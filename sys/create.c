@@ -149,10 +149,11 @@ DokanGetFCB(
 		ExFreePool(FileName);
 	}
 
+	InterlockedIncrement(&fcb->FileCount);
+
 	ExReleaseResourceLite(&Vcb->Resource);
 	KeLeaveCriticalRegion();
 
-	InterlockedIncrement(&fcb->FileCount);
 	return fcb;
 }
 
@@ -173,7 +174,7 @@ DokanFreeFCB(
 	ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
 	ExAcquireResourceExclusiveLite(&Fcb->Resource, TRUE);
 
-	Fcb->FileCount--;
+	InterlockedDecrement(&Fcb->FileCount)
 
 	if (Fcb->FileCount == 0) {
 
