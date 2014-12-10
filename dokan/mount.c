@@ -29,7 +29,6 @@ DokanServiceCheck(
 {
 	SC_HANDLE controlHandle;
 	SC_HANDLE serviceHandle;
-	SERVICE_STATUS ss;
 
 	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
@@ -123,7 +122,6 @@ BOOL DOKANAPI
 DokanMountControl(PDOKAN_CONTROL Control)
 {
 	HANDLE pipe;
-	DWORD writtenBytes;
 	DWORD readBytes;
 	DWORD pipeMode;
 	DWORD error;

@@ -85,7 +85,7 @@ SendToDevice(
 LPCWSTR
 GetRawDeviceName(LPCWSTR	DeviceName);
 
-DWORD __stdcall
+UINT __stdcall
 DokanLoop(
 	PVOID Param);
 
@@ -254,7 +254,7 @@ VOID
 ClearFindData(
   PLIST_ENTRY	ListHead);
 
-DWORD WINAPI
+UINT WINAPI
 DokanKeepAlive(
 	PVOID	Param);
 

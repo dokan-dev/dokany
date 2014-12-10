@@ -80,11 +80,11 @@ CreateMountPoint(
 		return FALSE;
 	}
 
-	targetLength = wcslen(targetDeviceName) * sizeof(WCHAR);
+    targetLength = (USHORT)wcslen(targetDeviceName) * sizeof(WCHAR);
 	bufferLength = FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) +
 		targetLength + sizeof(WCHAR) + sizeof(WCHAR);
 
-	reparseData = malloc(bufferLength);
+    reparseData = (PREPARSE_DATA_BUFFER)malloc(bufferLength);
 
 	ZeroMemory(reparseData, bufferLength);
 

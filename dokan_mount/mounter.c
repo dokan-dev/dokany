@@ -74,7 +74,7 @@ PMOUNT_ENTRY
 FindMountEntry(PDOKAN_CONTROL	DokanControl)
 {
 	PLIST_ENTRY		listEntry;
-	PMOUNT_ENTRY	mountEntry;
+	PMOUNT_ENTRY	mountEntry = NULL;
 	BOOL			useMountPoint = wcslen(DokanControl->MountPoint) > 0;
 	BOOL			found = FALSE;
 
@@ -113,7 +113,6 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 VOID
 DokanControlFind(PDOKAN_CONTROL Control)
 {
-	PLIST_ENTRY		listEntry;
 	PMOUNT_ENTRY	mountEntry;
 
 	mountEntry = FindMountEntry(Control);
@@ -262,7 +261,7 @@ static DWORD WINAPI HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEvent
 
 static VOID BuildSecurityAttributes(PSECURITY_ATTRIBUTES SecurityAttributes)
 {
-	LPTSTR sd = L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGW;;;WD)(A;;GR;;;RC)";
+	LPWSTR sd = L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGW;;;WD)(A;;GR;;;RC)";
 
 	ZeroMemory(SecurityAttributes, sizeof(SECURITY_ATTRIBUTES));
 	
@@ -289,12 +288,8 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 	EVENT_CONTEXT	eventContext;
 	SECURITY_ATTRIBUTES sa;
 
-#if _MSC_VER < 1300
-	InitializeCriticalSection(&g_CriticalSection);
-#else
-	InitializeCriticalSectionAndSpinCount(&g_CriticalSection, 0x80000400);
-#endif
-			
+
+    InitializeCriticalSectionAndSpinCount(&g_CriticalSection, 4000);
 	InitializeListHead(&g_MountList);
 
 	g_StatusHandle = RegisterServiceCtrlHandlerEx(L"DokanMounter", HandlerEx, NULL);

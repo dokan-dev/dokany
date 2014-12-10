@@ -34,6 +34,8 @@ DispatchClose(
 	PDOKAN_OPEN_INFO		openInfo;
 	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
+    UNREFERENCED_PARAMETER(Handle);
+
 	CheckFileName(EventContext->Close.FileName);
 
 	eventInfo = DispatchCommon(

@@ -33,7 +33,7 @@ DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
 	HANDLE				handle = INVALID_HANDLE_VALUE;
 	ULONG				eventInfoSize;
 	
-	openInfo = (PDOKAN_OPEN_INFO)FileInfo->DokanContext;
+    openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
 	if (openInfo == NULL) {
 		return INVALID_HANDLE_VALUE;
 	}

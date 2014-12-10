@@ -25,11 +25,11 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 VOID
 DispatchCreate(
-	HANDLE				Handle,
+	HANDLE				Handle, // This handle is not for a file. It is for Dokan Device Driver(which is doing EVENT_WAIT).
 	PEVENT_CONTEXT		EventContext,
 	PDOKAN_INSTANCE		DokanInstance)
 {
-	static eventId = 0;
+	static int eventId = 0;
 	ULONG					length	  = sizeof(EVENT_INFORMATION);
 	PEVENT_INFORMATION		eventInfo = (PEVENT_INFORMATION)malloc(length);
 	int						status;
@@ -116,7 +116,7 @@ DispatchCreate(
 	} else {
 		DWORD creationDisposition = OPEN_EXISTING;
 		fileInfo.IsDirectory = FALSE;
-		DbgPrint("   CreateDisposition %X\n", disposition);
+		DbgPrint("   CreateDisposition %0x08X\n", disposition);
 		switch(disposition) {
 			case FILE_CREATE:
 				creationDisposition = CREATE_NEW;
@@ -162,52 +162,52 @@ DispatchCreate(
 	// FILE_SUPERSEDED
 
 
-	if (status < 0) {
+    DbgPrint("CreateFile status = %d\n", status);
+    if (status < 0) {
 
 		int error = status * -1;
 		
-		DbgPrint("CreateFile status = %d\n", status);
 		if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-			DbgPrint("SL_OPEN_TARGET_DIRECTORY spcefied\n");
+			DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
 		}
 		eventInfo->Create.Information = FILE_DOES_NOT_EXIST;
 
 		switch(error) {
-		case ERROR_FILE_NOT_FOUND:
-			if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
-				eventInfo->Status = STATUS_SUCCESS;
-			else
-				eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_PATH_NOT_FOUND:
-			//if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
-			//	eventInfo->Status = STATUS_SUCCESS;
-			//else
-			eventInfo->Status = STATUS_OBJECT_PATH_NOT_FOUND;
-			break;
-		case ERROR_ACCESS_DENIED:
-			eventInfo->Status = STATUS_ACCESS_DENIED;
-			break;
-		case ERROR_SHARING_VIOLATION:
-			eventInfo->Status = STATUS_SHARING_VIOLATION;
-			break;
-		case ERROR_INVALID_NAME:
-			eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_FILE_EXISTS:
-		case ERROR_ALREADY_EXISTS:		
-			eventInfo->Status = STATUS_OBJECT_NAME_COLLISION;
-			eventInfo->Create.Information = FILE_EXISTS;
-			break;
-		case ERROR_PRIVILEGE_NOT_HELD:
-			eventInfo->Status = STATUS_PRIVILEGE_NOT_HELD;
-			break;
-		case ERROR_NOT_READY:
-			eventInfo->Status = STATUS_DEVICE_NOT_READY;
-			break;
-		default:
-			eventInfo->Status = STATUS_INVALID_PARAMETER;
-			DbgPrint("Create got unknown error code %d\n", error);
+		    case ERROR_FILE_NOT_FOUND:
+			    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
+				    eventInfo->Status = STATUS_SUCCESS;
+			    else
+				    eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
+			    break;
+		    case ERROR_PATH_NOT_FOUND:
+			    //if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
+			    //	eventInfo->Status = STATUS_SUCCESS;
+			    //else
+			    eventInfo->Status = STATUS_OBJECT_PATH_NOT_FOUND;
+			    break;
+		    case ERROR_ACCESS_DENIED:
+			    eventInfo->Status = STATUS_ACCESS_DENIED;
+			    break;
+		    case ERROR_SHARING_VIOLATION:
+			    eventInfo->Status = STATUS_SHARING_VIOLATION;
+			    break;
+		    case ERROR_INVALID_NAME:
+			    eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
+			    break;
+		    case ERROR_FILE_EXISTS:
+		    case ERROR_ALREADY_EXISTS:		
+			    eventInfo->Status = STATUS_OBJECT_NAME_COLLISION;
+			    eventInfo->Create.Information = FILE_EXISTS;
+			    break;
+		    case ERROR_PRIVILEGE_NOT_HELD:
+			    eventInfo->Status = STATUS_PRIVILEGE_NOT_HELD;
+			    break;
+		    case ERROR_NOT_READY:
+			    eventInfo->Status = STATUS_DEVICE_NOT_READY;
+			    break;
+		    default:
+			    eventInfo->Status = STATUS_INVALID_PARAMETER;
+			    DbgPrint("Create got unknown error code %d\n", error);
 		}
 
 

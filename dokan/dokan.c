@@ -19,8 +19,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#define _UNICODE
-
 #include <windows.h>
 #include <winioctl.h>
 #include <stdio.h>
@@ -48,6 +46,9 @@ PDOKAN_INSTANCE
 NewDokanInstance()
 {
 	PDOKAN_INSTANCE instance = (PDOKAN_INSTANCE)malloc(sizeof(DOKAN_INSTANCE));
+    if (instance == NULL)
+        return NULL;
+
 	ZeroMemory(instance, sizeof(DOKAN_INSTANCE));
 
 #if _MSC_VER < 1300
@@ -120,12 +121,9 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 {
 	ULONG	threadNum = 0;
 	ULONG	i;
-	BOOL	status;
 	int		error;
 	HANDLE	device;
 	HANDLE	threadIds[DOKAN_MAX_THREAD];
-	ULONG   returnedLength;
-	char	buffer[1024];
 	BOOL	useMountPoint = FALSE;
 	PDOKAN_INSTANCE instance;
 
@@ -213,7 +211,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 			NULL, // Security Atributes
 			0, //stack size
 			DokanKeepAlive,
-			instance, // param
+			(PVOID)instance, // param
 			0, // create flag
 			NULL);
 	}
@@ -256,14 +254,13 @@ GetRawDeviceName(LPCWSTR	DeviceName)
 	return rawDeviceName;
 }
 
-DWORD WINAPI
+UINT WINAPI
 DokanLoop(
    PDOKAN_INSTANCE DokanInstance
 	)
 {
 	HANDLE	device;
 	char	buffer[EVENT_CONTEXT_MAX_SIZE];
-	ULONG	count = 0;
 	BOOL	status;
 	ULONG	returnedLength;
 	DWORD	result = 0;
@@ -283,7 +280,7 @@ DokanLoop(
 	if (device == INVALID_HANDLE_VALUE) {
 		DbgPrint("Dokan Error: CreateFile failed %ws: %d\n",
 			GetRawDeviceName(DokanInstance->DeviceName), GetLastError());
-		result = -1;
+		result = (DWORD)-1;
 		_endthreadex(result);
 		return result;
 	}
@@ -303,7 +300,7 @@ DokanLoop(
 
 		if (!status) {
 			DbgPrint("Ioctl failed with code %d\n", GetLastError());
-			result = -1;
+			result = (DWORD)-1;
 			break;
 		}
 
@@ -486,7 +483,7 @@ GetDokanOpenInfo(
 	PDOKAN_OPEN_INFO openInfo;
 	EnterCriticalSection(&DokanInstance->CriticalSection);
 
-	openInfo = (PDOKAN_OPEN_INFO)EventContext->Context;
+    openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventContext->Context;
 	if (openInfo != NULL) {
 		openInfo->OpenCount++;
 		openInfo->EventContext = EventContext;
@@ -505,7 +502,7 @@ ReleaseDokanOpenInfo(
 	PDOKAN_OPEN_INFO openInfo;
 	EnterCriticalSection(&DokanInstance->CriticalSection);
 
-	openInfo = (PDOKAN_OPEN_INFO)EventInformation->Context;
+    openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventInformation->Context;
 	if (openInfo != NULL) {
 		openInfo->OpenCount--;
 		if (openInfo->OpenCount < 1) {
@@ -528,6 +525,8 @@ DispatchUnmount(
 	PEVENT_CONTEXT		EventContext,
 	PDOKAN_INSTANCE		DokanInstance)
 {
+    UNREFERENCED_PARAMETER(Handle);
+
 	DOKAN_FILE_INFO			fileInfo;
 	static int count = 0;
 
@@ -664,7 +663,6 @@ SendToDevice(
 {
 	HANDLE	device;
 	BOOL	status;
-	ULONG	returnedLength;
 
 	device = CreateFile(
 				DeviceName,							// lpFileName
@@ -710,6 +708,9 @@ BOOL WINAPI DllMain(
 	DWORD		Reason,
 	LPVOID		Reserved)
 {
+    UNREFERENCED_PARAMETER(Reserved);
+    UNREFERENCED_PARAMETER(Instance);
+
 	switch(Reason) {
 		case DLL_PROCESS_ATTACH:
 			{

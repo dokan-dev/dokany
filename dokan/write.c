@@ -24,7 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include <winioctl.h>
 
-SendWriteRequest(
+VOID SendWriteRequest(
 	HANDLE				Handle,
 	PEVENT_INFORMATION	EventInfo,
 	ULONG				EventLength,

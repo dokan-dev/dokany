@@ -158,8 +158,11 @@ DokanSetLinkInformation(
 	PDOKAN_FILE_INFO	FileInfo,
 	PDOKAN_OPERATIONS	DokanOperations)
 {
-	PDOKAN_LINK_INFORMATION linkInfo =
-		(PDOKAN_LINK_INFORMATION)((PCHAR)EventContext + EventContext->SetFile.BufferOffset);
+    UNREFERENCED_PARAMETER(EventContext);
+    UNREFERENCED_PARAMETER(FileInfo);
+    UNREFERENCED_PARAMETER(DokanOperations);
+	//PDOKAN_LINK_INFORMATION linkInfo = (PDOKAN_LINK_INFORMATION)((PCHAR)EventContext + EventContext->SetFile.BufferOffset);
+
 	return -1;
 }
 
@@ -229,7 +232,7 @@ DispatchSetInformation(
 	PEVENT_INFORMATION		eventInfo;
 	PDOKAN_OPEN_INFO		openInfo;
 	DOKAN_FILE_INFO			fileInfo;
-	int						status;
+	int						status = -1;
 	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
 

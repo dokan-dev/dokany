@@ -32,7 +32,7 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 	PEVENT_INFORMATION	eventInfo;
 	ULONG	eventInfoSize = sizeof(EVENT_INFORMATION);
 
-	openInfo = (PDOKAN_OPEN_INFO)FileInfo->DokanContext;
+	openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
 	if (openInfo == NULL) {
 		return FALSE;
 	}
@@ -66,13 +66,12 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 }
 
 
-DWORD WINAPI
+UINT WINAPI
 DokanKeepAlive(
 	PDOKAN_INSTANCE DokanInstance)
 {
 	HANDLE	device;
 	ULONG	ReturnedLength;
-	ULONG	returnedLength;
 	BOOL	status;
 
 	device = CreateFile(

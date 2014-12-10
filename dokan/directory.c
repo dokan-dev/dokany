@@ -306,10 +306,10 @@ DokanFillFileData(
 	PWIN32_FIND_DATAW	FindData,
 	PDOKAN_FILE_INFO	FileInfo)
 {
-	PLIST_ENTRY listHead = ((PDOKAN_OPEN_INFO)FileInfo->DokanContext)->DirListHead;
+    PLIST_ENTRY listHead = ((PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext)->DirListHead;
 	PDOKAN_FIND_DATA	findData;
 	
-	findData = malloc(sizeof(DOKAN_FIND_DATA));
+    findData = (PDOKAN_FIND_DATA)malloc(sizeof(DOKAN_FIND_DATA));
 	ZeroMemory(findData, sizeof(DOKAN_FIND_DATA));
 	InitializeListHead(&findData->ListEntry);
 
@@ -403,7 +403,7 @@ MatchFiles(
 				((PFILE_BOTH_DIR_INFORMATION)currentBuffer)->NextEntryOffset = entrySize;
 
 				// next buffer position
-				(PCHAR)currentBuffer += entrySize;
+                currentBuffer = (PCHAR)currentBuffer + entrySize;
 			}
 			index++;
 		}

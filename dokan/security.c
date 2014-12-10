@@ -31,7 +31,6 @@ DispatchQuerySecurity(
 	DOKAN_FILE_INFO		fileInfo;
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG	eventInfoLength;
-	ULONG	securityDescLength;
 	int		status = -ERROR_CALL_NOT_IMPLEMENTED;
 	ULONG	lengthNeeded = 0;
 

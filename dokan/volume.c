@@ -29,6 +29,8 @@ int DOKAN_CALLBACK DokanGetDiskFreeSpace(
 	PULONGLONG			TotalNumberOfFreeBytes,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	*FreeBytesAvailable = 512*1024*1024;
 	*TotalNumberOfBytes = 1024*1024*1024;
 	*TotalNumberOfFreeBytes = 512*1024*1024;
@@ -47,6 +49,8 @@ int DOKAN_CALLBACK DokanGetVolumeInformation(
 	DWORD		FileSystemNameSize,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	wcscpy_s(VolumeNameBuffer, VolumeNameSize / sizeof(WCHAR), L"DOKAN");
 	*VolumeSerialNumber = 0x19831116;
 	*MaximumComponentLength = 256;
@@ -306,7 +310,6 @@ DispatchQueryVolumeInformation(
 	PEVENT_INFORMATION		eventInfo;
 	DOKAN_FILE_INFO			fileInfo;
 	PDOKAN_OPEN_INFO		openInfo;
-	int						status = -1;
 	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION)
 								- 8 + EventContext->Volume.BufferLength;
 
@@ -317,7 +320,7 @@ DispatchQueryVolumeInformation(
 
 	// There is no Context because file is not opened
 	// so DispatchCommon is not used here
-	openInfo = (PDOKAN_OPEN_INFO)EventContext->Context;
+    openInfo = (PDOKAN_OPEN_INFO)(INT_PTR)EventContext->Context;
 	
 	eventInfo->BufferLength = 0;
 	eventInfo->SerialNumber = EventContext->SerialNumber;

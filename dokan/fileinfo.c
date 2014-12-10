@@ -86,6 +86,8 @@ DokanFillFilePositionInfo(
 	PULONG						RemainingLength)
 {
 
+    UNREFERENCED_PARAMETER(FileInfo);
+
 	if (*RemainingLength < sizeof(FILE_POSITION_INFORMATION)) {
 		return STATUS_BUFFER_OVERFLOW;
 	}
@@ -158,6 +160,9 @@ DokanFillFileNameInfo(
 	PULONG						RemainingLength,
 	PEVENT_CONTEXT				EventContext)
 {
+
+    UNREFERENCED_PARAMETER(FileInfo);
+
 	if (*RemainingLength < sizeof(FILE_NAME_INFORMATION) 
 		+ EventContext->File.FileNameLength) {
 		return STATUS_BUFFER_OVERFLOW;
@@ -252,7 +257,7 @@ DispatchQueryInformation(
 	DOKAN_FILE_INFO				fileInfo;
 	BY_HANDLE_FILE_INFORMATION	byHandleFileInfo;
 	ULONG				remainingLength;
-	ULONG				status;
+    ULONG				status = STATUS_INVALID_PARAMETER;
 	int					result;
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG				sizeOfEventInfo;
@@ -290,12 +295,12 @@ DispatchQueryInformation(
 		switch(EventContext->File.FileInformationClass) {
 		case FileBasicInformation:
 			//DbgPrint("FileBasicInformation\n");
-			status = DokanFillFileBasicInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFileBasicInfo((PFILE_BASIC_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileInternalInformation:
-			status = DokanFillInternalInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillInternalInfo((PFILE_INTERNAL_INFORMATION)eventInfo->Buffer,
 											&byHandleFileInfo, &remainingLength);
 			break;
 
@@ -308,13 +313,13 @@ DispatchQueryInformation(
 
 		case FileStandardInformation:
 			//DbgPrint("FileStandardInformation\n");
-			status = DokanFillFileStandardInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFileStandardInfo((PFILE_STANDARD_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileAllInformation:
 			//DbgPrint("FileAllInformation\n");
-			status = DokanFillFileAllInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFileAllInfo((PFILE_ALL_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength, EventContext);
 			break;
 
@@ -323,7 +328,7 @@ DispatchQueryInformation(
 			break;
 
 		case FileAttributeTagInformation:
-			status = DokanFillFileAttributeTagInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFileAttributeTagInfo((PFILE_ATTRIBUTE_TAG_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
@@ -335,20 +340,20 @@ DispatchQueryInformation(
 		case FileNameInformation:
 			// this case is not used because driver deal with
 			//DbgPrint("FileNameInformation\n");
-			status = DokanFillFileNameInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFileNameInfo((PFILE_NAME_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength, EventContext);
 			break;
 
 		case FileNetworkOpenInformation:
 			//DbgPrint("FileNetworkOpenInformation\n");
-			status = DokanFillNetworkOpenInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillNetworkOpenInfo((PFILE_NETWORK_OPEN_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FilePositionInformation:
 			// this case is not used because driver deal with
 			//DbgPrint("FilePositionInformation\n");
-			status = DokanFillFilePositionInfo((PVOID)eventInfo->Buffer,
+            status = DokanFillFilePositionInfo((PFILE_POSITION_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength);
 
 			break;
