@@ -1,0 +1,35 @@
+TARGETNAME=dokan
+TARGETTYPE=DYNLINK
+
+C_DEFINES=$(C_DEFINES) -DUNICODE -D_UNICODE
+
+TARGETLIBS=$(SDK_LIB_PATH)\kernel32.lib \
+		   $(SDK_LIB_PATH)\user32.lib \
+		   $(SDK_LIB_PATH)\advapi32.lib
+
+USE_MSVCRT=1
+
+INCLUDES=..\sys\
+
+SOURCES=dokan.c \
+	write.c \
+	directory.c \
+	fileinfo.c \
+	setfile.c \
+	volume.c \
+	mount.c \
+	version.c \
+	close.c \
+	lock.c \
+	flush.c \
+	cleanup.c \
+	create.c \
+	read.c \
+	status.c \
+	timeout.c \
+	security.c \
+	access.c
+
+UMTYPE=windows
+
+

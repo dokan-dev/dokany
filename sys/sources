@@ -1,0 +1,28 @@
+TARGETNAME=dokan
+TARGETTYPE=DRIVER
+
+TARGETLIBS= \
+	$(DDK_LIB_PATH)\wdmsec.lib
+
+SOURCES=dokan.c \
+	init.c \
+	create.c \
+	close.c \
+	event.c \
+	directory.c \
+	fileinfo.c \
+	read.c \
+	write.c \
+	volume.c \
+	cleanup.c \
+	lock.c \
+	timeout.c \
+	flush.c \
+	device.c \
+	fscontrol.c \
+	notification.c \
+	security.c \
+	access.c \
+	dokan.rc
+
+

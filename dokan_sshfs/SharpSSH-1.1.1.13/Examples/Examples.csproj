@@ -1,0 +1,183 @@
+﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectType>Local</ProjectType>
+    <ProductVersion>8.0.50727</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{327E25D4-D8DF-4704-ABA3-274F8E777847}</ProjectGuid>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ApplicationIcon>App.ico</ApplicationIcon>
+    <AssemblyKeyContainerName>
+    </AssemblyKeyContainerName>
+    <AssemblyName>sharpSshTest</AssemblyName>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
+    <DefaultClientScript>JScript</DefaultClientScript>
+    <DefaultHTMLPageLayout>Grid</DefaultHTMLPageLayout>
+    <DefaultTargetSchema>IE50</DefaultTargetSchema>
+    <DelaySign>false</DelaySign>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>sharpSshTest</RootNamespace>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+    <StartupObject>
+    </StartupObject>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>..\bin\Debug\</OutputPath>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <BaseAddress>285212672</BaseAddress>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <ConfigurationOverrideFile>
+    </ConfigurationOverrideFile>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DocumentationFile>
+    </DocumentationFile>
+    <DebugSymbols>true</DebugSymbols>
+    <FileAlignment>4096</FileAlignment>
+    <NoStdLib>false</NoStdLib>
+    <NoWarn>
+    </NoWarn>
+    <Optimize>false</Optimize>
+    <RegisterForComInterop>false</RegisterForComInterop>
+    <RemoveIntegerChecks>false</RemoveIntegerChecks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>full</DebugType>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>..\bin\Release\</OutputPath>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <BaseAddress>285212672</BaseAddress>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <ConfigurationOverrideFile>
+    </ConfigurationOverrideFile>
+    <DefineConstants>TRACE</DefineConstants>
+    <DocumentationFile>
+    </DocumentationFile>
+    <DebugSymbols>false</DebugSymbols>
+    <FileAlignment>4096</FileAlignment>
+    <NoStdLib>false</NoStdLib>
+    <NoWarn>
+    </NoWarn>
+    <Optimize>true</Optimize>
+    <RegisterForComInterop>false</RegisterForComInterop>
+    <RemoveIntegerChecks>false</RemoveIntegerChecks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>none</DebugType>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System">
+      <Name>System</Name>
+    </Reference>
+    <Reference Include="System.Data">
+      <Name>System.Data</Name>
+    </Reference>
+    <Reference Include="System.Drawing">
+      <Name>System.Drawing</Name>
+    </Reference>
+    <Reference Include="System.Windows.Forms">
+      <Name>System.Windows.Forms</Name>
+    </Reference>
+    <Reference Include="System.Xml">
+      <Name>System.XML</Name>
+    </Reference>
+    <ProjectReference Include="..\SharpSSH\SharpSSH.csproj">
+      <Name>SharpSSH</Name>
+      <Project>{D27CF69D-4681-492A-BE4D-D3D209104423}</Project>
+      <Package>{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</Package>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="App.ico" />
+    <Content Include="jsch_samples\README.txt" />
+    <Compile Include="AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="ConsoleProgressBar.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\AES.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\ChangePassphrase.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\KeyGen.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\KnownHosts.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\PortForwardingL.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\PortForwardingR.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\ScpFrom.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\ScpTo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\Sftp.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\Shell.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\StreamForwarding.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\Subsystem.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\UserAuthPubKey.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\util\ConsoleProgressBar.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\util\InputForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="jsch_samples\ViaHTTP.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpSshTest.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpssh_samples\SshExeTest.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpssh_samples\SshExpectTest.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpssh_samples\SshFileTransferTest.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpssh_samples\SshShellTest.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="sharpssh_samples\Util.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <EmbeddedResource Include="jsch_samples\util\InputForm.resx">
+      <DependentUpon>InputForm.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PreBuildEvent>
+    </PreBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
+  </PropertyGroup>
+</Project>

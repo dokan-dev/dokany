@@ -1,0 +1,34 @@
+// DokanSSHFSControl.idl : DokanSSHFSControl の IDL ソース
+//
+
+// このファイルは、タイプ ライブラリ (DokanSSHFSControl.tlb) およびマーシャリング コードを
+// 作成するために MIDL ツールによって処理されます。
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(168172AB-0E52-4789-A276-1AA3BDE72064),
+	helpstring("ISSHFSControl インターフェイス"),
+	pointer_default(unique)
+]
+interface ISSHFSControl : IUnknown{
+};
+[
+	uuid(CA836D80-921A-4AB8-9146-2582F03CF820),
+	version(1.0),
+	helpstring("DokanSSHFSControl 1.0 タイプ ライブラリ")
+]
+library DokanSSHFSControlLib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(B4F169EE-929C-4693-B97D-0DAE20CAFD6C),
+		helpstring("SSHFSControl Class")
+	]
+	coclass SSHFSControl
+	{
+		[default] interface ISSHFSControl;
+	};
+};

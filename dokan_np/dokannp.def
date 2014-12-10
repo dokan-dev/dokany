@@ -1,0 +1,17 @@
+SECTIONS	.NULMRXNP	READ WRITE SHARED
+
+EXPORTS
+	NPGetCaps			        @13
+	NPAddConnection			    @17
+	NPAddConnection3		    @38
+	NPCancelConnection		    @18
+	NPGetConnection			    @12
+	NPOpenEnum			        @33	
+	NPEnumResource			    @34	
+	NPCloseEnum			        @35	
+	NPGetUniversalName		    @40
+	NPGetResourceParent		    @41
+	NPGetResourceInformation	@52
+	NPLogonNotify			    @500
+	NPPasswordChangeNotify		@501
+

@@ -1,0 +1,94 @@
+
+How to build Dokan library
+
+
+** Build Envrionment
+
+You need WDK(Windows Driver Kit). You can get WDK through Microsoft Connect Web site for free.
+http://www.microsoft.com/whdc/DevTools/WDK/WDKpkg.mspx
+https://connect.microsoft.com
+
+
+** Build
+
+When you unzip the dokan source codes, you can get the following folders.
+
+    * \dokan (user-mode library dokan.dll)
+    * \dokan_control (control program dokanctl.exe)
+    * \dokan_mirror (sample program)
+    * \dokan_mount (mount service mounter.exe)
+    * \sys (driver dokan.sys) 
+
+After installing WDK, launch the build environment from the Start menu. Change the directory to dokan source code.
+Run Ågbuild /wcbgÅh command within each folders.
+
+
+** Embed a manifest in programs
+
+You may need to embed a manifest in dokanctrl.exe when you use Vista or Windows7. 
+In that case, please run the following command within \dokan_mirror and \dokan_control directory.
+"{PATH_TO_MT}\mt.exe" -manifest "dokanctl.exe.manifest"  -outputresource:"objchk_wlh_amd64\amd64\dokanctl.exe"
+Please replace the target names besed on your environment.
+
+
+** Install Driver
+
+Now you can get binary programs for example under Åg\dokan\objchk_wlh_x86\i386Åç.
+You need dokan.dll dokan.sys dokanctl.exe mounter.exe mirror.exe
+
+Copy dokan.sys under \Windows\system32\drivers
+Copy dokan.dll under \Windows\system32
+Place dokanctl.exe and mounter.exe in the same folder.
+
+Run Ågdokanctl.exe /i aÅh This means register the driver and the service to Windows.
+You can also do them separately.
+Ågdokanctl.exe /i dÅh Install driver.
+Ågdokanctl.exe /i sÅh install service.
+
+If you update your driver, you MUST restart your computer after uninstalling previous version.
+
+
+** Test the driver
+
+You can get version information when you run Ågdokanctl.exe /vÅh.
+
+
+** Sample program
+
+Run Ågmirror.exe /r c:\ /l mÅh. This means mirror C driver under M driver. Can you see M driver?
+To unmount M driver, run Ågdokanctl.exe /u mÅh
+You can see all options of mirror.exe by running mirror.exe without argument.
+
+
+** Uninstall Driver
+
+Ågdokanctl.exe /r aÅh Uninstall both driver and service.
+Ågdokanctl.exe /r dÅh Uninstall driver.
+Ågdokanctl.exe /r sÅh Uninstall service.
+You should restart your computer after uninstalling driver.
+
+
+** For Windows Vista x64
+
+You are required a code signing certification to install driver on Windows Vista x64.
+You can disable driver signature enforcement using ReadyDriver Plus.
+http://www.citadelindustries.net/readydriverplus/
+
+
+** Network filesystem/provider support
+
+Dokan supports network filesystem mode. You need dokan network provider dll in \dokan_np.
+Please build it and copy dokannp.dll into Windows\system32 directly.
+You need to register network provider dll to system : dokanctl.exe /i n 
+(Unregister network provider : dokanctl.exe /r n) 
+You probably need to restart your computer after register or unregister network provider.
+And try "mirror.exe /r root_path /l drive_letter /n". 
+/n option means to mount as network drive 
+Network filesystem mode is an experimental implementation and not tested well. 
+
+
+** Windbg
+
+You can debug the driver with Windbg. http://www.microsoft.com/whdc/Devtools/Debugging/default.mspx
+You need to turn debug mode on. http://www.microsoft.com/whdc/driver/tips/Debug_Vista.mspx
+

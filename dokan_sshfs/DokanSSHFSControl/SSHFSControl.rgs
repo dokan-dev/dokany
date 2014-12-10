@@ -1,0 +1,48 @@
+HKCR
+{
+	DokanSSHFSControl.SSHFSControl.1 = s 'SSHFSControl Class'
+	{
+		CLSID = s '{B4F169EE-929C-4693-B97D-0DAE20CAFD6C}'
+	}
+	DokanSSHFSControl.SSHFSControl = s 'SSHFSControl Class'
+	{
+		CLSID = s '{B4F169EE-929C-4693-B97D-0DAE20CAFD6C}'
+		CurVer = s 'DokanSSHFSControl.SSHFSControl.1'
+	}
+	NoRemove CLSID
+	{
+		ForceRemove {B4F169EE-929C-4693-B97D-0DAE20CAFD6C} = s 'SSHFSControl Class'
+		{
+			ProgID = s 'DokanSSHFSControl.SSHFSControl.1'
+			VersionIndependentProgID = s 'DokanSSHFSControl.SSHFSControl'
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			val AppID = s '%APPID%'
+			'TypeLib' = s '{CA836D80-921A-4AB8-9146-2582F03CF820}'
+		}
+	}
+	
+	NoRemove *
+	{
+		NoRemove ShellEx
+		{
+			NoRemove ContextMenuHandlers
+			{
+				{B4F169EE-929C-4693-B97D-0DAE20CAFD6C}
+			}
+		}
+	}
+
+	NoRemove Folder
+	{
+		NoRemove ShellEx
+		{
+			NoRemove ContextMenuHandlers
+			{
+				{B4F169EE-929C-4693-B97D-0DAE20CAFD6C}
+			}
+		}
+	}
+}

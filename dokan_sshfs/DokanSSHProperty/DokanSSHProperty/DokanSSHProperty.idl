@@ -1,0 +1,34 @@
+// DokanSSHProperty.idl : DokanSSHProperty の IDL ソース
+//
+
+// このファイルは、タイプ ライブラリ (DokanSSHProperty.tlb) およびマーシャリング コードを
+// 作成するために MIDL ツールによって処理されます。
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(A2D061A2-A6F7-4ECD-953C-84C1623DFBCE),
+	helpstring("ISSHProperty インターフェイス"),
+	pointer_default(unique)
+]
+interface ISSHProperty : IUnknown{
+};
+[
+	uuid(116207D6-7C1D-4253-9B51-E6996A9D3D17),
+	version(1.0),
+	helpstring("DokanSSHProperty 1.0 タイプ ライブラリ")
+]
+library DokanSSHPropertyLib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(50A9DC6D-948D-4219-B378-6E0B28019FF7),
+		helpstring("SSHProperty Class")
+	]
+	coclass SSHProperty
+	{
+		[default] interface ISSHProperty;
+	};
+};

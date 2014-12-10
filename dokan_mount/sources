@@ -1,0 +1,17 @@
+TARGETNAME=mounter
+TARGETTYPE=PROGRAM
+
+C_DEFINES=$(C_DEFINES) -DUNICODE -D_UNICODE
+
+USE_MSVCRT=1
+
+INCLUDES=..\sys;..\dokan
+
+
+SOURCES=mount.c \
+		mounter.c
+
+UMTYPE=windows
+UMBASE=0x400000
+UMENTRY=winmain
+

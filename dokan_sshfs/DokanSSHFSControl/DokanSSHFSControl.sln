@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DokanSSHFSControl", "DokanSSHFSControl.vcproj", "{8AC0D054-1657-4C92-8AFA-64AACE9882EA}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DokanSSHFSControlPS", "DokanSSHFSControlPS.vcproj", "{CC87B1F0-6A46-4B35-A5D4-7C305450FD7C}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8AC0D054-1657-4C92-8AFA-64AACE9882EA} = {8AC0D054-1657-4C92-8AFA-64AACE9882EA}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8AC0D054-1657-4C92-8AFA-64AACE9882EA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8AC0D054-1657-4C92-8AFA-64AACE9882EA}.Debug|Win32.Build.0 = Debug|Win32
+		{8AC0D054-1657-4C92-8AFA-64AACE9882EA}.Release|Win32.ActiveCfg = Release|Win32
+		{8AC0D054-1657-4C92-8AFA-64AACE9882EA}.Release|Win32.Build.0 = Release|Win32
+		{CC87B1F0-6A46-4B35-A5D4-7C305450FD7C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CC87B1F0-6A46-4B35-A5D4-7C305450FD7C}.Release|Win32.ActiveCfg = Release|Win32
+		{CC87B1F0-6A46-4B35-A5D4-7C305450FD7C}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

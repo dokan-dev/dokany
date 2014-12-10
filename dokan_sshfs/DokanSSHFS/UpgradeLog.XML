@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="DokanSSHFS">
+</Property><Property Name="ソリューション ファイル" Value="C:\repos\dokan\dokan_sshfs\DokanSSHFS\DokanSSHFS.sln">
+</Property><Property Name="Date" Value="2010年1月17日">
+</Property><Property Name="Time" Value="14:44">
+</Property></Properties><Event ErrorLevel="0" Project="DokanSSHFS" Source="DokanSSHFS.csproj" Description="プロジェクトは正常に変換されました。">
+</Event><Event ErrorLevel="3" Project="DokanSSHFS" Source="DokanSSHFS.csproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="" Source="DokanSSHFS.sln" Description="ソリューションは正常に変換されました">
+</Event><Event ErrorLevel="3" Project="" Source="DokanSSHFS.sln" Description="Converted">
+</Event><Event ErrorLevel="0" Project="DokanSSHFS" Source="DokanSSHFS.csproj" Description="スキャンが完了しました: プロジェクト ファイルにアップグレードは必要ありません。">
+</Event></UpgradeLog>

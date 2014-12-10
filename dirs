@@ -1,0 +1,7 @@
+DIRS= \
+	dokan \
+	sys \
+	dokan_mirror \
+	dokan_control \
+	dokan_mount \
+	dokan_np

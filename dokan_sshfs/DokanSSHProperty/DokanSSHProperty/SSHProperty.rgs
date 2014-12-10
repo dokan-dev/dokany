@@ -1,0 +1,48 @@
+HKCR
+{
+	DokanSSHProperty.SSHProperty.1 = s 'SSHProperty Class'
+	{
+		CLSID = s '{50A9DC6D-948D-4219-B378-6E0B28019FF7}'
+	}
+	DokanSSHProperty.SSHProperty = s 'SSHProperty Class'
+	{
+		CLSID = s '{50A9DC6D-948D-4219-B378-6E0B28019FF7}'
+		CurVer = s 'DokanSSHProperty.SSHProperty.1'
+	}
+	NoRemove CLSID
+	{
+		ForceRemove {50A9DC6D-948D-4219-B378-6E0B28019FF7} = s 'SSHProperty Class'
+		{
+			ProgID = s 'DokanSSHProperty.SSHProperty.1'
+			VersionIndependentProgID = s 'DokanSSHProperty.SSHProperty'
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			val AppID = s '%APPID%'
+			'TypeLib' = s '{116207D6-7C1D-4253-9B51-E6996A9D3D17}'
+		}
+	}
+	
+    NoRemove *
+    {
+        NoRemove shellex
+        {
+            NoRemove PropertySheetHandlers
+            {
+                {50A9DC6D-948D-4219-B378-6E0B28019FF7}
+            }
+        }
+    }
+
+	NoRemove Folder
+	{
+        NoRemove shellex
+        {
+            NoRemove PropertySheetHandlers
+            {
+                {50A9DC6D-948D-4219-B378-6E0B28019FF7}
+            }
+        }
+	}
+}
