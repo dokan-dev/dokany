@@ -81,8 +81,8 @@ DeleteDokanInstance(PDOKAN_INSTANCE Instance)
 BOOL
 IsValidDriveLetter(WCHAR DriveLetter)
 {
-	return (L'd' <= DriveLetter && DriveLetter <= L'z') ||
-		(L'D' <= DriveLetter && DriveLetter <= L'Z');
+	return (L'b' <= DriveLetter && DriveLetter <= L'z') ||
+		(L'B' <= DriveLetter && DriveLetter <= L'Z');
 }
 
 int
