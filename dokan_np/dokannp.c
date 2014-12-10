@@ -92,6 +92,14 @@ NPLogonNotify(
 	__in PVOID		StationHandle,
 	__out PWSTR		*LogonScript)
 {
+	UNREFERENCED_PARAMETER(LogonId);
+	UNREFERENCED_PARAMETER(AuthentInfoType);
+	UNREFERENCED_PARAMETER(AuthentInfo);
+	UNREFERENCED_PARAMETER(PreviousAuthentInfoType);
+	UNREFERENCED_PARAMETER(PreviousAuthentInfo);
+	UNREFERENCED_PARAMETER(StationName);
+	UNREFERENCED_PARAMETER(StationHandle);
+
 	DbgPrintW(L"NPLogonNotify\n");
 	*LogonScript = NULL;
 	return WN_SUCCESS;
@@ -107,6 +115,14 @@ NPPasswordChangeNotify(
 	__in PVOID StationHandle,
 	__in DWORD ChangeInfo)
 {
+	UNREFERENCED_PARAMETER(AuthentInfoType);
+	UNREFERENCED_PARAMETER(AuthentInfo);
+	UNREFERENCED_PARAMETER(PreviousAuthentInfoType);
+	UNREFERENCED_PARAMETER(RreviousAuthentInfo);
+	UNREFERENCED_PARAMETER(StationName);
+	UNREFERENCED_PARAMETER(StationHandle);
+	UNREFERENCED_PARAMETER(ChangeInfo);
+
 	DbgPrintW(L"NPPasswordChangeNotify\n");
 	SetLastError(WN_NOT_SUPPORTED);
 	return WN_NOT_SUPPORTED;
@@ -134,6 +150,11 @@ NPAddConnection3(
 	DWORD status;
 	WCHAR temp[128];
 	WCHAR local[3];
+
+	UNREFERENCED_PARAMETER(WndOwner);
+	UNREFERENCED_PARAMETER(Password);
+	UNREFERENCED_PARAMETER(UserName);
+	UNREFERENCED_PARAMETER(Flags);
 
 	DbgPrintW(L"NPAddConnection3\n");
 	DbgPrintW(L"  LocalName: %s\n", NetResource->lpLocalName);
@@ -203,6 +224,11 @@ NPOpenEnum(
 	 __in LPHANDLE Enum)
 {
 	DWORD status;
+
+	UNREFERENCED_PARAMETER(Type);
+	UNREFERENCED_PARAMETER(Usage);
+	UNREFERENCED_PARAMETER(NetResource);
+
 	DbgPrintW(L"NPOpenEnum\n");
     switch (Scope){
 	case RESOURCE_CONNECTED:
@@ -242,6 +268,10 @@ NPGetResourceParent(
 	__in LPVOID Buffer,
 	__in LPDWORD BufferSize)
 {
+	UNREFERENCED_PARAMETER(NetResource);
+	UNREFERENCED_PARAMETER(Buffer);
+	UNREFERENCED_PARAMETER(BufferSize);
+
 	DbgPrintW(L"NPGetResourceParent\n");
 	return WN_NOT_SUPPORTED;
 }
@@ -254,6 +284,11 @@ NPEnumResource(
 	 __in LPVOID Buffer,
 	 __in LPDWORD BufferSize)
 {
+	UNREFERENCED_PARAMETER(Enum);
+	UNREFERENCED_PARAMETER(Count);
+	UNREFERENCED_PARAMETER(Buffer);
+	UNREFERENCED_PARAMETER(BufferSize);
+
 	DbgPrintW(L"NPEnumResource\n");
 	return WN_NOT_SUPPORTED;
 }
@@ -265,6 +300,11 @@ NPGetResourceInformation(
 	__out LPDWORD BufferSize,
     __out LPWSTR *System)
 {
+	UNREFERENCED_PARAMETER(NetResource);
+	UNREFERENCED_PARAMETER(Buffer);
+	UNREFERENCED_PARAMETER(BufferSize);
+	UNREFERENCED_PARAMETER(System);
+
 	DbgPrintW(L"NPGetResourceInformation\n");
 	return WN_NOT_SUPPORTED;
 }
@@ -277,6 +317,11 @@ NPGetUniversalName(
 	__in LPVOID Buffer,
 	__in LPDWORD BufferSize)
 {
+	UNREFERENCED_PARAMETER(LocalPath);
+	UNREFERENCED_PARAMETER(InfoLevel);
+	UNREFERENCED_PARAMETER(Buffer);
+	UNREFERENCED_PARAMETER(BufferSize);
+
 	DbgPrintW(L"NPGetUniversalName %s\n", LocalPath);
 	return WN_NOT_SUPPORTED;
 }
