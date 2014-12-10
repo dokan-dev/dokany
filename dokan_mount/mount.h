@@ -25,8 +25,8 @@ THE SOFTWARE.
 #ifndef _MOUNT_H_
 #define _MOUNT_H_
 
-#include "dokanc.h"
-#include "list.h"
+#include "../dokan/dokanc.h"
+#include "../dokan/list.h"
 
 #ifdef __cplusplus
 extern "C" {

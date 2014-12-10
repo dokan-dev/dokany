@@ -505,12 +505,12 @@ DokanCompleteSetInformation(
 	UNICODE_STRING		oldFileName;
 
 	FILE_INFORMATION_CLASS infoClass;
+    irp = IrpEntry->Irp;
 
 	__try {
 
 		DDbgPrint("==> DokanCompleteSetInformation\n");
 
-		irp = IrpEntry->Irp;
 		irpSp = IrpEntry->IrpSp;
 
 		ccb = IrpEntry->FileObject->FsContext2;

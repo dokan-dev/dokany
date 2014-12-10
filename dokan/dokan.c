@@ -636,7 +636,7 @@ DokanStart(PDOKAN_INSTANCE Instance)
 }
 
 
-BOOL
+BOOL DOKANAPI
 DokanSetDebugMode(
 	ULONG	Mode)
 {

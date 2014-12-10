@@ -38,9 +38,10 @@ DokanGetAccessToken(
 	BOOLEAN				hasLock = FALSE;
 	ULONG				outBufferLen;
 	ULONG				inBufferLen;
-	PACCESS_STATE		accessState;
+	PACCESS_STATE		accessState = NULL;
 
 	DDbgPrint("==> DokanGetAccessToken\n");
+    vcb = DeviceObject->DeviceExtension;
 
 	__try {
 		eventInfo		= (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
@@ -52,7 +53,6 @@ DokanGetAccessToken(
 			__leave;
 		}
 
-		vcb = DeviceObject->DeviceExtension;
 		if (GetIdentifierType(vcb) != VCB) {
 			DDbgPrint("  GetIdentifierType != VCB\n");
 			status = STATUS_INVALID_PARAMETER;

@@ -26,7 +26,7 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <sddl.h>
 #include "mount.h"
-#include "public.h"
+#include "../sys/public.h"
 
 static HANDLE                g_EventControl = NULL;
 static SERVICE_STATUS        g_ServiceStatus;

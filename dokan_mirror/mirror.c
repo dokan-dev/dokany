@@ -25,8 +25,8 @@ THE SOFTWARE.
 #include <winbase.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "dokan.h"
-#include "fileinfo.h"
+#include "../dokan/dokan.h"
+#include "../dokan/fileinfo.h"
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
@@ -101,7 +101,7 @@ PrintUserName(PDOKAN_FILE_INFO	DokanFileInfo)
 
 #define MirrorCheckFlag(val, flag) if (val&flag) { DbgPrint(L"\t" L#flag L"\n"); }
 
-static int
+static int DOKAN_CALLBACK
 MirrorCreateFile(
 	LPCWSTR					FileName,
 	DWORD					AccessMode,
@@ -225,7 +225,7 @@ MirrorCreateFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorCreateDirectory(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
@@ -243,7 +243,7 @@ MirrorCreateDirectory(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorOpenDirectory(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
@@ -289,7 +289,7 @@ MirrorOpenDirectory(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorCloseFile(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
@@ -313,7 +313,7 @@ MirrorCloseFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorCleanup(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
@@ -354,7 +354,7 @@ MirrorCleanup(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorReadFile(
 	LPCWSTR				FileName,
 	LPVOID				Buffer,
@@ -415,7 +415,7 @@ MirrorReadFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorWriteFile(
 	LPCWSTR		FileName,
 	LPCVOID		Buffer,
@@ -479,7 +479,7 @@ MirrorWriteFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorFlushFileBuffers(
 	LPCWSTR		FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
@@ -506,7 +506,7 @@ MirrorFlushFileBuffers(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorGetFileInformation(
 	LPCWSTR							FileName,
 	LPBY_HANDLE_FILE_INFORMATION	HandleFileInformation,
@@ -573,7 +573,7 @@ MirrorGetFileInformation(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorFindFiles(
 	LPCWSTR				FileName,
 	PFillFindData		FillFindData, // function pointer
@@ -620,7 +620,7 @@ MirrorFindFiles(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorDeleteFile(
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
@@ -636,7 +636,7 @@ MirrorDeleteFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorDeleteDirectory(
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
@@ -680,7 +680,7 @@ MirrorDeleteDirectory(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorMoveFile(
 	LPCWSTR				FileName, // existing file name
 	LPCWSTR				NewFileName,
@@ -717,7 +717,7 @@ MirrorMoveFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorLockFile(
 	LPCWSTR				FileName,
 	LONGLONG			ByteOffset,
@@ -752,7 +752,7 @@ MirrorLockFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorSetEndOfFile(
 	LPCWSTR				FileName,
 	LONGLONG			ByteOffset,
@@ -789,7 +789,7 @@ MirrorSetEndOfFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorSetAllocationSize(
 	LPCWSTR				FileName,
 	LONGLONG			AllocSize,
@@ -832,7 +832,7 @@ MirrorSetAllocationSize(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorSetFileAttributes(
 	LPCWSTR				FileName,
 	DWORD				FileAttributes,
@@ -855,7 +855,7 @@ MirrorSetFileAttributes(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorSetFileTime(
 	LPCWSTR				FileName,
 	CONST FILETIME*		CreationTime,
@@ -888,7 +888,7 @@ MirrorSetFileTime(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorUnlockFile(
 	LPCWSTR				FileName,
 	LONGLONG			ByteOffset,
@@ -923,7 +923,7 @@ MirrorUnlockFile(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorGetFileSecurity(
 	LPCWSTR					FileName,
 	PSECURITY_INFORMATION	SecurityInformation,
@@ -960,7 +960,7 @@ MirrorGetFileSecurity(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorSetFileSecurity(
 	LPCWSTR					FileName,
 	PSECURITY_INFORMATION	SecurityInformation,
@@ -989,7 +989,7 @@ MirrorSetFileSecurity(
 	return 0;
 }
 
-static int
+static int DOKAN_CALLBACK
 MirrorGetVolumeInformation(
 	LPWSTR		VolumeNameBuffer,
 	DWORD		VolumeNameSize,
@@ -1015,7 +1015,7 @@ MirrorGetVolumeInformation(
 }
 
 
-static int
+static int DOKAN_CALLBACK
 MirrorUnmount(
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {

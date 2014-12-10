@@ -40,31 +40,31 @@ Copy dokan.sys under \Windows\system32\drivers
 Copy dokan.dll under \Windows\system32
 Place dokanctl.exe and mounter.exe in the same folder.
 
-Run gdokanctl.exe /i ah This means register the driver and the service to Windows.
+Run dokanctl.exe /i ah This means register the driver and the service to Windows.
 You can also do them separately.
-gdokanctl.exe /i dh Install driver.
-gdokanctl.exe /i sh install service.
+dokanctl.exe /i dh Install driver.
+dokanctl.exe /i sh install service.
 
 If you update your driver, you MUST restart your computer after uninstalling previous version.
 
 
 ** Test the driver
 
-You can get version information when you run gdokanctl.exe /vh.
+You can get version information when you run dokanctl.exe /vh.
 
 
 ** Sample program
 
-Run gmirror.exe /r c:\ /l mh. This means mirror C driver under M driver. Can you see M driver?
-To unmount M driver, run gdokanctl.exe /u mh
+Run mirror.exe /r c:\ /l mh. This means mirror C driver under M driver. Can you see M driver?
+To unmount M driver, run dokanctl.exe /u mh
 You can see all options of mirror.exe by running mirror.exe without argument.
 
 
 ** Uninstall Driver
 
-gdokanctl.exe /r ah Uninstall both driver and service.
-gdokanctl.exe /r dh Uninstall driver.
-gdokanctl.exe /r sh Uninstall service.
+dokanctl.exe /r ah Uninstall both driver and service.
+dokanctl.exe /r dh Uninstall driver.
+dokanctl.exe /r sh Uninstall service.
 You should restart your computer after uninstalling driver.
 
 
