@@ -256,6 +256,8 @@ DokanDispatchSetVolumeInformation(
 {
 	NTSTATUS status = STATUS_INVALID_PARAMETER;
 
+    UNREFERENCED_PARAMETER(DeviceObject);
+
 	PAGED_CODE();
 
 	//FsRtlEnterFileSystem();

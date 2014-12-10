@@ -82,10 +82,7 @@ DokanCheckKeepAlive(
 	)
 {
 	LARGE_INTEGER		tickCount;
-	ULONG				eventLength;
-	PEVENT_CONTEXT		eventContext;
 	ULONG				mounted;
-	PDokanVCB			vcb = Dcb->Vcb;
 
 	//DDbgPrint("==> DokanCheckKeepAlive\n");
 
@@ -243,9 +240,6 @@ DokanResetPendingIrpTimeout(
 
     for (thisEntry = listHead->Flink; thisEntry != listHead; thisEntry = nextEntry) {
 
-		PIRP				irp;
-		PIO_STACK_LOCATION	irpSp;
-
         nextEntry = thisEntry->Flink;
 
         irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
@@ -377,6 +371,8 @@ DokanInformServiceAboutUnmount(
    __in PDEVICE_OBJECT	DeviceObject,
    __in PIRP			Irp)
 {
+    UNREFERENCED_PARAMETER(DeviceObject);
+    UNREFERENCED_PARAMETER(Irp);
 
 	return STATUS_SUCCESS;
 }

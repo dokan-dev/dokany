@@ -53,6 +53,15 @@ DokanFastIoCheckIfPossible (
     __in PDEVICE_OBJECT		DeviceObject
     )
 {
+    UNREFERENCED_PARAMETER(FileObject);
+    UNREFERENCED_PARAMETER(FileOffset);
+    UNREFERENCED_PARAMETER(Length);
+    UNREFERENCED_PARAMETER(Wait);
+    UNREFERENCED_PARAMETER(LockKey);
+    UNREFERENCED_PARAMETER(CheckForReadOperation);
+    UNREFERENCED_PARAMETER(IoStatus);
+    UNREFERENCED_PARAMETER(DeviceObject);
+
 	DDbgPrint("DokanFastIoCheckIfPossible\n");
 	return FALSE;
 }
@@ -70,6 +79,15 @@ DokanFastIoRead (
     __in PDEVICE_OBJECT		DeviceObject
     )
 {
+    UNREFERENCED_PARAMETER(FileObject);
+    UNREFERENCED_PARAMETER(FileOffset);
+    UNREFERENCED_PARAMETER(Length);
+    UNREFERENCED_PARAMETER(Wait);
+    UNREFERENCED_PARAMETER(LockKey);
+    UNREFERENCED_PARAMETER(Buffer);
+    UNREFERENCED_PARAMETER(IoStatus);
+    UNREFERENCED_PARAMETER(DeviceObject);
+
 	DDbgPrint("DokanFastIoRead\n");
 	return FALSE;
 }
@@ -113,6 +131,9 @@ DokanFilterCallbackAcquireForCreateSection(
 	)
 {
 	PFSRTL_ADVANCED_FCB_HEADER	header;
+
+    UNREFERENCED_PARAMETER(CompletionContext);
+
 	DDbgPrint("DokanFilterCallbackAcquireForCreateSection\n");
 
 	header = CallbackData->FileObject->FsContext;
@@ -153,12 +174,12 @@ Return Value:
 --*/
 
 {
-	PDEVICE_OBJECT		deviceObject;
 	NTSTATUS			status;
 	PFAST_IO_DISPATCH	fastIoDispatch;
-	UNICODE_STRING		functionName;
 	FS_FILTER_CALLBACKS filterCallbacks;
 	PDOKAN_GLOBAL		dokanGlobal = NULL;
+
+    UNREFERENCED_PARAMETER(RegistryPath);
 
 	DDbgPrint("==> DriverEntry ver.%x, %s %s\n", DOKAN_DRIVER_VERSION, __DATE__, __TIME__);
 
@@ -199,7 +220,12 @@ Return Value:
 	DriverObject->MajorFunction[IRP_MJ_SET_SECURITY]		= DokanDispatchSetSecurity;
 
 	fastIoDispatch = ExAllocatePool(sizeof(FAST_IO_DISPATCH));
-	// TODO: check fastIoDispatch
+    if (!fastIoDispatch)
+    {
+        IoDeleteDevice(dokanGlobal->DeviceObject);
+        DDbgPrint("  ExAllocatePool failed");
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
 	RtlZeroMemory(fastIoDispatch, sizeof(FAST_IO_DISPATCH));
 
@@ -298,6 +324,8 @@ DokanDispatchShutdown(
 	__in PIRP Irp
    )
 {
+    UNREFERENCED_PARAMETER(DeviceObject);
+
 	PAGED_CODE();
 	DDbgPrint("==> DokanShutdown\n");
 
@@ -320,6 +348,8 @@ DokanDispatchPnp(
 {
 	PIO_STACK_LOCATION	irpSp;
 	NTSTATUS			status = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(DeviceObject);
 
 	PAGED_CODE();
 

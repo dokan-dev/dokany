@@ -338,8 +338,6 @@ Return Value:
 	NTSTATUS			status = STATUS_INVALID_PARAMETER;
 	PFILE_OBJECT		fileObject;
 	ULONG				info = 0;
-	PEPROCESS			process;
-	PUNICODE_STRING		processImageName;
 	PEVENT_CONTEXT		eventContext;
 	PFILE_OBJECT		relatedFileObject;
 	ULONG				fileNameLength = 0;
@@ -348,7 +346,6 @@ Return Value:
 	PDokanCCB			ccb;
 	PWCHAR				fileName;
 	BOOLEAN				needBackSlashAfterRelatedFile = FALSE;
-	HANDLE				accessTokenHandle;
 
 	PAGED_CODE();
 
@@ -608,6 +605,7 @@ DokanCompleteCreate(
 		break;
 	}
 
+    KeEnterCriticalRegion();
 	ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 	if (NT_SUCCESS(status) &&
 		(irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE ||
@@ -620,12 +618,15 @@ DokanCompleteCreate(
 		fcb->Flags |= DOKAN_FILE_DIRECTORY;
 	}
 	ExReleaseResourceLite(&fcb->Resource);
+    KeLeaveCriticalRegion();
 
+    KeEnterCriticalRegion();
 	ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
 	if (NT_SUCCESS(status)) {
 		ccb->Flags |= DOKAN_FILE_OPENED;
 	}
 	ExReleaseResourceLite(&ccb->Resource);
+    KeLeaveCriticalRegion();
 
 	if (NT_SUCCESS(status)) {
 		if (info == FILE_CREATED) {

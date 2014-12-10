@@ -29,10 +29,7 @@ DokanDispatchQueryInformation(
 {
 	NTSTATUS				status = STATUS_NOT_IMPLEMENTED;
 	PIO_STACK_LOCATION		irpSp;
-	PVOID					buffer;
-	ULONG					remainingLength;
 	PFILE_OBJECT			fileObject;
-	FILE_INFORMATION_CLASS	fileInfo;
 	PDokanCCB				ccb;
 	PDokanFCB				fcb;
 	PDokanVCB				vcb;
@@ -140,21 +137,29 @@ DokanDispatchQueryInformation(
 			
 				DDbgPrint("  FilePositionInformation\n");
 
-				if (irpSp->Parameters.QueryFile.Length < sizeof(FILE_POSITION_INFORMATION)) {
-					status = STATUS_INSUFFICIENT_RESOURCES;
-			
-				} else {
-					posInfo = (PFILE_POSITION_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-					ASSERT(posInfo != NULL);
+                if (irpSp->Parameters.QueryFile.Length < sizeof(FILE_POSITION_INFORMATION)) {
+                    status = STATUS_INFO_LENGTH_MISMATCH;
 
-					RtlZeroMemory(posInfo, sizeof(FILE_POSITION_INFORMATION));
-				
-					// set the current file offset
-					posInfo->CurrentByteOffset = fileObject->CurrentByteOffset;
-				
-					info = sizeof(FILE_POSITION_INFORMATION);
-					status = STATUS_SUCCESS;
-				}
+                }
+                else {
+                    posInfo = (PFILE_POSITION_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+                    ASSERT(posInfo != NULL);
+
+                    RtlZeroMemory(posInfo, sizeof(FILE_POSITION_INFORMATION));
+
+                    if (fileObject->CurrentByteOffset.QuadPart < 0)
+                    {
+                        status = STATUS_INVALID_PARAMETER;
+                    }
+                    else
+                    {
+                        // set the current file offset
+                        posInfo->CurrentByteOffset = fileObject->CurrentByteOffset;
+
+                        info = sizeof(FILE_POSITION_INFORMATION);
+                        status = STATUS_SUCCESS;
+                    }
+                }
 				__leave;
 			}
 			break;
@@ -302,9 +307,7 @@ DokanDispatchSetInformation(
 	NTSTATUS			status = STATUS_NOT_IMPLEMENTED;
 	PIO_STACK_LOCATION  irpSp;
 	PVOID				buffer;
-	ULONG				remainingLength;
 	PFILE_OBJECT		fileObject;
-	FILE_INFORMATION_CLASS fileInfo;
 	PDokanCCB			ccb;
 	PDokanFCB			fcb;
 	PDokanVCB			vcb;
@@ -313,6 +316,8 @@ DokanDispatchSetInformation(
 	PEVENT_CONTEXT		eventContext;
 
 	PAGED_CODE();
+
+    vcb = DeviceObject->DeviceExtension;
 
 	__try {
 		FsRtlEnterFileSystem();
@@ -328,7 +333,6 @@ DokanDispatchSetInformation(
 			__leave;
 		}
 		
-		vcb = DeviceObject->DeviceExtension;
 		if (GetIdentifierType(vcb) != VCB ||
 			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
 			status = STATUS_INVALID_PARAMETER;
@@ -506,6 +510,7 @@ DokanCompleteSetInformation(
 
 	FILE_INFORMATION_CLASS infoClass;
     irp = IrpEntry->Irp;
+    status = EventInfo->Status;
 
 	__try {
 
@@ -523,7 +528,6 @@ DokanCompleteSetInformation(
 
 		ccb->UserContext = EventInfo->Context;
 
-		status = EventInfo->Status;
 		info = EventInfo->BufferLength;
 
 		infoClass = irpSp->Parameters.SetFile.FileInformationClass;
@@ -574,6 +578,7 @@ DokanCompleteSetInformation(
 					status = STATUS_INSUFFICIENT_RESOURCES;
 					ExReleaseResourceLite(&fcb->Resource);
 					ExReleaseResourceLite(&ccb->Resource);
+                    KeLeaveCriticalRegion();
 					__leave;
 				}
 
@@ -592,6 +597,7 @@ DokanCompleteSetInformation(
 		}
 
 		ExReleaseResourceLite(&ccb->Resource);
+        KeLeaveCriticalRegion();
 
 		if (NT_SUCCESS(status)) {
 			switch (irpSp->Parameters.SetFile.FileInformationClass) {

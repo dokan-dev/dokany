@@ -422,10 +422,9 @@ Return Value:
 	PDokanDCB			dcb;
 	PIO_STACK_LOCATION	irpSp;
 	NTSTATUS			status = STATUS_NOT_IMPLEMENTED;
-	ULONG				controlCode;
+	ULONG				controlCode = 0;
 	// {DCA0E0A5-D2CA-4f0f-8416-A6414657A77A}
-	GUID dokanGUID = 
-		{ 0xdca0e0a5, 0xd2ca, 0x4f0f, { 0x84, 0x16, 0xa6, 0x41, 0x46, 0x57, 0xa7, 0x7a } };
+	// GUID dokanGUID = { 0xdca0e0a5, 0xd2ca, 0x4f0f, { 0x84, 0x16, 0xa6, 0x41, 0x46, 0x57, 0xa7, 0x7a } };
 
 
 	__try {

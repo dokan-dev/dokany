@@ -26,7 +26,7 @@ DokanGetAccessToken(
    __in PIRP			Irp
    )
 {
-	KIRQL				oldIrql;
+	KIRQL				oldIrql = 0;
     PLIST_ENTRY			thisEntry, nextEntry, listHead;
 	PIRP_ENTRY			irpEntry;
 	PDokanVCB			vcb;

@@ -249,7 +249,6 @@ NotificationLoop(
 	PLIST_ENTRY	listHead;
 	PIRP_ENTRY	irpEntry;
 	LIST_ENTRY	completeList;
-	NTSTATUS	status;
 	KIRQL	irpIrql;
 	KIRQL	notifyIrql;
 	PIRP	irp;

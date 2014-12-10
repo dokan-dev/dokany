@@ -31,6 +31,8 @@ DokanUserFsRequest(
 	NTSTATUS			status = STATUS_NOT_IMPLEMENTED;
 	PIO_STACK_LOCATION	irpSp;
 
+    UNREFERENCED_PARAMETER(DeviceObject);
+
 	irpSp = IoGetCurrentIrpStackLocation(Irp);
 
 	switch(irpSp->Parameters.FileSystemControl.FsControlCode) {
@@ -331,7 +333,7 @@ DokanDispatchFileSystemControl(
 				vpb->DeviceObject = vcb->DeviceObject;
 				vpb->RealDevice = vcb->DeviceObject;
 				vpb->Flags |= VPB_MOUNTED;
-				vpb->VolumeLabelLength = wcslen(VOLUME_LABEL) * sizeof(WCHAR);
+				vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
 				RtlStringCchCopyW(vpb->VolumeLabel, sizeof(vpb->VolumeLabel) / sizeof(WCHAR), VOLUME_LABEL);
 				vpb->SerialNumber = 0x19831116;
 				status = STATUS_SUCCESS;

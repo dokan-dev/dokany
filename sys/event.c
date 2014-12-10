@@ -30,8 +30,10 @@ DokanIrpCancelRoutine(
 {
     KIRQL               oldIrql;
     PIRP_ENTRY			irpEntry;
-	ULONG				serialNumber;
+	ULONG				serialNumber = 0;
 	PIO_STACK_LOCATION	irpSp;
+
+    UNREFERENCED_PARAMETER(DeviceObject);
 
     DDbgPrint("==> DokanIrpCancelRoutine\n");
 
@@ -408,7 +410,6 @@ DokanEventStart(
 {
 	ULONG				outBufferLen;
 	ULONG				inBufferLen;
-	PVOID				buffer;
 	PIO_STACK_LOCATION	irpSp;
 	EVENT_START			eventStart;
 	PEVENT_DRIVER_INFO	driverInfo;

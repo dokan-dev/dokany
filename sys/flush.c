@@ -30,7 +30,6 @@ DokanDispatchFlush(
 {
 	PIO_STACK_LOCATION	irpSp;
 	PFILE_OBJECT		fileObject;
-	PVOID				buffer;
 	NTSTATUS			status = STATUS_INVALID_PARAMETER;
 	PDokanFCB			fcb;
 	PDokanCCB			ccb;
@@ -121,9 +120,7 @@ DokanCompleteFlush(
 	PIRP				irp;
 	PIO_STACK_LOCATION	irpSp;
 	NTSTATUS			status   = STATUS_SUCCESS;
-	ULONG				info	 = 0;
 	PDokanCCB			ccb;
-	PDokanFCB			fcb;
 	PFILE_OBJECT		fileObject;
 
 	irp   = IrpEntry->Irp;

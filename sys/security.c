@@ -31,9 +31,6 @@ DokanDispatchQuerySecurity(
 	PFILE_OBJECT		fileObject;
 	ULONG				info = 0;
 	ULONG				bufferLength;
-	SECURITY_DESCRIPTOR dummySecurityDesc;
-	ULONG				descLength;
-	PSECURITY_DESCRIPTOR securityDesc;
 	PSECURITY_INFORMATION securityInfo;
 	PDokanFCB			fcb;
 	PDokanDCB			dcb;
@@ -75,6 +72,10 @@ DokanDispatchQuerySecurity(
 			__leave;
 		}
 		fcb = ccb->Fcb;
+        if (fcb == NULL) {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            __leave;
+        }
 
 		bufferLength = irpSp->Parameters.QuerySecurity.Length;
 		securityInfo = &irpSp->Parameters.QuerySecurity.SecurityInformation;
@@ -226,7 +227,6 @@ DokanDispatchSetSecurity(
 	ULONG				info = 0;
 	PSECURITY_INFORMATION	securityInfo;
 	PSECURITY_DESCRIPTOR	securityDescriptor;
-	PSECURITY_DESCRIPTOR	selfRelativesScurityDescriptor = NULL;
 	ULONG				securityDescLength;
 	ULONG				eventLength;
 	PEVENT_CONTEXT		eventContext;
@@ -263,6 +263,10 @@ DokanDispatchSetSecurity(
 			__leave;
 		}
 		fcb = ccb->Fcb;
+        if (fcb == NULL) {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            __leave;
+        }
 
 		securityInfo = &irpSp->Parameters.SetSecurity.SecurityInformation;
 

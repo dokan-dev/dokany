@@ -142,7 +142,6 @@ DokanCompleteCleanup(
 	PIRP				irp;
 	PIO_STACK_LOCATION	irpSp;
 	NTSTATUS			status   = STATUS_SUCCESS;
-	ULONG				info	 = 0;
 	PDokanCCB			ccb;
 	PDokanFCB			fcb;
 	PDokanVCB			vcb;

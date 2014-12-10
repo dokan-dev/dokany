@@ -37,7 +37,6 @@ DokanDispatchWrite(
 	PDokanFCB			fcb;
 	PDokanVCB			vcb;
 	PVOID				buffer;
-	ULONG				bufferLength;
 
 	PAGED_CODE();
 
@@ -241,9 +240,6 @@ DokanCompleteWrite(
 	PIRP				irp;
 	PIO_STACK_LOCATION	irpSp;
 	NTSTATUS			status     = STATUS_SUCCESS;
-	ULONG				readLength = 0;
-	ULONG				bufferLen  = 0;
-	PVOID				buffer	   = NULL;
 	PDokanCCB			ccb;
 	PFILE_OBJECT		fileObject;
 

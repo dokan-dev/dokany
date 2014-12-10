@@ -398,7 +398,6 @@ DokanCreateDiskDevice(
 	PDokanVCB			vcb;
 	UNICODE_STRING		diskDeviceName;
 	NTSTATUS			status;
-	PUNICODE_STRING		symbolicLinkTarget;
 	BOOLEAN				isNetworkFileSystem = (DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
 	// make DeviceName and SymboliLink
@@ -558,7 +557,7 @@ DokanCreateDiskDevice(
 		diskDeviceObject->Vpb->DeviceObject = fsDeviceObject;
 		diskDeviceObject->Vpb->RealDevice = fsDeviceObject;
 		diskDeviceObject->Vpb->Flags |= VPB_MOUNTED;
-		diskDeviceObject->Vpb->VolumeLabelLength = wcslen(VOLUME_LABEL) * sizeof(WCHAR);
+		diskDeviceObject->Vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
 		RtlStringCchCopyW(diskDeviceObject->Vpb->VolumeLabel,
 						sizeof(diskDeviceObject->Vpb->VolumeLabel) / sizeof(WCHAR),
 						VOLUME_LABEL);
@@ -628,8 +627,6 @@ VOID
 DokanDeleteDeviceObject(
 	__in PDokanDCB Dcb)
 {
-	UNICODE_STRING		symbolicLinkName;
-	WCHAR				symbolicLinkBuf[MAXIMUM_FILENAME_LENGTH];
 	PDokanVCB			vcb;
 
 	ASSERT(GetIdentifierType(Dcb) == DCB);
