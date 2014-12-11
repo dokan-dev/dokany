@@ -745,26 +745,23 @@ namespace Dokan
             try
             {
                 string file = GetFileName(rawFileName);
+                DateTime? ctime = null;
+                DateTime? atime = null;
+                DateTime? mtime = null;
 
                 long time;
 
                 time = ((long)rawCreationTime.dwHighDateTime << 32) + (uint)rawCreationTime.dwLowDateTime;
-                DateTime ctime = DateTime.FromFileTime(time);
-                
-                if (time == 0)
-                    ctime = DateTime.MinValue;
+                if (time > 0)
+                    ctime = DateTime.FromFileTime(time);
 
                 time = ((long)rawLastAccessTime.dwHighDateTime << 32) + (uint)rawLastAccessTime.dwLowDateTime;
-                DateTime atime = DateTime.FromFileTime(time);
-
-                if (time == 0)
-                    atime = DateTime.MinValue;
+                if (time > 0)
+                    atime = DateTime.FromFileTime(time);
 
                 time = ((long)rawLastWriteTime.dwHighDateTime << 32) + (uint)rawLastWriteTime.dwLowDateTime;
-                DateTime mtime = DateTime.FromFileTime(time);
-
-                if (time == 0)
-                    mtime = DateTime.MinValue;
+                if (time > 0)
+                    mtime = DateTime.FromFileTime(time);
 
                 return operations_.SetFileTime(
                     file, ctime, atime, mtime, GetFileInfo(ref rawFileInfo));

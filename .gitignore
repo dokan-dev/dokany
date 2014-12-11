@@ -17,3 +17,5 @@ Release
 ipch
 bin
 obj
+*.exe
+ReleasePS

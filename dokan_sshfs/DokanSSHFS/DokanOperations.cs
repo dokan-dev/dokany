@@ -764,22 +764,22 @@ namespace DokanSSHFS
 
         public int SetFileTime(
             String filename,
-            DateTime ctime,
-            DateTime atime,
-            DateTime mtime,
+            DateTime? ctime,
+            DateTime? atime,
+            DateTime? mtime,
             DokanFileInfo info)
         {
             Debug("SetFileTime {0}", filename);
             try
             {
-                Debug(" filetime {0} {1} {2}", ctime.ToString(), atime.ToString(), mtime.ToString());
+                Debug(" filetime {0} {1} {2}", ctime.HasValue ? ctime.ToString() : "-", atime.HasValue ? atime.ToString() : "-", mtime.HasValue ? mtime.ToString() : "-");
 
                 string path = GetPath(filename);
                 ChannelSftp channel = GetChannel();
                 SftpATTRS attr = channel.stat(path);
 
-                TimeSpan at = (atime - new DateTime(1970, 1, 1, 0, 0, 0));
-                TimeSpan mt = (mtime - new DateTime(1970, 1, 1, 0, 0, 0));
+                TimeSpan at = (atime.GetValueOrDefault(DateTime.MinValue) - new DateTime(1970, 1, 1, 0, 0, 0));
+                TimeSpan mt = (mtime.GetValueOrDefault(DateTime.MinValue) - new DateTime(1970, 1, 1, 0, 0, 0));
 
                 int uat = (int)at.TotalSeconds;
                 int umt = (int)mt.TotalSeconds;

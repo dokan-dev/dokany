@@ -269,8 +269,8 @@ namespace DokanSSHFS
             return ope_.SetFileAttributes(filename, attr, info);
         }
 
-        public int SetFileTime(string filename, DateTime ctime, DateTime atime,
-            DateTime mtime, DokanFileInfo info)
+        public int SetFileTime(string filename, DateTime? ctime, DateTime? atime,
+            DateTime? mtime, DokanFileInfo info)
         {
             CacheEntry entry = cache_.Lookup(filename);
             entry.RemoveGetFileInfoCache();

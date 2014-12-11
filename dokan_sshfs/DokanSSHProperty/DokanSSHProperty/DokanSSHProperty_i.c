@@ -5,18 +5,18 @@
 /* link this file in with the server and any clients */
 
 
- /* File created by MIDL compiler version 6.00.0366 */
-/* at Tue Jun 10 22:15:10 2008
+ /* File created by MIDL compiler version 8.00.0603 */
+/* at Thu Dec 11 15:53:03 2014
  */
-/* Compiler settings for .\DokanSSHProperty.idl:
-    Oicf, W1, Zp8, env=Win32 (32b run)
+/* Compiler settings for DokanSSHProperty.idl:
+    Oicf, W1, Zp8, env=Win32 (32b run), target_arch=X86 8.00.0603 
     protocol : dce , ms_ext, c_ext
     error checks: allocation ref bounds_check enum stub_data 
     VC __declspec() decoration level: 
          __declspec(uuid()), __declspec(selectany), __declspec(novtable)
          DECLSPEC_UUID(), MIDL_INTERFACE()
 */
-//@@MIDL_FILE_HEADING(  )
+/* @@MIDL_FILE_HEADING(  ) */
 
 #pragma warning( disable: 4049 )  /* more than 64k source lines */
 

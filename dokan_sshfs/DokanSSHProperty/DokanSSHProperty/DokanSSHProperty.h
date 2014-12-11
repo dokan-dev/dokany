@@ -3,18 +3,18 @@
 /* this ALWAYS GENERATED file contains the definitions for the interfaces */
 
 
- /* File created by MIDL compiler version 6.00.0366 */
-/* at Tue Jun 10 22:15:10 2008
+ /* File created by MIDL compiler version 8.00.0603 */
+/* at Thu Dec 11 15:53:03 2014
  */
-/* Compiler settings for .\DokanSSHProperty.idl:
-    Oicf, W1, Zp8, env=Win32 (32b run)
+/* Compiler settings for DokanSSHProperty.idl:
+    Oicf, W1, Zp8, env=Win32 (32b run), target_arch=X86 8.00.0603 
     protocol : dce , ms_ext, c_ext
     error checks: allocation ref bounds_check enum stub_data 
     VC __declspec() decoration level: 
          __declspec(uuid()), __declspec(selectany), __declspec(novtable)
          DECLSPEC_UUID(), MIDL_INTERFACE()
 */
-//@@MIDL_FILE_HEADING(  )
+/* @@MIDL_FILE_HEADING(  ) */
 
 #pragma warning( disable: 4049 )  /* more than 64k source lines */
 
@@ -48,6 +48,7 @@
 #ifndef __ISSHProperty_FWD_DEFINED__
 #define __ISSHProperty_FWD_DEFINED__
 typedef interface ISSHProperty ISSHProperty;
+
 #endif 	/* __ISSHProperty_FWD_DEFINED__ */
 
 
@@ -71,8 +72,6 @@ typedef struct SSHProperty SSHProperty;
 extern "C"{
 #endif 
 
-void * __RPC_USER MIDL_user_allocate(size_t);
-void __RPC_USER MIDL_user_free( void * ); 
 
 #ifndef __ISSHProperty_INTERFACE_DEFINED__
 #define __ISSHProperty_INTERFACE_DEFINED__
@@ -91,6 +90,7 @@ EXTERN_C const IID IID_ISSHProperty;
     public:
     };
     
+    
 #else 	/* C style interface */
 
     typedef struct ISSHPropertyVtbl
@@ -100,7 +100,8 @@ EXTERN_C const IID IID_ISSHProperty;
         HRESULT ( STDMETHODCALLTYPE *QueryInterface )( 
             ISSHProperty * This,
             /* [in] */ REFIID riid,
-            /* [iid_is][out] */ void **ppvObject);
+            /* [annotation][iid_is][out] */ 
+            _COM_Outptr_  void **ppvObject);
         
         ULONG ( STDMETHODCALLTYPE *AddRef )( 
             ISSHProperty * This);
@@ -122,13 +123,13 @@ EXTERN_C const IID IID_ISSHProperty;
 
 
 #define ISSHProperty_QueryInterface(This,riid,ppvObject)	\
-    (This)->lpVtbl -> QueryInterface(This,riid,ppvObject)
+    ( (This)->lpVtbl -> QueryInterface(This,riid,ppvObject) ) 
 
 #define ISSHProperty_AddRef(This)	\
-    (This)->lpVtbl -> AddRef(This)
+    ( (This)->lpVtbl -> AddRef(This) ) 
 
 #define ISSHProperty_Release(This)	\
-    (This)->lpVtbl -> Release(This)
+    ( (This)->lpVtbl -> Release(This) ) 
 
 
 #endif /* COBJMACROS */

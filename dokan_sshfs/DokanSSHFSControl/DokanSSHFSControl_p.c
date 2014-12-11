@@ -3,29 +3,33 @@
 /* this ALWAYS GENERATED file contains the proxy stub code */
 
 
- /* File created by MIDL compiler version 6.00.0366 */
-/* at Tue Jun 10 22:14:22 2008
+ /* File created by MIDL compiler version 8.00.0603 */
+/* at Thu Dec 11 16:03:27 2014
  */
-/* Compiler settings for .\DokanSSHFSControl.idl:
-    Oicf, W1, Zp8, env=Win32 (32b run)
+/* Compiler settings for DokanSSHFSControl.idl:
+    Oicf, W1, Zp8, env=Win32 (32b run), target_arch=X86 8.00.0603 
     protocol : dce , ms_ext, c_ext
     error checks: allocation ref bounds_check enum stub_data 
     VC __declspec() decoration level: 
          __declspec(uuid()), __declspec(selectany), __declspec(novtable)
          DECLSPEC_UUID(), MIDL_INTERFACE()
 */
-//@@MIDL_FILE_HEADING(  )
+/* @@MIDL_FILE_HEADING(  ) */
 
-#if !defined(_M_IA64) && !defined(_M_AMD64)
+#if !defined(_M_IA64) && !defined(_M_AMD64) && !defined(_ARM_)
 
 
 #pragma warning( disable: 4049 )  /* more than 64k source lines */
 #if _MSC_VER >= 1200
 #pragma warning(push)
 #endif
-#pragma warning( disable: 4100 ) /* unreferenced arguments in x86 call */
-#pragma warning( disable: 4211 )  /* redefine extent to static */
+
+#pragma warning( disable: 4211 )  /* redefine extern to static */
 #pragma warning( disable: 4232 )  /* dllimport identity*/
+#pragma warning( disable: 4024 )  /* array to pointer mapping*/
+#pragma warning( disable: 4152 )  /* function/data pointer conversion in expression */
+#pragma warning( disable: 4100 ) /* unreferenced arguments in x86 call */
+
 #pragma optimize("", off ) 
 
 #define USE_STUBLESS_PROXY
@@ -40,35 +44,43 @@
 #include "rpcproxy.h"
 #ifndef __RPCPROXY_H_VERSION__
 #error this stub requires an updated version of <rpcproxy.h>
-#endif // __RPCPROXY_H_VERSION__
+#endif /* __RPCPROXY_H_VERSION__ */
 
 
 #include "DokanSSHFSControl.h"
 
 #define TYPE_FORMAT_STRING_SIZE   3                                 
 #define PROC_FORMAT_STRING_SIZE   1                                 
+#define EXPR_FORMAT_STRING_SIZE   1                                 
 #define TRANSMIT_AS_TABLE_SIZE    0            
 #define WIRE_MARSHAL_TABLE_SIZE   0            
 
-typedef struct _MIDL_TYPE_FORMAT_STRING
+typedef struct _DokanSSHFSControl_MIDL_TYPE_FORMAT_STRING
     {
     short          Pad;
     unsigned char  Format[ TYPE_FORMAT_STRING_SIZE ];
-    } MIDL_TYPE_FORMAT_STRING;
+    } DokanSSHFSControl_MIDL_TYPE_FORMAT_STRING;
 
-typedef struct _MIDL_PROC_FORMAT_STRING
+typedef struct _DokanSSHFSControl_MIDL_PROC_FORMAT_STRING
     {
     short          Pad;
     unsigned char  Format[ PROC_FORMAT_STRING_SIZE ];
-    } MIDL_PROC_FORMAT_STRING;
+    } DokanSSHFSControl_MIDL_PROC_FORMAT_STRING;
+
+typedef struct _DokanSSHFSControl_MIDL_EXPR_FORMAT_STRING
+    {
+    long          Pad;
+    unsigned char  Format[ EXPR_FORMAT_STRING_SIZE ];
+    } DokanSSHFSControl_MIDL_EXPR_FORMAT_STRING;
 
 
-static RPC_SYNTAX_IDENTIFIER  _RpcTransferSyntax = 
+static const RPC_SYNTAX_IDENTIFIER  _RpcTransferSyntax = 
 {{0x8A885D04,0x1CEB,0x11C9,{0x9F,0xE8,0x08,0x00,0x2B,0x10,0x48,0x60}},{2,0}};
 
 
-extern const MIDL_TYPE_FORMAT_STRING __MIDL_TypeFormatString;
-extern const MIDL_PROC_FORMAT_STRING __MIDL_ProcFormatString;
+extern const DokanSSHFSControl_MIDL_TYPE_FORMAT_STRING DokanSSHFSControl__MIDL_TypeFormatString;
+extern const DokanSSHFSControl_MIDL_PROC_FORMAT_STRING DokanSSHFSControl__MIDL_ProcFormatString;
+extern const DokanSSHFSControl_MIDL_EXPR_FORMAT_STRING DokanSSHFSControl__MIDL_ExprFormatString;
 
 
 extern const MIDL_STUB_DESC Object_StubDesc;
@@ -84,14 +96,14 @@ extern const MIDL_STUBLESS_PROXY_INFO ISSHFSControl_ProxyInfo;
 #endif
 
 #if !(TARGET_IS_NT40_OR_LATER)
-#error You need a Windows NT 4.0 or later to run this stub because it uses these features:
+#error You need Windows NT 4.0 or later to run this stub because it uses these features:
 #error   -Oif or -Oicf.
 #error However, your C/C++ compilation flags indicate you intend to run this app on earlier systems.
-#error This app will die there with the RPC_X_WRONG_STUB_VERSION error.
+#error This app will fail with the RPC_X_WRONG_STUB_VERSION error.
 #endif
 
 
-static const MIDL_PROC_FORMAT_STRING __MIDL_ProcFormatString =
+static const DokanSSHFSControl_MIDL_PROC_FORMAT_STRING DokanSSHFSControl__MIDL_ProcFormatString =
     {
         0,
         {
@@ -100,7 +112,7 @@ static const MIDL_PROC_FORMAT_STRING __MIDL_ProcFormatString =
         }
     };
 
-static const MIDL_TYPE_FORMAT_STRING __MIDL_TypeFormatString =
+static const DokanSSHFSControl_MIDL_TYPE_FORMAT_STRING DokanSSHFSControl__MIDL_TypeFormatString =
     {
         0,
         {
@@ -127,7 +139,7 @@ static const unsigned short ISSHFSControl_FormatStringOffsetTable[] =
 static const MIDL_STUBLESS_PROXY_INFO ISSHFSControl_ProxyInfo =
     {
     &Object_StubDesc,
-    __MIDL_ProcFormatString.Format,
+    DokanSSHFSControl__MIDL_ProcFormatString.Format,
     &ISSHFSControl_FormatStringOffsetTable[-3],
     0,
     0,
@@ -139,7 +151,7 @@ static const MIDL_SERVER_INFO ISSHFSControl_ServerInfo =
     {
     &Object_StubDesc,
     0,
-    __MIDL_ProcFormatString.Format,
+    DokanSSHFSControl__MIDL_ProcFormatString.Format,
     &ISSHFSControl_FormatStringOffsetTable[-3],
     0,
     0,
@@ -173,27 +185,27 @@ static const MIDL_STUB_DESC Object_StubDesc =
     0,
     0,
     0,
-    __MIDL_TypeFormatString.Format,
+    DokanSSHFSControl__MIDL_TypeFormatString.Format,
     1, /* -error bounds_check flag */
     0x20000, /* Ndr library version */
     0,
-    0x600016e, /* MIDL Version 6.0.366 */
+    0x800025b, /* MIDL Version 8.0.603 */
     0,
     0,
     0,  /* notify & notify_flag routine table */
     0x1, /* MIDL flag */
     0, /* cs routines */
     0,   /* proxy/server info */
-    0   /* Reserved5 */
+    0
     };
 
-const CInterfaceProxyVtbl * _DokanSSHFSControl_ProxyVtblList[] = 
+const CInterfaceProxyVtbl * const _DokanSSHFSControl_ProxyVtblList[] = 
 {
     ( CInterfaceProxyVtbl *) &_ISSHFSControlProxyVtbl,
     0
 };
 
-const CInterfaceStubVtbl * _DokanSSHFSControl_StubVtblList[] = 
+const CInterfaceStubVtbl * const _DokanSSHFSControl_StubVtblList[] = 
 {
     ( CInterfaceStubVtbl *) &_ISSHFSControlStubVtbl,
     0
@@ -225,7 +237,7 @@ const ExtendedProxyFileInfo DokanSSHFSControl_ProxyFileInfo =
     (PCInterfaceProxyVtblList *) & _DokanSSHFSControl_ProxyVtblList,
     (PCInterfaceStubVtblList *) & _DokanSSHFSControl_StubVtblList,
     (const PCInterfaceName * ) & _DokanSSHFSControl_InterfaceNamesList,
-    0, // no delegation
+    0, /* no delegation */
     & _DokanSSHFSControl_IID_Lookup, 
     1,
     2,
@@ -240,5 +252,5 @@ const ExtendedProxyFileInfo DokanSSHFSControl_ProxyFileInfo =
 #endif
 
 
-#endif /* !defined(_M_IA64) && !defined(_M_AMD64)*/
+#endif /* !defined(_M_IA64) && !defined(_M_AMD64) && !defined(_ARM_) */
 

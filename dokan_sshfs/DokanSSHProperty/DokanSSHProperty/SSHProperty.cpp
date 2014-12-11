@@ -11,54 +11,6 @@ extern CDokanSSHPropertyModule _AtlModule;
 static BOOL g_UseStdErr = FALSE;
 
 static BOOL
-CheckMount(WCHAR drive)
-{
-	HANDLE pipe;
-	DWORD readBytes;
-	DWORD pipeMode;
-
-	DOKAN_CONTROL control;
-	ZeroMemory(&control, sizeof(DOKAN_CONTROL));
-
-	control.Type = DOKAN_CONTROL_CHECK;
-	control.Check.Drive = drive;
-
-	DokanDbgPrintW(L"CheckMount Drive: %c\n", drive);
-
-	pipe = CreateFile(DOKAN_CONTROL_PIPE,
-		GENERIC_READ|GENERIC_WRITE,
-		0, NULL, OPEN_EXISTING, 0, NULL);
-
-	if (pipe == INVALID_HANDLE_VALUE) {
-		if (GetLastError() == ERROR_ACCESS_DENIED) {
-			DokanDbgPrintW(L"failed to connect DokanMounter service: access denied\n");
-		} else {
-			DokanDbgPrintW(L"failed to connect DokanMounter service: %d\n", GetLastError());
-		}
-		return FALSE;
-	}
-
-	pipeMode = PIPE_READMODE_MESSAGE|PIPE_WAIT;
-
-	if(!SetNamedPipeHandleState(pipe, &pipeMode, NULL, NULL)) {
-		DokanDbgPrintW(L"failed to set named pipe state\n");
-		return FALSE;
-	}
-
-
-	if(!TransactNamedPipe(pipe, &control, sizeof(DOKAN_CONTROL),
-		&control, sizeof(DOKAN_CONTROL), &readBytes, NULL)) {
-		
-		DokanDbgPrintW(L"failed to transact named pipe\n");
-	}
-
-	if(control.Status != DOKAN_CONTROL_FAIL)
-		return TRUE;
-	else
-		return FALSE;
-}
-
-static BOOL
 CheckMount2(LPCWSTR FileName)
 {
 	std::wstring file = std::wstring(FileName) + L":SSHFSProperty.Permission";

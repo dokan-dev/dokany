@@ -6,7 +6,7 @@ namespace Dokan
 {
     public class DokanFileInfo
     {
-        public Object Context;
+        public ulong Context;
         public bool IsDirectory;
         public ulong InfoId;
         public uint ProcessId;
@@ -19,7 +19,7 @@ namespace Dokan
 
         public DokanFileInfo(ulong dokanContext)
         {
-            Context = null;
+            Context = 0;
             IsDirectory = false;
             DeleteOnClose = false;
             PagingIo = false;
@@ -110,9 +110,9 @@ namespace Dokan
 
         int SetFileTime(
                 string filename,
-                DateTime ctime,
-                DateTime atime,
-                DateTime mtime,
+                DateTime? ctime,
+                DateTime? atime,
+                DateTime? mtime,
                 DokanFileInfo info);
 
         int DeleteFile(
