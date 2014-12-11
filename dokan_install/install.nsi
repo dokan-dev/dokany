@@ -30,20 +30,19 @@ UninstPage instfiles
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\dokan\objchk_${os}_x86\i386\dokan.lib
-    File ..\dokan_control\objchk_${os}_x86\i386\dokanctl.exe
-    File ..\dokan_mount\objchk_${os}_x86\i386\mounter.exe
+    File ..\Release\dokan.lib
+    File ..\Release\dokanctl.exe
+    File ..\Release\mounter.exe
 
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\sample\mirror
 
-    File ..\dokan_mirror\makefile
-    File ..\dokan_mirror\mirror.c
-    File ..\dokan_mirror\sources
-    File ..\dokan_mirror\objchk_${os}_x86\i386\mirror.exe
+    File ..\dokan_mirror\dokan_mirror.vcxproj
+	File ..\dokan_mirror\mirror.c
+    File ..\Release\mirror.exe
 
   SetOutPath $SYSDIR
 
-    File ..\dokan\objchk_${os}_x86\i386\dokan.dll
+    File ..\Release\dokan.dll
 
 !macroend
 
@@ -95,7 +94,7 @@ UninstPage instfiles
 
 !macro X86Driver os
   SetOutPath $SYSDIR\drivers
-    File ..\sys\objchk_${os}_x86\i386\dokan.sys
+    File ..\${os}Release\dokan.sys
 !macroend
 
 !macro X64Driver os
@@ -103,7 +102,7 @@ UninstPage instfiles
 
   SetOutPath $SYSDIR\drivers
 
-    File ..\sys\objchk_${os}_amd64\amd64\dokan.sys
+    File ..\x64\${os}Release\dokan.sys
 
   ${EnableX64FSRedirection}
 !macroend
@@ -111,46 +110,50 @@ UninstPage instfiles
 
 Section "Dokan Library x86" section_x86
   ${If} ${IsWin7}
-    !insertmacro X86Files "win7"
+    !insertmacro X86Files "Win7"
   ${ElseIf} ${IsWin2008R2}
-    !insertmacro X86Files "win7"
-  ${ElseIf} ${IsWinVista}
-    !insertmacro X86Files "wlh"
-  ${ElseIf} ${IsWin2008}
-    !insertmacro X86Files "wlh"
-  ${ElseIf} ${IsWin2003}
-    !insertmacro X86Files "wnet"
-  ${ElseIf} ${IsWinXp}
-    !insertmacro X86Files "wxp"
+    !insertmacro X86Files "Win7"
+  ${ElseIf} ${IsWin8}
+    !insertmacro X86Files "Win8"
+  ${ElseIf} ${IsWin2012}
+    !insertmacro X86Files "Win8"
+  ${ElseIf} ${IsWin8.1}
+    !insertmacro X86Files "Win8.1"
+  ${ElseIf} ${IsWin2012R2}
+    !insertmacro X86Files "Win8.1"
   ${EndIf}
 SectionEnd
 
 Section "Dokan Driver x86" section_x86_driver
   ${If} ${IsWin7}
-    !insertmacro X86Driver "win7"
-  ${ElseIf} ${IsWinVista}
-    !insertmacro X86Driver "wlh"
-  ${ElseIf} ${IsWin2008}
-    !insertmacro X86Driver "wlh"
-  ${ElseIf} ${IsWin2003}
-    !insertmacro X86Driver "wnet"
-  ${ElseIf} ${IsWinXp}
-    !insertmacro X86Driver "wxp"
+    !insertmacro X86Driver "Win7"
+  ${ElseIf} ${IsWin2008R2}
+    !insertmacro X86Driver "Win7"
+  ${ElseIf} ${IsWin8}
+    !insertmacro X86Driver "Win8"
+  ${ElseIf} ${IsWin2012}
+    !insertmacro X86Driver "Win8"
+  ${ElseIf} ${IsWin8.1}
+    !insertmacro X86Driver "Win8.1"
+  ${ElseIf} ${IsWin2012R2}
+    !insertmacro X86Driver "Win8.1"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
 
 Section "Dokan Driver x64" section_x64_driver
   ${If} ${IsWin7}
-    !insertmacro X64Driver "win7"
+    !insertmacro X64Driver "Win7"
   ${ElseIf} ${IsWin2008R2}
-    !insertmacro X64Driver "win7"
-  ${ElseIf} ${IsWinVista}
-    !insertmacro X64Driver "wlh"
-  ${ElseIf} ${IsWin2008}
-    !insertmacro X64Driver "wlh"
-  ${ElseIf} ${IsWin2003}
-    !insertmacro X64Driver "wnet"
+    !insertmacro X64Driver "Win7"
+  ${ElseIf} ${IsWin8}
+    !insertmacro X64Driver "Win8"
+  ${ElseIf} ${IsWin2012}
+    !insertmacro X64Driver "Win8"
+  ${ElseIf} ${IsWin8.1}
+    !insertmacro X64Driver "Win8.1"
+  ${ElseIf} ${IsWin2012R2}
+    !insertmacro X64Driver "Win8.1"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
@@ -211,23 +214,25 @@ Function .onInit
   ; Windows Version check
 
   ${If} ${RunningX64}
-    ${If} ${IsWin2003}
-    ${ElseIf} ${IsWinVista}
-    ${ElseIf} ${IsWin2008}
-    ${ElseIf} ${IsWin2008R2}
+    ${If} ${IsWin2008R2}
     ${ElseIf} ${IsWin7}
+	${ElseIf} ${IsWin2012}
+	${ElseIf} ${IsWin8}
+	${ElseIf} ${IsWin2012R2}
+	${ElseIf} ${IsWin8.1}
     ${Else}
-      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2003, Vista, 2008, 2008R2 and 7 for x64."
+      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1 for x64."
       Abort
     ${EndIf}
   ${Else}
-    ${If} ${IsWinXP}
-    ${ElseIf} ${IsWin2003}
-    ${ElseIf} ${IsWinVista}
-    ${ElseIf} ${IsWin2008}
+    ${If} ${IsWin2008R2}
     ${ElseIf} ${IsWin7}
+	${ElseIf} ${IsWin2012}
+	${ElseIf} ${IsWin8}
+	${ElseIf} ${IsWin2012R2}
+	${ElseIf} ${IsWin8.1}
     ${Else}
-      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows XP, 2003, Vista, 2008 and 7 for x86."
+      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1 for x86."
       Abort
     ${EndIf}
   ${EndIf}
