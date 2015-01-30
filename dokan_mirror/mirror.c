@@ -230,6 +230,8 @@ MirrorCreateDirectory(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	WCHAR filePath[MAX_PATH];
 	GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -389,7 +391,9 @@ MirrorReadFile(
 		opened = TRUE;
 	}
 	
-	if (SetFilePointer(handle, offset, NULL, FILE_BEGIN) == 0xFFFFFFFF) {
+    LARGE_INTEGER distanceToMove;
+    distanceToMove.QuadPart = Offset;
+    if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
 		DbgPrint(L"\tseek error, offset = %d\n\n", offset);
 		if (opened)
 			CloseHandle(handle);
@@ -451,12 +455,18 @@ MirrorWriteFile(
 		opened = TRUE;
 	}
 
+    LARGE_INTEGER distanceToMove;
+    distanceToMove.QuadPart = Offset;
+
 	if (DokanFileInfo->WriteToEndOfFile) {
-		if (SetFilePointer(handle, 0, NULL, FILE_END) == INVALID_SET_FILE_POINTER) {
+        LARGE_INTEGER z;
+        z.QuadPart = 0;
+		if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
 			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", GetLastError());
 			return -1;
 		}
-	} else if (SetFilePointer(handle, offset, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+    }
+    else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
 		DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, GetLastError());
 		return -1;
 	}
@@ -625,8 +635,10 @@ MirrorDeleteFile(
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	WCHAR	filePath[MAX_PATH];
-	HANDLE	handle = (HANDLE)DokanFileInfo->Context;
+	//HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -641,8 +653,10 @@ MirrorDeleteDirectory(
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	WCHAR	filePath[MAX_PATH];
-	HANDLE	handle = (HANDLE)DokanFileInfo->Context;
+	//HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 	HANDLE	hFind;
 	WIN32_FIND_DATAW	findData;
 	ULONG	fileLen;
@@ -838,6 +852,8 @@ MirrorSetFileAttributes(
 	DWORD				FileAttributes,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	WCHAR	filePath[MAX_PATH];
 	
 	GetFilePath(filePath, MAX_PATH, FileName);
@@ -1000,6 +1016,8 @@ MirrorGetVolumeInformation(
 	DWORD		FileSystemNameSize,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	wcscpy_s(VolumeNameBuffer, VolumeNameSize / sizeof(WCHAR), L"DOKAN");
 	*VolumeSerialNumber = 0x19831116;
 	*MaximumComponentLength = 256;
@@ -1019,6 +1037,8 @@ static int DOKAN_CALLBACK
 MirrorUnmount(
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+    UNREFERENCED_PARAMETER(DokanFileInfo);
+
 	DbgPrint(L"Unmount\n");
 	return 0;
 }
