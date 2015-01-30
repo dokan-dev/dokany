@@ -44,7 +44,7 @@ DokanDispatchDirectoryControl(
 	PIO_STACK_LOCATION	irpSp;
 	PDokanVCB			vcb;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 		FsRtlEnterFileSystem();

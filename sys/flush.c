@@ -37,7 +37,7 @@ DokanDispatchFlush(
 	PEVENT_CONTEXT		eventContext;
 	ULONG				eventLength;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 	
 	__try {
 		FsRtlEnterFileSystem();

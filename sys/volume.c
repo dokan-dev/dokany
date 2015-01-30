@@ -37,7 +37,7 @@ DokanDispatchQueryVolumeInformation(
 	PDokanCCB			ccb;
 	ULONG               info = 0;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 
@@ -258,7 +258,7 @@ DokanDispatchSetVolumeInformation(
 
     UNREFERENCED_PARAMETER(DeviceObject);
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	//FsRtlEnterFileSystem();
 

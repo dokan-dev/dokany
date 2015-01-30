@@ -38,7 +38,7 @@ DokanDispatchQueryInformation(
 	PEVENT_CONTEXT			eventContext;
 
 
-	PAGED_CODE();
+	//PAGED_CODE();
 	
 	__try {
 		FsRtlEnterFileSystem();
@@ -315,7 +315,7 @@ DokanDispatchSetInformation(
 	PFILE_OBJECT		targetFileObject;
 	PEVENT_CONTEXT		eventContext;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
     vcb = DeviceObject->DeviceExtension;
 

@@ -55,7 +55,7 @@ Return Value:
 	ULONG				eventLength;
 	PDokanFCB			fcb;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 

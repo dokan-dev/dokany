@@ -54,7 +54,7 @@ Return Value:
 	PEVENT_CONTEXT		eventContext;
 	ULONG				eventLength;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 

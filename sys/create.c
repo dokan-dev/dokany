@@ -347,7 +347,7 @@ Return Value:
 	PWCHAR				fileName;
 	BOOLEAN				needBackSlashAfterRelatedFile = FALSE;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 		FsRtlEnterFileSystem();

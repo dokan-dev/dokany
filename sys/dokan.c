@@ -300,7 +300,7 @@ Return Value:
 	WCHAR			symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
 	UNICODE_STRING	symbolicLinkName;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 	DDbgPrint("==> DokanUnload\n");
 
 	if (GetIdentifierType(deviceObject->DeviceExtension) == DGL) {
@@ -326,7 +326,7 @@ DokanDispatchShutdown(
 {
     UNREFERENCED_PARAMETER(DeviceObject);
 
-	PAGED_CODE();
+	//PAGED_CODE();
 	DDbgPrint("==> DokanShutdown\n");
 
 	Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -351,7 +351,7 @@ DokanDispatchPnp(
 
     UNREFERENCED_PARAMETER(DeviceObject);
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 		DDbgPrint("==> DokanPnp\n");

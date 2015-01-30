@@ -38,7 +38,7 @@ DokanDispatchWrite(
 	PDokanVCB			vcb;
 	PVOID				buffer;
 
-	PAGED_CODE();
+	//PAGED_CODE();
 
 	__try {
 
