@@ -1,0 +1,17 @@
+LIBRARY	"dokan"
+
+EXPORTS
+		DokanMain
+		DokanUnmount
+		DokanRemoveMountPoint
+		DokanIsNameInExpression
+		DokanVersion
+		DokanDriverVersion
+		DokanResetTimeout
+		DokanOpenRequestorToken
+		DokanMountControl
+		DokanNetworkProviderInstall
+		DokanNetworkProviderUninstall
+		DokanServiceDelete
+		DokanServiceInstall
+		DokanSetDebugMode
