@@ -521,6 +521,7 @@ DokanCompleteSetInformation(
 		ccb = IrpEntry->FileObject->FsContext2;
 		ASSERT(ccb != NULL);
 
+        KeEnterCriticalRegion();
 		ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
 
 		fcb = ccb->Fcb;
