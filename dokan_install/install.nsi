@@ -25,7 +25,6 @@ UninstPage instfiles
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary
  
     File ..\dokan\readme.txt
-    File ..\dokan\readme.ja.txt
     File ..\dokan\dokan.h
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
@@ -52,7 +51,6 @@ UninstPage instfiles
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary
 
     File ..\dokan\readme.txt
-    File ..\dokan\readme.ja.txt
     File ..\dokan\dokan.h
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
