@@ -3,7 +3,7 @@ configuration:
 - Release
 - Win7 Release
 - Win8 Release
-- Win 8.1 Release
+- Win8.1 Release
 platform:
 - Win32
 - x64
