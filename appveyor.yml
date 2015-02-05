@@ -1,0 +1,13 @@
+version: 0.7.1-{build}
+configuration:
+- Release
+- Win7 Release
+- Win8 Release
+- Win 8.1 Release
+platform:
+- Win32
+- x64
+os: Windows Server 2012 R2
+build:
+  project: dokan.sln
+  verbosity: minimal

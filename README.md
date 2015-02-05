@@ -1,4 +1,5 @@
 # Dokany
+[![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 
 ## Dokany is a Fork of Dokan 0.6.0 synced with DokanX fork
 Because the original [Dokan](http://dokan-dev.net/en/docs/) project is no longer maintained.
