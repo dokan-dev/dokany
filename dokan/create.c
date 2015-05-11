@@ -116,7 +116,7 @@ DispatchCreate(
 	} else {
 		DWORD creationDisposition = OPEN_EXISTING;
 		fileInfo.IsDirectory = FALSE;
-		DbgPrint("   CreateDisposition %0x08X\n", disposition);
+		DbgPrint("   CreateDisposition 0x%08X\n", disposition);
 		switch(disposition) {
 			case FILE_CREATE:
 				creationDisposition = CREATE_NEW;
