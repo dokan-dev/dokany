@@ -9,9 +9,9 @@ What is Dokan Library
 =====================
 
 When you want to create a new file system on Windows, for example to
-improve FAT or NTFS, you need to develope a file system
+improve FAT or NTFS, you need to develop a file system
 driver. Developing a device driver that works in kernel mode on
-windows is extremley difficult.By using Dokan library, you can create
+windows is extremely difficult.By using Dokan library, you can create
 your own file systems very easily without writing device driver. Dokan
 Library is similar to FUSE(Linux user mode file system) but works on
 Windows.
@@ -25,10 +25,10 @@ Dokan library contains LGPL, MIT licensed programs.
 - user-mode library (dokan.dll)  LGPL
 - driver (dokan.sys)             LGPL
 - control program (dokanctl.exe) MIT
-- mount service (mouter.exe)     MIT
+- mount service (mounter.exe)    MIT
 - samples (mirror.c)             MIT
 
-For detals, please check license files.
+For details, please check license files.
 LGPL license.lgpl.txt
 GPL  license.gpl.txt
 MIT  license.mit.txt
@@ -39,7 +39,7 @@ You can obtain source files from http://dokan-dev.net/en/download
 Environment
 ===========
 
-Dokan Library works on Windowx XP,2003,Vista,2008,7 x86 and Windows
+Dokan Library works on Windows XP,2003,Vista,2008,7 x86 and Windows
 2003,Vista,2008,7 x64.
 
 
@@ -75,7 +75,7 @@ Components of the Library and installation
 ==========================================
 
 When the installer executes, it will install Dokan file system driver
-(dokan.sys), register Dokan mount service (mouter.exe) and several
+(dokan.sys), register Dokan mount service (mounter.exe) and several
 libraries. The detailed list of files installed is as follows:
 
 SystemFolder\dokan.dll
@@ -85,7 +85,7 @@ SystemFolder\drivers\dokan.sys
    Dokan File System Driver
 
 ProgramFilesFolder\Dokan\DokanLibrary\mounter.exe
-   Dokan mouter service
+   Dokan mounter service
 
 ProgramFilesFolder\Dokan\DokanLibrary\dokanctl.exe
    Dokan control program
@@ -118,7 +118,7 @@ occur.
 
 These functions are typically invoked in this sequence:
 
-1. CreateFile(OpenDirectory, OpenDirectory)
+1. CreateFile (or OpenDirectory, CreateDirectory)
 2. Other functions
 3. Cleanup
 4. CloseFile
@@ -130,7 +130,7 @@ get called by the Dokan file system driver when the file is closed by
 the CloseFile Windows API.  Each function should return 0 when the
 operation succeeded, otherwise it should return a negative value
 represents error code. The error codes are negated Windows System
-Error Codes. For examaple, when CreateFile can't open a file, you
+Error Codes. For example, when CreateFile can't open a file, you
 should return -2( -1 * ERROR_FILE_NOT_FOUND).
 
 The last parameter of each function is a DOKAN_FILE_INFO structure :
@@ -219,17 +219,17 @@ work in this case.
        PDOKAN_FILE_INFO); //  (see PFillFindData definition)
 
 
-   // You should implement either FindFires or FindFilesWithPattern
+   // You should implement either FindFiles or FindFilesWithPattern
    int (*FindFilesWithPattern) (
        LPCWSTR,           // PathName
        LPCWSTR,           // SearchPattern
        PFillFindData,     // call this function with PWIN32_FIND_DATAW
        PDOKAN_FILE_INFO);
 
-FindFiles or FindFilesWithPattern is called in order to response to
-directory listing requests. You should implement either FielFiles or
-FileFilesWithPttern.  For each directory entry, file system
-application should call the function FillFindData (passed as a
+FindFiles or FindFilesWithPattern are called in order to respond to
+directory listing requests. You should implement either FindFiles or
+FindFilesWithPattern.  For each directory entry, file system
+applications should call the function FillFindData (passed as a
 function pointer to FindFiles, FindFilesWithPattern) with the
 WIN32_FIND_DATAW structure filled with directory information:
 FillFindData( &win32FindDataw, DokanFileInfo ).  It is the
@@ -284,7 +284,7 @@ Dokan options are as follows:
     Dokan library may change the behavior based on this version number.
     ie. 530 (Dokan 0.5.3)
   ThreadCount :
-    The number of threads internaly used by the Dokan library.
+    The number of threads internally used by the Dokan library.
     If this value is set to 0, the default value will be used.
     When debugging the file system, file system application should
     set this value to 1 to avoid nondeterministic behaviors of
@@ -292,11 +292,11 @@ Dokan options are as follows:
   Options :
     A Combination of DOKAN_OPTION_* constants.
   GlobalContext :
-    Your filrsystem can use this variable to store a mount specific
+    Your filesystem can use this variable to store a mount specific
     structure.
   MountPoint :
-    A mount point. "M:\" drive letter or "C:\mount\dokan" a directory
-    (needs empty) in NTFS
+    A mount point. Either a "M:\" drive letter or a "C:\mount\dokan" directory
+    (needs to be empty) in NTFS.
 
 If the mount operation succeeded, the return value is DOKAN_SUCCESS,
 otherwise, the following error code is returned.
