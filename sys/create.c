@@ -174,7 +174,7 @@ DokanFreeFCB(
 	ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
 	ExAcquireResourceExclusiveLite(&Fcb->Resource, TRUE);
 
-	InterlockedDecrement(&Fcb->FileCount)
+	InterlockedDecrement(&Fcb->FileCount);
 
 	if (Fcb->FileCount == 0) {
 
