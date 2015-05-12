@@ -313,10 +313,11 @@ otherwise, the following error code is returned.
 Unmounting
 ==========
 
-File system can be unmounted by calling the function DokanUnmount.  In
-most cases when the programs or shells use the file system hang,
-unmount operation will solve the problems by bringing the system to
-the previous state when the file system is not mounted.
+File system can be unmounted by calling the function DokanUnmount or
+DokanRemoveMountPoint.  In most cases when the programs or shells use
+the file system hang, unmount operation will solve the problems by
+bringing the system to the previous state when the file system is not
+mounted.
 
 User may use DokanCtl to unmount file system like this:
    > dokanctl.exe /u DriveLetter
