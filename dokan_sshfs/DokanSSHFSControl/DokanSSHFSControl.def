@@ -1,9 +1,0 @@
-; DokanSSHFSControl.def : モジュール パラメータを宣言します。
-
-LIBRARY      "DokanSSHFSControl.DLL"
-
-EXPORTS
-	DllCanUnloadNow		PRIVATE
-	DllGetClassObject	PRIVATE
-	DllRegisterServer	PRIVATE
-	DllUnregisterServer	PRIVATE
