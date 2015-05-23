@@ -86,4 +86,11 @@ For details, see the [build page](https://github.com/dokan-dev/dokany/wiki/Build
 For manual installation, see the [installation page](https://github.com/dokan-dev/dokany/wiki/Installation).
 
 ## Contribute
-A fork initiative for Dokan is hard work and we don't want to split the small Dokan community. We forked the project again because of undesired changes (our opinion) on DokanX as explained before.
+You want Dokan to get better? Contribute!
+
+
+Learn the code and suggest your changes on [Dokan git repository](https://github.com/dokan-dev).
+
+Detect defects and report them on [Dokan issue tracker](https://github.com/dokan-dev/dokany/issues).
+
+Ask and answer questions on [Dokan discussion group](https://groups.google.com/forum/#!forum/dokan).

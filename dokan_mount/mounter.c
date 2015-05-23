@@ -363,7 +363,7 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 
 		eventNo = WaitForMultipleObjects(3, eventArray, FALSE, INFINITE) - WAIT_OBJECT_0;
 
-		DbgPrintW(L"DokanMouner: get an event\n");
+		DbgPrintW(L"DokanMounter: get an event\n");
 
 		if (eventNo == 0) {
 
