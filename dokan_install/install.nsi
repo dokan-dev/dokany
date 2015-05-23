@@ -30,6 +30,7 @@ UninstPage instfiles
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\Win32\Release\dokan.lib
+    File ..\Win32\Release\dokanfuse.lib
     File ..\Win32\Release\dokanctl.exe
     File ..\Win32\Release\mounter.exe
 
@@ -55,6 +56,7 @@ UninstPage instfiles
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\x64\Release\dokan.lib
+    File ..\x64\Release\dokanfuse.lib
     File ..\x64\Release\dokanctl.exe
     File ..\x64\Release\mounter.exe
 

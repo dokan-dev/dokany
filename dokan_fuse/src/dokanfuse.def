@@ -1,0 +1,83 @@
+LIBRARY	dokanfuse
+
+EXPORTS
+
+; Optionals
+fuse_opt_parse
+fuse_opt_add_opt
+fuse_opt_add_arg
+fuse_opt_insert_arg
+fuse_opt_free_args
+fuse_opt_match
+
+; Main FUSE
+fuse_new
+fuse_destroy
+fuse_loop
+fuse_exit
+fuse_is_lib_option
+fuse_loop_mt
+fuse_get_context
+fuse_interrupted
+fuse_main_real
+
+fuse_setup
+fuse_teardown
+fuse_get_session
+
+; Stacking
+;fuse_fs_getattr
+;fuse_fs_fgetattr
+;fuse_fs_rename
+;fuse_fs_unlink
+;fuse_fs_rmdir
+;fuse_fs_symlink
+;fuse_fs_link
+;fuse_fs_release
+;fuse_fs_open
+;fuse_fs_read
+;fuse_fs_write
+;fuse_fs_fsync
+;fuse_fs_flush
+;fuse_fs_statfs
+;fuse_fs_opendir
+;fuse_fs_readdir
+;fuse_fs_fsyncdir
+;fuse_fs_releasedir
+;fuse_fs_create
+;fuse_fs_lock
+;fuse_fs_chmod
+;fuse_fs_chown
+;fuse_fs_truncate
+;fuse_fs_ftruncate
+;fuse_fs_utimens
+;fuse_fs_access
+;fuse_fs_readlink
+;fuse_fs_mknod
+;fuse_fs_mkdir
+;fuse_fs_setxattr
+;fuse_fs_getxattr
+;fuse_fs_listxattr
+;fuse_fs_removexattr
+;fuse_fs_bmap
+;fuse_fs_init
+;fuse_fs_destroy
+
+; Modules
+;fuse_fs_new
+;fuse_register_module
+
+; Fuse Common
+fuse_mount
+fuse_unmount
+fuse_parse_cmdline
+fuse_daemonize
+fuse_version
+fuse_set_signal_handlers
+fuse_remove_signal_handlers
+
+; Win32 Helpers
+win32_error_to_errno
+errno_to_win32_error
+convert_args
+free_converted_args
