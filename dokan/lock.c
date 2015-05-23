@@ -34,7 +34,7 @@ DispatchLock(
 	PDOKAN_OPEN_INFO	openInfo;
 	int status;
 
-	CheckFileName(EventContext->Lock.FileName);
+	CheckFileName(EventContext->Operation.Lock.FileName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -48,11 +48,11 @@ DispatchLock(
 		if (DokanInstance->DokanOperations->LockFile) {
 
 			status = DokanInstance->DokanOperations->LockFile(
-						EventContext->Lock.FileName,
-						EventContext->Lock.ByteOffset.QuadPart,
-						EventContext->Lock.Length.QuadPart,
-						//EventContext->Lock.Key,
-						&fileInfo);
+				EventContext->Operation.Lock.FileName,
+				EventContext->Operation.Lock.ByteOffset.QuadPart,
+				EventContext->Operation.Lock.Length.QuadPart,
+				//EventContext->Operation.Lock.Key,
+				&fileInfo);
 
 			eventInfo->Status = status < 0 ?
 				STATUS_LOCK_NOT_GRANTED : STATUS_SUCCESS;
@@ -66,11 +66,11 @@ DispatchLock(
 		if (DokanInstance->DokanOperations->UnlockFile) {
 		
 			status = DokanInstance->DokanOperations->UnlockFile(
-						EventContext->Lock.FileName,
-						EventContext->Lock.ByteOffset.QuadPart,
-						EventContext->Lock.Length.QuadPart,
-						//EventContext->Lock.Key,
-						&fileInfo);
+				EventContext->Operation.Lock.FileName,
+				EventContext->Operation.Lock.ByteOffset.QuadPart,
+				EventContext->Operation.Lock.Length.QuadPart,
+				//EventContext->Operation.Lock.Key,
+				&fileInfo);
 
 			eventInfo->Status = STATUS_SUCCESS; // at any time return success ?
 		}

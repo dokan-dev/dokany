@@ -123,7 +123,7 @@ AllocateEventContext(
 		return NULL;
 	}
 	SetCommonEventContext(Dcb, eventContext, Irp, Ccb);
-	eventContext->SerialNumber = InterlockedIncrement(&Dcb->SerialNumber);
+	eventContext->SerialNumber = InterlockedIncrement((LONG*)&Dcb->SerialNumber);
 
 	return eventContext;
 }
@@ -377,26 +377,22 @@ NotificationThread(
 	events[3] = &Dcb->Global->PendingService.NotEmpty;
 	events[4] = &Dcb->Global->NotifyService.NotEmpty;
 
-	while (1) {
+	do {
 		status = KeWaitForMultipleObjects(
 			5, events, WaitAny, Executive, KernelMode, FALSE, NULL, waitBlock);
 
-		if (status == STATUS_WAIT_0) {
-			;
-			break;
-
-		} else if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
-
-			NotificationLoop(
+		if (status != STATUS_WAIT_0) {
+			if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
+				NotificationLoop(
 					&Dcb->PendingEvent,
 					&Dcb->NotifyEvent);
-
-		} else {
-			NotificationLoop(
-				&Dcb->Global->PendingService,
-				&Dcb->Global->NotifyService);
+			} else {
+				NotificationLoop(
+					&Dcb->Global->PendingService,
+					&Dcb->Global->NotifyService);
+			}
 		}
-	}
+	} while (status != STATUS_WAIT_0);
 
 	ExFreePool(waitBlock);
 	DDbgPrint("<== NotificationThread\n");

@@ -255,7 +255,7 @@ DokanControlMount(
 	LPCWSTR	MountPoint,
 	LPCWSTR	DeviceName)
 {
-	ULONG length = wcslen(MountPoint);
+	size_t length = wcslen(MountPoint);
 
 	if (length == 1 ||
 		(length == 2 && MountPoint[1] == L':') ||
@@ -272,7 +272,7 @@ DokanControlUnmount(
 	LPCWSTR	MountPoint)
 {
     
-	ULONG	length = wcslen(MountPoint);
+	size_t	length = wcslen(MountPoint);
 
 	if (length == 1 ||
 		(length == 2 && MountPoint[1] == L':') ||

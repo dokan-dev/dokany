@@ -51,7 +51,7 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 	RtlZeroMemory(eventInfo, eventInfoSize);
 
 	eventInfo->SerialNumber = eventContext->SerialNumber;
-	eventInfo->ResetTimeout.Timeout = Timeout;
+	eventInfo->Operation.ResetTimeout.Timeout = Timeout;
 
 	status = SendToDevice(
 				GetRawDeviceName(instance->DeviceName),

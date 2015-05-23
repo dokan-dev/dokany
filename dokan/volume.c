@@ -92,7 +92,7 @@ DokanFsVolumeInformation(
 		DokanOperations->GetVolumeInformation = DokanGetVolumeInformation;
 	}
 
-	remainingLength = EventContext->Volume.BufferLength;
+	remainingLength = EventContext->Operation.Volume.BufferLength;
 
 	if (remainingLength < sizeof(FILE_FS_VOLUME_INFORMATION)) {
 		return STATUS_BUFFER_OVERFLOW;
@@ -123,7 +123,7 @@ DokanFsVolumeInformation(
 	
 	remainingLength -= FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
 	
-	bytesToCopy = wcslen(volumeName) * sizeof(WCHAR);
+	bytesToCopy = (ULONG)wcslen(volumeName) * sizeof(WCHAR);
 	if (remainingLength < bytesToCopy) {
 		bytesToCopy = remainingLength;
 	}
@@ -132,7 +132,7 @@ DokanFsVolumeInformation(
 	RtlCopyMemory(volumeInfo->VolumeLabel, volumeName, bytesToCopy);
 	remainingLength -= bytesToCopy;
 
-	EventInfo->BufferLength = EventContext->Volume.BufferLength - remainingLength;
+	EventInfo->BufferLength = EventContext->Operation.Volume.BufferLength - remainingLength;
 	
 	return STATUS_SUCCESS;
 }
@@ -159,7 +159,7 @@ DokanFsSizeInformation(
 		DokanOperations->GetDiskFreeSpace = DokanGetDiskFreeSpace;
 	}
 
-	if (EventContext->Volume.BufferLength < sizeof(FILE_FS_SIZE_INFORMATION) ) {
+	if (EventContext->Operation.Volume.BufferLength < sizeof(FILE_FS_SIZE_INFORMATION)) {
 		return STATUS_BUFFER_OVERFLOW;
 	}
 
@@ -209,7 +209,7 @@ DokanFsAttributeInformation(
 		//return STATUS_NOT_IMPLEMENTED;
 	}
 
-	remainingLength = EventContext->Volume.BufferLength;
+	remainingLength = EventContext->Operation.Volume.BufferLength;
 
 	if (remainingLength < sizeof(FILE_FS_ATTRIBUTE_INFORMATION)) {
 		return STATUS_BUFFER_OVERFLOW;
@@ -239,7 +239,7 @@ DokanFsAttributeInformation(
 
 	remainingLength -= FIELD_OFFSET(FILE_FS_ATTRIBUTE_INFORMATION, FileSystemName[0]);
 	
-	bytesToCopy = wcslen(fsName) * sizeof(WCHAR);
+	bytesToCopy = (ULONG)wcslen(fsName) * sizeof(WCHAR);
 	if (remainingLength < bytesToCopy) {
 		bytesToCopy = remainingLength;
 	}
@@ -248,7 +248,7 @@ DokanFsAttributeInformation(
 	RtlCopyMemory(attrInfo->FileSystemName, fsName, bytesToCopy);
 	remainingLength -= bytesToCopy;
 
-	EventInfo->BufferLength = EventContext->Volume.BufferLength - remainingLength;
+	EventInfo->BufferLength = EventContext->Operation.Volume.BufferLength - remainingLength;
 	
 	return STATUS_SUCCESS;
 }
@@ -275,7 +275,7 @@ DokanFsFullSizeInformation(
 		//return STATUS_NOT_IMPLEMENTED;
 	}
 
-	if (EventContext->Volume.BufferLength < sizeof(FILE_FS_FULL_SIZE_INFORMATION) ) {
+	if (EventContext->Operation.Volume.BufferLength < sizeof(FILE_FS_FULL_SIZE_INFORMATION)) {
 		return STATUS_BUFFER_OVERFLOW;
 	}
 
@@ -311,7 +311,7 @@ DispatchQueryVolumeInformation(
 	DOKAN_FILE_INFO			fileInfo;
 	PDOKAN_OPEN_INFO		openInfo;
 	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION)
-								- 8 + EventContext->Volume.BufferLength;
+		- 8 + EventContext->Operation.Volume.BufferLength;
 
 	eventInfo = (PEVENT_INFORMATION)malloc(sizeOfEventInfo);
 
@@ -333,7 +333,7 @@ DispatchQueryVolumeInformation(
 
 	DbgPrint("###QueryVolumeInfo %04d\n", openInfo ? openInfo->EventId : -1);
 
-	switch (EventContext->Volume.FsInformationClass) {
+	switch (EventContext->Operation.Volume.FsInformationClass) {
 	case FileFsVolumeInformation:
 		eventInfo->Status = DokanFsVolumeInformation(
 								eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
@@ -351,7 +351,7 @@ DispatchQueryVolumeInformation(
 								eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
 		break;
 	default:
-		DbgPrint("error unknown volume info %d\n", EventContext->Volume.FsInformationClass);
+		DbgPrint("error unknown volume info %d\n", EventContext->Operation.Volume.FsInformationClass);
 	}
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, NULL);

@@ -55,11 +55,11 @@ DokanUnmount(
 	deviceNamePos = Dcb->SymbolicLinkName->Length / sizeof(WCHAR) - 1;
 	for (; Dcb->SymbolicLinkName->Buffer[deviceNamePos] != L'\\'; --deviceNamePos)
 		;
-	RtlStringCchCopyW(eventContext->Unmount.DeviceName,
-			sizeof(eventContext->Unmount.DeviceName) / sizeof(WCHAR),
-			&(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
+	RtlStringCchCopyW(eventContext->Operation.Unmount.DeviceName,
+		sizeof(eventContext->Operation.Unmount.DeviceName) / sizeof(WCHAR),
+		&(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
-	DDbgPrint("  Send Unmount to Service : %ws\n", eventContext->Unmount.DeviceName);
+	DDbgPrint("  Send Unmount to Service : %ws\n", eventContext->Operation.Unmount.DeviceName);
 
 	DokanEventNotification(&Dcb->Global->NotifyService, eventContext);
 
@@ -223,7 +223,7 @@ DokanResetPendingIrpTimeout(
 	eventInfo		= (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
 	ASSERT(eventInfo != NULL);
 
-	timeout = eventInfo->ResetTimeout.Timeout;
+	timeout = eventInfo->Operation.ResetTimeout.Timeout;
 	if (DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX < timeout) {
 		timeout = DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX;
 	}
@@ -273,6 +273,7 @@ Routine Description:
 	KTIMER			timer;
 	PVOID			pollevents[2];
 	LARGE_INTEGER	timeout = {0};
+	BOOLEAN			waitObj = TRUE;
 
 	DDbgPrint("==> DokanTimeoutThread\n");
 
@@ -283,19 +284,19 @@ Routine Description:
 
 	KeSetTimerEx(&timer, timeout, DOKAN_CHECK_INTERVAL, NULL);
 	
-	while (TRUE) {
+	while (waitObj) {
 		status = KeWaitForMultipleObjects(2, pollevents, WaitAny,
 			Executive, KernelMode, FALSE, NULL, NULL);
 		
 		if (!NT_SUCCESS(status) || status ==  STATUS_WAIT_0) {
 			DDbgPrint("  DokanTimeoutThread catched KillEvent\n");
 			// KillEvent or something error is occured
-			break;
+			waitObj = FALSE;
+		} else {
+			ReleaseTimeoutPendingIrp(Dcb);
+			if (Dcb->UseKeepAlive)
+				DokanCheckKeepAlive(Dcb);
 		}
-
-		ReleaseTimeoutPendingIrp(Dcb);
-		if (Dcb->UseKeepAlive)
-			DokanCheckKeepAlive(Dcb);
 	}
 
 	KeCancelTimer(&timer);

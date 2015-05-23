@@ -39,7 +39,7 @@ DokanFillDirInfo(
 	PWIN32_FIND_DATAW			FindData,
 	ULONG						Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileAttributes = FindData->dwFileAttributes;
@@ -72,7 +72,7 @@ DokanFillFullDirInfo(
 	PWIN32_FIND_DATAW			FindData,
 	ULONG						Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileAttributes = FindData->dwFileAttributes;
@@ -108,7 +108,7 @@ DokanFillIdFullDirInfo(
 	PWIN32_FIND_DATAW				FindData,
 	ULONG							Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileAttributes = FindData->dwFileAttributes;
@@ -144,7 +144,7 @@ DokanFillIdBothDirInfo(
 	PWIN32_FIND_DATAW				FindData,
 	ULONG							Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileAttributes = FindData->dwFileAttributes;
@@ -181,7 +181,7 @@ DokanFillBothDirInfo(
 	PWIN32_FIND_DATAW				FindData,
 	ULONG							Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileAttributes = FindData->dwFileAttributes;
@@ -217,7 +217,7 @@ DokanFillNamesInfo(
 	PWIN32_FIND_DATAW		FindData,
 	ULONG					Index)
 {
-	ULONG nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	Buffer->FileIndex = Index;
 	Buffer->FileNameLength = nameBytes;
@@ -237,7 +237,7 @@ DokanFillDirectoryInformation(
 	ULONG	nameBytes;
 	ULONG	thisEntrySize;
 	
-	nameBytes = wcslen(FindData->cFileName) * sizeof(WCHAR);
+	nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
 	thisEntrySize = nameBytes;
 
@@ -355,9 +355,9 @@ MatchFiles(
 	PWCHAR pattern = NULL;
 	
 	// search patten is specified
-	if (PatternCheck && EventContext->Directory.SearchPatternLength != 0) {
-		pattern = (PWCHAR)((SIZE_T)&EventContext->Directory.SearchPatternBase[0]
-					+ (SIZE_T)EventContext->Directory.SearchPatternOffset);
+	if (PatternCheck && EventContext->Operation.Directory.SearchPatternLength != 0) {
+		pattern = (PWCHAR)((SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0]
+			+ (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
 	}
 
 	listHead = FindDataList;
@@ -373,16 +373,16 @@ MatchFiles(
 
 		DbgPrintW(L"FileMatch? : %s (%s,%d,%d)\n", find->FindData.cFileName,
 			(pattern ? pattern : L"null"),
-			EventContext->Directory.FileIndex, index);
+			EventContext->Operation.Directory.FileIndex, index);
 
 		// pattern is not specified or pattern match is ignore cases
 		if (!pattern || DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
 			
-			if(EventContext->Directory.FileIndex <= index) {
+			if (EventContext->Operation.Directory.FileIndex <= index) {
 				// index+1 is very important, should use next entry index
 				ULONG entrySize = DokanFillDirectoryInformation(
-									EventContext->Directory.FileInformationClass,
-									currentBuffer, &lengthRemaining, &find->FindData, index+1);
+					EventContext->Operation.Directory.FileInformationClass,
+					currentBuffer, &lengthRemaining, &find->FindData, index+1);
 				// buffer is full
 				if (entrySize == 0)
 					break;
@@ -413,10 +413,10 @@ MatchFiles(
 	((PFILE_BOTH_DIR_INFORMATION)lastBuffer)->NextEntryOffset = 0;
 
 	// acctualy used length of buffer
-	EventInfo->BufferLength = EventContext->Directory.BufferLength - lengthRemaining;
+	EventInfo->BufferLength = EventContext->Operation.Directory.BufferLength - lengthRemaining;
 
 	// NO_MORE_FILES
-	if (index <= EventContext->Directory.FileIndex)
+	if (index <= EventContext->Operation.Directory.FileIndex)
 		return -1;
 
 	return index;
@@ -434,12 +434,12 @@ DispatchDirectoryInformation(
 	DOKAN_FILE_INFO		fileInfo;
 	PDOKAN_OPEN_INFO	openInfo;
 	int					status = 0;
-	ULONG				fileInfoClass = EventContext->Directory.FileInformationClass;
-	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Directory.BufferLength;
+	ULONG				fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
+	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Directory.BufferLength;
 
 	BOOLEAN				patternCheck = TRUE;
 
-	CheckFileName(EventContext->Directory.DirectoryName);
+	CheckFileName(EventContext->Operation.Directory.DirectoryName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -464,14 +464,14 @@ DispatchDirectoryInformation(
 
 	// IMPORTANT!!
 	// this buffer length is fixed in MatchFiles funciton
-	eventInfo->BufferLength		= EventContext->Directory.BufferLength; 
+	eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
 
 	if (openInfo->DirListHead == NULL) {
 		openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
 		InitializeListHead(openInfo->DirListHead);
 	}
 
-	if (EventContext->Directory.FileIndex == 0) {
+	if (EventContext->Operation.Directory.FileIndex == 0) {
 		ClearFindData(openInfo->DirListHead);
 	}
 
@@ -484,18 +484,18 @@ DispatchDirectoryInformation(
 			LPCWSTR	pattern = L"*";
 		
 			// if search pattern is specified
-			if (EventContext->Directory.SearchPatternLength != 0) {
-				pattern = (PWCHAR)((SIZE_T)&EventContext->Directory.SearchPatternBase[0]
-						+ (SIZE_T)EventContext->Directory.SearchPatternOffset);
+			if (EventContext->Operation.Directory.SearchPatternLength != 0) {
+				pattern = (PWCHAR)((SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0]
+					+ (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
 			}
 
 			patternCheck = FALSE; // do not recheck pattern later in MatchFiles
 
 			status = DokanInstance->DokanOperations->FindFilesWithPattern(
-						EventContext->Directory.DirectoryName,
-						pattern,
-						DokanFillFileData,
-						&fileInfo);
+				EventContext->Operation.Directory.DirectoryName,
+				pattern,
+				DokanFillFileData,
+				&fileInfo);
 	
 		} else if (DokanInstance->DokanOperations->FindFiles) {
 
@@ -503,9 +503,9 @@ DispatchDirectoryInformation(
 
 			// call FileSystem specifeid callback routine
 			status = DokanInstance->DokanOperations->FindFiles(
-						EventContext->Directory.DirectoryName,
-						DokanFillFileData,
-						&fileInfo);
+				EventContext->Operation.Directory.DirectoryName,
+				DokanFillFileData,
+				&fileInfo);
 		} else {
 			status = -1;
 		}
@@ -515,7 +515,7 @@ DispatchDirectoryInformation(
 
 	if (status < 0) {
 
-		if (EventContext->Directory.FileIndex == 0) {
+		if (EventContext->Operation.Directory.FileIndex == 0) {
 			DbgPrint("  STATUS_NO_SUCH_FILE\n");
 			eventInfo->Status = STATUS_NO_SUCH_FILE;
 		} else {
@@ -524,20 +524,20 @@ DispatchDirectoryInformation(
 		}
 
 		eventInfo->BufferLength = 0;
-		eventInfo->Directory.Index = EventContext->Directory.FileIndex;
+		eventInfo->Operation.Directory.Index = EventContext->Operation.Directory.FileIndex;
 		// free all of list entries
 		ClearFindData(openInfo->DirListHead);
 	} else {
 		LONG	index;
 		eventInfo->Status = STATUS_SUCCESS;
 
-		DbgPrint("index from %d\n", EventContext->Directory.FileIndex);
+		DbgPrint("index from %d\n", EventContext->Operation.Directory.FileIndex);
 		// extract entries that match search pattern from FindFiles result
 		index = MatchFiles(EventContext, eventInfo, openInfo->DirListHead, patternCheck);
 
 		// there is no matched file
 		if (index <0) {
-			if (EventContext->Directory.FileIndex == 0) {
+			if (EventContext->Operation.Directory.FileIndex == 0) {
 				DbgPrint("  STATUS_NO_SUCH_FILE\n");
 				eventInfo->Status = STATUS_NO_SUCH_FILE;
 			} else {
@@ -545,13 +545,13 @@ DispatchDirectoryInformation(
 				eventInfo->Status = STATUS_NO_MORE_FILES;
 			}
 			eventInfo->BufferLength = 0;
-			eventInfo->Directory.Index = EventContext->Directory.FileIndex;
+			eventInfo->Operation.Directory.Index = EventContext->Operation.Directory.FileIndex;
 
 			ClearFindData(openInfo->DirListHead);
 
 		} else {
 			DbgPrint("index to %d\n", index);
-			eventInfo->Directory.Index	= index;
+			eventInfo->Operation.Directory.Index = index;
 		}
 		
 	}
@@ -618,14 +618,17 @@ DokanIsNameInExpression(
 				p++;
 			}
 			
+			BOOL endReached = FALSE;
+			while (!endReached) {
 
-			while (TRUE) {
-				if (Name[ni] == '\0' || ni == lastDot)
-					break;
+				endReached = (Name[ni] == '\0' || ni == lastDot);
 
-				if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
-					return TRUE;
-				ni++;
+				if (!endReached) {
+					if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
+						return TRUE;
+
+					ni++;
+				}
 			}
 			
 		} else if (Expression[ei] == DOS_QM)  {

@@ -120,7 +120,7 @@ int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 int __cdecl
 wmain(int argc, PWCHAR argv[])
 {
-	ULONG	i;
+	size_t	i;
     WCHAR	fileName[MAX_PATH];
     WCHAR	driverFullPath[MAX_PATH] = { 0 };
     WCHAR	mounterFullPath[MAX_PATH] = { 0 };

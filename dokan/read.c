@@ -36,9 +36,9 @@ DispatchRead(
 	DOKAN_FILE_INFO			fileInfo;
 	ULONG					sizeOfEventInfo;
 	
-	sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Read.BufferLength;
+	sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Read.BufferLength;
 
-	CheckFileName(EventContext->Read.FileName);
+	CheckFileName(EventContext->Operation.Read.FileName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -47,12 +47,12 @@ DispatchRead(
 
 	if (DokanInstance->DokanOperations->ReadFile) {
 		status = DokanInstance->DokanOperations->ReadFile(
-						EventContext->Read.FileName,
-						eventInfo->Buffer,
-						EventContext->Read.BufferLength,
-						&readLength,
-						EventContext->Read.ByteOffset.QuadPart,
-						&fileInfo);
+			EventContext->Operation.Read.FileName,
+				eventInfo->Buffer,
+				EventContext->Operation.Read.BufferLength,
+				&readLength,
+				EventContext->Operation.Read.ByteOffset.QuadPart,
+				&fileInfo);
 	} else {
 		status = -1;
 	}
@@ -67,8 +67,8 @@ DispatchRead(
 	} else {
 		eventInfo->Status = STATUS_SUCCESS;
 		eventInfo->BufferLength = readLength;
-		eventInfo->Read.CurrentByteOffset.QuadPart =
-			EventContext->Read.ByteOffset.QuadPart + readLength;
+		eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
+			EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
 	}
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);

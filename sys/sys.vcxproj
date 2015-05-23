@@ -155,26 +155,38 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
+    <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>

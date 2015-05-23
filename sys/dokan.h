@@ -224,10 +224,10 @@ typedef struct _DokanVolumeControlBlock {
     PNOTIFY_SYNC				NotifySync;
     LIST_ENTRY					DirNotifyList;
 
-	ULONG						FcbAllocated;
-	ULONG						FcbFreed;
-	ULONG						CcbAllocated;
-	ULONG						CcbFreed;
+	LONG						FcbAllocated;
+	LONG						FcbFreed;
+	LONG						CcbAllocated;
+	LONG						CcbFreed;
 
 } DokanVCB, *PDokanVCB;
 
@@ -249,7 +249,7 @@ typedef struct _DokanFileControlBlock
 	ERESOURCE				Resource;
 	LIST_ENTRY				NextCCB;
 
-	ULONG					FileCount;
+	LONG					FileCount;
 
 	ULONG					Flags;
 

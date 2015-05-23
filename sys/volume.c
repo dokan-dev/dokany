@@ -153,11 +153,11 @@ DokanDispatchQueryVolumeInformation(
 				//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 			}
 
-			eventContext->Volume.FsInformationClass =
+			eventContext->Operation.Volume.FsInformationClass =
 				irpSp->Parameters.QueryVolume.FsInformationClass;
 
 			// the length which can be returned to user-mode
-			eventContext->Volume.BufferLength = irpSp->Parameters.QueryVolume.Length;
+			eventContext->Operation.Volume.BufferLength = irpSp->Parameters.QueryVolume.Length;
 
 
 			status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);

@@ -81,8 +81,8 @@ DokanDispatchFlush(
 		DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
 		// copy file name to be flushed
-		eventContext->Flush.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Flush.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Flush.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Flush.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 		CcUninitializeCacheMap(fileObject, NULL, NULL);
 		//fileObject->Flags &= FO_CLEANUP_COMPLETE;

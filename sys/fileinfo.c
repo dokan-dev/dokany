@@ -188,15 +188,15 @@ DokanDispatchQueryInformation(
 		eventContext->Context = ccb->UserContext;
 		//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-		eventContext->File.FileInformationClass =
+		eventContext->Operation.File.FileInformationClass =
 			irpSp->Parameters.QueryFile.FileInformationClass;
 
 		// bytes length which is able to be returned
-		eventContext->File.BufferLength = irpSp->Parameters.QueryFile.Length;
+		eventContext->Operation.File.BufferLength = irpSp->Parameters.QueryFile.Length;
 
 		// copy file name to EventContext from FCB
-		eventContext->File.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->File.FileName,
+		eventContext->Operation.File.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.File.FileName,
 						fcb->FileName.Buffer,
 						fcb->FileName.Length);
 
@@ -421,20 +421,20 @@ DokanDispatchSetInformation(
 	
 		eventContext->Context = ccb->UserContext;
 
-		eventContext->SetFile.FileInformationClass =
+		eventContext->Operation.SetFile.FileInformationClass =
 			irpSp->Parameters.SetFile.FileInformationClass;
 
 		// the size of FileInformation
-		eventContext->SetFile.BufferLength = irpSp->Parameters.SetFile.Length;
+		eventContext->Operation.SetFile.BufferLength = irpSp->Parameters.SetFile.Length;
 
 		// the offset from begining of structure to fill FileInfo
-		eventContext->SetFile.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, SetFile.FileName[0]) +
-												fcb->FileName.Length + sizeof(WCHAR); // the last null char
+		eventContext->Operation.SetFile.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
+			fcb->FileName.Length + sizeof(WCHAR); // the last null char
 	
 		// copy FileInformation
-		RtlCopyMemory((PCHAR)eventContext + eventContext->SetFile.BufferOffset,
-						Irp->AssociatedIrp.SystemBuffer,
-						irpSp->Parameters.SetFile.Length);
+		RtlCopyMemory((PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset,
+			Irp->AssociatedIrp.SystemBuffer,
+			irpSp->Parameters.SetFile.Length);
 
 		if (irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformation ||
 			irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation) {
@@ -443,7 +443,7 @@ DokanDispatchSetInformation(
 			// This cases problems when driver is 64 bit and user mode library is 32 bit.
 			PFILE_RENAME_INFORMATION renameInfo = (PFILE_RENAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;			
 			PDOKAN_RENAME_INFORMATION renameContext = 
-				(PDOKAN_RENAME_INFORMATION)((PCHAR)eventContext + eventContext->SetFile.BufferOffset);
+				(PDOKAN_RENAME_INFORMATION)((PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset);
 
 			// This code assumes FILE_RENAME_INFORMATION and FILE_LINK_INFORMATION have
 			// the same typse and fields.
@@ -465,10 +465,10 @@ DokanDispatchSetInformation(
 		}
 
 		// copy the file name
-		eventContext->SetFile.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->SetFile.FileName,
-						fcb->FileName.Buffer,
-						fcb->FileName.Length);
+		eventContext->Operation.SetFile.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.SetFile.FileName,
+			fcb->FileName.Buffer,
+			fcb->FileName.Length);
 
 		// register this IRP to waiting IRP list and make it pending status
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
@@ -539,7 +539,7 @@ DokanCompleteSetInformation(
 			
 			if (infoClass == FileDispositionInformation) {
 
-				if (EventInfo->Delete.DeleteOnClose) {
+				if (EventInfo->Operation.Delete.DeleteOnClose) {
 
 					if (!MmFlushImageSection(
 						&fcb->SectionObjectPointers,

@@ -33,7 +33,7 @@ DispatchCleanup(
 	PDOKAN_OPEN_INFO		openInfo;
 	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
-	CheckFileName(EventContext->Cleanup.FileName);
+	CheckFileName(EventContext->Operation.Cleanup.FileName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -45,7 +45,7 @@ DispatchCleanup(
 	if (DokanInstance->DokanOperations->Cleanup) {
 		// ignore return value
 		DokanInstance->DokanOperations->Cleanup(
-			EventContext->Cleanup.FileName,
+			EventContext->Operation.Cleanup.FileName,
 			&fileInfo);
 	}
 

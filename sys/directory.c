@@ -242,24 +242,24 @@ DokanQueryDirectory(
 		DDbgPrint("    ccb->Context %d\n", index);
 	}
 
-	eventContext->Directory.FileInformationClass	= irpSp->Parameters.QueryDirectory.FileInformationClass;
-	eventContext->Directory.BufferLength			= irpSp->Parameters.QueryDirectory.Length; // length of buffer
-	eventContext->Directory.FileIndex				= index; // directory index which should be returned this time
+	eventContext->Operation.Directory.FileInformationClass = irpSp->Parameters.QueryDirectory.FileInformationClass;
+	eventContext->Operation.Directory.BufferLength = irpSp->Parameters.QueryDirectory.Length; // length of buffer
+	eventContext->Operation.Directory.FileIndex = index; // directory index which should be returned this time
 
 	// copying file name(directory name)
-	eventContext->Directory.DirectoryNameLength = fcb->FileName.Length;
-	RtlCopyMemory(eventContext->Directory.DirectoryName,
+	eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
+	RtlCopyMemory(eventContext->Operation.Directory.DirectoryName,
 					fcb->FileName.Buffer, fcb->FileName.Length);
 
 	// if search pattern is specified, copy it to EventContext
 	if (ccb->SearchPatternLength) {
 		PVOID searchBuffer;
 
-		eventContext->Directory.SearchPatternLength = ccb->SearchPatternLength;
-		eventContext->Directory.SearchPatternOffset = eventContext->Directory.DirectoryNameLength;
+		eventContext->Operation.Directory.SearchPatternLength = ccb->SearchPatternLength;
+		eventContext->Operation.Directory.SearchPatternOffset = eventContext->Operation.Directory.DirectoryNameLength;
 			
-		searchBuffer = (PVOID)((SIZE_T)&eventContext->Directory.SearchPatternBase[0] +
-							(SIZE_T)eventContext->Directory.SearchPatternOffset);
+		searchBuffer = (PVOID)((SIZE_T)&eventContext->Operation.Directory.SearchPatternBase[0] +
+			(SIZE_T)eventContext->Operation.Directory.SearchPatternOffset);
 			
 		RtlCopyMemory(searchBuffer, 
 						ccb->SearchPattern,
@@ -381,13 +381,13 @@ DokanCompleteDirectoryControl(
 		//DDbgPrint("   copy DirectoryInfo\n");
 		RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
-		DDbgPrint("    eventInfo->Directory.Index = %d\n", EventInfo->Directory.Index);
+		DDbgPrint("    eventInfo->Directory.Index = %d\n", EventInfo->Operation.Directory.Index);
 		DDbgPrint("    eventInfo->BufferLength    = %d\n", EventInfo->BufferLength);
 		DDbgPrint("    eventInfo->Status = %x (%d)\n",	  EventInfo->Status, EventInfo->Status);
 
 		// update index which specified n-th directory entry is returned
 		// this should be locked before writing?
-		ccb->Context = EventInfo->Directory.Index;
+		ccb->Context = EventInfo->Operation.Directory.Index;
 
 		ccb->UserContext = EventInfo->Context;
 		//DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);

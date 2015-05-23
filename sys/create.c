@@ -524,13 +524,13 @@ Return Value:
 		eventContext->FileFlags |= fcb->Flags;
 
 		// copy the file name
-		eventContext->Create.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Create.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Create.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
-		eventContext->Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
-		eventContext->Create.CreateOptions  = irpSp->Parameters.Create.Options;
-		eventContext->Create.DesiredAccess  = irpSp->Parameters.Create.SecurityContext->DesiredAccess;
-		eventContext->Create.ShareAccess    = irpSp->Parameters.Create.ShareAccess;
+		eventContext->Operation.Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
+		eventContext->Operation.Create.CreateOptions = irpSp->Parameters.Create.Options;
+		eventContext->Operation.Create.DesiredAccess = irpSp->Parameters.Create.SecurityContext->DesiredAccess;
+		eventContext->Operation.Create.ShareAccess = irpSp->Parameters.Create.ShareAccess;
 
 		// register this IRP to waiting IPR list
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
@@ -583,7 +583,7 @@ DokanCompleteCreate(
 
 	status = EventInfo->Status;
 
-	info = EventInfo->Create.Information;
+	info = EventInfo->Operation.Create.Information;
 
 	switch (info) {
 	case FILE_OPENED:
@@ -601,6 +601,9 @@ DokanCompleteCreate(
 	case FILE_EXISTS:
 		DDbgPrint("  FILE_EXISTS\n");
 		break;
+	case FILE_SUPERSEDED:
+		DDbgPrint("  FILE_SUPERSEDED\n");
+		break;
 	default:
 		DDbgPrint("  info = %d\n", info);
 		break;
@@ -610,7 +613,7 @@ DokanCompleteCreate(
 	ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 	if (NT_SUCCESS(status) &&
 		(irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE ||
-		EventInfo->Create.Flags & DOKAN_FILE_DIRECTORY)) {
+		EventInfo->Operation.Create.Flags & DOKAN_FILE_DIRECTORY)) {
 		if (irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE) {
 			DDbgPrint("  FILE_DIRECTORY_FILE %p\n", fcb);
 		} else {

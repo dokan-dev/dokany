@@ -34,8 +34,8 @@ DispatchQuerySecurity(
 	int		status = -ERROR_CALL_NOT_IMPLEMENTED;
 	ULONG	lengthNeeded = 0;
 
-	eventInfoLength = sizeof(EVENT_INFORMATION) - 8 + EventContext->Security.BufferLength;
-	CheckFileName(EventContext->Security.FileName);
+	eventInfoLength = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Security.BufferLength;
+	CheckFileName(EventContext->Operation.Security.FileName);
 
 	eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance, &fileInfo, &openInfo);
 	
@@ -43,12 +43,12 @@ DispatchQuerySecurity(
 	if (DOKAN_SECURITY_SUPPORTED_VERSION <= DokanInstance->DokanOptions->Version &&
 		DokanInstance->DokanOperations->GetFileSecurity) {
 		status = DokanInstance->DokanOperations->GetFileSecurity(
-					EventContext->Security.FileName,
-					&EventContext->Security.SecurityInformation,
-					&eventInfo->Buffer,
-					EventContext->Security.BufferLength,
-					&lengthNeeded,
-					&fileInfo);
+			EventContext->Operation.Security.FileName,
+			&EventContext->Operation.Security.SecurityInformation,
+			&eventInfo->Buffer,
+			EventContext->Operation.Security.BufferLength,
+			&lengthNeeded,
+			&fileInfo);
 	}
 
 	if (status < 0) {
@@ -67,7 +67,7 @@ DispatchQuerySecurity(
 			eventInfo->BufferLength = 0;
 		}
 	} else {
-		if (EventContext->Security.BufferLength < lengthNeeded) {
+		if (EventContext->Operation.Security.BufferLength < lengthNeeded) {
 			// Filesystem Application should return -ERROR_BUFFER_OVERFLOW in this case.
 			eventInfo->BufferLength = lengthNeeded;
 			eventInfo->Status = STATUS_BUFFER_OVERFLOW;
@@ -96,20 +96,20 @@ DispatchSetSecurity(
 	PSECURITY_DESCRIPTOR	securityDescriptor;
 	
 	eventInfoLength = sizeof(EVENT_INFORMATION);
-	CheckFileName(EventContext->SetSecurity.FileName);
+	CheckFileName(EventContext->Operation.SetSecurity.FileName);
 
 	eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance, &fileInfo, &openInfo);
 	
-	securityDescriptor = (PCHAR)EventContext + EventContext->SetSecurity.BufferOffset;
+	securityDescriptor = (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;
 
 	if (DOKAN_SECURITY_SUPPORTED_VERSION <= DokanInstance->DokanOptions->Version &&
 		DokanInstance->DokanOperations->SetFileSecurity) {
 		status = DokanInstance->DokanOperations->SetFileSecurity(
-					EventContext->SetSecurity.FileName,
-					&EventContext->SetSecurity.SecurityInformation,
-					securityDescriptor,
-					EventContext->SetSecurity.BufferLength,
-					&fileInfo);
+			EventContext->Operation.SetSecurity.FileName,
+			&EventContext->Operation.SetSecurity.SecurityInformation,
+			securityDescriptor,
+			EventContext->Operation.SetSecurity.BufferLength,
+			&fileInfo);
 	}
 
 	if (status < 0) {

@@ -114,7 +114,7 @@ DokanGetAccessToken(
 			__leave;
 		}
 
-		eventInfo->AccessToken.Handle = handle;
+		eventInfo->Operation.AccessToken.Handle = handle;
 		Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
 		status = STATUS_SUCCESS;
 

@@ -75,26 +75,26 @@ DispatchWrite(
 
 	// Since driver requested bigger memory,
 	// allocate enough memory and send it to driver
-	if (EventContext->Write.RequestLength > 0) {
-		ULONG contextLength = EventContext->Write.RequestLength;
+	if (EventContext->Operation.Write.RequestLength > 0) {
+		ULONG contextLength = EventContext->Operation.Write.RequestLength;
 		PEVENT_CONTEXT	contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
 		SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf, contextLength);
 		EventContext = contextBuf;
 		bufferAllocated = TRUE;
 	}
 
-	CheckFileName(EventContext->Write.FileName);
+	CheckFileName(EventContext->Operation.Write.FileName);
 
 	DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
 	if (DokanInstance->DokanOperations->WriteFile) {
 		status = DokanInstance->DokanOperations->WriteFile(
-						EventContext->Write.FileName,
-						(PCHAR)EventContext + EventContext->Write.BufferOffset,
-						EventContext->Write.BufferLength,
-						&writtenLength,
-						EventContext->Write.ByteOffset.QuadPart,
-						&fileInfo);
+			EventContext->Operation.Write.FileName,
+			(PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
+			EventContext->Operation.Write.BufferLength,
+			&writtenLength,
+			EventContext->Operation.Write.ByteOffset.QuadPart,
+			&fileInfo);
 	} else {
 		status = -1;
 	}
@@ -108,8 +108,8 @@ DispatchWrite(
 	} else {
 		eventInfo->Status = STATUS_SUCCESS;
 		eventInfo->BufferLength = writtenLength;
-		eventInfo->Write.CurrentByteOffset.QuadPart =
-			EventContext->Write.ByteOffset.QuadPart + writtenLength;
+		eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
+			EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
 	}
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);

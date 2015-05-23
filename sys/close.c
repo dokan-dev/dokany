@@ -120,8 +120,8 @@ Return Value:
 		DDbgPrint("   UserContext:%X\n", (ULONG)ccb->UserContext);
 
 		// copy the file name to be closed
-		eventContext->Close.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Close.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 		DDbgPrint("   Free CCB:%X\n", ccb);
 		DokanFreeCCB(ccb);

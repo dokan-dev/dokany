@@ -386,7 +386,7 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 					ZeroMemory(&unmount, sizeof(DOKAN_CONTROL));
 					unmount.Type = DOKAN_CONTROL_UNMOUNT;
 					wcscpy_s(unmount.DeviceName, sizeof(unmount.DeviceName) / sizeof(WCHAR),
-							eventContext.Unmount.DeviceName);
+						eventContext.Operation.Unmount.DeviceName);
 					DokanControl(&unmount);
 				} else {
 					DbgPrintW(L"DokanMounter: Unmount error\n", control.Type);

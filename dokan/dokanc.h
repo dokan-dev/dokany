@@ -108,14 +108,20 @@ DokanDbgPrintW(LPCWSTR format, ...)
 		if (g_DebugMode) {\
 			DokanDbgPrint(format, __VA_ARGS__);\
 		}\
-	} while(0)
+	} __pragma(warning(push)) \
+	  __pragma(warning(disable:4127)) \
+	  while(0) \
+	  __pragma(warning(pop))
 
 #define DbgPrintW(format, ... ) \
 	do {\
 		if (g_DebugMode) {\
 			DokanDbgPrintW(format, __VA_ARGS__);\
 		}\
-	} while(0)
+	} __pragma(warning(push)) \
+	  __pragma(warning(disable:4127)) \
+	  while(0) \
+	  __pragma(warning(pop))
 
 
 BOOL DOKANAPI

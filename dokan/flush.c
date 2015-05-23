@@ -35,7 +35,7 @@ DispatchFlush(
 	PDOKAN_OPEN_INFO	openInfo;
 	int status;
 
-	CheckFileName(EventContext->Flush.FileName);
+	CheckFileName(EventContext->Operation.Flush.FileName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -47,7 +47,7 @@ DispatchFlush(
 	if (DokanInstance->DokanOperations->FlushFileBuffers) {
 
 		status = DokanInstance->DokanOperations->FlushFileBuffers(
-					EventContext->Flush.FileName,
+			EventContext->Operation.Flush.FileName,
 					&fileInfo);
 
 		eventInfo->Status = status < 0 ?

@@ -89,7 +89,7 @@ IsValidDriveLetter(WCHAR DriveLetter)
 int
 CheckMountPoint(LPCWSTR	MountPoint)
 {
-	ULONG	length = wcslen(MountPoint);
+	size_t	length = wcslen(MountPoint);
 
 	if ((length == 1) ||
 		(length == 2 && MountPoint[1] == L':') ||
@@ -285,7 +285,8 @@ DokanLoop(
 		return result;
 	}
 
-	while(1) {
+	status = TRUE;
+	while (status) {
 
 		status = DeviceIoControl(
 					device,				// Handle to device

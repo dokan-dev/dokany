@@ -234,7 +234,7 @@ typedef struct _EVENT_CONTEXT {
 		UNMOUNT_CONTEXT		Unmount;
 		SECURITY_CONTEXT		Security;
 		SET_SECURITY_CONTEXT	SetSecurity;
-	};
+	} Operation;
 } EVENT_CONTEXT, *PEVENT_CONTEXT;
 
 
@@ -268,7 +268,7 @@ typedef struct _EVENT_INFORMATION {
 		struct {
 			HANDLE	Handle;
 		} AccessToken;
-	};
+	} Operation;
 	ULONG64		Context;
 	ULONG		BufferLength;
 	UCHAR		Buffer[8];

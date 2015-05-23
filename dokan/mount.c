@@ -304,13 +304,13 @@ DokanNetworkProviderInstall()
 		REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, &position);
 
 	RegSetValueEx(key, L"DeviceName", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_DEVICE_NAME, (wcslen(DOKAN_NP_DEVICE_NAME)+1) * sizeof(WCHAR));
+		(BYTE*)DOKAN_NP_DEVICE_NAME, (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
 
 	RegSetValueEx(key, L"Name", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_NAME, (wcslen(DOKAN_NP_NAME)+1) * sizeof(WCHAR));
+		(BYTE*)DOKAN_NP_NAME, (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
 
 	RegSetValueEx(key, L"ProviderPath", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_PATH, (wcslen(DOKAN_NP_PATH)+1) * sizeof(WCHAR));
+		(BYTE*)DOKAN_NP_PATH, (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
 
     RegCloseKey(key);
 
@@ -321,7 +321,7 @@ DokanNetworkProviderInstall()
 	if (wcsstr(buffer, L",Dokan") == NULL) {
 		wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), L",Dokan");
 		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ,
-			(BYTE*)&buffer, (wcslen(buffer) + 1) * sizeof(WCHAR));
+			(BYTE*)&buffer, (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
 	}
 
     RegCloseKey(key);
@@ -355,7 +355,7 @@ DokanNetworkProviderUninstall()
 		wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer, dokan_pos - buffer);
 		wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), dokan_pos + wcslen(L",Dokan"));
 		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ,
-			(BYTE*)&buffer2, (wcslen(buffer2) + 1) * sizeof(WCHAR));
+			(BYTE*)&buffer2, (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
 	}
 
     RegCloseKey(key);

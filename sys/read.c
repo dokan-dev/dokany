@@ -152,15 +152,15 @@ Return Value:
 		}
 
 		// offset of file to read
-		eventContext->Read.ByteOffset = byteOffset;
+		eventContext->Operation.Read.ByteOffset = byteOffset;
 
 		// buffer size for read
 		// user-mode file system application can return this size
-		eventContext->Read.BufferLength = irpSp->Parameters.Read.Length;
+		eventContext->Operation.Read.BufferLength = irpSp->Parameters.Read.Length;
 
 		// copy the accessed file name
-		eventContext->Read.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Read.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Read.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Read.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 
 		// register this IRP to pending IPR list and make it pending status
@@ -251,7 +251,7 @@ DokanCompleteRead(
 			!(irp->Flags & IRP_PAGING_IO)) {
 			// update current byte offset only when synchronous IO and not pagind IO
 			fileObject->CurrentByteOffset.QuadPart =
-				EventInfo->Read.CurrentByteOffset.QuadPart;
+				EventInfo->Operation.Read.CurrentByteOffset.QuadPart;
 			DDbgPrint("  Updated CurrentByteOffset %I64d\n",
 				fileObject->CurrentByteOffset.QuadPart); 
 		}

@@ -127,7 +127,7 @@ DokanDispatchWrite(
 		}
 
 		// offset of file to write
-		eventContext->Write.ByteOffset = irpSp->Parameters.Write.ByteOffset;
+		eventContext->Operation.Write.ByteOffset = irpSp->Parameters.Write.ByteOffset;
 
 		if (irpSp->Parameters.Write.ByteOffset.LowPart == FILE_WRITE_TO_END_OF_FILE
 			&& irpSp->Parameters.Write.ByteOffset.HighPart == -1) {
@@ -143,24 +143,24 @@ DokanDispatchWrite(
 			// http://msdn.microsoft.com/en-us/library/ms795960.aspx
 			// Do not check IrpSp->Parameters.Write.ByteOffset.QuadPart == 0
 			// Probably the document is wrong.
-			eventContext->Write.ByteOffset.QuadPart = fileObject->CurrentByteOffset.QuadPart;
+			eventContext->Operation.Write.ByteOffset.QuadPart = fileObject->CurrentByteOffset.QuadPart;
 		}
 
 		// the size of buffer to write
-		eventContext->Write.BufferLength = irpSp->Parameters.Write.Length;
+		eventContext->Operation.Write.BufferLength = irpSp->Parameters.Write.Length;
 
 		// the offset from the begining of structure
 		// the contents to write will be copyed to this offset
-		eventContext->Write.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Write.FileName[0]) +
-										fcb->FileName.Length + sizeof(WCHAR); // adds last null char
+		eventContext->Operation.Write.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.Write.FileName[0]) +
+			fcb->FileName.Length + sizeof(WCHAR); // adds last null char
 
 		// copies the content to write to EventContext
-		RtlCopyMemory((PCHAR)eventContext + eventContext->Write.BufferOffset,
+		RtlCopyMemory((PCHAR)eventContext + eventContext->Operation.Write.BufferOffset,
 			buffer, irpSp->Parameters.Write.Length);
 
 		// copies file name
-		eventContext->Write.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Write.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Write.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Write.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 		
 		// When eventlength is less than event notification buffer,
 		// returns it to user-mode using pending event.
@@ -181,7 +181,7 @@ DokanDispatchWrite(
 		// eventContext will be freed later using Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT]
 		} else {
 			// the length at lest file name can be stored
-			ULONG	requestContextLength = max(sizeof(EVENT_CONTEXT), eventContext->Write.BufferOffset);
+			ULONG	requestContextLength = max(sizeof(EVENT_CONTEXT), eventContext->Operation.Write.BufferOffset);
 			PEVENT_CONTEXT requestContext = AllocateEventContext(vcb->Dcb, Irp, requestContextLength, ccb);
 
 			// no more memory!
@@ -198,11 +198,11 @@ DokanDispatchWrite(
 				irpSp->Parameters.Write.Length);
 
 			// copies from begining of EventContext to the end of file name
-			RtlCopyMemory(requestContext, eventContext, eventContext->Write.BufferOffset);
+			RtlCopyMemory(requestContext, eventContext, eventContext->Operation.Write.BufferOffset);
 			// puts actual size of RequestContext
 			requestContext->Length = requestContextLength;
 			// requsts enough size to copy EventContext
-			requestContext->Write.RequestLength = eventLength;
+			requestContext->Operation.Write.RequestLength = eventLength;
 
 			// regiters this IRP to IRP wainting list and make it pending status
 			status = DokanRegisterPendingIrp(DeviceObject, Irp, requestContext, 0);
@@ -268,7 +268,7 @@ DokanCompleteWrite(
 		!(irp->Flags & IRP_PAGING_IO)) {
 		// update current byte offset only when synchronous IO and not paging IO
 		fileObject->CurrentByteOffset.QuadPart =
-			EventInfo->Write.CurrentByteOffset.QuadPart;
+			EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
 		DDbgPrint("  Updated CurrentByteOffset %I64d\n",
 			fileObject->CurrentByteOffset.QuadPart);
 	}

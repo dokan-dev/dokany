@@ -108,8 +108,8 @@ Return Value:
 		//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
 		// copy the filename to EventContext from ccb
-		eventContext->Cleanup.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Cleanup.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Cleanup.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 		// register this IRP to pending IRP list
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);

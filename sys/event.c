@@ -483,7 +483,7 @@ DokanEventStart(
 	RtlStringCchCopyW(baseGuidString, sizeof(baseGuidString) / sizeof(WCHAR), unicodeGuid.Buffer);
 	RtlFreeUnicodeString(&unicodeGuid);
 
-	InterlockedIncrement(&dokanGlobal->MountId);
+	InterlockedIncrement((LONG*)&dokanGlobal->MountId);
 
 	KeEnterCriticalRegion();
 	ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);

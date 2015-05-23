@@ -356,7 +356,7 @@ AllocateUnicodeString(
 		return NULL;
 	}
 
-	length = (wcslen(String) + 1) * sizeof(WCHAR);
+	length = (ULONG)(wcslen(String) + 1) * sizeof(WCHAR);
 	buffer = ExAllocatePool(length);
 	if (buffer == NULL) {
 		ExFreePool(unicode);

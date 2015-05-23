@@ -117,11 +117,11 @@ DokanDispatchQuerySecurity(
 		}
 
 		eventContext->Context = ccb->UserContext;
-		eventContext->Security.SecurityInformation = *securityInfo;
-		eventContext->Security.BufferLength = bufferLength;
+		eventContext->Operation.Security.SecurityInformation = *securityInfo;
+		eventContext->Operation.Security.BufferLength = bufferLength;
 	
-		eventContext->Security.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Security.FileName,
+		eventContext->Operation.Security.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Security.FileName,
 				fcb->FileName.Buffer, fcb->FileName.Length);
 
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
@@ -308,16 +308,16 @@ DokanDispatchSetSecurity(
 			__leave;
 		}
 		eventContext->Context = ccb->UserContext;
-		eventContext->SetSecurity.SecurityInformation = *securityInfo;
-		eventContext->SetSecurity.BufferLength = securityDescLength;
-		eventContext->SetSecurity.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, SetSecurity.FileName[0]) +
-													fcb->FileName.Length + sizeof(WCHAR);
-		RtlCopyMemory((PCHAR)eventContext + eventContext->SetSecurity.BufferOffset,
-				securityDescriptor, securityDescLength);
+		eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
+		eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
+		eventContext->Operation.SetSecurity.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
+			fcb->FileName.Length + sizeof(WCHAR);
+		RtlCopyMemory((PCHAR)eventContext + eventContext->Operation.SetSecurity.BufferOffset,
+			securityDescriptor, securityDescLength);
 
 
-		eventContext->SetSecurity.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->SetSecurity.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.SetSecurity.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.SetSecurity.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 

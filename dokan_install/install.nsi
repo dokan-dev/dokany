@@ -1,4 +1,4 @@
-!define VERSION "0.7.2"
+!define VERSION "0.7.3"
 
 !include LogicLib.nsh
 !include x64.nsh
@@ -29,23 +29,22 @@ UninstPage instfiles
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\Release\dokan.lib
-    File ..\Release\dokanctl.exe
-    File ..\Release\mounter.exe
+    File ..\Win32\Release\dokan.lib
+    File ..\Win32\Release\dokanctl.exe
+    File ..\Win32\Release\mounter.exe
 
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\sample\mirror
 
     File ..\dokan_mirror\dokan_mirror.vcxproj
 	File ..\dokan_mirror\mirror.c
-    File ..\Release\mirror.exe
+    File ..\Win32\Release\mirror.exe
 
   SetOutPath $SYSDIR
 
-    File ..\Release\dokan.dll
+    File ..\Win32\Release\dokan.dll
 
 !macroend
 
-/*
 !macro X64Files os
 
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary
@@ -55,27 +54,25 @@ UninstPage instfiles
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\dokan\objchk_${os}_amd64\amd64\dokan.lib
-    File ..\dokan_control\objchk_${os}_amd64\amd64\dokanctl.exe
-    File ..\dokan_mount\objchk_${os}_amd64\amd64\mounter.exe
+    File ..\x64\Release\dokan.lib
+    File ..\x64\Release\dokanctl.exe
+    File ..\x64\Release\mounter.exe
 
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\sample\mirror
 
-    File ..\dokan_mirror\makefile
+    File ..\dokan_mirror\dokan_mirror.vcxproj
     File ..\dokan_mirror\mirror.c
-    File ..\dokan_mirror\sources
-    File ..\dokan_mirror\objchk_${os}_amd64\amd64\mirror.exe
+    File ..\x64\Release\mirror.exe
 
   ${DisableX64FSRedirection}
 
   SetOutPath $SYSDIR
 
-    File ..\dokan\objchk_${os}_amd64\amd64\dokan.dll
+    File ..\x64\Release\dokan.dll
 
   ${EnableX64FSRedirection}
 
 !macroend
-*/
 
 !macro DokanSetup
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
@@ -92,7 +89,7 @@ UninstPage instfiles
 
 !macro X86Driver os
   SetOutPath $SYSDIR\drivers
-    File ..\${os}Release\dokan.sys
+    File ..\Win32\${os}Release\dokan.sys
 !macroend
 
 !macro X64Driver os
@@ -119,6 +116,22 @@ Section "Dokan Library x86" section_x86
     !insertmacro X86Files "Win8.1"
   ${ElseIf} ${IsWin2012R2}
     !insertmacro X86Files "Win8.1"
+  ${EndIf}
+SectionEnd
+
+Section "Dokan Library x64" section_x64
+  ${If} ${IsWin7}
+    !insertmacro X64Files "Win7"
+  ${ElseIf} ${IsWin2008R2}
+    !insertmacro X64Files "Win7"
+  ${ElseIf} ${IsWin8}
+    !insertmacro X64Files "Win8"
+  ${ElseIf} ${IsWin2012}
+    !insertmacro X64Files "Win8"
+  ${ElseIf} ${IsWin8.1}
+    !insertmacro X64Files "Win8.1"
+  ${ElseIf} ${IsWin2012R2}
+    !insertmacro X64Files "Win8.1"
   ${EndIf}
 SectionEnd
 
@@ -156,20 +169,6 @@ Section "Dokan Driver x64" section_x64_driver
   !insertmacro DokanSetup
 SectionEnd
 
-/*
-Section "Dokan Library x64" section_x64
-  ${If} ${IsWin7}
-    !insertmacro X64Files "win7"
-  ${ElseIf} ${IsWinVista}
-    !insertmacro X64Files "wlh"
-  ${ElseIf} ${IsWin2008}
-    !insertmacro X64Files "wlh"
-  ${ElseIf} ${IsWin2003}
-    !insertmacro X64Files "wnet"
-  ${EndIf}
-SectionEnd
-*/
-
 Section "Uninstall"
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r a' $0
   DetailPrint "dokanctl.exe returned $0"
@@ -179,8 +178,11 @@ Section "Uninstall"
   Delete $SYSDIR\dokan.dll
 
   ${If} ${RunningX64}
+    RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary
+    RMDir $PROGRAMFILES64\Dokan
     ${DisableX64FSRedirection}
       Delete $SYSDIR\drivers\dokan.sys
+      Delete $SYSDIR\dokan.dll
     ${EnableX64FSRedirection}
   ${Else}
     Delete $SYSDIR\drivers\dokan.sys
@@ -201,10 +203,12 @@ Function .onInit
   IntOp $0 ${SF_SELECTED} | ${SF_RO}
   ${If} ${RunningX64}
     SectionSetFlags ${section_x86} $0
+    SectionSetFlags ${section_x64} $0
     SectionSetFlags ${section_x86_driver} ${SF_RO}  ; disable
     SectionSetFlags ${section_x64_driver} $0
   ${Else}
     SectionSetFlags ${section_x86} $0
+    SectionSetFlags ${section_x64} ${SF_RO}  ; disable
     SectionSetFlags ${section_x86_driver} $0
     SectionSetFlags ${section_x64_driver} ${SF_RO}  ; disable
   ${EndIf}

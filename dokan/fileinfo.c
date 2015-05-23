@@ -124,11 +124,11 @@ DokanFillFileAllInfo(
 	DokanFillFilePositionInfo(&AllInfo->PositionInformation, FileInfo, RemainingLength);
 
 	// there is not enough space to fill FileNameInformation
-	if (allRemainingLength < sizeof(FILE_ALL_INFORMATION) + EventContext->File.FileNameLength) {
+	if (allRemainingLength < sizeof(FILE_ALL_INFORMATION) + EventContext->Operation.File.FileNameLength) {
 		// fill out to the limit
 		// FileNameInformation
-		AllInfo->NameInformation.FileNameLength = EventContext->File.FileNameLength;
-		AllInfo->NameInformation.FileName[0] = EventContext->File.FileName[0];
+		AllInfo->NameInformation.FileNameLength = EventContext->Operation.File.FileNameLength;
+		AllInfo->NameInformation.FileName[0] = EventContext->Operation.File.FileName[0];
 					
 		allRemainingLength -= sizeof(FILE_ALL_INFORMATION);
 		*RemainingLength = allRemainingLength;
@@ -136,9 +136,9 @@ DokanFillFileAllInfo(
 	}
 
 	// FileNameInformation
-	AllInfo->NameInformation.FileNameLength = EventContext->File.FileNameLength;
+	AllInfo->NameInformation.FileNameLength = EventContext->Operation.File.FileNameLength;
 	RtlCopyMemory(&(AllInfo->NameInformation.FileName[0]),
-					EventContext->File.FileName, EventContext->File.FileNameLength);
+		EventContext->Operation.File.FileName, EventContext->Operation.File.FileNameLength);
 
 	// the size except of FILE_NAME_INFORMATION
 	allRemainingLength -= (sizeof(FILE_ALL_INFORMATION) - sizeof(FILE_NAME_INFORMATION));
@@ -164,13 +164,13 @@ DokanFillFileNameInfo(
     UNREFERENCED_PARAMETER(FileInfo);
 
 	if (*RemainingLength < sizeof(FILE_NAME_INFORMATION) 
-		+ EventContext->File.FileNameLength) {
+		+ EventContext->Operation.File.FileNameLength) {
 		return STATUS_BUFFER_OVERFLOW;
 	}
 
-	NameInfo->FileNameLength = EventContext->File.FileNameLength;
+	NameInfo->FileNameLength = EventContext->Operation.File.FileNameLength;
 	RtlCopyMemory(&(NameInfo->FileName[0]),
-			EventContext->File.FileName, EventContext->File.FileNameLength);
+		EventContext->Operation.File.FileName, EventContext->Operation.File.FileNameLength);
 
 	*RemainingLength -= FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]);
 	*RemainingLength -= NameInfo->FileNameLength;
@@ -262,24 +262,24 @@ DispatchQueryInformation(
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG				sizeOfEventInfo;
 
-	sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->File.BufferLength;
+	sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.File.BufferLength;
 
-	CheckFileName(EventContext->File.FileName);
+	CheckFileName(EventContext->Operation.File.FileName);
 
 	ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
 	
-	eventInfo->BufferLength = EventContext->File.BufferLength;
+	eventInfo->BufferLength = EventContext->Operation.File.BufferLength;
 
 	DbgPrint("###GetFileInfo %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
 	if (DokanInstance->DokanOperations->GetFileInformation) {
 		result = DokanInstance->DokanOperations->GetFileInformation(
-										EventContext->File.FileName,
-										&byHandleFileInfo,
-										&fileInfo);
+			EventContext->Operation.File.FileName,
+			&byHandleFileInfo,
+			&fileInfo);
 	} else {
 		result = -1;
 	}
@@ -292,7 +292,7 @@ DispatchQueryInformation(
 	
 	} else {
 
-		switch(EventContext->File.FileInformationClass) {
+		switch (EventContext->Operation.File.FileInformationClass) {
 		case FileBasicInformation:
 			//DbgPrint("FileBasicInformation\n");
             status = DokanFillFileBasicInfo((PFILE_BASIC_INFORMATION)eventInfo->Buffer,
@@ -363,13 +363,13 @@ DispatchQueryInformation(
 			break;
         default:
 			{
-				DbgPrint("  unknown type:%d\n", EventContext->File.FileInformationClass);
+				DbgPrint("  unknown type:%d\n", EventContext->Operation.File.FileInformationClass);
 			}
             break;
 		}
 	
 		eventInfo->Status = status;
-		eventInfo->BufferLength = EventContext->File.BufferLength - remainingLength;
+		eventInfo->BufferLength = EventContext->Operation.File.BufferLength - remainingLength;
 	}
 
 	// information for FileSystem

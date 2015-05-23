@@ -659,7 +659,7 @@ MirrorDeleteDirectory(
 	//HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 	HANDLE	hFind;
 	WIN32_FIND_DATAW	findData;
-	ULONG	fileLen;
+	size_t	fileLen;
 
 	ZeroMemory(filePath, sizeof(filePath));
 	GetFilePath(filePath, MAX_PATH, FileName);

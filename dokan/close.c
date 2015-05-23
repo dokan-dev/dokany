@@ -36,7 +36,7 @@ DispatchClose(
 
     UNREFERENCED_PARAMETER(Handle);
 
-	CheckFileName(EventContext->Close.FileName);
+	CheckFileName(EventContext->Operation.Close.FileName);
 
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
@@ -48,7 +48,7 @@ DispatchClose(
 	if (DokanInstance->DokanOperations->CloseFile) {
 		// ignore return value
 		DokanInstance->DokanOperations->CloseFile(
-			EventContext->Close.FileName, &fileInfo);
+			EventContext->Operation.Close.FileName, &fileInfo);
 	}
 
 	// do not send it to the driver

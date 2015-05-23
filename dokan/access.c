@@ -67,7 +67,7 @@ DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
 				eventInfoSize,
 				&returnedLength);
 	if (status) {
-		handle = eventInfo->AccessToken.Handle;
+		handle = eventInfo->Operation.AccessToken.Handle;
 	} else {
 		DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
 	}

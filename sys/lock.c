@@ -99,17 +99,17 @@ DokanDispatchLock(
 		DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
 		// copy file name to be locked
-		eventContext->Lock.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Lock.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+		eventContext->Operation.Lock.FileNameLength = fcb->FileName.Length;
+		RtlCopyMemory(eventContext->Operation.Lock.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
 		// parameters of Lock
-		eventContext->Lock.ByteOffset = irpSp->Parameters.LockControl.ByteOffset;
+		eventContext->Operation.Lock.ByteOffset = irpSp->Parameters.LockControl.ByteOffset;
 		if (irpSp->Parameters.LockControl.Length != NULL) {
-			eventContext->Lock.Length.QuadPart = irpSp->Parameters.LockControl.Length->QuadPart;
+			eventContext->Operation.Lock.Length.QuadPart = irpSp->Parameters.LockControl.Length->QuadPart;
 		} else {
 			DDbgPrint("  LockControl.Length = NULL\n");
 		}
-		eventContext->Lock.Key = irpSp->Parameters.LockControl.Key;
+		eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
 
 		// register this IRP to waiting IRP list and make it pending status
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
