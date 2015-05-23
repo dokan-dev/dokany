@@ -39,6 +39,10 @@ DispatchCreate(
 	BOOL					directoryRequested = FALSE;
 	DWORD					options;
 
+	if (eventInfo == NULL) {
+		return;
+	}
+
 	CheckFileName(EventContext->Operation.Create.FileName);
 
 	RtlZeroMemory(eventInfo, length);
@@ -53,6 +57,11 @@ DispatchCreate(
 	// DOKAN_OPEN_INFO is structure for a opened file
 	// this will be freed by Close
 	openInfo = malloc(sizeof(DOKAN_OPEN_INFO));
+	if (openInfo == NULL) {
+		eventInfo->Status = STATUS_INSUFFICIENT_RESOURCES;
+		SendEventInformation(Handle, eventInfo, length, NULL);
+		return;
+	}
 	ZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
 	openInfo->OpenCount = 2;
 	openInfo->EventContext = EventContext;
@@ -228,7 +237,13 @@ DispatchCreate(
 			disposition == FILE_OPEN_IF ||
 			disposition == FILE_OVERWRITE_IF) {
 
-			if (status != ERROR_ALREADY_EXISTS) {
+			if (status == ERROR_ALREADY_EXISTS || status == ERROR_FILE_EXISTS) {
+				if (disposition == FILE_OPEN_IF) {
+					eventInfo->Operation.Create.Information = FILE_OPENED;
+				} else if (disposition == FILE_OVERWRITE_IF) {
+					eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
+				}
+			} else {
 				eventInfo->Operation.Create.Information = FILE_CREATED;
 			}
 		}
