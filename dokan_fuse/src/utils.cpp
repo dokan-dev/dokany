@@ -37,7 +37,7 @@ static const unsigned char utf8_masks[7] = {
 	0, 0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01
 };
 
-static int
+static size_t
 get_utf8(const unsigned char *p, size_t len, ICONV_CHAR *out)
 {
 	ICONV_CHAR uc;
@@ -57,7 +57,7 @@ get_utf8(const unsigned char *p, size_t len, ICONV_CHAR *out)
 	return len;
 }
 
-static int
+static size_t
 put_utf8(unsigned char *buf, ICONV_CHAR c)
 {
 #define MASK(n) ((0xffffffffu << (n)) & 0xffffffffu)
@@ -101,7 +101,7 @@ put_utf8(unsigned char *buf, ICONV_CHAR c)
 	return o_len;
 }
 
-static int
+static size_t
 get_utf16(const unsigned char *p, size_t len, ICONV_CHAR *out)
 {
 	ICONV_CHAR c, c2;
@@ -120,7 +120,7 @@ get_utf16(const unsigned char *p, size_t len, ICONV_CHAR *out)
 	return 2;
 }
 
-static int
+static size_t
 put_utf16(unsigned char *buf, ICONV_CHAR c)
 {
 	if (c >= 0x110000u)
@@ -135,26 +135,26 @@ put_utf16(unsigned char *buf, ICONV_CHAR c)
 	return 4;
 }
 
-typedef int (*get_conver_t)(const unsigned char *p, size_t len, ICONV_CHAR *out);
-typedef int (*put_convert_t)(unsigned char *buf, ICONV_CHAR c);
+typedef size_t (*get_conver_t)(const unsigned char *p, size_t len, ICONV_CHAR *out);
+typedef size_t (*put_convert_t)(unsigned char *buf, ICONV_CHAR c);
 
-static int convert_char(get_conver_t get_func, put_convert_t put_func, const void *src, size_t src_len, void *dest)
+static size_t convert_char(get_conver_t get_func, put_convert_t put_func, const void *src, size_t src_len, void *dest)
 {
 	size_t il = src_len;
 	const unsigned char* ib = (const unsigned char*) src;
 	unsigned char* ob = (unsigned char*) dest;
-	int total = 0;
+	size_t total = 0;
 
 	while (il) {
 		ICONV_CHAR out_c;
-		int readed = get_func(ib, il, &out_c);
+		size_t readed = get_func(ib, il, &out_c);
 		if (unlikely(readed < 0))
 			return -1;
 		il -= readed;
 		ib += readed;
 
 		unsigned char dummy[8];
-		int written = put_func(ob ? ob : dummy, out_c);
+		size_t written = put_func(ob ? ob : dummy, out_c);
 		if (unlikely(written < 0))
 			return -1;
 
@@ -171,7 +171,7 @@ static char* wchar_to_utf8(const wchar_t* str)
 		return NULL;
 	
 	//Determine required length
-	int ln=convert_char(get_utf16, put_utf8, str, (wcslen(str)+1)*sizeof(wchar_t), NULL);
+	size_t ln=convert_char(get_utf16, put_utf8, str, (wcslen(str)+1)*sizeof(wchar_t), NULL);
 	if (ln <= 0) return NULL;
 	char *res=(char *)malloc(sizeof(char)*ln);
 
@@ -184,7 +184,7 @@ void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen)
 {
 	if (res==NULL || maxlen==0) return;
 
-	int ln=convert_char(get_utf8, put_utf16, src, strlen(src)+1, NULL);/* | raise_w32_error()*/;
+	size_t ln = convert_char(get_utf8, put_utf16, src, strlen(src) + 1, NULL);/* | raise_w32_error()*/;
 	if (ln <= 0 || ln/sizeof(wchar_t) > maxlen)
 	{
 		*res=L'\0';

@@ -51,7 +51,7 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
     assert(!args->argv || args->allocated);
 
     newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
-    newarg = newargv ? strdup(arg) : NULL;
+    newarg = newargv ? _strdup(arg) : NULL;
     if (!newargv || !newarg)
         return alloc_failed();
 
@@ -96,9 +96,9 @@ int fuse_opt_add_opt(char **opts, const char *opt)
 {
     char *newopts;
     if (!*opts)
-        newopts = strdup(opt);
+        newopts = _strdup(opt);
     else {
-        unsigned oldlen = strlen(*opts);
+		size_t oldlen = strlen(*opts);
         newopts = realloc(*opts, oldlen + 1 + strlen(opt) + 1);
         if (newopts) {
             newopts[oldlen] = ',';
@@ -134,13 +134,13 @@ static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
         return add_arg(ctx, arg);
 }
 
-static int match_template(const char *t, const char *arg, unsigned *sepp)
+static char match_template(const char *t, const char *arg, size_t *sepp)
 {
-    int arglen = strlen(arg);
+	size_t arglen = strlen(arg);
     const char *sep = strchr(t, '=');
     sep = sep ? sep : strchr(t, ' ');
     if (sep && (!sep[1] || sep[1] == '%')) {
-        int tlen = sep - t;
+		size_t tlen = sep - t;
         if (sep[0] == '=')
             tlen ++;
         if (arglen >= tlen && strncmp(arg, t, tlen) == 0) {
@@ -156,7 +156,7 @@ static int match_template(const char *t, const char *arg, unsigned *sepp)
 }
 
 static const struct fuse_opt *find_opt(const struct fuse_opt *opt,
-                                       const char *arg, unsigned *sepp)
+                                       const char *arg, size_t *sepp)
 {
     for (; opt && opt->templ; opt++)
         if (match_template(opt->templ, arg, sepp))
@@ -166,7 +166,7 @@ static const struct fuse_opt *find_opt(const struct fuse_opt *opt,
 
 int fuse_opt_match(const struct fuse_opt *opts, const char *opt)
 {
-    unsigned dummy;
+	size_t dummy;
     return find_opt(opts, opt, &dummy) ? 1 : 0;
 }
 
@@ -175,7 +175,7 @@ static int process_opt_param(void *var, const char *format, const char *param,
 {
     assert(format[0] == '%');
     if (format[1] == 's') {
-        char *copy = strdup(param);
+        char *copy = _strdup(param);
         if (!copy)
             return alloc_failed();
 
@@ -190,10 +190,10 @@ static int process_opt_param(void *var, const char *format, const char *param,
 }
 
 static int process_opt(struct fuse_opt_context *ctx,
-                       const struct fuse_opt *opt, unsigned sep,
+                       const struct fuse_opt *opt, size_t sep,
                        const char *arg, int iso)
 {
-    if (opt->offset == -1U) {
+	if (opt->offset == (unsigned long)-1) {
         if (call_proc(ctx, arg, opt->value, iso) == -1)
             return -1;
     } else {
@@ -212,7 +212,7 @@ static int process_opt(struct fuse_opt_context *ctx,
 }
 
 static int process_opt_sep_arg(struct fuse_opt_context *ctx,
-                               const struct fuse_opt *opt, unsigned sep,
+                               const struct fuse_opt *opt, size_t sep,
                                const char *arg, int iso)
 {
     int res;
@@ -237,7 +237,7 @@ static int process_opt_sep_arg(struct fuse_opt_context *ctx,
 
 static int process_gopt(struct fuse_opt_context *ctx, const char *arg, int iso)
 {
-    unsigned sep;
+	size_t sep;
     const struct fuse_opt *opt = find_opt(ctx->opt, arg, &sep);
     if (opt) {
         for (; opt; opt = find_opt(opt + 1, arg, &sep)) {
@@ -280,7 +280,7 @@ static int process_option_group(struct fuse_opt_context *ctx, const char *opts)
     if (!sep)
         return process_gopt(ctx, opts, 1);
 
-    copy = strdup(opts);
+    copy = _strdup(opts);
     if (!copy) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         return -1;

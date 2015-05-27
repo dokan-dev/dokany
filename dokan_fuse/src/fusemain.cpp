@@ -181,8 +181,8 @@ int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition, DWORD
 
 int impl_fuse_context::convert_flags(DWORD Flags)
 {
-	bool read=(Flags & ACCESS_READ);
-	bool write=(Flags & ACCESS_WRITE);
+	bool read=(Flags & ACCESS_READ) == 1;
+	bool write=(Flags & ACCESS_WRITE) == 1;
 	if (read && !write)
 		return O_RDONLY;
 	if (!read && write)
