@@ -174,9 +174,9 @@ typedef struct _DOKAN_OPERATIONS {
 	// you can delete the file or not, and return 0 (when you can delete it)
 	// or appropriate error codes such as -ERROR_DIR_NOT_EMPTY,
 	// -ERROR_SHARING_VIOLATION.
-	// When you return 0 (ERROR_SUCCESS), you get Cleanup with
-	// FileInfo->DeleteOnClose set TRUE and you have to delete the
-	// file in Close.
+	// When you return 0 (ERROR_SUCCESS), you get a Cleanup call with
+	// FileInfo->DeleteOnClose set to TRUE and you have to delete the
+	// file being closed.
 	int (DOKAN_CALLBACK *DeleteFile) (
 		LPCWSTR, // FileName
 		PDOKAN_FILE_INFO);
