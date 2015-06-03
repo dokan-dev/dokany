@@ -436,6 +436,9 @@ DispatchCommon(
 {
 	PEVENT_INFORMATION	eventInfo = (PEVENT_INFORMATION)malloc(SizeOfEventInfo);
 
+	if (eventInfo == NULL) {
+		return NULL;
+	}
 	RtlZeroMemory(eventInfo, SizeOfEventInfo);
 	RtlZeroMemory(DokanFileInfo, sizeof(DOKAN_FILE_INFO));
 

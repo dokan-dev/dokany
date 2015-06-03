@@ -54,6 +54,10 @@ DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
 
 	eventInfoSize = sizeof(EVENT_INFORMATION);
 	eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+	if (eventInfo == NULL) {
+		return INVALID_HANDLE_VALUE;
+	}
+
 	RtlZeroMemory(eventInfo, eventInfoSize);
 
 	eventInfo->SerialNumber = eventContext->SerialNumber;

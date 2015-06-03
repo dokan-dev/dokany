@@ -78,6 +78,9 @@ DispatchWrite(
 	if (EventContext->Operation.Write.RequestLength > 0) {
 		ULONG contextLength = EventContext->Operation.Write.RequestLength;
 		PEVENT_CONTEXT	contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
+		if (contextBuf == NULL) {
+			return;
+		}
 		SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf, contextLength);
 		EventContext = contextBuf;
 		bufferAllocated = TRUE;

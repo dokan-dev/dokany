@@ -85,6 +85,9 @@ CreateMountPoint(
 		targetLength + sizeof(WCHAR) + sizeof(WCHAR);
 
     reparseData = (PREPARSE_DATA_BUFFER)malloc(bufferLength);
+	if (reparseData == NULL) {
+		return FALSE;
+	}
 
 	ZeroMemory(reparseData, bufferLength);
 

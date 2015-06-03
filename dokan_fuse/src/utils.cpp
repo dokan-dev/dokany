@@ -174,6 +174,8 @@ static char* wchar_to_utf8(const wchar_t* str)
 	size_t ln=convert_char(get_utf16, put_utf8, str, (wcslen(str)+1)*sizeof(wchar_t), NULL);
 	if (ln <= 0) return NULL;
 	char *res=(char *)malloc(sizeof(char)*ln);
+	if (res == NULL)
+		return NULL;
 
 	//Convert to Unicode
 	convert_char(get_utf16, put_utf8, str, (wcslen(str)+1)*sizeof(wchar_t), res);
@@ -185,7 +187,7 @@ void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen)
 	if (res==NULL || maxlen==0) return;
 
 	size_t ln = convert_char(get_utf8, put_utf16, src, strlen(src) + 1, NULL);/* | raise_w32_error()*/;
-	if (ln <= 0 || ln/sizeof(wchar_t) > maxlen)
+	if (ln <= 0 || ln/sizeof(wchar_t) > (size_t)maxlen)
 	{
 		*res=L'\0';
 		return;
@@ -341,6 +343,8 @@ extern "C" int errno_to_win32_error(int err)
 extern "C" char** convert_args(int argc, wchar_t* argv[])
 {
 	char **arr=(char**)malloc(sizeof(char*)*(argc+1));
+	if (arr == NULL)
+		return NULL;
 	for(int f=0;f<argc;++f)
 		arr[f]=wchar_to_utf8(argv[f]);
 	arr[argc]=NULL;

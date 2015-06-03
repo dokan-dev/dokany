@@ -48,6 +48,9 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 	}
 
 	eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+	if (eventInfo == NULL) {
+		return FALSE;
+	}
 	RtlZeroMemory(eventInfo, eventInfoSize);
 
 	eventInfo->SerialNumber = eventContext->SerialNumber;

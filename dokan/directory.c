@@ -310,6 +310,9 @@ DokanFillFileData(
 	PDOKAN_FIND_DATA	findData;
 	
     findData = (PDOKAN_FIND_DATA)malloc(sizeof(DOKAN_FIND_DATA));
+	if (findData == NULL) {
+		return 0;
+	}
 	ZeroMemory(findData, sizeof(DOKAN_FIND_DATA));
 	InitializeListHead(&findData->ListEntry);
 
@@ -468,7 +471,9 @@ DispatchDirectoryInformation(
 
 	if (openInfo->DirListHead == NULL) {
 		openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
-		InitializeListHead(openInfo->DirListHead);
+		if (openInfo->DirListHead != NULL) {
+			InitializeListHead(openInfo->DirListHead);
+		}
 	}
 
 	if (EventContext->Operation.Directory.FileIndex == 0) {

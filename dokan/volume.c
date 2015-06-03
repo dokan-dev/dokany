@@ -314,6 +314,9 @@ DispatchQueryVolumeInformation(
 		- 8 + EventContext->Operation.Volume.BufferLength;
 
 	eventInfo = (PEVENT_INFORMATION)malloc(sizeOfEventInfo);
+	if (eventInfo == NULL) {
+		return;
+	}
 
 	RtlZeroMemory(eventInfo, sizeOfEventInfo);
 	RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));

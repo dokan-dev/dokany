@@ -1051,8 +1051,15 @@ wmain(ULONG argc, PWCHAR argv[])
 	ULONG command;
 	PDOKAN_OPERATIONS dokanOperations =
 			(PDOKAN_OPERATIONS)malloc(sizeof(DOKAN_OPERATIONS));
+	if (dokanOperations == NULL) {
+		return -1;
+	}
 	PDOKAN_OPTIONS dokanOptions =
 			(PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
+	if (dokanOptions == NULL) {
+		free(dokanOperations);
+		return -1;
+	}
 
 	if (argc < 5) {
 		fprintf(stderr, "mirror.exe\n"
