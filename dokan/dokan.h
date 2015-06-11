@@ -27,7 +27,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DRIVER_NAME	L"dokan.sys"
 
 #ifdef _EXPORTING
-  #define DOKANAPI __declspec(dllexport) __stdcall
+  #define DOKANAPI /*__declspec(dllexport)*/ __stdcall // exports defined in dokan.def
 #else
   #define DOKANAPI __declspec(dllimport) __stdcall
 #endif

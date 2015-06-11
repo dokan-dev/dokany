@@ -955,8 +955,8 @@ void impl_file_locks::remove_file(const std::string& name)
 	EnterCriticalSection(&lock);
 	file_locks_t::iterator i = file_locks.find(name);
 	if (i != file_locks.end() && !i->second->first) {
-		file_locks.erase(i);
 		delete i->second;
+		file_locks.erase(i);
 	}
 	LeaveCriticalSection(&lock);
 }
