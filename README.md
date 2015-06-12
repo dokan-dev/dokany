@@ -44,9 +44,6 @@ Dokan works on
  * Windows 8
  * Windows Server 2012
  * Windows 7
- * Windows Server 2008 R2
- * Windows Vista
- * Windows Server 2008
 
 ## How it works
 Dokan library contains a user mode DLL (dokan.dll) and a kernel mode
