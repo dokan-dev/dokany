@@ -43,6 +43,7 @@ UninstPage instfiles
   SetOutPath $SYSDIR
 
     File ..\Win32\Release\dokan.dll
+    File ..\Win32\Release\dokannp.dll
 
 !macroend
 
@@ -71,6 +72,7 @@ UninstPage instfiles
   SetOutPath $SYSDIR
 
     File ..\x64\Release\dokan.dll
+    File ..\x64\Release\dokannp.dll
 
   ${EnableX64FSRedirection}
 
@@ -78,6 +80,7 @@ UninstPage instfiles
 
 !macro DokanSetup
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
   DetailPrint "dokanctl returned $0"
   WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
 
@@ -172,12 +175,14 @@ Section "Dokan Driver x64" section_x64_driver
 SectionEnd
 
 Section "Uninstall"
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r n' $0
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r a' $0
   DetailPrint "dokanctl.exe returned $0"
 
   RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary
   RMDir $PROGRAMFILES32\Dokan
   Delete $SYSDIR\dokan.dll
+  Delete $SYSDIR\dokannp.dll
 
   ${If} ${RunningX64}
     RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary
@@ -185,6 +190,7 @@ Section "Uninstall"
     ${DisableX64FSRedirection}
       Delete $SYSDIR\drivers\dokan.sys
       Delete $SYSDIR\dokan.dll
+      Delete $SYSDIR\dokannp.dll
     ${EnableX64FSRedirection}
   ${Else}
     Delete $SYSDIR\drivers\dokan.sys

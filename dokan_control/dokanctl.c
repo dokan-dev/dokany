@@ -55,8 +55,8 @@ int ShowUsage()
 	fprintf(stderr,
 		"dokanctl /u MountPoint (/f)\n" \
 		"dokanctl /m\n" \
-		"dokanctl /i [d|s|a]\n" \
-		"dokanctl /r [d|s|a]\n" \
+		"dokanctl /i [d|s|a|n]\n" \
+		"dokanctl /r [d|s|a|n]\n" \
 		"dokanctl /v\n" \
 		"\n" \
 		"Example:\n" \
@@ -65,9 +65,14 @@ int ShowUsage()
 		"  /u 1                : Unmount mount point 1\n" \
 		"  /u M: /f            : Force unmount M: drive\n" \
 		"  /m                  : Print mount points list\n" \
+		"  /i d                : Install driver\n" \
 		"  /i s                : Install mounter service\n" \
+		"  /i a                : Install driver and mounter service\n" \
+		"  /i n                : Install network provider\n" \
 		"  /r d                : Remove driver\n" \
+		"  /r s                : Remove mounter service\n" \
 		"  /r a                : Remove driver and mounter service\n" \
+		"  /r n                : Remove network provider\n" \
 		"  /v                  : Print Dokan version\n");
 	return -1;
 }

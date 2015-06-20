@@ -148,7 +148,7 @@ NPAddConnection3(
 	__in DWORD Flags)
 {
 	DWORD status;
-	WCHAR temp[128];
+	WCHAR temp[MAX_PATH + 1];
 	WCHAR local[3];
 
 	UNREFERENCED_PARAMETER(WndOwner);
@@ -169,7 +169,7 @@ NPAddConnection3(
 		local[2] = L'\0';
 	}
 
-	if (QueryDosDevice(local, temp, 128)) {
+	if (QueryDosDevice(local, temp, MAX_PATH / 2)) {
 		DbgPrintW(L"  WN_ALREADY_CONNECTED");
 		status = WN_ALREADY_CONNECTED;
 	} else {
@@ -198,18 +198,31 @@ NPGetConnection(
 {
 	DbgPrintW(L"NpGetConnection %s, %d\n", LocalName, *BufferSize);
 	if (*BufferSize < sizeof(WCHAR) * 4) {
+		*BufferSize = sizeof(WCHAR) * 4;
 		return WN_MORE_DATA;
 	}
 	//if (NotConnected) {
 	//	return WN_NOT_CONNECTED;
 	//  return WN_NO_NETWORK;
 	//}
-	RemoteName[0] = LocalName[0]; // n
-	RemoteName[1] = LocalName[1]; // :
-	RemoteName[2] = L'\\';
-	RemoteName[3] = L'\0';
-	*BufferSize = 4 * sizeof(WCHAR);
 
+	WCHAR drive[] = L" :\\";
+	WCHAR tmpName[MAX_PATH];
+	ZeroMemory(tmpName, MAX_PATH);
+	drive[0] = LocalName[0];
+	if (!GetVolumeInformation(drive, tmpName, MAX_PATH, NULL, NULL, NULL, NULL, 0)) {
+		return WN_NO_NETWORK;
+	}
+
+	if (lstrlenW(tmpName) == 0) {
+		lstrcpyW(RemoteName, drive);
+	} else if (lstrlenW(tmpName) > (LONG)*BufferSize) {
+		*BufferSize = lstrlenW(tmpName);
+		return WN_MORE_DATA;
+	}
+	else {
+		lstrcpyW(RemoteName, tmpName);
+	}
 
 	return WN_SUCCESS;
 }
