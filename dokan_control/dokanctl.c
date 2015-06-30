@@ -60,10 +60,10 @@ int ShowUsage()
 		"dokanctl /v\n" \
 		"\n" \
 		"Example:\n" \
-		"  /u M:               : Unmount M: drive\n" \
-		"  /u C:\\mount\\dokan   : Unmount mount point C:\\mount\\dokan\n" \
+		"  /u M                : Unmount M: drive\n" \
+		"  /u C:\\mount\\dokan : Unmount mount point C:\\mount\\dokan\n" \
 		"  /u 1                : Unmount mount point 1\n" \
-		"  /u M: /f            : Force unmount M: drive\n" \
+		"  /u M /f             : Force unmount M: drive\n" \
 		"  /m                  : Print mount points list\n" \
 		"  /i d                : Install driver\n" \
 		"  /i s                : Install mounter service\n" \
