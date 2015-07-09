@@ -111,6 +111,7 @@ UninstPage instfiles
 Section -Prerequisites
   ; Check VC++ 2013 is installed on the system
   
+  IfSilent endVCRedist
   ${If} ${RunningX64}
 	ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
 	${If} $0 == ""
