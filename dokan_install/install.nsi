@@ -5,6 +5,7 @@
 !include WinVer.nsh
 
 Name "DokanLibraryInstaller ${VERSION}"
+BrandingText http://dokan-dev.github.io
 OutFile "DokanInstall_${VERSION}.exe"
 
 InstallDir $PROGRAMFILES32\Dokan\DokanLibrary
@@ -106,6 +107,33 @@ UninstPage instfiles
 
   ${EnableX64FSRedirection}
 !macroend
+
+Section -Prerequisites
+  ; Check VC++ 2013 is installed on the system
+  
+  ${If} ${RunningX64}
+	ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
+	${If} $0 == ""
+		Goto beginVCRedist
+	${EndIf}
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A749D8E6-B613-3BE3-8F5F-045C84EBA29B}" "Version"
+	${If} $0 == ""
+		Goto beginVCRedist
+	${EndIf}
+  ${Else}
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
+	${If} $0 == ""
+		Goto beginVCRedist
+	${EndIf}
+  ${EndIf}
+  Goto endVCRedist
+  
+  beginVCRedist:
+  MessageBox MB_YESNO "Your system does not appear to have Microsoft Visual C++ 2013 Runtime installed.$\n$\nWould you like to download it?" IDNO endVCRedist
+  ExecShell "open" "https://www.microsoft.com/en-US/download/details.aspx?id=40784"
+  Abort
+  endVCRedist:
+SectionEnd
 
 
 Section "Dokan Library x86" section_x86
