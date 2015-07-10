@@ -348,7 +348,7 @@ Return Value:
 	PWCHAR				fileName;
 	BOOLEAN				needBackSlashAfterRelatedFile = FALSE;
 
-	//PAGED_CODE();
+	PAGED_CODE();
 
 	__try {
 		FsRtlEnterFileSystem();
@@ -371,6 +371,7 @@ Return Value:
 		vcb = DeviceObject->DeviceExtension;
 		PrintIdType(vcb);
 		if (GetIdentifierType(vcb) != VCB) {
+            DDbgPrint("  IdentifierType is not vcb\n");
 			status = STATUS_SUCCESS;
 			__leave;
 		}
@@ -457,6 +458,7 @@ Return Value:
 		// "+ sizeof(WCHAR)" is for the last NULL character
 		fileName = ExAllocatePool(fileNameLength + sizeof(WCHAR));
 		if (fileName == NULL) {
+            DDbgPrint("    Can't allocatePool for fileName\n");
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
 		}
@@ -490,6 +492,7 @@ Return Value:
 
 		fcb = DokanGetFCB(vcb, fileName, fileNameLength);
 		if (fcb == NULL) {
+            DDbgPrint("    Was not able to get FCB for fileName %s\n", fileName);
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
 		}
@@ -501,6 +504,7 @@ Return Value:
 
 		ccb = DokanAllocateCCB(dcb, fcb);
 		if (ccb == NULL) {
+            DDbgPrint("    Was not able to allocate CCB\n");
 			DokanFreeFCB(fcb); // FileName is freed here
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
@@ -509,7 +513,7 @@ Return Value:
 		//remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close for windows 8
 		if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
 			fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
-			DDbgPrint("  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup");
+			DDbgPrint("  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
 		} else {
 			fcb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
 		}
@@ -524,6 +528,7 @@ Return Value:
 		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 				
 		if (eventContext == NULL) {
+            DDbgPrint("    Was not able to allocate eventContext\n");
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
 		}
@@ -545,12 +550,7 @@ Return Value:
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = info;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
+        DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanCreate\n");
 		FsRtlExitFileSystem();

@@ -44,8 +44,6 @@ DokanDispatchDirectoryControl(
 	PIO_STACK_LOCATION	irpSp;
 	PDokanVCB			vcb;
 
-	//PAGED_CODE();
-
 	__try {
 		FsRtlEnterFileSystem();
 
@@ -82,13 +80,8 @@ DokanDispatchDirectoryControl(
 	
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-		}
+        DokanCompleteIrpRequest(Irp, status, 0);
 
-		DokanPrintNTStatus(status);
 		DDbgPrint("<== DokanDirectoryControl\n");
 
 		FsRtlExitFileSystem();
@@ -406,11 +399,7 @@ DokanCompleteDirectoryControl(
 		IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
 	}
 
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = info;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
-
-	DokanPrintNTStatus(status);
+    DokanCompleteIrpRequest(irp, status, info);
 
 	DDbgPrint("<== DokanCompleteDirectoryControl\n");
 

@@ -113,7 +113,8 @@ DokanDispatchQueryInformation(
 				if (irpSp->Parameters.QueryFile.Length < sizeof(FILE_NAME_INFORMATION)
 					+ fcb->FileName.Length) {
 
-					status = STATUS_INSUFFICIENT_RESOURCES;
+                    info = irpSp->Parameters.QueryFile.Length;
+                    status = STATUS_BUFFER_OVERFLOW;
 				
 				} else {
 					
@@ -205,12 +206,7 @@ DokanDispatchQueryInformation(
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = info;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
+        DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanQueryInformation\n");
 
@@ -285,11 +281,8 @@ DokanCompleteQueryInformation(
 	}
 
 
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = info;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+    DokanCompleteIrpRequest(irp, status, info);
 
-	DokanPrintNTStatus(status);
 	DDbgPrint("<== DokanCompleteQueryInformation\n");
 
 	//FsRtlExitFileSystem();
@@ -314,8 +307,6 @@ DokanDispatchSetInformation(
 	ULONG				eventLength;
 	PFILE_OBJECT		targetFileObject;
 	PEVENT_CONTEXT		eventContext;
-
-	//PAGED_CODE();
 
     vcb = DeviceObject->DeviceExtension;
 
@@ -475,13 +466,7 @@ DokanDispatchSetInformation(
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
-
+        DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanSetInformation\n");
 
@@ -655,11 +640,7 @@ DokanCompleteSetInformation(
 
 	} __finally {
 
-		irp->IoStatus.Status = status;
-		irp->IoStatus.Information = info;
-		IoCompleteRequest(irp, IO_NO_INCREMENT);
-
-		DokanPrintNTStatus(status);
+        DokanCompleteIrpRequest(irp, status, info);
 
 		DDbgPrint("<== DokanCompleteSetInformation\n");
 	}

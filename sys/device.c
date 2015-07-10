@@ -122,6 +122,16 @@ DiskDeviceControl(
 	dcb = DeviceObject->DeviceExtension;
 	outputLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
 
+    if (!dcb->Mounted){
+        DDbgPrint("  Device is not mounted");
+        if (dcb->SymbolicLinkName != NULL){
+            DDbgPrint("  Device is not mounted, so delete the device");
+            DokanUnmount(dcb);
+            
+        }
+        return STATUS_DEVICE_DOES_NOT_EXIST;
+    }
+
 	switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
 	case IOCTL_DISK_GET_DRIVE_GEOMETRY:
 		{
@@ -267,6 +277,7 @@ DiskDeviceControl(
 			   Even if status = STATUS_SUCCESS, GetVolumeNameForVolumeMountPoint returns error.
 			   Something is wrong..
 			*/
+            RtlZeroMemory(mountdevName, sizeof(MOUNTDEV_NAME));
 			mountdevName->NameLength = deviceName->Length;
 
 			if (sizeof(USHORT) + mountdevName->NameLength < bufferLength) {
@@ -386,7 +397,7 @@ DiskDeviceControl(
 
 	default:
 		PrintUnknownDeviceIoctlCode(irpSp->Parameters.DeviceIoControl.IoControlCode);
-		status = STATUS_NOT_IMPLEMENTED;
+        status = STATUS_INVALID_DEVICE_REQUEST;
 		break;
 	}
 	DDbgPrint("   <= DokanDiskDeviceControl\n");
@@ -509,11 +520,7 @@ Return Value:
 	} __finally {
 
 		if (status != STATUS_PENDING) {
-			//
-			// complete the Irp
-			//
-			Irp->IoStatus.Status = status;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
+            DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
 		}
 
 		if (controlCode != IOCTL_EVENT_WAIT &&

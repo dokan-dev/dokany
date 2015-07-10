@@ -207,10 +207,8 @@ ReleasePendingIrp(
 		listHead = RemoveHeadList(&completeList);
 		irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
 		irp = irpEntry->Irp;
-		irp->IoStatus.Information = 0;
-		irp->IoStatus.Status = STATUS_SUCCESS;
 		DokanFreeIrpEntry(irpEntry);
-		IoCompleteRequest(irp, IO_NO_INCREMENT);
+        DokanCompleteIrpRequest(irp, STATUS_SUCCESS, 0);
 	}
 }
 
@@ -256,7 +254,7 @@ NotificationLoop(
 	ULONG	bufferLen;
 	PVOID	buffer;
 
-	//DDbgPrint("=> NotificationLoop\n");
+	DDbgPrint("=> NotificationLoop\n");
 
 	InitializeListHead(&completeList);
 
@@ -347,10 +345,10 @@ NotificationLoop(
 			irp->IoStatus.Status = STATUS_SUCCESS;
 		}
 		DokanFreeIrpEntry(irpEntry);
-		IoCompleteRequest(irp, IO_NO_INCREMENT);
+        DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
 	}
 
-	//DDbgPrint("<= NotificationLoop\n");
+	DDbgPrint("<= NotificationLoop\n");
 }
 
 
@@ -435,19 +433,43 @@ VOID
 DokanStopEventNotificationThread(
 	__in PDokanDCB	Dcb)
 {
-	DDbgPrint("==> DokanStopEventNotificationThread\n");
-	
-	KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE);
+    PIO_WORKITEM      workItem;
 
-	if (Dcb->EventNotificationThread) {
-		KeWaitForSingleObject(
-			Dcb->EventNotificationThread, Executive,
-			KernelMode, FALSE, NULL);
-		ObDereferenceObject(Dcb->EventNotificationThread);
-		Dcb->EventNotificationThread = NULL;
-	}
+	DDbgPrint("==> DokanStopEventNotificationThread\n");
+
+    workItem = IoAllocateWorkItem(Dcb->DeviceObject);
+    if (workItem != NULL) {
+        IoQueueWorkItem(workItem, DokanStopEventNotificationThreadInternal, DelayedWorkQueue, workItem);
+    } else {
+        DDbgPrint("Can't create work item.");
+    }
 	
 	DDbgPrint("<== DokanStopEventNotificationThread\n");
+}
+
+VOID
+ DokanStopEventNotificationThreadInternal(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PVOID      Context)
+{
+    PDokanDCB Dcb;
+
+    UNREFERENCED_PARAMETER(Context);
+
+    DDbgPrint("==> DokanStopEventNotificationThreadInternal\n");
+
+    Dcb = DeviceObject->DeviceExtension;
+    KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE);
+
+    if (Dcb->EventNotificationThread) {
+        KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode, FALSE, NULL);
+        if (Dcb->EventNotificationThread) {
+            ObDereferenceObject(Dcb->EventNotificationThread);
+            Dcb->EventNotificationThread = NULL;
+        }
+    }
+
+    DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");
 }
 
 

@@ -54,8 +54,6 @@ Return Value:
 	PEVENT_CONTEXT		eventContext;
 	ULONG				eventLength;
 
-	//PAGED_CODE();
-
 	__try {
 
 		FsRtlEnterFileSystem();
@@ -117,12 +115,7 @@ Return Value:
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
+        DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanCleanup\n");
 	
@@ -173,9 +166,7 @@ DokanCompleteCleanup(
 		FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
 	}
 
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = 0;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+    DokanCompleteIrpRequest(irp, status, 0);
 
 	DDbgPrint("<== DokanCompleteCleanup\n");
 }

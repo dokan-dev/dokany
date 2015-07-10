@@ -87,9 +87,7 @@ DokanIrpCancelRoutine(
 	}
 
 	DDbgPrint("   canceled IRP #%X\n", serialNumber);
-    Irp->IoStatus.Status = STATUS_CANCELLED;
-    Irp->IoStatus.Information = 0;
-    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    DokanCompleteIrpRequest(Irp, STATUS_CANCELLED, 0);
 
 	DDbgPrint("<== DokanIrpCancelRoutine\n");
     return;
@@ -111,7 +109,7 @@ RegisterPendingIrpMain(
     PIO_STACK_LOCATION	irpSp;
     KIRQL				oldIrql;
  
-	//DDbgPrint("==> DokanRegisterPendingIrpMain\n");
+	DDbgPrint("==> DokanRegisterPendingIrpMain\n");
 
 	if (GetIdentifierType(DeviceObject->DeviceExtension) == VCB) {
 		PDokanVCB vcb = DeviceObject->DeviceExtension;
@@ -176,7 +174,7 @@ RegisterPendingIrpMain(
 	//DDbgPrint("  Release IrpList.ListLock\n");
     KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
 
-	//DDbgPrint("<== DokanRegisterPendingIrpMain\n");
+	DDbgPrint("<== DokanRegisterPendingIrpMain\n");
     return STATUS_PENDING;;
 }
 
@@ -192,8 +190,10 @@ DokanRegisterPendingIrp(
 	PDokanVCB vcb = DeviceObject->DeviceExtension;
 	NTSTATUS status;
 
+    DDbgPrint("==> DokanRegisterPendingIrp\n");
+
 	if (GetIdentifierType(vcb) != VCB) {
-		DbgPrint("  Type != VCB\n");
+		DDbgPrint("  IdentifierType is not VCB\n");
 		return STATUS_INVALID_PARAMETER;
 	}
 
@@ -210,6 +210,8 @@ DokanRegisterPendingIrp(
 	} else {
 		DokanFreeEventContext(EventContext);
 	}
+
+    DDbgPrint("<== DokanRegisterPendingIrp\n");
 	return status;
 }
 
@@ -224,7 +226,7 @@ DokanRegisterPendingIrpForEvent(
 	PDokanVCB vcb = DeviceObject->DeviceExtension;
 
 	if (GetIdentifierType(vcb) != VCB) {
-		DbgPrint("  Type != VCB\n");
+		DDbgPrint("  IdentifierType is not VCB\n");
 		return STATUS_INVALID_PARAMETER;
 	}
 

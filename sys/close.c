@@ -55,8 +55,6 @@ Return Value:
 	ULONG				eventLength;
 	PDokanFCB			fcb;
 
-	//PAGED_CODE();
-
 	__try {
 
 		FsRtlEnterFileSystem();
@@ -139,11 +137,7 @@ Return Value:
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-		}
+        DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanClose\n");
 

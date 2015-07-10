@@ -38,8 +38,6 @@ DokanDispatchWrite(
 	PDokanVCB			vcb;
 	PVOID				buffer;
 
-	//PAGED_CODE();
-
 	__try {
 
 		FsRtlEnterFileSystem();
@@ -210,15 +208,7 @@ DokanDispatchWrite(
 
 	} __finally {
 
-		// if status of IRP is not pending, must complete current IRP
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		} else {
-			DDbgPrint("  STATUS_PENDING\n");
-		}
+        DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanWrite\n");
 
@@ -273,9 +263,8 @@ DokanCompleteWrite(
 			fileObject->CurrentByteOffset.QuadPart);
 	}
 
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+    DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
 
-	DokanPrintNTStatus(status);
 	DDbgPrint("<== DokanCompleteWrite\n");
 }
 

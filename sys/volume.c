@@ -37,8 +37,6 @@ DokanDispatchQueryVolumeInformation(
 	PDokanCCB			ccb;
 	ULONG               info = 0;
 
-	//PAGED_CODE();
-
 	__try {
 
 		FsRtlEnterFileSystem();
@@ -165,12 +163,7 @@ DokanDispatchQueryVolumeInformation(
 
 	} __finally {
 
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = info;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
+        DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanQueryVolumeInformation\n");
 
@@ -235,12 +228,8 @@ DokanCompleteQueryVolumeInformation(
 		status = EventInfo->Status;
 	}
 
+    DokanCompleteIrpRequest(irp, status, info);
 
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = info;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
-
-	DokanPrintNTStatus(status);
 	DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
 
 	//FsRtlExitFileSystem();
@@ -258,15 +247,11 @@ DokanDispatchSetVolumeInformation(
 
     UNREFERENCED_PARAMETER(DeviceObject);
 
-	//PAGED_CODE();
-
 	//FsRtlEnterFileSystem();
 
 	DDbgPrint("==> DokanSetVolumeInformation\n");
 
-	Irp->IoStatus.Status = status;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    DokanCompleteIrpRequest(Irp, status, 0);
 
 	DDbgPrint("<== DokanSetVolumeInformation");
 

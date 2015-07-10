@@ -37,8 +37,6 @@ DokanDispatchFlush(
 	PEVENT_CONTEXT		eventContext;
 	ULONG				eventLength;
 
-	//PAGED_CODE();
-	
 	__try {
 		FsRtlEnterFileSystem();
 
@@ -92,15 +90,7 @@ DokanDispatchFlush(
 
 	} __finally {
 
-		// if status is not pending, must complete current IRPs
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		} else {
-			DDbgPrint("  STATUS_PENDING\n");
-		}
+        DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanFlush\n");
 
@@ -119,7 +109,6 @@ DokanCompleteFlush(
 {
 	PIRP				irp;
 	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status   = STATUS_SUCCESS;
 	PDokanCCB			ccb;
 	PFILE_OBJECT		fileObject;
 
@@ -137,14 +126,7 @@ DokanCompleteFlush(
 	ccb->UserContext = EventInfo->Context;
 	DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-	status = EventInfo->Status;
-
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = 0;
-	
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
-
-	DokanPrintNTStatus(status);
+    DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
 	DDbgPrint("<== DokanCompleteFlush\n");
 

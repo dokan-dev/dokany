@@ -634,6 +634,11 @@ DokanDeleteDeviceObject(
 	ASSERT(GetIdentifierType(Dcb) == DCB);
 	vcb = Dcb->Vcb;
 
+    if (Dcb->SymbolicLinkName == NULL){
+        DDbgPrint("  Symbolic Name already deleted, so go out here\n");
+        return;
+    }
+
 	if (Dcb->MupHandle) {
 		FsRtlDeregisterUncProvider(Dcb->MupHandle);
 	}
