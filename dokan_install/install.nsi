@@ -113,10 +113,12 @@ Section -Prerequisites
   
   IfSilent endVCRedist
   ${If} ${RunningX64}
-	ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
+	SetRegView 32
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist
 	${EndIf}
+	SetRegView 64
 	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A749D8E6-B613-3BE3-8F5F-045C84EBA29B}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist
