@@ -362,15 +362,6 @@ Routine Description:
     workItem = IoAllocateWorkItem(Dcb->DeviceObject);
     if (workItem != NULL) {
         IoQueueWorkItem(workItem, DokanStopCheckThreadInternal, DelayedWorkQueue, workItem);
-
-        KeSetEvent(&Dcb->KillEvent, 0, FALSE);
-
-        if (Dcb->TimeoutThread) {
-            KeWaitForSingleObject(Dcb->TimeoutThread, Executive,
-                KernelMode, FALSE, NULL);
-            ObDereferenceObject(Dcb->TimeoutThread);
-            Dcb->TimeoutThread = NULL;
-        }
     } else {
         DDbgPrint("Can't create work item.");
     }
