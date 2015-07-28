@@ -87,6 +87,22 @@ DispatchCreate(
 		//DbgPrint("FILE_DIRECTORY_FILE\n");
 		directoryRequested = TRUE;
 	}
+	else {
+	    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+		DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
+		// strip the last section of the file path
+		WCHAR* lastP = NULL;
+		for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
+		    if ((*p == L'\\' || *p == L'/') && p[1])
+			lastP = p;
+		}
+		if (lastP) {
+		    *lastP = 0;
+		    directoryRequested = TRUE;
+		}
+	    }
+
+	}
 
 	// to open no directory file
 	// event if this flag is not specified,
@@ -147,7 +163,7 @@ DispatchCreate(
 				DbgPrint("### Create other disposition : %d\n", disposition);
 				break;
 		}
-		
+
 		if(DokanInstance->DokanOperations->CreateFile) {
 			status = DokanInstance->DokanOperations->CreateFile(
 				EventContext->Operation.Create.FileName,
@@ -176,15 +192,12 @@ DispatchCreate(
 
 		int error = status * -1;
 		
-		if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-			DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
-		}
 		eventInfo->Operation.Create.Information = FILE_DOES_NOT_EXIST;
 
 		switch(error) {
 		    case ERROR_FILE_NOT_FOUND:
 			    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
-				    eventInfo->Status = STATUS_SUCCESS;
+				eventInfo->Status = STATUS_OBJECT_PATH_NOT_FOUND;
 			    else
 				    eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
 			    break;

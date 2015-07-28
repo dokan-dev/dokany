@@ -247,7 +247,7 @@ DispatchSetInformation(
 	eventInfo = DispatchCommon(
 		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
 	
-	DbgPrint("###SetFileInfo %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+	DbgPrint("###SetFileInfo %04d  %d\n", openInfo != NULL ? openInfo->EventId : -1, EventContext->Operation.SetFile.FileInformationClass);
 
 	switch (EventContext->Operation.SetFile.FileInformationClass) {
 	case FileAllocationInformation:
