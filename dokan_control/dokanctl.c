@@ -73,6 +73,7 @@ int ShowUsage()
 		"  /r s                : Remove mounter service\n" \
 		"  /r a                : Remove driver and mounter service\n" \
 		"  /r n                : Remove network provider\n" \
+		"  /d [0-9]            : Enable Kernel Debug output\n" \
 		"  /v                  : Print Dokan version\n");
 	return -1;
 }
