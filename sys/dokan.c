@@ -102,7 +102,9 @@ DokanAcquireForCreateSection(
 
 	header = FileObject->FsContext;
 	if (header && header->Resource) {
+		KeEnterCriticalRegion();
 		ExAcquireResourceExclusiveLite(header->Resource, TRUE);
+		KeLeaveCriticalRegion();
 	}
 
 	DDbgPrint("DokanAcquireForCreateSection\n");
@@ -141,7 +143,9 @@ DokanFilterCallbackAcquireForCreateSection(
 	header = CallbackData->FileObject->FsContext;
 
 	if (header && header->Resource) {
+		KeEnterCriticalRegion();
 		ExAcquireResourceExclusiveLite(header->Resource, TRUE);
+		KeLeaveCriticalRegion();
 	}
 
 	if (CallbackData->Parameters.AcquireForSectionSynchronization.SyncType

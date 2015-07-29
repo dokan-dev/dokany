@@ -502,6 +502,30 @@ DokanCreateDiskDevice(
 	dcb->DiskDeviceName =  AllocateUnicodeString(diskDeviceNameBuf);
 	dcb->FileSystemDeviceName = AllocateUnicodeString(fsDeviceNameBuf);
 
+	if (dcb->SymbolicLinkName == NULL) {
+		DDbgPrint("  Can't allocate memory for SymbolicLinkName");
+		ExDeleteResourceLite(&dcb->Resource);
+		IoDeleteDevice(diskDeviceObject);
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
+	if (dcb->DiskDeviceName == NULL) {
+		DDbgPrint("  Can't allocate memory for DiskDeviceName");
+		ExFreePool(dcb->SymbolicLinkName);
+		ExDeleteResourceLite(&dcb->Resource);
+		IoDeleteDevice(diskDeviceObject);
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
+	if (dcb->FileSystemDeviceName == NULL) {
+		DDbgPrint("  Can't allocate memory for FileSystemDeviceName");
+		ExFreePool(dcb->SymbolicLinkName);
+		ExFreePool(dcb->DiskDeviceName);
+		ExDeleteResourceLite(&dcb->Resource);
+		IoDeleteDevice(diskDeviceObject);
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
 	status = IoCreateDeviceSecure(
 				DriverObject,		// DriverObject
 				sizeof(DokanVCB),	// DeviceExtensionSize
@@ -515,6 +539,7 @@ DokanCreateDiskDevice(
 
 	if (!NT_SUCCESS(status)) {
 		DDbgPrint("  IoCreateDevice (FILE_SYSTEM_DEVICE) failed: 0x%x\n", status);
+		ExDeleteResourceLite(&dcb->Resource);
 		IoDeleteDevice(diskDeviceObject);
 		return status;
 	}
