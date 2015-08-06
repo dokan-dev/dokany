@@ -987,6 +987,8 @@ MirrorSetFileSecurity(
 	HANDLE	handle;
 	WCHAR	filePath[MAX_PATH];
 
+	UNREFERENCED_PARAMETER(SecurityDescriptorLength);
+
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"SetFileSecurity %s\n", filePath);

@@ -155,8 +155,6 @@ DokanControlList(PDOKAN_CONTROL Control)
 static VOID DokanControl(PDOKAN_CONTROL Control)
 {
 	PMOUNT_ENTRY	mountEntry;
-	ULONG	index = 0;
-	DWORD written = 0;
 
 	Control->Status = DOKAN_CONTROL_FAIL;
 
@@ -235,6 +233,10 @@ static VOID DokanControl(PDOKAN_CONTROL Control)
 
 static DWORD WINAPI HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext)
 {
+	UNREFERENCED_PARAMETER(dwEventType);
+	UNREFERENCED_PARAMETER(lpEventData);
+	UNREFERENCED_PARAMETER(lpContext);
+
 	switch (dwControl) {
 	case SERVICE_CONTROL_STOP:
 
@@ -288,6 +290,8 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 	EVENT_CONTEXT	eventContext;
 	SECURITY_ATTRIBUTES sa;
 
+	UNREFERENCED_PARAMETER(dwArgc);
+	UNREFERENCED_PARAMETER(lpszArgv);
 
     InitializeCriticalSectionAndSpinCount(&g_CriticalSection, 4000);
 	InitializeListHead(&g_MountList);
@@ -422,6 +426,11 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 
 int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hinstPrev, LPSTR lpszCmdLine, int nCmdShow)
 {
+	UNREFERENCED_PARAMETER(hinst);
+	UNREFERENCED_PARAMETER(hinstPrev);
+	UNREFERENCED_PARAMETER(lpszCmdLine);
+	UNREFERENCED_PARAMETER(nCmdShow);
+
 	SERVICE_TABLE_ENTRY serviceTable[] = {
 		{L"DokanMounter", ServiceMain}, {NULL, NULL}
 	};
