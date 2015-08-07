@@ -14,7 +14,7 @@ is similar to FUSE(Linux user mode file system) but works on Windows.
 
 Because the original [Dokan](http://dokan-dev.net/en/docs/) project is no longer maintained.
 
-Because other forks like [DokanX](https://github.com/BenjaminKim/dokanx) has undesired changes or not really maintained.
+Because other forks like [DokanX](https://github.com/BenjaminKim/dokanx) have undesired changes or are not really maintained.
 
 
 **Signed x86 / x64 drivers** are provided at each release.
