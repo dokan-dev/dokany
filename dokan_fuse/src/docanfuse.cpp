@@ -594,11 +594,23 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 {
-	if (ch==NULL || mountpoint==NULL || strlen(mountpoint)==0) return;
+	if (mountpoint==NULL || strlen(mountpoint)==0) return;
+
+	fuse_chan chan;
+	if (!ch) {
+		ch = &chan;
+		ch->init();
+		ch->mountpoint = mountpoint;
+	}
+
 	//Unmount attached FUSE filesystem
 	if (ch->ResolvedDokanRemoveMountPoint) {
 		wchar_t wmountpoint[MAX_PATH+1];
 		mbstowcs(wmountpoint,mountpoint,MAX_PATH);
+		wchar_t& last = wmountpoint[wcslen(wmountpoint) - 1];
+		if (last == L'\\'
+			|| last == L'/')
+			last = L'\0';
 		ch->ResolvedDokanRemoveMountPoint(wmountpoint);
 		return;
 	}

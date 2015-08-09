@@ -181,8 +181,8 @@ int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition, DWORD
 
 int impl_fuse_context::convert_flags(DWORD Flags)
 {
-	bool read=(Flags & ACCESS_READ) == 1;
-	bool write=(Flags & ACCESS_WRITE) == 1;
+	bool read=(Flags & ACCESS_READ) != 0;
+	bool write=(Flags & ACCESS_WRITE) != 0;
 	if (read && !write)
 		return O_RDONLY;
 	if (!read && write)
@@ -955,7 +955,8 @@ void impl_file_locks::remove_file(const std::string& name)
 	EnterCriticalSection(&lock);
 	file_locks_t::iterator i = file_locks.find(name);
 	if (i != file_locks.end() && !i->second->first) {
-		delete i->second;
+		if (i->second)
+			delete i->second;
 		file_locks.erase(i);
 	}
 	LeaveCriticalSection(&lock);
