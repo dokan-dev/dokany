@@ -42,8 +42,7 @@ typedef struct _DOKAN_INSTANCE {
 	CRITICAL_SECTION	CriticalSection;
 
 	// store CurrentDeviceName
-	// (when there are many mounts, each mount use 
-	// other DeviceName)
+	// (when there are many mounts, each mount uses different DeviceName)
 	WCHAR	DeviceName[64];
 	WCHAR	MountPoint[MAX_PATH];
 
