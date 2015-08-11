@@ -2,12 +2,11 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 
 ## What is Dokan
-When you want to create a new file system on Windows, for example to
-improve FAT or NTFS, you need to develop a file system
+When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system
 driver. Developing a device driver that works in kernel mode on
 windows is extremely technical. By using Dokan, you can create
-your own file systems very easily without writing device driver. Dokan
-is similar to FUSE(Linux user mode file system) but works on Windows.
+your own file systems very easily without writing device drivers. Dokan
+is similar to FUSE (Linux file system in user space) but works on Windows.
 
 ## What is Dokany
 *Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and updated to build with latest tools.*
@@ -86,8 +85,8 @@ For manual installation, see the [installation page](https://github.com/dokan-de
 You want Dokan to get better? Contribute!
 
 
-Learn the code and suggest your changes on [Dokan git repository](https://github.com/dokan-dev).
+Learn the code and suggest your changes on [GitHub repository](https://github.com/dokan-dev).
 
-Detect defects and report them on [Dokan issue tracker](https://github.com/dokan-dev/dokany/issues).
+Detect defects and report them on [GitHub issue tracker](https://github.com/dokan-dev/dokany/issues).
 
-Ask and answer questions on [Dokan discussion group](https://groups.google.com/forum/#!forum/dokan).
+Ask and answer questions on [Google discussion group](https://groups.google.com/forum/#!forum/dokan).
