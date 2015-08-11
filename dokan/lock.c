@@ -72,7 +72,7 @@ DispatchLock(
 				//EventContext->Operation.Lock.Key,
 				&fileInfo);
 
-			eventInfo->Status = STATUS_SUCCESS; // at any time return success ?
+			eventInfo->Status = STATUS_SUCCESS; // always succeeds so it cannot fail ?
 		}
 		break;
 	default:
