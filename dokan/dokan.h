@@ -50,16 +50,16 @@ extern "C" {
 
 typedef struct _DOKAN_OPTIONS {
 	USHORT	Version; // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
-	USHORT	ThreadCount; // number of threads to be used
+	USHORT	ThreadCount; // number of threads to be used internally by Dokan library
 	ULONG	Options;	 // combination of DOKAN_OPTIONS_*
-	ULONG64	GlobalContext; // FileSystem can use this variable
+	ULONG64	GlobalContext; // FileSystem can store anything here
 	LPCWSTR	MountPoint; //  mount point "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS)
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 typedef struct _DOKAN_FILE_INFO {
-	ULONG64	Context;      // FileSystem can use this variable
-	ULONG64	DokanContext; // Don't touch this
-	PDOKAN_OPTIONS DokanOptions; // A pointer to DOKAN_OPTIONS which was  passed to DokanMain.
+	ULONG64	Context;      // FileSystem can store anything here
+	ULONG64	DokanContext; // Used internally, never modify
+	PDOKAN_OPTIONS DokanOptions; // A pointer to DOKAN_OPTIONS which was passed to DokanMain.
 	ULONG	ProcessId;    // process id for the thread that originally requested a given I/O operation
 	UCHAR	IsDirectory;  // requesting a directory file
 	UCHAR	DeleteOnClose; // Delete on when "cleanup" is called
@@ -71,16 +71,16 @@ typedef struct _DOKAN_FILE_INFO {
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 
-// FillFileData
-//   add an entry in FindFiles
-//   return 1 if buffer is full, otherwise 0
-//   (currently never return 1)
+// FillFindData
+//   is used to add an entry in FindFiles
+//   returns 1 if buffer is full, otherwise 0
+//   (currently it never returns 1)
 typedef int (WINAPI *PFillFindData) (PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 
 typedef struct _DOKAN_OPERATIONS {
 
-	// When an error occurs, return negative value.
-	// Usually you should return GetLastError() * -1.
+	// When an error occurs, return a negative value.
+	// Usually you should return -GetLastError().
 
 
 	// CreateFile
@@ -106,6 +106,7 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 	// When FileInfo->DeleteOnClose is true, you must delete the file in Cleanup.
+	// Refer to comment at DeleteFile definition below in this file for explanation.
 	int (DOKAN_CALLBACK *Cleanup) (
 		LPCWSTR,      // FileName
 		PDOKAN_FILE_INFO);
@@ -141,15 +142,15 @@ typedef struct _DOKAN_OPERATIONS {
 		LPCWSTR,          // FileName
 		LPBY_HANDLE_FILE_INFORMATION, // Buffer
 		PDOKAN_FILE_INFO);
+
 	
+	// You should implement either FindFiles or FindFilesWithPattern
 
 	int (DOKAN_CALLBACK *FindFiles) (
 		LPCWSTR,			// PathName
 		PFillFindData,		// call this function with PWIN32_FIND_DATAW
 		PDOKAN_FILE_INFO);  //  (see PFillFindData definition)
 
-
-	// You should implement either FindFiles or FindFilesWithPattern
 	int (DOKAN_CALLBACK *FindFilesWithPattern) (
 		LPCWSTR,			// PathName
 		LPCWSTR,			// SearchPattern
@@ -171,14 +172,13 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 
-	// You should not delete file on DeleteFile or DeleteDirectory.
-	// When DeleteFile or DeleteDirectory, you must check whether
-	// you can delete the file or not, and return 0 (when you can delete it)
-	// or appropriate error codes such as -ERROR_DIR_NOT_EMPTY,
-	// -ERROR_SHARING_VIOLATION.
-	// When you return 0 (ERROR_SUCCESS), you get a Cleanup call with
-	// FileInfo->DeleteOnClose set to TRUE and you have to delete the
-	// file being closed.
+	// You should not delete the file on DeleteFile or DeleteDirectory, but instead
+	// you must only check whether you can delete the file or not, 
+	// and return 0 (when you can delete it) or appropriate error codes such as 
+	// -ERROR_DIR_NOT_EMPTY, -ERROR_SHARING_VIOLATION.
+	// When you return 0 (ERROR_SUCCESS), you get a Cleanup call afterwards with
+	// FileInfo->DeleteOnClose set to TRUE and only then you have to actually delete
+	// the file being closed.
 	int (DOKAN_CALLBACK *DeleteFile) (
 		LPCWSTR, // FileName
 		PDOKAN_FILE_INFO);
@@ -296,7 +296,7 @@ DokanRemoveMountPoint(
 
 
 // DokanIsNameInExpression
-//   check whether Name can match Expression
+//   checks whether Name can match Expression
 //   Expression can contain wildcard characters (? and *)
 BOOL DOKANAPI
 DokanIsNameInExpression(
