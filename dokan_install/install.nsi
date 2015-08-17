@@ -40,6 +40,10 @@ UninstPage instfiles
     File ..\dokan_mirror\dokan_mirror.vcxproj
 	File ..\dokan_mirror\mirror.c
     File ..\Win32\Release\mirror.exe
+	
+  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\include\fuse
+
+    File /r "..\dokan_fuse\include\"
 
   SetOutPath $SYSDIR
 
@@ -68,6 +72,10 @@ UninstPage instfiles
     File ..\dokan_mirror\mirror.c
     File ..\x64\Release\mirror.exe
 
+  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\include\fuse
+
+    File /r "..\dokan_fuse\include\"
+	
   ${DisableX64FSRedirection}
 
   SetOutPath $SYSDIR
