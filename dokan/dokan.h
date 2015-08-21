@@ -38,8 +38,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-// The current Dokan version (ver 0.7.3). Please set this constant on DokanOptions->Version.
-#define DOKAN_VERSION		730
+// The current Dokan version (ver 0.7.4). Please set this constant on DokanOptions->Version.
+#define DOKAN_VERSION		740
 
 #define DOKAN_OPTION_DEBUG		1 // ouput debug message
 #define DOKAN_OPTION_STDERR		2 // ouput debug message to stderr
