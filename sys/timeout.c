@@ -62,6 +62,8 @@ DokanUnmount(
 		sizeof(eventContext->Operation.Unmount.DeviceName) / sizeof(WCHAR),
 		&(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
+	eventContext->Operation.Unmount.Option = 1; //DOKAN_CONTROL_OPTION_FORCE_UNMOUNT dokanc.h
+
 	DDbgPrint("  Send Unmount to Service : %ws\n", eventContext->Operation.Unmount.DeviceName);
 
 	DokanEventNotification(&Dcb->Global->NotifyService, eventContext);

@@ -189,6 +189,7 @@ typedef struct _FLUSH_CONTEXT {
 
 typedef struct _UNMOUNT_CONTEXT {
 	WCHAR	DeviceName[64];
+	ULONG	Option;
 } UNMOUNT_CONTEXT, *PUNMOUNT_CONTEXT;
 
 

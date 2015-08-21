@@ -152,6 +152,28 @@ DokanControlList(PDOKAN_CONTROL Control)
 	}
 	LeaveCriticalSection(&g_CriticalSection);
 }
+
+VOID FindMountPoint(PDOKAN_CONTROL Control)
+{
+	WCHAR physical[65536];
+	WCHAR logical[65536];
+
+	QueryDosDevice(NULL, physical, sizeof(physical));
+
+	for (WCHAR *pos = physical; *pos; pos += wcslen(pos) + 1) {
+		QueryDosDevice(pos, logical, sizeof(logical));
+
+		if (wcsstr(logical, Control->DeviceName) != NULL
+			&& wcsstr(logical, pos) == NULL)
+		{
+			wcscpy_s(Control->MountPoint, sizeof(Control->MountPoint) / sizeof(WCHAR),
+				pos);
+			DbgPrintW(L"DokanControl MountPoint found '%s'\n", Control->MountPoint);
+			break;
+		}
+	}
+}
+
 static VOID DokanControl(PDOKAN_CONTROL Control)
 {
 	PMOUNT_ENTRY	mountEntry;
@@ -178,6 +200,9 @@ static VOID DokanControl(PDOKAN_CONTROL Control)
 
 		mountEntry = FindMountEntry(Control);
 		if (mountEntry == NULL) {
+			if (!wcslen(Control->MountPoint))
+				FindMountPoint(Control);
+			DbgPrintW(L"DokanControl MountEntry not found. Try unmount '%s' force: %d\n", Control->MountPoint, Control->Option);
 			if (Control->Option == DOKAN_CONTROL_OPTION_FORCE_UNMOUNT &&
 				DokanControlUnmount(Control->MountPoint)) {
 				Control->Status = DOKAN_CONTROL_SUCCESS;
@@ -389,6 +414,7 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 
 					ZeroMemory(&unmount, sizeof(DOKAN_CONTROL));
 					unmount.Type = DOKAN_CONTROL_UNMOUNT;
+					unmount.Option = eventContext.Operation.Unmount.Option;
 					wcscpy_s(unmount.DeviceName, sizeof(unmount.DeviceName) / sizeof(WCHAR),
 						eventContext.Operation.Unmount.DeviceName);
 					DokanControl(&unmount);
