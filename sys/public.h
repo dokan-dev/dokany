@@ -74,7 +74,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_SECTOR_SIZE			512
 #define DOKAN_ALLOCATION_UNIT_SIZE	512
 
-
 // used in CCB->Flags and FCB->Flags
 #define DOKAN_FILE_DIRECTORY	1
 #define DOKAN_FILE_DELETED		2

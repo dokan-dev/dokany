@@ -84,6 +84,9 @@ SendToDevice(
 LPCWSTR
 GetRawDeviceName(LPCWSTR	DeviceName);
 
+void
+ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size);
+
 UINT __stdcall
 DokanLoop(
 	PVOID Param);

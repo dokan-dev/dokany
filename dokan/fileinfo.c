@@ -63,6 +63,7 @@ DokanFillFileStandardInfo(
 
 	StandardInfo->AllocationSize.HighPart = FileInfo->nFileSizeHigh;
 	StandardInfo->AllocationSize.LowPart  = FileInfo->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&StandardInfo->AllocationSize);
 	StandardInfo->EndOfFile.HighPart      = FileInfo->nFileSizeHigh;
 	StandardInfo->EndOfFile.LowPart       = FileInfo->nFileSizeLow;
 	StandardInfo->NumberOfLinks           = FileInfo->nNumberOfLinks;
@@ -218,6 +219,7 @@ DokanFillNetworkOpenInfo(
 	NetInfo->ChangeTime.HighPart	= FileInfo->ftLastWriteTime.dwHighDateTime;
 	NetInfo->AllocationSize.HighPart= FileInfo->nFileSizeHigh;
 	NetInfo->AllocationSize.LowPart	= FileInfo->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&NetInfo->AllocationSize);
 	NetInfo->EndOfFile.HighPart		= FileInfo->nFileSizeHigh;
 	NetInfo->EndOfFile.LowPart		= FileInfo->nFileSizeLow;
 	NetInfo->FileAttributes			= FileInfo->dwFileAttributes;

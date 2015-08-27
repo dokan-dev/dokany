@@ -254,6 +254,13 @@ GetRawDeviceName(LPCWSTR	DeviceName)
 	return rawDeviceName;
 }
 
+void
+ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size)
+{
+	long long r = size->QuadPart % DOKAN_ALLOCATION_UNIT_SIZE;
+	size->QuadPart = (size->QuadPart + (r > 0 ? DOKAN_ALLOCATION_UNIT_SIZE - r : 0));
+}
+
 UINT WINAPI
 DokanLoop(
    PDOKAN_INSTANCE DokanInstance

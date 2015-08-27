@@ -49,6 +49,7 @@ DokanFillDirInfo(
 	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
 	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
 	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
 	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
 	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
@@ -82,6 +83,7 @@ DokanFillFullDirInfo(
 	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
 	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
 	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
 	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
 	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
@@ -118,6 +120,7 @@ DokanFillIdFullDirInfo(
 	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
 	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
 	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
 	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
 	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
@@ -155,6 +158,7 @@ DokanFillIdBothDirInfo(
 	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
 	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
 	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
 	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
 	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
@@ -192,6 +196,7 @@ DokanFillBothDirInfo(
 	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
 	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
 	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
 	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
 	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
