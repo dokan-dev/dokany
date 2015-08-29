@@ -96,9 +96,10 @@ DispatchCreate(
 		    if ((*p == L'\\' || *p == L'/') && p[1])
 			lastP = p;
 		}
-		if (lastP && lastP != EventContext->Operation.Create.FileName) {
-		    *lastP = 0;
+		if (lastP) {
 		    directoryRequested = TRUE;
+		    if (lastP != EventContext->Operation.Create.FileName)
+		        *lastP = 0;
 		}
 	    }
 
