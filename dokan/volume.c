@@ -221,12 +221,12 @@ DokanFsAttributeInformation(
 
 	status = DokanOperations->GetVolumeInformation(
 				volumeName,			// VolumeNameBuffer
-				sizeof(volumeName),	// VolumeNameSize
+				sizeof(volumeName) / sizeof(WCHAR),	// VolumeNameSize
 				&volumeSerial,		// VolumeSerialNumber
 				&maxComLength,		// MaximumComponentLength
 				&fsFlags,			// FileSystemFlags
 				fsName,				// FileSystemNameBuffer
-				sizeof(fsName),		// FileSystemNameSize
+				sizeof(fsName) / sizeof(WCHAR),		// FileSystemNameSize
 				FileInfo);
 
 	if (status < 0) {

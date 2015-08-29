@@ -1020,7 +1020,7 @@ MirrorGetVolumeInformation(
 {
     UNREFERENCED_PARAMETER(DokanFileInfo);
 
-	wcscpy_s(VolumeNameBuffer, VolumeNameSize / sizeof(WCHAR), L"DOKAN");
+	wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"DOKAN");
 	*VolumeSerialNumber = 0x19831116;
 	*MaximumComponentLength = 256;
 	*FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | 
@@ -1029,7 +1029,7 @@ MirrorGetVolumeInformation(
 						FILE_UNICODE_ON_DISK |
 						FILE_PERSISTENT_ACLS;
 
-	wcscpy_s(FileSystemNameBuffer, FileSystemNameSize / sizeof(WCHAR), L"Dokan");
+	wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"Dokan");
 
 	return 0;
 }
