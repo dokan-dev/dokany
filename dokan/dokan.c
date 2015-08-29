@@ -429,6 +429,11 @@ CheckFileName(
 		}
 		FileName[i] = L'\0';
 	}
+	
+	// Remove "\" in front of Directory
+	size_t len = wcslen(FileName);
+	if (len > 2 && FileName[len - 1] == L'\\')
+		FileName[len - 1] = '\0';
 }
 
 
