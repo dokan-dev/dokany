@@ -38,8 +38,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-// The current Dokan version (ver 0.7.4). Please set this constant on DokanOptions->Version.
-#define DOKAN_VERSION		740
+// The current Dokan version (ver 0.8.0). Please set this constant on DokanOptions->Version.
+#define DOKAN_VERSION		800
 
 #define DOKAN_OPTION_DEBUG		1 // ouput debug message
 #define DOKAN_OPTION_STDERR		2 // ouput debug message to stderr
@@ -264,6 +264,15 @@ typedef struct _DOKAN_OPERATIONS {
 		PSECURITY_INFORMATION,
 		PSECURITY_DESCRIPTOR, // SecurityDescriptor
 		ULONG, // SecurityDescriptor length
+		PDOKAN_FILE_INFO);
+
+	// Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
+	int (DOKAN_CALLBACK *EnumerateNamedStreams) (
+		LPCWSTR, // FileName
+		PVOID*, // EnumContext
+		LPWSTR, // StreamName
+		PULONG, // StreamNameLength
+		PLONGLONG, // StreamSize
 		PDOKAN_FILE_INFO);
 
 

@@ -248,6 +248,73 @@ DokanFillInternalInfo(
 	return STATUS_SUCCESS;
 }
 
+ULONG
+DokanEnumerateNamedStreams(
+	PFILE_STREAM_INFORMATION	StreamInfo,
+	PDOKAN_FILE_INFO			FileInfo,
+	PEVENT_CONTEXT				EventContext,
+	PDOKAN_INSTANCE				DokanInstance,
+	PULONG						RemainingLength)
+{
+	WCHAR streamName[SHRT_MAX + 1];
+	ULONG streamNameLength;
+	LONGLONG streamSize;
+	ULONG entrySize = 0;
+	PVOID enumContext = NULL;
+	int result = 0;
+
+	if (DokanInstance->DokanOptions->Version < DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION || !DokanInstance->DokanOperations->EnumerateNamedStreams) {
+		return STATUS_NOT_IMPLEMENTED;
+	}
+
+	if (*RemainingLength < sizeof(FILE_STREAM_INFORMATION)) {
+		return STATUS_BUFFER_OVERFLOW;
+	}
+
+	while (result > -1) {
+		ZeroMemory(streamName, sizeof(streamName));
+		streamNameLength = 0;
+		streamSize = 0;
+		result = DokanInstance->DokanOperations->EnumerateNamedStreams(
+			EventContext->Operation.File.FileName,
+			&enumContext,
+			streamName,
+			&streamNameLength,
+			&streamSize,
+			FileInfo);
+		
+		if (result > -1) {
+			if (*RemainingLength < sizeof(FILE_STREAM_INFORMATION)) {
+				return STATUS_BUFFER_OVERFLOW;
+			}
+
+			// Not the first entry, set the offset before filling the new entry
+			if (entrySize > 0) {
+				StreamInfo->NextEntryOffset = entrySize;
+				StreamInfo = (PFILE_STREAM_INFORMATION)((LPBYTE)StreamInfo + StreamInfo->NextEntryOffset);
+			}
+
+			entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
+			// Must be align on a 8-byte boundary.
+			entrySize = QuadAlign(entrySize);
+			if (*RemainingLength < entrySize) {
+				return STATUS_BUFFER_OVERFLOW;
+			}
+
+			// Fill the new entry
+			StreamInfo->StreamNameLength = streamNameLength;
+			wcscpy_s(StreamInfo->StreamName, streamNameLength + 1, streamName);
+			StreamInfo->StreamSize.QuadPart = streamSize;
+			StreamInfo->StreamAllocationSize.QuadPart = streamSize;
+			ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
+
+			*RemainingLength -= entrySize;
+		}
+	}
+
+	return STATUS_SUCCESS;
+}
+
 
 VOID
 DispatchQueryInformation(
@@ -291,7 +358,6 @@ DispatchQueryInformation(
 	if (result < 0) {
 		eventInfo->Status = STATUS_INVALID_PARAMETER;
 		eventInfo->BufferLength = 0;
-	
 	} else {
 
 		switch (EventContext->Operation.File.FileInformationClass) {
@@ -361,7 +427,7 @@ DispatchQueryInformation(
 			break;
 		case FileStreamInformation:
 			//DbgPrint("FileStreamInformation\n");
-			status = STATUS_NOT_IMPLEMENTED;
+			status = DokanEnumerateNamedStreams((PFILE_STREAM_INFORMATION)eventInfo->Buffer, &fileInfo, EventContext, DokanInstance, &remainingLength);
 			break;
         default:
 			{

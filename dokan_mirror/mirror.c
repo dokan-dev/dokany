@@ -1045,6 +1045,91 @@ MirrorUnmount(
 	return 0;
 }
 
+/**
+ * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS definition.
+ * This only for MirrorEnumerateNamedStreams. Link with ntdll.lib still required.
+ * 
+ * Not needed if you're not using NtQueryInformationFile!
+ *
+ * BEGIN
+ */
+typedef struct _IO_STATUS_BLOCK {
+	union {
+		NTSTATUS Status;
+		PVOID Pointer;
+	} DUMMYUNIONNAME;
+
+	ULONG_PTR Information;
+} IO_STATUS_BLOCK, *PIO_STATUS_BLOCK;
+
+NTSYSCALLAPI NTSTATUS NTAPI 	NtQueryInformationFile(_In_ HANDLE FileHandle, _Out_ PIO_STATUS_BLOCK IoStatusBlock, _Out_writes_bytes_(Length) PVOID FileInformation, _In_ ULONG Length, _In_ FILE_INFORMATION_CLASS FileInformationClass);
+/**
+ * END
+ */
+
+static int DOKAN_CALLBACK
+MirrorEnumerateNamedStreams(
+	LPCWSTR					FileName,
+	PVOID*					EnumContext,
+	LPWSTR					StreamName,
+	PULONG					StreamNameLength,
+	PLONGLONG				StreamSize,
+	PDOKAN_FILE_INFO		DokanFileInfo)
+{
+	HANDLE	handle;
+	WCHAR	filePath[MAX_PATH];
+
+	GetFilePath(filePath, MAX_PATH, FileName);
+
+	DbgPrint(L"EnumerateNamedStreams %s\n", filePath);
+
+	handle = (HANDLE)DokanFileInfo->Context;
+	if (!handle || handle == INVALID_HANDLE_VALUE) {
+		DbgPrint(L"\tinvalid handle\n\n");
+		return -1;
+	}
+
+	// As we are requested one by one, it would be better to use FindFirstStream / FindNextStream instead of requesting all streams each time
+	// But this doesn't really matter on mirror sample
+	BYTE InfoBlock[64 * 1024];
+	PFILE_STREAM_INFORMATION pStreamInfo = (PFILE_STREAM_INFORMATION)InfoBlock;
+	IO_STATUS_BLOCK ioStatus;
+	ZeroMemory(InfoBlock, sizeof(InfoBlock));
+
+	NTSTATUS status = NtQueryInformationFile(handle, &ioStatus, InfoBlock, sizeof(InfoBlock), FileStreamInformation);
+	if (status != STATUS_SUCCESS) {
+		DbgPrint(L"\tNtQueryInformationFile failed with %d.\n", status);
+		return -1;
+	}
+
+	if (pStreamInfo->StreamNameLength == 0) {
+		DbgPrint(L"\tNo stream found.\n");
+		return -1;
+	}
+
+	UINT index = (UINT)*EnumContext;
+	DbgPrint(L"\tStream #%d requested.\n", index);
+	
+	for (UINT i = 0; i != index; ++i) {
+		if (pStreamInfo->NextEntryOffset == 0) {
+			DbgPrint(L"\tNo more stream.\n");
+			return -1;
+		}
+		pStreamInfo = (PFILE_STREAM_INFORMATION) ((LPBYTE)pStreamInfo + pStreamInfo->NextEntryOffset);   // Next stream record
+	}
+
+	wcscpy_s(StreamName, SHRT_MAX + 1, pStreamInfo->StreamName);
+	*StreamNameLength = pStreamInfo->StreamNameLength;
+	*StreamSize = pStreamInfo->StreamSize.QuadPart;
+
+	DbgPrint(L"\t Stream %ws\n", pStreamInfo->StreamName);
+
+	// Remember next stream entry index
+	*EnumContext = (PVOID)++index;
+
+	return 0;
+}
+
 
 int __cdecl
 wmain(ULONG argc, PWCHAR argv[])
@@ -1124,6 +1209,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	}
 
 	dokanOptions->Options |= DOKAN_OPTION_KEEP_ALIVE;
+	dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
 	ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
 	dokanOperations->CreateFile = MirrorCreateFile;
@@ -1151,6 +1237,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->GetDiskFreeSpace = NULL;
 	dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
 	dokanOperations->Unmount = MirrorUnmount;
+	dokanOperations->EnumerateNamedStreams = MirrorEnumerateNamedStreams;
 
 	status = DokanMain(dokanOptions, dokanOperations);
 	switch (status) {
