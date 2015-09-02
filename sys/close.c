@@ -85,7 +85,7 @@ Return Value:
 				fcb = ccb->Fcb;
 				ASSERT(fcb != NULL);
 
-				DDbgPrint("   Free CCB:%X\n", ccb);
+				DDbgPrint("   Free CCB:%p\n", ccb);
 				DokanFreeCCB(ccb);
 
 				DokanFreeFCB(fcb);
@@ -107,7 +107,7 @@ Return Value:
 		if (eventContext == NULL) {
 			//status = STATUS_INSUFFICIENT_RESOURCES;
 			DDbgPrint("   eventContext == NULL\n");
-			DDbgPrint("   Free CCB:%X\n", ccb);
+			DDbgPrint("   Free CCB:%p\n", ccb);
 			DokanFreeCCB(ccb);
 			DokanFreeFCB(fcb);
 			status = STATUS_SUCCESS;
@@ -121,7 +121,7 @@ Return Value:
 		eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
 		RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
 
-		DDbgPrint("   Free CCB:%X\n", ccb);
+		DDbgPrint("   Free CCB:%p\n", ccb);
 		DokanFreeCCB(ccb);
 
 		DokanFreeFCB(fcb);

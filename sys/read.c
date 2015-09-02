@@ -95,7 +95,7 @@ Return Value:
 
 		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 		DokanPrintFileName(fileObject);
-		DDbgPrint("  ByteCount:%d ByteOffset:%d\n", bufferLength, byteOffset);
+		DDbgPrint("  ByteCount:%lu ByteOffset:%I64d\n", bufferLength, byteOffset.QuadPart);
 
 		if (bufferLength == 0) {
 			status = STATUS_SUCCESS;

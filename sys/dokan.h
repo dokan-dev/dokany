@@ -365,7 +365,7 @@ AllocateEventContext(
 	__in PDokanDCB	Dcb,
 	__in PIRP				Irp,
 	__in ULONG				EventContextLength,
-	__in PDokanCCB			Ccb);
+	__in_opt PDokanCCB			Ccb);
 
 VOID
 DokanFreeEventContext(
@@ -545,7 +545,7 @@ DokanStopCheckThreadInternal(
 BOOLEAN
 DokanCheckCCB(
 	__in PDokanDCB	Dcb,
-	__in PDokanCCB	Ccb);
+    __in_opt PDokanCCB	Ccb);
 
 VOID
 DokanInitIrpList(
