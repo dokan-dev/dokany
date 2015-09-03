@@ -620,6 +620,9 @@ DokanStart(PDOKAN_INSTANCE Instance)
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_REMOVABLE) {
 		eventStart.Flags |= DOKAN_EVENT_REMOVABLE;
 	}
+    
+    eventStart.IrpTimeout = Instance->DokanOptions->Timeout;
+    
 
 	SendToDevice(
 		DOKAN_GLOBAL_DEVICE_NAME,

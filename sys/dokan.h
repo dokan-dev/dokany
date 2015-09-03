@@ -149,7 +149,7 @@ typedef struct _DOKAN_GLOBAL {
 	// the list of waiting IRP for mount service
 	IRP_LIST		PendingService;
 	IRP_LIST		NotifyService;
-
+    ULONG           IrpTimeout;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 

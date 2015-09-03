@@ -293,6 +293,7 @@ typedef struct _EVENT_START {
 	ULONG	DeviceType;
 	ULONG	Flags;
 	WCHAR	DriveLetter;
+    ULONG   IrpTimeout;
 } EVENT_START, *PEVENT_START;
 
 typedef struct _DOKAN_RENAME_INFORMATION {
