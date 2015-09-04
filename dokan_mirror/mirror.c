@@ -1197,7 +1197,8 @@ wmain(ULONG argc, PWCHAR argv[])
 			dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
 			break;
         case L'i':
-            dokanOptions->Timeout = (ULONG)_wtoi(argv[command]);
+            command++;
+            dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
             break;
 		default:
 			fwprintf(stderr, L"unknown command: %s\n", argv[command]);

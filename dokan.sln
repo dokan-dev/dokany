@@ -44,7 +44,6 @@ Global
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Debug|Win32.ActiveCfg = Win8.1 Debug|Win32
-		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Debug|Win32.Deploy.0 = Win8.1 Debug|Win32
 		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Debug|x64.ActiveCfg = Win8.1 Debug|x64
 		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Debug|x64.Deploy.0 = Win8.1 Debug|x64
 		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Release|Win32.ActiveCfg = Win8.1 Release|Win32
@@ -88,7 +87,6 @@ Global
 		{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}.Win8.1 Release|x64.Deploy.0 = Win8.1 Release|x64
 		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Debug|Win32.ActiveCfg = Debug|Win32
 		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Debug|Win32.Build.0 = Debug|Win32
-		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Debug|Win32.Deploy.0 = Debug|Win32
 		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Debug|x64.ActiveCfg = Debug|x64
 		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Debug|x64.Build.0 = Debug|x64
 		{F25BA22F-2AB8-4859-9B89-8FE1E774B472}.Release|Win32.ActiveCfg = Release|Win32
