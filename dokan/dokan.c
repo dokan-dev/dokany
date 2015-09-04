@@ -271,6 +271,7 @@ DokanLoop(
 	BOOL	status;
 	ULONG	returnedLength;
 	DWORD	result = 0;
+    BOOL    doTerminateThread = TRUE;
 
 	RtlZeroMemory(buffer, sizeof(buffer));
 
@@ -307,8 +308,10 @@ DokanLoop(
 					);
 
 		if (!status) {
-			DbgPrint("Ioctl failed with code %d\n", GetLastError());
-			result = (DWORD)-1;
+			DbgPrint("Ioctl failed for wait with code %d. Processing will continue.\n", GetLastError());
+            Sleep(200);
+            doTerminateThread = false;
+            DokanLoop(DokanInstance);
 			break;
 		}
 
@@ -376,7 +379,11 @@ DokanLoop(
 	}
 
 	CloseHandle(device);
-	_endthreadex(result);
+
+    if (doTerminateThread) {
+        _endthreadex(result);
+    }
+
 	return result;
 }
 
