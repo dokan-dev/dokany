@@ -143,7 +143,7 @@ RegisterPendingIrpMain(
 
     // Update the irp timeout for the entry
     if (vcb) {
-        DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->Global->IrpTimeout);
+        DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
     } else {
         DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
     }
@@ -462,19 +462,6 @@ DokanEventStart(
 
 	deviceCharacteristics = FILE_DEVICE_IS_MOUNTED;
 
-    // Set the irp timeout in milliseconds
-    // If the IrpTimeout is 0, we assume that the value was not changed
-    if (eventStart.IrpTimeout > 0) {
-        if (eventStart.IrpTimeout > DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX) {
-            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX;
-        }
-
-        if (eventStart.IrpTimeout < DOKAN_IRP_PENDING_TIMEOUT) {
-            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
-        }
-        dokanGlobal->IrpTimeout = eventStart.IrpTimeout;
-    }
-
 	switch (eventStart.DeviceType) {
 	case DOKAN_DISK_FILE_SYSTEM:
 		deviceType = FILE_DEVICE_DISK_FILE_SYSTEM;
@@ -539,6 +526,20 @@ DokanEventStart(
 	RtlStringCchCopyW(driverInfo->DeviceName,
 			sizeof(driverInfo->DeviceName) / sizeof(WCHAR),
 			&(dcb->SymbolicLinkName->Buffer[deviceNamePos]));
+
+    // Set the irp timeout in milliseconds
+    // If the IrpTimeout is 0, we assume that the value was not changed
+    dcb->IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
+    if (eventStart.IrpTimeout > 0) {
+        if (eventStart.IrpTimeout > DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX) {
+            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX;
+        }
+
+        if (eventStart.IrpTimeout < DOKAN_IRP_PENDING_TIMEOUT) {
+            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
+        }
+        dcb->IrpTimeout = eventStart.IrpTimeout;
+    }
 
 	DDbgPrint("  DeviceName:%ws\n", driverInfo->DeviceName);
     DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);

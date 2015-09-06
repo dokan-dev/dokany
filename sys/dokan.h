@@ -149,7 +149,6 @@ typedef struct _DOKAN_GLOBAL {
 	// the list of waiting IRP for mount service
 	IRP_LIST		PendingService;
 	IRP_LIST		NotifyService;
-    ULONG           IrpTimeout;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 
@@ -204,6 +203,8 @@ typedef struct _DokanDiskControlBlock {
 
 	CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
     CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
+
+    ULONG           IrpTimeout;
 } DokanDCB, *PDokanDCB;
 
 

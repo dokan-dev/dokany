@@ -273,9 +273,6 @@ Return Value:
 		return status;
 	}
 
-    // Default timeout for pending requests
-    dokanGlobal->IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
-
 	DDbgPrint("<== DriverEntry\n");
 
 	return( status );

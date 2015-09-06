@@ -271,8 +271,7 @@ DokanLoop(
 	BOOL	status;
 	ULONG	returnedLength;
 	DWORD	result = 0;
-    BOOL    doTerminateThread = TRUE;
-
+    DWORD   lastError = 0;
 	RtlZeroMemory(buffer, sizeof(buffer));
 
 	device = CreateFile(
@@ -308,10 +307,15 @@ DokanLoop(
 					);
 
 		if (!status) {
-			DbgPrint("Ioctl failed for wait with code %d. Processing will continue.\n", GetLastError());
-            Sleep(200);
-            doTerminateThread = false;
-            DokanLoop(DokanInstance);
+            lastError = GetLastError();
+			DbgPrint("Ioctl failed for wait with code %d.\n", lastError);
+            if (lastError == ERROR_NO_SYSTEM_RESOURCES) {
+                DbgPrint("Processing will continue\n");
+                status = TRUE;
+                Sleep(200);
+                continue;
+            }
+            DbgPrint("Thread will be terminated\n");
 			break;
 		}
 
@@ -379,10 +383,7 @@ DokanLoop(
 	}
 
 	CloseHandle(device);
-
-    if (doTerminateThread) {
-        _endthreadex(result);
-    }
+    _endthreadex(result);
 
 	return result;
 }
