@@ -39,8 +39,6 @@ DokanDispatchQueryVolumeInformation(
 
 	__try {
 
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanQueryVolumeInformation\n");
 		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 
@@ -166,8 +164,6 @@ DokanDispatchQueryVolumeInformation(
         DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanQueryVolumeInformation\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -187,8 +183,6 @@ DokanCompleteQueryVolumeInformation(
 	ULONG				bufferLen= 0;
 	PVOID				buffer	 = NULL;
 	PDokanCCB			ccb;
-
-	//FsRtlEnterFileSystem();
 
 	DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
 
@@ -231,8 +225,6 @@ DokanCompleteQueryVolumeInformation(
     DokanCompleteIrpRequest(irp, status, info);
 
 	DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
-
-	//FsRtlExitFileSystem();
 }
 
 
@@ -247,15 +239,11 @@ DokanDispatchSetVolumeInformation(
 
     UNREFERENCED_PARAMETER(DeviceObject);
 
-	//FsRtlEnterFileSystem();
-
 	DDbgPrint("==> DokanSetVolumeInformation\n");
 
     DokanCompleteIrpRequest(Irp, status, 0);
 
 	DDbgPrint("<== DokanSetVolumeInformation");
-
-	//FsRtlExitFileSystem();
 
 	return status;
 }

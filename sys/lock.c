@@ -38,8 +38,6 @@ DokanDispatchLock(
 	ULONG				eventLength;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanLock\n");
 	
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -117,7 +115,6 @@ DokanDispatchLock(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanLock\n");
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -138,8 +135,6 @@ DokanCompleteLock(
 	irp   = IrpEntry->Irp;
 	irpSp = IrpEntry->IrpSp;	
 
-	//FsRtlEnterFileSystem();
-
 	DDbgPrint("==> DokanCompleteLock\n");
 
 	fileObject = irpSp->FileObject;
@@ -152,6 +147,4 @@ DokanCompleteLock(
     DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
 	DDbgPrint("<== DokanCompleteLock\n");
-
-	//FsRtlExitFileSystem();
 }

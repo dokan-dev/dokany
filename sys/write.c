@@ -40,8 +40,6 @@ DokanDispatchWrite(
 
 	__try {
 
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanWrite\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -211,9 +209,6 @@ DokanDispatchWrite(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanWrite\n");
-
-		FsRtlExitFileSystem();
-
 	}
 
 	return status;

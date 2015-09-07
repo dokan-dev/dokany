@@ -38,8 +38,6 @@ DokanDispatchFlush(
 	ULONG				eventLength;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanFlush\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -93,8 +91,6 @@ DokanDispatchFlush(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanFlush\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -115,8 +111,6 @@ DokanCompleteFlush(
 	irp   = IrpEntry->Irp;
 	irpSp = IrpEntry->IrpSp;
 
-	//FsRtlEnterFileSystem();
-
 	DDbgPrint("==> DokanCompleteFlush\n");
 
 	fileObject = irpSp->FileObject;
@@ -129,8 +123,5 @@ DokanCompleteFlush(
     DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
 	DDbgPrint("<== DokanCompleteFlush\n");
-
-	//FsRtlExitFileSystem();
-
 }
 
