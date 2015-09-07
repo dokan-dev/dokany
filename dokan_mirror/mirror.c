@@ -166,10 +166,10 @@ MirrorCreateFile(
 	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_READ);
 	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_WRITE);
 	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_EXECUTE);
-
+	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
-	if (fileAttr && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+	if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
 		FlagsAndAttributes |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
