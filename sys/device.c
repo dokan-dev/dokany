@@ -505,8 +505,6 @@ Return Value:
 
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		Irp->IoStatus.Information = 0;
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -596,8 +594,6 @@ Return Value:
 			DokanPrintNTStatus(status);
 			DDbgPrint("<== DokanDispatchIoControl\n");
 		}
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;

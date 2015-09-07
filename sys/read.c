@@ -59,8 +59,6 @@ Return Value:
 
 	__try {
 
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanRead\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -168,9 +166,6 @@ Return Value:
         DokanCompleteIrpRequest(Irp, status, readLength);
 
 		DDbgPrint("<== DokanRead\n");
-		
-		FsRtlExitFileSystem();
-
 	}
 
 	return status;

@@ -1,0 +1,144 @@
+/*
+Dokan : user-mode file system library for Windows
+
+Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+
+http://dokan-dev.net/en
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the Free
+Software Foundation; either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along
+with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include "dokan.h"
+
+NTSTATUS
+DokanBuildRequest(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    BOOLEAN             AtIrqlPassiveLevel = FALSE;
+    BOOLEAN             IsTopLevelIrp = FALSE;
+    NTSTATUS            Status = STATUS_UNSUCCESSFUL;
+
+    __try {
+
+        __try {
+
+            AtIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
+
+            if (AtIrqlPassiveLevel) {
+                FsRtlEnterFileSystem();
+            }
+
+            if (!IoGetTopLevelIrp()) {
+                IsTopLevelIrp = TRUE;
+                IoSetTopLevelIrp(Irp);
+            }
+
+            Status = DokanDispatchRequest(DeviceObject, Irp);
+
+        }
+        __except (DokanExceptionFilter(Irp, GetExceptionInformation()))
+        {
+
+            Status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
+        }
+
+    }
+    __finally {
+
+        if (IsTopLevelIrp) {
+            IoSetTopLevelIrp(NULL);
+        }
+
+        if (AtIrqlPassiveLevel) {
+            FsRtlExitFileSystem();
+        }
+    }
+
+    return Status;
+}
+
+
+NTSTATUS
+DokanDispatchRequest(
+__in PDEVICE_OBJECT   DeviceObject,
+__in PIRP Irp)
+{
+    PIO_STACK_LOCATION	irpSp;
+
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+
+    switch (irpSp->MajorFunction) {
+
+        case IRP_MJ_CREATE:
+            return DokanDispatchCreate(DeviceObject, Irp);
+
+        case IRP_MJ_CLOSE:
+            return DokanDispatchClose(DeviceObject, Irp);
+
+        case IRP_MJ_READ:
+            return DokanDispatchRead(DeviceObject, Irp);
+
+        case IRP_MJ_WRITE:
+            return DokanDispatchWrite(DeviceObject, Irp);
+
+        case IRP_MJ_FLUSH_BUFFERS:
+            return DokanDispatchFlush(DeviceObject, Irp);
+
+        case IRP_MJ_QUERY_INFORMATION:
+            return DokanDispatchQueryInformation(DeviceObject, Irp);
+
+        case IRP_MJ_SET_INFORMATION:
+            return DokanDispatchSetInformation(DeviceObject, Irp);
+
+        case IRP_MJ_QUERY_VOLUME_INFORMATION:
+            return DokanDispatchQueryVolumeInformation(DeviceObject, Irp);
+
+        case IRP_MJ_SET_VOLUME_INFORMATION:
+            return DokanDispatchSetVolumeInformation(DeviceObject, Irp);
+
+        case IRP_MJ_DIRECTORY_CONTROL:
+            return DokanDispatchDirectoryControl(DeviceObject, Irp);
+
+        case IRP_MJ_FILE_SYSTEM_CONTROL:
+            return DokanDispatchFileSystemControl(DeviceObject, Irp);
+
+        case IRP_MJ_DEVICE_CONTROL:
+            return DokanDispatchDeviceControl(DeviceObject, Irp);
+
+        case IRP_MJ_LOCK_CONTROL:
+            return DokanDispatchLock(DeviceObject, Irp);
+
+        case IRP_MJ_CLEANUP:
+            return DokanDispatchCleanup(DeviceObject, Irp);
+
+        case IRP_MJ_SHUTDOWN:
+            return DokanDispatchShutdown(DeviceObject, Irp);
+
+        case IRP_MJ_QUERY_SECURITY:
+            return DokanDispatchQuerySecurity(DeviceObject, Irp);
+
+        case IRP_MJ_SET_SECURITY:
+            return DokanDispatchSetSecurity(DeviceObject, Irp);
+
+
+#if (_WIN32_WINNT >= 0x0500)
+        case IRP_MJ_PNP:
+            return DokanDispatchPnp(DeviceObject, Irp);
+#endif //(_WIN32_WINNT >= 0x0500)        
+        default:
+            DDbgPrint("DokanDispatchRequest: Unexpected major function: %xh\n", irpSp->MajorFunction);
+
+            DokanCompleteIrpRequest(Irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
+
+            return STATUS_DRIVER_INTERNAL_ERROR;
+    }
+}

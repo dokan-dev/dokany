@@ -351,8 +351,6 @@ Return Value:
 	PAGED_CODE();
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanCreate\n");
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -553,7 +551,6 @@ Return Value:
         DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanCreate\n");
-		FsRtlExitFileSystem();
 	}
 
 	return status;

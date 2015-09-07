@@ -45,8 +45,6 @@ DokanDispatchDirectoryControl(
 	PDokanVCB			vcb;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanDirectoryControl\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -83,8 +81,6 @@ DokanDispatchDirectoryControl(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanDirectoryControl\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -331,8 +327,6 @@ DokanCompleteDirectoryControl(
 	ULONG				bufferLen= 0;
 	PVOID				buffer	 = NULL;
 
-	//FsRtlEnterFileSystem();
-
 	DDbgPrint("==> DokanCompleteDirectoryControl\n");
 
 	irp   = IrpEntry->Irp;
@@ -402,7 +396,5 @@ DokanCompleteDirectoryControl(
     DokanCompleteIrpRequest(irp, status, info);
 
 	DDbgPrint("<== DokanCompleteDirectoryControl\n");
-
-	//FsRtlExitFileSystem();
 }
 
