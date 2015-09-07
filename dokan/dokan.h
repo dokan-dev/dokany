@@ -54,6 +54,7 @@ typedef struct _DOKAN_OPTIONS {
 	ULONG	Options;	 // combination of DOKAN_OPTIONS_*
 	ULONG64	GlobalContext; // FileSystem can store anything here
 	LPCWSTR	MountPoint; //  mount point "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS)
+    ULONG   Timeout;    // IrpTimeout in milliseconds
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 typedef struct _DOKAN_FILE_INFO {

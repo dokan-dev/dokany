@@ -1156,7 +1156,8 @@ wmain(ULONG argc, PWCHAR argv[])
 			"  /d (enable debug output)\n"
 			"  /s (use stderr for output)\n"
 			"  /n (use network drive)\n"
-			"  /m (use removable drive)\n");
+			"  /m (use removable drive)\n"
+            "  /i (Timeout in Milliseconds ex. /i 30000)\n");
 		return -1;
 	}
 
@@ -1195,6 +1196,10 @@ wmain(ULONG argc, PWCHAR argv[])
 		case L'm':
 			dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
 			break;
+        case L'i':
+            command++;
+            dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
+            break;
 		default:
 			fwprintf(stderr, L"unknown command: %s\n", argv[command]);
 			return -1;

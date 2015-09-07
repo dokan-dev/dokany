@@ -108,11 +108,12 @@ RegisterPendingIrpMain(
  	PIRP_ENTRY			irpEntry;
     PIO_STACK_LOCATION	irpSp;
     KIRQL				oldIrql;
- 
+    PDokanVCB           vcb = NULL;
+
 	DDbgPrint("==> DokanRegisterPendingIrpMain\n");
 
 	if (GetIdentifierType(DeviceObject->DeviceExtension) == VCB) {
-		PDokanVCB vcb = DeviceObject->DeviceExtension;
+		vcb = DeviceObject->DeviceExtension;
 		if (CheckMount && !vcb->Dcb->Mounted) {
 			DDbgPrint(" device is not mounted\n");
 			return STATUS_INSUFFICIENT_RESOURCES;
@@ -140,7 +141,12 @@ RegisterPendingIrpMain(
 	irpEntry->IrpList			= IrpList;
 	irpEntry->Flags				= Flags;
 
-	DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
+    // Update the irp timeout for the entry
+    if (vcb) {
+        DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
+    } else {
+        DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
+    }
 
 	//DDbgPrint("  Lock IrpList.ListLock\n");
 	ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
@@ -521,8 +527,22 @@ DokanEventStart(
 			sizeof(driverInfo->DeviceName) / sizeof(WCHAR),
 			&(dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
+    // Set the irp timeout in milliseconds
+    // If the IrpTimeout is 0, we assume that the value was not changed
+    dcb->IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
+    if (eventStart.IrpTimeout > 0) {
+        if (eventStart.IrpTimeout > DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX) {
+            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX;
+        }
+
+        if (eventStart.IrpTimeout < DOKAN_IRP_PENDING_TIMEOUT) {
+            eventStart.IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
+        }
+        dcb->IrpTimeout = eventStart.IrpTimeout;
+    }
+
 	DDbgPrint("  DeviceName:%ws\n", driverInfo->DeviceName);
-	DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
+    DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
 
 	dcb->UseAltStream = 0;
 	if (eventStart.Flags & DOKAN_EVENT_ALTERNATIVE_STREAM_ON) {

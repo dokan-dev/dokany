@@ -383,7 +383,7 @@ DiskDeviceControl(
 				Irp->IoStatus.Information = FIELD_OFFSET(MOUNTDEV_UNIQUE_ID, UniqueId[0]) +
 											uniqueId->UniqueIdLength;
 				status = STATUS_SUCCESS;
-				DDbgPrint("  UniqueName %ws\n", uniqueId->UniqueId);
+                DDbgPrint("  UniqueName %u\n", (unsigned int)uniqueId->UniqueId);
 				break;
 			} else {
 				Irp->IoStatus.Information = sizeof(MOUNTDEV_UNIQUE_ID);

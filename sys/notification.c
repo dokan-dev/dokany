@@ -64,7 +64,7 @@ SetCommonEventContext(
 	__in PDokanDCB		Dcb,
 	__in PEVENT_CONTEXT	EventContext,
 	__in PIRP			Irp,
-	__in PDokanCCB		Ccb)
+	__in_opt PDokanCCB		Ccb)
 {
 	PIO_STACK_LOCATION  irpSp;
 
@@ -114,7 +114,7 @@ AllocateEventContext(
 	__in PDokanDCB	Dcb,
 	__in PIRP		Irp,
 	__in ULONG		EventContextLength,
-	__in PDokanCCB	Ccb
+	__in_opt PDokanCCB	Ccb
 	)
 {
 	PEVENT_CONTEXT eventContext;
@@ -515,7 +515,7 @@ DokanEventRelease(
 			ccbNext = ccbEntry->Flink;
 			ccb = CONTAINING_RECORD(ccbEntry, DokanCCB, NextCCB);
 
-			DDbgPrint("  NotifyCleanup ccb:%X, context:%X, filename:%wZ\n",
+			DDbgPrint("  NotifyCleanup ccb:%p, context:%X, filename:%wZ\n",
 					ccb, (ULONG)ccb->UserContext, &fcb->FileName);
 			FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
 		}

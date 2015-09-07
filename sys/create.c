@@ -180,7 +180,7 @@ DokanFreeFCB(
 
 		RemoveEntryList(&Fcb->NextFCB);
 
-		DDbgPrint("  Free FCB:%X\n", Fcb);
+		DDbgPrint("  Free FCB:%p\n", Fcb);
 		ExFreePool(Fcb->FileName.Buffer);
 
 #if _WIN32_WINNT >= 0x0501
@@ -492,7 +492,7 @@ Return Value:
 
 		fcb = DokanGetFCB(vcb, fileName, fileNameLength);
 		if (fcb == NULL) {
-            DDbgPrint("    Was not able to get FCB for fileName %s\n", fileName);
+            DDbgPrint("    Was not able to get FCB for fileName %ls\n", fileName);
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
 		}
@@ -649,7 +649,7 @@ DokanCompleteCreate(
 			}
 		}
 	} else {
-		DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%X\n", ccb);
+		DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p\n", ccb);
 		DokanFreeCCB(ccb);
 		DokanFreeFCB(fcb);
 	}

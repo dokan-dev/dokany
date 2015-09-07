@@ -109,7 +109,7 @@ DokanDispatchQuerySecurity(
 			if (Irp->MdlAddress == NULL) {
 				status = DokanAllocateMdl(Irp, bufferLength);
 				if (!NT_SUCCESS(status)) {
-					ExFreePool(eventContext);
+                    DokanFreeEventContext(eventContext);
 					__leave;
 				}
 				flags = DOKAN_MDL_ALLOCATED;

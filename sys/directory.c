@@ -245,7 +245,7 @@ DokanQueryDirectory(
 					fcb->FileName.Buffer, fcb->FileName.Length);
 
 	// if search pattern is specified, copy it to EventContext
-	if (ccb->SearchPatternLength) {
+	if (ccb->SearchPatternLength && ccb->SearchPattern) {
 		PVOID searchBuffer;
 
 		eventContext->Operation.Directory.SearchPatternLength = ccb->SearchPatternLength;

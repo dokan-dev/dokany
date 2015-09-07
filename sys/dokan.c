@@ -273,7 +273,6 @@ Return Value:
 		return status;
 	}
 
-
 	DDbgPrint("<== DriverEntry\n");
 
 	return( status );
@@ -568,7 +567,7 @@ PrintIdType(
 BOOLEAN
 DokanCheckCCB(
 	__in PDokanDCB	Dcb,
-	__in PDokanCCB	Ccb)
+	__in_opt PDokanCCB	Ccb)
 {
 	ASSERT(Dcb != NULL);
 	if (GetIdentifierType(Dcb) != DCB) {
@@ -576,13 +575,13 @@ DokanCheckCCB(
 		return FALSE;
 	}
 
-	if (Ccb == NULL) {
+	if (Ccb == NULL || Ccb == 0) {
 		PrintIdType(Dcb);
 		DDbgPrint("   ccb is NULL\n");
 		return FALSE;
 	}
 
-	if (Ccb->MountId != Dcb->MountId) {
+    if (Ccb->MountId != Dcb->MountId) {
 		DDbgPrint("   MountId is different\n");
 		return FALSE;
 	}

@@ -271,7 +271,7 @@ DokanLoop(
 	BOOL	status;
 	ULONG	returnedLength;
 	DWORD	result = 0;
-
+    DWORD   lastError = 0;
 	RtlZeroMemory(buffer, sizeof(buffer));
 
 	device = CreateFile(
@@ -307,8 +307,15 @@ DokanLoop(
 					);
 
 		if (!status) {
-			DbgPrint("Ioctl failed with code %d\n", GetLastError());
-			result = (DWORD)-1;
+            lastError = GetLastError();
+			DbgPrint("Ioctl failed for wait with code %d.\n", lastError);
+            if (lastError == ERROR_NO_SYSTEM_RESOURCES) {
+                DbgPrint("Processing will continue\n");
+                status = TRUE;
+                Sleep(200);
+                continue;
+            }
+            DbgPrint("Thread will be terminated\n");
 			break;
 		}
 
@@ -376,7 +383,8 @@ DokanLoop(
 	}
 
 	CloseHandle(device);
-	_endthreadex(result);
+    _endthreadex(result);
+
 	return result;
 }
 
@@ -620,6 +628,9 @@ DokanStart(PDOKAN_INSTANCE Instance)
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_REMOVABLE) {
 		eventStart.Flags |= DOKAN_EVENT_REMOVABLE;
 	}
+    
+    eventStart.IrpTimeout = Instance->DokanOptions->Timeout;
+    
 
 	SendToDevice(
 		DOKAN_GLOBAL_DEVICE_NAME,
