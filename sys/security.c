@@ -41,8 +41,6 @@ DokanDispatchQuerySecurity(
 	ULONG				flags = 0;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanQuerySecurity\n");
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -131,7 +129,6 @@ DokanDispatchQuerySecurity(
         DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanQuerySecurity\n");
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -223,8 +220,6 @@ DokanDispatchSetSecurity(
 	PEVENT_CONTEXT		eventContext;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanSetSecurity\n");
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -317,7 +312,6 @@ DokanDispatchSetSecurity(
         DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanSetSecurity\n");
-		FsRtlExitFileSystem();
 	}
 
 	return status;

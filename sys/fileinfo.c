@@ -41,8 +41,6 @@ DokanDispatchQueryInformation(
 	//PAGED_CODE();
 	
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanQueryInformation\n");
 
 		irpSp			= IoGetCurrentIrpStackLocation(Irp);
@@ -209,9 +207,6 @@ DokanDispatchQueryInformation(
         DokanCompleteIrpRequest(Irp, status, info);
 
 		DDbgPrint("<== DokanQueryInformation\n");
-
-		FsRtlExitFileSystem();
-
 	}
 
 	return status;
@@ -232,8 +227,6 @@ DokanCompleteQueryInformation(
 	ULONG				bufferLen= 0;
 	PVOID				buffer	 = NULL;
 	PDokanCCB			ccb;
-
-	//FsRtlEnterFileSystem();
 
 	DDbgPrint("==> DokanCompleteQueryInformation\n");
 
@@ -284,9 +277,6 @@ DokanCompleteQueryInformation(
     DokanCompleteIrpRequest(irp, status, info);
 
 	DDbgPrint("<== DokanCompleteQueryInformation\n");
-
-	//FsRtlExitFileSystem();
-
 }
 
 
@@ -311,8 +301,6 @@ DokanDispatchSetInformation(
     vcb = DeviceObject->DeviceExtension;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanSetInformationn\n");
 
 		irpSp			= IoGetCurrentIrpStackLocation(Irp);
@@ -469,8 +457,6 @@ DokanDispatchSetInformation(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanSetInformation\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;

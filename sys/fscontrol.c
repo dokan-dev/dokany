@@ -297,8 +297,6 @@ DokanDispatchFileSystemControl(
 	PDokanVCB			vcb;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanFileSystemControl\n");
 		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 
@@ -360,8 +358,6 @@ DokanDispatchFileSystemControl(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanFileSystemControl\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;
