@@ -89,18 +89,17 @@ DispatchCreate(
 	}
 	else {
 	    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-		DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
-		// strip the last section of the file path
-		WCHAR* lastP = NULL;
-		for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
-		    if ((*p == L'\\' || *p == L'/') && p[1])
-			lastP = p;
-		}
-		if (lastP) {
-		    directoryRequested = TRUE;
-		    if (lastP != EventContext->Operation.Create.FileName)
-		        *lastP = 0;
-		}
+			DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
+			// strip the last section of the file path
+			WCHAR* lastP = NULL;
+			for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
+				if ((*p == L'\\' || *p == L'/') && p[1])
+				lastP = p;
+			}
+			if (lastP) {
+				directoryRequested = TRUE;
+				*lastP = 0;
+			}
 	    }
 
 	}
