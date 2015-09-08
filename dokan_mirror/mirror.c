@@ -673,6 +673,12 @@ MirrorDeleteDirectory(
 	filePath[fileLen] = L'*';
 
 	hFind = FindFirstFile(filePath, &findData);
+
+	if (hFind == INVALID_HANDLE_VALUE) {
+		DbgPrint(L"\tFindFirstFile error code = %d\n\n", GetLastError());
+		return -1;
+	}
+
 	while (hFind != INVALID_HANDLE_VALUE) {
 		if (wcscmp(findData.cFileName, L"..") != 0 &&
 			wcscmp(findData.cFileName, L".") != 0) {
