@@ -694,7 +694,7 @@ MirrorDeleteDirectory(
 	FindClose(hFind);
 
 	if (error != ERROR_NO_MORE_FILES) {
-		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error;
+		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
 		return -1;
 	}
 
