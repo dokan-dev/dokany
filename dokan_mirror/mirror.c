@@ -675,7 +675,7 @@ MirrorDeleteDirectory(
 	hFind = FindFirstFile(filePath, &findData);
 
 	if (hFind == INVALID_HANDLE_VALUE) {
-		DbgPrint(L"\tFindFirstFile error code = %d\n\n", GetLastError());
+		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", GetLastError());
 		return -1;
 	}
 
@@ -683,20 +683,22 @@ MirrorDeleteDirectory(
 		if (wcscmp(findData.cFileName, L"..") != 0 &&
 			wcscmp(findData.cFileName, L".") != 0) {
 			FindClose(hFind);
-			DbgPrint(L"  Directory is not empty: %s\n", findData.cFileName);
+			DbgPrint(L"\tDirectory is not empty: %s\n", findData.cFileName);
 			return -(int)ERROR_DIR_NOT_EMPTY;
 		}
 		if (!FindNextFile(hFind, &findData)) {
 			break;
 		}
 	}
+	DWORD error = GetLastError();
 	FindClose(hFind);
 
-	if (GetLastError() == ERROR_NO_MORE_FILES) {
-		return 0;
-	} else {
+	if (error != ERROR_NO_MORE_FILES) {
+		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error;
 		return -1;
 	}
+
+	return 0;
 }
 
 
