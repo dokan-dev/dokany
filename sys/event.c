@@ -549,11 +549,6 @@ DokanEventStart(
 		DDbgPrint("  ALT_STREAM_ON\n");
 		dcb->UseAltStream = 1;
 	}
-	dcb->UseKeepAlive = 0;
-	if (eventStart.Flags & DOKAN_EVENT_KEEP_ALIVE_ON) {
-		DDbgPrint("  KEEP_ALIVE_ON\n");
-		dcb->UseKeepAlive = 1;
-	}
 	dcb->Mounted = 1;
 
 	DokanStartEventNotificationThread(dcb);

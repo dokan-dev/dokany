@@ -464,7 +464,7 @@ int do_fuse_loop(struct fuse *fs, bool mt)
 		return -1;
 	}
 	ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
-	dokanOptions->Options |= DOKAN_OPTION_KEEP_ALIVE|DOKAN_OPTION_REMOVABLE;
+	dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
 	dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
 
 	wchar_t mount[MAX_PATH+1];

@@ -142,12 +142,12 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 	if (DokanOptions->ThreadCount == 0) {
 		DokanOptions->ThreadCount = 5;
 
-	} else if (DOKAN_MAX_THREAD-1 < DokanOptions->ThreadCount) {
+	} else if ((DOKAN_MAX_THREAD - 1) < DokanOptions->ThreadCount) {
 		// DOKAN_MAX_THREAD includes DokanKeepAlive thread, so 
 		// available thread is DOKAN_MAX_THREAD -1
 		DokanDbgPrintW(L"Dokan Error: too many thread count %d\n",
 			DokanOptions->ThreadCount);
-		DokanOptions->ThreadCount = DOKAN_MAX_THREAD-1;
+		DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
 	}
 
 	if (DOKAN_MOUNT_POINT_SUPPORTED_VERSION <= DokanOptions->Version &&
@@ -206,15 +206,14 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
-	if (DokanOptions->Options & DOKAN_OPTION_KEEP_ALIVE) {
-		threadIds[threadNum++] = (HANDLE)_beginthreadex(
-			NULL, // Security Atributes
-			0, //stack size
-			DokanKeepAlive,
-			(PVOID)instance, // param
-			0, // create flag
-			NULL);
-	}
+	//Start Keep Alive thread
+	threadIds[threadNum++] = (HANDLE)_beginthreadex(
+		NULL, // Security Atributes
+		0, //stack size
+		DokanKeepAlive,
+		(PVOID)instance, // param
+		0, // create flag
+		NULL);
 
 	for (i = 0; i < DokanOptions->ThreadCount; ++i) {
 		threadIds[threadNum++] = (HANDLE)_beginthreadex(
@@ -618,9 +617,6 @@ DokanStart(PDOKAN_INSTANCE Instance)
 	eventStart.UserVersion = DOKAN_DRIVER_VERSION;
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_ALT_STREAM) {
 		eventStart.Flags |= DOKAN_EVENT_ALTERNATIVE_STREAM_ON;
-	}
-	if (Instance->DokanOptions->Options & DOKAN_OPTION_KEEP_ALIVE) {
-		eventStart.Flags |= DOKAN_EVENT_KEEP_ALIVE_ON;
 	}
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_NETWORK) {
 		eventStart.DeviceType = DOKAN_NETWORK_FILE_SYSTEM;

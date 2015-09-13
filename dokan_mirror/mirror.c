@@ -1221,7 +1221,6 @@ wmain(ULONG argc, PWCHAR argv[])
 		dokanOptions->Options |= DOKAN_OPTION_STDERR;
 	}
 
-	dokanOptions->Options |= DOKAN_OPTION_KEEP_ALIVE;
 	dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
 	ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));

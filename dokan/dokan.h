@@ -44,7 +44,6 @@ extern "C" {
 #define DOKAN_OPTION_DEBUG		1 // ouput debug message
 #define DOKAN_OPTION_STDERR		2 // ouput debug message to stderr
 #define DOKAN_OPTION_ALT_STREAM	4 // use alternate stream
-#define DOKAN_OPTION_KEEP_ALIVE	8 // use auto unmount
 #define DOKAN_OPTION_NETWORK	16 // use network drive, you need to install Dokan network provider.
 #define DOKAN_OPTION_REMOVABLE	32 // use removable drive
 
