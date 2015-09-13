@@ -89,9 +89,7 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  * The file system operations:
  *
  * Most of these should work very similarly to the well known UNIX
- * file system operations.  A major exception is that instead of
- * returning an error in 'errno', the operation should return the
- * negated error value (-errno) directly.
+ * file system operations.
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,

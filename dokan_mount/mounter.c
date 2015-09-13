@@ -464,7 +464,7 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hinstPrev, LPSTR lpszCmdLine, int 
 
 	StartServiceCtrlDispatcher(serviceTable);
 
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 
