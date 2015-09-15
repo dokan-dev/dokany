@@ -56,9 +56,10 @@ GetFilePath(
 	ULONG	numberOfElements,
 	LPCWSTR FileName)
 {
-	RtlZeroMemory(filePath, numberOfElements * sizeof(WCHAR));
+	filePath[0] = 0;
 	wcsncpy_s(filePath, numberOfElements, RootDirectory, wcslen(RootDirectory));
 	wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
+	RtlZeroMemory(filePath+ wcslen(filePath), (numberOfElements-wcslen(filePath)) * sizeof(WCHAR));
 }
 
 
