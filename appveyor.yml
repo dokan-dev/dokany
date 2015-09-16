@@ -4,6 +4,7 @@ configuration:
 - Win7 Release
 - Win8 Release
 - Win8.1 Release
+- Win10 Release
 platform:
 - Win32
 - x64
