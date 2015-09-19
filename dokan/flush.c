@@ -54,7 +54,8 @@ DispatchFlush(
 					STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 

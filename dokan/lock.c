@@ -79,7 +79,8 @@ DispatchLock(
 		DbgPrint("unkown lock function %d\n", EventContext->MinorFunction);
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 

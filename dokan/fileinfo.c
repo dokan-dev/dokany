@@ -441,7 +441,8 @@ DispatchQueryInformation(
 	}
 
 	// information for FileSystem
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 	free(eventInfo);

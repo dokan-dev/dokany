@@ -57,7 +57,8 @@ DispatchRead(
 		status = -1;
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 	eventInfo->BufferLength = 0;
 
 	if (status < 0) {
