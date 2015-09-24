@@ -237,6 +237,22 @@ static BOOL ftruncate( HANDLE hFile, unsigned int size)
 	return res;
 }
 
+
+static const char* getFileName(const char *pFileNamePath)
+{
+	if (pFileNamePath == NULL)
+	{
+		return NULL;
+	}
+
+	if (strstr(pFileNamePath, ":\\") != NULL)
+	{
+		return pFileNamePath + 3;
+	}
+
+	return pFileNamePath;
+}
+
 int parsetime(char *t)
 {
 	unsigned int i = 0;
@@ -1628,11 +1644,11 @@ main(int argc, char **argv)
 	 * create goodfile and logfile names from fname before potentially adding
 	 * a fork name to fname
 	 */
-	if (strcat_s(goodfile, sizeof(goodfile), fname) >= sizeof(goodfile))
+	if (strcat_s(goodfile, sizeof(goodfile), getFileName( fname ) ) >= sizeof(goodfile))
 		usage();
 	if (strcat_s(goodfile, sizeof(goodfile), ".fsxgood") >= sizeof(goodfile))
 		usage();
-	if (strcat_s(logfile, sizeof(logfile), fname) >= sizeof(logfile))
+	if (strcat_s(logfile, sizeof(logfile), getFileName(fname)) >= sizeof(logfile))
 		usage();
 	if (strcat_s(logfile, sizeof(logfile), ".fsxlog") >= sizeof(logfile))
 		usage();
