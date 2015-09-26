@@ -189,7 +189,7 @@ Return Value:
 
 	status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
-	if (status != STATUS_SUCCESS) {
+	if (NT_ERROR(status)) {
 		return status;
 	}
 	//

@@ -77,7 +77,7 @@ fuse_set_signal_handlers
 fuse_remove_signal_handlers
 
 ; Win32 Helpers
-win32_error_to_errno
-errno_to_win32_error
+ntstatus_error_to_errno
+errno_to_ntstatus_error
 convert_args
 free_converted_args

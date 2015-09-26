@@ -155,7 +155,6 @@
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
     <ClCompile Include="setfile.c" />
-    <ClCompile Include="status.c" />
     <ClCompile Include="timeout.c" />
     <ClCompile Include="version.c" />
     <ClCompile Include="volume.c" />
