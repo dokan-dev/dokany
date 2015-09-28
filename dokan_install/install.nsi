@@ -258,12 +258,12 @@ Section "Uninstall"
     RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary
     RMDir $PROGRAMFILES64\Dokan
     ${DisableX64FSRedirection}
-      Delete $SYSDIR\drivers\dokan.sys
+      Delete /REBOOTOK $SYSDIR\drivers\dokan.sys
       Delete $SYSDIR\dokan.dll
       Delete $SYSDIR\dokannp.dll
     ${EnableX64FSRedirection}
   ${Else}
-    Delete $SYSDIR\drivers\dokan.sys
+    Delete /REBOOTOK $SYSDIR\drivers\dokan.sys
   ${EndIf}
 
   ; Remove registry keys
