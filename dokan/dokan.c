@@ -208,7 +208,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	//Start Keep Alive thread
 	threadIds[threadNum++] = (HANDLE)_beginthreadex(
-		NULL, // Security Atributes
+		NULL, // Security Attributes
 		0, //stack size
 		DokanKeepAlive,
 		(PVOID)instance, // param
@@ -217,7 +217,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	for (i = 0; i < DokanOptions->ThreadCount; ++i) {
 		threadIds[threadNum++] = (HANDLE)_beginthreadex(
-			NULL, // Security Atributes
+			NULL, // Security Attributes
 			0, //stack size
 			DokanLoop,
 			(PVOID)instance, // param
