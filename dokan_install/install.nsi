@@ -30,14 +30,21 @@ UninstPage instfiles
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary
  
     File README.url
-    File ..\dokan\dokan.h
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\Win32\Release\dokan.lib
-    File ..\Win32\Release\dokanfuse.lib
     File ..\Win32\Release\dokanctl.exe
     File ..\Win32\Release\mounter.exe
+	
+  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\include\dokan
+	
+	File ..\dokan\dokan.h
+	File ..\dokan\fileinfo.h
+	
+  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\lib
+  
+	File ..\Win32\Release\dokan.lib
+    File ..\Win32\Release\dokanfuse.lib
 
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\sample\mirror
 
@@ -61,14 +68,21 @@ UninstPage instfiles
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary
 
     File README.url
-    File ..\dokan\dokan.h
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\x64\Release\dokan.lib
-    File ..\x64\Release\dokanfuse.lib
     File ..\x64\Release\dokanctl.exe
     File ..\x64\Release\mounter.exe
+	
+  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\include\dokan
+	
+	File ..\dokan\dokan.h
+	File ..\dokan\fileinfo.h
+	
+  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\lib
+  
+	File ..\x64\Release\dokan.lib
+    File ..\x64\Release\dokanfuse.lib
 
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\sample\mirror
 
