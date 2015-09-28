@@ -1224,6 +1224,7 @@ wmain(ULONG argc, PWCHAR argv[])
 			"  /s (use stderr for output)\n"
 			"  /n (use network drive)\n"
 			"  /m (use removable drive)\n"
+			"  /o (use read-only drive)\n"
             "  /i (Timeout in Milliseconds ex. /i 30000)\n");
 		return EXIT_FAILURE;
 	}
@@ -1262,6 +1263,9 @@ wmain(ULONG argc, PWCHAR argv[])
 			break;
 		case L'm':
 			dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
+			break;
+		case L'o':
+			dokanOptions->Options |= DOKAN_OPTION_READONLY;
 			break;
         case L'i':
             command++;
