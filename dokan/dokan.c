@@ -573,7 +573,7 @@ DispatchUnmount(
 
 	LeaveCriticalSection(&DokanInstance->CriticalSection);
 
-	// do not notice enything to the driver
+	// do not notice anything to the driver
 	return;
 }
 
