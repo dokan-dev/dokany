@@ -427,7 +427,7 @@ VOID
 CheckFileName(
 	LPWSTR	FileName)
 {
-	// if the begining of file name is "\\",
+	// if the beginning of file name is "\\",
 	// replace it with "\"
 	if (FileName[0] == L'\\' && FileName[1] == L'\\') {
 		int i;
