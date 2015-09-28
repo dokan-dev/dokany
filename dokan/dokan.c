@@ -369,7 +369,7 @@ DokanLoop(
 				DispatchSetSecurity(device, context, DokanInstance);
 				break;
 			case IRP_MJ_SHUTDOWN:
-				// this cass is used before unmount not shutdown
+				// this case is used before unmount not shutdown
 				DispatchUnmount(device, context, DokanInstance);
 				break;
 			default:
@@ -427,7 +427,7 @@ VOID
 CheckFileName(
 	LPWSTR	FileName)
 {
-	// if the begining of file name is "\\",
+	// if the beginning of file name is "\\",
 	// replace it with "\"
 	if (FileName[0] == L'\\' && FileName[1] == L'\\') {
 		int i;
@@ -573,7 +573,7 @@ DispatchUnmount(
 
 	LeaveCriticalSection(&DokanInstance->CriticalSection);
 
-	// do not notice enything to the driver
+	// do not notice anything to the driver
 	return;
 }
 
