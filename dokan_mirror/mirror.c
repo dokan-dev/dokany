@@ -43,7 +43,7 @@ static void DbgPrint(LPCWSTR format, ...)
 		vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
 		va_end(argp);
 		if (g_UseStdErr) {
-			fwprintf(stderr, buffer);
+			fputws(buffer, stderr);
 		} else {
 			OutputDebugStringW(buffer);
 		}
@@ -59,10 +59,8 @@ GetFilePath(
 	ULONG	numberOfElements,
 	LPCWSTR FileName)
 {
-	filePath[0] = 0;
 	wcsncpy_s(filePath, numberOfElements, RootDirectory, wcslen(RootDirectory));
 	wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
-	RtlZeroMemory(filePath+ wcslen(filePath), (numberOfElements-wcslen(filePath)) * sizeof(WCHAR));
 }
 
 
@@ -643,16 +641,22 @@ MirrorFindFiles(
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
 	WCHAR				filePath[MAX_PATH];
+	size_t				fileLen;
 	HANDLE				hFind;
 	WIN32_FIND_DATAW	findData;
 	DWORD				error;
-	PWCHAR				yenStar = L"\\*";
-	int count = 0;
+	int					count = 0;
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
-	wcscat_s(filePath, MAX_PATH, yenStar);
 	DbgPrint(L"FindFiles :%s\n", filePath);
+
+	fileLen = wcslen(filePath);
+	if (filePath[fileLen-1] != L'\\') {
+		filePath[fileLen++] = L'\\';
+	}
+	filePath[fileLen] = L'*';
+	filePath[fileLen+1] = L'\0';
 
 	hFind = FindFirstFile(filePath, &findData);
 
@@ -725,6 +729,7 @@ MirrorDeleteDirectory(
 		filePath[fileLen++] = L'\\';
 	}
 	filePath[fileLen] = L'*';
+	filePath[fileLen+1] = L'\0';
 
 	hFind = FindFirstFile(filePath, &findData);
 
