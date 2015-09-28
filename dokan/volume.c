@@ -51,7 +51,7 @@ NTSTATUS DOKAN_CALLBACK DokanGetVolumeInformation(
 {
     UNREFERENCED_PARAMETER(DokanFileInfo);
 
-	wcscpy_s(VolumeNameBuffer, VolumeNameSize / sizeof(WCHAR), L"DOKAN");
+	wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"DOKAN");
 	*VolumeSerialNumber = 0x19831116;
 	*MaximumComponentLength = 256;
 	*FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | 
@@ -59,7 +59,7 @@ NTSTATUS DOKAN_CALLBACK DokanGetVolumeInformation(
 						FILE_SUPPORTS_REMOTE_STORAGE |
 						FILE_UNICODE_ON_DISK;
 
-	wcscpy_s(FileSystemNameBuffer, FileSystemNameSize / sizeof(WCHAR), L"Dokan");
+	wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"Dokan");
 
 	return STATUS_SUCCESS;
 }
