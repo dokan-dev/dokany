@@ -112,6 +112,11 @@ UninstPage instfiles
   WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
 
   ; Write the uninstall keys for Windows
+  ${If} ${RunningX64}
+	SetRegView 64
+  ${Else}
+    SetRegView 32
+  ${EndIf}
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "DisplayName" "Dokan Library ${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "UninstallString" '"$PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe"'
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "NoModify" 1
@@ -267,6 +272,11 @@ Section "Uninstall"
   ${EndIf}
 
   ; Remove registry keys
+  ${If} ${RunningX64}
+	SetRegView 64
+  ${Else}
+    SetRegView 32
+  ${EndIf}
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary"
 
   IfSilent noreboot
