@@ -75,11 +75,22 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 {
 	PLIST_ENTRY		listEntry;
 	PMOUNT_ENTRY	mountEntry = NULL;
-	BOOL			useMountPoint = wcslen(DokanControl->MountPoint) > 0;
+	size_t			mountPointLength = wcslen(DokanControl->MountPoint);
+	BOOL			useMountPoint = mountPointLength > 0;
 	BOOL			found = FALSE;
+	WCHAR			mountPointDefaultTemplate[] = L"C:\\";
+	PWCHAR			mountPoint = DokanControl->MountPoint;
 
 	if (!useMountPoint && wcslen(DokanControl->DeviceName) == 0) {
 		return NULL;
+	}
+
+	/* NOTE: g_MountList expects MountPoint to have the format of C:\ */
+	if (mountPointLength == 1
+		|| (mountPointLength == 2 && DokanControl->MountPoint[1] == L':')) {
+		
+		mountPointDefaultTemplate[0] = DokanControl->MountPoint[0];
+		mountPoint = mountPointDefaultTemplate;
 	}
 
 	EnterCriticalSection(&g_CriticalSection);
@@ -87,7 +98,7 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
     for (listEntry = g_MountList.Flink; listEntry != &g_MountList; listEntry = listEntry->Flink) {
 		mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
 		if (useMountPoint) {
-			if (wcscmp(DokanControl->MountPoint, mountEntry->MountControl.MountPoint) == 0) {
+			if (wcscmp(mountPoint, mountEntry->MountControl.MountPoint) == 0) {
 				found = TRUE;
 				break;
 			}
