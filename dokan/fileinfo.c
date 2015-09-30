@@ -264,7 +264,7 @@ DokanEnumerateNamedStreams(
 	LONGLONG streamSize;
 	ULONG entrySize = 0;
 	PVOID enumContext = NULL;
-	int result = 0;
+	NTSTATUS result = STATUS_SUCCESS;
 
 	if (DokanInstance->DokanOptions->Version < DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION || !DokanInstance->DokanOperations->EnumerateNamedStreams) {
 		return STATUS_NOT_IMPLEMENTED;
@@ -315,6 +315,8 @@ DokanEnumerateNamedStreams(
 		}
 	}
 
+	if (entrySize == 0)
+		return result; //EnumerateNamedStreams have directly failed
 	return STATUS_SUCCESS;
 }
 
