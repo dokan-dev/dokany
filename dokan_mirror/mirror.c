@@ -43,7 +43,7 @@ static void DbgPrint(LPCWSTR format, ...)
 		vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
 		va_end(argp);
 		if (g_UseStdErr) {
-			fwprintf(stderr, buffer);
+			fputws(buffer, stderr);
 		} else {
 			OutputDebugStringW(buffer);
 		}
