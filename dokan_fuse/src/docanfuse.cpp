@@ -580,7 +580,7 @@ int fuse_loop(struct fuse *f)
 
 struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 {
-	if (mountpoint==NULL || strlen(mountpoint)==0) return NULL;
+	if (mountpoint==NULL || mountpoint[0]=='\0') return NULL;
 
 	std::auto_ptr<fuse_chan> chan(new fuse_chan());
 	//NOTE: we used to do chan->init() here to check that Dokan DLLs can be loaded.
@@ -594,7 +594,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 {
-	if (mountpoint==NULL || strlen(mountpoint)==0) return;
+	if (mountpoint==NULL || mountpoint[0]=='\0') return;
 
 	fuse_chan chan;
 	if (!ch) {

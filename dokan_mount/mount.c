@@ -173,7 +173,7 @@ BOOL CheckDriveLetterAvailability(
 	WCHAR driveLetter = towupper(DriveLetter);
 	driveName[0] = driveLetter;
 
-	ZeroMemory(buffer, MAX_PATH);
+	ZeroMemory(buffer, MAX_PATH * sizeof(WCHAR));
 	result = QueryDosDevice(driveName, buffer, MAX_PATH);
 	if (result > 0)
 	{

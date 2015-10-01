@@ -83,7 +83,7 @@ DokanDbgPrint(LPCSTR format, ...)
     vsprintf_s(buffer, sizeof(buffer)/sizeof(char), format, argp);
     va_end(argp);
 	if (g_UseStdErr)
-		fprintf(stderr, buffer);
+		fputs(buffer, stderr);
 	else
 		OutputDebugStringA(buffer);
 }
@@ -98,7 +98,7 @@ DokanDbgPrintW(LPCWSTR format, ...)
     vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
     va_end(argp);
 	if (g_UseStdErr)
-		fwprintf(stderr, buffer);
+		fputws(buffer, stderr);
 	else
 		OutputDebugStringW(buffer);
 }

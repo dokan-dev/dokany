@@ -591,7 +591,7 @@ int impl_fuse_context::get_file_information(LPCWSTR file_name,
 	if (S_ISLNK(st.st_mode))
 	{
 		std::string resolved;
-		CHECKED(resolve_symlink(fname.c_str(),&resolved));
+		CHECKED(resolve_symlink(fname,&resolved));
 		CHECKED(ops_.getattr(resolved.c_str(),&st));
 	}
 

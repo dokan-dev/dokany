@@ -208,13 +208,13 @@ NPGetConnection(
 
 	WCHAR drive[] = L" :\\";
 	WCHAR tmpName[MAX_PATH];
-	ZeroMemory(tmpName, MAX_PATH);
+	ZeroMemory(tmpName, MAX_PATH * sizeof(WCHAR));
 	drive[0] = LocalName[0];
 	if (!GetVolumeInformation(drive, tmpName, MAX_PATH, NULL, NULL, NULL, NULL, 0)) {
 		return WN_NO_NETWORK;
 	}
 
-	if (lstrlenW(tmpName) == 0) {
+	if (tmpName[0] == L'\0') {
 		lstrcpyW(RemoteName, drive);
 	} else if (lstrlenW(tmpName) > (LONG)*BufferSize) {
 		*BufferSize = lstrlenW(tmpName);
