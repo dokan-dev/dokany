@@ -4,7 +4,7 @@
 !include x64.nsh
 !include WinVer.nsh
 
-Name "DokanLibraryInstaller ${VERSION}"
+Name "DokanLibraryPDBInstaller ${VERSION}"
 BrandingText http://dokan-dev.github.io
 OutFile "DokanInstall_${VERSION}_pdb.exe"
 
