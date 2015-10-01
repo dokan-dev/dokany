@@ -34,6 +34,9 @@ UninstPage instfiles
  
     File ..\Win32\Release\dokanctl.pdb
     File ..\Win32\Release\mounter.pdb
+	
+  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\pdb\mirror
+  
 	File ..\Win32\Release\mirror.pdb
 	
   SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\pdb\driver\Win7
@@ -63,6 +66,9 @@ UninstPage instfiles
  
     File ..\x64\Release\dokanctl.pdb
     File ..\x64\Release\mounter.pdb
+	
+  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\pdb\mirror
+  
 	File ..\x64\Release\mirror.pdb
 	
   SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\pdb\driver\Win7
