@@ -24,85 +24,67 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+!macro Files arch folder
 
-!macro X86Files os
-
-  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary
- 
-    File README.url
-    File ..\license.gpl.txt
-    File ..\license.lgpl.txt
-    File ..\license.mit.txt
-    File ..\Win32\Release\dokanctl.exe
-    File ..\Win32\Release\mounter.exe
-	
-  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\include\dokan
-	
-	File ..\dokan\dokan.h
-	File ..\dokan\fileinfo.h
-	
-  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\lib
-  
-	File ..\Win32\Release\dokan.lib
-    File ..\Win32\Release\dokanfuse.lib
-
-  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\sample\mirror
-
-    File ..\dokan_mirror\dokan_mirror.vcxproj
-	File ..\dokan_mirror\mirror.c
-    File ..\Win32\Release\mirror.exe
-	
-  SetOutPath $PROGRAMFILES32\Dokan\DokanLibrary\include\fuse
-
-    File /r "..\dokan_fuse\include\"
-
-  SetOutPath $SYSDIR
-
-    File ..\Win32\Release\dokan.dll
-    File ..\Win32\Release\dokannp.dll
-
-!macroend
-
-!macro X64Files os
-
-  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary
+  SetOutPath ${folder}\Dokan\DokanLibrary
 
     File README.url
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
-    File ..\x64\Release\dokanctl.exe
-    File ..\x64\Release\mounter.exe
+    File ..\${arch}\Release\dokanctl.exe
+    File ..\${arch}\Release\mounter.exe
 	
-  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\include\dokan
+  SetOutPath ${folder}\Dokan\DokanLibrary\include\dokan
 	
 	File ..\dokan\dokan.h
 	File ..\dokan\fileinfo.h
 	
-  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\lib
+  SetOutPath ${folder}\Dokan\DokanLibrary\lib
   
-	File ..\x64\Release\dokan.lib
-    File ..\x64\Release\dokanfuse.lib
+	File ..\${arch}\Release\dokan.lib
+    File ..\${arch}\Release\dokanfuse.lib
 
-  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\sample\mirror
+  SetOutPath ${folder}\Dokan\DokanLibrary\sample\mirror
 
     File ..\dokan_mirror\dokan_mirror.vcxproj
     File ..\dokan_mirror\mirror.c
-    File ..\x64\Release\mirror.exe
+    File ..\${arch}\Release\mirror.exe
 
-  SetOutPath $PROGRAMFILES64\Dokan\DokanLibrary\include\fuse
+  SetOutPath ${folder}\Dokan\DokanLibrary\include\fuse
 
     File /r "..\dokan_fuse\include\"
 	
-  ${DisableX64FSRedirection}
+  ${If} ${RunningX64}
+	${DisableX64FSRedirection}
+  ${EndIf}
 
   SetOutPath $SYSDIR
 
-    File ..\x64\Release\dokan.dll
-    File ..\x64\Release\dokannp.dll
+    File ..\${arch}\Release\dokan.dll
+    File ..\${arch}\Release\dokannp.dll
 
-  ${EnableX64FSRedirection}
+  ${If} ${RunningX64}
+	${EnableX64FSRedirection}
+  ${EndIf}
 
+!macroend
+
+!macro PDBFiles os arch folder
+
+  SetOutPath ${folder}\Dokan\DokanLibrary\pdb
+ 
+    File ..\${arch}\Release\dokanctl.pdb
+    File ..\${arch}\Release\mounter.pdb
+	
+  SetOutPath ${folder}\Dokan\DokanLibrary\pdb\mirror
+  
+	File ..\${arch}\Release\mirror.pdb
+	
+  SetOutPath ${folder}\Dokan\DokanLibrary\pdb\driver
+ 
+    File ..\${arch}\${os}Release\dokan.pdb
+	
 !macroend
 
 !macro DokanSetup
@@ -124,19 +106,18 @@ UninstPage instfiles
 
 !macroend
 
-!macro X86Driver os
-  SetOutPath $SYSDIR\drivers
-    File ..\Win32\${os}Release\dokan.sys
-!macroend
-
-!macro X64Driver os
-  ${DisableX64FSRedirection}
+!macro Driver os arch
+  ${If} ${arch} == "x64"
+	${DisableX64FSRedirection}
+  ${EndIf}
 
   SetOutPath $SYSDIR\drivers
 
-    File ..\x64\${os}Release\dokan.sys
+    File ..\${arch}\${os}Release\dokan.sys
 
-  ${EnableX64FSRedirection}
+  ${If} ${arch} == "x64"
+    ${EnableX64FSRedirection}
+  ${EndIf}
 !macroend
 
 Section -Prerequisites
@@ -184,67 +165,75 @@ SectionEnd
 
 
 Section "Dokan Library x86" section_x86
-  ${If} ${IsWin7}
-    !insertmacro X86Files "Win7"
-  ${ElseIf} ${IsWin2008R2}
-    !insertmacro X86Files "Win7"
-  ${ElseIf} ${IsWin8}
-    !insertmacro X86Files "Win8"
-  ${ElseIf} ${IsWin2012}
-    !insertmacro X86Files "Win8"
-  ${ElseIf} ${IsWin8.1}
-    !insertmacro X86Files "Win8.1"
-  ${ElseIf} ${IsWin2012R2}
-    !insertmacro X86Files "Win8.1"
-  ${EndIf}
+  !insertmacro Files "Win32" $PROGRAMFILES32
 SectionEnd
 
 Section "Dokan Library x64" section_x64
+  !insertmacro Files "x64" $PROGRAMFILES64
+SectionEnd
+
+Section "Dokan PDB x86" section_x86_pdb
   ${If} ${IsWin7}
-    !insertmacro X64Files "Win7"
+    !insertmacro PDBFiles "Win7" "Win32" $PROGRAMFILES32
   ${ElseIf} ${IsWin2008R2}
-    !insertmacro X64Files "Win7"
+    !insertmacro PDBFiles "Win7" "Win32" $PROGRAMFILES32 
   ${ElseIf} ${IsWin8}
-    !insertmacro X64Files "Win8"
+    !insertmacro PDBFiles "Win8" "Win32" $PROGRAMFILES32
   ${ElseIf} ${IsWin2012}
-    !insertmacro X64Files "Win8"
+    !insertmacro PDBFiles "Win8" "Win32" $PROGRAMFILES32
   ${ElseIf} ${IsWin8.1}
-    !insertmacro X64Files "Win8.1"
+    !insertmacro PDBFiles "Win8.1" "Win32" $PROGRAMFILES32
   ${ElseIf} ${IsWin2012R2}
-    !insertmacro X64Files "Win8.1"
+    !insertmacro PDBFiles "Win8.1" "Win32" $PROGRAMFILES32
+  ${EndIf}
+SectionEnd
+
+Section "Dokan PDB x64" section_x64_pdb
+  ${If} ${IsWin7}
+    !insertmacro PDBFiles "Win7" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin2008R2}
+    !insertmacro PDBFiles "Win7" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin8}
+    !insertmacro PDBFiles "Win8" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin2012}
+    !insertmacro PDBFiles "Win8" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin8.1}
+    !insertmacro PDBFiles "Win8.1" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin2012R2}
+    !insertmacro PDBFiles "Win8.1" "x64" $PROGRAMFILES64
   ${EndIf}
 SectionEnd
 
 Section "Dokan Driver x86" section_x86_driver
   ${If} ${IsWin7}
-    !insertmacro X86Driver "Win7"
+    !insertmacro Driver "Win7" "Win32"
   ${ElseIf} ${IsWin2008R2}
-    !insertmacro X86Driver "Win7"
+    !insertmacro Driver "Win7" "Win32"
   ${ElseIf} ${IsWin8}
-    !insertmacro X86Driver "Win8"
+    !insertmacro Driver "Win8" "Win32"
   ${ElseIf} ${IsWin2012}
-    !insertmacro X86Driver "Win8"
+    !insertmacro Driver "Win8" "Win32"
   ${ElseIf} ${IsWin8.1}
-    !insertmacro X86Driver "Win8.1"
+    !insertmacro Driver "Win8.1" "Win32"
   ${ElseIf} ${IsWin2012R2}
-    !insertmacro X86Driver "Win8.1"
+    !insertmacro Driver "Win8.1" "Win32"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
 
 Section "Dokan Driver x64" section_x64_driver
   ${If} ${IsWin7}
-    !insertmacro X64Driver "Win7"
+    !insertmacro Driver "Win7" "x64"
   ${ElseIf} ${IsWin2008R2}
-    !insertmacro X64Driver "Win7"
+    !insertmacro Driver "Win7" "x64"
   ${ElseIf} ${IsWin8}
-    !insertmacro X64Driver "Win8"
+    !insertmacro Driver "Win8" "x64"
   ${ElseIf} ${IsWin2012}
-    !insertmacro X64Driver "Win8"
+    !insertmacro Driver "Win8" "x64"
   ${ElseIf} ${IsWin8.1}
-    !insertmacro X64Driver "Win8.1"
+    !insertmacro Driver "Win8.1" "x64"
   ${ElseIf} ${IsWin2012R2}
-    !insertmacro X64Driver "Win8.1"
+    !insertmacro Driver "Win8.1" "x64"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
@@ -289,16 +278,21 @@ SectionEnd
 
 Function .onInit
   IntOp $0 ${SF_SELECTED} | ${SF_RO}
+  SectionSetFlags ${section_x86} $0
   ${If} ${RunningX64}
-    SectionSetFlags ${section_x86} $0
     SectionSetFlags ${section_x64} $0
     SectionSetFlags ${section_x86_driver} ${SF_RO}  ; disable
     SectionSetFlags ${section_x64_driver} $0
   ${Else}
-    SectionSetFlags ${section_x86} $0
     SectionSetFlags ${section_x64} ${SF_RO}  ; disable
     SectionSetFlags ${section_x86_driver} $0
     SectionSetFlags ${section_x64_driver} ${SF_RO}  ; disable
+  ${EndIf}
+  
+  IntOp $0 ${SF_USELECTED} | !${SF_RO}
+  SectionSetFlags ${section_x86_pdb} $0
+  ${If} ${RunningX64}
+	SectionSetFlags ${section_x64_pdb} $0
   ${EndIf}
 
   ; Windows Version check
