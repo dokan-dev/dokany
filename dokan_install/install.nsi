@@ -55,7 +55,7 @@ UninstPage instfiles
 
     File /r "..\dokan_fuse\include\"
 	
-  ${If} ${RunningX64}
+  ${If} ${arch} == "x64"
 	${DisableX64FSRedirection}
   ${EndIf}
 
@@ -64,7 +64,7 @@ UninstPage instfiles
     File ..\${arch}\Release\dokan.dll
     File ..\${arch}\Release\dokannp.dll
 
-  ${If} ${RunningX64}
+  ${If} ${arch} == "x64"
 	${EnableX64FSRedirection}
   ${EndIf}
 
