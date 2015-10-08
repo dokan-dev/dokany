@@ -106,6 +106,7 @@
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>dokannp.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

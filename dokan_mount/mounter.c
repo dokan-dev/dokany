@@ -51,6 +51,9 @@ InsertMountEntry(PDOKAN_CONTROL DokanControl)
 	}
 	ZeroMemory(mountEntry, sizeof(MOUNT_ENTRY));
 	CopyMemory(&mountEntry->MountControl, DokanControl, sizeof(DOKAN_CONTROL));
+
+	NormalizeMountPoint(mountEntry->MountControl.MountPoint, sizeof(mountEntry->MountControl.MountPoint) / sizeof(WCHAR));
+
 	InitializeListHead(&mountEntry->ListEntry);
 
 	EnterCriticalSection(&g_CriticalSection);
@@ -75,10 +78,9 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 {
 	PLIST_ENTRY		listEntry;
 	PMOUNT_ENTRY	mountEntry = NULL;
-	size_t			mountPointLength = wcslen(DokanControl->MountPoint);
-	BOOL			useMountPoint = mountPointLength > 0;
+	BOOL			useMountPoint = DokanControl->MountPoint[0] != 0;
 	BOOL			found = FALSE;
-	WCHAR			mountPointDefaultTemplate[] = L"C:\\";
+	WCHAR			mountPointDefaultTemplate[4] = L"C:\\";
 	PWCHAR			mountPoint = DokanControl->MountPoint;
 
 	if (!useMountPoint && wcslen(DokanControl->DeviceName) == 0) {
@@ -86,10 +88,13 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 	}
 
 	/* NOTE: g_MountList expects MountPoint to have the format of C:\ */
-	if (mountPointLength == 1
-		|| (mountPointLength == 2 && DokanControl->MountPoint[1] == L':')) {
+	
+	if(useMountPoint && IsMountPointDriveLetter(DokanControl->MountPoint)) {
 		
 		mountPointDefaultTemplate[0] = DokanControl->MountPoint[0];
+
+		NormalizeMountPoint(mountPointDefaultTemplate, sizeof(mountPointDefaultTemplate) / sizeof(WCHAR));
+
 		mountPoint = mountPointDefaultTemplate;
 	}
 

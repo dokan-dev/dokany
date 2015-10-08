@@ -46,6 +46,19 @@ BOOL
 DokanControlUnmount(
 	LPCWSTR MountPoint);
 
+/*
+ * Currently this is only applicable to mount points that are a single drive letter.
+ * This function will ensure drive letter mount points follow the format C:\
+ */
+VOID
+NormalizeMountPoint(WCHAR *mountPoint, size_t mountPointMaxLength);
+
+/*
+ * Return TRUE if mountPoint has the format "C", "C:", or "C:\"
+ */
+BOOL
+IsMountPointDriveLetter(WCHAR *mountPoint);
+
 #ifdef __cplusplus
 }
 #endif
