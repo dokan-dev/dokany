@@ -59,8 +59,6 @@ Return Value:
 
 	__try {
 
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanRead\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -95,7 +93,7 @@ Return Value:
 
 		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 		DokanPrintFileName(fileObject);
-		DDbgPrint("  ByteCount:%d ByteOffset:%d\n", bufferLength, byteOffset);
+		DDbgPrint("  ByteCount:%lu ByteOffset:%I64d\n", bufferLength, byteOffset.QuadPart);
 
 		if (bufferLength == 0) {
 			status = STATUS_SUCCESS;
@@ -168,9 +166,6 @@ Return Value:
         DokanCompleteIrpRequest(Irp, status, readLength);
 
 		DDbgPrint("<== DokanRead\n");
-		
-		FsRtlExitFileSystem();
-
 	}
 
 	return status;
@@ -247,7 +242,7 @@ DokanCompleteRead(
 		}
 	}
 
-	if (status == STATUS_SUCCESS) {
+	if (NT_SUCCESS(status)) {
 		DDbgPrint("  STATUS_SUCCESS\n");
 	} else if (status == STATUS_INSUFFICIENT_RESOURCES) {
 		DDbgPrint("  STATUS_INSUFFICIENT_RESOURCES\n");

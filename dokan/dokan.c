@@ -142,12 +142,12 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 	if (DokanOptions->ThreadCount == 0) {
 		DokanOptions->ThreadCount = 5;
 
-	} else if (DOKAN_MAX_THREAD-1 < DokanOptions->ThreadCount) {
+	} else if ((DOKAN_MAX_THREAD - 1) < DokanOptions->ThreadCount) {
 		// DOKAN_MAX_THREAD includes DokanKeepAlive thread, so 
 		// available thread is DOKAN_MAX_THREAD -1
 		DokanDbgPrintW(L"Dokan Error: too many thread count %d\n",
 			DokanOptions->ThreadCount);
-		DokanOptions->ThreadCount = DOKAN_MAX_THREAD-1;
+		DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
 	}
 
 	if (DOKAN_MOUNT_POINT_SUPPORTED_VERSION <= DokanOptions->Version &&
@@ -206,19 +206,18 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
-	if (DokanOptions->Options & DOKAN_OPTION_KEEP_ALIVE) {
-		threadIds[threadNum++] = (HANDLE)_beginthreadex(
-			NULL, // Security Atributes
-			0, //stack size
-			DokanKeepAlive,
-			(PVOID)instance, // param
-			0, // create flag
-			NULL);
-	}
+	//Start Keep Alive thread
+	threadIds[threadNum++] = (HANDLE)_beginthreadex(
+		NULL, // Security Attributes
+		0, //stack size
+		DokanKeepAlive,
+		(PVOID)instance, // param
+		0, // create flag
+		NULL);
 
 	for (i = 0; i < DokanOptions->ThreadCount; ++i) {
 		threadIds[threadNum++] = (HANDLE)_beginthreadex(
-			NULL, // Security Atributes
+			NULL, // Security Attributes
 			0, //stack size
 			DokanLoop,
 			(PVOID)instance, // param
@@ -254,6 +253,13 @@ GetRawDeviceName(LPCWSTR	DeviceName)
 	return rawDeviceName;
 }
 
+void
+ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size)
+{
+	long long r = size->QuadPart % DOKAN_ALLOCATION_UNIT_SIZE;
+	size->QuadPart = (size->QuadPart + (r > 0 ? DOKAN_ALLOCATION_UNIT_SIZE - r : 0));
+}
+
 UINT WINAPI
 DokanLoop(
    PDOKAN_INSTANCE DokanInstance
@@ -264,7 +270,7 @@ DokanLoop(
 	BOOL	status;
 	ULONG	returnedLength;
 	DWORD	result = 0;
-
+    DWORD   lastError = 0;
 	RtlZeroMemory(buffer, sizeof(buffer));
 
 	device = CreateFile(
@@ -300,8 +306,15 @@ DokanLoop(
 					);
 
 		if (!status) {
-			DbgPrint("Ioctl failed with code %d\n", GetLastError());
-			result = (DWORD)-1;
+            lastError = GetLastError();
+			DbgPrint("Ioctl failed for wait with code %d.\n", lastError);
+            if (lastError == ERROR_NO_SYSTEM_RESOURCES) {
+                DbgPrint("Processing will continue\n");
+                status = TRUE;
+                Sleep(200);
+                continue;
+            }
+            DbgPrint("Thread will be terminated\n");
 			break;
 		}
 
@@ -356,7 +369,7 @@ DokanLoop(
 				DispatchSetSecurity(device, context, DokanInstance);
 				break;
 			case IRP_MJ_SHUTDOWN:
-				// this cass is used before unmount not shutdown
+				// this case is used before unmount not shutdown
 				DispatchUnmount(device, context, DokanInstance);
 				break;
 			default:
@@ -369,7 +382,8 @@ DokanLoop(
 	}
 
 	CloseHandle(device);
-	_endthreadex(result);
+    _endthreadex(result);
+
 	return result;
 }
 
@@ -413,7 +427,7 @@ VOID
 CheckFileName(
 	LPWSTR	FileName)
 {
-	// if the begining of file name is "\\",
+	// if the beginning of file name is "\\",
 	// replace it with "\"
 	if (FileName[0] == L'\\' && FileName[1] == L'\\') {
 		int i;
@@ -422,6 +436,11 @@ CheckFileName(
 		}
 		FileName[i] = L'\0';
 	}
+	
+	// Remove "\" in front of Directory
+	size_t len = wcslen(FileName);
+	if (len > 2 && FileName[len - 1] == L'\\')
+		FileName[len - 1] = '\0';
 }
 
 
@@ -554,7 +573,7 @@ DispatchUnmount(
 
 	LeaveCriticalSection(&DokanInstance->CriticalSection);
 
-	// do not notice enything to the driver
+	// do not notice anything to the driver
 	return;
 }
 
@@ -599,15 +618,15 @@ DokanStart(PDOKAN_INSTANCE Instance)
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_ALT_STREAM) {
 		eventStart.Flags |= DOKAN_EVENT_ALTERNATIVE_STREAM_ON;
 	}
-	if (Instance->DokanOptions->Options & DOKAN_OPTION_KEEP_ALIVE) {
-		eventStart.Flags |= DOKAN_EVENT_KEEP_ALIVE_ON;
-	}
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_NETWORK) {
 		eventStart.DeviceType = DOKAN_NETWORK_FILE_SYSTEM;
 	}
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_REMOVABLE) {
 		eventStart.Flags |= DOKAN_EVENT_REMOVABLE;
 	}
+    
+    eventStart.IrpTimeout = Instance->DokanOptions->Timeout;
+    
 
 	SendToDevice(
 		DOKAN_GLOBAL_DEVICE_NAME,

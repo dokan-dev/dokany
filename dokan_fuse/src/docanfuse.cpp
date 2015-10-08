@@ -30,7 +30,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID lpRes
 	return TRUE;
 }
 
-static int DOKAN_CALLBACK FuseFindFiles(
+static NTSTATUS DOKAN_CALLBACK FuseFindFiles(
 				LPCWSTR				FileName,
 				PFillFindData		FillFindData, // function pointer
 				PDOKAN_FILE_INFO	DokanFileInfo)
@@ -39,11 +39,11 @@ static int DOKAN_CALLBACK FuseFindFiles(
 	if (impl->debug()) FWPRINTF(stderr, L"FindFiles :%s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->find_files(FileName,FillFindData,
+	return errno_to_ntstatus_error(impl->find_files(FileName,FillFindData,
 		DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseOpenDirectory(
+static NTSTATUS DOKAN_CALLBACK FuseOpenDirectory(
 				LPCWSTR					FileName,
 				PDOKAN_FILE_INFO		DokanFileInfo)
 {
@@ -51,10 +51,10 @@ static int DOKAN_CALLBACK FuseOpenDirectory(
 	if (impl->debug()) FWPRINTF(stderr, L"OpenDirectory : %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->open_directory(FileName,DokanFileInfo));
+	return errno_to_ntstatus_error(impl->open_directory(FileName,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseCleanup(
+static void DOKAN_CALLBACK FuseCleanup(
 					LPCWSTR					FileName,
 					PDOKAN_FILE_INFO		DokanFileInfo)
 {
@@ -62,10 +62,10 @@ static int DOKAN_CALLBACK FuseCleanup(
 	if (impl->debug()) FWPRINTF(stderr, L"Cleanup: %s\n\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->cleanup(FileName,DokanFileInfo));
+	impl->cleanup(FileName,DokanFileInfo);
 }
 
-static int DOKAN_CALLBACK FuseCreateDirectory(
+static NTSTATUS DOKAN_CALLBACK FuseCreateDirectory(
 					LPCWSTR					FileName,
 					PDOKAN_FILE_INFO		DokanFileInfo)
 {
@@ -73,10 +73,10 @@ static int DOKAN_CALLBACK FuseCreateDirectory(
 	if (impl->debug()) FWPRINTF(stderr, L"CreateDirectory : %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->create_directory(FileName,DokanFileInfo));
+	return errno_to_ntstatus_error(impl->create_directory(FileName,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseDeleteDirectory(
+static NTSTATUS DOKAN_CALLBACK FuseDeleteDirectory(
 					LPCWSTR				FileName,
 					PDOKAN_FILE_INFO	DokanFileInfo)
 {
@@ -84,7 +84,7 @@ static int DOKAN_CALLBACK FuseDeleteDirectory(
 	if (impl->debug()) FWPRINTF(stderr, L"DeleteDirectory %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->delete_directory(FileName,DokanFileInfo));
+	return errno_to_ntstatus_error(impl->delete_directory(FileName,DokanFileInfo));
 }
 
 
@@ -182,7 +182,7 @@ void DebugConstantBit(const char *name, DWORD value, Constant *cs)
 	fprintf(stderr, "\n");
 }
 
-static int DOKAN_CALLBACK FuseCreateFile(
+static NTSTATUS DOKAN_CALLBACK FuseCreateFile(
 				 LPCWSTR				FileName,
 				 DWORD					AccessMode,
 				 DWORD					ShareMode,
@@ -205,7 +205,7 @@ static int DOKAN_CALLBACK FuseCreateFile(
 		CreationDisposition,FlagsAndAttributes,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseCloseFile(
+static void DOKAN_CALLBACK FuseCloseFile(
 				LPCWSTR					FileName,
 				PDOKAN_FILE_INFO		DokanFileInfo)
 {
@@ -213,10 +213,10 @@ static int DOKAN_CALLBACK FuseCloseFile(
 	if (impl->debug()) FWPRINTF(stderr, L"Close: %s\n\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->close_file(FileName,DokanFileInfo));
+	impl->close_file(FileName,DokanFileInfo);
 }
 
-static int DOKAN_CALLBACK FuseReadFile(
+static NTSTATUS DOKAN_CALLBACK FuseReadFile(
 			   LPCWSTR				FileName,
 			   LPVOID				Buffer,
 			   DWORD				BufferLength,
@@ -228,11 +228,11 @@ static int DOKAN_CALLBACK FuseReadFile(
 	if (impl->debug()) FWPRINTF(stderr, L"ReadFile : %s from %I64d len %u\n", FileName, (__int64) Offset, (unsigned) BufferLength);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->read_file(FileName,Buffer,
+	return errno_to_ntstatus_error(impl->read_file(FileName,Buffer,
 		BufferLength,ReadLength,Offset,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseWriteFile(
+static NTSTATUS DOKAN_CALLBACK FuseWriteFile(
 				LPCWSTR		FileName,
 				LPCVOID		Buffer,
 				DWORD		NumberOfBytesToWrite,
@@ -245,11 +245,11 @@ static int DOKAN_CALLBACK FuseWriteFile(
 		FileName, Offset, NumberOfBytesToWrite);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->write_file(FileName,Buffer,
+	return errno_to_ntstatus_error(impl->write_file(FileName,Buffer,
 		NumberOfBytesToWrite,NumberOfBytesWritten,Offset,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseFlushFileBuffers(
+static NTSTATUS DOKAN_CALLBACK FuseFlushFileBuffers(
 				LPCWSTR				FileName,
 				PDOKAN_FILE_INFO	DokanFileInfo)
 {
@@ -257,11 +257,11 @@ static int DOKAN_CALLBACK FuseFlushFileBuffers(
 	if (impl->debug()) FWPRINTF(stderr, L"FlushFileBuffers : %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->flush_file_buffers(FileName,
+	return errno_to_ntstatus_error(impl->flush_file_buffers(FileName,
 		DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseGetFileInformation(
+static NTSTATUS DOKAN_CALLBACK FuseGetFileInformation(
 				LPCWSTR							FileName,
 				LPBY_HANDLE_FILE_INFORMATION	HandleFileInformation,
 				PDOKAN_FILE_INFO				DokanFileInfo)
@@ -270,11 +270,11 @@ static int DOKAN_CALLBACK FuseGetFileInformation(
 	if (impl->debug()) FWPRINTF(stderr, L"GetFileInfo : %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->get_file_information(FileName,
+	return errno_to_ntstatus_error(impl->get_file_information(FileName,
 		HandleFileInformation,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseDeleteFile(
+static NTSTATUS DOKAN_CALLBACK FuseDeleteFile(
 				 LPCWSTR				FileName,
 				 PDOKAN_FILE_INFO	DokanFileInfo)
 {
@@ -282,10 +282,10 @@ static int DOKAN_CALLBACK FuseDeleteFile(
 	if (impl->debug()) FWPRINTF(stderr, L"DeleteFile %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->delete_file(FileName,DokanFileInfo));
+	return errno_to_ntstatus_error(impl->delete_file(FileName,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseMoveFile(
+static NTSTATUS DOKAN_CALLBACK FuseMoveFile(
 				LPCWSTR				FileName, // existing file name
 				LPCWSTR				NewFileName,
 				BOOL				ReplaceIfExisting,
@@ -295,11 +295,11 @@ static int DOKAN_CALLBACK FuseMoveFile(
 	if (impl->debug()) FWPRINTF(stderr, L"MoveFile %s -> %s\n\n", FileName, NewFileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->move_file(FileName,NewFileName,
+	return errno_to_ntstatus_error(impl->move_file(FileName,NewFileName,
 		ReplaceIfExisting,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseLockFile(
+static NTSTATUS DOKAN_CALLBACK FuseLockFile(
 				LPCWSTR				FileName,
 				LONGLONG			ByteOffset,
 				LONGLONG			Length,
@@ -309,11 +309,11 @@ static int DOKAN_CALLBACK FuseLockFile(
 	if (impl->debug()) FWPRINTF(stderr, L"LockFile %s\n", FileName);
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->lock_file(FileName,ByteOffset,
+	return errno_to_ntstatus_error(impl->lock_file(FileName,ByteOffset,
 		Length,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseUnlockFile(
+static NTSTATUS DOKAN_CALLBACK FuseUnlockFile(
 				LPCWSTR				FileName,
 				LONGLONG			ByteOffset,
 				LONGLONG			Length,
@@ -323,11 +323,11 @@ static int DOKAN_CALLBACK FuseUnlockFile(
 	if (impl->debug()) FWPRINTF(stderr, L"UnlockFile %s\n", FileName);
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->unlock_file(FileName,ByteOffset,
+	return errno_to_ntstatus_error(impl->unlock_file(FileName,ByteOffset,
 		Length,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseSetEndOfFile(
+static NTSTATUS DOKAN_CALLBACK FuseSetEndOfFile(
 				LPCWSTR				FileName,
 				LONGLONG			ByteOffset,
 				PDOKAN_FILE_INFO	DokanFileInfo)
@@ -336,11 +336,11 @@ static int DOKAN_CALLBACK FuseSetEndOfFile(
 	if (impl->debug()) FWPRINTF(stderr, L"SetEndOfFile %s, %I64d\n", FileName, ByteOffset);
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->set_end_of_file(FileName,
+	return errno_to_ntstatus_error(impl->set_end_of_file(FileName,
 		ByteOffset,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseSetFileAttributes(
+static NTSTATUS DOKAN_CALLBACK FuseSetFileAttributes(
 				LPCWSTR				FileName,
 				DWORD				FileAttributes,
 				PDOKAN_FILE_INFO	DokanFileInfo)
@@ -349,11 +349,11 @@ static int DOKAN_CALLBACK FuseSetFileAttributes(
 	if (impl->debug()) FWPRINTF(stderr, L"SetFileAttributes %s\n", FileName);
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->set_file_attributes(FileName,
+	return errno_to_ntstatus_error(impl->set_file_attributes(FileName,
 		FileAttributes,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseSetFileTime(
+static NTSTATUS DOKAN_CALLBACK FuseSetFileTime(
 				LPCWSTR				FileName,
 				CONST FILETIME*		CreationTime,
 				CONST FILETIME*		LastAccessTime,
@@ -364,11 +364,11 @@ static int DOKAN_CALLBACK FuseSetFileTime(
 	if (impl->debug()) FWPRINTF(stderr, L"SetFileTime %s\n", FileName);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->set_file_time(FileName,
+	return errno_to_ntstatus_error(impl->set_file_time(FileName,
 		CreationTime,LastAccessTime,LastWriteTime,DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK FuseGetDiskFreeSpace(PULONGLONG FreeBytesAvailable,
+static NTSTATUS DOKAN_CALLBACK FuseGetDiskFreeSpace(PULONGLONG FreeBytesAvailable,
 				PULONGLONG TotalNumberOfBytes, PULONGLONG TotalNumberOfFreeBytes,
 				PDOKAN_FILE_INFO DokanFileInfo)
 {
@@ -376,11 +376,11 @@ static int DOKAN_CALLBACK FuseGetDiskFreeSpace(PULONGLONG FreeBytesAvailable,
 	if (impl->debug()) FWPRINTF(stderr, L"GetDiskFreeSpace\n");
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->get_disk_free_space(FreeBytesAvailable,TotalNumberOfBytes,
+	return errno_to_ntstatus_error(impl->get_disk_free_space(FreeBytesAvailable,TotalNumberOfBytes,
 		TotalNumberOfFreeBytes, DokanFileInfo));
 }
 
-static int DOKAN_CALLBACK GetVolumeInformation(
+static NTSTATUS DOKAN_CALLBACK GetVolumeInformation(
 		LPWSTR VolumeNameBuffer,
 		DWORD VolumeNameSize,
 		LPDWORD VolumeSerialNumber,
@@ -396,17 +396,17 @@ static int DOKAN_CALLBACK GetVolumeInformation(
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
 	*VolumeSerialNumber = 0;
 	*MaximumComponentLength = 255;
-	return -errno_to_win32_error(impl->get_volume_information(VolumeNameBuffer,VolumeNameSize,
+	return errno_to_ntstatus_error(impl->get_volume_information(VolumeNameBuffer,VolumeNameSize,
 		FileSystemNameBuffer,FileSystemNameSize, DokanFileInfo, FileSystemFlags));
 }
 
-static int DOKAN_CALLBACK FuseUnmount(PDOKAN_FILE_INFO	DokanFileInfo)
+static NTSTATUS DOKAN_CALLBACK FuseUnmount(PDOKAN_FILE_INFO	DokanFileInfo)
 {
 	impl_fuse_context *impl=the_impl;
 	if (impl->debug()) FWPRINTF(stderr, L"Unmount\n");
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -errno_to_win32_error(impl->unmount(DokanFileInfo));
+	return errno_to_ntstatus_error(impl->unmount(DokanFileInfo));
 }
 
 int fuse_interrupted(void)
@@ -464,7 +464,7 @@ int do_fuse_loop(struct fuse *fs, bool mt)
 		return -1;
 	}
 	ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
-	dokanOptions->Options |= DOKAN_OPTION_KEEP_ALIVE|DOKAN_OPTION_REMOVABLE;
+	dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
 	dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
 
 	wchar_t mount[MAX_PATH+1];
@@ -580,7 +580,7 @@ int fuse_loop(struct fuse *f)
 
 struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 {
-	if (mountpoint==NULL || strlen(mountpoint)==0) return NULL;
+	if (mountpoint==NULL || mountpoint[0]=='\0') return NULL;
 
 	std::auto_ptr<fuse_chan> chan(new fuse_chan());
 	//NOTE: we used to do chan->init() here to check that Dokan DLLs can be loaded.
@@ -594,7 +594,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 {
-	if (mountpoint==NULL || strlen(mountpoint)==0) return;
+	if (mountpoint==NULL || mountpoint[0]=='\0') return;
 
 	fuse_chan chan;
 	if (!ch) {

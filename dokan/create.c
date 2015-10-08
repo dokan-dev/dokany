@@ -18,7 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
@@ -32,7 +32,7 @@ DispatchCreate(
 	static int eventId = 0;
 	ULONG					length	  = sizeof(EVENT_INFORMATION);
 	PEVENT_INFORMATION		eventInfo = (PEVENT_INFORMATION)malloc(length);
-	int						status;
+	NTSTATUS				status = STATUS_INSUFFICIENT_RESOURCES;
 	DOKAN_FILE_INFO			fileInfo;
 	DWORD					disposition;
 	PDOKAN_OPEN_INFO		openInfo;
@@ -73,8 +73,6 @@ DispatchCreate(
 
 	// The high 8 bits of this parameter correspond to the Disposition parameter
 	disposition = (EventContext->Operation.Create.CreateOptions >> 24) & 0x000000ff;
-
-	status = -1; // in case being not dispatched
 	
 	// The low 24 bits of this member correspond to the CreateOptions parameter
 	options = EventContext->Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
@@ -89,17 +87,17 @@ DispatchCreate(
 	}
 	else {
 	    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-		DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
-		// strip the last section of the file path
-		WCHAR* lastP = NULL;
-		for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
-		    if ((*p == L'\\' || *p == L'/') && p[1])
-			lastP = p;
-		}
-		if (lastP) {
-		    *lastP = 0;
-		    directoryRequested = TRUE;
-		}
+			DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
+			// strip the last section of the file path
+			WCHAR* lastP = NULL;
+			for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
+				if ((*p == L'\\' || *p == L'/') && p[1])
+				lastP = p;
+			}
+			if (lastP) {
+				directoryRequested = TRUE;
+				*lastP = 0;
+			}
 	    }
 
 	}
@@ -187,58 +185,25 @@ DispatchCreate(
 	// FILE_SUPERSEDED
 
 
-    DbgPrint("CreateFile status = %d\n", status);
-    if (status < 0) {
-
-		int error = status * -1;
-		
+    DbgPrint("CreateFile status = %lu\n", status);
+	if (status != STATUS_SUCCESS) {
+		if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
+		{
+			DbgPrint("SL_OPEN_TARGET_DIRECTORY spcefied\n");
+		}
 		eventInfo->Operation.Create.Information = FILE_DOES_NOT_EXIST;
+		eventInfo->Status = status;
 
-		switch(error) {
-		    case ERROR_FILE_NOT_FOUND:
-			    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
-				eventInfo->Status = STATUS_OBJECT_PATH_NOT_FOUND;
-			    else
-				    eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
-			    break;
-		    case ERROR_PATH_NOT_FOUND:
-			    //if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
-			    //	eventInfo->Status = STATUS_SUCCESS;
-			    //else
-			    eventInfo->Status = STATUS_OBJECT_PATH_NOT_FOUND;
-			    break;
-		    case ERROR_ACCESS_DENIED:
-			    eventInfo->Status = STATUS_ACCESS_DENIED;
-			    break;
-		    case ERROR_SHARING_VIOLATION:
-			    eventInfo->Status = STATUS_SHARING_VIOLATION;
-			    break;
-		    case ERROR_INVALID_NAME:
-			    eventInfo->Status = STATUS_OBJECT_NAME_NOT_FOUND;
-			    break;
-		    case ERROR_FILE_EXISTS:
-		    case ERROR_ALREADY_EXISTS:		
-			    eventInfo->Status = STATUS_OBJECT_NAME_COLLISION;
-				eventInfo->Operation.Create.Information = FILE_EXISTS;
-			    break;
-		    case ERROR_PRIVILEGE_NOT_HELD:
-			    eventInfo->Status = STATUS_PRIVILEGE_NOT_HELD;
-			    break;
-		    case ERROR_NOT_READY:
-			    eventInfo->Status = STATUS_DEVICE_NOT_READY;
-			    break;
-		    default:
-			    eventInfo->Status = STATUS_INVALID_PARAMETER;
-			    DbgPrint("Create got unknown error code %d\n", error);
+		if (status == STATUS_OBJECT_NAME_NOT_FOUND && EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
+		{
+			DbgPrint("This case should be returned as SUCCESS\n");
+			eventInfo->Status = STATUS_SUCCESS;
 		}
 
-
-		if (eventInfo->Status != STATUS_SUCCESS) {
-			// Needs to free openInfo because Close is never called.
-			free(openInfo);
-			eventInfo->Context = 0;
+		if (status == STATUS_OBJECT_NAME_COLLISION)
+		{
+			eventInfo->Operation.Create.Information = FILE_EXISTS;
 		}
-
 	} else {
 		
 		//DbgPrint("status = %d\n", status);
@@ -250,15 +215,7 @@ DispatchCreate(
 			disposition == FILE_OPEN_IF ||
 			disposition == FILE_OVERWRITE_IF) {
 
-			if (status == ERROR_ALREADY_EXISTS || status == ERROR_FILE_EXISTS) {
-				if (disposition == FILE_OPEN_IF) {
-					eventInfo->Operation.Create.Information = FILE_OPENED;
-				} else if (disposition == FILE_OVERWRITE_IF) {
-					eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
-				}
-			} else {
-				eventInfo->Operation.Create.Information = FILE_CREATED;
-			}
+			eventInfo->Operation.Create.Information = FILE_CREATED;
 		}
 
 		if ((disposition == FILE_OVERWRITE_IF || disposition == FILE_OVERWRITE) &&

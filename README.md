@@ -1,5 +1,6 @@
 # Dokany
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
+[![Bounty](https://img.shields.io/bountysource/team/dokan-dev/activity.svg)](https://www.bountysource.com/teams/dokan-dev/issues)
 
 ## What is Dokan
 When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system

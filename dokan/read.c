@@ -18,7 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
@@ -32,7 +32,7 @@ DispatchRead(
 	PEVENT_INFORMATION		eventInfo;
 	PDOKAN_OPEN_INFO		openInfo;
 	ULONG					readLength = 0;
-	int						status;
+	NTSTATUS				status = STATUS_NOT_IMPLEMENTED;
 	DOKAN_FILE_INFO			fileInfo;
 	ULONG					sizeOfEventInfo;
 	
@@ -54,21 +54,23 @@ DispatchRead(
 				EventContext->Operation.Read.ByteOffset.QuadPart,
 				&fileInfo);
 	} else {
-		status = -1;
+		status = STATUS_NOT_IMPLEMENTED;
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 	eventInfo->BufferLength = 0;
+	eventInfo->Status = status;
 
-	if (status < 0) {
-		eventInfo->Status = STATUS_INVALID_PARAMETER;
-	} else if(readLength == 0) {
-		eventInfo->Status = STATUS_END_OF_FILE;
-	} else {
-		eventInfo->Status = STATUS_SUCCESS;
-		eventInfo->BufferLength = readLength;
-		eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
-			EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
+	if (status == STATUS_SUCCESS)
+	{
+		if (readLength == 0) {
+			eventInfo->Status = STATUS_END_OF_FILE;
+		} else {
+			eventInfo->BufferLength = readLength;
+			eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
+				EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
+		}
 	}
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);

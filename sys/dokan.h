@@ -149,7 +149,6 @@ typedef struct _DOKAN_GLOBAL {
 	// the list of waiting IRP for mount service
 	IRP_LIST		PendingService;
 	IRP_LIST		NotifyService;
-
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 
@@ -192,7 +191,6 @@ typedef struct _DokanDiskControlBlock {
 
 	// When UseAltStream is 1, use Alternate stream
 	USHORT					UseAltStream;
-	USHORT					UseKeepAlive;
 	USHORT					Mounted;
 
 	// to make a unique id for pending IRP
@@ -204,6 +202,8 @@ typedef struct _DokanDiskControlBlock {
 
 	CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
     CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
+
+    ULONG           IrpTimeout;
 } DokanDCB, *PDokanDCB;
 
 
@@ -304,28 +304,146 @@ typedef struct _DRIVER_EVENT_CONTEXT {
 
 DRIVER_INITIALIZE DriverEntry;
 
-__drv_dispatchType(IRP_MJ_CREATE)	DRIVER_DISPATCH DokanDispatchCreate;
-__drv_dispatchType(IRP_MJ_CLOSE)	DRIVER_DISPATCH DokanDispatchClose;
-__drv_dispatchType(IRP_MJ_READ)		DRIVER_DISPATCH DokanDispatchRead;
-__drv_dispatchType(IRP_MJ_WRITE)	DRIVER_DISPATCH DokanDispatchWrite;
-__drv_dispatchType(IRP_MJ_FLUSH_BUFFERS)	DRIVER_DISPATCH DokanDispatchFlush;
-__drv_dispatchType(IRP_MJ_CLEANUP)			DRIVER_DISPATCH DokanDispatchCleanup;
-__drv_dispatchType(IRP_MJ_DEVICE_CONTROL)		DRIVER_DISPATCH DokanDispatchDeviceControl;
-__drv_dispatchType(IRP_MJ_FILE_SYSTEM_CONTROL)	DRIVER_DISPATCH DokanDispatchFileSystemControl;
-__drv_dispatchType(IRP_MJ_DIRECTORY_CONTROL)	DRIVER_DISPATCH DokanDispatchDirectoryControl;
-__drv_dispatchType(IRP_MJ_QUERY_INFORMATION)	DRIVER_DISPATCH DokanDispatchQueryInformation;
-__drv_dispatchType(IRP_MJ_SET_INFORMATION)		DRIVER_DISPATCH DokanDispatchSetInformation;
-__drv_dispatchType(IRP_MJ_QUERY_VOLUME_INFORMATION)	DRIVER_DISPATCH DokanDispatchQueryVolumeInformation;
-__drv_dispatchType(IRP_MJ_SET_VOLUME_INFORMATION)	DRIVER_DISPATCH DokanDispatchSetVolumeInformation;
-__drv_dispatchType(IRP_MJ_SHUTDOWN)		DRIVER_DISPATCH DokanDispatchShutdown;
-__drv_dispatchType(IRP_MJ_PNP)			DRIVER_DISPATCH DokanDispatchPnp;
-__drv_dispatchType(IRP_MJ_LOCK_CONTROL)	DRIVER_DISPATCH DokanDispatchLock;
-__drv_dispatchType(IRP_MJ_QUERY_SECURITY)	DRIVER_DISPATCH DokanDispatchQuerySecurity;
-__drv_dispatchType(IRP_MJ_SET_SECURITY)		DRIVER_DISPATCH DokanDispatchSetSecurity;
+__drv_dispatchType(IRP_MJ_CREATE)	
+__drv_dispatchType(IRP_MJ_CLOSE)	
+__drv_dispatchType(IRP_MJ_READ)		
+__drv_dispatchType(IRP_MJ_WRITE)	
+__drv_dispatchType(IRP_MJ_FLUSH_BUFFERS)
+__drv_dispatchType(IRP_MJ_CLEANUP)
+__drv_dispatchType(IRP_MJ_DEVICE_CONTROL)		
+__drv_dispatchType(IRP_MJ_FILE_SYSTEM_CONTROL)
+__drv_dispatchType(IRP_MJ_DIRECTORY_CONTROL)
+__drv_dispatchType(IRP_MJ_QUERY_INFORMATION)
+__drv_dispatchType(IRP_MJ_SET_INFORMATION)	
+__drv_dispatchType(IRP_MJ_QUERY_VOLUME_INFORMATION)	
+__drv_dispatchType(IRP_MJ_SET_VOLUME_INFORMATION)	
+__drv_dispatchType(IRP_MJ_SHUTDOWN)		
+__drv_dispatchType(IRP_MJ_PNP)			
+__drv_dispatchType(IRP_MJ_LOCK_CONTROL)	
+__drv_dispatchType(IRP_MJ_QUERY_SECURITY)	
+__drv_dispatchType(IRP_MJ_SET_SECURITY)		
+NTSTATUS
+DokanBuildRequest(
+__in PDEVICE_OBJECT   DeviceObject,
+__in PIRP             Irp
+);
+
+NTSTATUS
+DokanDispatchClose(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchCreate(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchRead(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchWrite(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchFlush(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchQueryInformation(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchSetInformation(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchQueryVolumeInformation(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchSetVolumeInformation(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchSetInformation(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchDirectoryControl(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchFileSystemControl(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchDeviceControl(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchLock(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchCleanup(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchShutdown(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchQuerySecurity(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchSetSecurity(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
+NTSTATUS
+DokanDispatchPnp(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp
+);
+
 
 DRIVER_UNLOAD DokanUnload;
-
-
 
 DRIVER_CANCEL DokanEventCancelRoutine;
 
@@ -346,9 +464,26 @@ IO_WORKITEM_ROUTINE DokanStopCheckThreadInternal;
 IO_WORKITEM_ROUTINE DokanStopEventNotificationThreadInternal;
 
 NTSTATUS
+DokanDispatchRequest(
+    __in PDEVICE_OBJECT   DeviceObject,
+    __in PIRP Irp);
+
+NTSTATUS
 DokanEventRelease(
 	__in PDEVICE_OBJECT DeviceObject);
 
+
+NTSTATUS
+DokanExceptionFilter(
+    __in PIRP Irp,
+    __in PEXCEPTION_POINTERS  ExceptionPointer
+);
+
+NTSTATUS
+DokanExceptionHandler(
+    __in PDEVICE_OBJECT DeviceObject,
+    __in PIRP Irp,
+    __in NTSTATUS ExceptionCode);
 
 DRIVER_DISPATCH DokanEventStart;
 
@@ -365,7 +500,7 @@ AllocateEventContext(
 	__in PDokanDCB	Dcb,
 	__in PIRP				Irp,
 	__in ULONG				EventContextLength,
-	__in PDokanCCB			Ccb);
+	__in_opt PDokanCCB			Ccb);
 
 VOID
 DokanFreeEventContext(
@@ -545,7 +680,7 @@ DokanStopCheckThreadInternal(
 BOOLEAN
 DokanCheckCCB(
 	__in PDokanDCB	Dcb,
-	__in PDokanCCB	Ccb);
+    __in_opt PDokanCCB	Ccb);
 
 VOID
 DokanInitIrpList(

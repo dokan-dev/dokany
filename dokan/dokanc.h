@@ -28,8 +28,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-#define DOKAN_MOUNT_POINT_SUPPORTED_VERSION 600
-#define DOKAN_SECURITY_SUPPORTED_VERSION	600
+#define DOKAN_MOUNT_POINT_SUPPORTED_VERSION			600
+#define DOKAN_SECURITY_SUPPORTED_VERSION			600
+#define DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION	800
 
 #define DOKAN_GLOBAL_DEVICE_NAME	L"\\\\.\\Dokan"
 #define DOKAN_CONTROL_PIPE			L"\\\\.\\pipe\\DokanMounter"
@@ -82,7 +83,7 @@ DokanDbgPrint(LPCSTR format, ...)
     vsprintf_s(buffer, sizeof(buffer)/sizeof(char), format, argp);
     va_end(argp);
 	if (g_UseStdErr)
-		fprintf(stderr, buffer);
+		fputs(buffer, stderr);
 	else
 		OutputDebugStringA(buffer);
 }
@@ -97,7 +98,7 @@ DokanDbgPrintW(LPCWSTR format, ...)
     vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
     va_end(argp);
 	if (g_UseStdErr)
-		fwprintf(stderr, buffer);
+		fputws(buffer, stderr);
 	else
 		OutputDebugStringW(buffer);
 }

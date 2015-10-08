@@ -477,7 +477,7 @@ int impl_fuse_context::close_file(LPCWSTR file_name,
 int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer, DWORD num_bytes_to_read,
 			  LPDWORD read_bytes, LONGLONG offset, PDOKAN_FILE_INFO dokan_file_info)
 {
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 	if (!ops_.read) return -EINVAL;
 
@@ -520,7 +520,7 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
 			   DWORD num_bytes_to_write,LPDWORD num_bytes_written, 
 			   LONGLONG offset, PDOKAN_FILE_INFO dokan_file_info)
 {	
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 
 	*num_bytes_written=0; //Conform to ReadFile semantics
@@ -557,7 +557,7 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
 int impl_fuse_context::flush_file_buffers(LPCWSTR /*file_name*/, 
 					   PDOKAN_FILE_INFO dokan_file_info)
 {
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 	impl_file_handle *hndl=reinterpret_cast<impl_file_handle*>(dokan_file_info->Context);
 	if (!hndl) 
@@ -591,7 +591,7 @@ int impl_fuse_context::get_file_information(LPCWSTR file_name,
 	if (S_ISLNK(st.st_mode))
 	{
 		std::string resolved;
-		CHECKED(resolve_symlink(fname.c_str(),&resolved));
+		CHECKED(resolve_symlink(fname,&resolved));
 		CHECKED(ops_.getattr(resolved.c_str(),&st));
 	}
 

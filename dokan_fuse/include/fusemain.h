@@ -55,7 +55,7 @@ public:
 class win_error
 {
 public:
-	win_error(int _err): err(errno_to_win32_error(_err)) {}
+	win_error(int _err): err(errno_to_ntstatus_error(_err)) {}
 	win_error(int _err, bool): err(_err) {}
 	operator int() { return err; }
 private:

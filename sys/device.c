@@ -105,6 +105,20 @@ GlobalDeviceControl(
 	return status;
 }
 
+VOID
+DokanPopulateDiskGeometry(
+	__in PDISK_GEOMETRY diskGeometry
+	)
+{
+	ULONG		    length;
+
+	length = 1024 * 1024 * 1024;
+	diskGeometry->Cylinders.QuadPart = length / DOKAN_SECTOR_SIZE / 32 / 2;
+	diskGeometry->MediaType = FixedMedia;
+	diskGeometry->TracksPerCylinder = 2;
+	diskGeometry->SectorsPerTrack = 32;
+	diskGeometry->BytesPerSector = DOKAN_SECTOR_SIZE;
+}
 
 NTSTATUS
 DiskDeviceControl(
@@ -136,7 +150,6 @@ DiskDeviceControl(
 	case IOCTL_DISK_GET_DRIVE_GEOMETRY:
 		{
 			PDISK_GEOMETRY	diskGeometry;
-			ULONG		    length;
 
 			DDbgPrint("  IOCTL_DISK_GET_DRIVE_GEOMETRY\n");
 			if (outputLength < sizeof(DISK_GEOMETRY)) {
@@ -148,15 +161,68 @@ DiskDeviceControl(
 			diskGeometry = (PDISK_GEOMETRY)Irp->AssociatedIrp.SystemBuffer;
 			ASSERT(diskGeometry != NULL);
 
-			length = 1024*1024*1024;
-			diskGeometry->Cylinders.QuadPart = length / DOKAN_SECTOR_SIZE / 32 / 2;
-			diskGeometry->MediaType = FixedMedia;
-			diskGeometry->TracksPerCylinder = 2;
-			diskGeometry->SectorsPerTrack = 32;
-			diskGeometry->BytesPerSector = DOKAN_SECTOR_SIZE;
+			DokanPopulateDiskGeometry(diskGeometry);
 
 			status = STATUS_SUCCESS;
 			Irp->IoStatus.Information = sizeof(DISK_GEOMETRY);
+		}
+		break;
+
+	case IOCTL_DISK_GET_DRIVE_GEOMETRY_EX:
+		{
+			PDISK_GEOMETRY_EX	diskGeometry;
+
+			DDbgPrint("  IOCTL_DISK_GET_DRIVE_GEOMETRY_EX\n");
+			if (outputLength < sizeof(DISK_GEOMETRY_EX)) {
+				status = STATUS_BUFFER_TOO_SMALL;
+				Irp->IoStatus.Information = 0;
+				break;
+			}
+
+			diskGeometry = (PDISK_GEOMETRY_EX)Irp->AssociatedIrp.SystemBuffer;
+			ASSERT(diskGeometry != NULL);
+
+			DokanPopulateDiskGeometry(&(diskGeometry->Geometry));
+			diskGeometry->DiskSize.QuadPart = 1024 * 1024 * 1024; // TODO: This should be get from dcb, like dcb->PartitionLength (cached from DokanOperations->GetDiskFreeSpace ?)
+
+			status = STATUS_SUCCESS;
+			Irp->IoStatus.Information = sizeof(DISK_GEOMETRY_EX);
+		}
+		break;
+
+	case IOCTL_STORAGE_GET_MEDIA_TYPES_EX:
+		{
+			PGET_MEDIA_TYPES        mediaTypes = NULL;
+			PDEVICE_MEDIA_INFO      mediaInfo = NULL; //&mediaTypes->MediaInfo[0];
+
+			// We alway return only one media type
+			DDbgPrint("  IOCTL_STORAGE_GET_MEDIA_TYPES_EX\n");
+			if (outputLength < sizeof(GET_MEDIA_TYPES)) {
+				status = STATUS_BUFFER_TOO_SMALL;
+				Irp->IoStatus.Information = 0;
+				break;
+			}
+
+			mediaTypes = (PGET_MEDIA_TYPES)Irp->AssociatedIrp.SystemBuffer;
+			ASSERT(mediaTypes != NULL);
+
+			mediaInfo = &mediaTypes->MediaInfo[0];
+
+			mediaTypes->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
+			mediaTypes->MediaInfoCount = 1;
+
+			DISK_GEOMETRY diskGeometry;
+			DokanPopulateDiskGeometry(&diskGeometry);
+			mediaInfo->DeviceSpecific.DiskInfo.MediaType = diskGeometry.MediaType;
+			mediaInfo->DeviceSpecific.DiskInfo.NumberMediaSides = 1;
+			mediaInfo->DeviceSpecific.DiskInfo.MediaCharacteristics = (MEDIA_CURRENTLY_MOUNTED | MEDIA_READ_WRITE);
+			mediaInfo->DeviceSpecific.DiskInfo.Cylinders.QuadPart = diskGeometry.Cylinders.QuadPart;
+			mediaInfo->DeviceSpecific.DiskInfo.TracksPerCylinder = diskGeometry.TracksPerCylinder;
+			mediaInfo->DeviceSpecific.DiskInfo.SectorsPerTrack = diskGeometry.SectorsPerTrack;
+			mediaInfo->DeviceSpecific.DiskInfo.BytesPerSector = diskGeometry.BytesPerSector;
+
+			status = STATUS_SUCCESS;
+			Irp->IoStatus.Information = sizeof(GET_MEDIA_TYPES);
 		}
 		break;
 
@@ -317,7 +383,7 @@ DiskDeviceControl(
 				Irp->IoStatus.Information = FIELD_OFFSET(MOUNTDEV_UNIQUE_ID, UniqueId[0]) +
 											uniqueId->UniqueIdLength;
 				status = STATUS_SUCCESS;
-				DDbgPrint("  UniqueName %ws\n", uniqueId->UniqueId);
+                DDbgPrint("  UniqueName %u\n", (unsigned int)uniqueId->UniqueId);
 				break;
 			} else {
 				Irp->IoStatus.Information = sizeof(MOUNTDEV_UNIQUE_ID);
@@ -439,8 +505,6 @@ Return Value:
 
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		Irp->IoStatus.Information = 0;
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -530,8 +594,6 @@ Return Value:
 			DokanPrintNTStatus(status);
 			DDbgPrint("<== DokanDispatchIoControl\n");
 		}
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;

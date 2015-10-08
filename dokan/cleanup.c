@@ -18,6 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
@@ -49,7 +50,8 @@ DispatchCleanup(
 			&fileInfo);
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 

@@ -22,7 +22,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef _DOKANI_H_
 #define _DOKANI_H_
 
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -83,6 +85,9 @@ SendToDevice(
 
 LPCWSTR
 GetRawDeviceName(LPCWSTR	DeviceName);
+
+void
+ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size);
 
 UINT __stdcall
 DokanLoop(
@@ -256,10 +261,6 @@ ClearFindData(
 UINT WINAPI
 DokanKeepAlive(
 	PVOID	Param);
-
-
-ULONG
-GetNTStatus(DWORD ErrorCode);
 
 PDOKAN_OPEN_INFO
 GetDokanOpenInfo(

@@ -25,8 +25,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (INIT, DriverEntry)
 #pragma alloc_text (PAGE, DokanUnload)
-#pragma alloc_text (PAGE, DokanDispatchShutdown)
-#pragma alloc_text (PAGE, DokanDispatchPnp)
 #endif
 
 
@@ -191,7 +189,7 @@ Return Value:
 
 	status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
-	if (status != STATUS_SUCCESS) {
+	if (NT_ERROR(status)) {
 		return status;
 	}
 	//
@@ -199,31 +197,31 @@ Return Value:
 	//
 	DriverObject->DriverUnload								= DokanUnload;
 
-	DriverObject->MajorFunction[IRP_MJ_CREATE]				= DokanDispatchCreate;
-	DriverObject->MajorFunction[IRP_MJ_CLOSE]				= DokanDispatchClose;
-	DriverObject->MajorFunction[IRP_MJ_CLEANUP] 			= DokanDispatchCleanup;
+    DriverObject->MajorFunction[IRP_MJ_CREATE]              = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE]               = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_CLEANUP]             = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL]		= DokanDispatchDeviceControl;
-	DriverObject->MajorFunction[IRP_MJ_FILE_SYSTEM_CONTROL] = DokanDispatchFileSystemControl;
-	DriverObject->MajorFunction[IRP_MJ_DIRECTORY_CONTROL]   = DokanDispatchDirectoryControl;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL]      = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_FILE_SYSTEM_CONTROL] = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_DIRECTORY_CONTROL]   = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_QUERY_INFORMATION]   = DokanDispatchQueryInformation;
-    DriverObject->MajorFunction[IRP_MJ_SET_INFORMATION]     = DokanDispatchSetInformation;
+    DriverObject->MajorFunction[IRP_MJ_QUERY_INFORMATION]   = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_SET_INFORMATION]     = DokanBuildRequest;
 
-    DriverObject->MajorFunction[IRP_MJ_QUERY_VOLUME_INFORMATION]	= DokanDispatchQueryVolumeInformation;
-    DriverObject->MajorFunction[IRP_MJ_SET_VOLUME_INFORMATION]		= DokanDispatchSetVolumeInformation;
+    DriverObject->MajorFunction[IRP_MJ_QUERY_VOLUME_INFORMATION]    = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_SET_VOLUME_INFORMATION]      = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_READ]				= DokanDispatchRead;
-	DriverObject->MajorFunction[IRP_MJ_WRITE]				= DokanDispatchWrite;
-	DriverObject->MajorFunction[IRP_MJ_FLUSH_BUFFERS]		= DokanDispatchFlush;
+    DriverObject->MajorFunction[IRP_MJ_READ]                = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_WRITE]               = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_FLUSH_BUFFERS]       = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_SHUTDOWN]            = DokanDispatchShutdown;
-	DriverObject->MajorFunction[IRP_MJ_PNP]					= DokanDispatchPnp;
+    DriverObject->MajorFunction[IRP_MJ_SHUTDOWN]            = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_PNP]                 = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_LOCK_CONTROL]		= DokanDispatchLock;
+    DriverObject->MajorFunction[IRP_MJ_LOCK_CONTROL]        = DokanBuildRequest;
 
-	DriverObject->MajorFunction[IRP_MJ_QUERY_SECURITY]		= DokanDispatchQuerySecurity;
-	DriverObject->MajorFunction[IRP_MJ_SET_SECURITY]		= DokanDispatchSetSecurity;
+    DriverObject->MajorFunction[IRP_MJ_QUERY_SECURITY]      = DokanBuildRequest;
+    DriverObject->MajorFunction[IRP_MJ_SET_SECURITY]        = DokanBuildRequest;
 
 	fastIoDispatch = ExAllocatePool(sizeof(FAST_IO_DISPATCH));
     if (!fastIoDispatch)
@@ -272,7 +270,6 @@ Return Value:
 		DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x\n", status);
 		return status;
 	}
-
 
 	DDbgPrint("<== DriverEntry\n");
 
@@ -568,7 +565,7 @@ PrintIdType(
 BOOLEAN
 DokanCheckCCB(
 	__in PDokanDCB	Dcb,
-	__in PDokanCCB	Ccb)
+	__in_opt PDokanCCB	Ccb)
 {
 	ASSERT(Dcb != NULL);
 	if (GetIdentifierType(Dcb) != DCB) {
@@ -576,13 +573,13 @@ DokanCheckCCB(
 		return FALSE;
 	}
 
-	if (Ccb == NULL) {
+	if (Ccb == NULL || Ccb == 0) {
 		PrintIdType(Dcb);
 		DDbgPrint("   ccb is NULL\n");
 		return FALSE;
 	}
 
-	if (Ccb->MountId != Dcb->MountId) {
+    if (Ccb->MountId != Dcb->MountId) {
 		DDbgPrint("   MountId is different\n");
 		return FALSE;
 	}

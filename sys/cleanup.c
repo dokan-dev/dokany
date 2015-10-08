@@ -56,8 +56,6 @@ Return Value:
 
 	__try {
 
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanCleanup\n");
 	
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -118,8 +116,6 @@ Return Value:
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanCleanup\n");
-	
-		FsRtlExitFileSystem();
 	}
 
 	return status;

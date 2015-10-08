@@ -45,8 +45,6 @@ DokanDispatchDirectoryControl(
 	PDokanVCB			vcb;
 
 	__try {
-		FsRtlEnterFileSystem();
-
 		DDbgPrint("==> DokanDirectoryControl\n");
 
 		irpSp		= IoGetCurrentIrpStackLocation(Irp);
@@ -83,8 +81,6 @@ DokanDispatchDirectoryControl(
         DokanCompleteIrpRequest(Irp, status, 0);
 
 		DDbgPrint("<== DokanDirectoryControl\n");
-
-		FsRtlExitFileSystem();
 	}
 
 	return status;
@@ -245,7 +241,7 @@ DokanQueryDirectory(
 					fcb->FileName.Buffer, fcb->FileName.Length);
 
 	// if search pattern is specified, copy it to EventContext
-	if (ccb->SearchPatternLength) {
+	if (ccb->SearchPatternLength && ccb->SearchPattern) {
 		PVOID searchBuffer;
 
 		eventContext->Operation.Directory.SearchPatternLength = ccb->SearchPatternLength;
@@ -331,8 +327,6 @@ DokanCompleteDirectoryControl(
 	ULONG				bufferLen= 0;
 	PVOID				buffer	 = NULL;
 
-	//FsRtlEnterFileSystem();
-
 	DDbgPrint("==> DokanCompleteDirectoryControl\n");
 
 	irp   = IrpEntry->Irp;
@@ -374,9 +368,9 @@ DokanCompleteDirectoryControl(
 		//DDbgPrint("   copy DirectoryInfo\n");
 		RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
-		DDbgPrint("    eventInfo->Directory.Index = %d\n", EventInfo->Operation.Directory.Index);
-		DDbgPrint("    eventInfo->BufferLength    = %d\n", EventInfo->BufferLength);
-		DDbgPrint("    eventInfo->Status = %x (%d)\n",	  EventInfo->Status, EventInfo->Status);
+		DDbgPrint("    eventInfo->Directory.Index = %lu\n", EventInfo->Operation.Directory.Index);
+		DDbgPrint("    eventInfo->BufferLength    = %lu\n", EventInfo->BufferLength);
+		DDbgPrint("    eventInfo->Status = %x (%lu)\n",	  EventInfo->Status, EventInfo->Status);
 
 		// update index which specified n-th directory entry is returned
 		// this should be locked before writing?
@@ -402,7 +396,5 @@ DokanCompleteDirectoryControl(
     DokanCompleteIrpRequest(irp, status, info);
 
 	DDbgPrint("<== DokanCompleteDirectoryControl\n");
-
-	//FsRtlExitFileSystem();
 }
 
