@@ -28,6 +28,7 @@ THE SOFTWARE.
 #include <ntstatus.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include "../dokan/dokan.h"
 #include "../dokan/fileinfo.h"
 
@@ -37,16 +38,26 @@ BOOL g_DebugMode;
 static void DbgPrint(LPCWSTR format, ...)
 {
 	if (g_DebugMode) {
-		WCHAR buffer[512];
+		const WCHAR *outputString;
+		WCHAR *buffer;
+		size_t length;
 		va_list argp;
+
 		va_start(argp, format);
-		vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
-		va_end(argp);
-		if (g_UseStdErr) {
-			fputws(buffer, stderr);
+		length = _vscwprintf(format, argp) + 1;
+		buffer = _malloca(length*sizeof(WCHAR));
+		if (buffer) {
+			vswprintf_s(buffer, length, format, argp);
+			outputString = buffer;
 		} else {
-			OutputDebugStringW(buffer);
+			outputString = format;
 		}
+		if (g_UseStdErr)
+			fputws(outputString, stderr);
+		else
+			OutputDebugStringW(outputString);
+		_freea(buffer);
+		va_end(argp);
 	}
 }
 
