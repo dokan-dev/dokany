@@ -23,6 +23,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define _DOKANC_H_
 
 #include "dokan.h"
+#include <malloc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -77,30 +78,52 @@ static
 VOID
 DokanDbgPrint(LPCSTR format, ...)
 {
-	char buffer[512];
+	const char *outputString;
+	char *buffer;
+	size_t length;
 	va_list argp;
+
 	va_start(argp, format);
-    vsprintf_s(buffer, sizeof(buffer)/sizeof(char), format, argp);
-    va_end(argp);
+	length = _vscprintf(format, argp) + 1;
+	buffer = _malloca(length*sizeof(char));
+	if (buffer) {
+		vsprintf_s(buffer, length, format, argp);
+		outputString = buffer;
+	} else {
+		outputString = format;
+	}
 	if (g_UseStdErr)
-		fputs(buffer, stderr);
+		fputs(outputString, stderr);
 	else
-		OutputDebugStringA(buffer);
+		OutputDebugStringA(outputString);
+	_freea(buffer);
+	va_end(argp);
 }
 
 static
 VOID
 DokanDbgPrintW(LPCWSTR format, ...)
 {
-	WCHAR buffer[512];
+	const WCHAR *outputString;
+	WCHAR *buffer;
+	size_t length;
 	va_list argp;
+
 	va_start(argp, format);
-    vswprintf_s(buffer, sizeof(buffer)/sizeof(WCHAR), format, argp);
-    va_end(argp);
+	length = _vscwprintf(format, argp) + 1;
+	buffer = _malloca(length*sizeof(WCHAR));
+	if (buffer) {
+		vswprintf_s(buffer, length, format, argp);
+		outputString = buffer;
+	} else {
+		outputString = format;
+	}
 	if (g_UseStdErr)
-		fputws(buffer, stderr);
+		fputws(outputString, stderr);
 	else
-		OutputDebugStringW(buffer);
+		OutputDebugStringW(outputString);
+	_freea(buffer);
+	va_end(argp);
 }
 
 
