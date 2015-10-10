@@ -62,7 +62,7 @@ static void DbgPrint(LPCWSTR format, ...)
 }
 
 static WCHAR RootDirectory[MAX_PATH] = L"C:";
-static WCHAR MountPoint[MAX_PATH] = L"M:";
+static WCHAR MountPoint[MAX_PATH] = L"M:\\";
 
 static void
 GetFilePath(
