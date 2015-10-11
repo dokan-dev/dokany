@@ -1155,7 +1155,6 @@ MirrorEnumerateNamedStreams(
 	LPCWSTR					FileName,
 	PVOID*					EnumContext,
 	LPWSTR					StreamName,
-	PULONG					StreamNameLength,
 	PLONGLONG				StreamSize,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
@@ -1202,7 +1201,6 @@ MirrorEnumerateNamedStreams(
 	}
 
 	wcscpy_s(StreamName, SHRT_MAX + 1, pStreamInfo->StreamName);
-	*StreamNameLength = pStreamInfo->StreamNameLength;
 	*StreamSize = pStreamInfo->StreamSize.QuadPart;
 
 	DbgPrint(L"\t Stream %ws\n", pStreamInfo->StreamName);

@@ -268,7 +268,6 @@ typedef struct _DOKAN_OPERATIONS {
 		LPCWSTR, // FileName
 		PVOID*, // EnumContext
 		LPWSTR, // StreamName
-		PULONG, // StreamNameLength
 		PLONGLONG, // StreamSize
 		PDOKAN_FILE_INFO);
 

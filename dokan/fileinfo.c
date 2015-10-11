@@ -276,13 +276,11 @@ DokanEnumerateNamedStreams(
 
 	while (result == STATUS_SUCCESS) {
 		ZeroMemory(streamName, sizeof(streamName));
-		streamNameLength = 0;
 		streamSize = 0;
 		result = DokanInstance->DokanOperations->EnumerateNamedStreams(
 			EventContext->Operation.File.FileName,
 			&enumContext,
 			streamName,
-			&streamNameLength,
 			&streamSize,
 			FileInfo);
 		
@@ -297,6 +295,7 @@ DokanEnumerateNamedStreams(
 				StreamInfo = (PFILE_STREAM_INFORMATION)((LPBYTE)StreamInfo + StreamInfo->NextEntryOffset);
 			}
 
+			streamNameLength = (ULONG)wcslen(streamName) * sizeof(WCHAR);
 			entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
 			// Must be align on a 8-byte boundary.
 			entrySize = QuadAlign(entrySize);
@@ -309,6 +308,7 @@ DokanEnumerateNamedStreams(
 			wcscpy_s(StreamInfo->StreamName, streamNameLength + 1, streamName);
 			StreamInfo->StreamSize.QuadPart = streamSize;
 			StreamInfo->StreamAllocationSize.QuadPart = streamSize;
+			StreamInfo->NextEntryOffset = 0;
 			ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
 
 			*RemainingLength -= entrySize;
