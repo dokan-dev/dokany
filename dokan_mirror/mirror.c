@@ -490,6 +490,7 @@ MirrorWriteFile(
 		{
 			if (Offset >= fileSize)
 			{
+				*NumberOfBytesWritten = 0;
 				return 0;
 			}
 
@@ -521,23 +522,6 @@ MirrorWriteFile(
 			return -1;
 		}
 	}
-
-
-    distanceToMove.QuadPart = Offset;
-
-	if (DokanFileInfo->WriteToEndOfFile) {
-        LARGE_INTEGER z;
-        z.QuadPart = 0;
-		if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
-			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", GetLastError());
-			return -1;
-		}
-    }
-    else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-		DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, GetLastError());
-		return -1;
-	}
-
 		
 	if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten, NULL)) {
 		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
