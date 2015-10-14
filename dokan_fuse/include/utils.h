@@ -40,12 +40,12 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 	find_data->nFileSizeLow=(DWORD) stbuf->st_size;
 	find_data->nFileSizeHigh=stbuf->st_size>>32;
 #endif
-	if (stbuf->st_ctime!=0)
-		find_data->ftCreationTime=unixTimeToFiletime(stbuf->st_ctime);
-	if (stbuf->st_atime!=0)
-		find_data->ftLastAccessTime=unixTimeToFiletime(stbuf->st_atime);
-	if (stbuf->st_mtime!=0)
-		find_data->ftLastWriteTime=unixTimeToFiletime(stbuf->st_mtime);
+	if (stbuf->st_ctim.tv_sec!=0)
+		find_data->ftCreationTime=unixTimeToFiletime(stbuf->st_ctim.tv_sec);
+	if (stbuf->st_atim.tv_sec!=0)
+		find_data->ftLastAccessTime=unixTimeToFiletime(stbuf->st_atim.tv_sec);
+	if (stbuf->st_mtim.tv_sec!=0)
+		find_data->ftLastWriteTime=unixTimeToFiletime(stbuf->st_mtim.tv_sec);
 
 	//TODO: add support for read-only files - try to derive it from file's owner?
 	std::string fname=extract_file_name(name);
