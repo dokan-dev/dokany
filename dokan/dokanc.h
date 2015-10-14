@@ -85,7 +85,7 @@ DokanDbgPrint(LPCSTR format, ...)
 
 	va_start(argp, format);
 	length = _vscprintf(format, argp) + 1;
-	buffer = _malloca(length*sizeof(char));
+	buffer = (char*)_malloca(length*sizeof(char));
 	if (buffer) {
 		vsprintf_s(buffer, length, format, argp);
 		outputString = buffer;
@@ -111,7 +111,7 @@ DokanDbgPrintW(LPCWSTR format, ...)
 
 	va_start(argp, format);
 	length = _vscwprintf(format, argp) + 1;
-	buffer = _malloca(length*sizeof(WCHAR));
+	buffer = (WCHAR*)_malloca(length*sizeof(WCHAR));
 	if (buffer) {
 		vswprintf_s(buffer, length, format, argp);
 		outputString = buffer;
