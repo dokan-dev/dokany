@@ -3,6 +3,7 @@
 #include "fusemain.h"
 #include "ScopeGuard.h"
 #include "docanfuse.h"
+#include "../../dokan/dokani.h"
 #include <stdio.h>
 
 #ifdef __CYGWIN__
@@ -139,11 +140,12 @@ CONST_START(cShareMode)
 CONST_END(cShareMode)
 
 CONST_START(cDisposition)
-	CONST_VAL(CREATE_ALWAYS)
-	CONST_VAL(CREATE_NEW)
-	CONST_VAL(OPEN_ALWAYS)
-	CONST_VAL(OPEN_EXISTING)
-	CONST_VAL(TRUNCATE_EXISTING)
+	CONST_VAL(FILE_SUPERSEDE)
+	CONST_VAL(FILE_CREATE)
+	CONST_VAL(FILE_OPEN)
+	CONST_VAL(FILE_OPEN_IF)
+	CONST_VAL(FILE_OVERWRITE)
+	CONST_VAL(FILE_OVERWRITE_IF)
 CONST_END(cDisposition)
 
 void DebugConstant(const char *name, DWORD value, Constant *c)
@@ -183,26 +185,31 @@ void DebugConstantBit(const char *name, DWORD value, Constant *cs)
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseCreateFile(
-				 LPCWSTR				FileName,
-				 DWORD					AccessMode,
-				 DWORD					ShareMode,
-				 DWORD					CreationDisposition,
-				 DWORD					FlagsAndAttributes,
-				 PDOKAN_FILE_INFO		DokanFileInfo)
+				 LPCWSTR						FileName,
+				 PDOKAN_IO_SECURITY_CONTEXT		SecurityContext,
+				 ACCESS_MASK					DesiredAccess,
+				 ULONG							FileAttributes,
+				 ULONG							ShareAccess,
+				 ULONG							CreateDisposition,
+				 ULONG							CreateOptions,
+				 PDOKAN_FILE_INFO				DokanFileInfo)
 {
-	impl_fuse_context *impl=the_impl;
+	impl_fuse_context *impl = the_impl;
+
 	if (impl->debug()) {
 		FWPRINTF(stderr, L"CreateFile : %s\n", FileName);
-		DebugConstantBit("\tAccessMode", AccessMode,  cAccessMode);
-		DebugConstantBit("\tShareMode",  ShareMode,   cShareMode);
-		DebugConstant("\tDisposition",   CreationDisposition, cDisposition);
-		FWPRINTF(stderr, L"\tFlags: %u (0x%x)\n", FlagsAndAttributes, FlagsAndAttributes);
+		DebugConstantBit("\tDesiredAccess", DesiredAccess, cAccessMode);
+		DebugConstantBit("\tShareAccess", ShareAccess, cShareMode);
+		DebugConstant("\tDisposition", CreateDisposition, cDisposition);
+		FWPRINTF(stderr, L"\tAttributes: %u (0x%x)\n", FileAttributes, FileAttributes);
+		FWPRINTF(stderr, L"\tOptions: %u (0x%x)\n", CreateOptions, CreateOptions);
 		fflush(stderr);
 	}
-	
+
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -win_error(impl->create_file(FileName,AccessMode,ShareMode,
-		CreationDisposition,FlagsAndAttributes,DokanFileInfo));
+
+	return -win_error(impl->create_file(FileName, CreateDisposition, ShareAccess, DesiredAccess, FileAttributes,
+		DokanFileInfo));
 }
 
 static void DOKAN_CALLBACK FuseCloseFile(

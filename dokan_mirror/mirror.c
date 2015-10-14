@@ -31,6 +31,8 @@ THE SOFTWARE.
 #include "../dokan/dokan.h"
 #include "../dokan/fileinfo.h"
 
+#define MirrorMapBit(dest, src, userBit, kernelBit) if(((src) & (kernelBit)) == (kernelBit)) (dest) |= (userBit)
+
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 
@@ -120,34 +122,41 @@ NTSTATUS ToNtStatus(DWORD dwError)
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorCreateFile(
-	LPCWSTR					FileName,
-	DWORD					AccessMode,
-	DWORD					ShareMode,
-	DWORD					CreationDisposition,
-	DWORD					FlagsAndAttributes,
+	LPCWSTR						FileName,
+	PDOKAN_IO_SECURITY_CONTEXT	SecurityContext,
+	ACCESS_MASK					DesiredAccess,
+	ULONG						FileAttributes,
+	ULONG						ShareAccess,
+	ULONG						CreateDisposition,
+	ULONG						CreateOptions,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
 	WCHAR filePath[MAX_PATH];
 	HANDLE handle;
 	DWORD fileAttr;
 	NTSTATUS status = STATUS_SUCCESS;
+	DWORD creationDisposition = OPEN_EXISTING;
+	DWORD fileAttributesAndFlags = FileAttributes;
+
+	UNREFERENCED_PARAMETER(SecurityContext);
+
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
+#endif
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"CreateFile : %s\n", filePath);
 
 	PrintUserName(DokanFileInfo);
-
-	if (CreationDisposition == CREATE_NEW)
-		DbgPrint(L"\tCREATE_NEW\n");
-	if (CreationDisposition == OPEN_ALWAYS)
-		DbgPrint(L"\tOPEN_ALWAYS\n");
-	if (CreationDisposition == CREATE_ALWAYS)
-		DbgPrint(L"\tCREATE_ALWAYS\n");
-	if (CreationDisposition == OPEN_EXISTING)
-		DbgPrint(L"\tOPEN_EXISTING\n");
-	if (CreationDisposition == TRUNCATE_EXISTING)
-		DbgPrint(L"\tTRUNCATE_EXISTING\n");
 
 	/*
 	if (ShareMode == 0 && AccessMode & FILE_WRITE_DATA)
@@ -156,77 +165,110 @@ MirrorCreateFile(
 		ShareMode = FILE_SHARE_READ;
 	*/
 
-	DbgPrint(L"\tShareMode = 0x%x\n", ShareMode);
+	DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
-	MirrorCheckFlag(ShareMode, FILE_SHARE_READ);
-	MirrorCheckFlag(ShareMode, FILE_SHARE_WRITE);
-	MirrorCheckFlag(ShareMode, FILE_SHARE_DELETE);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
 
-	DbgPrint(L"\tAccessMode = 0x%x\n", AccessMode);
+	DbgPrint(L"\tAccessMode = 0x%x\n", DesiredAccess);
 
-	MirrorCheckFlag(AccessMode, GENERIC_READ);
-	MirrorCheckFlag(AccessMode, GENERIC_WRITE);
-	MirrorCheckFlag(AccessMode, GENERIC_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_READ);
+	MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_EXECUTE);
 	
-	MirrorCheckFlag(AccessMode, DELETE);
-	MirrorCheckFlag(AccessMode, FILE_READ_DATA);
-	MirrorCheckFlag(AccessMode, FILE_READ_ATTRIBUTES);
-	MirrorCheckFlag(AccessMode, FILE_READ_EA);
-	MirrorCheckFlag(AccessMode, READ_CONTROL);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_DATA);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_ATTRIBUTES);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_EA);
-	MirrorCheckFlag(AccessMode, FILE_APPEND_DATA);
-	MirrorCheckFlag(AccessMode, WRITE_DAC);
-	MirrorCheckFlag(AccessMode, WRITE_OWNER);
-	MirrorCheckFlag(AccessMode, SYNCHRONIZE);
-	MirrorCheckFlag(AccessMode, FILE_EXECUTE);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_READ);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_WRITE);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, DELETE);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_EA);
+	MirrorCheckFlag(DesiredAccess, READ_CONTROL);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_EA);
+	MirrorCheckFlag(DesiredAccess, FILE_APPEND_DATA);
+	MirrorCheckFlag(DesiredAccess, WRITE_DAC);
+	MirrorCheckFlag(DesiredAccess, WRITE_OWNER);
+	MirrorCheckFlag(DesiredAccess, SYNCHRONIZE);
+	MirrorCheckFlag(DesiredAccess, FILE_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
 	if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
-		FlagsAndAttributes |= FILE_FLAG_BACKUP_SEMANTICS;
+		fileAttributesAndFlags |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
-	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", FlagsAndAttributes);
 
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_ARCHIVE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_ENCRYPTED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_HIDDEN);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_NORMAL);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_OFFLINE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_READONLY);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_SYSTEM);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_TEMPORARY);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_WRITE_THROUGH);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OVERLAPPED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_NO_BUFFERING);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_RANDOM_ACCESS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_SEQUENTIAL_SCAN);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_DELETE_ON_CLOSE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_BACKUP_SEMANTICS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_POSIX_SEMANTICS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OPEN_REPARSE_POINT);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OPEN_NO_RECALL);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_ANONYMOUS);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_IDENTIFICATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_IMPERSONATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_DELEGATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_CONTEXT_TRACKING);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_EFFECTIVE_ONLY);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_SQOS_PRESENT);
+	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
+
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
+	
+	switch(CreateDisposition) {
+	case FILE_CREATE:
+		creationDisposition = CREATE_NEW;
+		break;
+	case FILE_OPEN:
+		creationDisposition = OPEN_EXISTING;
+		break;
+	case FILE_OPEN_IF:
+		creationDisposition = OPEN_ALWAYS;
+		break;
+	case FILE_OVERWRITE:
+		creationDisposition = TRUNCATE_EXISTING;
+		break;
+	case FILE_OVERWRITE_IF:
+		creationDisposition = CREATE_ALWAYS;
+		break;
+	default:
+		// TODO: should support FILE_SUPERSEDE ?
+		break;
+	}
+
+	if(creationDisposition == CREATE_NEW)
+		DbgPrint(L"\tCREATE_NEW\n");
+	if(creationDisposition == OPEN_ALWAYS)
+		DbgPrint(L"\tOPEN_ALWAYS\n");
+	if(creationDisposition == CREATE_ALWAYS)
+		DbgPrint(L"\tCREATE_ALWAYS\n");
+	if(creationDisposition == OPEN_EXISTING)
+		DbgPrint(L"\tOPEN_EXISTING\n");
+	if(creationDisposition == TRUNCATE_EXISTING)
+		DbgPrint(L"\tTRUNCATE_EXISTING\n");
 
 	handle = CreateFile(
 		filePath,
-		AccessMode,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-		ShareMode,
+		DesiredAccess,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+		ShareAccess,
 		NULL, // security attribute
-		CreationDisposition,
-		FlagsAndAttributes,// |FILE_FLAG_NO_BUFFERING,
+		creationDisposition,
+		fileAttributesAndFlags,// |FILE_FLAG_NO_BUFFERING,
 		NULL); // template file handle
 
 	if (handle == INVALID_HANDLE_VALUE) {

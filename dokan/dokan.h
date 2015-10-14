@@ -24,6 +24,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <Windows.h>
 
+#include "fileinfo.h"
+#include "public.h"
+
 #define DOKAN_DRIVER_NAME	L"dokan.sys"
 
 #ifdef _EXPORTING
@@ -83,15 +86,19 @@ typedef struct _DOKAN_OPERATIONS {
 
 
 	// CreateFile
-	//   If file is a directory, CreateFile (not OpenDirectory) may be called.
+	//   If the file is a directory CreateFile (not OpenDirectory) may be called.
 	//   In this case, CreateFile should return STATUS_SUCCESS when that directory can be opened.
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
+	//   See ZwCreateFile() https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx
+	//   for more information about the parameters of this callback.
 	NTSTATUS (DOKAN_CALLBACK *CreateFile) (
-		LPCWSTR,      // FileName
-		DWORD,        // DesiredAccess
-		DWORD,        // ShareMode
-		DWORD,        // CreationDisposition
-		DWORD,        // FlagsAndAttributes
+		LPCWSTR,					// FileName
+		PDOKAN_IO_SECURITY_CONTEXT,	// SecurityContext, see https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
+		ACCESS_MASK,				// DesiredAccess
+		ULONG,						// FileAttributes
+		ULONG,						// ShareAccess
+		ULONG,						// CreateDisposition
+		ULONG,						// CreateOptions
 		PDOKAN_FILE_INFO);
 
 	NTSTATUS (DOKAN_CALLBACK *OpenDirectory) (

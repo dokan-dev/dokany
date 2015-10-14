@@ -333,20 +333,26 @@ Return Value:
 
 --*/
 {
-	PDokanVCB			vcb;
-	PDokanDCB			dcb;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PFILE_OBJECT		fileObject;
-	ULONG				info = 0;
-	PEVENT_CONTEXT		eventContext;
-	PFILE_OBJECT		relatedFileObject;
-	ULONG				fileNameLength = 0;
-	ULONG				eventLength;
-	PDokanFCB			fcb;
-	PDokanCCB			ccb;
-	PWCHAR				fileName;
-	BOOLEAN				needBackSlashAfterRelatedFile = FALSE;
+	PDokanVCB								vcb;
+	PDokanDCB								dcb;
+	PIO_STACK_LOCATION						irpSp;
+	NTSTATUS								status = STATUS_INVALID_PARAMETER;
+	PFILE_OBJECT							fileObject;
+	ULONG									info = 0;
+	PEVENT_CONTEXT							eventContext;
+	PFILE_OBJECT							relatedFileObject;
+	ULONG									fileNameLength = 0;
+	ULONG									eventLength;
+	PDokanFCB								fcb;
+	PDokanCCB								ccb;
+	PWCHAR									fileName;
+	BOOLEAN									needBackSlashAfterRelatedFile = FALSE;
+	ULONG									securityDescriptorSize = 0;
+	ULONG									alignedEventContextSize = 0;
+	ULONG									alignedObjectNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
+	ULONG									alignedObjectTypeNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
+	ULONG									newSecurityDescriptorLength = 0;
+	PDOKAN_UNICODE_STRING_INTERMEDIATE		intermediateUnicodeStr = NULL;
 
 	PAGED_CODE();
 
@@ -522,7 +528,32 @@ Return Value:
 		fileObject->SectionObjectPointer = &fcb->SectionObjectPointers;
 		//fileObject->Flags |= FILE_NO_INTERMEDIATE_BUFFERING;
 
-		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+		alignedEventContextSize = PointerAlignSize(sizeof(EVENT_CONTEXT));
+
+		if(irpSp->Parameters.Create.SecurityContext->AccessState) {
+			
+			if(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor) {
+				securityDescriptorSize = PointerAlignSize(RtlLengthSecurityDescriptor(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor));
+			}
+
+			if(irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length > 0) {
+				// add 1 WCHAR for NULL
+				alignedObjectNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length + sizeof(WCHAR));
+			}
+			// else alignedObjectNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) SEE DECLARATION
+
+			if(irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length > 0) {
+				// add 1 WCHAR for NULL
+				alignedObjectTypeNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length + sizeof(WCHAR));
+			}
+			// else alignedObjectTypeNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) SEE DECLARATION
+		}
+
+		eventLength = alignedEventContextSize + securityDescriptorSize;
+		eventLength += alignedObjectNameSize;
+		eventLength += alignedObjectTypeNameSize;
+		eventLength += fcb->FileName.Length + sizeof(WCHAR); // add WCHAR for NULL
+
 		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 				
 		if (eventContext == NULL) {
@@ -531,17 +562,98 @@ Return Value:
 			__leave;
 		}
 
+		RtlZeroMemory((char*)eventContext + alignedEventContextSize, eventLength - alignedEventContextSize);
+
+		if(irpSp->Parameters.Create.SecurityContext->AccessState) {
+			// Copy security context
+			eventContext->Operation.Create.SecurityContext.AccessState.Flags = irpSp->Parameters.Create.SecurityContext->AccessState->Flags;
+			eventContext->Operation.Create.SecurityContext.AccessState.RemainingDesiredAccess = irpSp->Parameters.Create.SecurityContext->AccessState->RemainingDesiredAccess;
+			eventContext->Operation.Create.SecurityContext.AccessState.PreviouslyGrantedAccess = irpSp->Parameters.Create.SecurityContext->AccessState->PreviouslyGrantedAccess;
+			eventContext->Operation.Create.SecurityContext.AccessState.OriginalDesiredAccess = irpSp->Parameters.Create.SecurityContext->AccessState->OriginalDesiredAccess;
+
+			// NOTE: AccessState offsets are relative to the start address of AccessState
+
+			if(securityDescriptorSize > 0) {
+				eventContext->Operation.Create.SecurityContext.AccessState.SecurityDescriptorOffset = (ULONG)(((char*)eventContext + alignedEventContextSize) - (char*)&eventContext->Operation.Create.SecurityContext.AccessState);
+			}
+
+			eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset = (ULONG)(((char*)eventContext + alignedEventContextSize + securityDescriptorSize) - (char*)&eventContext->Operation.Create.SecurityContext.AccessState);
+			eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectTypeOffset = eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset + alignedObjectNameSize;
+		}
+
+		// Other Create attributes
+		eventContext->Operation.Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
+		eventContext->Operation.Create.CreateOptions = irpSp->Parameters.Create.Options;
+		eventContext->Operation.Create.ShareAccess = irpSp->Parameters.Create.ShareAccess;
+		eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
+		eventContext->Operation.Create.FileNameOffset = (ULONG)(((char*)eventContext + alignedEventContextSize + securityDescriptorSize + alignedObjectNameSize + alignedObjectTypeNameSize) - (char*)&eventContext->Operation.Create);
+
+		if(securityDescriptorSize > 0) {
+			// Copy security descriptor
+			status = RtlAbsoluteToSelfRelativeSD(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor, (PSECURITY_DESCRIPTOR)((char*)eventContext + alignedEventContextSize), &newSecurityDescriptorLength);
+
+			switch(status) {
+			case STATUS_BAD_DESCRIPTOR_FORMAT:
+				// It's already a relative SD so just do a bulk copy
+				RtlCopyMemory((char*)eventContext + alignedEventContextSize, irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor, securityDescriptorSize);
+				break;
+			case STATUS_BUFFER_TOO_SMALL:
+				DDbgPrint("Failed to copy SECURITY_DESCRIPTOR because the buffer was too small.\n");
+				RtlZeroMemory((char*)eventContext + alignedEventContextSize, securityDescriptorSize);
+				break;
+			case STATUS_SUCCESS:
+				// we're good
+				break;
+			default:
+				DDbgPrint("Failed to copy SECURITY_DESCRIPTOR due to an unexpected error: %d\n", status);
+				RtlZeroMemory((char*)eventContext + alignedEventContextSize, securityDescriptorSize);
+				break;
+			}
+		}
+
+		if(irpSp->Parameters.Create.SecurityContext->AccessState) {
+			// Object name
+			intermediateUnicodeStr = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)&eventContext->Operation.Create.SecurityContext.AccessState + eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset);
+			intermediateUnicodeStr->Length = irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length;
+			intermediateUnicodeStr->MaximumLength = (USHORT)alignedObjectNameSize;
+
+			if(irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length > 0) {
+
+				RtlCopyMemory(intermediateUnicodeStr->Buffer,
+					irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Buffer,
+					irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length);
+
+				*(WCHAR*)((char*)intermediateUnicodeStr->Buffer + intermediateUnicodeStr->Length) = 0;
+			}
+			else {
+				intermediateUnicodeStr->Buffer[0] = 0;
+			}
+
+			// Object type name
+			intermediateUnicodeStr = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)intermediateUnicodeStr + alignedObjectNameSize);
+			intermediateUnicodeStr->Length = irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length;
+			intermediateUnicodeStr->MaximumLength = (USHORT)alignedObjectTypeNameSize;
+
+			if(irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length > 0) {
+
+				RtlCopyMemory(intermediateUnicodeStr->Buffer,
+					irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Buffer,
+					irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length);
+
+				*(WCHAR*)((char*)intermediateUnicodeStr->Buffer + intermediateUnicodeStr->Length) = 0;
+			}
+			else {
+				intermediateUnicodeStr->Buffer[0] = 0;
+			}
+		}
+
+		// other context info
 		eventContext->Context = 0;
 		eventContext->FileFlags |= fcb->Flags;
 
 		// copy the file name
-		eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Create.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
-
-		eventContext->Operation.Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
-		eventContext->Operation.Create.CreateOptions = irpSp->Parameters.Create.Options;
-		eventContext->Operation.Create.DesiredAccess = irpSp->Parameters.Create.SecurityContext->DesiredAccess;
-		eventContext->Operation.Create.ShareAccess = irpSp->Parameters.Create.ShareAccess;
+		RtlCopyMemory(((char*)&eventContext->Operation.Create + eventContext->Operation.Create.FileNameOffset), fcb->FileName.Buffer, fcb->FileName.Length);
+		*(PWCHAR)((char*)&eventContext->Operation.Create + eventContext->Operation.Create.FileNameOffset + fcb->FileName.Length) = 0;
 
 		// register this IRP to waiting IPR list
 		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);

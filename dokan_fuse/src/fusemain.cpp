@@ -151,31 +151,41 @@ int impl_fuse_context::do_open_file(LPCWSTR FileName, DWORD share_mode, DWORD Fl
 }
 
 int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition, DWORD share_mode, DWORD Flags,
-									PDOKAN_FILE_INFO DokanFileInfo)
+	PDOKAN_FILE_INFO DokanFileInfo)
+	// Kernel mappsings:
+	// Disposition = CreateDisposition
+	// Flags = DesiredAccess
+	// share_mode = ShareAccess
 {
-	std::string fname=unixify(wchar_to_utf8_cstr(FileName));
+	std::string fname = unixify(wchar_to_utf8_cstr(FileName));
 
 	//Create file?
-	if (Disposition!=CREATE_NEW && Disposition!=CREATE_ALWAYS && Disposition!=OPEN_ALWAYS)		
+	if(Disposition != FILE_CREATE
+		&& Disposition != FILE_SUPERSEDE
+		&& Disposition != FILE_OPEN_IF
+		&& Disposition != FILE_OVERWRITE_IF) {
 		return -ENOENT; //No, we're trying to open an existing file!
+	}
 
 	if (!ops_.create)
 	{
 		//Use mknod+open.
 		if (!ops_.mknod || !ops_.open) return -EINVAL;
+
 		CHECKED(ops_.mknod(fname.c_str(),filemask_,0));
+
 		return do_open_file(FileName, share_mode, Flags, DokanFileInfo);
 	}
 
 	std::auto_ptr<impl_file_handle> file;
-	CHECKED(file_locks.get_file(fname,false,Flags,share_mode,file));
+	CHECKED(file_locks.get_file(fname, false, Flags, share_mode, file));
 
-	fuse_file_info finfo={0};
-	finfo.flags=O_CREAT | O_EXCL | convert_flags(Flags); //TODO: these flags should be OK for new files?	
+	fuse_file_info finfo = { 0 };
+	finfo.flags = O_CREAT | O_EXCL | convert_flags(Flags); //TODO: these flags should be OK for new files?	
 	
-	CHECKED(ops_.create(fname.c_str(),filemask_,&finfo));
+	CHECKED(ops_.create(fname.c_str(), filemask_, &finfo));
 
-	DokanFileInfo->Context=reinterpret_cast<ULONG64>(file.release());
+	DokanFileInfo->Context = reinterpret_cast<ULONG64>(file.release());
 	return 0;
 }
 

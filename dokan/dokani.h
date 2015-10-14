@@ -28,7 +28,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "public.h"
 #include "dokan.h"
 #include "dokanc.h"
 #include "list.h"

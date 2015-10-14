@@ -631,3 +631,17 @@ DokanFreeMdl(
 		Irp->MdlAddress = NULL;
 	}
 }
+
+ULONG
+PointerAlignSize(ULONG sizeInBytes)
+{
+	// power of 2 cheat to avoid using %
+	ULONG remainder = sizeInBytes & (sizeof(void*) - 1);
+
+	if(remainder > 0)
+	{
+		return sizeInBytes + (sizeof(void*) - remainder);
+	}
+
+	return sizeInBytes;
+}
