@@ -804,18 +804,18 @@ int impl_fuse_context::set_file_time(PCWSTR file_name, const FILETIME* creation_
 		struct timespec tv[2]={0};
 		//TODO: support nanosecond resolution
 		//Access time
-		CHECKED(helper_set_time_struct(last_access_time,st.st_atime,&(tv[0].tv_sec)));		
+		CHECKED(helper_set_time_struct(last_access_time,st.st_atim.tv_sec,&(tv[0].tv_sec)));		
 		//Modification time
-		CHECKED(helper_set_time_struct(last_write_time,st.st_mtime,&(tv[1].tv_sec)));
+		CHECKED(helper_set_time_struct(last_write_time,st.st_mtim.tv_sec,&(tv[1].tv_sec)));
 
 		return ops_.utimens(fname.c_str(),tv);
 	} else
 	{
 		struct utimbuf ut={0};
 		//Access time
-		CHECKED(helper_set_time_struct(last_access_time,st.st_atime,&(ut.actime)));
+		CHECKED(helper_set_time_struct(last_access_time,st.st_atim.tv_sec,&(ut.actime)));
 		//Modification time
-		CHECKED(helper_set_time_struct(last_write_time,st.st_mtime,&(ut.modtime)));
+		CHECKED(helper_set_time_struct(last_write_time,st.st_mtim.tv_sec,&(ut.modtime)));
 		
 		return ops_.utime(fname.c_str(),&ut);
 	}

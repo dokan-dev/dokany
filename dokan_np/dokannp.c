@@ -4,16 +4,28 @@
 #include <stdio.h>
 #include <npapi.h>
 #include <strsafe.h>
+#include <malloc.h>
 
 static VOID
 DokanDbgPrintW(LPCWSTR format, ...)
 {
-	WCHAR buffer[512];
+	const WCHAR *outputString;
+	WCHAR *buffer;
+	size_t length;
 	va_list argp;
+
 	va_start(argp, format);
-	StringCchVPrintfW(buffer, 127, format, argp);
-    va_end(argp);
-	OutputDebugStringW(buffer);
+	length = _vscwprintf(format, argp) + 1;
+	buffer = _malloca(length*sizeof(WCHAR));
+	if (buffer) {
+		StringCchVPrintfW(buffer, length, format, argp);
+		outputString = buffer;
+	} else {
+		outputString = format;
+	}
+	OutputDebugStringW(outputString);
+	_freea(buffer);
+	va_end(argp);
 }
 
 #define DbgPrintW(format, ...) \

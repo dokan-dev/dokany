@@ -44,6 +44,7 @@ UninstPage instfiles
   SetOutPath ${folder}\Dokan\DokanLibrary\lib
   
 	File ..\${arch}\Release\dokan.lib
+	File ..\${arch}\Release\dokanfuse.lib
     File ..\${arch}\Release\dokanfuse.lib
 
   SetOutPath ${folder}\Dokan\DokanLibrary\sample\mirror
@@ -63,6 +64,7 @@ UninstPage instfiles
   SetOutPath $SYSDIR
 
     File ..\${arch}\Release\dokan.dll
+	File ..\${arch}\Release\dokanfuse.dll
     File ..\${arch}\Release\dokannp.dll
 
   ${If} ${arch} == "x64"
@@ -247,6 +249,7 @@ Section "Uninstall"
   RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary
   RMDir $PROGRAMFILES32\Dokan
   Delete $SYSDIR\dokan.dll
+  Delete $SYSDIR\dokanfuse.dll
   Delete $SYSDIR\dokannp.dll
 
   ${If} ${RunningX64}
@@ -255,6 +258,7 @@ Section "Uninstall"
     ${DisableX64FSRedirection}
       Delete /REBOOTOK $SYSDIR\drivers\dokan.sys
       Delete $SYSDIR\dokan.dll
+	  Delete $SYSDIR\dokanfuse.dll
       Delete $SYSDIR\dokannp.dll
     ${EnableX64FSRedirection}
   ${Else}
