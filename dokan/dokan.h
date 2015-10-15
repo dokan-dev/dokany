@@ -79,17 +79,14 @@ typedef int (WINAPI *PFillFindData) (PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 
 typedef struct _DOKAN_OPERATIONS {
 
-	// When an error occurs, return a negative value.
-	// Usually you should return -GetLastError().
+	// When an error occurs, return NTSTATUS (https://support.microsoft.com/en-us/kb/113996)
 
 
 	// CreateFile
 	//   If file is a directory, CreateFile (not OpenDirectory) may be called.
-	//   In this case, CreateFile should return 0 when that directory can be opened.
+	//   In this case, CreateFile should return STATUS_SUCCESS when that directory can be opened.
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
-	//   When CreationDisposition is CREATE_ALWAYS or OPEN_ALWAYS and a file already exists,
-	//   you should return ERROR_ALREADY_EXISTS(183) (not negative value)
-	int (DOKAN_CALLBACK *CreateFile) (
+	NTSTATUS (DOKAN_CALLBACK *CreateFile) (
 		LPCWSTR,      // FileName
 		DWORD,        // DesiredAccess
 		DWORD,        // ShareMode
@@ -97,25 +94,25 @@ typedef struct _DOKAN_OPERATIONS {
 		DWORD,        // FlagsAndAttributes
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *OpenDirectory) (
+	NTSTATUS (DOKAN_CALLBACK *OpenDirectory) (
 		LPCWSTR,				// FileName
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *CreateDirectory) (
+	NTSTATUS (DOKAN_CALLBACK *CreateDirectory) (
 		LPCWSTR,				// FileName
 		PDOKAN_FILE_INFO);
 
 	// When FileInfo->DeleteOnClose is true, you must delete the file in Cleanup.
 	// Refer to comment at DeleteFile definition below in this file for explanation.
-	int (DOKAN_CALLBACK *Cleanup) (
+	void (DOKAN_CALLBACK *Cleanup) (
 		LPCWSTR,      // FileName
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *CloseFile) (
+	void (DOKAN_CALLBACK *CloseFile) (
 		LPCWSTR,      // FileName
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *ReadFile) (
+	NTSTATUS (DOKAN_CALLBACK *ReadFile) (
 		LPCWSTR,  // FileName
 		LPVOID,   // Buffer
 		DWORD,    // NumberOfBytesToRead
@@ -124,7 +121,7 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 	
 
-	int (DOKAN_CALLBACK *WriteFile) (
+	NTSTATUS (DOKAN_CALLBACK *WriteFile) (
 		LPCWSTR,  // FileName
 		LPCVOID,  // Buffer
 		DWORD,    // NumberOfBytesToWrite
@@ -133,12 +130,12 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *FlushFileBuffers) (
+	NTSTATUS (DOKAN_CALLBACK *FlushFileBuffers) (
 		LPCWSTR, // FileName
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *GetFileInformation) (
+	NTSTATUS (DOKAN_CALLBACK *GetFileInformation) (
 		LPCWSTR,          // FileName
 		LPBY_HANDLE_FILE_INFORMATION, // Buffer
 		PDOKAN_FILE_INFO);
@@ -146,25 +143,25 @@ typedef struct _DOKAN_OPERATIONS {
 	
 	// You should implement either FindFiles or FindFilesWithPattern
 
-	int (DOKAN_CALLBACK *FindFiles) (
+	NTSTATUS (DOKAN_CALLBACK *FindFiles) (
 		LPCWSTR,			// PathName
 		PFillFindData,		// call this function with PWIN32_FIND_DATAW
 		PDOKAN_FILE_INFO);  //  (see PFillFindData definition)
 
-	int (DOKAN_CALLBACK *FindFilesWithPattern) (
+	NTSTATUS (DOKAN_CALLBACK *FindFilesWithPattern) (
 		LPCWSTR,			// PathName
 		LPCWSTR,			// SearchPattern
 		PFillFindData,		// call this function with PWIN32_FIND_DATAW
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *SetFileAttributes) (
+	NTSTATUS (DOKAN_CALLBACK *SetFileAttributes) (
 		LPCWSTR, // FileName
 		DWORD,   // FileAttributes
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *SetFileTime) (
+	NTSTATUS (DOKAN_CALLBACK *SetFileTime) (
 		LPCWSTR,		// FileName
 		CONST FILETIME*, // CreationTime
 		CONST FILETIME*, // LastAccessTime
@@ -174,47 +171,47 @@ typedef struct _DOKAN_OPERATIONS {
 
 	// You should not delete the file on DeleteFile or DeleteDirectory, but instead
 	// you must only check whether you can delete the file or not, 
-	// and return 0 (when you can delete it) or appropriate error codes such as 
-	// -ERROR_DIR_NOT_EMPTY, -ERROR_SHARING_VIOLATION.
-	// When you return 0 (ERROR_SUCCESS), you get a Cleanup call afterwards with
+	// and return ERROR_SUCCESS (when you can delete it) or appropriate error codes such as 
+	// STATUS_ACCESS_DENIED, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_OBJECT_NAME_NOT_FOUND.
+	// When you return ERROR_SUCCESS, you get a Cleanup call afterwards with
 	// FileInfo->DeleteOnClose set to TRUE and only then you have to actually delete
 	// the file being closed.
-	int (DOKAN_CALLBACK *DeleteFile) (
+	NTSTATUS (DOKAN_CALLBACK *DeleteFile) (
 		LPCWSTR, // FileName
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *DeleteDirectory) ( 
+	NTSTATUS (DOKAN_CALLBACK *DeleteDirectory) (
 		LPCWSTR, // FileName
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *MoveFile) (
+	NTSTATUS (DOKAN_CALLBACK *MoveFile) (
 		LPCWSTR, // ExistingFileName
 		LPCWSTR, // NewFileName
 		BOOL,	// ReplaceExisiting
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *SetEndOfFile) (
+	NTSTATUS (DOKAN_CALLBACK *SetEndOfFile) (
 		LPCWSTR,  // FileName
 		LONGLONG, // Length
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *SetAllocationSize) (
+	NTSTATUS (DOKAN_CALLBACK *SetAllocationSize) (
 		LPCWSTR,  // FileName
 		LONGLONG, // Length
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *LockFile) (
+	NTSTATUS (DOKAN_CALLBACK *LockFile) (
 		LPCWSTR, // FileName
 		LONGLONG, // ByteOffset
 		LONGLONG, // Length
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *UnlockFile) (
+	NTSTATUS (DOKAN_CALLBACK *UnlockFile) (
 		LPCWSTR, // FileName
 		LONGLONG,// ByteOffset
 		LONGLONG,// Length
@@ -227,7 +224,7 @@ typedef struct _DOKAN_OPERATIONS {
 	// (ditto CloseFile and Cleanup)
 
 	// see Win32 API GetDiskFreeSpaceEx
-	int (DOKAN_CALLBACK *GetDiskFreeSpace) (
+	NTSTATUS (DOKAN_CALLBACK *GetDiskFreeSpace) (
 		PULONGLONG, // FreeBytesAvailable
 		PULONGLONG, // TotalNumberOfBytes
 		PULONGLONG, // TotalNumberOfFreeBytes
@@ -235,7 +232,7 @@ typedef struct _DOKAN_OPERATIONS {
 
 
 	// see Win32 API GetVolumeInformation
-	int (DOKAN_CALLBACK *GetVolumeInformation) (
+	NTSTATUS (DOKAN_CALLBACK *GetVolumeInformation) (
 		LPWSTR, // VolumeNameBuffer
 		DWORD,	// VolumeNameSize in num of chars
 		LPDWORD,// VolumeSerialNumber
@@ -246,12 +243,12 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 
-	int (DOKAN_CALLBACK *Unmount) (
+	NTSTATUS (DOKAN_CALLBACK *Unmount) (
 		PDOKAN_FILE_INFO);
 
 
 	// Suported since 0.6.0. You must specify the version at DOKAN_OPTIONS.Version.
-	int (DOKAN_CALLBACK *GetFileSecurity) (
+	NTSTATUS (DOKAN_CALLBACK *GetFileSecurity) (
 		LPCWSTR, // FileName
 		PSECURITY_INFORMATION, // A pointer to SECURITY_INFORMATION value being requested
 		PSECURITY_DESCRIPTOR, // A pointer to SECURITY_DESCRIPTOR buffer to be filled
@@ -259,7 +256,7 @@ typedef struct _DOKAN_OPERATIONS {
 		PULONG, // LengthNeeded
 		PDOKAN_FILE_INFO);
 
-	int (DOKAN_CALLBACK *SetFileSecurity) (
+	NTSTATUS (DOKAN_CALLBACK *SetFileSecurity) (
 		LPCWSTR, // FileName
 		PSECURITY_INFORMATION,
 		PSECURITY_DESCRIPTOR, // SecurityDescriptor
@@ -267,11 +264,10 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 	// Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
-	int (DOKAN_CALLBACK *EnumerateNamedStreams) (
+	NTSTATUS (DOKAN_CALLBACK *EnumerateNamedStreams) (
 		LPCWSTR, // FileName
 		PVOID*, // EnumContext
 		LPWSTR, // StreamName
-		PULONG, // StreamNameLength
 		PLONGLONG, // StreamSize
 		PDOKAN_FILE_INFO);
 

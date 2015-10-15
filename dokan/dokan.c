@@ -208,7 +208,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	//Start Keep Alive thread
 	threadIds[threadNum++] = (HANDLE)_beginthreadex(
-		NULL, // Security Atributes
+		NULL, // Security Attributes
 		0, //stack size
 		DokanKeepAlive,
 		(PVOID)instance, // param
@@ -217,7 +217,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	for (i = 0; i < DokanOptions->ThreadCount; ++i) {
 		threadIds[threadNum++] = (HANDLE)_beginthreadex(
-			NULL, // Security Atributes
+			NULL, // Security Attributes
 			0, //stack size
 			DokanLoop,
 			(PVOID)instance, // param
@@ -369,7 +369,7 @@ DokanLoop(
 				DispatchSetSecurity(device, context, DokanInstance);
 				break;
 			case IRP_MJ_SHUTDOWN:
-				// this cass is used before unmount not shutdown
+				// this case is used before unmount not shutdown
 				DispatchUnmount(device, context, DokanInstance);
 				break;
 			default:
@@ -427,7 +427,7 @@ VOID
 CheckFileName(
 	LPWSTR	FileName)
 {
-	// if the begining of file name is "\\",
+	// if the beginning of file name is "\\",
 	// replace it with "\"
 	if (FileName[0] == L'\\' && FileName[1] == L'\\') {
 		int i;
@@ -573,7 +573,7 @@ DispatchUnmount(
 
 	LeaveCriticalSection(&DokanInstance->CriticalSection);
 
-	// do not notice enything to the driver
+	// do not notice anything to the driver
 	return;
 }
 

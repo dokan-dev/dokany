@@ -24,7 +24,7 @@
 	GENERIC_READ|GENERIC_EXECUTE|FILE_GENERIC_EXECUTE|FILE_GENERIC_READ|\
 	READ_CONTROL|FILE_EXECUTE|FILE_LIST_DIRECTORY|FILE_READ_DATA|\
 	FILE_READ_EA)
-#define ACCESS_WRITE (STANDARD_RIGHTS_WRITE|GENERIC_WRITE|FILE_GENERIC_WRITE|\
+#define ACCESS_WRITE (GENERIC_WRITE|\
 	WRITE_DAC|WRITE_OWNER|FILE_APPEND_DATA|FILE_WRITE_ATTRIBUTES|\
 	FILE_WRITE_DATA|FILE_WRITE_EA|FILE_ADD_FILE|FILE_ADD_SUBDIRECTORY|\
 	FILE_APPEND_DATA)
@@ -477,7 +477,7 @@ int impl_fuse_context::close_file(LPCWSTR file_name,
 int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer, DWORD num_bytes_to_read,
 			  LPDWORD read_bytes, LONGLONG offset, PDOKAN_FILE_INFO dokan_file_info)
 {
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 	if (!ops_.read) return -EINVAL;
 
@@ -520,7 +520,7 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
 			   DWORD num_bytes_to_write,LPDWORD num_bytes_written, 
 			   LONGLONG offset, PDOKAN_FILE_INFO dokan_file_info)
 {	
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 
 	*num_bytes_written=0; //Conform to ReadFile semantics
@@ -557,7 +557,7 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
 int impl_fuse_context::flush_file_buffers(LPCWSTR /*file_name*/, 
 					   PDOKAN_FILE_INFO dokan_file_info)
 {
-	//Please note, that we ifnore file_name here, because it might
+	//Please note, that we ignore file_name here, because it might
 	//have been retargeted by a symlink.
 	impl_file_handle *hndl=reinterpret_cast<impl_file_handle*>(dokan_file_info->Context);
 	if (!hndl) 
@@ -591,7 +591,7 @@ int impl_fuse_context::get_file_information(LPCWSTR file_name,
 	if (S_ISLNK(st.st_mode))
 	{
 		std::string resolved;
-		CHECKED(resolve_symlink(fname.c_str(),&resolved));
+		CHECKED(resolve_symlink(fname,&resolved));
 		CHECKED(ops_.getattr(resolved.c_str(),&st));
 	}
 
@@ -794,18 +794,18 @@ int impl_fuse_context::set_file_time(PCWSTR file_name, const FILETIME* creation_
 		struct timespec tv[2]={0};
 		//TODO: support nanosecond resolution
 		//Access time
-		CHECKED(helper_set_time_struct(last_access_time,st.st_atime,&(tv[0].tv_sec)));		
+		CHECKED(helper_set_time_struct(last_access_time,st.st_atim.tv_sec,&(tv[0].tv_sec)));		
 		//Modification time
-		CHECKED(helper_set_time_struct(last_write_time,st.st_mtime,&(tv[1].tv_sec)));
+		CHECKED(helper_set_time_struct(last_write_time,st.st_mtim.tv_sec,&(tv[1].tv_sec)));
 
 		return ops_.utimens(fname.c_str(),tv);
 	} else
 	{
 		struct utimbuf ut={0};
 		//Access time
-		CHECKED(helper_set_time_struct(last_access_time,st.st_atime,&(ut.actime)));
+		CHECKED(helper_set_time_struct(last_access_time,st.st_atim.tv_sec,&(ut.actime)));
 		//Modification time
-		CHECKED(helper_set_time_struct(last_write_time,st.st_mtime,&(ut.modtime)));
+		CHECKED(helper_set_time_struct(last_write_time,st.st_mtim.tv_sec,&(ut.modtime)));
 		
 		return ops_.utime(fname.c_str(),&ut);
 	}

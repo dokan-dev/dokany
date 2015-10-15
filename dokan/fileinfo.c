@@ -18,14 +18,17 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
 
-ULONG
+NTSTATUS
 DokanFillFileBasicInfo(
 	PFILE_BASIC_INFORMATION		BasicInfo,
 	PBY_HANDLE_FILE_INFORMATION FileInfo,
@@ -51,7 +54,7 @@ DokanFillFileBasicInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillFileStandardInfo(
 	PFILE_STANDARD_INFORMATION	StandardInfo,
 	PBY_HANDLE_FILE_INFORMATION	FileInfo,
@@ -80,7 +83,7 @@ DokanFillFileStandardInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillFilePositionInfo(
 	PFILE_POSITION_INFORMATION	PosInfo,
 	PBY_HANDLE_FILE_INFORMATION	FileInfo,
@@ -102,7 +105,7 @@ DokanFillFilePositionInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillFileAllInfo(
 	PFILE_ALL_INFORMATION		AllInfo,
 	PBY_HANDLE_FILE_INFORMATION	FileInfo,
@@ -154,7 +157,7 @@ DokanFillFileAllInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillFileNameInfo(
 	PFILE_NAME_INFORMATION		NameInfo,
 	PBY_HANDLE_FILE_INFORMATION	FileInfo,
@@ -180,7 +183,7 @@ DokanFillFileNameInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillFileAttributeTagInfo(
 	PFILE_ATTRIBUTE_TAG_INFORMATION		AttrTagInfo,
 	PBY_HANDLE_FILE_INFORMATION			FileInfo,
@@ -199,7 +202,7 @@ DokanFillFileAttributeTagInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillNetworkOpenInfo(
 	PFILE_NETWORK_OPEN_INFORMATION	NetInfo,
 	PBY_HANDLE_FILE_INFORMATION		FileInfo,
@@ -230,7 +233,7 @@ DokanFillNetworkOpenInfo(
 }
 
 
-ULONG
+NTSTATUS
 DokanFillInternalInfo(
 	PFILE_INTERNAL_INFORMATION	InternalInfo,
 	PBY_HANDLE_FILE_INFORMATION	FileInfo,
@@ -248,7 +251,7 @@ DokanFillInternalInfo(
 	return STATUS_SUCCESS;
 }
 
-ULONG
+NTSTATUS
 DokanEnumerateNamedStreams(
 	PFILE_STREAM_INFORMATION	StreamInfo,
 	PDOKAN_FILE_INFO			FileInfo,
@@ -261,7 +264,7 @@ DokanEnumerateNamedStreams(
 	LONGLONG streamSize;
 	ULONG entrySize = 0;
 	PVOID enumContext = NULL;
-	int result = 0;
+	NTSTATUS result = STATUS_SUCCESS;
 
 	if (DokanInstance->DokanOptions->Version < DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION || !DokanInstance->DokanOperations->EnumerateNamedStreams) {
 		return STATUS_NOT_IMPLEMENTED;
@@ -271,19 +274,17 @@ DokanEnumerateNamedStreams(
 		return STATUS_BUFFER_OVERFLOW;
 	}
 
-	while (result > -1) {
+	while (result == STATUS_SUCCESS) {
 		ZeroMemory(streamName, sizeof(streamName));
-		streamNameLength = 0;
 		streamSize = 0;
 		result = DokanInstance->DokanOperations->EnumerateNamedStreams(
 			EventContext->Operation.File.FileName,
 			&enumContext,
 			streamName,
-			&streamNameLength,
 			&streamSize,
 			FileInfo);
 		
-		if (result > -1) {
+		if (result == STATUS_SUCCESS) {
 			if (*RemainingLength < sizeof(FILE_STREAM_INFORMATION)) {
 				return STATUS_BUFFER_OVERFLOW;
 			}
@@ -294,6 +295,7 @@ DokanEnumerateNamedStreams(
 				StreamInfo = (PFILE_STREAM_INFORMATION)((LPBYTE)StreamInfo + StreamInfo->NextEntryOffset);
 			}
 
+			streamNameLength = (ULONG)wcslen(streamName) * sizeof(WCHAR);
 			entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
 			// Must be align on a 8-byte boundary.
 			entrySize = QuadAlign(entrySize);
@@ -306,12 +308,15 @@ DokanEnumerateNamedStreams(
 			wcscpy_s(StreamInfo->StreamName, streamNameLength + 1, streamName);
 			StreamInfo->StreamSize.QuadPart = streamSize;
 			StreamInfo->StreamAllocationSize.QuadPart = streamSize;
+			StreamInfo->NextEntryOffset = 0;
 			ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
 
 			*RemainingLength -= entrySize;
 		}
 	}
 
+	if (entrySize == 0)
+		return result; //EnumerateNamedStreams have directly failed
 	return STATUS_SUCCESS;
 }
 
@@ -326,8 +331,7 @@ DispatchQueryInformation(
 	DOKAN_FILE_INFO				fileInfo;
 	BY_HANDLE_FILE_INFORMATION	byHandleFileInfo;
 	ULONG				remainingLength;
-    ULONG				status = STATUS_INVALID_PARAMETER;
-	int					result;
+	NTSTATUS			status = STATUS_INVALID_PARAMETER;
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG				sizeOfEventInfo;
 
@@ -345,17 +349,19 @@ DispatchQueryInformation(
 	DbgPrint("###GetFileInfo %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
 	if (DokanInstance->DokanOperations->GetFileInformation) {
-		result = DokanInstance->DokanOperations->GetFileInformation(
+		status = DokanInstance->DokanOperations->GetFileInformation(
 			EventContext->Operation.File.FileName,
 			&byHandleFileInfo,
 			&fileInfo);
 	} else {
-		result = -1;
+		status = STATUS_NOT_IMPLEMENTED;
 	}
 
 	remainingLength = eventInfo->BufferLength;
 
-	if (result < 0) {
+	DbgPrint("\tresult =  %lu\n", status);
+
+	if (status != STATUS_SUCCESS) {
 		eventInfo->Status = STATUS_INVALID_PARAMETER;
 		eventInfo->BufferLength = 0;
 	} else {
@@ -431,6 +437,7 @@ DispatchQueryInformation(
 			break;
         default:
 			{
+				status = STATUS_INVALID_PARAMETER;
 				DbgPrint("  unknown type:%d\n", EventContext->Operation.File.FileInformationClass);
 			}
             break;

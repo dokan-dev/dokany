@@ -116,7 +116,7 @@ RegisterPendingIrpMain(
 		vcb = DeviceObject->DeviceExtension;
 		if (CheckMount && !vcb->Dcb->Mounted) {
 			DDbgPrint(" device is not mounted\n");
-			return STATUS_INSUFFICIENT_RESOURCES;
+			return STATUS_DEVICE_DOES_NOT_EXIST;
 		}
 	}
 
@@ -181,7 +181,7 @@ RegisterPendingIrpMain(
     KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
 
 	DDbgPrint("<== DokanRegisterPendingIrpMain\n");
-    return STATUS_PENDING;;
+    return STATUS_PENDING;
 }
 
 

@@ -51,6 +51,9 @@ InsertMountEntry(PDOKAN_CONTROL DokanControl)
 	}
 	ZeroMemory(mountEntry, sizeof(MOUNT_ENTRY));
 	CopyMemory(&mountEntry->MountControl, DokanControl, sizeof(DOKAN_CONTROL));
+
+	NormalizeMountPoint(mountEntry->MountControl.MountPoint, sizeof(mountEntry->MountControl.MountPoint) / sizeof(WCHAR));
+
 	InitializeListHead(&mountEntry->ListEntry);
 
 	EnterCriticalSection(&g_CriticalSection);
@@ -75,11 +78,24 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 {
 	PLIST_ENTRY		listEntry;
 	PMOUNT_ENTRY	mountEntry = NULL;
-	BOOL			useMountPoint = wcslen(DokanControl->MountPoint) > 0;
+	BOOL			useMountPoint = DokanControl->MountPoint[0] != L'\0';
 	BOOL			found = FALSE;
+	WCHAR			mountPointDefaultTemplate[4] = L"C:\\";
+	PWCHAR			mountPoint = DokanControl->MountPoint;
 
-	if (!useMountPoint && wcslen(DokanControl->DeviceName) == 0) {
+	if (!useMountPoint && DokanControl->DeviceName[0] == L'\0') {
 		return NULL;
+	}
+
+	/* NOTE: g_MountList expects MountPoint to have the format of C:\ */
+	
+	if(useMountPoint && IsMountPointDriveLetter(DokanControl->MountPoint)) {
+		
+		mountPointDefaultTemplate[0] = DokanControl->MountPoint[0];
+
+		NormalizeMountPoint(mountPointDefaultTemplate, sizeof(mountPointDefaultTemplate) / sizeof(WCHAR));
+
+		mountPoint = mountPointDefaultTemplate;
 	}
 
 	EnterCriticalSection(&g_CriticalSection);
@@ -87,7 +103,7 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
     for (listEntry = g_MountList.Flink; listEntry != &g_MountList; listEntry = listEntry->Flink) {
 		mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
 		if (useMountPoint) {
-			if (wcscmp(DokanControl->MountPoint, mountEntry->MountControl.MountPoint) == 0) {
+			if (wcscmp(mountPoint, mountEntry->MountControl.MountPoint) == 0) {
 				found = TRUE;
 				break;
 			}
@@ -214,7 +230,7 @@ static VOID DokanControl(PDOKAN_CONTROL Control)
 
 		if (DokanControlUnmount(mountEntry->MountControl.MountPoint)) {
 			Control->Status = DOKAN_CONTROL_SUCCESS;
-			if (wcslen(Control->DeviceName) == 0) {
+			if (Control->DeviceName[0] == L'\0') {
 				wcscpy_s(Control->DeviceName, sizeof(Control->DeviceName) / sizeof(WCHAR),
 						mountEntry->MountControl.DeviceName);
 			}
@@ -464,7 +480,7 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hinstPrev, LPSTR lpszCmdLine, int 
 
 	StartServiceCtrlDispatcher(serviceTable);
 
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 

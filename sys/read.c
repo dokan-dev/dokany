@@ -268,7 +268,7 @@ DokanCompleteRead(
 		}
 	}
 
-	if (status == STATUS_SUCCESS) {
+	if (NT_SUCCESS(status)) {
 		DDbgPrint("  STATUS_SUCCESS\n");
 	} else if (status == STATUS_INSUFFICIENT_RESOURCES) {
 		DDbgPrint("  STATUS_INSUFFICIENT_RESOURCES\n");

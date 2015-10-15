@@ -173,7 +173,7 @@ BOOL CheckDriveLetterAvailability(
 	WCHAR driveLetter = towupper(DriveLetter);
 	driveName[0] = driveLetter;
 
-	ZeroMemory(buffer, MAX_PATH);
+	ZeroMemory(buffer, MAX_PATH * sizeof(WCHAR));
 	result = QueryDosDevice(driveName, buffer, MAX_PATH);
 	if (result > 0)
 	{
@@ -295,6 +295,57 @@ DokanControlUnmount(
 
 	} else if (length > 3 ) {
 		return DeleteMountPoint(MountPoint);
+	}
+
+	return FALSE;
+}
+
+VOID
+NormalizeMountPoint(WCHAR *mountPoint, size_t mountPointMaxLength)
+{
+	size_t mountPointLength = wcslen(mountPoint);
+
+	if(mountPointMaxLength >= 4) {
+
+		if(mountPointLength == 1) {
+			mountPoint[0] = towupper(mountPoint[0]);
+			mountPoint[1] = L':';
+			mountPoint[2] = L'\\';
+			mountPoint[3] = 0;
+		}
+		else if(mountPointLength == 2 && mountPoint[1] == L':') {
+			mountPoint[0] = towupper(mountPoint[0]);
+			mountPoint[2] = L'\\';
+			mountPoint[3] = 0;
+		}
+		else if(mountPointLength == 3
+			&& mountPoint[1] == L':'
+			&& mountPoint[2] == L'\\') {
+
+			mountPoint[0] = towupper(mountPoint[0]);
+		}
+	}
+	else {
+		DbgPrintW(L"Failed to normalize mount point because the input buffer has a max length < 4!\n");
+	}
+}
+
+BOOL
+IsMountPointDriveLetter(WCHAR *mountPoint)
+{
+	size_t mountPointLength;
+
+	if(!mountPoint || *mountPoint == 0) {
+		return FALSE;
+	}
+
+	mountPointLength = wcslen(mountPoint);
+
+	if(mountPointLength == 1
+		|| (mountPointLength == 2 && mountPoint[1] == L':')
+		|| (mountPointLength == 3 && mountPoint[1] == L':' && mountPoint[2] == L'\\')) {
+
+		return TRUE;
 	}
 
 	return FALSE;

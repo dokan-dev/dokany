@@ -44,10 +44,10 @@ int ShowMountList()
 				control.Option, control.MountPoint, control.DeviceName);
 			control.Option++;
 		} else {
-			return 0;
+			return EXIT_SUCCESS;
 		}
 	}
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 int ShowUsage()
@@ -75,12 +75,12 @@ int ShowUsage()
 		"  /r n                : Remove network provider\n" \
 		"  /d [0-9]            : Enable Kernel Debug output\n" \
 		"  /v                  : Print Dokan version\n");
-	return -1;
+	return EXIT_FAILURE;
 }
 
 int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 {
-	int status = 0;
+	int status = EXIT_SUCCESS;
 	DOKAN_CONTROL control;
 	ZeroMemory(&control, sizeof(DOKAN_CONTROL));
 
@@ -89,11 +89,10 @@ int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 		control.Option = MountPoint[0] - L'0';
 		DokanMountControl(&control);
 
-		if (control.Status == DOKAN_CONTROL_SUCCESS) {
-			status = DokanRemoveMountPoint(control.MountPoint);
-		} else {
+		if (control.Status != DOKAN_CONTROL_SUCCESS
+			|| (control.Status == DOKAN_CONTROL_SUCCESS && !DokanRemoveMountPoint(control.MountPoint))) {
 			fwprintf(stderr, L"Mount entry %d not found\n", control.Option);
-			status = -1;
+			status = EXIT_FAILURE;
 		}
 	} else if (ForceUnmount) {
 		control.Type = DOKAN_CONTROL_UNMOUNT;
@@ -101,17 +100,13 @@ int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 		wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR), MountPoint);
 		DokanMountControl(&control);
 
-		if (control.Status == DOKAN_CONTROL_SUCCESS) {
-			fwprintf(stderr, L"Unmount success: %s", MountPoint);
-			status = 0;
-		} else {
-			fwprintf(stderr, L"Unmount failed: %s", MountPoint);
-			status = -1;
-		}
+		if (control.Status != DOKAN_CONTROL_SUCCESS)
+			status = EXIT_FAILURE;
 
-	} else {
-		status = DokanRemoveMountPoint(MountPoint);
-	}
+		fwprintf(stderr, L"Unmount status %d - %s\tn", status, MountPoint);
+
+	} else if (!DokanRemoveMountPoint(MountPoint))
+			status = EXIT_FAILURE;
 
 	fwprintf(stderr, L"Unmount status = %d\n", status);
 	return status;
@@ -157,7 +152,7 @@ wmain(int argc, PWCHAR argv[])
         fprintf(stderr, "dokanctl : %s %s\n", __DATE__, __TIME__);
         fprintf(stderr, "Dokan version : %d\n", DokanVersion());
         fprintf(stderr, "Dokan driver version : 0x%X\n", DokanDriverVersion());
-        return 0;
+		return EXIT_SUCCESS;
     
     } else if (GetOption(argc, argv, 1) == L'm') {
         return ShowMountList();
@@ -181,85 +176,85 @@ wmain(int argc, PWCHAR argv[])
             if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
                                     SERVICE_FILE_SYSTEM_DRIVER,
                                     driverFullPath))
-                fprintf(stderr, "driver install ok");
+                fprintf(stderr, "driver install ok\n");
             else
-                fprintf(stderr, "driver install failed");
+                fprintf(stderr, "driver install failed\n");
 
         } else if (type == L's') {
             if (DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
                                     SERVICE_WIN32_OWN_PROCESS,
                                     mounterFullPath))
-                fprintf(stderr, "mounter install ok");
+                fprintf(stderr, "mounter install ok\n");
             else
-                fprintf(stderr, "mounter install failed");
+                fprintf(stderr, "mounter install failed\n");
         
         } else if (type == L'a') {
             if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
                                     SERVICE_FILE_SYSTEM_DRIVER,
                                     driverFullPath))
-                fprintf(stderr, "driver install ok");
+                fprintf(stderr, "driver install ok\n");
             else
-                fprintf(stderr, "driver install failed");
+                fprintf(stderr, "driver install failed\n");
 
             if (DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
                                     SERVICE_WIN32_OWN_PROCESS,
                                     mounterFullPath))
-                fprintf(stderr, "mounter install ok");
+                fprintf(stderr, "mounter install ok\n");
             else
-                fprintf(stderr, "mounter install failed");
+                fprintf(stderr, "mounter install failed\n");
         } else if (type == L'n') {
             if (DokanNetworkProviderInstall())
-                fprintf(stderr, "network provider install ok");
+                fprintf(stderr, "network provider install ok\n");
             else
-                fprintf(stderr, "network provider install failed");
+                fprintf(stderr, "network provider install failed\n");
         }
         break;
 
     case L'r':
         if (type == L'd') {
             if (DokanServiceDelete(DOKAN_DRIVER_SERVICE))
-                fprintf(stderr, "driver remove ok");
+                fprintf(stderr, "driver remove ok\n");
             else
-                fprintf(stderr, "driver remvoe failed");
+                fprintf(stderr, "driver remvoe failed\n");
         
         } else if (type == L's') {
             if (DokanServiceDelete(DOKAN_MOUNTER_SERVICE))
-                fprintf(stderr, "mounter remove ok");
+                fprintf(stderr, "mounter remove ok\n");
             else
-                fprintf(stderr, "mounter remvoe failed");	
+                fprintf(stderr, "mounter remvoe failed\n");	
         
         } else if (type == L'a') {
             if (DokanServiceDelete(DOKAN_MOUNTER_SERVICE))
-                fprintf(stderr, "mounter remove ok");
+                fprintf(stderr, "mounter remove ok\n");
             else
-                fprintf(stderr, "mounter remvoe failed");	
+                fprintf(stderr, "mounter remvoe failed\n");	
 
             if (DokanServiceDelete(DOKAN_DRIVER_SERVICE))
-                fprintf(stderr, "driver remove ok");
+                fprintf(stderr, "driver remove ok\n");
             else
-                fprintf(stderr, "driver remvoe failed");
+                fprintf(stderr, "driver remvoe failed\n");
         } else if (type == L'n') {
             if (DokanNetworkProviderUninstall())
-                fprintf(stderr, "network provider remove ok");
+                fprintf(stderr, "network provider remove ok\n");
             else
-                fprintf(stderr, "network provider remove failed");
+                fprintf(stderr, "network provider remove failed\n");
         }
         break;
     case L'd':
         if (L'0' <= type && type <= L'9') {
             ULONG mode = type - L'0';
             if (DokanSetDebugMode(mode)) {
-                fprintf(stderr, "set debug mode ok");
+                fprintf(stderr, "set debug mode ok\n");
             } else {
-                fprintf(stderr, "set debug mode failed");
+                fprintf(stderr, "set debug mode failed\n");
             }
         }
         break;
     default:
-        fprintf(stderr, "unknown option");
+        fprintf(stderr, "unknown option\n");
     }
     
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
