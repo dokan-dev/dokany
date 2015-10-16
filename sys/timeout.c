@@ -299,8 +299,7 @@ Routine Description:
 			waitObj = FALSE;
 		} else {
 			ReleaseTimeoutPendingIrp(Dcb);
-			if (Dcb->UseKeepAlive)
-				DokanCheckKeepAlive(Dcb);
+			DokanCheckKeepAlive(Dcb);
 		}
 	}
 

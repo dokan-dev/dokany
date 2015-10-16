@@ -116,7 +116,7 @@ RegisterPendingIrpMain(
 		vcb = DeviceObject->DeviceExtension;
 		if (CheckMount && !vcb->Dcb->Mounted) {
 			DDbgPrint(" device is not mounted\n");
-			return STATUS_INSUFFICIENT_RESOURCES;
+			return STATUS_DEVICE_DOES_NOT_EXIST;
 		}
 	}
 
@@ -181,7 +181,7 @@ RegisterPendingIrpMain(
     KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
 
 	DDbgPrint("<== DokanRegisterPendingIrpMain\n");
-    return STATUS_PENDING;;
+    return STATUS_PENDING;
 }
 
 
@@ -548,11 +548,6 @@ DokanEventStart(
 	if (eventStart.Flags & DOKAN_EVENT_ALTERNATIVE_STREAM_ON) {
 		DDbgPrint("  ALT_STREAM_ON\n");
 		dcb->UseAltStream = 1;
-	}
-	dcb->UseKeepAlive = 0;
-	if (eventStart.Flags & DOKAN_EVENT_KEEP_ALIVE_ON) {
-		DDbgPrint("  KEEP_ALIVE_ON\n");
-		dcb->UseKeepAlive = 1;
 	}
 	dcb->Mounted = 1;
 

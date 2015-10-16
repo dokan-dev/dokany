@@ -191,7 +191,6 @@ typedef struct _DokanDiskControlBlock {
 
 	// When UseAltStream is 1, use Alternate stream
 	USHORT					UseAltStream;
-	USHORT					UseKeepAlive;
 	USHORT					Mounted;
 
 	// to make a unique id for pending IRP

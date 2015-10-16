@@ -19,7 +19,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 #include <stdio.h>
 #include "dokani.h"
 
@@ -49,5 +52,5 @@ DokanDriverVersion()
 		return version;
 	}
 
-	return 0;
+	return STATUS_SUCCESS;
 }

@@ -18,6 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
@@ -32,7 +33,7 @@ DispatchLock(
 	PEVENT_INFORMATION	eventInfo;
 	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 	PDOKAN_OPEN_INFO	openInfo;
-	int status;
+	NTSTATUS status;
 
 	CheckFileName(EventContext->Operation.Lock.FileName);
 
@@ -54,7 +55,7 @@ DispatchLock(
 				//EventContext->Operation.Lock.Key,
 				&fileInfo);
 
-			eventInfo->Status = status < 0 ?
+			eventInfo->Status = status != STATUS_SUCCESS ?
 				STATUS_LOCK_NOT_GRANTED : STATUS_SUCCESS;
 		}
 		break;
@@ -79,7 +80,8 @@ DispatchLock(
 		DbgPrint("unkown lock function %d\n", EventContext->MinorFunction);
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 

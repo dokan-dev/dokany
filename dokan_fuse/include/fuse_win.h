@@ -28,8 +28,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int win32_error_to_errno(int win_res);
-int errno_to_win32_error(int err);
+int ntstatus_error_to_errno(int win_res);
+int errno_to_ntstatus_error(int err);
 
 //This stuff is useful only on Windows in MSVC
 #ifdef _MSC_VER
@@ -101,13 +101,18 @@ struct flock {
 /////////////////////////////////////////////////////////////////////
 #if defined(_MSC_VER)
 //UNIX compatibility
+typedef struct timespec timestruc_t;
 typedef unsigned int mode_t;
+typedef unsigned short nlink_t;
 typedef unsigned int pid_t;
 typedef unsigned int gid_t;
 typedef unsigned int uid_t;
+typedef unsigned int blksize_t;
+typedef unsigned __int64 blkcnt_t;
 typedef unsigned int uint32_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64 int64_t;
+
 
 //OCTAL constants!
 #define	S_IFLNK 0120000
@@ -154,7 +159,36 @@ struct flock {
 
 #else
 #define FUSE_OFF_T __int64
-#define FUSE_STAT _stati64
+// #define FUSE_STAT _stati64
+// use stat from cygwin instead for having more members and 
+// being more compatible
+// stat ported from cygwin sys/stat.h
+struct stat64_cygwin
+{
+	dev_t         st_dev;
+	uint64_t      st_ino;
+	mode_t        st_mode;
+	nlink_t       st_nlink;
+	uid_t         st_uid;
+	gid_t         st_gid;
+	dev_t         st_rdev;
+	FUSE_OFF_T    st_size;
+	timestruc_t   st_atim;
+	timestruc_t   st_mtim;
+	timestruc_t   st_ctim;
+	blksize_t     st_blksize;
+	blkcnt_t      st_blocks;
+	timestruc_t   st_birthtim;
+};
+/* The following breaks struct stat definiton in native Windows stats.h
+* So whenever referencing st_atime|st_ctime|st_mtime, replacing is needed.
+*/
+/*
+#define st_atime st_atim.tv_sec
+#define st_ctime st_ctim.tv_sec
+#define st_mtime st_mtim.tv_sec
+*/
+#define FUSE_STAT stat64_cygwin
 #if 0
 struct stat64 {
 	dev_t st_dev;

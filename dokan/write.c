@@ -18,11 +18,9 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
-
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
-#include <winioctl.h>
 
 VOID SendWriteRequest(
 	HANDLE				Handle,
@@ -99,20 +97,20 @@ DispatchWrite(
 			EventContext->Operation.Write.ByteOffset.QuadPart,
 			&fileInfo);
 	} else {
-		status = -1;
+		status = STATUS_NOT_IMPLEMENTED;
 	}
 
-	openInfo->UserContext = fileInfo.Context;
+	if (openInfo != NULL)
+		openInfo->UserContext = fileInfo.Context;
 	eventInfo->BufferLength = 0;
-
-	if (status < 0) {
-		eventInfo->Status = STATUS_INVALID_PARAMETER;
 	
-	} else {
-		eventInfo->Status = STATUS_SUCCESS;
+	if (status == STATUS_SUCCESS) {
+		eventInfo->Status = status;
 		eventInfo->BufferLength = writtenLength;
 		eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
 			EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
+	} else {
+		eventInfo->Status = STATUS_INVALID_PARAMETER;
 	}
 
 	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);

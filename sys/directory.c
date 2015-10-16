@@ -368,9 +368,9 @@ DokanCompleteDirectoryControl(
 		//DDbgPrint("   copy DirectoryInfo\n");
 		RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
-		DDbgPrint("    eventInfo->Directory.Index = %d\n", EventInfo->Operation.Directory.Index);
-		DDbgPrint("    eventInfo->BufferLength    = %d\n", EventInfo->BufferLength);
-		DDbgPrint("    eventInfo->Status = %x (%d)\n",	  EventInfo->Status, EventInfo->Status);
+		DDbgPrint("    eventInfo->Directory.Index = %lu\n", EventInfo->Operation.Directory.Index);
+		DDbgPrint("    eventInfo->BufferLength    = %lu\n", EventInfo->BufferLength);
+		DDbgPrint("    eventInfo->Status = %x (%lu)\n",	  EventInfo->Status, EventInfo->Status);
 
 		// update index which specified n-th directory entry is returned
 		// this should be locked before writing?

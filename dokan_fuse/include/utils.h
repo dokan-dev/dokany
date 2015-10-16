@@ -40,14 +40,17 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 	find_data->nFileSizeLow=(DWORD) stbuf->st_size;
 	find_data->nFileSizeHigh=stbuf->st_size>>32;
 #endif
-	if (stbuf->st_ctime!=0)
-		find_data->ftCreationTime=unixTimeToFiletime(stbuf->st_ctime);
-	if (stbuf->st_atime!=0)
-		find_data->ftLastAccessTime=unixTimeToFiletime(stbuf->st_atime);
-	if (stbuf->st_mtime!=0)
-		find_data->ftLastWriteTime=unixTimeToFiletime(stbuf->st_mtime);
+	if (stbuf->st_ctim.tv_sec!=0)
+		find_data->ftCreationTime=unixTimeToFiletime(stbuf->st_ctim.tv_sec);
+	if (stbuf->st_atim.tv_sec!=0)
+		find_data->ftLastAccessTime=unixTimeToFiletime(stbuf->st_atim.tv_sec);
+	if (stbuf->st_mtim.tv_sec!=0)
+		find_data->ftLastWriteTime=unixTimeToFiletime(stbuf->st_mtim.tv_sec);
 
-	//TODO: add support for read-only files - try to derive it from file's owner?
+	//Partial support for read-only files - currently done for a files without write permission only
+	if (!(stbuf->st_mode&0222))
+		find_data->dwFileAttributes|=FILE_ATTRIBUTE_READONLY;
+	//TODO: add full support for read-only files - try to derive it from file's owner?
 	std::string fname=extract_file_name(name);
 	if (!fname.empty() && fname.at(0)=='.') //UNIX hidden files
 		find_data->dwFileAttributes|=FILE_ATTRIBUTE_HIDDEN;

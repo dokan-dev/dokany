@@ -18,7 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 #include "list.h"
@@ -441,7 +441,7 @@ DispatchDirectoryInformation(
 	PEVENT_INFORMATION	eventInfo;
 	DOKAN_FILE_INFO		fileInfo;
 	PDOKAN_OPEN_INFO	openInfo;
-	int					status = 0;
+	NTSTATUS			status = STATUS_SUCCESS;
 	ULONG				fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
 	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Directory.BufferLength;
 
@@ -517,13 +517,13 @@ DispatchDirectoryInformation(
 				DokanFillFileData,
 				&fileInfo);
 		} else {
-			status = -1;
+			status = STATUS_NOT_IMPLEMENTED;
 		}
 	}
 
 
 
-	if (status < 0) {
+	if (status != STATUS_SUCCESS) {
 
 		if (EventContext->Operation.Directory.FileIndex == 0) {
 			DbgPrint("  STATUS_NO_SUCH_FILE\n");

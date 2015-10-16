@@ -18,6 +18,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
@@ -31,7 +32,7 @@ DispatchQuerySecurity(
 	DOKAN_FILE_INFO		fileInfo;
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG	eventInfoLength;
-	int		status = -ERROR_CALL_NOT_IMPLEMENTED;
+	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 	ULONG	lengthNeeded = 0;
 
 	eventInfoLength = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Security.BufferLength;
@@ -51,29 +52,16 @@ DispatchQuerySecurity(
 			&fileInfo);
 	}
 
-	if (status < 0) {
-		int error = status * -1;
-		if (error == ERROR_INSUFFICIENT_BUFFER && lengthNeeded > 0) {
-			eventInfo->Status = STATUS_BUFFER_OVERFLOW;
-			eventInfo->BufferLength = lengthNeeded;
-		} else if (error == ERROR_ACCESS_DENIED) {
-			eventInfo->Status = STATUS_ACCESS_DENIED;
-			eventInfo->BufferLength = 0;
-		} else if (error == ERROR_CALL_NOT_IMPLEMENTED) {
-			eventInfo->Status = STATUS_NOT_IMPLEMENTED;
-			eventInfo->BufferLength = 0;
-		} else {
-			eventInfo->Status = STATUS_INVALID_PARAMETER;
-			eventInfo->BufferLength = 0;
-		}
+	eventInfo->Status = status;
+
+	if (status != STATUS_SUCCESS && status != STATUS_BUFFER_OVERFLOW) {
+		eventInfo->BufferLength = 0;
 	} else {
+		eventInfo->BufferLength = lengthNeeded;
+
 		if (EventContext->Operation.Security.BufferLength < lengthNeeded) {
-			// Filesystem Application should return -ERROR_BUFFER_OVERFLOW in this case.
-			eventInfo->BufferLength = lengthNeeded;
+			// Filesystem Application should return STATUS_BUFFER_OVERFLOW in this case.
 			eventInfo->Status = STATUS_BUFFER_OVERFLOW;
-		} else {
-			eventInfo->BufferLength = lengthNeeded;
-			eventInfo->Status = STATUS_SUCCESS;
 		}
 	}
 
@@ -92,7 +80,7 @@ DispatchSetSecurity(
 	DOKAN_FILE_INFO		fileInfo;
 	PDOKAN_OPEN_INFO	openInfo;
 	ULONG	eventInfoLength;
-	int		status = -1;
+	NTSTATUS		status = STATUS_NOT_IMPLEMENTED;
 	PSECURITY_DESCRIPTOR	securityDescriptor;
 	
 	eventInfoLength = sizeof(EVENT_INFORMATION);
@@ -112,7 +100,7 @@ DispatchSetSecurity(
 			&fileInfo);
 	}
 
-	if (status < 0) {
+	if (status > 0) {
 		eventInfo->Status = STATUS_INVALID_PARAMETER;
 		eventInfo->BufferLength = 0;
 	} else {

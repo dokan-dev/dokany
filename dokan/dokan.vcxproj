@@ -160,6 +160,7 @@
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
@@ -191,6 +192,7 @@
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
@@ -282,7 +284,6 @@
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
     <ClCompile Include="setfile.c" />
-    <ClCompile Include="status.c" />
     <ClCompile Include="timeout.c" />
     <ClCompile Include="version.c" />
     <ClCompile Include="volume.c" />
