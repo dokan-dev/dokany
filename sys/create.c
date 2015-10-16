@@ -581,6 +581,9 @@ Return Value:
 			eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectTypeOffset = eventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset + alignedObjectNameSize;
 		}
 
+		// Other SecurityContext attributes
+		eventContext->Operation.Create.SecurityContext.DesiredAccess = irpSp->Parameters.Create.SecurityContext->DesiredAccess;
+
 		// Other Create attributes
 		eventContext->Operation.Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
 		eventContext->Operation.Create.CreateOptions = irpSp->Parameters.Create.Options;
