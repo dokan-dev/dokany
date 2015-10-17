@@ -198,7 +198,9 @@ MirrorCreateFile(
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
-	if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+	if (fileAttr != INVALID_FILE_ATTRIBUTES
+		&& (fileAttr & FILE_ATTRIBUTE_DIRECTORY
+			&& AccessMode != DELETE)) { //Directory cannot be open for DELETE
 		FlagsAndAttributes |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
