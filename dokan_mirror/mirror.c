@@ -276,8 +276,18 @@ MirrorCreateFile(
 			status = STATUS_INVALID_PARAMETER;
 			DbgPrint(L"Create got unknown error code %d\n", error);
 		}
-	} else
+	} else {
 		DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+		if (CreationDisposition == OPEN_ALWAYS
+			|| CreationDisposition == CREATE_ALWAYS) {
+			DWORD error = GetLastError();
+			if (error == ERROR_ALREADY_EXISTS) {
+				DbgPrint(L"\tOpen an already exist file\n");
+				status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+			}
+		}
+	}
 
 	DbgPrint(L"\n");
 	return status;
