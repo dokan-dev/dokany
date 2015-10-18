@@ -1173,6 +1173,12 @@ MirrorEnumerateNamedStreams(
 	HANDLE	handle;
 	WCHAR	filePath[MAX_PATH];
 
+	if (FileName == NULL) { //Dokan ask to free the previous allocated memory
+		DbgPrint(L"EnumerateNamedStreams Free allocated memory\n");
+		EnumContext = NULL;
+		return STATUS_SUCCESS;
+	}
+
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"EnumerateNamedStreams %s\n", filePath);
