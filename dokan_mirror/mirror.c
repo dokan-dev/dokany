@@ -198,7 +198,9 @@ MirrorCreateFile(
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
-	if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+	if (fileAttr != INVALID_FILE_ATTRIBUTES
+		&& (fileAttr & FILE_ATTRIBUTE_DIRECTORY
+			&& AccessMode != DELETE)) { //Directory cannot be open for DELETE
 		FlagsAndAttributes |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
@@ -274,8 +276,18 @@ MirrorCreateFile(
 			status = STATUS_INVALID_PARAMETER;
 			DbgPrint(L"Create got unknown error code %d\n", error);
 		}
-	} else
+	} else {
 		DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+		if (CreationDisposition == OPEN_ALWAYS
+			|| CreationDisposition == CREATE_ALWAYS) {
+			DWORD error = GetLastError();
+			if (error == ERROR_ALREADY_EXISTS) {
+				DbgPrint(L"\tOpen an already exist file\n");
+				status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+			}
+		}
+	}
 
 	DbgPrint(L"\n");
 	return status;
@@ -1160,6 +1172,12 @@ MirrorEnumerateNamedStreams(
 {
 	HANDLE	handle;
 	WCHAR	filePath[MAX_PATH];
+
+	if (FileName == NULL) { //Dokan ask to free the previous allocated memory
+		DbgPrint(L"EnumerateNamedStreams Free allocated memory\n");
+		EnumContext = NULL;
+		return STATUS_SUCCESS;
+	}
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 

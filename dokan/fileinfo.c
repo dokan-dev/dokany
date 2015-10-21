@@ -316,7 +316,16 @@ DokanEnumerateNamedStreams(
 	}
 
 	if (entrySize == 0)
-		return result; //EnumerateNamedStreams have directly failed
+		return result; //EnumerateNamedStreams has directly failed
+
+	//Empty call to let user clean the allocated memory
+	DokanInstance->DokanOperations->EnumerateNamedStreams(
+		NULL,
+		&enumContext,
+		NULL,
+		NULL,
+		FileInfo);
+
 	return STATUS_SUCCESS;
 }
 

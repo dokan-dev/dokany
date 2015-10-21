@@ -83,6 +83,8 @@ typedef struct _DOKAN_OPERATIONS {
 
 
 	// CreateFile
+	//	 In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already existing file,
+	//   you have to return STATUS_OBJECT_NAME_COLLISION.
 	//   If file is a directory, CreateFile (not OpenDirectory) may be called.
 	//   In this case, CreateFile should return STATUS_SUCCESS when that directory can be opened.
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
@@ -171,9 +173,9 @@ typedef struct _DOKAN_OPERATIONS {
 
 	// You should not delete the file on DeleteFile or DeleteDirectory, but instead
 	// you must only check whether you can delete the file or not, 
-	// and return ERROR_SUCCESS (when you can delete it) or appropriate error codes such as 
+	// and return STATUS_SUCCESS (when you can delete it) or appropriate error codes such as 
 	// STATUS_ACCESS_DENIED, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_OBJECT_NAME_NOT_FOUND.
-	// When you return ERROR_SUCCESS, you get a Cleanup call afterwards with
+	// When you return STATUS_SUCCESS, you get a Cleanup call afterwards with
 	// FileInfo->DeleteOnClose set to TRUE and only then you have to actually delete
 	// the file being closed.
 	NTSTATUS (DOKAN_CALLBACK *DeleteFile) (
