@@ -37,6 +37,10 @@ DokanDispatchWrite(
 	PDokanFCB			fcb;
 	PDokanVCB			vcb;
 	PVOID				buffer;
+	BOOLEAN				writeToEoF = FALSE;
+	BOOLEAN				isPagingIo = FALSE;
+	BOOLEAN				isNonCached = FALSE;
+	BOOLEAN				isSynchronousIo = FALSE;
 
 	__try {
 
@@ -92,6 +96,45 @@ DokanDispatchWrite(
 			__leave;
 		}
 
+		if (irpSp->Parameters.Write.ByteOffset.LowPart == FILE_WRITE_TO_END_OF_FILE
+			&& irpSp->Parameters.Write.ByteOffset.HighPart == -1)
+		{
+			writeToEoF = TRUE;
+		}
+
+		if (Irp->Flags & IRP_PAGING_IO)
+		{
+			isPagingIo = TRUE;
+		}
+
+		if (Irp->Flags & IRP_NOCACHE)
+		{
+			isNonCached = TRUE;
+		}
+
+		if (fileObject->Flags & FO_SYNCHRONOUS_IO)
+		{
+			isSynchronousIo = TRUE;
+		}
+
+		if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) && (fileObject->SectionObjectPointer->DataSectionObject != NULL))
+		{
+			ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+			CcFlushCache(
+				&fcb->SectionObjectPointers,
+				writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
+				irpSp->Parameters.Write.Length,
+				NULL
+				);
+			CcPurgeCacheSection(
+				&fcb->SectionObjectPointers,
+				writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
+				irpSp->Parameters.Write.Length,
+				FALSE
+				);
+			ExReleaseResourceLite(&fcb->PagingIoResource);
+		}
+
 		// the length of EventContext is sum of length to write and length of file name
 		eventLength = sizeof(EVENT_CONTEXT)
 							+ irpSp->Parameters.Write.Length
@@ -113,20 +156,24 @@ DokanDispatchWrite(
 		// more bigger memory.
 		Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = eventContext;
 		
-		if (Irp->Flags & IRP_PAGING_IO) {
+		if (isPagingIo) {
 			DDbgPrint("  Paging IO\n");
 			eventContext->FileFlags |= DOKAN_PAGING_IO;
 		}
-		if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
+		if (isSynchronousIo) {
 			DDbgPrint("  Synchronous IO\n");
 			eventContext->FileFlags |= DOKAN_SYNCHRONOUS_IO;
+		}
+
+		if (isNonCached) {
+			DDbgPrint("  Nocache\n");
+			eventContext->FileFlags |= DOKAN_NOCACHE;
 		}
 
 		// offset of file to write
 		eventContext->Operation.Write.ByteOffset = irpSp->Parameters.Write.ByteOffset;
 
-		if (irpSp->Parameters.Write.ByteOffset.LowPart == FILE_WRITE_TO_END_OF_FILE
-			&& irpSp->Parameters.Write.ByteOffset.HighPart == -1) {
+		if (writeToEoF) {
 
 			eventContext->FileFlags |= DOKAN_WRITE_TO_END_OF_FILE;
 			DDbgPrint("  WriteOffset = end of file\n");

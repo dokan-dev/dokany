@@ -56,6 +56,9 @@ Return Value:
 	PDokanVCB			vcb;
 	PEVENT_CONTEXT		eventContext;
 	ULONG				eventLength;
+	BOOLEAN				isPagingIo = FALSE;
+	BOOLEAN				isSynchronousIo = FALSE;
+	BOOLEAN				noCahce = FALSE;
 
 	__try {
 
@@ -121,6 +124,29 @@ Return Value:
 			__leave;
 		}
 
+		if (Irp->Flags & IRP_PAGING_IO) {
+			isPagingIo = TRUE;
+		}
+		if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
+			isSynchronousIo = TRUE;
+		}
+
+		if (Irp->Flags & IRP_NOCACHE) {
+			noCahce = TRUE;
+		}
+
+		if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) && (fileObject->SectionObjectPointer->DataSectionObject != NULL))
+		{
+			ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+			CcFlushCache(
+							&fcb->SectionObjectPointers,
+							&irpSp->Parameters.Read.ByteOffset,
+							irpSp->Parameters.Read.Length,
+							NULL
+						);
+			ExReleaseResourceLite(&fcb->PagingIoResource);
+		}
+
 		// length of EventContext is sum of file name length and itself
 		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
 
@@ -133,16 +159,16 @@ Return Value:
 		eventContext->Context = ccb->UserContext;
 		//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-		if (Irp->Flags & IRP_PAGING_IO) {
+		if (isPagingIo) {
 			DDbgPrint("  Paging IO\n");
 			eventContext->FileFlags |= DOKAN_PAGING_IO;
 		}
-		if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
+		if (isSynchronousIo) {
 			DDbgPrint("  Synchronous IO\n");
 			eventContext->FileFlags |= DOKAN_SYNCHRONOUS_IO;
 		}
 
-		if (Irp->Flags & IRP_NOCACHE) {
+		if (noCahce) {
 			DDbgPrint("  Nocache\n");
 			eventContext->FileFlags |= DOKAN_NOCACHE;
 		}

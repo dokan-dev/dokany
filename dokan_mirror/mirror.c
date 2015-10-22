@@ -452,7 +452,7 @@ MirrorReadFile(
 		}
 		opened = TRUE;
 	}
-	
+
     LARGE_INTEGER distanceToMove;
     distanceToMove.QuadPart = Offset;
     if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
@@ -520,24 +520,72 @@ MirrorWriteFile(
 		opened = TRUE;
 	}
 
-    LARGE_INTEGER distanceToMove;
-    distanceToMove.QuadPart = Offset;
-
-	if (DokanFileInfo->WriteToEndOfFile) {
-        LARGE_INTEGER z;
-        z.QuadPart = 0;
-		if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
-			DWORD error = GetLastError();
-			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
-			return ToNtStatus(error);
-		}
-    }
-    else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, error);
-		return ToNtStatus(error);
+	UINT64 fileSize = 0;
+	DWORD fileSizeLow = 0;
+	DWORD fileSizeHigh = 0;
+	fileSizeLow = GetFileSize(handle, &fileSizeHigh);
+	if (fileSizeLow == INVALID_FILE_SIZE)
+	{
+		DbgPrint(L"\tcan not get a file size\n");
+		return -1;
 	}
 
+	fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
+
+    LARGE_INTEGER distanceToMove;
+	if (DokanFileInfo->WriteToEndOfFile)
+	{
+		if (DokanFileInfo->PagingIo)
+		{
+			*NumberOfBytesWritten = 0;
+			return 0;
+		}
+		LARGE_INTEGER z;
+		z.QuadPart = 0;
+		if (!SetFilePointerEx(handle, z, NULL, FILE_END))
+		{
+			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", GetLastError());
+			return -1;
+		}
+	}
+	else
+	{
+		if (DokanFileInfo->PagingIo)
+		{
+			if (Offset >= fileSize)
+			{
+				*NumberOfBytesWritten = 0;
+				return 0;
+			}
+
+			if ((Offset + NumberOfBytesToWrite) > fileSize)
+			{
+				UINT64 bytes = fileSize - Offset;
+				if (bytes >> 32)
+				{
+					NumberOfBytesToWrite = (DWORD)( bytes & 0xFFFFFFFFUL );
+				}
+				else
+				{
+					NumberOfBytesToWrite = (DWORD)bytes;
+				}
+				 
+			}
+		}
+
+		if (Offset > fileSize)
+		{
+			//In the mirror sample helperZeroFileData is not necessary. NTFS will zero a hole.
+			//But if user's file system is different from NTFS( or other Windows's file systems ) then  users will have to zero the hole themselves.
+		}
+
+		distanceToMove.QuadPart = Offset;
+		if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN))
+		{
+			DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, GetLastError());
+			return -1;
+		}
+	}
 		
 	if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten, NULL)) {
 		DWORD error = GetLastError();

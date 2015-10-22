@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio Express 2013 for Windows Desktop
+VisualStudioVersion = 12.0.30723.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sys", "sys\sys.vcxproj", "{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}"
 EndProject
@@ -22,6 +22,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_fuse", "dokan_fuse\dokan_fuse.vcxproj", "{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test utilities", "test utilities", "{128CDF28-E5C3-4F04-8112-41484DDDC39B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fsx", "test utilities\fsx\fsx.vcxproj", "{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -252,8 +256,35 @@ Global
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Win8.1 Debug|x64.Build.0 = Debug|x64
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Win8.1 Release|Win32.ActiveCfg = Release|Win32
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Win8.1 Release|x64.ActiveCfg = Release|x64
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Debug|Win32.Build.0 = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Debug|x64.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Release|Win32.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Release|Win32.Build.0 = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Release|x64.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Debug|Win32.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Debug|Win32.Build.0 = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Debug|x64.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Release|Win32.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Release|Win32.Build.0 = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win7 Release|x64.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Debug|Win32.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Debug|Win32.Build.0 = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Debug|x64.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Release|Win32.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Release|Win32.Build.0 = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8 Release|x64.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Debug|Win32.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Debug|Win32.Build.0 = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Debug|x64.ActiveCfg = Debug|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Release|Win32.ActiveCfg = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Release|Win32.Build.0 = Release|Win32
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF}.Win8.1 Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0A59747B-5AB8-4928-B9D4-0C0F17C530AF} = {128CDF28-E5C3-4F04-8112-41484DDDC39B}
 	EndGlobalSection
 EndGlobal
