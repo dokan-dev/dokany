@@ -127,6 +127,62 @@ NTSTATUS ToNtStatus(DWORD dwError)
 	}
 }
 
+static BOOL AddSeSecurityNamePrivilege()
+{
+	HANDLE token = 0;
+	DbgPrint(L"## Attempting to add SE_SECURITY_NAME privilege to process token ##\n");
+	DWORD err;
+	LUID luid;
+	if (!LookupPrivilegeValue(0, SE_SECURITY_NAME, &luid)) {
+		err = GetLastError();
+		if (err != ERROR_SUCCESS) {
+			DbgPrint(L"  failed: Unable to lookup privilege value. error = %u\n", err);
+			return FALSE;
+		}
+	}
+
+	LUID_AND_ATTRIBUTES attr;
+	attr.Attributes = SE_PRIVILEGE_ENABLED;
+	attr.Luid = luid;
+
+	TOKEN_PRIVILEGES priv;
+	priv.PrivilegeCount = 1;
+	priv.Privileges[0] = attr;
+
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+		err = GetLastError();
+		if (err != ERROR_SUCCESS) {
+			DbgPrint(L"  failed: Unable obtain process token. error = %u\n", err);
+			return FALSE;
+		}
+	}
+
+	TOKEN_PRIVILEGES oldPriv;
+	DWORD retSize;
+	AdjustTokenPrivileges(token, FALSE, &priv, sizeof(TOKEN_PRIVILEGES), &oldPriv, &retSize);
+	err = GetLastError();
+	if (err != ERROR_SUCCESS) {
+		DbgPrint(L"  failed: Unable to adjust token privileges: %u\n", err);
+		CloseHandle(token);
+		return FALSE;
+	}
+
+	BOOL privAlreadyPresent = FALSE;
+	for (unsigned int i = 0; i < oldPriv.PrivilegeCount; i++) {
+		if (oldPriv.Privileges[i].Luid.HighPart == luid.HighPart &&
+			oldPriv.Privileges[i].Luid.LowPart == luid.LowPart) {
+			privAlreadyPresent = TRUE;
+			break;
+		}
+	}
+	DbgPrint(privAlreadyPresent
+		? L"  success: privilege already present\n"
+		: L"  success: privilege added\n");
+	if (token)
+		CloseHandle(token);
+	return TRUE;
+}
+
 #define MirrorCheckFlag(val, flag) if (val&flag) { DbgPrint(L"\t" L#flag L"\n"); }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -1043,30 +1099,62 @@ MirrorGetFileSecurity(
 	PULONG				LengthNeeded,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
-	HANDLE	handle;
 	WCHAR	filePath[MAX_PATH];
+
+	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
-	handle = (HANDLE)DokanFileInfo->Context;
+	MirrorCheckFlag(*SecurityInformation, FILE_SHARE_READ);
+	MirrorCheckFlag(*SecurityInformation, OWNER_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, GROUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+
+
+	DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
+	HANDLE handle = CreateFile(
+		filePath,
+		READ_CONTROL | ((*SecurityInformation & SACL_SECURITY_INFORMATION) ? ACCESS_SYSTEM_SECURITY : 0),
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+		NULL, // security attribute
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS,// |FILE_FLAG_NO_BUFFERING,
+		NULL);
+
 	if (!handle || handle == INVALID_HANDLE_VALUE) {
 		DbgPrint(L"\tinvalid handle\n\n");
-		return STATUS_INVALID_HANDLE;
+		int error = GetLastError();
+		return ToNtStatus(error);
 	}
 
 	if (!GetUserObjectSecurity(handle, SecurityInformation, SecurityDescriptor,
-			BufferLength, LengthNeeded)) {
+		BufferLength, LengthNeeded)) {
 		int error = GetLastError();
 		if (error == ERROR_INSUFFICIENT_BUFFER) {
 			DbgPrint(L"  GetUserObjectSecurity failed: ERROR_INSUFFICIENT_BUFFER\n");
-			return STATUS_BUFFER_OVERFLOW;
-		} else {
+			CloseHandle(handle);
+			return ToNtStatus(error);
+		}
+		else {
 			DbgPrint(L"  GetUserObjectSecurity failed: %d\n", error);
+			CloseHandle(handle);
 			return ToNtStatus(error);
 		}
 	}
+	CloseHandle(handle);
+
 	return STATUS_SUCCESS;
 }
 
@@ -1280,6 +1368,12 @@ wmain(ULONG argc, PWCHAR argv[])
 			fwprintf(stderr, L"unknown command: %s\n", argv[command]);
 			return EXIT_FAILURE;
 		}
+	}
+
+	// Add security name privilege. Required here to handle GetFileSecurity properly.
+	if (!AddSeSecurityNamePrivilege()) {
+		fwprintf(stderr, L"  Failed to add security privilege to process\n");
+		return -1;
 	}
 
 	if (g_DebugMode) {

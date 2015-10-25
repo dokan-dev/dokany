@@ -420,71 +420,73 @@ DispatchQueryInformation(
 
 		switch (EventContext->Operation.File.FileInformationClass) {
 		case FileBasicInformation:
-			//DbgPrint("FileBasicInformation\n");
+			DbgPrint("\tFileBasicInformation\n");
             status = DokanFillFileBasicInfo((PFILE_BASIC_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileInternalInformation:
+			DbgPrint("\tFileInternalInformation\n");
             status = DokanFillInternalInfo((PFILE_INTERNAL_INFORMATION)eventInfo->Buffer,
 											&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileEaInformation:
-			//DbgPrint("FileEaInformation or FileInternalInformation\n");
+			DbgPrint("\tFileEaInformation\n");
 			//status = STATUS_NOT_IMPLEMENTED;
 			status = STATUS_SUCCESS;
 			remainingLength -= sizeof(FILE_EA_INFORMATION);
 			break;
 
 		case FileStandardInformation:
-			//DbgPrint("FileStandardInformation\n");
+			DbgPrint("\tFileStandardInformation\n");
             status = DokanFillFileStandardInfo((PFILE_STANDARD_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileAllInformation:
-			//DbgPrint("FileAllInformation\n");
+			DbgPrint("\tFileAllInformation\n");
             status = DokanFillFileAllInfo((PFILE_ALL_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength, EventContext);
 			break;
 
 		case FileAlternateNameInformation:
+			DbgPrint("\tFileAlternateNameInformation\n");
 			status = STATUS_NOT_IMPLEMENTED;
 			break;
 
 		case FileAttributeTagInformation:
+			DbgPrint("\tFileAttributeTagInformation\n");
             status = DokanFillFileAttributeTagInfo((PFILE_ATTRIBUTE_TAG_INFORMATION)eventInfo->Buffer,
 										&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FileCompressionInformation:
-			//DbgPrint("FileAlternateNameInformation or...\n");
+			DbgPrint("\tFileCompressionInformation\n");
 			status = STATUS_NOT_IMPLEMENTED;
 			break;
 
 		case FileNameInformation:
 			// this case is not used because driver deal with
-			//DbgPrint("FileNameInformation\n");
+			DbgPrint("\tFileNameInformation\n");
             status = DokanFillFileNameInfo((PFILE_NAME_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength, EventContext);
 			break;
 
 		case FileNetworkOpenInformation:
-			//DbgPrint("FileNetworkOpenInformation\n");
+			DbgPrint("\tFileNetworkOpenInformation\n");
             status = DokanFillNetworkOpenInfo((PFILE_NETWORK_OPEN_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength);
 			break;
 
 		case FilePositionInformation:
 			// this case is not used because driver deal with
-			//DbgPrint("FilePositionInformation\n");
+			DbgPrint("\tFilePositionInformation\n");
             status = DokanFillFilePositionInfo((PFILE_POSITION_INFORMATION)eventInfo->Buffer,
 								&byHandleFileInfo, &remainingLength);
-
 			break;
 		case FileStreamInformation:
-			//DbgPrint("FileStreamInformation\n");
+			DbgPrint("FileStreamInformation\n");
 			status = DokanFindStreams((PFILE_STREAM_INFORMATION)eventInfo->Buffer, &fileInfo, EventContext, DokanInstance, &remainingLength);
 			break;
         default:
