@@ -87,7 +87,7 @@ FindMountEntry(PDOKAN_CONTROL	DokanControl)
 		return NULL;
 	}
 
-	/* NOTE: g_MountList expects MountPoint to has the format of C:\ */
+	/* NOTE: g_MountList expects MountPoint to have the format of C:\ */
 	
 	if(useMountPoint && IsMountPointDriveLetter(DokanControl->MountPoint)) {
 		
