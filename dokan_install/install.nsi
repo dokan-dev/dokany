@@ -308,8 +308,9 @@ Function .onInit
 	${ElseIf} ${IsWin8}
 	${ElseIf} ${IsWin2012R2}
 	${ElseIf} ${IsWin8.1}
+	${ElseIf} ${IsWin10}
     ${Else}
-      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1 for x64."
+      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1, 10 for x64."
       Abort
     ${EndIf}
   ${Else}
@@ -319,8 +320,9 @@ Function .onInit
 	${ElseIf} ${IsWin8}
 	${ElseIf} ${IsWin2012R2}
 	${ElseIf} ${IsWin8.1}
+	${ElseIf} ${IsWin10}
     ${Else}
-      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1 for x86."
+      MessageBox MB_OK "Your OS is not supported. Dokan library supports Windows 2008R2, 7, 2012, 8, 2012R2, 8.1, 10 for x86."
       Abort
     ${EndIf}
   ${EndIf}
