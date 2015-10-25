@@ -1142,7 +1142,7 @@ MirrorUnmount(
 
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS definition.
- * This only for MirrorEnumerateNamedStreams. Link with ntdll.lib still required.
+ * This only for MirrorFindStreams. Link with ntdll.lib still required.
  * 
  * Not needed if you're not using NtQueryInformationFile!
  *
@@ -1162,71 +1162,48 @@ NTSYSCALLAPI NTSTATUS NTAPI 	NtQueryInformationFile(_In_ HANDLE FileHandle, _Out
  * END
  */
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorEnumerateNamedStreams(
-	LPCWSTR					FileName,
-	PVOID*					EnumContext,
-	LPWSTR					StreamName,
-	PLONGLONG				StreamSize,
-	PDOKAN_FILE_INFO		DokanFileInfo)
+NTSTATUS DOKAN_CALLBACK MirrorFindStreams(
+    LPCWSTR                 FileName,
+    PFillFindStreamData     FillFindStreamData,
+    PDOKAN_FILE_INFO        DokanFileInfo)
 {
-	HANDLE	handle;
-	WCHAR	filePath[MAX_PATH];
+    WCHAR                   filePath[MAX_PATH];
+    HANDLE                  hFind;
+    WIN32_FIND_STREAM_DATA  findData;
+    DWORD                   error;
+    int                     count = 0;
 
-	if (FileName == NULL) { //Dokan ask to free the previous allocated memory
-		DbgPrint(L"EnumerateNamedStreams Free allocated memory\n");
-		EnumContext = NULL;
-		return STATUS_SUCCESS;
-	}
+    GetFilePath(filePath, MAX_PATH, FileName);
 
-	GetFilePath(filePath, MAX_PATH, FileName);
+    DbgPrint(L"FindStreams :%s\n", filePath);
 
-	DbgPrint(L"EnumerateNamedStreams %s\n", filePath);
+    hFind = FindFirstStreamW(filePath, FindStreamInfoStandard, &findData, 0);
 
-	handle = (HANDLE)DokanFileInfo->Context;
-	if (!handle || handle == INVALID_HANDLE_VALUE) {
-		DbgPrint(L"\tinvalid handle\n\n");
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    if (hFind == INVALID_HANDLE_VALUE) {
+        error = GetLastError();
+        DbgPrint(L"\tinvalid file handle. Error is %u\n\n", error);
+        return ToNtStatus(error);
+    }
 
-	// As we are requested one by one, it would be better to use FindFirstStream / FindNextStream instead of requesting all streams each time
-	// But this doesn't really matter on mirror sample
-	BYTE InfoBlock[64 * 1024];
-	PFILE_STREAM_INFORMATION pStreamInfo = (PFILE_STREAM_INFORMATION)InfoBlock;
-	IO_STATUS_BLOCK ioStatus;
-	ZeroMemory(InfoBlock, sizeof(InfoBlock));
+    FillFindStreamData(&findData, DokanFileInfo);
+    count++;
 
-	NTSTATUS status = NtQueryInformationFile(handle, &ioStatus, InfoBlock, sizeof(InfoBlock), FileStreamInformation);
-	if (status != STATUS_SUCCESS) {
-		DbgPrint(L"\tNtQueryInformationFile failed with %d.\n", status);
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    while (FindNextStreamW(hFind, &findData) != 0) {
+        FillFindStreamData(&findData, DokanFileInfo);
+        count++;
+    }
 
-	if (pStreamInfo->StreamNameLength == 0) {
-		DbgPrint(L"\tNo stream found.\n");
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    error = GetLastError();
+    FindClose(hFind);
 
-	UINT index = (UINT)*EnumContext;
-	DbgPrint(L"\tStream #%d requested.\n", index);
-	
-	for (UINT i = 0; i != index; ++i) {
-		if (pStreamInfo->NextEntryOffset == 0) {
-			DbgPrint(L"\tNo more stream.\n");
-			return STATUS_NOT_IMPLEMENTED;
-		}
-		pStreamInfo = (PFILE_STREAM_INFORMATION) ((LPBYTE)pStreamInfo + pStreamInfo->NextEntryOffset);   // Next stream record
-	}
+    if (error != ERROR_HANDLE_EOF) {
+        DbgPrint(L"\tFindNextStreamW error. Error is %u\n\n", error);
+        return ToNtStatus(error);
+    }
 
-	wcscpy_s(StreamName, SHRT_MAX + 1, pStreamInfo->StreamName);
-	*StreamSize = pStreamInfo->StreamSize.QuadPart;
+    DbgPrint(L"\tFindStreams return %d entries in %s\n\n", count, filePath);
 
-	DbgPrint(L"\t Stream %ws\n", pStreamInfo->StreamName);
-
-	// Remember next stream entry index
-	*EnumContext = (PVOID)++index;
-
-	return STATUS_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 
@@ -1340,7 +1317,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->GetDiskFreeSpace = NULL;
 	dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
 	dokanOperations->Unmount = MirrorUnmount;
-	dokanOperations->EnumerateNamedStreams = MirrorEnumerateNamedStreams;
+    dokanOperations->FindStreams = MirrorFindStreams;
 
 	status = DokanMain(dokanOptions, dokanOperations);
 	switch (status) {

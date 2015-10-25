@@ -66,6 +66,7 @@ typedef struct _DOKAN_OPEN_INFO {
 	ULONG64			UserContext;
 	ULONG			EventId;
 	PLIST_ENTRY		DirListHead;
+	PLIST_ENTRY		StreamListHead;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
 
 
@@ -257,6 +258,10 @@ CheckFileName(
 VOID
 ClearFindData(
   PLIST_ENTRY	ListHead);
+
+VOID
+ClearFindStreamData(
+    PLIST_ENTRY ListHead);
 
 UINT WINAPI
 DokanKeepAlive(

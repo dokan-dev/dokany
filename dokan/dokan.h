@@ -77,6 +77,12 @@ typedef struct _DOKAN_FILE_INFO {
 //   (currently it never returns 1)
 typedef int (WINAPI *PFillFindData) (PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 
+// FillFindStreamData
+//   is used to add an entry in FindStreams
+//   returns 1 if buffer is full, otherwise 0
+//   (currently it never returns 1)
+typedef int (WINAPI *PFillFindStreamData) (PWIN32_FIND_STREAM_DATA , PDOKAN_FILE_INFO);
+
 typedef struct _DOKAN_OPERATIONS {
 
 	// When an error occurs, return NTSTATUS (https://support.microsoft.com/en-us/kb/113996)
@@ -266,13 +272,10 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 	// Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
-	NTSTATUS (DOKAN_CALLBACK *EnumerateNamedStreams) (
-		LPCWSTR, // FileName
-		PVOID*, // EnumContext
-		LPWSTR, // StreamName
-		PLONGLONG, // StreamSize
-		PDOKAN_FILE_INFO);
-
+	NTSTATUS (DOKAN_CALLBACK *FindStreams) (
+		LPCWSTR,                // FileName
+		PFillFindStreamData,    // call this function with PWIN32_FIND_STREAM_DATA
+		PDOKAN_FILE_INFO);      //  (see PFillFindStreamData definition)
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 

@@ -251,84 +251,127 @@ DokanFillInternalInfo(
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS
-DokanEnumerateNamedStreams(
-	PFILE_STREAM_INFORMATION	StreamInfo,
-	PDOKAN_FILE_INFO			FileInfo,
-	PEVENT_CONTEXT				EventContext,
-	PDOKAN_INSTANCE				DokanInstance,
-	PULONG						RemainingLength)
+
+typedef struct _DOKAN_FIND_STREAM_DATA {
+    WIN32_FIND_STREAM_DATA  FindStreamData;
+    LIST_ENTRY              ListEntry;
+} DOKAN_FIND_STREAM_DATA, *PDOKAN_FIND_STREAM_DATA;
+
+
+int WINAPI
+DokanFillFindStreamData(
+    PWIN32_FIND_STREAM_DATA FindStreamData,
+    PDOKAN_FILE_INFO        FileInfo)
 {
-	WCHAR streamName[SHRT_MAX + 1];
-	ULONG streamNameLength;
-	LONGLONG streamSize;
-	ULONG entrySize = 0;
-	PVOID enumContext = NULL;
-	NTSTATUS result = STATUS_SUCCESS;
+    PLIST_ENTRY listHead = ((PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext)->StreamListHead;
+    PDOKAN_FIND_STREAM_DATA findStreamData;
 
-	if (DokanInstance->DokanOptions->Version < DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION || !DokanInstance->DokanOperations->EnumerateNamedStreams) {
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    findStreamData = (PDOKAN_FIND_STREAM_DATA)malloc(sizeof(DOKAN_FIND_STREAM_DATA));
+    if (findStreamData == NULL) {
+        return 0;
+    }
+    ZeroMemory(findStreamData, sizeof(DOKAN_FIND_STREAM_DATA));
+    InitializeListHead(&findStreamData->ListEntry);
 
-	if (*RemainingLength < sizeof(FILE_STREAM_INFORMATION)) {
-		return STATUS_BUFFER_OVERFLOW;
-	}
+    findStreamData->FindStreamData = *FindStreamData;
 
-	while (result == STATUS_SUCCESS) {
-		ZeroMemory(streamName, sizeof(streamName));
-		streamSize = 0;
-		result = DokanInstance->DokanOperations->EnumerateNamedStreams(
-			EventContext->Operation.File.FileName,
-			&enumContext,
-			streamName,
-			&streamSize,
-			FileInfo);
-		
-		if (result == STATUS_SUCCESS) {
-			if (*RemainingLength < sizeof(FILE_STREAM_INFORMATION)) {
-				return STATUS_BUFFER_OVERFLOW;
-			}
-
-			// Not the first entry, set the offset before filling the new entry
-			if (entrySize > 0) {
-				StreamInfo->NextEntryOffset = entrySize;
-				StreamInfo = (PFILE_STREAM_INFORMATION)((LPBYTE)StreamInfo + StreamInfo->NextEntryOffset);
-			}
-
-			streamNameLength = (ULONG)wcslen(streamName) * sizeof(WCHAR);
-			entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
-			// Must be align on a 8-byte boundary.
-			entrySize = QuadAlign(entrySize);
-			if (*RemainingLength < entrySize) {
-				return STATUS_BUFFER_OVERFLOW;
-			}
-
-			// Fill the new entry
-			StreamInfo->StreamNameLength = streamNameLength;
-			wcscpy_s(StreamInfo->StreamName, streamNameLength + 1, streamName);
-			StreamInfo->StreamSize.QuadPart = streamSize;
-			StreamInfo->StreamAllocationSize.QuadPart = streamSize;
-			StreamInfo->NextEntryOffset = 0;
-			ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
-
-			*RemainingLength -= entrySize;
-		}
-	}
-
-	if (entrySize == 0)
-		return result; //EnumerateNamedStreams has directly failed
-
-	//Empty call to let user clean the allocated memory
-	DokanInstance->DokanOperations->EnumerateNamedStreams(
-		NULL,
-		&enumContext,
-		NULL,
-		NULL,
-		FileInfo);
-
-	return STATUS_SUCCESS;
+    InsertTailList(listHead, &findStreamData->ListEntry);
+    return 0;
 }
 
+
+VOID
+ClearFindStreamData(
+    PLIST_ENTRY ListHead)
+{
+    // free all list entries
+    while(!IsListEmpty(ListHead)) {
+        PLIST_ENTRY entry = RemoveHeadList(ListHead);
+        PDOKAN_FIND_STREAM_DATA find = CONTAINING_RECORD(entry, DOKAN_FIND_STREAM_DATA, ListEntry);
+        free(find);
+    }
+}
+
+
+NTSTATUS
+DokanFindStreams(
+    PFILE_STREAM_INFORMATION    StreamInfo,
+    PDOKAN_FILE_INFO            FileInfo,
+    PEVENT_CONTEXT              EventContext,
+    PDOKAN_INSTANCE             DokanInstance,
+    PULONG                      RemainingLength)
+{
+    PDOKAN_OPEN_INFO    openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
+    NTSTATUS            status = STATUS_SUCCESS;
+
+    if (DokanInstance->DokanOptions->Version < DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION || !DokanInstance->DokanOperations->FindStreams) {
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    if (openInfo->StreamListHead == NULL) {
+        openInfo->StreamListHead = malloc(sizeof(LIST_ENTRY));
+        if (openInfo->StreamListHead != NULL) {
+            InitializeListHead(openInfo->StreamListHead);
+        } else {
+            status = STATUS_NO_MEMORY;
+        }
+    }
+
+    if (IsListEmpty(openInfo->StreamListHead)) {
+        status = DokanInstance->DokanOperations->FindStreams(
+            EventContext->Operation.File.FileName,
+            DokanFillFindStreamData,
+            FileInfo);
+    }
+
+    if (status == STATUS_SUCCESS) {
+        PLIST_ENTRY listHead, entry;
+        ULONG nextEntryOffset, entrySize, streamNameLength;
+
+        listHead = openInfo->StreamListHead;
+        entrySize = 0;
+
+        for (entry = listHead->Flink; entry != listHead; entry = entry->Flink) {
+            PDOKAN_FIND_STREAM_DATA find = CONTAINING_RECORD(entry, DOKAN_FIND_STREAM_DATA, ListEntry);
+
+            nextEntryOffset = entrySize;
+
+            streamNameLength = (ULONG)wcslen(find->FindStreamData.cStreamName) * sizeof(WCHAR);
+            entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
+            // Must be align on a 8-byte boundary.
+            entrySize = QuadAlign(entrySize);
+            if (*RemainingLength < entrySize) {
+                status = STATUS_BUFFER_OVERFLOW;
+                break;
+            }
+
+            // Not the first entry, set the offset before filling the new entry
+            if (nextEntryOffset > 0) {
+                StreamInfo->NextEntryOffset = nextEntryOffset;
+                StreamInfo = (PFILE_STREAM_INFORMATION)((LPBYTE)StreamInfo + StreamInfo->NextEntryOffset);
+            }
+
+            // Fill the new entry
+            StreamInfo->StreamNameLength = streamNameLength;
+            memcpy(StreamInfo->StreamName, find->FindStreamData.cStreamName, streamNameLength);
+            StreamInfo->StreamSize = find->FindStreamData.StreamSize;
+            StreamInfo->StreamAllocationSize = find->FindStreamData.StreamSize;
+            StreamInfo->NextEntryOffset = 0;
+            ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
+
+            *RemainingLength -= entrySize;
+        }
+
+        if (status != STATUS_BUFFER_OVERFLOW) {
+            ClearFindStreamData(openInfo->StreamListHead);
+        }
+
+    } else {
+	    ClearFindStreamData(openInfo->StreamListHead);
+    }
+
+    return status;
+}
 
 VOID
 DispatchQueryInformation(
@@ -442,7 +485,7 @@ DispatchQueryInformation(
 			break;
 		case FileStreamInformation:
 			//DbgPrint("FileStreamInformation\n");
-			status = DokanEnumerateNamedStreams((PFILE_STREAM_INFORMATION)eventInfo->Buffer, &fileInfo, EventContext, DokanInstance, &remainingLength);
+			status = DokanFindStreams((PFILE_STREAM_INFORMATION)eventInfo->Buffer, &fileInfo, EventContext, DokanInstance, &remainingLength);
 			break;
         default:
 			{
