@@ -277,6 +277,17 @@ typedef struct _DOKAN_OPERATIONS {
 		PFillFindStreamData,    // call this function with PWIN32_FIND_STREAM_DATA
 		PDOKAN_FILE_INFO);      //  (see PFillFindStreamData definition)
 
+    NTSTATUS (DOKAN_CALLBACK *CreateFileEx) (
+        LPCWSTR,                // FileName
+        DWORD,                  // DesiredAccess
+        DWORD,                  // ShareAccess
+        DWORD,                  // CreateDisposition
+        DWORD,                  // CreateOptions
+        DWORD,                  // FileAttributes
+        PSECURITY_DESCRIPTOR,   // Reserved
+        PULONG,                 // &IoStatusBlock.Information
+        PDOKAN_FILE_INFO);
+
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
 

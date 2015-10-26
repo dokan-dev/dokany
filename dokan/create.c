@@ -29,7 +29,7 @@ DispatchCreate(
 	PEVENT_CONTEXT		EventContext,
 	PDOKAN_INSTANCE		DokanInstance)
 {
-	static int eventId = 0;
+	static LONG eventId = 0;
 	ULONG					length	  = sizeof(EVENT_INFORMATION);
 	PEVENT_INFORMATION		eventInfo = (PEVENT_INFORMATION)malloc(length);
 	NTSTATUS				status = STATUS_INSUFFICIENT_RESOURCES;
@@ -78,7 +78,63 @@ DispatchCreate(
 	options = EventContext->Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
 	//DbgPrint("Create.CreateOptions 0x%x\n", options);
 
-	// to open directory
+    if (DokanInstance->DokanOptions->Version >= DOKAN_CREATEFILEEX_SUPPORTED_VERSION &&
+        DokanInstance->DokanOperations->CreateFileEx) {
+
+        if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+            WCHAR* lastP = NULL;
+            for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
+                if ((*p == L'\\' || *p == L'/') && p[1])
+                    lastP = p;
+            }
+            if (lastP) {
+                // ???: anything else we should do here?
+                //options |= FILE_DIRECTORY_FILE;
+                *lastP = 0;
+            }
+        }
+
+        openInfo->EventId = InterlockedIncrement(&eventId);
+        DbgPrint("###Create %04d\n", openInfo->EventId - 1);
+
+        eventInfo->Status = DokanInstance->DokanOperations->CreateFileEx(
+            EventContext->Operation.Create.FileName,
+            EventContext->Operation.Create.DesiredAccess,
+            EventContext->Operation.Create.ShareAccess,
+            disposition,
+            options,
+            EventContext->Operation.Create.FileAttributes,
+            0, /* reserved for now */
+            &eventInfo->Operation.Create.Information,
+            &fileInfo);
+        DbgPrint("###[%04d] CreateFileEx(FileName=\"%S\", "
+            "DesiredAccess=%#lx, ShareAccess=%#lx, CreateDisposition=%ld, "
+            "CreateOptions=%#lx, FileAttributes=%#lx, Reserved=%p, "
+            "*Information=%ld, FileInfo.Context=%#llx) = %lu\n",
+            openInfo->EventId - 1,
+            EventContext->Operation.Create.FileName,
+            EventContext->Operation.Create.DesiredAccess,
+            EventContext->Operation.Create.ShareAccess,
+            disposition,
+            options,
+            EventContext->Operation.Create.FileAttributes,
+            0,
+            eventInfo->Operation.Create.Information,
+            fileInfo.Context,
+            eventInfo->Status);
+
+        openInfo->IsDirectory = fileInfo.IsDirectory;
+        openInfo->UserContext = fileInfo.Context;
+
+        if (eventInfo->Status == STATUS_SUCCESS && fileInfo.IsDirectory)
+            eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+
+	    SendEventInformation(Handle, eventInfo, length, DokanInstance);
+	    free(eventInfo);
+	    return;
+    }
+
+    // to open directory
 	// even if this flag is not specifed, 
 	// there is a case to open a directory
 	if (options & FILE_DIRECTORY_FILE) {
