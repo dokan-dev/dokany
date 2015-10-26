@@ -337,6 +337,14 @@ HANDLE DOKANAPI
 DokanOpenRequestorToken(
 	PDOKAN_FILE_INFO	DokanFileInfo);
 
+void DOKANAPI
+DokanMapKernelToUserCreateFileFlags(
+	ULONG FileAttributes,
+	ULONG CreateOptions,
+	ULONG CreateDisposition,
+	DWORD *outFileAttributesAndFlags,
+	DWORD *outCreationDisposition);
+
 #ifdef __cplusplus
 }
 #endif

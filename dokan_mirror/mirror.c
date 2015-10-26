@@ -32,8 +32,6 @@ THE SOFTWARE.
 #include "../dokan/dokan.h"
 #include "../dokan/fileinfo.h"
 
-#define MirrorMapBit(dest, src, userBit, kernelBit) if(((src) & (kernelBit)) == (kernelBit)) (dest) |= (userBit)
-
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 
@@ -146,22 +144,13 @@ MirrorCreateFile(
 	HANDLE handle;
 	DWORD fileAttr;
 	NTSTATUS status = STATUS_SUCCESS;
-	DWORD creationDisposition = OPEN_EXISTING;
-	DWORD fileAttributesAndFlags = FileAttributes;
+	DWORD creationDisposition;
+	DWORD fileAttributesAndFlags;
+
+	DokanMapKernelToUserCreateFileFlags(FileAttributes, CreateOptions, CreateDisposition,
+		&fileAttributesAndFlags, &creationDisposition);
 
 	UNREFERENCED_PARAMETER(SecurityContext);
-
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
-
-#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-	MirrorMapBit(fileAttributesAndFlags, CreateOptions, FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
-#endif
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -240,38 +229,25 @@ MirrorCreateFile(
 	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
 	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
 	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
-	
-	switch(CreateDisposition) {
-	case FILE_CREATE:
-		creationDisposition = CREATE_NEW;
-		break;
-	case FILE_OPEN:
-		creationDisposition = OPEN_EXISTING;
-		break;
-	case FILE_OPEN_IF:
-		creationDisposition = OPEN_ALWAYS;
-		break;
-	case FILE_OVERWRITE:
-		creationDisposition = TRUNCATE_EXISTING;
-		break;
-	case FILE_OVERWRITE_IF:
-		creationDisposition = CREATE_ALWAYS;
-		break;
-	default:
-		// TODO: should support FILE_SUPERSEDE ?
-		break;
-	}
 
-	if(creationDisposition == CREATE_NEW)
+	if(creationDisposition == CREATE_NEW) {
 		DbgPrint(L"\tCREATE_NEW\n");
-	if(creationDisposition == OPEN_ALWAYS)
+	}
+	else if(creationDisposition == OPEN_ALWAYS) {
 		DbgPrint(L"\tOPEN_ALWAYS\n");
-	if(creationDisposition == CREATE_ALWAYS)
+	}
+	else if(creationDisposition == CREATE_ALWAYS) {
 		DbgPrint(L"\tCREATE_ALWAYS\n");
-	if(creationDisposition == OPEN_EXISTING)
+	}
+	else if(creationDisposition == OPEN_EXISTING) {
 		DbgPrint(L"\tOPEN_EXISTING\n");
-	if(creationDisposition == TRUNCATE_EXISTING)
+	}
+	else if(creationDisposition == TRUNCATE_EXISTING) {
 		DbgPrint(L"\tTRUNCATE_EXISTING\n");
+	}
+	else {
+		DbgPrint(L"\tUNKNOWN creationDisposition!\n");
+	}
 
 	handle = CreateFile(
 		filePath,

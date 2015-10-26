@@ -32,6 +32,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "list.h"
 
+#define DokanMapKernelBit(dest, src, userBit, kernelBit) if(((src) & (kernelBit)) == (kernelBit)) (dest) |= (userBit)
+
 // DokanOptions->DebugMode is ON?
 BOOL	g_DebugMode = TRUE;
 
@@ -766,4 +768,57 @@ BOOL WINAPI DllMain(
 			break;
 	}
 	return TRUE;
+}
+
+void DOKANAPI
+DokanMapKernelToUserCreateFileFlags(
+	ULONG FileAttributes,
+	ULONG CreateOptions,
+	ULONG CreateDisposition,
+	DWORD *outFileAttributesAndFlags,
+	DWORD *outCreationDisposition)
+{
+	if(outFileAttributesAndFlags) {
+
+		*outFileAttributesAndFlags = FileAttributes;
+
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
+#endif
+	}
+
+	if(outCreationDisposition) {
+
+		switch(CreateDisposition) {
+		case FILE_CREATE:
+			*outCreationDisposition = CREATE_NEW;
+			break;
+		case FILE_OPEN:
+			*outCreationDisposition = OPEN_EXISTING;
+			break;
+		case FILE_OPEN_IF:
+			*outCreationDisposition = OPEN_ALWAYS;
+			break;
+		case FILE_OVERWRITE:
+			*outCreationDisposition = TRUNCATE_EXISTING;
+			break;
+		case FILE_SUPERSEDE:
+			// The documentation isn't clear on the difference between replacing a file and truncating it.
+			// For now we just map it to create/truncate
+		case FILE_OVERWRITE_IF:
+			*outCreationDisposition = CREATE_ALWAYS;
+			break;
+		default:
+			*outCreationDisposition = 0;
+			break;
+		}
+	}
 }

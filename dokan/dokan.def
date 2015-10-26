@@ -17,4 +17,4 @@ DokanSetDebugMode
 DokanMountControl
 DokanOpenRequestorToken
 DokanRemoveMountPoint
-
+DokanMapKernelToUserCreateFileFlags
