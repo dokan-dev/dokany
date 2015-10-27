@@ -105,12 +105,11 @@ DispatchCreate(
             options,
             EventContext->Operation.Create.FileAttributes,
             0, /* reserved for now */
-            &eventInfo->Operation.Create.Information,
             &fileInfo);
         DbgPrint("###[%04d] CreateFileEx(FileName=\"%S\", "
             "DesiredAccess=%#lx, ShareAccess=%#lx, CreateDisposition=%ld, "
             "CreateOptions=%#lx, FileAttributes=%#lx, Reserved=%p, "
-            "*Information=%ld, FileInfo.Context=%#llx) = %lu\n",
+            "FileInfo.Context=%#llx) = %lu\n",
             openInfo->EventId - 1,
             EventContext->Operation.Create.FileName,
             EventContext->Operation.Create.DesiredAccess,
@@ -119,15 +118,38 @@ DispatchCreate(
             options,
             EventContext->Operation.Create.FileAttributes,
             0,
-            eventInfo->Operation.Create.Information,
             fileInfo.Context,
             eventInfo->Status);
 
         openInfo->IsDirectory = fileInfo.IsDirectory;
         openInfo->UserContext = fileInfo.Context;
 
-        if (eventInfo->Status == STATUS_SUCCESS && fileInfo.IsDirectory)
-            eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+        if (eventInfo->Status == STATUS_SUCCESS)
+        {
+            switch (disposition)
+            {
+            case FILE_CREATE:
+                eventInfo->Operation.Create.Information = FILE_CREATED;
+                break;
+            case FILE_OPEN_IF:
+            case FILE_OPEN:
+                eventInfo->Operation.Create.Information = FILE_OPENED;
+                break;
+            case FILE_OVERWRITE:
+            case FILE_OVERWRITE_IF:
+                eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
+                break;
+            case FILE_SUPERSEDE:
+                eventInfo->Operation.Create.Information = FILE_SUPERSEDED;
+                break;
+            default:
+				DbgPrint("### Create other disposition : %d\n", disposition);
+                break;
+            }
+
+            if (fileInfo.IsDirectory)
+                eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+        }
 
 	    SendEventInformation(Handle, eventInfo, length, DokanInstance);
 	    free(eventInfo);

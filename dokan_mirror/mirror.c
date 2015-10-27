@@ -435,7 +435,6 @@ MirrorCreateFileEx(
     DWORD                   options,
     DWORD                   FileAttributes,
     PSECURITY_DESCRIPTOR    Reserved,
-    PULONG                  IoStatusBlockInformation,
     PDOKAN_FILE_INFO        DokanFileInfo)
 {
     NTSTATUS                status = STATUS_INSUFFICIENT_RESOURCES;
@@ -497,31 +496,12 @@ MirrorCreateFileEx(
             DesiredAccess, ShareAccess, creationDisposition, FileAttributes, DokanFileInfo);
     }
 
-    // FILE_CREATED
-    // FILE_DOES_NOT_EXIST
-    // FILE_EXISTS
-    // FILE_OPENED
-    // FILE_OVERWRITTEN
-    // FILE_SUPERSEDED
-
-
     //DbgPrint(L"CreateFile status = %lu\n", status);
-    if (status != STATUS_SUCCESS) {
-        *IoStatusBlockInformation = FILE_DOES_NOT_EXIST;
-
-        if (status == STATUS_OBJECT_NAME_COLLISION) {
-            *IoStatusBlockInformation = FILE_EXISTS;
-
-            if (disposition == FILE_OPEN_IF ||
-                disposition == FILE_OVERWRITE_IF) {
-                status = STATUS_SUCCESS;
-                if (disposition == FILE_OPEN_IF) {
-                    *IoStatusBlockInformation = FILE_OPENED;
-                } else {
-                    *IoStatusBlockInformation = FILE_OVERWRITTEN;
-                }
-            }
-        }
+    if (status != STATUS_SUCCESS)
+    {
+        if (status == STATUS_OBJECT_NAME_COLLISION &&
+            (disposition == FILE_OPEN_IF || disposition == FILE_OVERWRITE_IF))
+            status = STATUS_SUCCESS;
     } else if (directoryRequested && !DokanFileInfo->IsDirectory) {
         DokanFileInfo->DeleteOnClose = 0;
         MirrorCleanup(FileName, DokanFileInfo);
@@ -532,18 +512,6 @@ MirrorCreateFileEx(
         MirrorCleanup(FileName, DokanFileInfo);
         MirrorCloseFile(FileName, DokanFileInfo);
         status = STATUS_FILE_IS_A_DIRECTORY;
-    } else {
-        
-        //DbgPrint("status = %d\n", status);
-
-        status = STATUS_SUCCESS;
-        *IoStatusBlockInformation = FILE_OPENED;
-
-        if (disposition == FILE_CREATE ||
-            disposition == FILE_OPEN_IF ||
-            disposition == FILE_OVERWRITE_IF) {
-            *IoStatusBlockInformation = FILE_CREATED;
-        }
     }
 
     return status;

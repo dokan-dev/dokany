@@ -301,15 +301,9 @@ typedef struct _DOKAN_OPERATIONS {
     //     Reserved
     //         This parameter is reserved and should be 0. In the future it will be used to pass
     //         a security descriptor to be attached to a newly created file.
-    //     PIoStatusBlockInformation
-    //         A pointer to the Information field of the IO_STATUS_BLOCK of the associated
-    //         request. When CreateFileEx succeeds, it must be set to one of the following
-    //         values: FILE_CREATED, FILE_OPENED, FILE_OVERWRITTEN, FILE_SUPERSEDED.
     //
     // Return
-    //     When this operation succeeds it should return STATUS_SUCCESS. In this case it should
-    //     also set *PIoStatusBlockInformation to the appropriate value (one of FILE_CREATED,
-    //     FILE_OPENED, FILE_OVERWRITTEN, FILE_SUPERSEDED) AND it should set TRUE on
+    //     When this operation succeeds it should return STATUS_SUCCESS and it should set TRUE on
     //     DokanFileInfo->IsDirectory when file is a directory.
     //
     //     When this operation fails it should return an appropriate status code.
@@ -348,7 +342,6 @@ typedef struct _DOKAN_OPERATIONS {
         DWORD,                  // CreateOptions
         DWORD,                  // FileAttributes
         PSECURITY_DESCRIPTOR,   // Reserved
-        PULONG,                 // &IoStatusBlock.Information
         PDOKAN_FILE_INFO);
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
