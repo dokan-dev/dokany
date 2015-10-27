@@ -112,7 +112,8 @@ case FUSE_OPT_KEY_NONOPT:
 			fprintf(stderr, "fuse: bad mount point `%s': %s\n", arg, strerror(errno));
 			return -1;
 		}*/
-		strcpy(mountpoint,arg);
+		ZeroMemory(mountpoint, sizeof(mountpoint));
+		strncpy(mountpoint,arg, sizeof(mountpoint) - 1);
 		return fuse_opt_add_opt(&hopts->mountpoint, mountpoint);
 	} else {
 		fprintf(stderr, "fuse: invalid argument `%s'\n", arg);

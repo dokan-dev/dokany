@@ -86,6 +86,7 @@ CreateMountPoint(
 
     reparseData = (PREPARSE_DATA_BUFFER)malloc(bufferLength);
 	if (reparseData == NULL) {
+		CloseHandle(handle);
 		return FALSE;
 	}
 

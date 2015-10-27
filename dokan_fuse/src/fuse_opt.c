@@ -45,15 +45,19 @@ static int alloc_failed(void)
 
 int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
 {
-    char **newargv;
+    char **newargv = NULL;
     char *newarg;
 
     assert(!args->argv || args->allocated);
 
     newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
     newarg = newargv ? _strdup(arg) : NULL;
-    if (!newargv || !newarg)
-        return alloc_failed();
+	if (!newargv || !newarg)
+	{
+		if (newargv)
+			free(newargv);
+		return alloc_failed();
+	}
 
     args->argv = newargv;
     args->allocated = 1;

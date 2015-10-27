@@ -1,5 +1,6 @@
 # Dokany
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
+[![Coverity Scan Build Status](https://scan.coverity.com/projects/6789/badge.svg)](https://scan.coverity.com/projects/6789)
 [![Bounty](https://img.shields.io/bountysource/team/dokan-dev/activity.svg)](https://www.bountysource.com/teams/dokan-dev/issues)
 
 ## What is Dokan

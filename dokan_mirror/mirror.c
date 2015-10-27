@@ -39,7 +39,7 @@ static void DbgPrint(LPCWSTR format, ...)
 {
 	if (g_DebugMode) {
 		const WCHAR *outputString;
-		WCHAR *buffer;
+		WCHAR *buffer = NULL;
 		size_t length;
 		va_list argp;
 
@@ -56,7 +56,8 @@ static void DbgPrint(LPCWSTR format, ...)
 			fputws(outputString, stderr);
 		else
 			OutputDebugStringW(outputString);
-		_freea(buffer);
+		if (buffer)
+			_freea(buffer);
 		va_end(argp);
 	}
 }
@@ -571,6 +572,7 @@ MirrorWriteFile(
 	ULONG	offset = (ULONG)Offset;
 	BOOL	opened = FALSE;
 
+
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, Offset, NumberOfBytesToWrite);
@@ -603,12 +605,16 @@ MirrorWriteFile(
 		if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
 			DWORD error = GetLastError();
 			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
+			if (opened)
+				CloseHandle(handle);
 			return ToNtStatus(error);
 		}
     }
     else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
 		DWORD error = GetLastError();
 		DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, error);
+		if (opened)
+			CloseHandle(handle);
 		return ToNtStatus(error);
 	}
 
@@ -617,6 +623,8 @@ MirrorWriteFile(
 		DWORD error = GetLastError();
 		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
 			error, NumberOfBytesToWrite, *NumberOfBytesWritten);
+		if (opened)
+			CloseHandle(handle);
 		return ToNtStatus(error);
 
 	} else {
@@ -691,6 +699,11 @@ MirrorGetFileInformation(
 
 	if (!GetFileInformationByHandle(handle,HandleFileInformation)) {
 		DbgPrint(L"\terror code = %d\n", GetLastError());
+
+		if (opened) {
+			opened = FALSE;
+			CloseHandle(handle);
+		}
 
 		// FileName is a root directory
 		// in this case, FindFirstFile can't get directory information
@@ -1340,6 +1353,8 @@ wmain(ULONG argc, PWCHAR argv[])
 			"  /n (use network drive)\n"
 			"  /m (use removable drive)\n"
             "  /i (Timeout in Milliseconds ex. /i 30000)\n");
+		free(dokanOperations);
+		free(dokanOptions);
 		return EXIT_FAILURE;
 	}
 
@@ -1384,6 +1399,8 @@ wmain(ULONG argc, PWCHAR argv[])
             break;
 		default:
 			fwprintf(stderr, L"unknown command: %s\n", argv[command]);
+			free(dokanOperations);
+			free(dokanOptions);
 			return EXIT_FAILURE;
 		}
 	}
@@ -1391,6 +1408,8 @@ wmain(ULONG argc, PWCHAR argv[])
 	// Add security name privilege. Required here to handle GetFileSecurity properly.
 	if (!AddSeSecurityNamePrivilege()) {
 		fwprintf(stderr, L"  Failed to add security privilege to process\n");
+		free(dokanOperations);
+		free(dokanOptions);
 		return -1;
 	}
 

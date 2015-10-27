@@ -34,7 +34,7 @@ DispatchCreate(
 	NTSTATUS								status = STATUS_INSUFFICIENT_RESOURCES;
 	DOKAN_FILE_INFO							fileInfo;
 	ULONG									disposition;
-	PDOKAN_OPEN_INFO						openInfo;
+	PDOKAN_OPEN_INFO						openInfo = NULL;
 	BOOL									directoryRequested = FALSE;
 	DWORD									options;
 	DOKAN_IO_SECURITY_CONTEXT				ioSecurityContext;
@@ -65,6 +65,7 @@ DispatchCreate(
 	if (openInfo == NULL) {
 		eventInfo->Status = STATUS_INSUFFICIENT_RESOURCES;
 		SendEventInformation(Handle, eventInfo, length, NULL);
+		free(eventInfo);
 		return;
 	}
 	ZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
