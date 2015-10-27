@@ -47,7 +47,10 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 	if (stbuf->st_mtim.tv_sec!=0)
 		find_data->ftLastWriteTime=unixTimeToFiletime(stbuf->st_mtim.tv_sec);
 
-	//TODO: add support for read-only files - try to derive it from file's owner?
+	//Partial support for read-only files - currently done for a files without write permission only
+	if (!(stbuf->st_mode&0222))
+		find_data->dwFileAttributes|=FILE_ATTRIBUTE_READONLY;
+	//TODO: add full support for read-only files - try to derive it from file's owner?
 	std::string fname=extract_file_name(name);
 	if (!fname.empty() && fname.at(0)=='.') //UNIX hidden files
 		find_data->dwFileAttributes|=FILE_ATTRIBUTE_HIDDEN;

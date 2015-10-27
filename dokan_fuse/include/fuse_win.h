@@ -52,7 +52,7 @@ typedef unsigned int gid_t;
 typedef unsigned int uid_t;
 #endif
 
-#if !defined(HAVE_STRUCT_TIMESPEC) && !defined(__CYGWIN__) && !defined(_TIMESPEC_DEFINED) /* win32 pthread.h defines it */
+#if !defined(HAVE_STRUCT_TIMESPEC) && !defined(__CYGWIN__) && !defined(_TIMESPEC_DEFINED) && defined(_CRT_NO_TIME_T) /* win32 pthread.h time.h defines it */
 /* POSIX.1b structure for a time value.  This is like a `struct timeval' but
 has nanoseconds instead of microseconds.  */
 #define HAVE_STRUCT_TIMESPEC 1

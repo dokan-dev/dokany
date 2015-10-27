@@ -353,6 +353,7 @@ Return Value:
 	ULONG									alignedObjectTypeNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
 	ULONG									newSecurityDescriptorLength = 0;
 	PDOKAN_UNICODE_STRING_INTERMEDIATE		intermediateUnicodeStr = NULL;
+	PUNICODE_STRING							relatedFileName = NULL;
 
 	PAGED_CODE();
 
@@ -412,8 +413,20 @@ Return Value:
 			fileObject->Vpb = dcb->DeviceObject->Vpb;
 		}
 
-		if ((relatedFileObject == NULL || relatedFileObject->FileName.Length == 0) &&
-			fileObject->FileName.Length == 0) {
+		// Get RelatedFileObject filename.
+		if (relatedFileObject != NULL) {
+			// Using relatedFileObject->FileName is not safe here, use cached filename from context.
+			if (relatedFileObject->FsContext2) {
+				PDokanCCB relatedCcb = (PDokanCCB)relatedFileObject->FsContext2;
+				if (relatedCcb->Fcb) {
+					if (relatedCcb->Fcb->FileName.Length > 0 && relatedCcb->Fcb->FileName.Buffer != NULL) {
+						relatedFileName = &relatedCcb->Fcb->FileName;
+					}
+				}
+			}
+		}
+
+		if (relatedFileName == NULL && fileObject->FileName.Length == 0) {
 
 			DDbgPrint("   request for FS device\n");
 
@@ -433,8 +446,8 @@ Return Value:
 	   }
 
    		fileNameLength = fileObject->FileName.Length;
-		if (relatedFileObject) {
-			fileNameLength += relatedFileObject->FileName.Length;
+		if (relatedFileName != NULL) {
+			fileNameLength += relatedFileName->Length;
 
 			if (fileObject->FileName.Length > 0 &&
 				fileObject->FileName.Buffer[0] == '\\') {
@@ -442,8 +455,8 @@ Return Value:
 				status = STATUS_OBJECT_NAME_INVALID;
 				__leave;
 			}
-			if (relatedFileObject->FileName.Length > 0 &&
-				relatedFileObject->FileName.Buffer[relatedFileObject->FileName.Length/sizeof(WCHAR)-1] != '\\') {
+			if (relatedFileName->Length > 0 &&
+				relatedFileName->Buffer[relatedFileName->Length/sizeof(WCHAR)-1] != '\\') {
 				needBackSlashAfterRelatedFile = TRUE;
 				fileNameLength += sizeof(WCHAR);
 			}
@@ -469,20 +482,20 @@ Return Value:
 
 		RtlZeroMemory(fileName, fileNameLength + sizeof(WCHAR));
 
-		if (relatedFileObject != NULL) {
-			DDbgPrint("  RelatedFileName:%wZ\n", &relatedFileObject->FileName);
+		if (relatedFileName != NULL) {
+			DDbgPrint("  RelatedFileName:%wZ\n", relatedFileName);
 
 			// copy the file name of related file object
 			RtlCopyMemory(fileName,
-							relatedFileObject->FileName.Buffer,
-							relatedFileObject->FileName.Length);
+				relatedFileName->Buffer,
+				relatedFileName->Length);
 
 			if (needBackSlashAfterRelatedFile) {
-				((PWCHAR)fileName)[relatedFileObject->FileName.Length/sizeof(WCHAR)] = '\\';
+				((PWCHAR)fileName)[relatedFileName->Length/sizeof(WCHAR)] = '\\';
 			}
 			// copy the file name of fileObject
 			RtlCopyMemory((PCHAR)fileName +
-							relatedFileObject->FileName.Length +
+				relatedFileName->Length +
 							(needBackSlashAfterRelatedFile? sizeof(WCHAR) : 0),
 							fileObject->FileName.Buffer,
 							fileObject->FileName.Length);

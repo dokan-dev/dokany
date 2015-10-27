@@ -438,7 +438,10 @@ VOID
 DokanPrintNTStatus(
 	NTSTATUS	Status)
 {
+	DDbgPrint("  status = 0x%x\n", Status);
+
 	PrintStatus(Status, STATUS_SUCCESS);
+	PrintStatus(Status, STATUS_PENDING);
 	PrintStatus(Status, STATUS_NO_MORE_FILES);
 	PrintStatus(Status, STATUS_END_OF_FILE);
 	PrintStatus(Status, STATUS_NO_SUCH_FILE);

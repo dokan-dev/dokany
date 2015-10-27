@@ -536,6 +536,11 @@ ReleaseDokanOpenInfo(
 				free(openInfo->DirListHead);
 				openInfo->DirListHead = NULL;
 			}
+			if (openInfo->StreamListHead != NULL) {
+				ClearFindStreamData(openInfo->StreamListHead);
+				free(openInfo->StreamListHead);
+				openInfo->StreamListHead = NULL;
+			}
 			free(openInfo);
 			EventInformation->Context = 0;
 		}

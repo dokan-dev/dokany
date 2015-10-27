@@ -209,6 +209,16 @@ DispatchCreate(
 		if (status == STATUS_OBJECT_NAME_COLLISION)
 		{
 			eventInfo->Operation.Create.Information = FILE_EXISTS;
+
+			if (disposition == FILE_OPEN_IF ||
+				disposition == FILE_OVERWRITE_IF) {
+				eventInfo->Status = STATUS_SUCCESS;
+				if (disposition == FILE_OPEN_IF) {
+					eventInfo->Operation.Create.Information = FILE_OPENED;
+				} else {
+					eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
+				}
+			}
 		}
 	} else {
 		
@@ -220,14 +230,7 @@ DispatchCreate(
 		if (disposition == FILE_CREATE ||
 			disposition == FILE_OPEN_IF ||
 			disposition == FILE_OVERWRITE_IF) {
-
 			eventInfo->Operation.Create.Information = FILE_CREATED;
-		}
-
-		if ((disposition == FILE_OVERWRITE_IF || disposition == FILE_OVERWRITE) &&
-			eventInfo->Operation.Create.Information != FILE_CREATED) {
-			
-			eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
 		}
 
 		if (fileInfo.IsDirectory)

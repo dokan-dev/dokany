@@ -127,6 +127,62 @@ NTSTATUS ToNtStatus(DWORD dwError)
 	}
 }
 
+static BOOL AddSeSecurityNamePrivilege()
+{
+	HANDLE token = 0;
+	DbgPrint(L"## Attempting to add SE_SECURITY_NAME privilege to process token ##\n");
+	DWORD err;
+	LUID luid;
+	if (!LookupPrivilegeValue(0, SE_SECURITY_NAME, &luid)) {
+		err = GetLastError();
+		if (err != ERROR_SUCCESS) {
+			DbgPrint(L"  failed: Unable to lookup privilege value. error = %u\n", err);
+			return FALSE;
+		}
+	}
+
+	LUID_AND_ATTRIBUTES attr;
+	attr.Attributes = SE_PRIVILEGE_ENABLED;
+	attr.Luid = luid;
+
+	TOKEN_PRIVILEGES priv;
+	priv.PrivilegeCount = 1;
+	priv.Privileges[0] = attr;
+
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+		err = GetLastError();
+		if (err != ERROR_SUCCESS) {
+			DbgPrint(L"  failed: Unable obtain process token. error = %u\n", err);
+			return FALSE;
+		}
+	}
+
+	TOKEN_PRIVILEGES oldPriv;
+	DWORD retSize;
+	AdjustTokenPrivileges(token, FALSE, &priv, sizeof(TOKEN_PRIVILEGES), &oldPriv, &retSize);
+	err = GetLastError();
+	if (err != ERROR_SUCCESS) {
+		DbgPrint(L"  failed: Unable to adjust token privileges: %u\n", err);
+		CloseHandle(token);
+		return FALSE;
+	}
+
+	BOOL privAlreadyPresent = FALSE;
+	for (unsigned int i = 0; i < oldPriv.PrivilegeCount; i++) {
+		if (oldPriv.Privileges[i].Luid.HighPart == luid.HighPart &&
+			oldPriv.Privileges[i].Luid.LowPart == luid.LowPart) {
+			privAlreadyPresent = TRUE;
+			break;
+		}
+	}
+	DbgPrint(privAlreadyPresent
+		? L"  success: privilege already present\n"
+		: L"  success: privilege added\n");
+	if (token)
+		CloseHandle(token);
+	return TRUE;
+}
+
 #define MirrorCheckFlag(val, flag) if (val&flag) { DbgPrint(L"\t" L#flag L"\n"); }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -196,7 +252,9 @@ MirrorCreateFile(
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
-	if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+	if (fileAttr != INVALID_FILE_ATTRIBUTES
+		&& (fileAttr & FILE_ATTRIBUTE_DIRECTORY
+			&& DesiredAccess != DELETE)) { //Directory cannot be open for DELETE
 		fileAttributesAndFlags |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
@@ -292,8 +350,18 @@ MirrorCreateFile(
 			status = STATUS_INVALID_PARAMETER;
 			DbgPrint(L"Create got unknown error code %d\n", error);
 		}
-	} else
+	} else {
 		DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+		if (creationDisposition == OPEN_ALWAYS
+			|| creationDisposition == CREATE_ALWAYS) {
+			DWORD error = GetLastError();
+			if (error == ERROR_ALREADY_EXISTS) {
+				DbgPrint(L"\tOpen an already exist file\n");
+				status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+			}
+		}
+	}
 
 	DbgPrint(L"\n");
 	return status;
@@ -1049,30 +1117,62 @@ MirrorGetFileSecurity(
 	PULONG				LengthNeeded,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
-	HANDLE	handle;
 	WCHAR	filePath[MAX_PATH];
+
+	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
-	handle = (HANDLE)DokanFileInfo->Context;
+	MirrorCheckFlag(*SecurityInformation, FILE_SHARE_READ);
+	MirrorCheckFlag(*SecurityInformation, OWNER_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, GROUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+
+
+	DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
+	HANDLE handle = CreateFile(
+		filePath,
+		READ_CONTROL | ((*SecurityInformation & SACL_SECURITY_INFORMATION) ? ACCESS_SYSTEM_SECURITY : 0),
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+		NULL, // security attribute
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS,// |FILE_FLAG_NO_BUFFERING,
+		NULL);
+
 	if (!handle || handle == INVALID_HANDLE_VALUE) {
 		DbgPrint(L"\tinvalid handle\n\n");
-		return STATUS_INVALID_HANDLE;
+		int error = GetLastError();
+		return ToNtStatus(error);
 	}
 
 	if (!GetUserObjectSecurity(handle, SecurityInformation, SecurityDescriptor,
-			BufferLength, LengthNeeded)) {
+		BufferLength, LengthNeeded)) {
 		int error = GetLastError();
 		if (error == ERROR_INSUFFICIENT_BUFFER) {
 			DbgPrint(L"  GetUserObjectSecurity failed: ERROR_INSUFFICIENT_BUFFER\n");
-			return STATUS_BUFFER_OVERFLOW;
-		} else {
+			CloseHandle(handle);
+			return ToNtStatus(error);
+		}
+		else {
 			DbgPrint(L"  GetUserObjectSecurity failed: %d\n", error);
+			CloseHandle(handle);
 			return ToNtStatus(error);
 		}
 	}
+	CloseHandle(handle);
+
 	return STATUS_SUCCESS;
 }
 
@@ -1148,7 +1248,7 @@ MirrorUnmount(
 
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS definition.
- * This only for MirrorEnumerateNamedStreams. Link with ntdll.lib still required.
+ * This only for MirrorFindStreams. Link with ntdll.lib still required.
  * 
  * Not needed if you're not using NtQueryInformationFile!
  *
@@ -1168,65 +1268,48 @@ NTSYSCALLAPI NTSTATUS NTAPI 	NtQueryInformationFile(_In_ HANDLE FileHandle, _Out
  * END
  */
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorEnumerateNamedStreams(
-	LPCWSTR					FileName,
-	PVOID*					EnumContext,
-	LPWSTR					StreamName,
-	PLONGLONG				StreamSize,
-	PDOKAN_FILE_INFO		DokanFileInfo)
+NTSTATUS DOKAN_CALLBACK MirrorFindStreams(
+    LPCWSTR                 FileName,
+    PFillFindStreamData     FillFindStreamData,
+    PDOKAN_FILE_INFO        DokanFileInfo)
 {
-	HANDLE	handle;
-	WCHAR	filePath[MAX_PATH];
+    WCHAR                   filePath[MAX_PATH];
+    HANDLE                  hFind;
+    WIN32_FIND_STREAM_DATA  findData;
+    DWORD                   error;
+    int                     count = 0;
 
-	GetFilePath(filePath, MAX_PATH, FileName);
+    GetFilePath(filePath, MAX_PATH, FileName);
 
-	DbgPrint(L"EnumerateNamedStreams %s\n", filePath);
+    DbgPrint(L"FindStreams :%s\n", filePath);
 
-	handle = (HANDLE)DokanFileInfo->Context;
-	if (!handle || handle == INVALID_HANDLE_VALUE) {
-		DbgPrint(L"\tinvalid handle\n\n");
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    hFind = FindFirstStreamW(filePath, FindStreamInfoStandard, &findData, 0);
 
-	// As we are requested one by one, it would be better to use FindFirstStream / FindNextStream instead of requesting all streams each time
-	// But this doesn't really matter on mirror sample
-	BYTE InfoBlock[64 * 1024];
-	PFILE_STREAM_INFORMATION pStreamInfo = (PFILE_STREAM_INFORMATION)InfoBlock;
-	IO_STATUS_BLOCK ioStatus;
-	ZeroMemory(InfoBlock, sizeof(InfoBlock));
+    if (hFind == INVALID_HANDLE_VALUE) {
+        error = GetLastError();
+        DbgPrint(L"\tinvalid file handle. Error is %u\n\n", error);
+        return ToNtStatus(error);
+    }
 
-	NTSTATUS status = NtQueryInformationFile(handle, &ioStatus, InfoBlock, sizeof(InfoBlock), FileStreamInformation);
-	if (status != STATUS_SUCCESS) {
-		DbgPrint(L"\tNtQueryInformationFile failed with %d.\n", status);
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    FillFindStreamData(&findData, DokanFileInfo);
+    count++;
 
-	if (pStreamInfo->StreamNameLength == 0) {
-		DbgPrint(L"\tNo stream found.\n");
-		return STATUS_NOT_IMPLEMENTED;
-	}
+    while (FindNextStreamW(hFind, &findData) != 0) {
+        FillFindStreamData(&findData, DokanFileInfo);
+        count++;
+    }
 
-	UINT index = (UINT)*EnumContext;
-	DbgPrint(L"\tStream #%d requested.\n", index);
-	
-	for (UINT i = 0; i != index; ++i) {
-		if (pStreamInfo->NextEntryOffset == 0) {
-			DbgPrint(L"\tNo more stream.\n");
-			return STATUS_NOT_IMPLEMENTED;
-		}
-		pStreamInfo = (PFILE_STREAM_INFORMATION) ((LPBYTE)pStreamInfo + pStreamInfo->NextEntryOffset);   // Next stream record
-	}
+    error = GetLastError();
+    FindClose(hFind);
 
-	wcscpy_s(StreamName, SHRT_MAX + 1, pStreamInfo->StreamName);
-	*StreamSize = pStreamInfo->StreamSize.QuadPart;
+    if (error != ERROR_HANDLE_EOF) {
+        DbgPrint(L"\tFindNextStreamW error. Error is %u\n\n", error);
+        return ToNtStatus(error);
+    }
 
-	DbgPrint(L"\t Stream %ws\n", pStreamInfo->StreamName);
+    DbgPrint(L"\tFindStreams return %d entries in %s\n\n", count, filePath);
 
-	// Remember next stream entry index
-	*EnumContext = (PVOID)++index;
-
-	return STATUS_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 
@@ -1305,6 +1388,12 @@ wmain(ULONG argc, PWCHAR argv[])
 		}
 	}
 
+	// Add security name privilege. Required here to handle GetFileSecurity properly.
+	if (!AddSeSecurityNamePrivilege()) {
+		fwprintf(stderr, L"  Failed to add security privilege to process\n");
+		return -1;
+	}
+
 	if (g_DebugMode) {
 		dokanOptions->Options |= DOKAN_OPTION_DEBUG;
 	}
@@ -1340,7 +1429,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->GetDiskFreeSpace = NULL;
 	dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
 	dokanOperations->Unmount = MirrorUnmount;
-	dokanOperations->EnumerateNamedStreams = MirrorEnumerateNamedStreams;
+    dokanOperations->FindStreams = MirrorFindStreams;
 
 	status = DokanMain(dokanOptions, dokanOperations);
 	switch (status) {

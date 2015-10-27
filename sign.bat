@@ -13,6 +13,8 @@ REM Sign driver files...
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll Win32\Win7Release\dokan.sys
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll Win32\Win8Release\dokan.sys
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll Win32\Win8.1Release\dokan.sys
+signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll Win32\Win10Release\dokan.sys
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll x64\Win7Release\dokan.sys
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll x64\Win8Release\dokan.sys
 signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll x64\Win8.1Release\dokan.sys
+signtool sign /v /i Daddy /ac "cert\Go Daddy Class 2 Certification Authority.cer" /t http://timestamp.verisign.com/scripts/timstamp.dll x64\Win10Release\dokan.sys

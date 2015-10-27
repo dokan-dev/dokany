@@ -80,13 +80,21 @@ typedef struct _DOKAN_FILE_INFO {
 //   (currently it never returns 1)
 typedef int (WINAPI *PFillFindData) (PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 
+// FillFindStreamData
+//   is used to add an entry in FindStreams
+//   returns 1 if buffer is full, otherwise 0
+//   (currently it never returns 1)
+typedef int (WINAPI *PFillFindStreamData) (PWIN32_FIND_STREAM_DATA , PDOKAN_FILE_INFO);
+
 typedef struct _DOKAN_OPERATIONS {
 
 	// When an error occurs, return NTSTATUS (https://support.microsoft.com/en-us/kb/113996)
 
 
 	// CreateFile
-	//   If the file is a directory CreateFile (not OpenDirectory) may be called.
+	//	 In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already existing file,
+	//   you have to return STATUS_OBJECT_NAME_COLLISION.
+	//   If file is a directory, CreateFile (not OpenDirectory) may be called.
 	//   In this case, CreateFile should return STATUS_SUCCESS when that directory can be opened.
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
 	//   See ZwCreateFile() https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx
@@ -178,9 +186,9 @@ typedef struct _DOKAN_OPERATIONS {
 
 	// You should not delete the file on DeleteFile or DeleteDirectory, but instead
 	// you must only check whether you can delete the file or not, 
-	// and return ERROR_SUCCESS (when you can delete it) or appropriate error codes such as 
+	// and return STATUS_SUCCESS (when you can delete it) or appropriate error codes such as 
 	// STATUS_ACCESS_DENIED, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_OBJECT_NAME_NOT_FOUND.
-	// When you return ERROR_SUCCESS, you get a Cleanup call afterwards with
+	// When you return STATUS_SUCCESS, you get a Cleanup call afterwards with
 	// FileInfo->DeleteOnClose set to TRUE and only then you have to actually delete
 	// the file being closed.
 	NTSTATUS (DOKAN_CALLBACK *DeleteFile) (
@@ -271,13 +279,10 @@ typedef struct _DOKAN_OPERATIONS {
 		PDOKAN_FILE_INFO);
 
 	// Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
-	NTSTATUS (DOKAN_CALLBACK *EnumerateNamedStreams) (
-		LPCWSTR, // FileName
-		PVOID*, // EnumContext
-		LPWSTR, // StreamName
-		PLONGLONG, // StreamSize
-		PDOKAN_FILE_INFO);
-
+	NTSTATUS (DOKAN_CALLBACK *FindStreams) (
+		LPCWSTR,                // FileName
+		PFillFindStreamData,    // call this function with PWIN32_FIND_STREAM_DATA
+		PDOKAN_FILE_INFO);      //  (see PFillFindStreamData definition)
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
