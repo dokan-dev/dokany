@@ -24,12 +24,25 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 
 VOID
+DispatchCreateEx(
+    HANDLE              Handle,
+    PEVENT_CONTEXT      EventContext,
+    PDOKAN_INSTANCE     DokanInstance);
+
+
+VOID
 DispatchCreate(
 	HANDLE				Handle, // This handle is not for a file. It is for Dokan Device Driver(which is doing EVENT_WAIT).
 	PEVENT_CONTEXT		EventContext,
 	PDOKAN_INSTANCE		DokanInstance)
 {
-	static LONG eventId = 0;
+    if (DokanInstance->DokanOptions->Version >= DOKAN_CREATEFILEEX_SUPPORTED_VERSION &&
+        DokanInstance->DokanOperations->CreateFileEx) {
+        DispatchCreateEx(Handle, EventContext, DokanInstance);
+        return;
+    }
+
+    static int eventId = 0;
 	ULONG					length	  = sizeof(EVENT_INFORMATION);
 	PEVENT_INFORMATION		eventInfo = (PEVENT_INFORMATION)malloc(length);
 	NTSTATUS				status = STATUS_INSUFFICIENT_RESOURCES;
@@ -77,84 +90,6 @@ DispatchCreate(
 	// The low 24 bits of this member correspond to the CreateOptions parameter
 	options = EventContext->Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
 	//DbgPrint("Create.CreateOptions 0x%x\n", options);
-
-    if (DokanInstance->DokanOptions->Version >= DOKAN_CREATEFILEEX_SUPPORTED_VERSION &&
-        DokanInstance->DokanOperations->CreateFileEx) {
-
-        if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-            WCHAR* lastP = NULL;
-            for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
-                if ((*p == L'\\' || *p == L'/') && p[1])
-                    lastP = p;
-            }
-            if (lastP) {
-                // ???: anything else we should do here?
-                //options |= FILE_DIRECTORY_FILE;
-                *lastP = 0;
-            }
-        }
-
-        openInfo->EventId = InterlockedIncrement(&eventId);
-        DbgPrint("###Create %04d\n", openInfo->EventId - 1);
-
-        eventInfo->Status = DokanInstance->DokanOperations->CreateFileEx(
-            EventContext->Operation.Create.FileName,
-            EventContext->Operation.Create.DesiredAccess,
-            EventContext->Operation.Create.ShareAccess,
-            disposition,
-            options,
-            EventContext->Operation.Create.FileAttributes,
-            0, /* reserved for now */
-            &fileInfo);
-        DbgPrint("###[%04d] CreateFileEx(FileName=\"%S\", "
-            "DesiredAccess=%#lx, ShareAccess=%#lx, CreateDisposition=%ld, "
-            "CreateOptions=%#lx, FileAttributes=%#lx, Reserved=%p, "
-            "FileInfo.Context=%#llx) = %lu\n",
-            openInfo->EventId - 1,
-            EventContext->Operation.Create.FileName,
-            EventContext->Operation.Create.DesiredAccess,
-            EventContext->Operation.Create.ShareAccess,
-            disposition,
-            options,
-            EventContext->Operation.Create.FileAttributes,
-            0,
-            fileInfo.Context,
-            eventInfo->Status);
-
-        openInfo->IsDirectory = fileInfo.IsDirectory;
-        openInfo->UserContext = fileInfo.Context;
-
-        if (eventInfo->Status == STATUS_SUCCESS)
-        {
-            switch (disposition)
-            {
-            case FILE_CREATE:
-                eventInfo->Operation.Create.Information = FILE_CREATED;
-                break;
-            case FILE_OPEN_IF:
-            case FILE_OPEN:
-                eventInfo->Operation.Create.Information = FILE_OPENED;
-                break;
-            case FILE_OVERWRITE:
-            case FILE_OVERWRITE_IF:
-                eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
-                break;
-            case FILE_SUPERSEDE:
-                eventInfo->Operation.Create.Information = FILE_SUPERSEDED;
-                break;
-            default:
-                DbgPrint("### Create other disposition : %d\n", disposition);
-                break;
-            }
-
-            if (fileInfo.IsDirectory)
-                eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
-        }
-
-        SendEventInformation(Handle, eventInfo, length, DokanInstance);
-        free(eventInfo);
-        return;
-    }
 
     // to open directory
 	// even if this flag is not specifed, 
@@ -312,4 +247,125 @@ DispatchCreate(
 	SendEventInformation(Handle, eventInfo, length, DokanInstance);
 	free(eventInfo);
 	return;
+}
+
+VOID
+DispatchCreateEx(
+    HANDLE              Handle,
+    PEVENT_CONTEXT      EventContext,
+    PDOKAN_INSTANCE     DokanInstance)
+{
+    static LONG         eventId = 0;
+	EVENT_INFORMATION   eventInfo;
+	PDOKAN_OPEN_INFO    openInfo;
+	DOKAN_FILE_INFO     fileInfo;
+	DWORD               disposition;
+	DWORD               options;
+
+    CheckFileName(EventContext->Operation.Create.FileName);
+
+    RtlZeroMemory(&eventInfo, sizeof(EVENT_INFORMATION));
+    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+
+    eventInfo.BufferLength = 0;
+    eventInfo.SerialNumber = EventContext->SerialNumber;
+
+    fileInfo.ProcessId = EventContext->ProcessId;
+    fileInfo.DokanOptions = DokanInstance->DokanOptions;
+
+    // DOKAN_OPEN_INFO is structure for a opened file
+    // this will be freed by Close
+    openInfo = malloc(sizeof(DOKAN_OPEN_INFO));
+    if (openInfo == NULL) {
+        eventInfo.Status = STATUS_INSUFFICIENT_RESOURCES;
+        SendEventInformation(Handle, &eventInfo, sizeof eventInfo, NULL);
+        return;
+    }
+    RtlZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
+    openInfo->OpenCount = 2;
+    openInfo->EventContext = EventContext;
+    openInfo->DokanInstance = DokanInstance;
+    fileInfo.DokanContext = (ULONG64)openInfo;
+
+    // pass it to driver and when the same handle is used get it back
+    eventInfo.Context = (ULONG64)openInfo;
+
+    // The high 8 bits of this parameter correspond to the Disposition parameter
+    disposition = (EventContext->Operation.Create.CreateOptions >> 24) & 0x000000ff;
+	
+    // The low 24 bits of this member correspond to the CreateOptions parameter
+    options = EventContext->Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
+
+    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+        WCHAR* lastP = NULL;
+        for (WCHAR* p = EventContext->Operation.Create.FileName; *p; p++) {
+            if ((*p == L'\\' || *p == L'/') && p[1])
+                lastP = p;
+        }
+        if (lastP) {
+            // ???: anything else we should do here?
+            //options |= FILE_DIRECTORY_FILE;
+            *lastP = 0;
+        }
+    }
+
+    openInfo->EventId = InterlockedIncrement(&eventId);
+    DbgPrint("###Create %04d\n", openInfo->EventId - 1);
+
+    eventInfo.Status = DokanInstance->DokanOperations->CreateFileEx(
+        EventContext->Operation.Create.FileName,
+        EventContext->Operation.Create.DesiredAccess,
+        EventContext->Operation.Create.ShareAccess,
+        disposition,
+        options,
+        EventContext->Operation.Create.FileAttributes,
+        0, /* reserved for now */
+        &fileInfo);
+
+    DbgPrint("###[%04d] CreateFileEx(FileName=\"%S\", "
+        "DesiredAccess=%#lx, ShareAccess=%#lx, CreateDisposition=%ld, "
+        "CreateOptions=%#lx, FileAttributes=%#lx, Reserved=%p, "
+        "FileInfo.Context=%#llx) = %lu\n",
+        openInfo->EventId - 1,
+        EventContext->Operation.Create.FileName,
+        EventContext->Operation.Create.DesiredAccess,
+        EventContext->Operation.Create.ShareAccess,
+        disposition,
+        options,
+        EventContext->Operation.Create.FileAttributes,
+        0,
+        fileInfo.Context,
+        eventInfo.Status);
+
+    openInfo->IsDirectory = fileInfo.IsDirectory;
+    openInfo->UserContext = fileInfo.Context;
+
+    if (eventInfo.Status == STATUS_SUCCESS)
+    {
+        switch (disposition)
+        {
+        case FILE_CREATE:
+            eventInfo.Operation.Create.Information = FILE_CREATED;
+            break;
+        case FILE_OPEN_IF:
+        case FILE_OPEN:
+            eventInfo.Operation.Create.Information = FILE_OPENED;
+            break;
+        case FILE_OVERWRITE:
+        case FILE_OVERWRITE_IF:
+            eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
+            break;
+        case FILE_SUPERSEDE:
+            eventInfo.Operation.Create.Information = FILE_SUPERSEDED;
+            break;
+        default:
+            DbgPrint("### Create other disposition : %d\n", disposition);
+            break;
+        }
+
+        if (fileInfo.IsDirectory)
+            eventInfo.Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+    }
+
+    SendEventInformation(Handle, &eventInfo, sizeof eventInfo, DokanInstance);
 }
