@@ -96,7 +96,8 @@ DokanDbgPrint(LPCSTR format, ...)
 		fputs(outputString, stderr);
 	else
 		OutputDebugStringA(outputString);
-	_freea(buffer);
+	if (buffer)
+		_freea(buffer);
 	va_end(argp);
 }
 
@@ -122,7 +123,8 @@ DokanDbgPrintW(LPCWSTR format, ...)
 		fputws(outputString, stderr);
 	else
 		OutputDebugStringW(outputString);
-	_freea(buffer);
+	if (buffer)
+		_freea(buffer);
 	va_end(argp);
 }
 

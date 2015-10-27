@@ -195,6 +195,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 	}
 
 	if (!DokanStart(instance)) {
+		CloseHandle(device);
 		return DOKAN_START_ERROR;
 	}
 
@@ -427,9 +428,10 @@ VOID
 CheckFileName(
 	LPWSTR	FileName)
 {
+	size_t len = wcslen(FileName);
 	// if the beginning of file name is "\\",
 	// replace it with "\"
-	if (FileName[0] == L'\\' && FileName[1] == L'\\') {
+	if (len >= 2 && FileName[0] == L'\\' && FileName[1] == L'\\') {
 		int i;
 		for (i = 0; FileName[i+1] != L'\0'; ++i) {
 			FileName[i] = FileName[i+1];
@@ -438,7 +440,7 @@ CheckFileName(
 	}
 	
 	// Remove "\" in front of Directory
-	size_t len = wcslen(FileName);
+	len = wcslen(FileName);
 	if (len > 2 && FileName[len - 1] == L'\\')
 		FileName[len - 1] = '\0';
 }

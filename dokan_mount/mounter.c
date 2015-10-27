@@ -435,7 +435,7 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 						eventContext.Operation.Unmount.DeviceName);
 					DokanControl(&unmount);
 				} else {
-					DbgPrintW(L"DokanMounter: Unmount error\n", control.Type);
+					DbgPrintW(L"DokanMounter: Unmount error\n");
 				}
 			}
 

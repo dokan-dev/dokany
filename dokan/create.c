@@ -35,7 +35,7 @@ DispatchCreate(
 	NTSTATUS				status = STATUS_INSUFFICIENT_RESOURCES;
 	DOKAN_FILE_INFO			fileInfo;
 	DWORD					disposition;
-	PDOKAN_OPEN_INFO		openInfo;
+	PDOKAN_OPEN_INFO		openInfo = NULL;
 	BOOL					directoryRequested = FALSE;
 	DWORD					options;
 
@@ -60,6 +60,7 @@ DispatchCreate(
 	if (openInfo == NULL) {
 		eventInfo->Status = STATUS_INSUFFICIENT_RESOURCES;
 		SendEventInformation(Handle, eventInfo, length, NULL);
+		free(eventInfo);
 		return;
 	}
 	ZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
