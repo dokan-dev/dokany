@@ -277,6 +277,69 @@ typedef struct _DOKAN_OPERATIONS {
 		PFillFindStreamData,    // call this function with PWIN32_FIND_STREAM_DATA
 		PDOKAN_FILE_INFO);      //  (see PFillFindStreamData definition)
 
+    // CreateFileEx
+    //     The CreateFileEx operation can be used to create and open files and directories.
+    //     A file system need not implement this operation, but if it does it will be used
+    //     instead of CreateFile, CreateDirectory and OpenDirectory; in this case the file
+    //     system need not implement CreateFile, CreateDirectory and OpenDirectory.
+    //
+    // Parameters
+    //     DesiredAccess
+    //         The type of access that the caller requires to the file or directory.
+    //     ShareAccess
+    //         The type of share access that the caller would like to use in the file, as 0
+    //         or a combination of FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_DELETE.
+    //     CreateDisposition
+    //         Specifies what to do, depending on whether the file already exists, as one of
+    //         the values FILE_CREATE, FILE_OPEN, FILE_OPEN_IF, FILE_OVERWRITE, FILE_OVERWRITE_IF,
+    //         FILE_SUPERSEDE
+    //     CreateOptions
+    //         The options to be applied when creating or opening the file, as a combination of
+    //         FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, etc.
+    //     FileAttributes
+    //         The file attributes to be applied to a newly created file.
+    //     Reserved
+    //         This parameter is reserved and should be 0. In the future it will be used to pass
+    //         a security descriptor to be attached to a newly created file.
+    //     PIoStatusBlockInformation
+    //         A pointer to the Information field of the IO_STATUS_BLOCK of the associated
+    //         request. When CreateFileEx succeeds, it must be set to one of the following
+    //         values: FILE_CREATED, FILE_OPENED, FILE_OVERWRITTEN, FILE_SUPERSEDED.
+    //
+    // Return
+    //     When this operation succeeds it should return STATUS_SUCCESS. In this case it should
+    //     also set *PIoStatusBlockInformation to the appropriate value (one of FILE_CREATED,
+    //     FILE_OPENED, FILE_OVERWRITTEN, FILE_SUPERSEDED) AND it should set TRUE on
+    //     DokanFileInfo->IsDirectory when file is a directory.
+    //
+    //     When this operation fails it should return an appropriate status code.
+    //
+    // Remarks
+    //     The CreateDisposition parameter corresponds to the similarly named parameter in
+    //     Win32 CreateFile. The mapping is as follows:
+    //         FILE_CREATE          <-> CREATE_NEW
+    //         FILE_OPEN            <-> OPEN_EXISTING
+    //         FILE_OPEN_IF         <-> OPEN_ALWAYS
+    //         FILE_OVERWRITE       <-> TRUNCATE_EXISTING
+    //         FILE_OVERWRITE_IF    <-> CREATE_ALWAYS
+    //         FILE_SUPERSEDE       <-> No Win32 equivalent
+    //                                  This operation is similar to FILE_OVERWRITE, except
+    //                                  that it is considered as a transaction that first deletes
+    //                                  the original file and then creates a new file.
+    //                                  http://www.osronline.com/showThread.cfm?link=27213
+    //
+    //     The CreateOptions parameter contains many important flags:
+    //         FILE_DIRECTORY_FILE      The file being created or opened is a directory file. A call
+    //                                  to CreateFileEx with CreateDisposition==FILE_CREATE and
+    //                                  FILE_DIRECTORY_FILE in CreateOptions is a request to create
+    //                                  a new directory.
+    //         FILE_NON_DIRECTORY_FILE  The file being opened must not be a directory file or this call
+    //                                  must fail.
+    //
+    //     For additional information about the CreateFileEx parameters refer to the NtCreateFile
+    //     documentation.
+    //
+	//     Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
     NTSTATUS (DOKAN_CALLBACK *CreateFileEx) (
         LPCWSTR,                // FileName
         DWORD,                  // DesiredAccess
