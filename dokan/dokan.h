@@ -333,7 +333,7 @@ typedef struct _DOKAN_OPERATIONS {
     //     For additional information about the CreateFileEx parameters refer to the NtCreateFile
     //     documentation.
     //
-	//     Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
+    //     Supported since 0.8.0. You must specify the version at DOKAN_OPTIONS.Version.
     NTSTATUS (DOKAN_CALLBACK *CreateFileEx) (
         LPCWSTR,                // FileName
         DWORD,                  // DesiredAccess

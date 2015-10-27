@@ -1492,7 +1492,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->OpenDirectory = MirrorOpenDirectory;
 	dokanOperations->CreateDirectory = MirrorCreateDirectory;
     /* comment the following line if you do not want to use CreateFileEx */
-	dokanOperations->CreateFileEx = MirrorCreateFileEx;
+    dokanOperations->CreateFileEx = MirrorCreateFileEx;
 	dokanOperations->Cleanup = MirrorCleanup;
 	dokanOperations->CloseFile = MirrorCloseFile;
 	dokanOperations->ReadFile = MirrorReadFile;

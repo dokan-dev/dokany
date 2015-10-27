@@ -143,7 +143,7 @@ DispatchCreate(
                 eventInfo->Operation.Create.Information = FILE_SUPERSEDED;
                 break;
             default:
-				DbgPrint("### Create other disposition : %d\n", disposition);
+                DbgPrint("### Create other disposition : %d\n", disposition);
                 break;
             }
 
@@ -151,9 +151,9 @@ DispatchCreate(
                 eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
         }
 
-	    SendEventInformation(Handle, eventInfo, length, DokanInstance);
-	    free(eventInfo);
-	    return;
+        SendEventInformation(Handle, eventInfo, length, DokanInstance);
+        free(eventInfo);
+        return;
     }
 
     // to open directory
