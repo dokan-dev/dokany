@@ -256,11 +256,11 @@ DispatchCreateEx(
     PDOKAN_INSTANCE     DokanInstance)
 {
     static LONG         eventId = 0;
-	EVENT_INFORMATION   eventInfo;
-	PDOKAN_OPEN_INFO    openInfo;
-	DOKAN_FILE_INFO     fileInfo;
-	DWORD               disposition;
-	DWORD               options;
+    EVENT_INFORMATION   eventInfo;
+    PDOKAN_OPEN_INFO    openInfo;
+    DOKAN_FILE_INFO     fileInfo;
+    DWORD               disposition;
+    DWORD               options;
 
     CheckFileName(EventContext->Operation.Create.FileName);
 
