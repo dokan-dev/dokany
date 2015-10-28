@@ -174,10 +174,20 @@ VOID FindMountPoint(PDOKAN_CONTROL Control)
 	WCHAR physical[65536];
 	WCHAR logical[65536];
 
-	QueryDosDevice(NULL, physical, sizeof(physical));
+	if (QueryDosDevice(NULL, physical, MAX_PATH) == 0)
+	{
+		DWORD error = GetLastError();
+		DbgPrintW(L"FindMountPoint error = %d\n", error);
+		return;
+	}
 
 	for (WCHAR *pos = physical; *pos; pos += wcslen(pos) + 1) {
-		QueryDosDevice(pos, logical, sizeof(logical));
+		if (QueryDosDevice(pos, logical, MAX_PATH) == 0)
+		{
+			DWORD error = GetLastError();
+			DbgPrintW(L"FindMountPoint error = %d\n", error);
+			return;
+		}
 
 		if (wcsstr(logical, Control->DeviceName) != NULL
 			&& wcsstr(logical, pos) == NULL)
