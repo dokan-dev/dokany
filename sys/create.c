@@ -131,7 +131,7 @@ DokanGetFCB(
 		
 		// no memory?
 		if (fcb == NULL) {
-			DDbgPrint("    Was not able to get FCB for fileName %ls\n", fileName);
+			DDbgPrint("    Was not able to get FCB for FileName %ls\n", FileName);
 			ExFreePool(FileName);
 			ExReleaseResourceLite(&Vcb->Resource);
 			KeLeaveCriticalRegion();
