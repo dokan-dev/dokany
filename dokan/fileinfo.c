@@ -317,7 +317,7 @@ DokanFindStreams(
         }
     }
 
-    if (IsListEmpty(openInfo->StreamListHead)) {
+    if (status == STATUS_SUCCESS && IsListEmpty(openInfo->StreamListHead)) {
         status = DokanInstance->DokanOperations->FindStreams(
             EventContext->Operation.File.FileName,
             DokanFillFindStreamData,
