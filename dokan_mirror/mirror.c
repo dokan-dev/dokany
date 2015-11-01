@@ -418,6 +418,108 @@ MirrorOpenDirectory(
 
 
 static void DOKAN_CALLBACK
+MirrorCleanup(
+    LPCWSTR					FileName,
+    PDOKAN_FILE_INFO		DokanFileInfo);
+static void DOKAN_CALLBACK
+MirrorCloseFile(
+    LPCWSTR					FileName,
+    PDOKAN_FILE_INFO		DokanFileInfo);
+
+
+static NTSTATUS DOKAN_CALLBACK
+MirrorCreateFileEx(
+    LPCWSTR                 FileName,
+    DWORD                   DesiredAccess,
+    DWORD                   ShareAccess,
+    DWORD                   disposition,
+    DWORD                   options,
+    DWORD                   FileAttributes,
+    PSECURITY_DESCRIPTOR    Reserved,
+    PDOKAN_FILE_INFO        DokanFileInfo)
+{
+    NTSTATUS                status = STATUS_INSUFFICIENT_RESOURCES;
+    BOOL                    directoryRequested = FALSE;
+    BOOL                    nonDirectoryRequested = FALSE;
+
+    (void)Reserved;
+
+    DbgPrint(L"CreateFileEx: %S\n", FileName);
+
+    if (options & FILE_DIRECTORY_FILE) {
+        directoryRequested = TRUE;
+    }
+
+    if (options & FILE_NON_DIRECTORY_FILE) {
+        nonDirectoryRequested = TRUE;
+    }
+
+    // make a directory or open
+    if (directoryRequested) {
+        DokanFileInfo->IsDirectory = TRUE;
+
+        if (disposition == FILE_CREATE || disposition == FILE_OPEN_IF) {
+            status = MirrorCreateDirectory(FileName, DokanFileInfo);
+        } else if(disposition == FILE_OPEN) {
+            status = MirrorOpenDirectory(FileName, DokanFileInfo);
+        } else {
+            //DbgPrint(L"### Create other disposition : %d\n", disposition);
+        }
+    
+    // open a file
+    } else {
+        DWORD creationDisposition = OPEN_EXISTING;
+        DokanFileInfo->IsDirectory = FALSE;
+        //DbgPrint(L"   CreateDisposition 0x%08X\n", disposition);
+        switch(disposition) {
+            case FILE_CREATE:
+                creationDisposition = CREATE_NEW;
+                break;
+            case FILE_OPEN:
+                creationDisposition = OPEN_EXISTING;
+                break;
+            case FILE_OPEN_IF:
+                creationDisposition = OPEN_ALWAYS;
+                break;
+            case FILE_OVERWRITE:
+                creationDisposition = TRUNCATE_EXISTING;
+                break;
+            case FILE_OVERWRITE_IF:
+                creationDisposition = CREATE_ALWAYS;
+                break;
+            default:
+                // TODO: should support FILE_SUPERSEDE ?
+                //DbgPrint(L"### Create other disposition : %d\n", disposition);
+                break;
+        }
+
+        status = MirrorCreateFile(FileName,
+            DesiredAccess, ShareAccess, creationDisposition, FileAttributes, DokanFileInfo);
+    }
+
+    //DbgPrint(L"CreateFile status = %lu\n", status);
+    if (status != STATUS_SUCCESS)
+    {
+        if (status == STATUS_OBJECT_NAME_COLLISION &&
+            (disposition == FILE_OPEN_IF || disposition == FILE_OVERWRITE_IF))
+            status = STATUS_SUCCESS;
+    } else if (directoryRequested && !DokanFileInfo->IsDirectory) {
+        DokanFileInfo->DeleteOnClose = 0;
+        MirrorCleanup(FileName, DokanFileInfo);
+        MirrorCloseFile(FileName, DokanFileInfo);
+        status = STATUS_NOT_A_DIRECTORY;
+    } else if (nonDirectoryRequested && DokanFileInfo->IsDirectory) {
+        DokanFileInfo->DeleteOnClose = 0;
+        MirrorCleanup(FileName, DokanFileInfo);
+        MirrorCloseFile(FileName, DokanFileInfo);
+        status = STATUS_FILE_IS_A_DIRECTORY;
+    }
+
+    return status;
+}
+
+    
+static void DOKAN_CALLBACK
 MirrorCloseFile(
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
@@ -1408,6 +1510,8 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->CreateFile = MirrorCreateFile;
 	dokanOperations->OpenDirectory = MirrorOpenDirectory;
 	dokanOperations->CreateDirectory = MirrorCreateDirectory;
+    /* comment the following line if you do not want to use CreateFileEx */
+    dokanOperations->CreateFileEx = MirrorCreateFileEx;
 	dokanOperations->Cleanup = MirrorCleanup;
 	dokanOperations->CloseFile = MirrorCloseFile;
 	dokanOperations->ReadFile = MirrorReadFile;
