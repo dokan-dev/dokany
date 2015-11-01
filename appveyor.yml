@@ -56,7 +56,7 @@
         -r "dokan-dev/dokany" `
         -z "coverity.zip" `
         -d "Appveyor build." `
-        --codeVersion "{version}"
+        --codeVersion "$env:APPVEYOR_BUILD_VERSION"
         
       } else {
         $buildArgs = @(
