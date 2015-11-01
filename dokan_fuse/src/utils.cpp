@@ -107,13 +107,13 @@ put_utf8(unsigned char *buf, ICONV_CHAR c)
 static size_t
 get_utf16(const unsigned char *p, size_t len, ICONV_CHAR *out)
 {
-	ICONV_CHAR c, c2;
+	ICONV_CHAR c;
 
 	if (len < 2)
 		return -EINVAL;
 	c = GET_A2(p);
 	if ((c & 0xfc00) == 0xd800 && len >= 4) {
-		c2 = GET_A2(p+2);
+		ICONV_CHAR c2 = GET_A2(p+2);
 		if ((c2 & 0xfc00) == 0xdc00) {
 			*out = (c << 10) + c2 - ((0xd800 << 10) + 0xdc00 - 0x10000);
 			return 4;
@@ -156,7 +156,7 @@ static size_t convert_char(get_conver_t get_func, put_convert_t put_func, const 
 		il -= readed;
 		ib += readed;
 
-		unsigned char dummy[8];
+		unsigned char dummy[8]={0};
 		size_t written = put_func(ob ? ob : dummy, out_c);
 		if (unlikely(written < 0))
 			return -1;
@@ -260,8 +260,7 @@ time_t filetimeToUnixTime(const FILETIME *ft)
 {
 	if (!is_filetime_set(ft)) return 0;
 
-	ULONGLONG ll={0};
-	ll=(ULONGLONG(ft->dwHighDateTime)<<32) + ft->dwLowDateTime;
+	ULONGLONG ll=(ULONGLONG(ft->dwHighDateTime)<<32) + ft->dwLowDateTime;
 	return time_t((ll-116444736000000000LL)/10000000LL);
 }
 

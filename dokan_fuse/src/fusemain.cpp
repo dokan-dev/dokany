@@ -72,16 +72,10 @@ struct fuse_context *fuse_get_context(void)
 impl_fuse_context::impl_fuse_context(const struct fuse_operations *ops, 
 									 void *user_data, bool debug, 
 									 unsigned int filemask, unsigned int dirmask,
-									 const char *fsname, const char *volname) 
+									 const char *fsname, const char *volname)
+	: ops_(*ops), debug_(debug), filemask_(filemask), dirmask_(dirmask),
+	fsname_(fsname), volname_(volname), user_data_(user_data) //Use current user data
 {
-	this->ops_=*ops;
-	this->debug_=debug;
-	this->filemask_=filemask;
-	this->dirmask_=dirmask;
-	this->fsname_=fsname;
-	this->volname_=volname;
-	user_data_=user_data; //Use current user data
-
 	//Reset connection info
 	memset(&conn_info_,0,sizeof(fuse_conn_info));
 	conn_info_.max_write=ULONG_MAX;
@@ -224,7 +218,7 @@ int impl_fuse_context::check_and_resolve(std::string *name)
 int impl_fuse_context::walk_directory(void *buf, const char *name, 
 									  const struct FUSE_STAT *stbuf, FUSE_OFF_T off)
 {
-	walk_data *wd=(walk_data*)buf;
+	walk_data *wd=static_cast<walk_data*>(buf);
 	WIN32_FIND_DATAW find_data={0};	
 
 	utf8_to_wchar_buf(name,find_data.cFileName,MAX_PATH);
@@ -873,7 +867,7 @@ static DWORD required_share(DWORD access_mode)
 	  FILE_READ_EA))
 		share |= FILE_SHARE_READ;
 	if (access_mode & (STANDARD_RIGHTS_WRITE|GENERIC_WRITE|FILE_GENERIC_WRITE|
-	  WRITE_DAC|WRITE_OWNER|FILE_APPEND_DATA|FILE_WRITE_ATTRIBUTES|
+	  WRITE_DAC|WRITE_OWNER|FILE_WRITE_ATTRIBUTES|
 	  FILE_WRITE_DATA|FILE_WRITE_EA|FILE_ADD_FILE|FILE_ADD_SUBDIRECTORY|
 	  FILE_APPEND_DATA))
 		share |= FILE_SHARE_WRITE;

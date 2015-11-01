@@ -696,8 +696,8 @@ MirrorGetFileInformation(
 		} else {
 			WIN32_FIND_DATAW find;
 			ZeroMemory(&find, sizeof(WIN32_FIND_DATAW));
-			handle = FindFirstFile(filePath, &find);
-			if (handle == INVALID_HANDLE_VALUE) {
+			HANDLE findHandle = FindFirstFile(filePath, &find);
+			if (findHandle == INVALID_HANDLE_VALUE) {
 				DWORD error = GetLastError();
 				DbgPrint(L"\tFindFirstFile error code = %d\n\n", error);
 				return ToNtStatus(error);
@@ -709,7 +709,7 @@ MirrorGetFileInformation(
 			HandleFileInformation->nFileSizeHigh = find.nFileSizeHigh;
 			HandleFileInformation->nFileSizeLow = find.nFileSizeLow;
 			DbgPrint(L"\tFindFiles OK, file size = %d\n", find.nFileSizeLow);
-			FindClose(handle);
+			FindClose(findHandle);
 		}
 	} else {
 		DbgPrint(L"\tGetFileInformationByHandle success, file size = %d\n",

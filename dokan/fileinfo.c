@@ -326,7 +326,7 @@ DokanFindStreams(
 
     if (status == STATUS_SUCCESS) {
         PLIST_ENTRY listHead, entry;
-        ULONG nextEntryOffset, entrySize, streamNameLength;
+        ULONG entrySize;
 
         listHead = openInfo->StreamListHead;
         entrySize = 0;
@@ -334,9 +334,9 @@ DokanFindStreams(
         for (entry = listHead->Flink; entry != listHead; entry = entry->Flink) {
             PDOKAN_FIND_STREAM_DATA find = CONTAINING_RECORD(entry, DOKAN_FIND_STREAM_DATA, ListEntry);
 
-            nextEntryOffset = entrySize;
+			ULONG nextEntryOffset = entrySize;
 
-            streamNameLength = (ULONG)wcslen(find->FindStreamData.cStreamName) * sizeof(WCHAR);
+			ULONG streamNameLength = (ULONG)wcslen(find->FindStreamData.cStreamName) * sizeof(WCHAR);
             entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
             // Must be align on a 8-byte boundary.
             entrySize = QuadAlign(entrySize);

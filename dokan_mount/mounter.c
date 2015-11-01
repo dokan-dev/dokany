@@ -147,7 +147,6 @@ VOID
 DokanControlList(PDOKAN_CONTROL Control)
 {
 	PLIST_ENTRY		listEntry;
-	PMOUNT_ENTRY	mountEntry;
 	ULONG			index = 0;
 
 	EnterCriticalSection(&g_CriticalSection);
@@ -156,7 +155,7 @@ DokanControlList(PDOKAN_CONTROL Control)
 	for (listEntry = g_MountList.Flink;
 		listEntry != &g_MountList;
 		listEntry = listEntry->Flink) {
-		mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+		PMOUNT_ENTRY mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
 		if (Control->Option == index++) {
 			wcscpy_s(Control->DeviceName, sizeof(Control->DeviceName) / sizeof(WCHAR),
 					mountEntry->MountControl.DeviceName);
@@ -331,7 +330,6 @@ static VOID BuildSecurityAttributes(PSECURITY_ATTRIBUTES SecurityAttributes)
 
 static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 {
-	DWORD			eventNo;
 	HANDLE			pipe, device;
 	HANDLE			eventConnect, eventUnmount;
 	HANDLE			eventArray[3];
@@ -416,7 +414,7 @@ static VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv)
 		eventArray[1] = eventUnmount;
 		eventArray[2] = g_EventControl;
 
-		eventNo = WaitForMultipleObjects(3, eventArray, FALSE, INFINITE) - WAIT_OBJECT_0;
+		DWORD eventNo = WaitForMultipleObjects(3, eventArray, FALSE, INFINITE) - WAIT_OBJECT_0;
 
 		DbgPrintW(L"DokanMounter: get an event\n");
 

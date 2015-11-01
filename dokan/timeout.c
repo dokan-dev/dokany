@@ -76,7 +76,6 @@ DokanKeepAlive(
 {
 	HANDLE	device;
 	ULONG	ReturnedLength;
-	BOOL	status;
 
 	device = CreateFile(
 				GetRawDeviceName(DokanInstance->DeviceName),
@@ -90,7 +89,7 @@ DokanKeepAlive(
 
     while(device != INVALID_HANDLE_VALUE) {
 
-		status = DeviceIoControl(
+		BOOL status = DeviceIoControl(
 					device,                 // Handle to device
 					IOCTL_KEEPALIVE,			// IO Control code
 					NULL,		    // Input Buffer to driver.

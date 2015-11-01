@@ -150,7 +150,7 @@ void DebugConstant(const char *name, DWORD value, Constant *c)
 {
 	while (c->name != NULL && c->value != value)
 		++c;
-	fprintf(stderr, "%s: %s (%d)\n", name, c->name ? c->name : "unknown!", value);
+	fprintf(stderr, "%s: %s (%lu)\n", name, c->name ? c->name : "unknown!", value);
 }
 
 void DebugConstantBit(const char *name, DWORD value, Constant *cs)
@@ -196,7 +196,7 @@ static NTSTATUS DOKAN_CALLBACK FuseCreateFile(
 		DebugConstantBit("\tAccessMode", AccessMode,  cAccessMode);
 		DebugConstantBit("\tShareMode",  ShareMode,   cShareMode);
 		DebugConstant("\tDisposition",   CreationDisposition, cDisposition);
-		FWPRINTF(stderr, L"\tFlags: %u (0x%x)\n", FlagsAndAttributes, FlagsAndAttributes);
+		FWPRINTF(stderr, L"\tFlags: %lu (0x%lx)\n", FlagsAndAttributes, FlagsAndAttributes);
 		fflush(stderr);
 	}
 	
@@ -241,7 +241,7 @@ static NTSTATUS DOKAN_CALLBACK FuseWriteFile(
 				PDOKAN_FILE_INFO	DokanFileInfo)
 {
 	impl_fuse_context *impl=the_impl;
-	if (impl->debug()) FWPRINTF(stderr, L"WriteFile : %s, offset %I64d, length %d\n", 
+	if (impl->debug()) FWPRINTF(stderr, L"WriteFile : %s, offset %I64d, length %lu\n", 
 		FileName, Offset, NumberOfBytesToWrite);
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
@@ -479,8 +479,10 @@ int do_fuse_loop(struct fuse *fs, bool mt)
 		dokanOptions->Options |= DOKAN_OPTION_DEBUG|DOKAN_OPTION_STDERR;
 
 	//Load Dokan DLL
-	if (!fs->ch->init())
+	if (!fs->ch->init()) {
+		free(dokanOptions);
 		return -1; //Couldn't load DLL. TODO: UGLY!!
+	}
 
 	//The main loop!
 	fs->within_loop=true;
