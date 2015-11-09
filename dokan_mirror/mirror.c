@@ -123,7 +123,22 @@ NTSTATUS ToNtStatus(DWORD dwError)
 		return STATUS_OBJECT_PATH_NOT_FOUND;
 	case ERROR_INVALID_PARAMETER:
 		return STATUS_INVALID_PARAMETER;
+	case ERROR_ACCESS_DENIED:
+		return STATUS_ACCESS_DENIED;
+		break;
+	case ERROR_SHARING_VIOLATION:
+		return STATUS_SHARING_VIOLATION;
+	case ERROR_INVALID_NAME:
+		return STATUS_OBJECT_NAME_NOT_FOUND;
+	case ERROR_FILE_EXISTS:
+	case ERROR_ALREADY_EXISTS:
+		return STATUS_OBJECT_NAME_COLLISION;
+	case ERROR_PRIVILEGE_NOT_HELD:
+		return STATUS_PRIVILEGE_NOT_HELD;
+	case ERROR_NOT_READY:
+		return STATUS_DEVICE_NOT_READY;
 	default:
+		DbgPrint(L"Create got unknown error code %d\n", dwError);
 		return STATUS_ACCESS_DENIED;
 	}
 }
@@ -203,11 +218,15 @@ MirrorCreateFile(
 	NTSTATUS status = STATUS_SUCCESS;
 	DWORD creationDisposition;
 	DWORD fileAttributesAndFlags;
+	DWORD error = 0;
+	SECURITY_ATTRIBUTES securityAttrib;
+
+	securityAttrib.nLength = sizeof(securityAttrib);
+	securityAttrib.lpSecurityDescriptor = SecurityContext->AccessState.SecurityDescriptor;
+	securityAttrib.bInheritHandle = FALSE;
 
 	DokanMapKernelToUserCreateFileFlags(FileAttributes, CreateOptions, CreateDisposition,
 		&fileAttributesAndFlags, &creationDisposition);
-
-	UNREFERENCED_PARAMETER(SecurityContext);
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -253,6 +272,7 @@ MirrorCreateFile(
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
+
 	if (fileAttr != INVALID_FILE_ATTRIBUTES
 		&& (fileAttr & FILE_ATTRIBUTE_DIRECTORY
 			&& DesiredAccess != DELETE)) { //Directory cannot be open for DELETE
@@ -308,130 +328,92 @@ MirrorCreateFile(
 		DbgPrint(L"\tUNKNOWN creationDisposition!\n");
 	}
 
-	handle = CreateFile(
-		filePath,
-		DesiredAccess,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-		ShareAccess,
-		NULL, // security attribute
-		creationDisposition,
-		fileAttributesAndFlags,// |FILE_FLAG_NO_BUFFERING,
-		NULL); // template file handle
+	if((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
 
-	if (handle == INVALID_HANDLE_VALUE) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-
-		switch (error) {
-		case ERROR_FILE_NOT_FOUND:
-			status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_PATH_NOT_FOUND:
-			status = STATUS_OBJECT_PATH_NOT_FOUND;
-			break;
-		case ERROR_ACCESS_DENIED:
-			status = STATUS_ACCESS_DENIED;
-			break;
-		case ERROR_SHARING_VIOLATION:
-			status = STATUS_SHARING_VIOLATION;
-			break;
-		case ERROR_INVALID_NAME:
-			status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_FILE_EXISTS:
-		case ERROR_ALREADY_EXISTS:
-			status = STATUS_OBJECT_NAME_COLLISION;
-			break;
-		case ERROR_PRIVILEGE_NOT_HELD:
-			status = STATUS_PRIVILEGE_NOT_HELD;
-			break;
-		case ERROR_NOT_READY:
-			status = STATUS_DEVICE_NOT_READY;
-			break;
-		default:
-			status = STATUS_INVALID_PARAMETER;
-			DbgPrint(L"Create got unknown error code %d\n", error);
+		if(status != STATUS_SUCCESS) {
+			DbgPrint(L"\tInvalid directory ZwCreateFile parameters.\n\n");
+			return status;
 		}
-	} else {
-		DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
 
-		if (creationDisposition == OPEN_ALWAYS
-			|| creationDisposition == CREATE_ALWAYS) {
-			DWORD error = GetLastError();
-			if (error == ERROR_ALREADY_EXISTS) {
-				DbgPrint(L"\tOpen an already exist file\n");
-				status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+		if(CreateDisposition == FILE_CREATE) {
+			if(!CreateDirectory(filePath, &securityAttrib)) {
+				error = GetLastError();
+				DbgPrint(L"\terror code = %d\n\n", error);
+				status = ToNtStatus(error);
+			}
+		}
+		else if(CreateDisposition == FILE_OPEN_IF) {
+			
+			if(!CreateDirectory(filePath, &securityAttrib)) {
+				
+				error = GetLastError();
+
+				if(error != ERROR_ALREADY_EXISTS) {
+					DbgPrint(L"\terror code = %d\n\n", error);
+					status = ToNtStatus(error);
+				}
+			}
+		}
+
+		if(status == STATUS_SUCCESS)
+		{
+			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
+			handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttrib, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+
+			if(handle == INVALID_HANDLE_VALUE) {
+				error = GetLastError();
+				DbgPrint(L"\terror code = %d\n\n", error);
+
+				status = ToNtStatus(error);
+			}
+			else {
+				DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+			}
+		}
+	}
+	else {
+
+		if(fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
+			if(CreateDisposition == FILE_CREATE) {
+				return STATUS_OBJECT_NAME_COLLISION;
+			}
+			else {
+				handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttrib, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+			}
+		}
+		else {
+			handle = CreateFile(
+				filePath,
+				DesiredAccess,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+				ShareAccess,
+				&securityAttrib, // security attribute
+				creationDisposition,
+				fileAttributesAndFlags,// |FILE_FLAG_NO_BUFFERING,
+				NULL); // template file handle
+		}
+
+		if(handle == INVALID_HANDLE_VALUE) {
+			error = GetLastError();
+			DbgPrint(L"\terror code = %d\n\n", error);
+
+			status = ToNtStatus(error);
+		}
+		else {
+			DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+			if(creationDisposition == OPEN_ALWAYS
+				|| creationDisposition == CREATE_ALWAYS) {
+				error = GetLastError();
+				if(error == ERROR_ALREADY_EXISTS) {
+					DbgPrint(L"\tOpen an already existing file\n");
+					status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+				}
 			}
 		}
 	}
 
 	DbgPrint(L"\n");
 	return status;
-}
-
-
-static NTSTATUS DOKAN_CALLBACK
-MirrorCreateDirectory(
-	LPCWSTR					FileName,
-	PDOKAN_FILE_INFO		DokanFileInfo)
-{
-    UNREFERENCED_PARAMETER(DokanFileInfo);
-
-	WCHAR filePath[MAX_PATH];
-	GetFilePath(filePath, MAX_PATH, FileName);
-
-	DbgPrint(L"CreateDirectory : %s\n", filePath);
-	if (!CreateDirectory(filePath, NULL)) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-	return STATUS_SUCCESS;
-}
-
-
-static NTSTATUS DOKAN_CALLBACK
-MirrorOpenDirectory(
-	LPCWSTR					FileName,
-	PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	WCHAR filePath[MAX_PATH];
-	HANDLE handle;
-	DWORD attr;
-
-	GetFilePath(filePath, MAX_PATH, FileName);
-
-	DbgPrint(L"OpenDirectory : %s\n", filePath);
-
-	attr = GetFileAttributes(filePath);
-	if (attr == INVALID_FILE_ATTRIBUTES) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-	if (!(attr & FILE_ATTRIBUTE_DIRECTORY)) {
-		return STATUS_NOT_IMPLEMENTED;
-	}
-
-	handle = CreateFile(
-		filePath,
-		0,
-		FILE_SHARE_READ|FILE_SHARE_WRITE,
-		NULL,
-		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS,
-		NULL);
-
-	if (handle == INVALID_HANDLE_VALUE) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-
-	DbgPrint(L"\n");
-
-	DokanFileInfo->Context = (ULONG64)handle;
-
-	return STATUS_SUCCESS;
 }
 
 
@@ -1423,9 +1405,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
 	ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
-	dokanOperations->CreateFile = MirrorCreateFile;
-	dokanOperations->OpenDirectory = MirrorOpenDirectory;
-	dokanOperations->CreateDirectory = MirrorCreateDirectory;
+	dokanOperations->ZwCreateFile = MirrorCreateFile;
 	dokanOperations->Cleanup = MirrorCleanup;
 	dokanOperations->CloseFile = MirrorCloseFile;
 	dokanOperations->ReadFile = MirrorReadFile;

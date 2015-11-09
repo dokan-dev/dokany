@@ -35,7 +35,6 @@ DispatchCreate(
 	DOKAN_FILE_INFO							fileInfo;
 	ULONG									disposition;
 	PDOKAN_OPEN_INFO						openInfo = NULL;
-	BOOL									directoryRequested = FALSE;
 	DWORD									options;
 	DOKAN_IO_SECURITY_CONTEXT				ioSecurityContext;
 	WCHAR									*fileName;
@@ -89,23 +88,30 @@ DispatchCreate(
 	// there is a case to open a directory
 	if (options & FILE_DIRECTORY_FILE) {
 		//DbgPrint("FILE_DIRECTORY_FILE\n");
-		directoryRequested = TRUE;
+		fileInfo.IsDirectory = TRUE;
 	}
-	else {
-	    if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-			DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
-			// strip the last section of the file path
-			WCHAR* lastP = NULL;
-			for (WCHAR* p = fileName; *p; p++) {
-				if ((*p == L'\\' || *p == L'/') && p[1])
-				lastP = p;
-			}
-			if (lastP) {
-				directoryRequested = TRUE;
-				*lastP = 0;
-			}
-	    }
+	else if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+		// NOTE: SL_OPEN_TARGET_DIRECTORY means open the parent directory of the specified file
+		// We pull out the parent directory name and then switch the flags to make it look like it was
+		// a regular request to open a directory.
+		// https://msdn.microsoft.com/en-us/library/windows/hardware/ff548630(v=vs.85).aspx
+		fileInfo.IsDirectory = TRUE;
+		options |= FILE_DIRECTORY_FILE;
+		options &= ~FILE_NON_DIRECTORY_FILE;
 
+		DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
+		
+		// strip the last section of the file path
+		WCHAR* lastP = NULL;
+		
+		for (WCHAR* p = fileName; *p; p++) {
+			if ((*p == L'\\' || *p == L'/') && p[1])
+			lastP = p;
+		}
+
+		if (lastP) {
+			*lastP = 0;
+		}
 	}
 
 	// to open no directory file
@@ -119,65 +125,49 @@ DispatchCreate(
 	//DbgPrint("### OpenInfo %X\n", openInfo);
 	openInfo->EventId = eventId++;
 
-	// make a directory or open
-	if (directoryRequested) {
-		fileInfo.IsDirectory = TRUE;
+	if(DokanInstance->DokanOperations->ZwCreateFile) {
+		
+		ioSecurityContext.AccessState.SecurityEvaluated = EventContext->Operation.Create.SecurityContext.AccessState.SecurityEvaluated;
+		ioSecurityContext.AccessState.GenerateAudit = EventContext->Operation.Create.SecurityContext.AccessState.GenerateAudit;
+		ioSecurityContext.AccessState.GenerateOnClose = EventContext->Operation.Create.SecurityContext.AccessState.GenerateOnClose;
+		ioSecurityContext.AccessState.AuditPrivileges = EventContext->Operation.Create.SecurityContext.AccessState.AuditPrivileges;
+		ioSecurityContext.AccessState.Flags = EventContext->Operation.Create.SecurityContext.AccessState.Flags;
+		ioSecurityContext.AccessState.RemainingDesiredAccess = EventContext->Operation.Create.SecurityContext.AccessState.RemainingDesiredAccess;
+		ioSecurityContext.AccessState.PreviouslyGrantedAccess = EventContext->Operation.Create.SecurityContext.AccessState.PreviouslyGrantedAccess;
+		ioSecurityContext.AccessState.OriginalDesiredAccess = EventContext->Operation.Create.SecurityContext.AccessState.OriginalDesiredAccess;
 
-		if (disposition == FILE_CREATE || disposition == FILE_OPEN_IF) {
-			if (DokanInstance->DokanOperations->CreateDirectory) {
-				status = DokanInstance->DokanOperations->CreateDirectory(fileName, &fileInfo);
-			}
-		} else if(disposition == FILE_OPEN) {
-			if (DokanInstance->DokanOperations->OpenDirectory) {
-				status = DokanInstance->DokanOperations->OpenDirectory(fileName, &fileInfo);
-			}
-		} else {
-			DbgPrint("### Create other disposition : %d\n", disposition);
-		}
-	
-	// open a file
-	}
-	else {
-		if(DokanInstance->DokanOperations->CreateFile) {
-			
-			ioSecurityContext.AccessState.Flags = EventContext->Operation.Create.SecurityContext.AccessState.Flags;
-			ioSecurityContext.AccessState.RemainingDesiredAccess = EventContext->Operation.Create.SecurityContext.AccessState.RemainingDesiredAccess;
-			ioSecurityContext.AccessState.PreviouslyGrantedAccess = EventContext->Operation.Create.SecurityContext.AccessState.PreviouslyGrantedAccess;
-			ioSecurityContext.AccessState.OriginalDesiredAccess = EventContext->Operation.Create.SecurityContext.AccessState.OriginalDesiredAccess;
-
-			if(EventContext->Operation.Create.SecurityContext.AccessState.SecurityDescriptorOffset > 0) {
-				ioSecurityContext.AccessState.SecurityDescriptor = (PSECURITY_DESCRIPTOR)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.SecurityDescriptorOffset);
-			}
-			else {
-				ioSecurityContext.AccessState.SecurityDescriptor = NULL;
-			}
-
-			intermediateObjName = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset);
-			intermediateObjType = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectTypeOffset);
-
-			ioSecurityContext.AccessState.ObjectName.Length = intermediateObjName->Length;
-			ioSecurityContext.AccessState.ObjectName.MaximumLength = intermediateObjName->MaximumLength;
-			ioSecurityContext.AccessState.ObjectName.Buffer = &intermediateObjName->Buffer[0];
-
-			ioSecurityContext.AccessState.ObjectType.Length = intermediateObjType->Length;
-			ioSecurityContext.AccessState.ObjectType.MaximumLength = intermediateObjType->MaximumLength;
-			ioSecurityContext.AccessState.ObjectType.Buffer = &intermediateObjType->Buffer[0];
-
-			ioSecurityContext.DesiredAccess = EventContext->Operation.Create.SecurityContext.DesiredAccess;
-
-			status = DokanInstance->DokanOperations->CreateFile(
-				fileName,
-				&ioSecurityContext,
-				ioSecurityContext.DesiredAccess,
-				EventContext->Operation.Create.FileAttributes,
-				EventContext->Operation.Create.ShareAccess,
-				disposition,
-				options,
-				&fileInfo);
+		if(EventContext->Operation.Create.SecurityContext.AccessState.SecurityDescriptorOffset > 0) {
+			ioSecurityContext.AccessState.SecurityDescriptor = (PSECURITY_DESCRIPTOR)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.SecurityDescriptorOffset);
 		}
 		else {
-			status = STATUS_NOT_IMPLEMENTED;
+			ioSecurityContext.AccessState.SecurityDescriptor = NULL;
 		}
+
+		intermediateObjName = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectNameOffset);
+		intermediateObjType = (PDOKAN_UNICODE_STRING_INTERMEDIATE)((char*)&EventContext->Operation.Create.SecurityContext.AccessState + EventContext->Operation.Create.SecurityContext.AccessState.UnicodeStringObjectTypeOffset);
+
+		ioSecurityContext.AccessState.ObjectName.Length = intermediateObjName->Length;
+		ioSecurityContext.AccessState.ObjectName.MaximumLength = intermediateObjName->MaximumLength;
+		ioSecurityContext.AccessState.ObjectName.Buffer = &intermediateObjName->Buffer[0];
+
+		ioSecurityContext.AccessState.ObjectType.Length = intermediateObjType->Length;
+		ioSecurityContext.AccessState.ObjectType.MaximumLength = intermediateObjType->MaximumLength;
+		ioSecurityContext.AccessState.ObjectType.Buffer = &intermediateObjType->Buffer[0];
+
+		ioSecurityContext.DesiredAccess = EventContext->Operation.Create.SecurityContext.DesiredAccess;
+
+		status = DokanInstance->DokanOperations->ZwCreateFile(
+			fileName,
+			&ioSecurityContext,
+			ioSecurityContext.DesiredAccess,
+			EventContext->Operation.Create.FileAttributes,
+			EventContext->Operation.Create.ShareAccess,
+			disposition,
+			options,
+			&fileInfo);
+	}
+	else {
+		status = STATUS_NOT_IMPLEMENTED;
 	}
 
 	// save the information about this access in DOKAN_OPEN_INFO

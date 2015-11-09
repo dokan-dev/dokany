@@ -31,9 +31,11 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 	PDOKAN_OPEN_INFO	openInfo;
 	PEVENT_CONTEXT		eventContext;
 	PEVENT_INFORMATION	eventInfo;
-	ULONG	eventInfoSize = sizeof(EVENT_INFORMATION);
+	ULONG				eventInfoSize = sizeof(EVENT_INFORMATION);
+	WCHAR				rawDeviceName[MAX_PATH];
 
 	openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
+
 	if (openInfo == NULL) {
 		return FALSE;
 	}
@@ -58,7 +60,7 @@ DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
 	eventInfo->Operation.ResetTimeout.Timeout = Timeout;
 
 	status = SendToDevice(
-				GetRawDeviceName(instance->DeviceName),
+				GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
 				IOCTL_RESET_TIMEOUT,
 				eventInfo,
 				eventInfoSize,
@@ -77,9 +79,10 @@ DokanKeepAlive(
 	HANDLE	device;
 	ULONG	ReturnedLength;
 	BOOL	status;
+	WCHAR	rawDeviceName[MAX_PATH];
 
 	device = CreateFile(
-				GetRawDeviceName(DokanInstance->DeviceName),
+				GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
 				GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
                 FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
                 NULL,                               // lpSecurityAttributes

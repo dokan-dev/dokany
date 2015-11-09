@@ -99,7 +99,7 @@ typedef struct _DOKAN_OPERATIONS {
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
 	//   See ZwCreateFile() https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx
 	//   for more information about the parameters of this callback.
-	NTSTATUS (DOKAN_CALLBACK *CreateFile) (
+	NTSTATUS (DOKAN_CALLBACK *ZwCreateFile) (
 		LPCWSTR,					// FileName
 		PDOKAN_IO_SECURITY_CONTEXT,	// SecurityContext, see https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
 		ACCESS_MASK,				// DesiredAccess
@@ -107,14 +107,6 @@ typedef struct _DOKAN_OPERATIONS {
 		ULONG,						// ShareAccess
 		ULONG,						// CreateDisposition
 		ULONG,						// CreateOptions
-		PDOKAN_FILE_INFO);
-
-	NTSTATUS (DOKAN_CALLBACK *OpenDirectory) (
-		LPCWSTR,				// FileName
-		PDOKAN_FILE_INFO);
-
-	NTSTATUS (DOKAN_CALLBACK *CreateDirectory) (
-		LPCWSTR,				// FileName
 		PDOKAN_FILE_INFO);
 
 	// When FileInfo->DeleteOnClose is true, you must delete the file in Cleanup.

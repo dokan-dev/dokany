@@ -103,6 +103,10 @@ typedef struct _DOKAN_UNICODE_STRING_INTERMEDIATE {
  * https://msdn.microsoft.com/en-us/library/windows/hardware/ff538840(v=vs.85).aspx
 */
 typedef struct _DOKAN_ACCESS_STATE_INTERMEDIATE {
+	BOOLEAN			SecurityEvaluated;
+	BOOLEAN			GenerateAudit;
+	BOOLEAN			GenerateOnClose;
+	BOOLEAN			AuditPrivileges;
 	ULONG			Flags;
 	ACCESS_MASK		RemainingDesiredAccess;
 	ACCESS_MASK		PreviouslyGrantedAccess;
@@ -120,6 +124,10 @@ typedef struct _DOKAN_ACCESS_STATE_INTERMEDIATE {
 } DOKAN_ACCESS_STATE_INTERMEDIATE, *PDOKAN_ACCESS_STATE_INTERMEDIATE;
 
 typedef struct _DOKAN_ACCESS_STATE {
+	BOOLEAN					SecurityEvaluated;
+	BOOLEAN					GenerateAudit;
+	BOOLEAN					GenerateOnClose;
+	BOOLEAN					AuditPrivileges;
 	ULONG					Flags;
 	ACCESS_MASK				RemainingDesiredAccess;
 	ACCESS_MASK				PreviouslyGrantedAccess;

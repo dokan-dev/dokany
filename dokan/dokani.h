@@ -83,8 +83,8 @@ SendToDevice(
 	ULONG	OutputLength,
 	PULONG	ReturnedLength);
 
-LPCWSTR
-GetRawDeviceName(LPCWSTR	DeviceName);
+LPWSTR
+GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer, rsize_t DestinationBufferSizeInElements);
 
 void
 ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size);

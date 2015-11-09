@@ -351,9 +351,9 @@ Return Value:
 	ULONG									alignedEventContextSize = 0;
 	ULONG									alignedObjectNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
 	ULONG									alignedObjectTypeNameSize = PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
-	ULONG									newSecurityDescriptorLength = 0;
 	PDOKAN_UNICODE_STRING_INTERMEDIATE		intermediateUnicodeStr = NULL;
 	PUNICODE_STRING							relatedFileName = NULL;
+	PSECURITY_DESCRIPTOR					newFileSecurityDescriptor = NULL;
 
 	PAGED_CODE();
 
@@ -546,7 +546,18 @@ Return Value:
 		if(irpSp->Parameters.Create.SecurityContext->AccessState) {
 			
 			if(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor) {
-				securityDescriptorSize = PointerAlignSize(RtlLengthSecurityDescriptor(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor));
+				// (CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE
+				if(SeAssignSecurity(
+					NULL, // we don't keep track of parents, this will have to be handled in user mode
+					irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor,
+					&newFileSecurityDescriptor,
+					(irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE) || (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY),
+					&irpSp->Parameters.Create.SecurityContext->AccessState->SubjectSecurityContext,
+					IoGetFileObjectGenericMapping(),
+					PagedPool) == STATUS_SUCCESS) {
+
+					securityDescriptorSize = PointerAlignSize(RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
+				}
 			}
 
 			if(irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length > 0) {
@@ -579,6 +590,10 @@ Return Value:
 
 		if(irpSp->Parameters.Create.SecurityContext->AccessState) {
 			// Copy security context
+			eventContext->Operation.Create.SecurityContext.AccessState.SecurityEvaluated = irpSp->Parameters.Create.SecurityContext->AccessState->SecurityEvaluated;
+			eventContext->Operation.Create.SecurityContext.AccessState.GenerateAudit = irpSp->Parameters.Create.SecurityContext->AccessState->GenerateAudit;
+			eventContext->Operation.Create.SecurityContext.AccessState.GenerateOnClose = irpSp->Parameters.Create.SecurityContext->AccessState->GenerateOnClose;
+			eventContext->Operation.Create.SecurityContext.AccessState.AuditPrivileges = irpSp->Parameters.Create.SecurityContext->AccessState->AuditPrivileges;
 			eventContext->Operation.Create.SecurityContext.AccessState.Flags = irpSp->Parameters.Create.SecurityContext->AccessState->Flags;
 			eventContext->Operation.Create.SecurityContext.AccessState.RemainingDesiredAccess = irpSp->Parameters.Create.SecurityContext->AccessState->RemainingDesiredAccess;
 			eventContext->Operation.Create.SecurityContext.AccessState.PreviouslyGrantedAccess = irpSp->Parameters.Create.SecurityContext->AccessState->PreviouslyGrantedAccess;
@@ -604,27 +619,11 @@ Return Value:
 		eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
 		eventContext->Operation.Create.FileNameOffset = (ULONG)(((char*)eventContext + alignedEventContextSize + securityDescriptorSize + alignedObjectNameSize + alignedObjectTypeNameSize) - (char*)&eventContext->Operation.Create);
 
-		if(securityDescriptorSize > 0) {
+		if(newFileSecurityDescriptor) {
 			// Copy security descriptor
-			status = RtlAbsoluteToSelfRelativeSD(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor, (PSECURITY_DESCRIPTOR)((char*)eventContext + alignedEventContextSize), &newSecurityDescriptorLength);
-
-			switch(status) {
-			case STATUS_BAD_DESCRIPTOR_FORMAT:
-				// It's already a relative SD so just do a bulk copy
-				RtlCopyMemory((char*)eventContext + alignedEventContextSize, irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor, securityDescriptorSize);
-				break;
-			case STATUS_BUFFER_TOO_SMALL:
-				DDbgPrint("Failed to copy SECURITY_DESCRIPTOR because the buffer was too small.\n");
-				RtlZeroMemory((char*)eventContext + alignedEventContextSize, securityDescriptorSize);
-				break;
-			case STATUS_SUCCESS:
-				// we're good
-				break;
-			default:
-				DDbgPrint("Failed to copy SECURITY_DESCRIPTOR due to an unexpected error: %d\n", status);
-				RtlZeroMemory((char*)eventContext + alignedEventContextSize, securityDescriptorSize);
-				break;
-			}
+			RtlCopyMemory((char*)eventContext + alignedEventContextSize, newFileSecurityDescriptor, RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
+			SeDeassignSecurity(newFileSecurityDescriptor);
+			newFileSecurityDescriptor = NULL;
 		}
 
 		if(irpSp->Parameters.Create.SecurityContext->AccessState) {

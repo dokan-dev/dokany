@@ -44,17 +44,6 @@ static NTSTATUS DOKAN_CALLBACK FuseFindFiles(
 		DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseOpenDirectory(
-				LPCWSTR					FileName,
-				PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	impl_fuse_context *impl=the_impl;
-	if (impl->debug()) FWPRINTF(stderr, L"OpenDirectory : %s\n", FileName);
-	
-	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return errno_to_ntstatus_error(impl->open_directory(FileName,DokanFileInfo));
-}
-
 static void DOKAN_CALLBACK FuseCleanup(
 					LPCWSTR					FileName,
 					PDOKAN_FILE_INFO		DokanFileInfo)
@@ -64,17 +53,6 @@ static void DOKAN_CALLBACK FuseCleanup(
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
 	impl->cleanup(FileName,DokanFileInfo);
-}
-
-static NTSTATUS DOKAN_CALLBACK FuseCreateDirectory(
-					LPCWSTR					FileName,
-					PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	impl_fuse_context *impl=the_impl;
-	if (impl->debug()) FWPRINTF(stderr, L"CreateDirectory : %s\n", FileName);
-	
-	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return errno_to_ntstatus_error(impl->create_directory(FileName,DokanFileInfo));
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseDeleteDirectory(
@@ -207,6 +185,17 @@ static NTSTATUS DOKAN_CALLBACK FuseCreateFile(
 	}
 
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
+
+	if((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
+
+		if(CreateDisposition == FILE_CREATE || CreateDisposition == FILE_OPEN_IF) {
+			return errno_to_ntstatus_error(impl->create_directory(FileName, DokanFileInfo));
+		}
+		else if(CreateDisposition == FILE_OPEN) {
+
+			return errno_to_ntstatus_error(impl->open_directory(FileName, DokanFileInfo));
+		}
+	}
 
 	return -win_error(impl->create_file(FileName, CreateDisposition, ShareAccess, DesiredAccess, FileAttributes,
 		DokanFileInfo));
@@ -423,8 +412,6 @@ int fuse_interrupted(void)
 
 static DOKAN_OPERATIONS dokanOperations = {
 	FuseCreateFile,
-	FuseOpenDirectory,
-	FuseCreateDirectory,
 	FuseCleanup,
 	FuseCloseFile,
 	FuseReadFile,
