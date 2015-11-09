@@ -1,14 +1,69 @@
-version: 0.8.0-{build}
-configuration:
-- Release
-- Win7 Release
-- Win8 Release
-- Win8.1 Release
-- Win10 Release
-platform:
-- Win32
-- x64
-os: Windows Server 2012 R2
-build:
-  project: dokan.sln
-  verbosity: minimal
+-
+  environment:
+    CoverityProjectToken:
+      secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
+    CoverityNotificationEmail:
+      secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
+  version: 0.8.0-{build}
+  configuration:
+  - Release
+  - Win7 Release
+  - Win8 Release
+  - Win8.1 Release
+  - Win10 Release
+  - Coverity
+  platform:
+  - Win32
+  - x64
+
+  os: Visual Studio 2015
+
+  build_script:
+  - ps: |
+
+      $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
+
+      if ($env:CONFIGURATION -eq "Coverity") {
+        
+        if (!($env:PLATFORM -eq "Win32")) {
+          return;
+        }
+        
+        $buildArgs = @(
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Win10 Debug",
+        "/p:Platform=$env:PLATFORM")
+          
+        & "cov-build.exe" `
+        --dir cov-int `
+        --encoding=UTF-8 `
+        $buildCmd $buildArgs
+
+        nuget install -ExcludeVersion PublishCoverity
+        "Compressing Coverity results..."
+        & PublishCoverity\tools\PublishCoverity.exe compress `
+        --nologo `
+        -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
+        -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
+        --overwrite
+        
+         "Uploading Coverity results..."  
+        & PublishCoverity\tools\PublishCoverity.exe publish `
+        --nologo `
+        -t "$env:CoverityProjectToken" `
+        -e "$env:CoverityNotificationEmail" `
+        -r "dokan-dev/dokany" `
+        -z "coverity.zip" `
+        -d "Appveyor build." `
+        --codeVersion "$env:APPVEYOR_BUILD_VERSION"
+        
+      } else {
+        $buildArgs = @(
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=$env:CONFIGURATION",
+        "/p:Platform=$env:PLATFORM")
+        
+        & $buildCmd $buildArgs
+      }

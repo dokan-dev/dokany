@@ -126,7 +126,6 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 {
 	ULONG	threadNum = 0;
 	ULONG	i;
-	int		error;
 	HANDLE	device;
 	HANDLE	threadIds[DOKAN_MAX_THREAD];
 	BOOL	useMountPoint = FALSE;
@@ -157,7 +156,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 
 	if (DOKAN_MOUNT_POINT_SUPPORTED_VERSION <= DokanOptions->Version &&
 		DokanOptions->MountPoint) {
-		error = CheckMountPoint(DokanOptions->MountPoint);
+		int error = CheckMountPoint(DokanOptions->MountPoint);
 		if (error != DOKAN_SUCCESS) {
 			return error;
 		}
@@ -207,6 +206,7 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
 	if (!DokanMount(instance->MountPoint, instance->DeviceName)) {
 		SendReleaseIRP(instance->DeviceName);
 		DokanDbgPrint("Dokan Error: DefineDosDevice Failed\n");
+		CloseHandle(device);
 		return DOKAN_MOUNT_ERROR;
 	}
 

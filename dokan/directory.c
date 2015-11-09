@@ -478,6 +478,12 @@ DispatchDirectoryInformation(
 		openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
 		if (openInfo->DirListHead != NULL) {
 			InitializeListHead(openInfo->DirListHead);
+		} else {
+			eventInfo->BufferLength = 0;
+			eventInfo->Status = STATUS_NO_MEMORY;
+			SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+			free(eventInfo);
+			return;
 		}
 	}
 

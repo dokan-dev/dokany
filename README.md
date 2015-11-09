@@ -77,7 +77,7 @@ easy to debug.
 To learn more about Dokan file system development, see the [API documentation](https://github.com/dokan-dev/dokany/wiki/API).
 
 ## Build
-In short, download and install the [Visual Studio 2015](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx) with [SDK 10](https://msdn.microsoft.com/en-us/library/bb166441.aspx) & [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/dn913721.aspx)
+In short, download and install the [Visual Studio 2015](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx) with [SDK 10](https://dev.windows.com/en-us/downloads/windows-10-sdk) & [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/dn913721.aspx)
 
 For details, see the [build page](https://github.com/dokan-dev/dokany/wiki/Build).
 

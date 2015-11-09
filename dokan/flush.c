@@ -34,7 +34,6 @@ DispatchFlush(
 	PEVENT_INFORMATION	eventInfo;
 	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 	PDOKAN_OPEN_INFO	openInfo;
-	NTSTATUS status;
 
 	CheckFileName(EventContext->Operation.Flush.FileName);
 
@@ -47,7 +46,7 @@ DispatchFlush(
 
 	if (DokanInstance->DokanOperations->FlushFileBuffers) {
 
-		status = DokanInstance->DokanOperations->FlushFileBuffers(
+		NTSTATUS status = DokanInstance->DokanOperations->FlushFileBuffers(
 			EventContext->Operation.Flush.FileName,
 					&fileInfo);
 

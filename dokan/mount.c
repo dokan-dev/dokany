@@ -124,7 +124,6 @@ DokanMountControl(PDOKAN_CONTROL Control)
 	HANDLE pipe;
 	DWORD readBytes;
 	DWORD pipeMode;
-	DWORD error;
 
 	for (;;) {
 		pipe = CreateFile(DOKAN_CONTROL_PIPE,  GENERIC_READ|GENERIC_WRITE,
@@ -133,7 +132,7 @@ DokanMountControl(PDOKAN_CONTROL Control)
 			break;
 		}
 
-		error = GetLastError();
+		DWORD error = GetLastError();
 		if (error == ERROR_PIPE_BUSY) {
 			if (!WaitNamedPipe(DOKAN_CONTROL_PIPE, NMPWAIT_USE_DEFAULT_WAIT)) {
 				DbgPrint("DokanMounter service : ERROR_PIPE_BUSY\n");

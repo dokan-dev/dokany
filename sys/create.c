@@ -131,6 +131,7 @@ DokanGetFCB(
 		
 		// no memory?
 		if (fcb == NULL) {
+			DDbgPrint("    Was not able to get FCB for FileName %ls\n", FileName);
 			ExFreePool(FileName);
 			ExReleaseResourceLite(&Vcb->Resource);
 			KeLeaveCriticalRegion();
@@ -361,14 +362,15 @@ Return Value:
 		DDbgPrint("==> DokanCreate\n");
 
 		irpSp = IoGetCurrentIrpStackLocation(Irp);
-		fileObject = irpSp->FileObject;
-		relatedFileObject = fileObject->RelatedFileObject;
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
+		if (irpSp->FileObject == NULL) {
+			DDbgPrint("  irpSp->FileObject == NULL\n");
 			status = STATUS_INVALID_PARAMETER;
 			__leave;
 		}
+
+		fileObject = irpSp->FileObject;
+		relatedFileObject = fileObject->RelatedFileObject;
 
 		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 		DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
@@ -509,7 +511,6 @@ Return Value:
 
 		fcb = DokanGetFCB(vcb, fileName, fileNameLength);
 		if (fcb == NULL) {
-            DDbgPrint("    Was not able to get FCB for fileName %ls\n", fileName);
 			status = STATUS_INSUFFICIENT_RESOURCES;
 			__leave;
 		}

@@ -54,6 +54,8 @@ struct fuse
 	fuse() : within_loop(), user_data()
 	{
 		memset(&conf,0,sizeof(fuse_config));
+		memset(&sess, 0, sizeof(fuse_session));
+		memset(&ops, 0, sizeof(fuse_operations));
 	}
 };
 

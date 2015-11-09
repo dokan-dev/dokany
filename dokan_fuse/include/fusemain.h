@@ -36,7 +36,7 @@ struct impl_chain_link
 {
 	impl_chain_link *prev_link_;
 	fuse_context call_ctx_;
-	impl_chain_link() { memset(&call_ctx_, 0, sizeof(call_ctx_)); }
+	impl_chain_link() : prev_link_(nullptr) { memset(&call_ctx_, 0, sizeof(call_ctx_)); }
 };
 
 /*
