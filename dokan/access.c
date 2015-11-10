@@ -32,7 +32,8 @@ DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
 	PEVENT_INFORMATION	eventInfo;
 	HANDLE				handle = INVALID_HANDLE_VALUE;
 	ULONG				eventInfoSize;
-	
+	WCHAR				rawDeviceName[MAX_PATH];
+
     openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
 	if (openInfo == NULL) {
 		return INVALID_HANDLE_VALUE;
@@ -63,7 +64,7 @@ DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
 	eventInfo->SerialNumber = eventContext->SerialNumber;
 
 	status = SendToDevice(
-				GetRawDeviceName(instance->DeviceName),
+				GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
 				IOCTL_GET_ACCESS_TOKEN,
 				eventInfo,
 				eventInfoSize,

@@ -123,7 +123,22 @@ NTSTATUS ToNtStatus(DWORD dwError)
 		return STATUS_OBJECT_PATH_NOT_FOUND;
 	case ERROR_INVALID_PARAMETER:
 		return STATUS_INVALID_PARAMETER;
+	case ERROR_ACCESS_DENIED:
+		return STATUS_ACCESS_DENIED;
+		break;
+	case ERROR_SHARING_VIOLATION:
+		return STATUS_SHARING_VIOLATION;
+	case ERROR_INVALID_NAME:
+		return STATUS_OBJECT_NAME_NOT_FOUND;
+	case ERROR_FILE_EXISTS:
+	case ERROR_ALREADY_EXISTS:
+		return STATUS_OBJECT_NAME_COLLISION;
+	case ERROR_PRIVILEGE_NOT_HELD:
+		return STATUS_PRIVILEGE_NOT_HELD;
+	case ERROR_NOT_READY:
+		return STATUS_DEVICE_NOT_READY;
 	default:
+		DbgPrint(L"Create got unknown error code %d\n", dwError);
 		return STATUS_ACCESS_DENIED;
 	}
 }
@@ -188,34 +203,36 @@ static BOOL AddSeSecurityNamePrivilege()
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorCreateFile(
-	LPCWSTR					FileName,
-	DWORD					AccessMode,
-	DWORD					ShareMode,
-	DWORD					CreationDisposition,
-	DWORD					FlagsAndAttributes,
+	LPCWSTR						FileName,
+	PDOKAN_IO_SECURITY_CONTEXT	SecurityContext,
+	ACCESS_MASK					DesiredAccess,
+	ULONG						FileAttributes,
+	ULONG						ShareAccess,
+	ULONG						CreateDisposition,
+	ULONG						CreateOptions,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
 	WCHAR filePath[MAX_PATH];
 	HANDLE handle;
 	DWORD fileAttr;
 	NTSTATUS status = STATUS_SUCCESS;
+	DWORD creationDisposition;
+	DWORD fileAttributesAndFlags;
+	DWORD error = 0;
+	SECURITY_ATTRIBUTES securityAttrib;
+
+	securityAttrib.nLength = sizeof(securityAttrib);
+	securityAttrib.lpSecurityDescriptor = SecurityContext->AccessState.SecurityDescriptor;
+	securityAttrib.bInheritHandle = FALSE;
+
+	DokanMapKernelToUserCreateFileFlags(FileAttributes, CreateOptions, CreateDisposition,
+		&fileAttributesAndFlags, &creationDisposition);
 
 	GetFilePath(filePath, MAX_PATH, FileName);
 
 	DbgPrint(L"CreateFile : %s\n", filePath);
 
 	PrintUserName(DokanFileInfo);
-
-	if (CreationDisposition == CREATE_NEW)
-		DbgPrint(L"\tCREATE_NEW\n");
-	if (CreationDisposition == OPEN_ALWAYS)
-		DbgPrint(L"\tOPEN_ALWAYS\n");
-	if (CreationDisposition == CREATE_ALWAYS)
-		DbgPrint(L"\tCREATE_ALWAYS\n");
-	if (CreationDisposition == OPEN_EXISTING)
-		DbgPrint(L"\tOPEN_EXISTING\n");
-	if (CreationDisposition == TRUNCATE_EXISTING)
-		DbgPrint(L"\tTRUNCATE_EXISTING\n");
 
 	/*
 	if (ShareMode == 0 && AccessMode & FILE_WRITE_DATA)
@@ -224,196 +241,179 @@ MirrorCreateFile(
 		ShareMode = FILE_SHARE_READ;
 	*/
 
-	DbgPrint(L"\tShareMode = 0x%x\n", ShareMode);
+	DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
-	MirrorCheckFlag(ShareMode, FILE_SHARE_READ);
-	MirrorCheckFlag(ShareMode, FILE_SHARE_WRITE);
-	MirrorCheckFlag(ShareMode, FILE_SHARE_DELETE);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
 
-	DbgPrint(L"\tAccessMode = 0x%x\n", AccessMode);
+	DbgPrint(L"\tAccessMode = 0x%x\n", DesiredAccess);
 
-	MirrorCheckFlag(AccessMode, GENERIC_READ);
-	MirrorCheckFlag(AccessMode, GENERIC_WRITE);
-	MirrorCheckFlag(AccessMode, GENERIC_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_READ);
+	MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_EXECUTE);
 	
-	MirrorCheckFlag(AccessMode, DELETE);
-	MirrorCheckFlag(AccessMode, FILE_READ_DATA);
-	MirrorCheckFlag(AccessMode, FILE_READ_ATTRIBUTES);
-	MirrorCheckFlag(AccessMode, FILE_READ_EA);
-	MirrorCheckFlag(AccessMode, READ_CONTROL);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_DATA);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_ATTRIBUTES);
-	MirrorCheckFlag(AccessMode, FILE_WRITE_EA);
-	MirrorCheckFlag(AccessMode, FILE_APPEND_DATA);
-	MirrorCheckFlag(AccessMode, WRITE_DAC);
-	MirrorCheckFlag(AccessMode, WRITE_OWNER);
-	MirrorCheckFlag(AccessMode, SYNCHRONIZE);
-	MirrorCheckFlag(AccessMode, FILE_EXECUTE);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_READ);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_WRITE);
-	MirrorCheckFlag(AccessMode, STANDARD_RIGHTS_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, DELETE);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_EA);
+	MirrorCheckFlag(DesiredAccess, READ_CONTROL);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_EA);
+	MirrorCheckFlag(DesiredAccess, FILE_APPEND_DATA);
+	MirrorCheckFlag(DesiredAccess, WRITE_DAC);
+	MirrorCheckFlag(DesiredAccess, WRITE_OWNER);
+	MirrorCheckFlag(DesiredAccess, SYNCHRONIZE);
+	MirrorCheckFlag(DesiredAccess, FILE_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
 	
 	// When filePath is a directory, needs to change the flag so that the file can be opened.
 	fileAttr = GetFileAttributes(filePath);
+
 	if (fileAttr != INVALID_FILE_ATTRIBUTES
 		&& (fileAttr & FILE_ATTRIBUTE_DIRECTORY
-			&& AccessMode != DELETE)) { //Directory cannot be open for DELETE
-		FlagsAndAttributes |= FILE_FLAG_BACKUP_SEMANTICS;
+			&& DesiredAccess != DELETE)) { //Directory cannot be open for DELETE
+		fileAttributesAndFlags |= FILE_FLAG_BACKUP_SEMANTICS;
 		//AccessMode = 0;
 	}
-	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", FlagsAndAttributes);
 
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_ARCHIVE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_ENCRYPTED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_HIDDEN);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_NORMAL);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_OFFLINE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_READONLY);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_SYSTEM);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_ATTRIBUTE_TEMPORARY);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_WRITE_THROUGH);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OVERLAPPED);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_NO_BUFFERING);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_RANDOM_ACCESS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_SEQUENTIAL_SCAN);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_DELETE_ON_CLOSE);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_BACKUP_SEMANTICS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_POSIX_SEMANTICS);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OPEN_REPARSE_POINT);
-	MirrorCheckFlag(FlagsAndAttributes, FILE_FLAG_OPEN_NO_RECALL);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_ANONYMOUS);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_IDENTIFICATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_IMPERSONATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_DELEGATION);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_CONTEXT_TRACKING);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_EFFECTIVE_ONLY);
-	MirrorCheckFlag(FlagsAndAttributes, SECURITY_SQOS_PRESENT);
+	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
-	handle = CreateFile(
-		filePath,
-		AccessMode,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-		ShareMode,
-		NULL, // security attribute
-		CreationDisposition,
-		FlagsAndAttributes,// |FILE_FLAG_NO_BUFFERING,
-		NULL); // template file handle
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
 
-	if (handle == INVALID_HANDLE_VALUE) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
+	if(creationDisposition == CREATE_NEW) {
+		DbgPrint(L"\tCREATE_NEW\n");
+	}
+	else if(creationDisposition == OPEN_ALWAYS) {
+		DbgPrint(L"\tOPEN_ALWAYS\n");
+	}
+	else if(creationDisposition == CREATE_ALWAYS) {
+		DbgPrint(L"\tCREATE_ALWAYS\n");
+	}
+	else if(creationDisposition == OPEN_EXISTING) {
+		DbgPrint(L"\tOPEN_EXISTING\n");
+	}
+	else if(creationDisposition == TRUNCATE_EXISTING) {
+		DbgPrint(L"\tTRUNCATE_EXISTING\n");
+	}
+	else {
+		DbgPrint(L"\tUNKNOWN creationDisposition!\n");
+	}
 
-		switch (error) {
-		case ERROR_FILE_NOT_FOUND:
-			status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_PATH_NOT_FOUND:
-			status = STATUS_OBJECT_PATH_NOT_FOUND;
-			break;
-		case ERROR_ACCESS_DENIED:
-			status = STATUS_ACCESS_DENIED;
-			break;
-		case ERROR_SHARING_VIOLATION:
-			status = STATUS_SHARING_VIOLATION;
-			break;
-		case ERROR_INVALID_NAME:
-			status = STATUS_OBJECT_NAME_NOT_FOUND;
-			break;
-		case ERROR_FILE_EXISTS:
-		case ERROR_ALREADY_EXISTS:
-			status = STATUS_OBJECT_NAME_COLLISION;
-			break;
-		case ERROR_PRIVILEGE_NOT_HELD:
-			status = STATUS_PRIVILEGE_NOT_HELD;
-			break;
-		case ERROR_NOT_READY:
-			status = STATUS_DEVICE_NOT_READY;
-			break;
-		default:
-			status = STATUS_INVALID_PARAMETER;
-			DbgPrint(L"Create got unknown error code %d\n", error);
+	if((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
+
+		if(status != STATUS_SUCCESS) {
+			DbgPrint(L"\tInvalid directory ZwCreateFile parameters.\n\n");
+			return status;
 		}
-	} else {
-		DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
 
-		if (CreationDisposition == OPEN_ALWAYS
-			|| CreationDisposition == CREATE_ALWAYS) {
-			DWORD error = GetLastError();
-			if (error == ERROR_ALREADY_EXISTS) {
-				DbgPrint(L"\tOpen an already exist file\n");
-				status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+		if(CreateDisposition == FILE_CREATE) {
+			if(!CreateDirectory(filePath, &securityAttrib)) {
+				error = GetLastError();
+				DbgPrint(L"\terror code = %d\n\n", error);
+				status = ToNtStatus(error);
+			}
+		}
+		else if(CreateDisposition == FILE_OPEN_IF) {
+			
+			if(!CreateDirectory(filePath, &securityAttrib)) {
+				
+				error = GetLastError();
+
+				if(error != ERROR_ALREADY_EXISTS) {
+					DbgPrint(L"\terror code = %d\n\n", error);
+					status = ToNtStatus(error);
+				}
+			}
+		}
+
+		if(status == STATUS_SUCCESS)
+		{
+			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
+			handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttrib, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+
+			if(handle == INVALID_HANDLE_VALUE) {
+				error = GetLastError();
+				DbgPrint(L"\terror code = %d\n\n", error);
+
+				status = ToNtStatus(error);
+			}
+			else {
+				DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+			}
+		}
+	}
+	else {
+
+		if(fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
+			if(CreateDisposition == FILE_CREATE) {
+				return STATUS_OBJECT_NAME_COLLISION;
+			}
+			else {
+				handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttrib, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+			}
+		}
+		else {
+			handle = CreateFile(
+				filePath,
+				DesiredAccess,//GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+				ShareAccess,
+				&securityAttrib, // security attribute
+				creationDisposition,
+				fileAttributesAndFlags,// |FILE_FLAG_NO_BUFFERING,
+				NULL); // template file handle
+		}
+
+		if(handle == INVALID_HANDLE_VALUE) {
+			error = GetLastError();
+			DbgPrint(L"\terror code = %d\n\n", error);
+
+			status = ToNtStatus(error);
+		}
+		else {
+			DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+			if(creationDisposition == OPEN_ALWAYS
+				|| creationDisposition == CREATE_ALWAYS) {
+				error = GetLastError();
+				if(error == ERROR_ALREADY_EXISTS) {
+					DbgPrint(L"\tOpen an already existing file\n");
+					status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+				}
 			}
 		}
 	}
 
 	DbgPrint(L"\n");
 	return status;
-}
-
-
-static NTSTATUS DOKAN_CALLBACK
-MirrorCreateDirectory(
-	LPCWSTR					FileName,
-	PDOKAN_FILE_INFO		DokanFileInfo)
-{
-    UNREFERENCED_PARAMETER(DokanFileInfo);
-
-	WCHAR filePath[MAX_PATH];
-	GetFilePath(filePath, MAX_PATH, FileName);
-
-	DbgPrint(L"CreateDirectory : %s\n", filePath);
-	if (!CreateDirectory(filePath, NULL)) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-	return STATUS_SUCCESS;
-}
-
-
-static NTSTATUS DOKAN_CALLBACK
-MirrorOpenDirectory(
-	LPCWSTR					FileName,
-	PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	WCHAR filePath[MAX_PATH];
-	HANDLE handle;
-	DWORD attr;
-
-	GetFilePath(filePath, MAX_PATH, FileName);
-
-	DbgPrint(L"OpenDirectory : %s\n", filePath);
-
-	attr = GetFileAttributes(filePath);
-	if (attr == INVALID_FILE_ATTRIBUTES) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-	if (!(attr & FILE_ATTRIBUTE_DIRECTORY)) {
-		return STATUS_NOT_IMPLEMENTED;
-	}
-
-	handle = CreateFile(
-		filePath,
-		0,
-		FILE_SHARE_READ|FILE_SHARE_WRITE,
-		NULL,
-		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS,
-		NULL);
-
-	if (handle == INVALID_HANDLE_VALUE) {
-		DWORD error = GetLastError();
-		DbgPrint(L"\terror code = %d\n\n", error);
-		return ToNtStatus(error);
-	}
-
-	DbgPrint(L"\n");
-
-	DokanFileInfo->Context = (ULONG64)handle;
-
-	return STATUS_SUCCESS;
 }
 
 
@@ -1405,9 +1405,7 @@ wmain(ULONG argc, PWCHAR argv[])
 	dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
 	ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
-	dokanOperations->CreateFile = MirrorCreateFile;
-	dokanOperations->OpenDirectory = MirrorOpenDirectory;
-	dokanOperations->CreateDirectory = MirrorCreateDirectory;
+	dokanOperations->ZwCreateFile = MirrorCreateFile;
 	dokanOperations->Cleanup = MirrorCleanup;
 	dokanOperations->CloseFile = MirrorCloseFile;
 	dokanOperations->ReadFile = MirrorReadFile;

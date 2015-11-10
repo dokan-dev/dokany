@@ -19,4 +19,4 @@ DokanOpenRequestorToken
 DokanRemoveMountPoint
 DokanUseStdErr
 DokanDebugMode
-
+DokanMapKernelToUserCreateFileFlags

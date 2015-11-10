@@ -3,6 +3,7 @@
 #include "fusemain.h"
 #include "ScopeGuard.h"
 #include "docanfuse.h"
+#include "../../dokan/dokani.h"
 #include <stdio.h>
 
 #ifdef __CYGWIN__
@@ -43,17 +44,6 @@ static NTSTATUS DOKAN_CALLBACK FuseFindFiles(
 		DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseOpenDirectory(
-				LPCWSTR					FileName,
-				PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	impl_fuse_context *impl=the_impl;
-	if (impl->debug()) FWPRINTF(stderr, L"OpenDirectory : %s\n", FileName);
-	
-	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return errno_to_ntstatus_error(impl->open_directory(FileName,DokanFileInfo));
-}
-
 static void DOKAN_CALLBACK FuseCleanup(
 					LPCWSTR					FileName,
 					PDOKAN_FILE_INFO		DokanFileInfo)
@@ -63,17 +53,6 @@ static void DOKAN_CALLBACK FuseCleanup(
 	
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
 	impl->cleanup(FileName,DokanFileInfo);
-}
-
-static NTSTATUS DOKAN_CALLBACK FuseCreateDirectory(
-					LPCWSTR					FileName,
-					PDOKAN_FILE_INFO		DokanFileInfo)
-{
-	impl_fuse_context *impl=the_impl;
-	if (impl->debug()) FWPRINTF(stderr, L"CreateDirectory : %s\n", FileName);
-	
-	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return errno_to_ntstatus_error(impl->create_directory(FileName,DokanFileInfo));
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseDeleteDirectory(
@@ -139,11 +118,12 @@ CONST_START(cShareMode)
 CONST_END(cShareMode)
 
 CONST_START(cDisposition)
-	CONST_VAL(CREATE_ALWAYS)
-	CONST_VAL(CREATE_NEW)
-	CONST_VAL(OPEN_ALWAYS)
-	CONST_VAL(OPEN_EXISTING)
-	CONST_VAL(TRUNCATE_EXISTING)
+	CONST_VAL(FILE_SUPERSEDE)
+	CONST_VAL(FILE_CREATE)
+	CONST_VAL(FILE_OPEN)
+	CONST_VAL(FILE_OPEN_IF)
+	CONST_VAL(FILE_OVERWRITE)
+	CONST_VAL(FILE_OVERWRITE_IF)
 CONST_END(cDisposition)
 
 void DebugConstant(const char *name, DWORD value, Constant *c)
@@ -183,26 +163,42 @@ void DebugConstantBit(const char *name, DWORD value, Constant *cs)
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseCreateFile(
-				 LPCWSTR				FileName,
-				 DWORD					AccessMode,
-				 DWORD					ShareMode,
-				 DWORD					CreationDisposition,
-				 DWORD					FlagsAndAttributes,
-				 PDOKAN_FILE_INFO		DokanFileInfo)
+				 LPCWSTR						FileName,
+				 PDOKAN_IO_SECURITY_CONTEXT		SecurityContext,
+				 ACCESS_MASK					DesiredAccess,
+				 ULONG							FileAttributes,
+				 ULONG							ShareAccess,
+				 ULONG							CreateDisposition,
+				 ULONG							CreateOptions,
+				 PDOKAN_FILE_INFO				DokanFileInfo)
 {
-	impl_fuse_context *impl=the_impl;
+	impl_fuse_context *impl = the_impl;
+
 	if (impl->debug()) {
 		FWPRINTF(stderr, L"CreateFile : %s\n", FileName);
-		DebugConstantBit("\tAccessMode", AccessMode,  cAccessMode);
-		DebugConstantBit("\tShareMode",  ShareMode,   cShareMode);
-		DebugConstant("\tDisposition",   CreationDisposition, cDisposition);
-		FWPRINTF(stderr, L"\tFlags: %lu (0x%lx)\n", FlagsAndAttributes, FlagsAndAttributes);
+		DebugConstantBit("\tDesiredAccess", DesiredAccess, cAccessMode);
+		DebugConstantBit("\tShareAccess", ShareAccess, cShareMode);
+		DebugConstant("\tDisposition", CreateDisposition, cDisposition);
+		FWPRINTF(stderr, L"\tAttributes: %u (0x%x)\n", FileAttributes, FileAttributes);
+		FWPRINTF(stderr, L"\tOptions: %u (0x%x)\n", CreateOptions, CreateOptions);
 		fflush(stderr);
 	}
-	
+
 	impl_chain_guard guard(impl,DokanFileInfo->ProcessId);
-	return -win_error(impl->create_file(FileName,AccessMode,ShareMode,
-		CreationDisposition,FlagsAndAttributes,DokanFileInfo));
+
+	if((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
+
+		if(CreateDisposition == FILE_CREATE || CreateDisposition == FILE_OPEN_IF) {
+			return errno_to_ntstatus_error(impl->create_directory(FileName, DokanFileInfo));
+		}
+		else if(CreateDisposition == FILE_OPEN) {
+
+			return errno_to_ntstatus_error(impl->open_directory(FileName, DokanFileInfo));
+		}
+	}
+
+	return -win_error(impl->create_file(FileName, CreateDisposition, ShareAccess, DesiredAccess, FileAttributes,
+		DokanFileInfo));
 }
 
 static void DOKAN_CALLBACK FuseCloseFile(
@@ -416,8 +412,6 @@ int fuse_interrupted(void)
 
 static DOKAN_OPERATIONS dokanOperations = {
 	FuseCreateFile,
-	FuseOpenDirectory,
-	FuseCreateDirectory,
 	FuseCleanup,
 	FuseCloseFile,
 	FuseReadFile,
