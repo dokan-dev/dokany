@@ -721,6 +721,8 @@ VOID
 DokanFreeMdl(
 	__in PIRP	Irp);
 
+ULONG
+PointerAlignSize(ULONG sizeInBytes);
 
 #endif // _DOKAN_H_
 

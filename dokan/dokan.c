@@ -18,8 +18,10 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+
 #include <winioctl.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,9 +30,12 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <tchar.h>
 #include <process.h>
 #include <locale.h>
+#include <ntstatus.h>
 #include "fileinfo.h"
 #include "dokani.h"
 #include "list.h"
+
+#define DokanMapKernelBit(dest, src, userBit, kernelBit) if(((src) & (kernelBit)) == (kernelBit)) (dest) |= (userBit)
 
 // DokanOptions->DebugMode is ON?
 BOOL	g_DebugMode = TRUE;
@@ -257,13 +262,15 @@ DokanMain(PDOKAN_OPTIONS DokanOptions, PDOKAN_OPERATIONS DokanOperations)
     return DOKAN_SUCCESS;
 }
 
-LPCWSTR
-GetRawDeviceName(LPCWSTR	DeviceName)
+LPWSTR
+GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer, rsize_t DestinationBufferSizeInElements)
 {
-	static WCHAR rawDeviceName[MAX_PATH];
-	wcscpy_s(rawDeviceName, MAX_PATH, L"\\\\.");
-	wcscat_s(rawDeviceName, MAX_PATH, DeviceName);
-	return rawDeviceName;
+	if(DeviceName && DestinationBuffer && DestinationBufferSizeInElements > 0) {
+		wcscpy_s(DestinationBuffer, DestinationBufferSizeInElements, L"\\\\.");
+		wcscat_s(DestinationBuffer, DestinationBufferSizeInElements, DeviceName);
+	}
+
+	return DestinationBuffer;
 }
 
 void
@@ -284,10 +291,12 @@ DokanLoop(
 	ULONG	returnedLength;
 	DWORD	result = 0;
     DWORD   lastError = 0;
+	WCHAR	rawDeviceName[MAX_PATH];
+
 	RtlZeroMemory(buffer, sizeof(buffer));
 
 	device = CreateFile(
-				GetRawDeviceName(DokanInstance->DeviceName), // lpFileName
+				GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH), // lpFileName
 				GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
 				FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
 				NULL,                               // lpSecurityAttributes
@@ -298,7 +307,7 @@ DokanLoop(
 
 	if (device == INVALID_HANDLE_VALUE) {
 		DbgPrint("Dokan Error: CreateFile failed %ws: %d\n",
-			GetRawDeviceName(DokanInstance->DeviceName), GetLastError());
+			GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH), GetLastError());
 		result = (DWORD)-1;
 		_endthreadex(result);
 		return result;
@@ -603,11 +612,12 @@ SendReleaseIRP(
 	LPCWSTR	DeviceName)
 {
 	ULONG	returnedLength;
+	WCHAR	rawDeviceName[MAX_PATH];
 
 	DbgPrint("send release\n");
 
 	if (!SendToDevice(
-				GetRawDeviceName(DeviceName),
+				GetRawDeviceName(DeviceName, rawDeviceName, MAX_PATH),
 				IOCTL_EVENT_RELEASE,
 				NULL,
 				0,
@@ -785,4 +795,57 @@ BOOL WINAPI DllMain(
 			break;
 	}
 	return TRUE;
+}
+
+void DOKANAPI
+DokanMapKernelToUserCreateFileFlags(
+	ULONG FileAttributes,
+	ULONG CreateOptions,
+	ULONG CreateDisposition,
+	DWORD *outFileAttributesAndFlags,
+	DWORD *outCreationDisposition)
+{
+	if(outFileAttributesAndFlags) {
+
+		*outFileAttributesAndFlags = FileAttributes;
+
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+		DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions, FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
+#endif
+	}
+
+	if(outCreationDisposition) {
+
+		switch(CreateDisposition) {
+		case FILE_CREATE:
+			*outCreationDisposition = CREATE_NEW;
+			break;
+		case FILE_OPEN:
+			*outCreationDisposition = OPEN_EXISTING;
+			break;
+		case FILE_OPEN_IF:
+			*outCreationDisposition = OPEN_ALWAYS;
+			break;
+		case FILE_OVERWRITE:
+			*outCreationDisposition = TRUNCATE_EXISTING;
+			break;
+		case FILE_SUPERSEDE:
+			// The documentation isn't clear on the difference between replacing a file and truncating it.
+			// For now we just map it to create/truncate
+		case FILE_OVERWRITE_IF:
+			*outCreationDisposition = CREATE_ALWAYS;
+			break;
+		default:
+			*outCreationDisposition = 0;
+			break;
+		}
+	}
 }

@@ -39,6 +39,7 @@ UninstPage instfiles
 	
 	File ..\dokan\dokan.h
 	File ..\dokan\fileinfo.h
+	File ..\sys\public.h
 	
   SetOutPath ${folder}\Dokan\DokanLibrary\lib
   
