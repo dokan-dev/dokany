@@ -149,6 +149,11 @@ DokanDbgPrintW(LPCWSTR format, ...)
 	  while(0) \
 	  __pragma(warning(pop))
 
+VOID DOKANAPI
+DokanUseStdErr(BOOL Status);
+
+VOID DOKANAPI
+DokanDebugMode(BOOL Status);
 
 BOOL DOKANAPI
 DokanServiceInstall(

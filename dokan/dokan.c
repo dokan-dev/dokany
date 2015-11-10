@@ -42,6 +42,18 @@ BOOL	g_UseStdErr = FALSE;
 CRITICAL_SECTION	g_InstanceCriticalSection;
 LIST_ENTRY			g_InstanceList;	
 
+VOID DOKANAPI
+DokanUseStdErr(BOOL Status)
+{
+	g_UseStdErr = Status;
+}
+
+VOID DOKANAPI
+DokanDebugMode(BOOL Status)
+{
+	g_DebugMode = Status;
+}
+
 PDOKAN_INSTANCE 
 NewDokanInstance()
 {

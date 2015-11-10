@@ -33,7 +33,7 @@ DokanServiceCheck(
 	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
 	if (controlHandle == NULL) {
-		DbgPrint("failed to open SCM: %d\n", GetLastError());
+		DbgPrint("DokanServiceCheck: Failed to open Service Control Manager. error = %d\n", GetLastError());
 		return FALSE;
 	}
 
@@ -41,6 +41,7 @@ DokanServiceCheck(
 		SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS);
 
 	if (serviceHandle == NULL) {
+		DokanDbgPrintW(L"DokanServiceCheck: Failed to open Service (%s). error = %d\n", ServiceName, GetLastError());
 		CloseServiceHandle(controlHandle);
 		return FALSE;
 	}
@@ -65,7 +66,7 @@ DokanServiceControl(
 	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
 	if (controlHandle == NULL) {
-		DokanDbgPrint("failed to open SCM: %d\n", GetLastError());
+		DokanDbgPrint("DokanServiceControl: Failed to open Service Control Manager. error = %d\n", GetLastError());
 		return FALSE;
 	}
 
@@ -73,7 +74,7 @@ DokanServiceControl(
 		SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS | DELETE);
 
 	if (serviceHandle == NULL) {
-		DokanDbgPrintW(L"failed to open Service (%s): %d\n", ServiceName, GetLastError());
+		DokanDbgPrintW(L"DokanServiceControl: Failed to open Service (%s). error = %d\n", ServiceName, GetLastError());
 		CloseServiceHandle(controlHandle);
 		return FALSE;
 	}
@@ -82,29 +83,29 @@ DokanServiceControl(
 
 	if (Type == DOKAN_SERVICE_DELETE) {
 		if (DeleteService(serviceHandle)) {
-			DokanDbgPrintW(L"Service (%s) deleted\n", ServiceName);
+			DokanDbgPrintW(L"DokanServiceControl: Service (%s) deleted\n", ServiceName);
 			result = TRUE;
 		} else {
-			DokanDbgPrintW(L"failed to delete service (%s): %d\n", ServiceName, GetLastError());
+			DokanDbgPrintW(L"DokanServiceControl: Failed to delete service (%s). error = %d\n", ServiceName, GetLastError());
 			result = FALSE;
 		}
 
 	} else if (ss.dwCurrentState == SERVICE_STOPPED && Type == DOKAN_SERVICE_START) {
 		if (StartService(serviceHandle, 0, NULL)) {
-			DokanDbgPrintW(L"Service (%s) started\n", ServiceName);
+			DokanDbgPrintW(L"DokanServiceControl: Service (%s) started\n", ServiceName);
 			result = TRUE;
 		} else {
-			DokanDbgPrintW(L"failed to start service (%s): %d\n", ServiceName, GetLastError());
+			DokanDbgPrintW(L"DokanServiceControl: Failed to start service (%s). error = %d\n", ServiceName, GetLastError());
 			result = FALSE;
 		}
 	
 	} else if (ss.dwCurrentState == SERVICE_RUNNING && Type == DOKAN_SERVICE_STOP) {
 
 		if (ControlService(serviceHandle, SERVICE_CONTROL_STOP, &ss)) {
-			DokanDbgPrintW(L"Service (%s) stopped\n", ServiceName);
+			DokanDbgPrintW(L"DokanServiceControl: Service (%s) stopped\n", ServiceName);
 			result = TRUE;
 		} else {
-			DokanDbgPrintW(L"failed to stop service (%s): %d\n", ServiceName, GetLastError());
+			DokanDbgPrintW(L"DokanServiceControl: Failed to stop service (%s). error = %d\n", ServiceName, GetLastError());
 			result = FALSE;
 		}
 	}
@@ -115,8 +116,6 @@ DokanServiceControl(
 	Sleep(100);
 	return result;
 }
-
-
 
 BOOL DOKANAPI
 DokanMountControl(PDOKAN_CONTROL Control)
@@ -135,15 +134,15 @@ DokanMountControl(PDOKAN_CONTROL Control)
 		DWORD error = GetLastError();
 		if (error == ERROR_PIPE_BUSY) {
 			if (!WaitNamedPipe(DOKAN_CONTROL_PIPE, NMPWAIT_USE_DEFAULT_WAIT)) {
-				DbgPrint("DokanMounter service : ERROR_PIPE_BUSY\n");
+				DbgPrint("DokanMountControl: DokanMounter service : ERROR_PIPE_BUSY\n");
 				return FALSE;
 			}
 			continue;
 		} else if (error == ERROR_ACCESS_DENIED) {
-			DbgPrint("failed to connect DokanMounter service: access denied\n");
+			DbgPrint("DokanMountControl: Failed to connect DokanMounter service: access denied\n");
 			return FALSE;
 		} else {
-			DbgPrint("failed to connect DokanMounter service: %d\n", GetLastError());
+			DbgPrint("DokanMountControl: Failed to connect DokanMounter service: %d\n", GetLastError());
 			return FALSE;
 		}
 	}
@@ -151,7 +150,7 @@ DokanMountControl(PDOKAN_CONTROL Control)
 	pipeMode = PIPE_READMODE_MESSAGE|PIPE_WAIT;
 
 	if(!SetNamedPipeHandleState(pipe, &pipeMode, NULL, NULL)) {
-		DbgPrint("failed to set named pipe state: %d\n", GetLastError());
+		DbgPrint("DokanMountControl: Failed to set named pipe state: %d\n", GetLastError());
 		CloseHandle(pipe);
 		return FALSE;
 	}
@@ -159,7 +158,7 @@ DokanMountControl(PDOKAN_CONTROL Control)
 
 	if(!TransactNamedPipe(pipe, Control, sizeof(DOKAN_CONTROL),
 		Control, sizeof(DOKAN_CONTROL), &readBytes, NULL)) {
-		DbgPrint("failed to transact named pipe: %d\n", GetLastError());
+		DbgPrint("DokanMountControl: Failed to transact named pipe: %d\n", GetLastError());
 	}
 
 	CloseHandle(pipe);
@@ -183,7 +182,7 @@ DokanServiceInstall(
 	
 	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
 	if (controlHandle == NULL) {
-		DokanDbgPrint("failed to open SCM");
+		DokanDbgPrint("DokanServiceInstall: Failed to open Service Control Manager. error = %d\n", GetLastError());
 		return FALSE;
 	}
 
@@ -192,10 +191,11 @@ DokanServiceInstall(
 		ServiceFullPath, NULL, NULL, NULL, NULL, NULL);
 	
 	if (serviceHandle == NULL) {
-		if (GetLastError() == ERROR_SERVICE_EXISTS) {
-			DokanDbgPrintW(L"Service (%s) is already installed\n", ServiceName);
+		BOOL error = GetLastError();
+		if (error == ERROR_SERVICE_EXISTS) {
+			DokanDbgPrintW(L"DokanServiceInstall: Service (%s) is already installed\n", ServiceName);
 		} else {
-			DokanDbgPrintW(L"failted to install service (%s): %d\n", ServiceName, GetLastError());
+			DokanDbgPrintW(L"DokanServiceInstall: Failed to install service (%s). error = %d\n", ServiceName, error);
 		}
 		CloseServiceHandle(controlHandle);
 		return FALSE;
@@ -204,13 +204,13 @@ DokanServiceInstall(
 	CloseServiceHandle(serviceHandle);
 	CloseServiceHandle(controlHandle);
 
-	DokanDbgPrintW(L"Service (%s) installed\n", ServiceName);
+	DokanDbgPrintW(L"DokanServiceInstall: Service (%s) installed\n", ServiceName);
 
 	if (DokanServiceControl(ServiceName, DOKAN_SERVICE_START)) {
-		DokanDbgPrintW(L"Service (%s) started\n", ServiceName);
+		DokanDbgPrintW(L"DokanServiceInstall: Service (%s) started\n", ServiceName);
 		return TRUE;
 	} else {
-		DokanDbgPrintW(L"Service (%s) start failed\n", ServiceName);
+		DokanDbgPrintW(L"DokanServiceInstall: Service (%s) start failed\n", ServiceName);
 		return FALSE;
 	}
 }

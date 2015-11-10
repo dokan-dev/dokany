@@ -17,4 +17,6 @@ DokanSetDebugMode
 DokanMountControl
 DokanOpenRequestorToken
 DokanRemoveMountPoint
+DokanUseStdErr
+DokanDebugMode
 

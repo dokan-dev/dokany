@@ -115,6 +115,55 @@ int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 	return status;
 }
 
+int InstallDriver(LPCWSTR	driverFullPath)
+{
+	fprintf(stderr, "Install driver...\n");
+	if (!PathFileExistsW(driverFullPath)) {
+		fwprintf(stderr, L"Error the file '%s' does not exist.\n", driverFullPath);
+		return EXIT_FAILURE;
+	}
+
+	if (!DokanServiceInstall(DOKAN_DRIVER_SERVICE,
+		SERVICE_FILE_SYSTEM_DRIVER,
+		DOKAN_DRIVER_FULL_PATH)) {
+		fprintf(stderr, "Driver install failed\n");
+		return EXIT_FAILURE;
+	}
+
+	fprintf(stderr, "Install driver successful!\n");
+	return EXIT_SUCCESS;
+}
+
+int InstallMounter(LPCWSTR mounterFullPath)
+{
+	fprintf(stderr, "Install mounter...\n");
+	if (!PathFileExistsW(mounterFullPath)) {
+		fwprintf(stderr, L"Error the file '%s' does not exist.\n", mounterFullPath);
+		return EXIT_FAILURE;
+	}
+
+	if (!DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
+		SERVICE_WIN32_OWN_PROCESS,
+		mounterFullPath)) {
+		fprintf(stderr, "Mounter install failed\n");
+		return EXIT_FAILURE;
+	}
+
+	fprintf(stderr, "Install mounter successful!\n");
+	return EXIT_SUCCESS;
+}
+
+int DeleteDokanService(LPCWSTR ServiceName)
+{
+	if (!DokanServiceDelete(ServiceName))
+	{
+		fwprintf(stderr, L"Error removing '%s'\n", ServiceName);
+		return EXIT_FAILURE;
+	}
+	fwprintf(stderr, L"'%s' removed.\n", ServiceName);
+	return EXIT_SUCCESS;
+}
+
 #define GetOption(argc, argv, index) \
 	(((argc) > (index) && \
 		wcslen((argv)[(index)]) == 2 && \
@@ -130,6 +179,8 @@ wmain(int argc, PWCHAR argv[])
     WCHAR	mounterFullPath[MAX_PATH] = { 0 };
     WCHAR	type;
 
+	DokanUseStdErr(TRUE); //Set dokan library debug output
+
     //setlocale(LC_ALL, "");
 
     GetModuleFileName(NULL, fileName, MAX_PATH);
@@ -143,11 +194,11 @@ wmain(int argc, PWCHAR argv[])
 
     wcscpy_s(mounterFullPath, MAX_PATH, fileName);
     wcscat_s(mounterFullPath, MAX_PATH, L"\\mounter.exe");
-    fwprintf(stderr, L"mounter path %s\n", mounterFullPath);
+    fwprintf(stderr, L"Mounter path: '%s'\n", mounterFullPath);
 
 	ExpandEnvironmentStringsW(DOKAN_DRIVER_FULL_PATH, driverFullPath, MAX_PATH);
 
-    fwprintf(stderr, L"driver path %s\n", driverFullPath);
+    fwprintf(stderr, L"Driver path: '%s'\n", driverFullPath);
 
     if (GetOption(argc, argv, 1) == L'v') {
         fprintf(stderr, "dokanctl : %s %s\n", __DATE__, __TIME__);
@@ -175,57 +226,20 @@ wmain(int argc, PWCHAR argv[])
     case L'i':
         if (type ==  L'd') {
 			
-			if(!PathFileExistsW(driverFullPath)) {
-				fprintf_s(stderr, "driver installation failed, the file does not exist.\n");
-				return EXIT_FAILURE;
-			}
-
-            if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
-                                    SERVICE_FILE_SYSTEM_DRIVER,
-                                    DOKAN_DRIVER_FULL_PATH))
-                fprintf(stderr, "driver install ok\n");
-            else
-                fprintf(stderr, "driver install failed\n");
+			return InstallDriver(driverFullPath);
 
         } else if (type == L's') {
 
-			if(!PathFileExistsW(mounterFullPath)) {
-				fprintf_s(stderr, "mounter installation failed, the file does not exist.\n");
-				return EXIT_FAILURE;
-			}
-
-            if (DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
-                                    SERVICE_WIN32_OWN_PROCESS,
-                                    mounterFullPath))
-                fprintf(stderr, "mounter install ok\n");
-            else
-                fprintf(stderr, "mounter install failed\n");
+			return InstallMounter(mounterFullPath);
         
         } else if (type == L'a') {
 
-			if(!PathFileExistsW(driverFullPath)) {
-				fprintf_s(stderr, "driver installation failed, the file does not exist.\n");
+			if (InstallDriver(driverFullPath) == EXIT_FAILURE)
 				return EXIT_FAILURE;
-			}
 
-			if(!PathFileExistsW(mounterFullPath)) {
-				fprintf_s(stderr, "mounter installation failed, the file does not exist.\n");
+			if (InstallMounter(mounterFullPath) == EXIT_FAILURE)
 				return EXIT_FAILURE;
-			}
 
-            if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
-                                    SERVICE_FILE_SYSTEM_DRIVER,
-									DOKAN_DRIVER_FULL_PATH))
-                fprintf(stderr, "driver install ok\n");
-            else
-                fprintf(stderr, "driver install failed\n");
-
-            if (DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
-                                    SERVICE_WIN32_OWN_PROCESS,
-                                    mounterFullPath))
-                fprintf(stderr, "mounter install ok\n");
-            else
-                fprintf(stderr, "mounter install failed\n");
         } else if (type == L'n') {
             if (DokanNetworkProviderInstall())
                 fprintf(stderr, "network provider install ok\n");
@@ -236,27 +250,21 @@ wmain(int argc, PWCHAR argv[])
 
     case L'r':
         if (type == L'd') {
-            if (DokanServiceDelete(DOKAN_DRIVER_SERVICE))
-                fprintf(stderr, "driver remove ok\n");
-            else
-                fprintf(stderr, "driver remvoe failed\n");
+
+			return DeleteDokanService(DOKAN_DRIVER_SERVICE);
         
         } else if (type == L's') {
-            if (DokanServiceDelete(DOKAN_MOUNTER_SERVICE))
-                fprintf(stderr, "mounter remove ok\n");
-            else
-                fprintf(stderr, "mounter remvoe failed\n");	
+
+			return DeleteDokanService(DOKAN_MOUNTER_SERVICE);
         
         } else if (type == L'a') {
-            if (DokanServiceDelete(DOKAN_MOUNTER_SERVICE))
-                fprintf(stderr, "mounter remove ok\n");
-            else
-                fprintf(stderr, "mounter remvoe failed\n");	
 
-            if (DokanServiceDelete(DOKAN_DRIVER_SERVICE))
-                fprintf(stderr, "driver remove ok\n");
-            else
-                fprintf(stderr, "driver remvoe failed\n");
+			if (DeleteDokanService(DOKAN_MOUNTER_SERVICE) == EXIT_FAILURE)
+				return EXIT_FAILURE;
+
+			if (DeleteDokanService(DOKAN_DRIVER_SERVICE) == EXIT_FAILURE)
+				return EXIT_FAILURE;
+
         } else if (type == L'n') {
             if (DokanNetworkProviderUninstall())
                 fprintf(stderr, "network provider remove ok\n");
