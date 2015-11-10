@@ -125,7 +125,6 @@ NTSTATUS ToNtStatus(DWORD dwError)
 		return STATUS_INVALID_PARAMETER;
 	case ERROR_ACCESS_DENIED:
 		return STATUS_ACCESS_DENIED;
-		break;
 	case ERROR_SHARING_VIOLATION:
 		return STATUS_SHARING_VIOLATION;
 	case ERROR_INVALID_NAME:
@@ -329,7 +328,7 @@ MirrorCreateFile(
 	}
 
 	if((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
-
+		// It is a create directory request
 		if(status != STATUS_SUCCESS) {
 			DbgPrint(L"\tInvalid directory ZwCreateFile parameters.\n\n");
 			return status;
@@ -372,10 +371,11 @@ MirrorCreateFile(
 		}
 	}
 	else {
+		// It is a create file request
 
 		if(fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
 			if(CreateDisposition == FILE_CREATE) {
-				return STATUS_OBJECT_NAME_COLLISION;
+				return STATUS_OBJECT_NAME_COLLISION; //File already exist because GetFileAttributes found it
 			}
 			else {
 				handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttrib, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);

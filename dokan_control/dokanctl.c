@@ -130,7 +130,7 @@ int InstallDriver(LPCWSTR	driverFullPath)
 		return EXIT_FAILURE;
 	}
 
-	fprintf(stderr, "Install driver successful!\n");
+	fprintf(stderr, "Driver installation succeeded!\n");
 	return EXIT_SUCCESS;
 }
 
@@ -149,7 +149,7 @@ int InstallMounter(LPCWSTR mounterFullPath)
 		return EXIT_FAILURE;
 	}
 
-	fprintf(stderr, "Install mounter successful!\n");
+	fprintf(stderr, "Mounter installation succeeded!\n");
 	return EXIT_SUCCESS;
 }
 
