@@ -22,12 +22,15 @@ THE SOFTWARE.
 */
 
 #include <windows.h>
+#include <Shlwapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
 
 #include "../dokan/dokan.h"
 #include "../dokan/dokanc.h"
+
+#define DOKAN_DRIVER_FULL_PATH L"%SystemRoot%\\system32\\drivers\\dokan.sys"
 
 int ShowMountList()
 {
@@ -142,11 +145,9 @@ wmain(int argc, PWCHAR argv[])
     wcscat_s(mounterFullPath, MAX_PATH, L"\\mounter.exe");
     fwprintf(stderr, L"mounter path %s\n", mounterFullPath);
 
-    GetSystemDirectory(driverFullPath, MAX_PATH);
-    wcscat_s(driverFullPath, MAX_PATH, L"\\drivers\\dokan.sys");
+	ExpandEnvironmentStringsW(DOKAN_DRIVER_FULL_PATH, driverFullPath, MAX_PATH);
 
     fwprintf(stderr, L"driver path %s\n", driverFullPath);
-    
 
     if (GetOption(argc, argv, 1) == L'v') {
         fprintf(stderr, "dokanctl : %s %s\n", __DATE__, __TIME__);
@@ -173,14 +174,26 @@ wmain(int argc, PWCHAR argv[])
     switch(towlower(argv[1][1])) {
     case L'i':
         if (type ==  L'd') {
+			
+			if(!PathFileExistsW(driverFullPath)) {
+				fprintf_s(stderr, "driver installation failed, the file does not exist.\n");
+				return EXIT_FAILURE;
+			}
+
             if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
                                     SERVICE_FILE_SYSTEM_DRIVER,
-                                    driverFullPath))
+                                    DOKAN_DRIVER_FULL_PATH))
                 fprintf(stderr, "driver install ok\n");
             else
                 fprintf(stderr, "driver install failed\n");
 
         } else if (type == L's') {
+
+			if(!PathFileExistsW(mounterFullPath)) {
+				fprintf_s(stderr, "mounter installation failed, the file does not exist.\n");
+				return EXIT_FAILURE;
+			}
+
             if (DokanServiceInstall(DOKAN_MOUNTER_SERVICE,
                                     SERVICE_WIN32_OWN_PROCESS,
                                     mounterFullPath))
@@ -189,9 +202,20 @@ wmain(int argc, PWCHAR argv[])
                 fprintf(stderr, "mounter install failed\n");
         
         } else if (type == L'a') {
+
+			if(!PathFileExistsW(driverFullPath)) {
+				fprintf_s(stderr, "driver installation failed, the file does not exist.\n");
+				return EXIT_FAILURE;
+			}
+
+			if(!PathFileExistsW(mounterFullPath)) {
+				fprintf_s(stderr, "mounter installation failed, the file does not exist.\n");
+				return EXIT_FAILURE;
+			}
+
             if (DokanServiceInstall(DOKAN_DRIVER_SERVICE,
                                     SERVICE_FILE_SYSTEM_DRIVER,
-                                    driverFullPath))
+									DOKAN_DRIVER_FULL_PATH))
                 fprintf(stderr, "driver install ok\n");
             else
                 fprintf(stderr, "driver install failed\n");
