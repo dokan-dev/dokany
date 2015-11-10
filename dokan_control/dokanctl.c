@@ -117,7 +117,7 @@ int Unmount(LPCWSTR	MountPoint, BOOL ForceUnmount)
 
 int InstallDriver(LPCWSTR	driverFullPath)
 {
-	fprintf(stderr, "Install driver...\n");
+	fprintf(stderr, "Installing driver...\n");
 	if (!PathFileExistsW(driverFullPath)) {
 		fwprintf(stderr, L"Error the file '%s' does not exist.\n", driverFullPath);
 		return EXIT_FAILURE;
@@ -136,7 +136,7 @@ int InstallDriver(LPCWSTR	driverFullPath)
 
 int InstallMounter(LPCWSTR mounterFullPath)
 {
-	fprintf(stderr, "Install mounter...\n");
+	fprintf(stderr, "Installing mounter...\n");
 	if (!PathFileExistsW(mounterFullPath)) {
 		fwprintf(stderr, L"Error the file '%s' does not exist.\n", mounterFullPath);
 		return EXIT_FAILURE;
@@ -155,6 +155,7 @@ int InstallMounter(LPCWSTR mounterFullPath)
 
 int DeleteDokanService(LPCWSTR ServiceName)
 {
+	fwprintf(stderr, L"Removing '%s'...\n", ServiceName);
 	if (!DokanServiceDelete(ServiceName))
 	{
 		fwprintf(stderr, L"Error removing '%s'\n", ServiceName);
