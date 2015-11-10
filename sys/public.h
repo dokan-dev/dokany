@@ -339,6 +339,7 @@ typedef struct _EVENT_INFORMATION {
 
 #define DOKAN_EVENT_ALTERNATIVE_STREAM_ON	1
 #define DOKAN_EVENT_REMOVABLE				4
+#define DOKAN_EVENT_READONLY				8
 
 typedef struct _EVENT_DRIVER_INFO {
 	ULONG	DriverVersion;

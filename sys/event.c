@@ -480,6 +480,11 @@ DokanEventStart(
 		deviceCharacteristics |= FILE_REMOVABLE_MEDIA;
 	}
 
+	if (eventStart.Flags & DOKAN_EVENT_READONLY) {
+		DDbgPrint("  DeviceCharacteristics |= DOKAN_EVENT_READONLY\n");
+		deviceCharacteristics |= FILE_READ_ONLY_DEVICE;
+	}
+
 	baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
 	baseGuid.Data3 = (USHORT)(dokanGlobal->MountId >> 16) ^ baseGuid.Data3;
 

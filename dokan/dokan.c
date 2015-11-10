@@ -653,6 +653,9 @@ DokanStart(PDOKAN_INSTANCE Instance)
 	if (Instance->DokanOptions->Options & DOKAN_OPTION_REMOVABLE) {
 		eventStart.Flags |= DOKAN_EVENT_REMOVABLE;
 	}
+	if (Instance->DokanOptions->Options & DOKAN_OPTION_READONLY) {
+		eventStart.Flags |= DOKAN_EVENT_READONLY;
+	}
     
     eventStart.IrpTimeout = Instance->DokanOptions->Timeout;
     
