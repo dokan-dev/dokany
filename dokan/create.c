@@ -29,8 +29,7 @@ DispatchCreate(
 	PDOKAN_INSTANCE		DokanInstance)
 {
 	static int								eventId = 0;
-	ULONG									length	  = sizeof(EVENT_INFORMATION);
-	PEVENT_INFORMATION						eventInfo = (PEVENT_INFORMATION)malloc(length);
+	EVENT_INFORMATION  						eventInfo;
 	NTSTATUS								status = STATUS_INSUFFICIENT_RESOURCES;
 	DOKAN_FILE_INFO							fileInfo;
 	ULONG									disposition;
@@ -41,19 +40,15 @@ DispatchCreate(
 	PDOKAN_UNICODE_STRING_INTERMEDIATE		intermediateObjName = NULL;
 	PDOKAN_UNICODE_STRING_INTERMEDIATE		intermediateObjType = NULL;
 
-	if (eventInfo == NULL) {
-		return;
-	}
-
 	fileName = (WCHAR*)((char*)&EventContext->Operation.Create + EventContext->Operation.Create.FileNameOffset);
 
 	CheckFileName(fileName);
 
-	RtlZeroMemory(eventInfo, length);
+	RtlZeroMemory(&eventInfo, sizeof(EVENT_INFORMATION));
 	RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
 
-	eventInfo->BufferLength = 0;
-	eventInfo->SerialNumber = EventContext->SerialNumber;
+	eventInfo.BufferLength = 0;
+	eventInfo.SerialNumber = EventContext->SerialNumber;
 
 	fileInfo.ProcessId = EventContext->ProcessId;
 	fileInfo.DokanOptions = DokanInstance->DokanOptions;
@@ -62,9 +57,8 @@ DispatchCreate(
 	// this will be freed by Close
 	openInfo = malloc(sizeof(DOKAN_OPEN_INFO));
 	if (openInfo == NULL) {
-		eventInfo->Status = STATUS_INSUFFICIENT_RESOURCES;
-		SendEventInformation(Handle, eventInfo, length, NULL);
-		free(eventInfo);
+		eventInfo.Status = STATUS_INSUFFICIENT_RESOURCES;
+		SendEventInformation(Handle, &eventInfo, sizeof(EVENT_INFORMATION), NULL);
 		return;
 	}
 	ZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
@@ -74,7 +68,7 @@ DispatchCreate(
 	fileInfo.DokanContext = (ULONG64)openInfo;
 
 	// pass it to driver and when the same handle is used get it back
-	eventInfo->Context = (ULONG64)openInfo;
+	eventInfo.Context = (ULONG64)openInfo;
 
 	// The high 8 bits of this parameter correspond to the Disposition parameter
 	disposition = (EventContext->Operation.Create.CreateOptions >> 24) & 0x000000ff;
@@ -188,26 +182,26 @@ DispatchCreate(
 		{
 			DbgPrint("SL_OPEN_TARGET_DIRECTORY spcefied\n");
 		}
-		eventInfo->Operation.Create.Information = FILE_DOES_NOT_EXIST;
-		eventInfo->Status = status;
+		eventInfo.Operation.Create.Information = FILE_DOES_NOT_EXIST;
+		eventInfo.Status = status;
 
 		if (status == STATUS_OBJECT_NAME_NOT_FOUND && EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
 		{
 			DbgPrint("This case should be returned as SUCCESS\n");
-			eventInfo->Status = STATUS_SUCCESS;
+			eventInfo.Status = STATUS_SUCCESS;
 		}
 
 		if (status == STATUS_OBJECT_NAME_COLLISION)
 		{
-			eventInfo->Operation.Create.Information = FILE_EXISTS;
+			eventInfo.Operation.Create.Information = FILE_EXISTS;
 
 			if (disposition == FILE_OPEN_IF ||
 				disposition == FILE_OVERWRITE_IF) {
-				eventInfo->Status = STATUS_SUCCESS;
+				eventInfo.Status = STATUS_SUCCESS;
 				if (disposition == FILE_OPEN_IF) {
-					eventInfo->Operation.Create.Information = FILE_OPENED;
+					eventInfo.Operation.Create.Information = FILE_OPENED;
 				} else {
-					eventInfo->Operation.Create.Information = FILE_OVERWRITTEN;
+					eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
 				}
 			}
 		}
@@ -215,20 +209,19 @@ DispatchCreate(
 		
 		//DbgPrint("status = %d\n", status);
 
-		eventInfo->Status = STATUS_SUCCESS;
-		eventInfo->Operation.Create.Information = FILE_OPENED;
+		eventInfo.Status = STATUS_SUCCESS;
+		eventInfo.Operation.Create.Information = FILE_OPENED;
 
 		if (disposition == FILE_CREATE ||
 			disposition == FILE_OPEN_IF ||
 			disposition == FILE_OVERWRITE_IF) {
-			eventInfo->Operation.Create.Information = FILE_CREATED;
+			eventInfo.Operation.Create.Information = FILE_CREATED;
 		}
 
 		if (fileInfo.IsDirectory)
-			eventInfo->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+			eventInfo.Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
 	}
 	
-	SendEventInformation(Handle, eventInfo, length, DokanInstance);
-	free(eventInfo);
+	SendEventInformation(Handle, &eventInfo, sizeof(EVENT_INFORMATION), DokanInstance);
 	return;
 }

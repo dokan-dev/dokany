@@ -345,7 +345,7 @@ Return Value:
 	ULONG									eventLength;
 	PDokanFCB								fcb;
 	PDokanCCB								ccb;
-	PWCHAR									fileName;
+	PWCHAR									fileName = NULL;
 	BOOLEAN									needBackSlashAfterRelatedFile = FALSE;
 	ULONG									securityDescriptorSize = 0;
 	ULONG									alignedEventContextSize = 0;
@@ -509,7 +509,7 @@ Return Value:
 		}
 
 		// Fail if device is read-only and request involves a write operation
-		DWORD disposition;
+		DWORD disposition = 0;
 		if (IS_DEVICE_READ_ONLY(DeviceObject)) {
 			disposition = (irpSp->Parameters.Create.Options >> 24) & 0x000000ff;
 
@@ -521,6 +521,7 @@ Return Value:
 
 				DDbgPrint("    Media is write protected\n");
 				status = STATUS_MEDIA_WRITE_PROTECTED;
+				ExFreePool(fileName);
 				__leave;
 			}
 		}
