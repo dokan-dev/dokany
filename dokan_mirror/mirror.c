@@ -1334,7 +1334,8 @@ wmain(ULONG argc, PWCHAR argv[])
 			"  /s (use stderr for output)\n"
 			"  /n (use network drive)\n"
 			"  /m (use removable drive)\n"
-            "  /i (Timeout in Milliseconds ex. /i 30000)\n");
+			"  /w (write-protect drive)\n"
+			"  /i (Timeout in Milliseconds ex. /i 30000)\n");
 		free(dokanOperations);
 		free(dokanOptions);
 		return EXIT_FAILURE;
@@ -1375,7 +1376,10 @@ wmain(ULONG argc, PWCHAR argv[])
 		case L'm':
 			dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
 			break;
-        case L'i':
+		case L'w':
+			dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
+			break;
+		case L'i':
             command++;
             dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
             break;

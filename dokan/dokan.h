@@ -44,11 +44,12 @@ extern "C" {
 // The current Dokan version (ver 0.8.0). Please set this constant on DokanOptions->Version.
 #define DOKAN_VERSION		800
 
-#define DOKAN_OPTION_DEBUG		1 // ouput debug message
-#define DOKAN_OPTION_STDERR		2 // ouput debug message to stderr
-#define DOKAN_OPTION_ALT_STREAM	4 // use alternate stream
-#define DOKAN_OPTION_NETWORK	16 // use network drive, you need to install Dokan network provider.
-#define DOKAN_OPTION_REMOVABLE	32 // use removable drive
+#define DOKAN_OPTION_DEBUG         1 // ouput debug message
+#define DOKAN_OPTION_STDERR        2 // ouput debug message to stderr
+#define DOKAN_OPTION_ALT_STREAM    4 // use alternate stream
+#define DOKAN_OPTION_WRITE_PROTECT 8 // mount drive as write-protected.
+#define DOKAN_OPTION_NETWORK      16 // use network drive, you need to install Dokan network provider.
+#define DOKAN_OPTION_REMOVABLE    32 // use removable drive
 
 typedef struct _DOKAN_OPTIONS {
 	USHORT	Version; // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
@@ -237,6 +238,10 @@ typedef struct _DOKAN_OPERATIONS {
 		PULONGLONG, // TotalNumberOfFreeBytes
 		PDOKAN_FILE_INFO);
 
+	// Note:
+	// FILE_READ_ONLY_VOLUME is automatically added to the
+	// FileSystemFlags if DOKAN_OPTION_WRITE_PROTECT was
+	// specified in DOKAN_OPTIONS when the volume was mounted.
 
 	// see Win32 API GetVolumeInformation
 	NTSTATUS (DOKAN_CALLBACK *GetVolumeInformation) (

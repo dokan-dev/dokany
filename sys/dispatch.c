@@ -76,7 +76,26 @@ __in PIRP Irp)
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
 
-    switch (irpSp->MajorFunction) {
+	// If volume is write protected and this request
+	// would modify it then return write protected status.
+	if (IS_DEVICE_READ_ONLY(DeviceObject)) {
+		if ((irpSp->MajorFunction == IRP_MJ_WRITE) ||
+			(irpSp->MajorFunction == IRP_MJ_SET_INFORMATION) ||
+			(irpSp->MajorFunction == IRP_MJ_SET_EA) ||
+			(irpSp->MajorFunction == IRP_MJ_FLUSH_BUFFERS) ||
+			(irpSp->MajorFunction == IRP_MJ_SET_SECURITY) ||
+			(irpSp->MajorFunction == IRP_MJ_SET_VOLUME_INFORMATION) ||
+			(irpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&
+				irpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&
+				irpSp->Parameters.FileSystemControl.FsControlCode == FSCTL_MARK_VOLUME_DIRTY)) {
+
+			DDbgPrint("    Media is write protected\n");
+			DokanCompleteIrpRequest(Irp, STATUS_MEDIA_WRITE_PROTECTED, 0);
+			return STATUS_MEDIA_WRITE_PROTECTED;
+		}
+	}
+
+	switch (irpSp->MajorFunction) {
 
         case IRP_MJ_CREATE:
             return DokanDispatchCreate(DeviceObject, Irp);

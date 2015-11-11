@@ -257,7 +257,9 @@ DiskDeviceControl(
 
 	case IOCTL_DISK_IS_WRITABLE:
 		DDbgPrint("  IOCTL_DISK_IS_WRITABLE\n");
-		status = STATUS_SUCCESS;
+		status = IS_DEVICE_READ_ONLY(DeviceObject)
+			? STATUS_MEDIA_WRITE_PROTECTED
+			: STATUS_SUCCESS;
 		break;
 
 	case IOCTL_DISK_MEDIA_REMOVAL:
@@ -297,12 +299,25 @@ DiskDeviceControl(
 			Irp->IoStatus.Information = sizeof(STORAGE_HOTPLUG_INFO);
 		}
 		break;
+
 	case IOCTL_VOLUME_GET_GPT_ATTRIBUTES:
 		{
 			DDbgPrint("   IOCTL_VOLUME_GET_GPT_ATTRIBUTES\n");
+			PVOLUME_GET_GPT_ATTRIBUTES_INFORMATION gptAttrInfo;
+			if (outputLength < sizeof(VOLUME_GET_GPT_ATTRIBUTES_INFORMATION)) {
+				status = STATUS_BUFFER_TOO_SMALL;
+				Irp->IoStatus.Information = 0;
+				break;
+			}
+			// Set GPT read-only flag if device is not writable
+			gptAttrInfo = Irp->AssociatedIrp.SystemBuffer;
+			if (IS_DEVICE_READ_ONLY(DeviceObject))
+				gptAttrInfo->GptAttributes = GPT_BASIC_DATA_ATTRIBUTE_READ_ONLY;
+			Irp->IoStatus.Information = sizeof(VOLUME_GET_GPT_ATTRIBUTES_INFORMATION);
 			status = STATUS_SUCCESS;
 		}
 		break;
+
 	case IOCTL_DISK_CHECK_VERIFY:
 		DDbgPrint("  IOCTL_DISK_CHECK_VERIFY\n");
 		status = STATUS_SUCCESS;

@@ -209,6 +209,16 @@ DokanCompleteQueryVolumeInformation(
 		status = STATUS_INSUFFICIENT_RESOURCES;
 
 	} else {
+		// If this is an attribute request and the volume
+		// is write protected, ensure read-only flag is present
+		if (irpSp->Parameters.QueryVolume.FsInformationClass == FileFsAttributeInformation &&
+			IS_DEVICE_READ_ONLY(IrpEntry->IrpSp->DeviceObject)) {
+
+			DDbgPrint("    Adding FILE_READ_ONLY_VOLUME flag to attributes\n");
+			PFILE_FS_ATTRIBUTE_INFORMATION attrInfo =
+				(PFILE_FS_ATTRIBUTE_INFORMATION)EventInfo->Buffer;
+			attrInfo->FileSystemAttributes |= FILE_READ_ONLY_VOLUME;
+		}
 
 		// copy the information from user-mode to specified buffer
 		ASSERT(buffer != NULL);

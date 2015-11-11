@@ -206,6 +206,7 @@ typedef struct _DokanDiskControlBlock {
     ULONG           IrpTimeout;
 } DokanDCB, *PDokanDCB;
 
+#define IS_DEVICE_READ_ONLY(DeviceObject) (DeviceObject->Characteristics & FILE_READ_ONLY_DEVICE)
 
 typedef struct _DokanVolumeControlBlock {
 

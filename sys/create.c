@@ -38,7 +38,7 @@ DokanAllocateFCB(
 		return NULL;
 	}
 
-	ASSERT(fcb != NULL);
+	//ASSERT(fcb != NULL);
 	ASSERT(Vcb != NULL);
 
 	RtlZeroMemory(fcb, sizeof(DokanFCB));
@@ -509,6 +509,23 @@ Return Value:
 							fileObject->FileName.Length);
 		}
 
+		// Fail if device is read-only and request involves a write operation
+		DWORD disposition;
+		if (IS_DEVICE_READ_ONLY(DeviceObject)) {
+			disposition = (irpSp->Parameters.Create.Options >> 24) & 0x000000ff;
+
+			if ((disposition == FILE_SUPERSEDE) ||
+				(disposition == FILE_CREATE) ||
+				(disposition == FILE_OVERWRITE) ||
+				(disposition == FILE_OVERWRITE_IF) ||
+				(irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE)) {
+
+				DDbgPrint("    Media is write protected\n");
+				status = STATUS_MEDIA_WRITE_PROTECTED;
+				__leave;
+			}
+		}
+
 		fcb = DokanGetFCB(vcb, fileName, fileNameLength);
 		if (fcb == NULL) {
 			status = STATUS_INSUFFICIENT_RESOURCES;
@@ -616,6 +633,13 @@ Return Value:
 		// Other Create attributes
 		eventContext->Operation.Create.FileAttributes = irpSp->Parameters.Create.FileAttributes;
 		eventContext->Operation.Create.CreateOptions = irpSp->Parameters.Create.Options;
+		if (IS_DEVICE_READ_ONLY(DeviceObject) && // do not reorder eval as
+			disposition == FILE_OPEN_IF) {       // disposition only init if read-only
+			// Substitute FILE_OPEN for FILE_OPEN_IF
+			// We check on return from userland in DokanCompleteCreate below
+			// and if file didn't exist, return write-protected status
+			eventContext->Operation.Create.CreateOptions &= ((FILE_OPEN << 24) | 0x00FFFFFF);
+		}
 		eventContext->Operation.Create.ShareAccess = irpSp->Parameters.Create.ShareAccess;
 		eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
 		eventContext->Operation.Create.FileNameOffset = (ULONG)(((char*)eventContext + alignedEventContextSize + securityDescriptorSize + alignedObjectNameSize + alignedObjectTypeNameSize) - (char*)&eventContext->Operation.Create);
@@ -742,7 +766,20 @@ DokanCompleteCreate(
 		break;
 	}
 
-    KeEnterCriticalRegion();
+	// If volume is write-protected, we subbed FILE_OPEN for FILE_OPEN_IF
+	// before call to userland in DokanDispatchCreate.
+	// In this case, a not found error should return write protected status.
+	if ((info == FILE_DOES_NOT_EXIST) &&
+		(IS_DEVICE_READ_ONLY(irpSp->DeviceObject))) {
+
+		DWORD disposition = (irpSp->Parameters.Create.Options >> 24) & 0x000000ff;
+		if (disposition == FILE_OPEN_IF) {
+			DDbgPrint("  Media is write protected\n");
+			status = STATUS_MEDIA_WRITE_PROTECTED;
+		}
+	}
+
+	KeEnterCriticalRegion();
 	ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 	if (NT_SUCCESS(status) &&
 		(irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE ||
