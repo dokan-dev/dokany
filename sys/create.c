@@ -26,7 +26,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 
-// We must NOT call without VCB lcok
+// We must NOT call without VCB lock
 PDokanFCB
 DokanAllocateFCB(
 	__in PDokanVCB Vcb
@@ -38,7 +38,6 @@ DokanAllocateFCB(
 		return NULL;
 	}
 
-	//ASSERT(fcb != NULL);
 	ASSERT(Vcb != NULL);
 
 	RtlZeroMemory(fcb, sizeof(DokanFCB));
