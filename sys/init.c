@@ -28,6 +28,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
+
 NTSTATUS
 DokanSendIoContlToMountManager(
 	__in PVOID	InputBuffer,
@@ -378,6 +379,20 @@ FreeUnicodeString(
 }
 
 
+static VOID
+FreeDcbNames(
+	__in PDokanDCB Dcb)
+{
+	FreeUnicodeString(Dcb->SymbolicLinkName);
+	FreeUnicodeString(Dcb->DiskDeviceName);
+	FreeUnicodeString(Dcb->FileSystemDeviceName);
+
+	Dcb->SymbolicLinkName = NULL;
+	Dcb->DiskDeviceName = NULL;
+	Dcb->FileSystemDeviceName = NULL;
+}
+
+
 //#define DOKAN_NET_PROVIDER
 
 NTSTATUS
@@ -429,7 +444,7 @@ DokanCreateDiskDevice(
 	RtlInitUnicodeString(&diskDeviceName, diskDeviceNameBuf);
 
 	//
-	// make a DeviceObject for Disk Device
+	// Create DeviceObject for the Disk Device
 	//
 	if (!isNetworkFileSystem) {
 		status = IoCreateDeviceSecure(
@@ -455,7 +470,10 @@ DokanCreateDiskDevice(
 
 
 	if (!NT_SUCCESS(status)) {
-		DDbgPrint("  IoCreateDevice (DISK_DEVICE) failed: 0x%x\n", status);
+		DDbgPrint("  %s failed: 0x%x\n", isNetworkFileSystem 
+				? "IoCreateDevice(FILE_DEVICE_UNKNOWN)" 
+				: "IoCreateDeviceSecure(FILE_DEVICE_DISK)",
+			status);
 		return status;
 	}
 	DDbgPrint("DokanDiskDevice: %wZ created\n", &diskDeviceName);
@@ -502,30 +520,27 @@ DokanCreateDiskDevice(
 	dcb->DiskDeviceName =  AllocateUnicodeString(diskDeviceNameBuf);
 	dcb->FileSystemDeviceName = AllocateUnicodeString(fsDeviceNameBuf);
 
-	if (dcb->SymbolicLinkName == NULL) {
-		DDbgPrint("  Can't allocate memory for SymbolicLinkName");
+	if (dcb->SymbolicLinkName == NULL ||
+		dcb->DiskDeviceName == NULL ||
+		dcb->FileSystemDeviceName == NULL) {
+
+		DDbgPrint("  Failed to allocate memory for device naming");
+
+		if (dcb->SymbolicLinkName != NULL)
+			ExFreePool(dcb->SymbolicLinkName);
+		if (dcb->DiskDeviceName != NULL)
+			ExFreePool(dcb->DiskDeviceName);
+		if (dcb->FileSystemDeviceName != NULL)
+			ExFreePool(dcb->FileSystemDeviceName);
+
 		ExDeleteResourceLite(&dcb->Resource);
 		IoDeleteDevice(diskDeviceObject);
 		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
-	if (dcb->DiskDeviceName == NULL) {
-		DDbgPrint("  Can't allocate memory for DiskDeviceName");
-		ExFreePool(dcb->SymbolicLinkName);
-		ExDeleteResourceLite(&dcb->Resource);
-		IoDeleteDevice(diskDeviceObject);
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
-
-	if (dcb->FileSystemDeviceName == NULL) {
-		DDbgPrint("  Can't allocate memory for FileSystemDeviceName");
-		ExFreePool(dcb->SymbolicLinkName);
-		ExFreePool(dcb->DiskDeviceName);
-		ExDeleteResourceLite(&dcb->Resource);
-		IoDeleteDevice(diskDeviceObject);
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
-
+	//
+	// Create DeviceObject for the File System
+	//
 	status = IoCreateDeviceSecure(
 				DriverObject,		// DriverObject
 				sizeof(DokanVCB),	// DeviceExtensionSize
@@ -538,9 +553,14 @@ DokanCreateDiskDevice(
 				&fsDeviceObject);	// DeviceObject
 
 	if (!NT_SUCCESS(status)) {
-		DDbgPrint("  IoCreateDevice (FILE_SYSTEM_DEVICE) failed: 0x%x\n", status);
+		DDbgPrint("  IoCreateDeviceSecure (%s) failed: 0x%x\n",
+			DeviceType == FILE_DEVICE_DISK_FILE_SYSTEM
+				? "FILE_DEVICE_DISK_FILE_SYSTEM"
+				: "FILE_DEVICE_NETWORK_FILE_SYSTEM",
+			status);
 		ExDeleteResourceLite(&dcb->Resource);
 		IoDeleteDevice(diskDeviceObject);
+		FreeDcbNames(dcb);
 		return status;
 	}
 	DDbgPrint("DokanFileSystemDevice: %wZ created\n", dcb->FileSystemDeviceName);
@@ -607,6 +627,7 @@ DokanCreateDiskDevice(
 		}
 		IoDeleteDevice(diskDeviceObject);
 		IoDeleteDevice(fsDeviceObject);
+		FreeDcbNames(dcb);
 		DDbgPrint("  IoCreateSymbolicLink returned 0x%x\n", status);
 		return status;
 	}
@@ -671,13 +692,7 @@ DokanDeleteDeviceObject(
 	DDbgPrint("  Delete Symbolic Name: %wZ\n", Dcb->SymbolicLinkName);
 	IoDeleteSymbolicLink(Dcb->SymbolicLinkName);
 
-	FreeUnicodeString(Dcb->SymbolicLinkName);
-	FreeUnicodeString(Dcb->DiskDeviceName);
-	FreeUnicodeString(Dcb->FileSystemDeviceName);
-	
-	Dcb->SymbolicLinkName = NULL;
-	Dcb->DiskDeviceName = NULL;
-	Dcb->FileSystemDeviceName = NULL;
+	FreeDcbNames(Dcb);
 
 	if (Dcb->DeviceObject->Vpb) {
 		Dcb->DeviceObject->Vpb->DeviceObject = NULL;
