@@ -406,7 +406,8 @@ MirrorCreateFile(
 				error = GetLastError();
 				if(error == ERROR_ALREADY_EXISTS) {
 					DbgPrint(L"\tOpen an already existing file\n");
-					status = STATUS_OBJECT_NAME_COLLISION; //This is a success
+					SetLastError(ERROR_ALREADY_EXISTS); //Inform the driver that we have open a already existing file
+					return STATUS_SUCCESS;
 				}
 			}
 		}

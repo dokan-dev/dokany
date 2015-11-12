@@ -30,6 +30,7 @@ DispatchCreate(
 {
 	static int								eventId = 0;
 	EVENT_INFORMATION  						eventInfo;
+	DWORD									lastError = 0;
 	NTSTATUS								status = STATUS_INSUFFICIENT_RESOURCES;
 	DOKAN_FILE_INFO							fileInfo;
 	ULONG									disposition;
@@ -159,6 +160,8 @@ DispatchCreate(
 			disposition,
 			options,
 			&fileInfo);
+
+		lastError = GetLastError();
 	}
 	else {
 		status = STATUS_NOT_IMPLEMENTED;
@@ -176,7 +179,7 @@ DispatchCreate(
 	// FILE_SUPERSEDED
 
 
-    DbgPrint("CreateFile status = %lu\n", status);
+    DbgPrint("CreateFile status = %lu - lastError = %d\n", status, lastError);
 	if (status != STATUS_SUCCESS) {
 		if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY)
 		{
@@ -194,17 +197,8 @@ DispatchCreate(
 		if (status == STATUS_OBJECT_NAME_COLLISION)
 		{
 			eventInfo.Operation.Create.Information = FILE_EXISTS;
-
-			if (disposition == FILE_OPEN_IF ||
-				disposition == FILE_OVERWRITE_IF) {
-				eventInfo.Status = STATUS_SUCCESS;
-				if (disposition == FILE_OPEN_IF) {
-					eventInfo.Operation.Create.Information = FILE_OPENED;
-				} else {
-					eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
-				}
-			}
 		}
+
 	} else {
 		
 		//DbgPrint("status = %d\n", status);
@@ -216,6 +210,14 @@ DispatchCreate(
 			disposition == FILE_OPEN_IF ||
 			disposition == FILE_OVERWRITE_IF) {
 			eventInfo.Operation.Create.Information = FILE_CREATED;
+
+			if (lastError == ERROR_ALREADY_EXISTS) {
+				if (disposition == FILE_OPEN_IF) {
+					eventInfo.Operation.Create.Information = FILE_OPENED;
+				} else if (disposition == FILE_OVERWRITE_IF) {
+					eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
+				}
+			}
 		}
 
 		if (fileInfo.IsDirectory)

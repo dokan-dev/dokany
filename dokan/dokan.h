@@ -94,7 +94,7 @@ typedef struct _DOKAN_OPERATIONS {
 
 	// CreateFile
 	//	 In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already existing file,
-	//   you have to return STATUS_OBJECT_NAME_COLLISION.
+	//   you have to SetLastError(ERROR_ALREADY_EXISTS)
 	//   If file is a directory, CreateFile (not OpenDirectory) may be called.
 	//   In this case, CreateFile should return STATUS_SUCCESS when that directory can be opened.
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
