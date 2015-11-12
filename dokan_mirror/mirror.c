@@ -317,11 +317,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
   if ((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
     // It is a create directory request
-    if (status != STATUS_SUCCESS) {
-      DbgPrint(L"\tInvalid directory ZwCreateFile parameters.\n\n");
-      return status;
-    }
-
     if (CreateDisposition == FILE_CREATE) {
       if (!CreateDirectory(filePath, &securityAttrib)) {
         error = GetLastError();
