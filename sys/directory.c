@@ -18,383 +18,354 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
 NTSTATUS
-DokanQueryDirectory(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP			Irp);
+DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
-DokanNotifyChangeDirectory(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP			Irp);
-
-
+DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
-DokanDispatchDirectoryControl(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-   )
-{
-	NTSTATUS			status		= STATUS_NOT_IMPLEMENTED;
-	PFILE_OBJECT		fileObject;
-	PIO_STACK_LOCATION	irpSp;
-	PDokanVCB			vcb;
+DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  PFILE_OBJECT fileObject;
+  PIO_STACK_LOCATION irpSp;
+  PDokanVCB vcb;
 
-	__try {
-		DDbgPrint("==> DokanDirectoryControl\n");
+  __try {
+    DDbgPrint("==> DokanDirectoryControl\n");
 
-		irpSp		= IoGetCurrentIrpStackLocation(Irp);
-		fileObject	= irpSp->FileObject;
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		if (fileObject == NULL) {
-			DDbgPrint("   fileObject is NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (fileObject == NULL) {
+      DDbgPrint("   fileObject is NULL\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		vcb = DeviceObject->DeviceExtension;
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DokanPrintFileName(fileObject);
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DokanPrintFileName(fileObject);
 
-		if (irpSp->MinorFunction == IRP_MN_QUERY_DIRECTORY) {
-			status = DokanQueryDirectory(DeviceObject, Irp);
-	
-		} else if( irpSp->MinorFunction == IRP_MN_NOTIFY_CHANGE_DIRECTORY) {
-			status = DokanNotifyChangeDirectory(DeviceObject, Irp);
-		} else {
-			DDbgPrint("  invalid minor function\n");
-			status = STATUS_INVALID_PARAMETER;
-		}
-	
-	} __finally {
+    if (irpSp->MinorFunction == IRP_MN_QUERY_DIRECTORY) {
+      status = DokanQueryDirectory(DeviceObject, Irp);
 
-        DokanCompleteIrpRequest(Irp, status, 0);
+    } else if (irpSp->MinorFunction == IRP_MN_NOTIFY_CHANGE_DIRECTORY) {
+      status = DokanNotifyChangeDirectory(DeviceObject, Irp);
+    } else {
+      DDbgPrint("  invalid minor function\n");
+      status = STATUS_INVALID_PARAMETER;
+    }
 
-		DDbgPrint("<== DokanDirectoryControl\n");
-	}
+  } __finally {
 
-	return status;
+    DokanCompleteIrpRequest(Irp, status, 0);
+
+    DDbgPrint("<== DokanDirectoryControl\n");
+  }
+
+  return status;
 }
-
 
 NTSTATUS
-DokanQueryDirectory(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP			Irp)
-{
-	PFILE_OBJECT		fileObject;
-	PIO_STACK_LOCATION	irpSp;
-	PDokanVCB			vcb;
-	PDokanCCB			ccb;
-	PDokanFCB			fcb;
-	NTSTATUS			status;
-	ULONG				eventLength;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				index;
-	BOOLEAN				initial;
-	ULONG				flags = 0;
+DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  PFILE_OBJECT fileObject;
+  PIO_STACK_LOCATION irpSp;
+  PDokanVCB vcb;
+  PDokanCCB ccb;
+  PDokanFCB fcb;
+  NTSTATUS status;
+  ULONG eventLength;
+  PEVENT_CONTEXT eventContext;
+  ULONG index;
+  BOOLEAN initial;
+  ULONG flags = 0;
 
-	irpSp		= IoGetCurrentIrpStackLocation(Irp);
-	fileObject	= irpSp->FileObject;
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
+  fileObject = irpSp->FileObject;
 
-	vcb = DeviceObject->DeviceExtension;
-	if (GetIdentifierType(vcb) != VCB) {
-		return STATUS_INVALID_PARAMETER;
-	}
+  vcb = DeviceObject->DeviceExtension;
+  if (GetIdentifierType(vcb) != VCB) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
-	ccb = fileObject->FsContext2;
-	if (ccb == NULL) {
-		return STATUS_INVALID_PARAMETER;
-	}
-	ASSERT(ccb != NULL);
+  ccb = fileObject->FsContext2;
+  if (ccb == NULL) {
+    return STATUS_INVALID_PARAMETER;
+  }
+  ASSERT(ccb != NULL);
 
-	fcb = ccb->Fcb;
-	ASSERT(fcb != NULL);
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
-	if (irpSp->Flags & SL_INDEX_SPECIFIED) {
-		DDbgPrint("  index specified %d\n", irpSp->Parameters.QueryDirectory.FileIndex);
-	}
-	if (irpSp->Flags & SL_RETURN_SINGLE_ENTRY) {
-		DDbgPrint("  return single entry\n");
-	}
-	if (irpSp->Flags & SL_RESTART_SCAN) {
-		DDbgPrint("  restart scan\n");
-	}
-	if (irpSp->Parameters.QueryDirectory.FileName) {
-		DDbgPrint("  pattern:%wZ\n", irpSp->Parameters.QueryDirectory.FileName);
-	}
-	
-	switch (irpSp->Parameters.QueryDirectory.FileInformationClass) {
-	case FileDirectoryInformation:
-		DDbgPrint("  FileDirectoryInformation\n");
-		break;
-	case FileFullDirectoryInformation:
-		DDbgPrint("  FileFullDirectoryInformation\n");
-		break;
-	case FileNamesInformation:
-		DDbgPrint("  FileNamesInformation\n");
-		break;
-	case FileBothDirectoryInformation:
-		DDbgPrint("  FileBothDirectoryInformation\n");
-		break;
-	case FileIdBothDirectoryInformation:
-		DDbgPrint("  FileIdBothDirectoryInformation\n");
-		break;
-	default:
-		DDbgPrint("  unknown FileInfoClass %d\n", irpSp->Parameters.QueryDirectory.FileInformationClass);
-		break;
-	}
+  if (irpSp->Flags & SL_INDEX_SPECIFIED) {
+    DDbgPrint("  index specified %d\n",
+              irpSp->Parameters.QueryDirectory.FileIndex);
+  }
+  if (irpSp->Flags & SL_RETURN_SINGLE_ENTRY) {
+    DDbgPrint("  return single entry\n");
+  }
+  if (irpSp->Flags & SL_RESTART_SCAN) {
+    DDbgPrint("  restart scan\n");
+  }
+  if (irpSp->Parameters.QueryDirectory.FileName) {
+    DDbgPrint("  pattern:%wZ\n", irpSp->Parameters.QueryDirectory.FileName);
+  }
 
+  switch (irpSp->Parameters.QueryDirectory.FileInformationClass) {
+  case FileDirectoryInformation:
+    DDbgPrint("  FileDirectoryInformation\n");
+    break;
+  case FileFullDirectoryInformation:
+    DDbgPrint("  FileFullDirectoryInformation\n");
+    break;
+  case FileNamesInformation:
+    DDbgPrint("  FileNamesInformation\n");
+    break;
+  case FileBothDirectoryInformation:
+    DDbgPrint("  FileBothDirectoryInformation\n");
+    break;
+  case FileIdBothDirectoryInformation:
+    DDbgPrint("  FileIdBothDirectoryInformation\n");
+    break;
+  default:
+    DDbgPrint("  unknown FileInfoClass %d\n",
+              irpSp->Parameters.QueryDirectory.FileInformationClass);
+    break;
+  }
 
-	// make a MDL for UserBuffer that can be used later on another thread context
-	if (Irp->MdlAddress == NULL) {
-		status = DokanAllocateMdl(Irp, irpSp->Parameters.QueryDirectory.Length);
-		if (!NT_SUCCESS(status)) {
-			return status;
-		}
-		flags = DOKAN_MDL_ALLOCATED;
-	}
+  // make a MDL for UserBuffer that can be used later on another thread context
+  if (Irp->MdlAddress == NULL) {
+    status = DokanAllocateMdl(Irp, irpSp->Parameters.QueryDirectory.Length);
+    if (!NT_SUCCESS(status)) {
+      return status;
+    }
+    flags = DOKAN_MDL_ALLOCATED;
+  }
 
-	
-	// size of EVENT_CONTEXT is sum of its length and file name length
-	eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+  // size of EVENT_CONTEXT is sum of its length and file name length
+  eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
 
-	initial = (BOOLEAN)(ccb->SearchPattern == NULL && !(ccb->Flags & DOKAN_DIR_MATCH_ALL));
+  initial = (BOOLEAN)(ccb->SearchPattern == NULL &&
+                      !(ccb->Flags & DOKAN_DIR_MATCH_ALL));
 
-	// this is an initial query
-	if (initial) {
-		DDbgPrint("    initial query\n");
-		// and search pattern is provided
-		if (irpSp->Parameters.QueryDirectory.FileName) {
-			// free current search pattern stored in CCB
-			if (ccb->SearchPattern)
-				ExFreePool(ccb->SearchPattern);
+  // this is an initial query
+  if (initial) {
+    DDbgPrint("    initial query\n");
+    // and search pattern is provided
+    if (irpSp->Parameters.QueryDirectory.FileName) {
+      // free current search pattern stored in CCB
+      if (ccb->SearchPattern)
+        ExFreePool(ccb->SearchPattern);
 
-			// the size of search pattern
-			ccb->SearchPatternLength = irpSp->Parameters.QueryDirectory.FileName->Length;
-			ccb->SearchPattern = ExAllocatePool(ccb->SearchPatternLength + sizeof(WCHAR));
+      // the size of search pattern
+      ccb->SearchPatternLength =
+          irpSp->Parameters.QueryDirectory.FileName->Length;
+      ccb->SearchPattern =
+          ExAllocatePool(ccb->SearchPatternLength + sizeof(WCHAR));
 
-			if (ccb->SearchPattern == NULL) {
-				return STATUS_INSUFFICIENT_RESOURCES;
-			}
+      if (ccb->SearchPattern == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+      }
 
-			RtlZeroMemory(ccb->SearchPattern, ccb->SearchPatternLength + sizeof(WCHAR));
+      RtlZeroMemory(ccb->SearchPattern,
+                    ccb->SearchPatternLength + sizeof(WCHAR));
 
-			// copy provided search pattern to CCB
-			RtlCopyMemory(ccb->SearchPattern,
-				irpSp->Parameters.QueryDirectory.FileName->Buffer,
-				ccb->SearchPatternLength);
+      // copy provided search pattern to CCB
+      RtlCopyMemory(ccb->SearchPattern,
+                    irpSp->Parameters.QueryDirectory.FileName->Buffer,
+                    ccb->SearchPatternLength);
 
-		} else {
-			ccb->Flags |= DOKAN_DIR_MATCH_ALL;
-		}
-	}
+    } else {
+      ccb->Flags |= DOKAN_DIR_MATCH_ALL;
+    }
+  }
 
-	// if search pattern is provided, add the length of it to store pattern
-	if (ccb->SearchPattern) {
-		eventLength += ccb->SearchPatternLength;
-	}
-		
-	eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+  // if search pattern is provided, add the length of it to store pattern
+  if (ccb->SearchPattern) {
+    eventLength += ccb->SearchPatternLength;
+  }
 
-	if (eventContext == NULL) {
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
+  eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-	eventContext->Context = ccb->UserContext;
-	//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+  if (eventContext == NULL) {
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
 
-	// index which specified index-1 th directory entry has been returned
-	// this time, 'index'th entry should be returned
-	index = 0;
+  eventContext->Context = ccb->UserContext;
+  // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-	if (irpSp->Flags & SL_INDEX_SPECIFIED) {
-		index = irpSp->Parameters.QueryDirectory.FileIndex;
-		DDbgPrint("    using FileIndex %d\n", index);
-		
-	} else if (FlagOn(irpSp->Flags, SL_RESTART_SCAN)) {
-		DDbgPrint("    SL_RESTART_SCAN\n");
-		index = 0;
-		
-	} else {
-		index = (ULONG)ccb->Context;
-		DDbgPrint("    ccb->Context %d\n", index);
-	}
+  // index which specified index-1 th directory entry has been returned
+  // this time, 'index'th entry should be returned
+  index = 0;
 
-	eventContext->Operation.Directory.FileInformationClass = irpSp->Parameters.QueryDirectory.FileInformationClass;
-	eventContext->Operation.Directory.BufferLength = irpSp->Parameters.QueryDirectory.Length; // length of buffer
-	eventContext->Operation.Directory.FileIndex = index; // directory index which should be returned this time
+  if (irpSp->Flags & SL_INDEX_SPECIFIED) {
+    index = irpSp->Parameters.QueryDirectory.FileIndex;
+    DDbgPrint("    using FileIndex %d\n", index);
 
-	// copying file name(directory name)
-	eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
-	RtlCopyMemory(eventContext->Operation.Directory.DirectoryName,
-					fcb->FileName.Buffer, fcb->FileName.Length);
+  } else if (FlagOn(irpSp->Flags, SL_RESTART_SCAN)) {
+    DDbgPrint("    SL_RESTART_SCAN\n");
+    index = 0;
 
-	// if search pattern is specified, copy it to EventContext
-	if (ccb->SearchPatternLength && ccb->SearchPattern) {
-		PVOID searchBuffer;
+  } else {
+    index = (ULONG)ccb->Context;
+    DDbgPrint("    ccb->Context %d\n", index);
+  }
 
-		eventContext->Operation.Directory.SearchPatternLength = ccb->SearchPatternLength;
-		eventContext->Operation.Directory.SearchPatternOffset = eventContext->Operation.Directory.DirectoryNameLength;
-			
-		searchBuffer = (PVOID)((SIZE_T)&eventContext->Operation.Directory.SearchPatternBase[0] +
-			(SIZE_T)eventContext->Operation.Directory.SearchPatternOffset);
-			
-		RtlCopyMemory(searchBuffer, 
-						ccb->SearchPattern,
-						ccb->SearchPatternLength);
+  eventContext->Operation.Directory.FileInformationClass =
+      irpSp->Parameters.QueryDirectory.FileInformationClass;
+  eventContext->Operation.Directory.BufferLength =
+      irpSp->Parameters.QueryDirectory.Length; // length of buffer
+  eventContext->Operation.Directory.FileIndex =
+      index; // directory index which should be returned this time
 
-		DDbgPrint("    ccb->SearchPattern %ws\n", ccb->SearchPattern);
-	}
+  // copying file name(directory name)
+  eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
+  RtlCopyMemory(eventContext->Operation.Directory.DirectoryName,
+                fcb->FileName.Buffer, fcb->FileName.Length);
 
+  // if search pattern is specified, copy it to EventContext
+  if (ccb->SearchPatternLength && ccb->SearchPattern) {
+    PVOID searchBuffer;
 
-	status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+    eventContext->Operation.Directory.SearchPatternLength =
+        ccb->SearchPatternLength;
+    eventContext->Operation.Directory.SearchPatternOffset =
+        eventContext->Operation.Directory.DirectoryNameLength;
 
-	return status;
+    searchBuffer = (PVOID)(
+        (SIZE_T)&eventContext->Operation.Directory.SearchPatternBase[0] +
+        (SIZE_T)eventContext->Operation.Directory.SearchPatternOffset);
+
+    RtlCopyMemory(searchBuffer, ccb->SearchPattern, ccb->SearchPatternLength);
+
+    DDbgPrint("    ccb->SearchPattern %ws\n", ccb->SearchPattern);
+  }
+
+  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+
+  return status;
 }
-
-
-
 
 NTSTATUS
-DokanNotifyChangeDirectory(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP			Irp)
-{
-	PDokanCCB			ccb;
-	PDokanFCB			fcb;
-	PFILE_OBJECT		fileObject;
-	PIO_STACK_LOCATION	irpSp;
-	PDokanVCB			vcb;
+DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  PDokanCCB ccb;
+  PDokanFCB fcb;
+  PFILE_OBJECT fileObject;
+  PIO_STACK_LOCATION irpSp;
+  PDokanVCB vcb;
 
-	DDbgPrint("\tNotifyChangeDirectory\n");
+  DDbgPrint("\tNotifyChangeDirectory\n");
 
-	irpSp		= IoGetCurrentIrpStackLocation(Irp);
-	fileObject	= irpSp->FileObject;
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
+  fileObject = irpSp->FileObject;
 
-	vcb = DeviceObject->DeviceExtension;
-	if (GetIdentifierType(vcb) != VCB) {
-		return STATUS_INVALID_PARAMETER;
-	}
-	
-	ccb = fileObject->FsContext2;
-	ASSERT(ccb != NULL);
+  vcb = DeviceObject->DeviceExtension;
+  if (GetIdentifierType(vcb) != VCB) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
-	fcb = ccb->Fcb;
-	ASSERT(fcb != NULL);
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-	if (!(fcb->Flags & DOKAN_FILE_DIRECTORY)) {
-		return STATUS_INVALID_PARAMETER;
-	}
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
-	FsRtlNotifyFullChangeDirectory(
-		vcb->NotifySync,
-		&vcb->DirNotifyList,
-		ccb,
-		(PSTRING)&fcb->FileName,
-		irpSp->Flags & SL_WATCH_TREE ? TRUE : FALSE,
-		FALSE,
-		irpSp->Parameters.NotifyDirectory.CompletionFilter,
-		Irp,
-		NULL,
-		NULL);
+  if (!(fcb->Flags & DOKAN_FILE_DIRECTORY)) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
-	return STATUS_PENDING;
+  FsRtlNotifyFullChangeDirectory(
+      vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
+      irpSp->Flags & SL_WATCH_TREE ? TRUE : FALSE, FALSE,
+      irpSp->Parameters.NotifyDirectory.CompletionFilter, Irp, NULL, NULL);
+
+  return STATUS_PENDING;
 }
 
+VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_SUCCESS;
+  ULONG info = 0;
+  ULONG bufferLen = 0;
+  PVOID buffer = NULL;
 
+  DDbgPrint("==> DokanCompleteDirectoryControl\n");
 
-VOID
-DokanCompleteDirectoryControl(
-	__in PIRP_ENTRY			IrpEntry,
-	__in PEVENT_INFORMATION	EventInfo
-	)
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status   = STATUS_SUCCESS;
-	ULONG				info	 = 0;
-	ULONG				bufferLen= 0;
-	PVOID				buffer	 = NULL;
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
 
-	DDbgPrint("==> DokanCompleteDirectoryControl\n");
+  // buffer pointer which points DirecotryInfo
+  if (irp->MdlAddress) {
+    // DDbgPrint("   use MDL Address\n");
+    buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority);
+  } else {
+    // DDbgPrint("   use UserBuffer\n");
+    buffer = irp->UserBuffer;
+  }
+  // usable buffer size
+  bufferLen = irpSp->Parameters.QueryDirectory.Length;
 
-	irp   = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;	
+  // DDbgPrint("  !!Returning DirecotyInfo!!\n");
 
+  // buffer is not specified or short of length
+  if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
+    info = 0;
+    status = STATUS_INSUFFICIENT_RESOURCES;
 
-	// buffer pointer which points DirecotryInfo
-	if (irp->MdlAddress) {
-		//DDbgPrint("   use MDL Address\n");
-		buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority);
-	} else {
-		//DDbgPrint("   use UserBuffer\n");
-		buffer	= irp->UserBuffer;
-	}
-	// usable buffer size
-	bufferLen = irpSp->Parameters.QueryDirectory.Length;
+  } else {
 
+    PDokanCCB ccb = IrpEntry->FileObject->FsContext2;
+    // ULONG	 orgLen = irpSp->Parameters.QueryDirectory.Length;
 
+    //
+    // set the information recieved from user mode
+    //
+    ASSERT(buffer != NULL);
 
-	//DDbgPrint("  !!Returning DirecotyInfo!!\n");
+    RtlZeroMemory(buffer, bufferLen);
 
-	// buffer is not specified or short of length
-	if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
-		info   = 0;
-		status = STATUS_INSUFFICIENT_RESOURCES;
+    // DDbgPrint("   copy DirectoryInfo\n");
+    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
-	} else {
+    DDbgPrint("    eventInfo->Directory.Index = %lu\n",
+              EventInfo->Operation.Directory.Index);
+    DDbgPrint("    eventInfo->BufferLength    = %lu\n",
+              EventInfo->BufferLength);
+    DDbgPrint("    eventInfo->Status = %x (%lu)\n", EventInfo->Status,
+              EventInfo->Status);
 
-		PDokanCCB ccb	= IrpEntry->FileObject->FsContext2;
-		//ULONG	 orgLen = irpSp->Parameters.QueryDirectory.Length;
+    // update index which specified n-th directory entry is returned
+    // this should be locked before writing?
+    ccb->Context = EventInfo->Operation.Directory.Index;
 
-		//
-		// set the information recieved from user mode
-		//
-		ASSERT(buffer != NULL);
-		
-		RtlZeroMemory(buffer, bufferLen);
-		
-		//DDbgPrint("   copy DirectoryInfo\n");
-		RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    ccb->UserContext = EventInfo->Context;
+    // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-		DDbgPrint("    eventInfo->Directory.Index = %lu\n", EventInfo->Operation.Directory.Index);
-		DDbgPrint("    eventInfo->BufferLength    = %lu\n", EventInfo->BufferLength);
-		DDbgPrint("    eventInfo->Status = %x (%lu)\n",	  EventInfo->Status, EventInfo->Status);
+    // written bytes
+    // irpSp->Parameters.QueryDirectory.Length = EventInfo->BufferLength;
 
-		// update index which specified n-th directory entry is returned
-		// this should be locked before writing?
-		ccb->Context = EventInfo->Operation.Directory.Index;
+    status = EventInfo->Status;
 
-		ccb->UserContext = EventInfo->Context;
-		//DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+    info = EventInfo->BufferLength;
+  }
 
-		// written bytes
-		//irpSp->Parameters.QueryDirectory.Length = EventInfo->BufferLength;
+  if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
+    DokanFreeMdl(irp);
+    IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+  }
 
-		status = EventInfo->Status;
-		
-		info = EventInfo->BufferLength;
-	}
+  DokanCompleteIrpRequest(irp, status, info);
 
-
-	if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
-		DokanFreeMdl(irp);
-		IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
-	}
-
-    DokanCompleteIrpRequest(irp, status, info);
-
-	DDbgPrint("<== DokanCompleteDirectoryControl\n");
+  DDbgPrint("<== DokanCompleteDirectoryControl\n");
 }
-

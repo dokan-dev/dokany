@@ -18,7 +18,6 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #ifndef _DOKANC_H_
 #define _DOKANC_H_
 
@@ -29,158 +28,135 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-#define DOKAN_MOUNT_POINT_SUPPORTED_VERSION			600
-#define DOKAN_SECURITY_SUPPORTED_VERSION			600
-#define DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION	800
+#define DOKAN_MOUNT_POINT_SUPPORTED_VERSION 600
+#define DOKAN_SECURITY_SUPPORTED_VERSION 600
+#define DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION 800
 
-#define DOKAN_GLOBAL_DEVICE_NAME	L"\\\\.\\Dokan"
-#define DOKAN_CONTROL_PIPE			L"\\\\.\\pipe\\DokanMounter"
+#define DOKAN_GLOBAL_DEVICE_NAME L"\\\\.\\Dokan"
+#define DOKAN_CONTROL_PIPE L"\\\\.\\pipe\\DokanMounter"
 
 #define DOKAN_MOUNTER_SERVICE L"DokanMounter"
 #define DOKAN_DRIVER_SERVICE L"Dokan"
 
-#define DOKAN_CONTROL_MOUNT		1
-#define DOKAN_CONTROL_UNMOUNT	2
-#define DOKAN_CONTROL_CHECK		3
-#define DOKAN_CONTROL_FIND		4
-#define DOKAN_CONTROL_LIST		5
+#define DOKAN_CONTROL_MOUNT 1
+#define DOKAN_CONTROL_UNMOUNT 2
+#define DOKAN_CONTROL_CHECK 3
+#define DOKAN_CONTROL_FIND 4
+#define DOKAN_CONTROL_LIST 5
 
 #define DOKAN_CONTROL_OPTION_FORCE_UNMOUNT 1
 
-#define DOKAN_CONTROL_SUCCESS	1
-#define DOKAN_CONTROL_FAIL		0
+#define DOKAN_CONTROL_SUCCESS 1
+#define DOKAN_CONTROL_FAIL 0
 
-#define DOKAN_SERVICE_START		1
-#define DOKAN_SERVICE_STOP		2
-#define DOKAN_SERVICE_DELETE	3
+#define DOKAN_SERVICE_START 1
+#define DOKAN_SERVICE_STOP 2
+#define DOKAN_SERVICE_DELETE 3
 
-#define DOKAN_KEEPALIVE_TIME	3000 // in miliseconds
+#define DOKAN_KEEPALIVE_TIME 3000 // in miliseconds
 
-#define DOKAN_MAX_THREAD		15
+#define DOKAN_MAX_THREAD 15
 
 // DokanOptions->DebugMode is ON?
-extern	BOOL	g_DebugMode;
+extern BOOL g_DebugMode;
 
 // DokanOptions->UseStdErr is ON?
-extern	BOOL	g_UseStdErr;
+extern BOOL g_UseStdErr;
 
 typedef struct _DOKAN_CONTROL {
-	ULONG	Type;
-	WCHAR	MountPoint[MAX_PATH];
-	WCHAR	DeviceName[64];
-	ULONG	Option;
-	ULONG	Status;
+  ULONG Type;
+  WCHAR MountPoint[MAX_PATH];
+  WCHAR DeviceName[64];
+  ULONG Option;
+  ULONG Status;
 
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
+static VOID DokanDbgPrint(LPCSTR format, ...) {
+  const char *outputString;
+  char *buffer;
+  size_t length;
+  va_list argp;
 
-static
-VOID
-DokanDbgPrint(LPCSTR format, ...)
-{
-	const char *outputString;
-	char *buffer;
-	size_t length;
-	va_list argp;
-
-	va_start(argp, format);
-	length = _vscprintf(format, argp) + 1;
-	buffer = (char*)_malloca(length*sizeof(char));
-	if (buffer) {
-		vsprintf_s(buffer, length, format, argp);
-		outputString = buffer;
-	} else {
-		outputString = format;
-	}
-	if (g_UseStdErr)
-		fputs(outputString, stderr);
-	else
-		OutputDebugStringA(outputString);
-	if (buffer)
-		_freea(buffer);
-	va_end(argp);
+  va_start(argp, format);
+  length = _vscprintf(format, argp) + 1;
+  buffer = (char *)_malloca(length * sizeof(char));
+  if (buffer) {
+    vsprintf_s(buffer, length, format, argp);
+    outputString = buffer;
+  } else {
+    outputString = format;
+  }
+  if (g_UseStdErr)
+    fputs(outputString, stderr);
+  else
+    OutputDebugStringA(outputString);
+  if (buffer)
+    _freea(buffer);
+  va_end(argp);
 }
 
-static
-VOID
-DokanDbgPrintW(LPCWSTR format, ...)
-{
-	const WCHAR *outputString;
-	WCHAR *buffer;
-	size_t length;
-	va_list argp;
+static VOID DokanDbgPrintW(LPCWSTR format, ...) {
+  const WCHAR *outputString;
+  WCHAR *buffer;
+  size_t length;
+  va_list argp;
 
-	va_start(argp, format);
-	length = _vscwprintf(format, argp) + 1;
-	buffer = (WCHAR*)_malloca(length*sizeof(WCHAR));
-	if (buffer) {
-		vswprintf_s(buffer, length, format, argp);
-		outputString = buffer;
-	} else {
-		outputString = format;
-	}
-	if (g_UseStdErr)
-		fputws(outputString, stderr);
-	else
-		OutputDebugStringW(outputString);
-	if (buffer)
-		_freea(buffer);
-	va_end(argp);
+  va_start(argp, format);
+  length = _vscwprintf(format, argp) + 1;
+  buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
+  if (buffer) {
+    vswprintf_s(buffer, length, format, argp);
+    outputString = buffer;
+  } else {
+    outputString = format;
+  }
+  if (g_UseStdErr)
+    fputws(outputString, stderr);
+  else
+    OutputDebugStringW(outputString);
+  if (buffer)
+    _freea(buffer);
+  va_end(argp);
 }
 
+#define DbgPrint(format, ...)                                                  \
+  do {                                                                         \
+    if (g_DebugMode) {                                                         \
+      DokanDbgPrint(format, __VA_ARGS__);                                      \
+    }                                                                          \
+  }                                                                            \
+  __pragma(warning(push)) __pragma(warning(disable : 4127)) while (0)          \
+      __pragma(warning(pop))
 
-#define DbgPrint(format, ... ) \
-	do {\
-		if (g_DebugMode) {\
-			DokanDbgPrint(format, __VA_ARGS__);\
-		}\
-	} __pragma(warning(push)) \
-	  __pragma(warning(disable:4127)) \
-	  while(0) \
-	  __pragma(warning(pop))
+#define DbgPrintW(format, ...)                                                 \
+  do {                                                                         \
+    if (g_DebugMode) {                                                         \
+      DokanDbgPrintW(format, __VA_ARGS__);                                     \
+    }                                                                          \
+  }                                                                            \
+  __pragma(warning(push)) __pragma(warning(disable : 4127)) while (0)          \
+      __pragma(warning(pop))
 
-#define DbgPrintW(format, ... ) \
-	do {\
-		if (g_DebugMode) {\
-			DokanDbgPrintW(format, __VA_ARGS__);\
-		}\
-	} __pragma(warning(push)) \
-	  __pragma(warning(disable:4127)) \
-	  while(0) \
-	  __pragma(warning(pop))
+VOID DOKANAPI DokanUseStdErr(BOOL Status);
 
-VOID DOKANAPI
-DokanUseStdErr(BOOL Status);
+VOID DOKANAPI DokanDebugMode(BOOL Status);
 
-VOID DOKANAPI
-DokanDebugMode(BOOL Status);
+BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
+                                  LPCWSTR ServiceFullPath);
 
-BOOL DOKANAPI
-DokanServiceInstall(
-	LPCWSTR	ServiceName,
-	DWORD	ServiceType,
-	LPCWSTR ServiceFullPath);
+BOOL DOKANAPI DokanServiceDelete(LPCWSTR ServiceName);
 
-BOOL DOKANAPI
-DokanServiceDelete(
-	LPCWSTR	ServiceName);
+BOOL DOKANAPI DokanNetworkProviderInstall();
 
-BOOL DOKANAPI
-DokanNetworkProviderInstall();
+BOOL DOKANAPI DokanNetworkProviderUninstall();
 
-BOOL DOKANAPI
-DokanNetworkProviderUninstall();
+BOOL DOKANAPI DokanSetDebugMode(ULONG Mode);
 
-BOOL DOKANAPI
-DokanSetDebugMode(ULONG Mode);
-
-BOOL DOKANAPI
-DokanMountControl(PDOKAN_CONTROL Control);
-
+BOOL DOKANAPI DokanMountControl(PDOKAN_CONTROL Control);
 
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif

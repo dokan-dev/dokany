@@ -21,61 +21,55 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-HANDLE DOKANAPI
-DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo)
-{
-	BOOL	status;
-	ULONG	returnedLength;
-	PDOKAN_INSTANCE		instance;
-	PDOKAN_OPEN_INFO	openInfo;
-	PEVENT_CONTEXT		eventContext;
-	PEVENT_INFORMATION	eventInfo;
-	HANDLE				handle = INVALID_HANDLE_VALUE;
-	ULONG				eventInfoSize;
-	WCHAR				rawDeviceName[MAX_PATH];
+HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
+  BOOL status;
+  ULONG returnedLength;
+  PDOKAN_INSTANCE instance;
+  PDOKAN_OPEN_INFO openInfo;
+  PEVENT_CONTEXT eventContext;
+  PEVENT_INFORMATION eventInfo;
+  HANDLE handle = INVALID_HANDLE_VALUE;
+  ULONG eventInfoSize;
+  WCHAR rawDeviceName[MAX_PATH];
 
-    openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
-	if (openInfo == NULL) {
-		return INVALID_HANDLE_VALUE;
-	}
+  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
+  if (openInfo == NULL) {
+    return INVALID_HANDLE_VALUE;
+  }
 
-	eventContext = openInfo->EventContext;
-	if (eventContext == NULL) {
-		return INVALID_HANDLE_VALUE;
-	}
+  eventContext = openInfo->EventContext;
+  if (eventContext == NULL) {
+    return INVALID_HANDLE_VALUE;
+  }
 
-	instance = openInfo->DokanInstance;
-	if (instance == NULL) {
-		return INVALID_HANDLE_VALUE;
-	}
+  instance = openInfo->DokanInstance;
+  if (instance == NULL) {
+    return INVALID_HANDLE_VALUE;
+  }
 
-	if (eventContext->MajorFunction != IRP_MJ_CREATE) {
-		return INVALID_HANDLE_VALUE;
-	}
+  if (eventContext->MajorFunction != IRP_MJ_CREATE) {
+    return INVALID_HANDLE_VALUE;
+  }
 
-	eventInfoSize = sizeof(EVENT_INFORMATION);
-	eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
-	if (eventInfo == NULL) {
-		return INVALID_HANDLE_VALUE;
-	}
+  eventInfoSize = sizeof(EVENT_INFORMATION);
+  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+  if (eventInfo == NULL) {
+    return INVALID_HANDLE_VALUE;
+  }
 
-	RtlZeroMemory(eventInfo, eventInfoSize);
+  RtlZeroMemory(eventInfo, eventInfoSize);
 
-	eventInfo->SerialNumber = eventContext->SerialNumber;
+  eventInfo->SerialNumber = eventContext->SerialNumber;
 
-	status = SendToDevice(
-				GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
-				IOCTL_GET_ACCESS_TOKEN,
-				eventInfo,
-				eventInfoSize,
-				eventInfo,
-				eventInfoSize,
-				&returnedLength);
-	if (status) {
-		handle = eventInfo->Operation.AccessToken.Handle;
-	} else {
-		DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
-	}
-	free(eventInfo);
-	return handle;
+  status = SendToDevice(
+      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+      IOCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
+      eventInfoSize, &returnedLength);
+  if (status) {
+    handle = eventInfo->Operation.AccessToken.Handle;
+  } else {
+    DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
+  }
+  free(eventInfo);
+  return handle;
 }

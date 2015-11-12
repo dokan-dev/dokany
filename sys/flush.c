@@ -18,110 +18,98 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
-
 NTSTATUS
-DokanDispatchFlush(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-	)
-{
-	PIO_STACK_LOCATION	irpSp;
-	PFILE_OBJECT		fileObject;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PDokanFCB			fcb;
-	PDokanCCB			ccb;
-	PDokanVCB			vcb;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				eventLength;
+DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  PIO_STACK_LOCATION irpSp;
+  PFILE_OBJECT fileObject;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PDokanFCB fcb;
+  PDokanCCB ccb;
+  PDokanVCB vcb;
+  PEVENT_CONTEXT eventContext;
+  ULONG eventLength;
 
-	__try {
-		DDbgPrint("==> DokanFlush\n");
+  __try {
+    DDbgPrint("==> DokanFlush\n");
 
-		irpSp		= IoGetCurrentIrpStackLocation(Irp);
-		fileObject	= irpSp->FileObject;
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject == NULL\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		vcb = DeviceObject->DeviceExtension;
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
+    DokanPrintFileName(fileObject);
 
-		DokanPrintFileName(fileObject);
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
 
-		ccb = fileObject->FsContext2;
-		ASSERT(ccb != NULL);
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
-		fcb = ccb->Fcb;
-		ASSERT(fcb != NULL);
+    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    if (eventContext == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
 
-		if (eventContext == NULL) {
-			status = STATUS_INSUFFICIENT_RESOURCES;
-			__leave;
-		}
+    eventContext->Context = ccb->UserContext;
+    DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-		eventContext->Context = ccb->UserContext;
-		DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+    // copy file name to be flushed
+    eventContext->Operation.Flush.FileNameLength = fcb->FileName.Length;
+    RtlCopyMemory(eventContext->Operation.Flush.FileName, fcb->FileName.Buffer,
+                  fcb->FileName.Length);
 
-		// copy file name to be flushed
-		eventContext->Operation.Flush.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Flush.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+    CcUninitializeCacheMap(fileObject, NULL, NULL);
+    // fileObject->Flags &= FO_CLEANUP_COMPLETE;
 
-		CcUninitializeCacheMap(fileObject, NULL, NULL);
-		//fileObject->Flags &= FO_CLEANUP_COMPLETE;
+    // register this IRP to waiting IRP list and make it pending status
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
-		// register this IRP to waiting IRP list and make it pending status
-		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+  } __finally {
 
-	} __finally {
+    DokanCompleteIrpRequest(Irp, status, 0);
 
-        DokanCompleteIrpRequest(Irp, status, 0);
+    DDbgPrint("<== DokanFlush\n");
+  }
 
-		DDbgPrint("<== DokanFlush\n");
-	}
-
-	return status;
+  return status;
 }
 
+VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  PDokanCCB ccb;
+  PFILE_OBJECT fileObject;
 
-VOID
-DokanCompleteFlush(
-	 __in PIRP_ENTRY			IrpEntry,
-	 __in PEVENT_INFORMATION	EventInfo
-	 )
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	PDokanCCB			ccb;
-	PFILE_OBJECT		fileObject;
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
 
-	irp   = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;
+  DDbgPrint("==> DokanCompleteFlush\n");
 
-	DDbgPrint("==> DokanCompleteFlush\n");
+  fileObject = irpSp->FileObject;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-	fileObject = irpSp->FileObject;
-	ccb = fileObject->FsContext2;
-	ASSERT(ccb != NULL);
+  ccb->UserContext = EventInfo->Context;
+  DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-	ccb->UserContext = EventInfo->Context;
-	DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+  DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
-    DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
-
-	DDbgPrint("<== DokanCompleteFlush\n");
+  DDbgPrint("<== DokanCompleteFlush\n");
 }
-

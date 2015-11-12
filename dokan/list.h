@@ -18,7 +18,6 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #ifndef _LIST_H_
 #define _LIST_H_
 
@@ -29,141 +28,107 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 FORCEINLINE
-VOID
-InitializeListHead(
-    PLIST_ENTRY ListHead)
-{
-    ListHead->Flink = ListHead->Blink = ListHead;
+VOID InitializeListHead(PLIST_ENTRY ListHead) {
+  ListHead->Flink = ListHead->Blink = ListHead;
 }
 
 FORCEINLINE
 BOOLEAN
-IsListEmpty(
-    const LIST_ENTRY * ListHead)
-{
-    return (BOOLEAN)(ListHead == NULL || ListHead->Flink == ListHead);
+IsListEmpty(const LIST_ENTRY *ListHead) {
+  return (BOOLEAN)(ListHead == NULL || ListHead->Flink == ListHead);
 }
 
 FORCEINLINE
 BOOLEAN
-RemoveEntryList(
-    PLIST_ENTRY Entry)
-{
-    PLIST_ENTRY Blink;
-    PLIST_ENTRY Flink;
+RemoveEntryList(PLIST_ENTRY Entry) {
+  PLIST_ENTRY Blink;
+  PLIST_ENTRY Flink;
 
-	if (Entry != NULL) {
-    	Flink = Entry->Flink;
-    	Blink = Entry->Blink;
-    	Blink->Flink = Flink;
-    	Flink->Blink = Blink;
-		return (BOOLEAN)(Flink == Blink);
-	}
-	/* Assumes the list is empty */
-    return TRUE;
-}
-
-FORCEINLINE
-PLIST_ENTRY
-RemoveHeadList(
-    PLIST_ENTRY ListHead)
-{
-    PLIST_ENTRY Flink;
-    PLIST_ENTRY Entry;
-
-    Entry = ListHead->Flink;
+  if (Entry != NULL) {
     Flink = Entry->Flink;
-    ListHead->Flink = Flink;
-    Flink->Blink = ListHead;
-    return Entry;
+    Blink = Entry->Blink;
+    Blink->Flink = Flink;
+    Flink->Blink = Blink;
+    return (BOOLEAN)(Flink == Blink);
+  }
+  /* Assumes the list is empty */
+  return TRUE;
 }
-
-
 
 FORCEINLINE
 PLIST_ENTRY
-RemoveTailList(
-    PLIST_ENTRY ListHead)
-{
-    PLIST_ENTRY Blink;
-    PLIST_ENTRY Entry;
+RemoveHeadList(PLIST_ENTRY ListHead) {
+  PLIST_ENTRY Flink;
+  PLIST_ENTRY Entry;
 
-    Entry = ListHead->Blink;
-    Blink = Entry->Blink;
-    ListHead->Blink = Blink;
-    Blink->Flink = ListHead;
-    return Entry;
-}
-
-
-FORCEINLINE
-VOID
-InsertTailList(
-    PLIST_ENTRY ListHead,
-    PLIST_ENTRY Entry)
-{
-    PLIST_ENTRY Blink;
-
-    Blink = ListHead->Blink;
-    Entry->Flink = ListHead;
-    Entry->Blink = Blink;
-    Blink->Flink = Entry;
-    ListHead->Blink = Entry;
-}
-
-
-FORCEINLINE
-VOID
-InsertHeadList(
-    PLIST_ENTRY ListHead,
-    PLIST_ENTRY Entry)
-{
-    PLIST_ENTRY Flink;
-
-    Flink = ListHead->Flink;
-    Entry->Flink = Flink;
-    Entry->Blink = ListHead;
-    Flink->Blink = Entry;
-    ListHead->Flink = Entry;
+  Entry = ListHead->Flink;
+  Flink = Entry->Flink;
+  ListHead->Flink = Flink;
+  Flink->Blink = ListHead;
+  return Entry;
 }
 
 FORCEINLINE
-VOID
-AppendTailList(
-    PLIST_ENTRY ListHead,
-    PLIST_ENTRY ListToAppend)
-{
-    PLIST_ENTRY ListEnd = ListHead->Blink;
+PLIST_ENTRY
+RemoveTailList(PLIST_ENTRY ListHead) {
+  PLIST_ENTRY Blink;
+  PLIST_ENTRY Entry;
 
-    ListHead->Blink->Flink = ListToAppend;
-    ListHead->Blink = ListToAppend->Blink;
-    ListToAppend->Blink->Flink = ListHead;
-    ListToAppend->Blink = ListEnd;
+  Entry = ListHead->Blink;
+  Blink = Entry->Blink;
+  ListHead->Blink = Blink;
+  Blink->Flink = ListHead;
+  return Entry;
+}
+
+FORCEINLINE
+VOID InsertTailList(PLIST_ENTRY ListHead, PLIST_ENTRY Entry) {
+  PLIST_ENTRY Blink;
+
+  Blink = ListHead->Blink;
+  Entry->Flink = ListHead;
+  Entry->Blink = Blink;
+  Blink->Flink = Entry;
+  ListHead->Blink = Entry;
+}
+
+FORCEINLINE
+VOID InsertHeadList(PLIST_ENTRY ListHead, PLIST_ENTRY Entry) {
+  PLIST_ENTRY Flink;
+
+  Flink = ListHead->Flink;
+  Entry->Flink = Flink;
+  Entry->Blink = ListHead;
+  Flink->Blink = Entry;
+  ListHead->Flink = Entry;
+}
+
+FORCEINLINE
+VOID AppendTailList(PLIST_ENTRY ListHead, PLIST_ENTRY ListToAppend) {
+  PLIST_ENTRY ListEnd = ListHead->Blink;
+
+  ListHead->Blink->Flink = ListToAppend;
+  ListHead->Blink = ListToAppend->Blink;
+  ListToAppend->Blink->Flink = ListHead;
+  ListToAppend->Blink = ListEnd;
 }
 
 FORCEINLINE
 PSINGLE_LIST_ENTRY
-PopEntryList(
-    PSINGLE_LIST_ENTRY ListHead)
-{
-    PSINGLE_LIST_ENTRY FirstEntry;
-    FirstEntry = ListHead->Next;
-    if (FirstEntry != NULL) {
-        ListHead->Next = FirstEntry->Next;
-    }
+PopEntryList(PSINGLE_LIST_ENTRY ListHead) {
+  PSINGLE_LIST_ENTRY FirstEntry;
+  FirstEntry = ListHead->Next;
+  if (FirstEntry != NULL) {
+    ListHead->Next = FirstEntry->Next;
+  }
 
-    return FirstEntry;
+  return FirstEntry;
 }
 
-
 FORCEINLINE
-VOID
-PushEntryList(
-    PSINGLE_LIST_ENTRY ListHead,
-    PSINGLE_LIST_ENTRY Entry)
-{
-    Entry->Next = ListHead->Next;
-    ListHead->Next = Entry;
+VOID PushEntryList(PSINGLE_LIST_ENTRY ListHead, PSINGLE_LIST_ENTRY Entry) {
+  Entry->Next = ListHead->Next;
+  ListHead->Next = Entry;
 }
 
 #endif

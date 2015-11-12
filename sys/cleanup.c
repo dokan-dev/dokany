@@ -18,153 +18,141 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
-
 NTSTATUS
-DokanDispatchCleanup(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-	)
+DokanDispatchCleanup(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 /*++
 
 Routine Description:
 
-	This device control dispatcher handles Cleanup IRP.
+        This device control dispatcher handles Cleanup IRP.
 
 Arguments:
 
-	DeviceObject - Context for the activity.
-	Irp 		 - The device control argument block.
+        DeviceObject - Context for the activity.
+        Irp 		 - The device control argument block.
 
 Return Value:
 
-	NTSTATUS
+        NTSTATUS
 
 --*/
 {
-	PDokanVCB			vcb;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PFILE_OBJECT		fileObject;
-	PDokanCCB			ccb = NULL;
-	PDokanFCB			fcb = NULL;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				eventLength;
+  PDokanVCB vcb;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PFILE_OBJECT fileObject;
+  PDokanCCB ccb = NULL;
+  PDokanFCB fcb = NULL;
+  PEVENT_CONTEXT eventContext;
+  ULONG eventLength;
 
-	__try {
+  __try {
 
-		DDbgPrint("==> DokanCleanup\n");
-	
-		irpSp = IoGetCurrentIrpStackLocation(Irp);
-		fileObject = irpSp->FileObject;
+    DDbgPrint("==> DokanCleanup\n");
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DokanPrintFileName(fileObject);
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		// Cleanup must be success in any case
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DokanPrintFileName(fileObject);
 
-		vcb = DeviceObject->DeviceExtension;
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    // Cleanup must be success in any case
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject == NULL\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		ccb = fileObject->FsContext2;
-		ASSERT(ccb != NULL);
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		fcb = ccb->Fcb;
-		ASSERT(fcb != NULL);
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
 
-		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
-		if (eventContext == NULL) {
-			status = STATUS_INSUFFICIENT_RESOURCES;
-			__leave;
-		}
+    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-		if (fileObject->SectionObjectPointer != NULL &&
-			fileObject->SectionObjectPointer->DataSectionObject != NULL) {
-			CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
-			CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-			CcUninitializeCacheMap(fileObject, NULL, NULL);
-		}
-		fileObject->Flags |= FO_CLEANUP_COMPLETE;
+    if (eventContext == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
 
-		eventContext->Context = ccb->UserContext;
-		eventContext->FileFlags |= fcb->Flags;
-		//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+    if (fileObject->SectionObjectPointer != NULL &&
+        fileObject->SectionObjectPointer->DataSectionObject != NULL) {
+      CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+      CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+      CcUninitializeCacheMap(fileObject, NULL, NULL);
+    }
+    fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
-		// copy the filename to EventContext from ccb
-		eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Cleanup.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+    eventContext->Context = ccb->UserContext;
+    eventContext->FileFlags |= fcb->Flags;
+    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-		// register this IRP to pending IRP list
-		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    // copy the filename to EventContext from ccb
+    eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
+    RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
+                  fcb->FileName.Buffer, fcb->FileName.Length);
 
-	} __finally {
+    // register this IRP to pending IRP list
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
-        DokanCompleteIrpRequest(Irp, status, 0);
+  } __finally {
 
-		DDbgPrint("<== DokanCleanup\n");
-	}
+    DokanCompleteIrpRequest(Irp, status, 0);
 
-	return status;
+    DDbgPrint("<== DokanCleanup\n");
+  }
+
+  return status;
 }
 
+VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_SUCCESS;
+  PDokanCCB ccb;
+  PDokanFCB fcb;
+  PDokanVCB vcb;
+  PFILE_OBJECT fileObject;
 
+  DDbgPrint("==> DokanCompleteCleanup\n");
 
-VOID
-DokanCompleteCleanup(
-	 __in PIRP_ENTRY			IrpEntry,
-	 __in PEVENT_INFORMATION	EventInfo
-	 )
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status   = STATUS_SUCCESS;
-	PDokanCCB			ccb;
-	PDokanFCB			fcb;
-	PDokanVCB			vcb;
-	PFILE_OBJECT		fileObject;
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
 
-	DDbgPrint("==> DokanCompleteCleanup\n");
+  fileObject = IrpEntry->FileObject;
+  ASSERT(fileObject != NULL);
 
-	irp   = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-	fileObject = IrpEntry->FileObject;
-	ASSERT(fileObject != NULL);
+  ccb->UserContext = EventInfo->Context;
+  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-	ccb	= fileObject->FsContext2;
-	ASSERT(ccb != NULL);
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
-	ccb->UserContext = EventInfo->Context;
-	//DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+  vcb = fcb->Vcb;
 
-	fcb = ccb->Fcb;
-	ASSERT(fcb != NULL);
+  status = EventInfo->Status;
 
-	vcb = fcb->Vcb;
+  if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+    FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
+  }
 
-	status = EventInfo->Status;
+  DokanCompleteIrpRequest(irp, status, 0);
 
-	if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
-		FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
-	}
-
-    DokanCompleteIrpRequest(irp, status, 0);
-
-	DDbgPrint("<== DokanCompleteCleanup\n");
+  DDbgPrint("<== DokanCompleteCleanup\n");
 }
-
-

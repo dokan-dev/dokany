@@ -23,14 +23,14 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 IOCTL_EVENT_START:
 DokanStartEventNotificationThread
   NotificationThread
-	# PendingEvent has pending IPRs (IOCTL_EVENT_WAIT)
+        # PendingEvent has pending IPRs (IOCTL_EVENT_WAIT)
     # NotifyEvent has IO events (ex.IRP_MJ_READ)
     # notify NotifyEvent using PendingEvent in this loop
-	NotificationLoop(&Dcb->PendingEvent,
-					      &Dcb->NotifyEvent);
+        NotificationLoop(&Dcb->PendingEvent,
+                                              &Dcb->NotifyEvent);
 
     # PendingService has service events (ex. Unmount notification)
-	# NotifyService has pending IRPs (IOCTL_SERVICE_WAIT)
+        # NotifyService has pending IRPs (IOCTL_SERVICE_WAIT)
     NotificationLoop(Dcb->Global->PendingService,
                           &Dcb->Global->NotifyService);
 
@@ -42,7 +42,7 @@ DokanDispatchRead
   DokanRegisterPendingIrp
     # add IRP_MJ_READ to PendingIrp list
     DokanRegisterPendingIrpMain(PendingIrp)
-	# put MJ_READ event into NotifyEvent
+        # put MJ_READ event into NotifyEvent
     DokanEventNotification(NotifyEvent, EventContext)
 
 IOCTL_EVENT_WAIT:
@@ -56,481 +56,414 @@ IOCTL_EVENT_INFO:
 
 */
 
-
 #include "dokan.h"
 
-VOID
-SetCommonEventContext(
-	__in PDokanDCB		Dcb,
-	__in PEVENT_CONTEXT	EventContext,
-	__in PIRP			Irp,
-	__in_opt PDokanCCB		Ccb)
-{
-	PIO_STACK_LOCATION  irpSp;
+VOID SetCommonEventContext(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext,
+                           __in PIRP Irp, __in_opt PDokanCCB Ccb) {
+  PIO_STACK_LOCATION irpSp;
 
-	irpSp = IoGetCurrentIrpStackLocation(Irp);
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
 
-	EventContext->MountId		= Dcb->MountId;
-	EventContext->MajorFunction = irpSp->MajorFunction;
-	EventContext->MinorFunction = irpSp->MinorFunction;
-	EventContext->Flags			= irpSp->Flags;
-	
-	if (Ccb) {
-		EventContext->FileFlags		= Ccb->Flags;
-	}
+  EventContext->MountId = Dcb->MountId;
+  EventContext->MajorFunction = irpSp->MajorFunction;
+  EventContext->MinorFunction = irpSp->MinorFunction;
+  EventContext->Flags = irpSp->Flags;
 
-	EventContext->ProcessId = IoGetRequestorProcessId(Irp);
+  if (Ccb) {
+    EventContext->FileFlags = Ccb->Flags;
+  }
+
+  EventContext->ProcessId = IoGetRequestorProcessId(Irp);
 }
-
 
 PEVENT_CONTEXT
-AllocateEventContextRaw(
-	__in ULONG	EventContextLength
-	)
-{
-	ULONG driverContextLength;
-	PDRIVER_EVENT_CONTEXT driverEventContext;
-	PEVENT_CONTEXT eventContext;
+AllocateEventContextRaw(__in ULONG EventContextLength) {
+  ULONG driverContextLength;
+  PDRIVER_EVENT_CONTEXT driverEventContext;
+  PEVENT_CONTEXT eventContext;
 
-	driverContextLength = EventContextLength - sizeof(EVENT_CONTEXT) + sizeof(DRIVER_EVENT_CONTEXT);
-	driverEventContext = ExAllocatePool(driverContextLength);
+  driverContextLength =
+      EventContextLength - sizeof(EVENT_CONTEXT) + sizeof(DRIVER_EVENT_CONTEXT);
+  driverEventContext = ExAllocatePool(driverContextLength);
 
-	if (driverEventContext == NULL) {
-		return NULL;
-	}
+  if (driverEventContext == NULL) {
+    return NULL;
+  }
 
-	RtlZeroMemory(driverEventContext, driverContextLength);
-	InitializeListHead(&driverEventContext->ListEntry);
+  RtlZeroMemory(driverEventContext, driverContextLength);
+  InitializeListHead(&driverEventContext->ListEntry);
 
-	eventContext = &driverEventContext->EventContext;
-	eventContext->Length = EventContextLength;
+  eventContext = &driverEventContext->EventContext;
+  eventContext->Length = EventContextLength;
 
-	return eventContext;
+  return eventContext;
 }
-
 
 PEVENT_CONTEXT
-AllocateEventContext(
-	__in PDokanDCB	Dcb,
-	__in PIRP		Irp,
-	__in ULONG		EventContextLength,
-	__in_opt PDokanCCB	Ccb
-	)
-{
-	PEVENT_CONTEXT eventContext;
-	eventContext = AllocateEventContextRaw(EventContextLength);
-	if (eventContext == NULL) {
-		return NULL;
-	}
-	SetCommonEventContext(Dcb, eventContext, Irp, Ccb);
-	eventContext->SerialNumber = InterlockedIncrement((LONG*)&Dcb->SerialNumber);
+AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
+                     __in ULONG EventContextLength, __in_opt PDokanCCB Ccb) {
+  PEVENT_CONTEXT eventContext;
+  eventContext = AllocateEventContextRaw(EventContextLength);
+  if (eventContext == NULL) {
+    return NULL;
+  }
+  SetCommonEventContext(Dcb, eventContext, Irp, Ccb);
+  eventContext->SerialNumber = InterlockedIncrement((LONG *)&Dcb->SerialNumber);
 
-	return eventContext;
+  return eventContext;
 }
 
-
-VOID
-DokanFreeEventContext(
-	__in PEVENT_CONTEXT	EventContext
-	)
-{
-	PDRIVER_EVENT_CONTEXT driverEventContext =
-		CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
-	ExFreePool(driverEventContext);
+VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext) {
+  PDRIVER_EVENT_CONTEXT driverEventContext =
+      CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
+  ExFreePool(driverEventContext);
 }
 
+VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
+                            __in PEVENT_CONTEXT EventContext) {
+  PDRIVER_EVENT_CONTEXT driverEventContext =
+      CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
 
-VOID
-DokanEventNotification(
-	__in PIRP_LIST		NotifyEvent,
-	__in PEVENT_CONTEXT	EventContext
-	)
-{
-	PDRIVER_EVENT_CONTEXT driverEventContext =
-		CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
+  InitializeListHead(&driverEventContext->ListEntry);
 
-	InitializeListHead(&driverEventContext->ListEntry);
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
 
-	ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  // DDbgPrint("DokanEventNotification\n");
 
-	//DDbgPrint("DokanEventNotification\n");
+  ExInterlockedInsertTailList(&NotifyEvent->ListHead,
+                              &driverEventContext->ListEntry,
+                              &NotifyEvent->ListLock);
 
-	ExInterlockedInsertTailList(
-		&NotifyEvent->ListHead,
-		&driverEventContext->ListEntry,
-		&NotifyEvent->ListLock);
-
-	KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
+  KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
 }
 
+VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
+  PLIST_ENTRY listHead;
+  LIST_ENTRY completeList;
+  PIRP_ENTRY irpEntry;
+  KIRQL oldIrql;
+  PIRP irp;
 
-VOID
-ReleasePendingIrp(
-	__in PIRP_LIST	PendingIrp
-	)
-{
-	PLIST_ENTRY	listHead;
-	LIST_ENTRY	completeList;
-	PIRP_ENTRY	irpEntry;
-	KIRQL	oldIrql;
-	PIRP	irp;
-	
-	InitializeListHead(&completeList);
+  InitializeListHead(&completeList);
 
-	ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-	KeAcquireSpinLock(&PendingIrp->ListLock, &oldIrql);
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  KeAcquireSpinLock(&PendingIrp->ListLock, &oldIrql);
 
-	while (!IsListEmpty(&PendingIrp->ListHead)) {
-		listHead = RemoveHeadList(&PendingIrp->ListHead);
-		irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-		irp = irpEntry->Irp;
-		if (irp == NULL) {
-			// this IRP has already been canceled
-			ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-			DokanFreeIrpEntry(irpEntry);
-			continue;
-		}
+  while (!IsListEmpty(&PendingIrp->ListHead)) {
+    listHead = RemoveHeadList(&PendingIrp->ListHead);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+    irp = irpEntry->Irp;
+    if (irp == NULL) {
+      // this IRP has already been canceled
+      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      DokanFreeIrpEntry(irpEntry);
+      continue;
+    }
 
-		if (IoSetCancelRoutine(irp, NULL) == NULL) {
-			// Cancel routine will run as soon as we release the lock
-			InitializeListHead(&irpEntry->ListEntry);
-			irpEntry->CancelRoutineFreeMemory = TRUE;
-			continue;
-		}
-		InsertTailList(&completeList, &irpEntry->ListEntry);
-	}
+    if (IoSetCancelRoutine(irp, NULL) == NULL) {
+      // Cancel routine will run as soon as we release the lock
+      InitializeListHead(&irpEntry->ListEntry);
+      irpEntry->CancelRoutineFreeMemory = TRUE;
+      continue;
+    }
+    InsertTailList(&completeList, &irpEntry->ListEntry);
+  }
 
-	KeClearEvent(&PendingIrp->NotEmpty);
-	KeReleaseSpinLock(&PendingIrp->ListLock, oldIrql);
+  KeClearEvent(&PendingIrp->NotEmpty);
+  KeReleaseSpinLock(&PendingIrp->ListLock, oldIrql);
 
-	while (!IsListEmpty(&completeList)) {
-		listHead = RemoveHeadList(&completeList);
-		irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-		irp = irpEntry->Irp;
-		DokanFreeIrpEntry(irpEntry);
-        DokanCompleteIrpRequest(irp, STATUS_SUCCESS, 0);
-	}
+  while (!IsListEmpty(&completeList)) {
+    listHead = RemoveHeadList(&completeList);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+    irp = irpEntry->Irp;
+    DokanFreeIrpEntry(irpEntry);
+    DokanCompleteIrpRequest(irp, STATUS_SUCCESS, 0);
+  }
 }
 
+VOID ReleaseNotifyEvent(__in PIRP_LIST NotifyEvent) {
+  PDRIVER_EVENT_CONTEXT driverEventContext;
+  PLIST_ENTRY listHead;
+  KIRQL oldIrql;
 
-VOID
-ReleaseNotifyEvent(
-	__in PIRP_LIST	NotifyEvent
-	)
-{
-	PDRIVER_EVENT_CONTEXT	driverEventContext;
-	PLIST_ENTRY	listHead;
-	KIRQL oldIrql;
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  KeAcquireSpinLock(&NotifyEvent->ListLock, &oldIrql);
 
-	ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-	KeAcquireSpinLock(&NotifyEvent->ListLock, &oldIrql);
+  while (!IsListEmpty(&NotifyEvent->ListHead)) {
+    listHead = RemoveHeadList(&NotifyEvent->ListHead);
+    driverEventContext =
+        CONTAINING_RECORD(listHead, DRIVER_EVENT_CONTEXT, ListEntry);
+    ExFreePool(driverEventContext);
+  }
 
-	while(!IsListEmpty(&NotifyEvent->ListHead)) {
-		listHead = RemoveHeadList(&NotifyEvent->ListHead);
-		driverEventContext = CONTAINING_RECORD(
-			listHead, DRIVER_EVENT_CONTEXT, ListEntry);
-		ExFreePool(driverEventContext);
-	}
-
-	KeClearEvent(&NotifyEvent->NotEmpty);
-	KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
+  KeClearEvent(&NotifyEvent->NotEmpty);
+  KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
 }
 
+VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
+  PDRIVER_EVENT_CONTEXT driverEventContext;
+  PLIST_ENTRY listHead;
+  PIRP_ENTRY irpEntry;
+  LIST_ENTRY completeList;
+  KIRQL irpIrql;
+  KIRQL notifyIrql;
+  PIRP irp;
+  ULONG eventLen;
+  ULONG bufferLen;
+  PVOID buffer;
 
-VOID
-NotificationLoop(
-	__in PIRP_LIST	PendingIrp,
-	__in PIRP_LIST	NotifyEvent
-	)
-{
-	PDRIVER_EVENT_CONTEXT	driverEventContext;
-	PLIST_ENTRY	listHead;
-	PIRP_ENTRY	irpEntry;
-	LIST_ENTRY	completeList;
-	KIRQL	irpIrql;
-	KIRQL	notifyIrql;
-	PIRP	irp;
-	ULONG	eventLen;
-	ULONG	bufferLen;
-	PVOID	buffer;
+  DDbgPrint("=> NotificationLoop\n");
 
-	DDbgPrint("=> NotificationLoop\n");
+  InitializeListHead(&completeList);
 
-	InitializeListHead(&completeList);
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  KeAcquireSpinLock(&PendingIrp->ListLock, &irpIrql);
+  KeAcquireSpinLock(&NotifyEvent->ListLock, &notifyIrql);
 
-	ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-	KeAcquireSpinLock(&PendingIrp->ListLock, &irpIrql);
-	KeAcquireSpinLock(&NotifyEvent->ListLock, &notifyIrql);
-		
-	while (!IsListEmpty(&PendingIrp->ListHead) &&
-		!IsListEmpty(&NotifyEvent->ListHead)) {
-			
-		listHead = RemoveHeadList(&NotifyEvent->ListHead);
+  while (!IsListEmpty(&PendingIrp->ListHead) &&
+         !IsListEmpty(&NotifyEvent->ListHead)) {
 
-		driverEventContext = CONTAINING_RECORD(
-			listHead, DRIVER_EVENT_CONTEXT, ListEntry);
+    listHead = RemoveHeadList(&NotifyEvent->ListHead);
 
-		listHead = RemoveHeadList(&PendingIrp->ListHead);
-		irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+    driverEventContext =
+        CONTAINING_RECORD(listHead, DRIVER_EVENT_CONTEXT, ListEntry);
 
-		eventLen = driverEventContext->EventContext.Length;
+    listHead = RemoveHeadList(&PendingIrp->ListHead);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
 
-		// ensure this eventIrp is not cancelled
-		irp = irpEntry->Irp;
+    eventLen = driverEventContext->EventContext.Length;
 
-		if (irp == NULL) {
-			// this IRP has already been canceled
-			ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-			DokanFreeIrpEntry(irpEntry);
-			// push back
-			InsertTailList(&NotifyEvent->ListHead,
-							&driverEventContext->ListEntry);
-			continue;
-		}
+    // ensure this eventIrp is not cancelled
+    irp = irpEntry->Irp;
 
-		if (IoSetCancelRoutine(irp, NULL) == NULL) {
-			// Cancel routine will run as soon as we release the lock
-			InitializeListHead(&irpEntry->ListEntry);
-			irpEntry->CancelRoutineFreeMemory = TRUE;
-			// push back
-			InsertTailList(&NotifyEvent->ListHead,
-							&driverEventContext->ListEntry);
-			continue;
-		}
+    if (irp == NULL) {
+      // this IRP has already been canceled
+      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      DokanFreeIrpEntry(irpEntry);
+      // push back
+      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+      continue;
+    }
 
-		// available size that is used for event notification
-		bufferLen =
-			irpEntry->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
-		// buffer that is used to inform Event
-		buffer	= irp->AssociatedIrp.SystemBuffer;
+    if (IoSetCancelRoutine(irp, NULL) == NULL) {
+      // Cancel routine will run as soon as we release the lock
+      InitializeListHead(&irpEntry->ListEntry);
+      irpEntry->CancelRoutineFreeMemory = TRUE;
+      // push back
+      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+      continue;
+    }
 
-		// buffer is not specified or short of length
-		if (bufferLen == 0 || buffer == NULL || bufferLen < eventLen) {
-			DDbgPrint("EventNotice : STATUS_INSUFFICIENT_RESOURCES\n");
-			DDbgPrint("  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
-			// push back
-			InsertTailList(&NotifyEvent->ListHead,
-							&driverEventContext->ListEntry);
-			// marks as STATUS_INSUFFICIENT_RESOURCES
-			irpEntry->SerialNumber = 0;
-		} else {
-			// let's copy EVENT_CONTEXT
-			RtlCopyMemory(buffer, &driverEventContext->EventContext, eventLen);
-			// save event length
-			irpEntry->SerialNumber = eventLen;
+    // available size that is used for event notification
+    bufferLen = irpEntry->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
+    // buffer that is used to inform Event
+    buffer = irp->AssociatedIrp.SystemBuffer;
 
-			if (driverEventContext->Completed) {
-				KeSetEvent(driverEventContext->Completed, IO_NO_INCREMENT, FALSE);
-			}
-			ExFreePool(driverEventContext);
-		}
-		InsertTailList(&completeList, &irpEntry->ListEntry);
-	}
+    // buffer is not specified or short of length
+    if (bufferLen == 0 || buffer == NULL || bufferLen < eventLen) {
+      DDbgPrint("EventNotice : STATUS_INSUFFICIENT_RESOURCES\n");
+      DDbgPrint("  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
+      // push back
+      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+      // marks as STATUS_INSUFFICIENT_RESOURCES
+      irpEntry->SerialNumber = 0;
+    } else {
+      // let's copy EVENT_CONTEXT
+      RtlCopyMemory(buffer, &driverEventContext->EventContext, eventLen);
+      // save event length
+      irpEntry->SerialNumber = eventLen;
 
-	KeClearEvent(&NotifyEvent->NotEmpty);
-	KeClearEvent(&PendingIrp->NotEmpty);
+      if (driverEventContext->Completed) {
+        KeSetEvent(driverEventContext->Completed, IO_NO_INCREMENT, FALSE);
+      }
+      ExFreePool(driverEventContext);
+    }
+    InsertTailList(&completeList, &irpEntry->ListEntry);
+  }
 
-	KeReleaseSpinLock(&NotifyEvent->ListLock, notifyIrql);
-	KeReleaseSpinLock(&PendingIrp->ListLock, irpIrql);
+  KeClearEvent(&NotifyEvent->NotEmpty);
+  KeClearEvent(&PendingIrp->NotEmpty);
 
-	while (!IsListEmpty(&completeList)) {
-		listHead = RemoveHeadList(&completeList);
-		irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-		irp = irpEntry->Irp;
-		if (irpEntry->SerialNumber == 0) {
-			irp->IoStatus.Information = 0;
-			irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-		} else {
-			irp->IoStatus.Information = irpEntry->SerialNumber;
-			irp->IoStatus.Status = STATUS_SUCCESS;
-		}
-		DokanFreeIrpEntry(irpEntry);
-        DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
-	}
+  KeReleaseSpinLock(&NotifyEvent->ListLock, notifyIrql);
+  KeReleaseSpinLock(&PendingIrp->ListLock, irpIrql);
 
-	DDbgPrint("<= NotificationLoop\n");
+  while (!IsListEmpty(&completeList)) {
+    listHead = RemoveHeadList(&completeList);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+    irp = irpEntry->Irp;
+    if (irpEntry->SerialNumber == 0) {
+      irp->IoStatus.Information = 0;
+      irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+    } else {
+      irp->IoStatus.Information = irpEntry->SerialNumber;
+      irp->IoStatus.Status = STATUS_SUCCESS;
+    }
+    DokanFreeIrpEntry(irpEntry);
+    DokanCompleteIrpRequest(irp, irp->IoStatus.Status,
+                            irp->IoStatus.Information);
+  }
+
+  DDbgPrint("<= NotificationLoop\n");
 }
-
 
 KSTART_ROUTINE NotificationThread;
-VOID
-NotificationThread(
-	__in PDokanDCB	Dcb
-	)
-{
-	PKEVENT events[5];
-	PKWAIT_BLOCK waitBlock;
-	NTSTATUS status;
+VOID NotificationThread(__in PDokanDCB Dcb) {
+  PKEVENT events[5];
+  PKWAIT_BLOCK waitBlock;
+  NTSTATUS status;
 
-	DDbgPrint("==> NotificationThread\n");
+  DDbgPrint("==> NotificationThread\n");
 
-	waitBlock = ExAllocatePool(sizeof(KWAIT_BLOCK) * 5);
-	if (waitBlock == NULL) {
-		DDbgPrint("  Can't allocate WAIT_BLOCK\n");
-		return;
-	}
-	events[0] = &Dcb->ReleaseEvent;
-	events[1] = &Dcb->NotifyEvent.NotEmpty;
-	events[2] = &Dcb->PendingEvent.NotEmpty;
-	events[3] = &Dcb->Global->PendingService.NotEmpty;
-	events[4] = &Dcb->Global->NotifyService.NotEmpty;
+  waitBlock = ExAllocatePool(sizeof(KWAIT_BLOCK) * 5);
+  if (waitBlock == NULL) {
+    DDbgPrint("  Can't allocate WAIT_BLOCK\n");
+    return;
+  }
+  events[0] = &Dcb->ReleaseEvent;
+  events[1] = &Dcb->NotifyEvent.NotEmpty;
+  events[2] = &Dcb->PendingEvent.NotEmpty;
+  events[3] = &Dcb->Global->PendingService.NotEmpty;
+  events[4] = &Dcb->Global->NotifyService.NotEmpty;
 
-	do {
-		status = KeWaitForMultipleObjects(
-			5, events, WaitAny, Executive, KernelMode, FALSE, NULL, waitBlock);
+  do {
+    status = KeWaitForMultipleObjects(5, events, WaitAny, Executive, KernelMode,
+                                      FALSE, NULL, waitBlock);
 
-		if (status != STATUS_WAIT_0) {
-			if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
-				NotificationLoop(
-					&Dcb->PendingEvent,
-					&Dcb->NotifyEvent);
-			} else {
-				NotificationLoop(
-					&Dcb->Global->PendingService,
-					&Dcb->Global->NotifyService);
-			}
-		}
-	} while (status != STATUS_WAIT_0);
+    if (status != STATUS_WAIT_0) {
+      if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
+        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent);
+      } else {
+        NotificationLoop(&Dcb->Global->PendingService,
+                         &Dcb->Global->NotifyService);
+      }
+    }
+  } while (status != STATUS_WAIT_0);
 
-	ExFreePool(waitBlock);
-	DDbgPrint("<== NotificationThread\n");
+  ExFreePool(waitBlock);
+  DDbgPrint("<== NotificationThread\n");
 }
-
-
 
 NTSTATUS
-DokanStartEventNotificationThread(
-	__in PDokanDCB	Dcb)
-{
-	NTSTATUS status;
-	HANDLE	thread;
+DokanStartEventNotificationThread(__in PDokanDCB Dcb) {
+  NTSTATUS status;
+  HANDLE thread;
 
-	DDbgPrint("==> DokanStartEventNotificationThread\n");
+  DDbgPrint("==> DokanStartEventNotificationThread\n");
 
-	KeResetEvent(&Dcb->ReleaseEvent);
+  KeResetEvent(&Dcb->ReleaseEvent);
 
-	status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS,
-		NULL, NULL, NULL,
-		(PKSTART_ROUTINE)NotificationThread,
-		Dcb);
+  status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
+                                (PKSTART_ROUTINE)NotificationThread, Dcb);
 
-	if (!NT_SUCCESS(status)) {
-		return status;
-	}
+  if (!NT_SUCCESS(status)) {
+    return status;
+  }
 
-	ObReferenceObjectByHandle(thread, THREAD_ALL_ACCESS, NULL,
-		KernelMode, (PVOID*)&Dcb->EventNotificationThread, NULL);
+  ObReferenceObjectByHandle(thread, THREAD_ALL_ACCESS, NULL, KernelMode,
+                            (PVOID *)&Dcb->EventNotificationThread, NULL);
 
-	ZwClose(thread);
+  ZwClose(thread);
 
-	DDbgPrint("<== DokanStartEventNotificationThread\n");
+  DDbgPrint("<== DokanStartEventNotificationThread\n");
 
-	return STATUS_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
+VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
+  PIO_WORKITEM workItem;
 
-VOID
-DokanStopEventNotificationThread(
-	__in PDokanDCB	Dcb)
-{
-    PIO_WORKITEM      workItem;
+  DDbgPrint("==> DokanStopEventNotificationThread\n");
 
-	DDbgPrint("==> DokanStopEventNotificationThread\n");
+  workItem = IoAllocateWorkItem(Dcb->DeviceObject);
+  if (workItem != NULL) {
+    IoQueueWorkItem(workItem, DokanStopEventNotificationThreadInternal,
+                    DelayedWorkQueue, workItem);
+  } else {
+    DDbgPrint("Can't create work item.");
+  }
 
-    workItem = IoAllocateWorkItem(Dcb->DeviceObject);
-    if (workItem != NULL) {
-        IoQueueWorkItem(workItem, DokanStopEventNotificationThreadInternal, DelayedWorkQueue, workItem);
-    } else {
-        DDbgPrint("Can't create work item.");
-    }
-	
-	DDbgPrint("<== DokanStopEventNotificationThread\n");
+  DDbgPrint("<== DokanStopEventNotificationThread\n");
 }
 
-VOID
- DokanStopEventNotificationThreadInternal(
-    __in PDEVICE_OBJECT DeviceObject,
-    __in PVOID      Context)
-{
-    PDokanDCB Dcb;
+VOID DokanStopEventNotificationThreadInternal(__in PDEVICE_OBJECT DeviceObject,
+                                              __in PVOID Context) {
+  PDokanDCB Dcb;
 
-    UNREFERENCED_PARAMETER(Context);
+  UNREFERENCED_PARAMETER(Context);
 
-    DDbgPrint("==> DokanStopEventNotificationThreadInternal\n");
+  DDbgPrint("==> DokanStopEventNotificationThreadInternal\n");
 
-    Dcb = DeviceObject->DeviceExtension;
-    KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE);
+  Dcb = DeviceObject->DeviceExtension;
+  KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE);
 
+  if (Dcb->EventNotificationThread) {
+    KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
+                          FALSE, NULL);
     if (Dcb->EventNotificationThread) {
-        KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode, FALSE, NULL);
-        if (Dcb->EventNotificationThread) {
-            ObDereferenceObject(Dcb->EventNotificationThread);
-            Dcb->EventNotificationThread = NULL;
-        }
+      ObDereferenceObject(Dcb->EventNotificationThread);
+      Dcb->EventNotificationThread = NULL;
     }
+  }
 
-    DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");
+  DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");
 }
 
-
 NTSTATUS
-DokanEventRelease(
-	__in PDEVICE_OBJECT DeviceObject)
-{
-	PDokanDCB	dcb;
-	PDokanVCB	vcb;
-	PDokanFCB	fcb;
-	PDokanCCB	ccb;
-	PLIST_ENTRY	fcbEntry, fcbNext, fcbHead;
-	PLIST_ENTRY	ccbEntry, ccbNext, ccbHead;
-	NTSTATUS	status = STATUS_SUCCESS;
+DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
+  PDokanDCB dcb;
+  PDokanVCB vcb;
+  PDokanFCB fcb;
+  PDokanCCB ccb;
+  PLIST_ENTRY fcbEntry, fcbNext, fcbHead;
+  PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
+  NTSTATUS status = STATUS_SUCCESS;
 
-	vcb = DeviceObject->DeviceExtension;
-	if (GetIdentifierType(vcb) != VCB) {
-		return STATUS_INVALID_PARAMETER;
-	}
-	dcb = vcb->Dcb;
+  vcb = DeviceObject->DeviceExtension;
+  if (GetIdentifierType(vcb) != VCB) {
+    return STATUS_INVALID_PARAMETER;
+  }
+  dcb = vcb->Dcb;
 
-	//ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-	dcb->Mounted = 0;
-	//ExReleaseResourceLite(&dcb->Resource);
+  // ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+  dcb->Mounted = 0;
+  // ExReleaseResourceLite(&dcb->Resource);
 
-	// search CCB list to complete not completed Directory Notification 
+  // search CCB list to complete not completed Directory Notification
 
-	KeEnterCriticalRegion();
-	ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
 
-	fcbHead = &vcb->NextFCB;
+  fcbHead = &vcb->NextFCB;
 
-    for (fcbEntry = fcbHead->Flink; fcbEntry != fcbHead; fcbEntry = fcbNext) {
+  for (fcbEntry = fcbHead->Flink; fcbEntry != fcbHead; fcbEntry = fcbNext) {
 
-		fcbNext = fcbEntry->Flink;
-		fcb = CONTAINING_RECORD(fcbEntry, DokanFCB, NextFCB);
+    fcbNext = fcbEntry->Flink;
+    fcb = CONTAINING_RECORD(fcbEntry, DokanFCB, NextFCB);
 
-		ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
+    ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 
-		ccbHead = &fcb->NextCCB;
+    ccbHead = &fcb->NextCCB;
 
-		for (ccbEntry = ccbHead->Flink; ccbEntry != ccbHead; ccbEntry = ccbNext) {
-			ccbNext = ccbEntry->Flink;
-			ccb = CONTAINING_RECORD(ccbEntry, DokanCCB, NextCCB);
+    for (ccbEntry = ccbHead->Flink; ccbEntry != ccbHead; ccbEntry = ccbNext) {
+      ccbNext = ccbEntry->Flink;
+      ccb = CONTAINING_RECORD(ccbEntry, DokanCCB, NextCCB);
 
-			DDbgPrint("  NotifyCleanup ccb:%p, context:%X, filename:%wZ\n",
-					ccb, (ULONG)ccb->UserContext, &fcb->FileName);
-			FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
-		}
-		ExReleaseResourceLite(&fcb->Resource);
-	}
+      DDbgPrint("  NotifyCleanup ccb:%p, context:%X, filename:%wZ\n", ccb,
+                (ULONG)ccb->UserContext, &fcb->FileName);
+      FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
+    }
+    ExReleaseResourceLite(&fcb->Resource);
+  }
 
-	ExReleaseResourceLite(&vcb->Resource);
-	KeLeaveCriticalRegion();
+  ExReleaseResourceLite(&vcb->Resource);
+  KeLeaveCriticalRegion();
 
-	ReleasePendingIrp(&dcb->PendingIrp);
-	ReleasePendingIrp(&dcb->PendingEvent);
-	DokanStopCheckThread(dcb);
-	DokanStopEventNotificationThread(dcb);
+  ReleasePendingIrp(&dcb->PendingIrp);
+  ReleasePendingIrp(&dcb->PendingEvent);
+  DokanStopCheckThread(dcb);
+  DokanStopEventNotificationThread(dcb);
 
-	DokanDeleteDeviceObject(dcb);
+  DokanDeleteDeviceObject(dcb);
 
-	return status;
+  return status;
 }

@@ -18,346 +18,349 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include <windows.h>
 #include <stdio.h>
 #include "dokani.h"
 
-static BOOL
-DokanServiceCheck(
-	LPCWSTR	ServiceName)
-{
-	SC_HANDLE controlHandle;
-	SC_HANDLE serviceHandle;
+static BOOL DokanServiceCheck(LPCWSTR ServiceName) {
+  SC_HANDLE controlHandle;
+  SC_HANDLE serviceHandle;
 
-	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+  controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
-	if (controlHandle == NULL) {
-		DbgPrint("DokanServiceCheck: Failed to open Service Control Manager. error = %d\n", GetLastError());
-		return FALSE;
-	}
+  if (controlHandle == NULL) {
+    DbgPrint("DokanServiceCheck: Failed to open Service Control Manager. error "
+             "= %d\n",
+             GetLastError());
+    return FALSE;
+  }
 
-	serviceHandle = OpenService(controlHandle, ServiceName,
-		SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS);
+  serviceHandle =
+      OpenService(controlHandle, ServiceName,
+                  SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS);
 
-	if (serviceHandle == NULL) {
-		DokanDbgPrintW(L"DokanServiceCheck: Failed to open Service (%s). error = %d\n", ServiceName, GetLastError());
-		CloseServiceHandle(controlHandle);
-		return FALSE;
-	}
-	
-	CloseServiceHandle(serviceHandle);
-	CloseServiceHandle(controlHandle);
+  if (serviceHandle == NULL) {
+    DokanDbgPrintW(
+        L"DokanServiceCheck: Failed to open Service (%s). error = %d\n",
+        ServiceName, GetLastError());
+    CloseServiceHandle(controlHandle);
+    return FALSE;
+  }
 
-	return TRUE;
+  CloseServiceHandle(serviceHandle);
+  CloseServiceHandle(controlHandle);
+
+  return TRUE;
 }
 
+static BOOL DokanServiceControl(LPCWSTR ServiceName, ULONG Type) {
+  SC_HANDLE controlHandle;
+  SC_HANDLE serviceHandle;
+  SERVICE_STATUS ss;
+  BOOL result = TRUE;
 
-static BOOL
-DokanServiceControl(
-	LPCWSTR	ServiceName,
-	ULONG	Type)
-{
-	SC_HANDLE controlHandle;
-	SC_HANDLE serviceHandle;
-	SERVICE_STATUS ss;
-	BOOL result = TRUE;
+  controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
-	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+  if (controlHandle == NULL) {
+    DokanDbgPrint("DokanServiceControl: Failed to open Service Control "
+                  "Manager. error = %d\n",
+                  GetLastError());
+    return FALSE;
+  }
 
-	if (controlHandle == NULL) {
-		DokanDbgPrint("DokanServiceControl: Failed to open Service Control Manager. error = %d\n", GetLastError());
-		return FALSE;
-	}
+  serviceHandle =
+      OpenService(controlHandle, ServiceName,
+                  SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS | DELETE);
 
-	serviceHandle = OpenService(controlHandle, ServiceName,
-		SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS | DELETE);
+  if (serviceHandle == NULL) {
+    DokanDbgPrintW(
+        L"DokanServiceControl: Failed to open Service (%s). error = %d\n",
+        ServiceName, GetLastError());
+    CloseServiceHandle(controlHandle);
+    return FALSE;
+  }
 
-	if (serviceHandle == NULL) {
-		DokanDbgPrintW(L"DokanServiceControl: Failed to open Service (%s). error = %d\n", ServiceName, GetLastError());
-		CloseServiceHandle(controlHandle);
-		return FALSE;
-	}
-	
-	QueryServiceStatus(serviceHandle, &ss);
+  QueryServiceStatus(serviceHandle, &ss);
 
-	if (Type == DOKAN_SERVICE_DELETE) {
-		if (DeleteService(serviceHandle)) {
-			DokanDbgPrintW(L"DokanServiceControl: Service (%s) deleted\n", ServiceName);
-			result = TRUE;
-		} else {
-			DokanDbgPrintW(L"DokanServiceControl: Failed to delete service (%s). error = %d\n", ServiceName, GetLastError());
-			result = FALSE;
-		}
+  if (Type == DOKAN_SERVICE_DELETE) {
+    if (DeleteService(serviceHandle)) {
+      DokanDbgPrintW(L"DokanServiceControl: Service (%s) deleted\n",
+                     ServiceName);
+      result = TRUE;
+    } else {
+      DokanDbgPrintW(
+          L"DokanServiceControl: Failed to delete service (%s). error = %d\n",
+          ServiceName, GetLastError());
+      result = FALSE;
+    }
 
-	} else if (ss.dwCurrentState == SERVICE_STOPPED && Type == DOKAN_SERVICE_START) {
-		if (StartService(serviceHandle, 0, NULL)) {
-			DokanDbgPrintW(L"DokanServiceControl: Service (%s) started\n", ServiceName);
-			result = TRUE;
-		} else {
-			DokanDbgPrintW(L"DokanServiceControl: Failed to start service (%s). error = %d\n", ServiceName, GetLastError());
-			result = FALSE;
-		}
-	
-	} else if (ss.dwCurrentState == SERVICE_RUNNING && Type == DOKAN_SERVICE_STOP) {
+  } else if (ss.dwCurrentState == SERVICE_STOPPED &&
+             Type == DOKAN_SERVICE_START) {
+    if (StartService(serviceHandle, 0, NULL)) {
+      DokanDbgPrintW(L"DokanServiceControl: Service (%s) started\n",
+                     ServiceName);
+      result = TRUE;
+    } else {
+      DokanDbgPrintW(
+          L"DokanServiceControl: Failed to start service (%s). error = %d\n",
+          ServiceName, GetLastError());
+      result = FALSE;
+    }
 
-		if (ControlService(serviceHandle, SERVICE_CONTROL_STOP, &ss)) {
-			DokanDbgPrintW(L"DokanServiceControl: Service (%s) stopped\n", ServiceName);
-			result = TRUE;
-		} else {
-			DokanDbgPrintW(L"DokanServiceControl: Failed to stop service (%s). error = %d\n", ServiceName, GetLastError());
-			result = FALSE;
-		}
-	}
+  } else if (ss.dwCurrentState == SERVICE_RUNNING &&
+             Type == DOKAN_SERVICE_STOP) {
 
-	CloseServiceHandle(serviceHandle);
-	CloseServiceHandle(controlHandle);
+    if (ControlService(serviceHandle, SERVICE_CONTROL_STOP, &ss)) {
+      DokanDbgPrintW(L"DokanServiceControl: Service (%s) stopped\n",
+                     ServiceName);
+      result = TRUE;
+    } else {
+      DokanDbgPrintW(
+          L"DokanServiceControl: Failed to stop service (%s). error = %d\n",
+          ServiceName, GetLastError());
+      result = FALSE;
+    }
+  }
 
-	Sleep(100);
-	return result;
+  CloseServiceHandle(serviceHandle);
+  CloseServiceHandle(controlHandle);
+
+  Sleep(100);
+  return result;
 }
 
-BOOL DOKANAPI
-DokanMountControl(PDOKAN_CONTROL Control)
-{
-	HANDLE pipe;
-	DWORD readBytes;
-	DWORD pipeMode;
+BOOL DOKANAPI DokanMountControl(PDOKAN_CONTROL Control) {
+  HANDLE pipe;
+  DWORD readBytes;
+  DWORD pipeMode;
 
-	for (;;) {
-		pipe = CreateFile(DOKAN_CONTROL_PIPE,  GENERIC_READ|GENERIC_WRITE,
-						0, NULL, OPEN_EXISTING, 0, NULL);
-		if (pipe != INVALID_HANDLE_VALUE) {
-			break;
-		}
+  for (;;) {
+    pipe = CreateFile(DOKAN_CONTROL_PIPE, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                      OPEN_EXISTING, 0, NULL);
+    if (pipe != INVALID_HANDLE_VALUE) {
+      break;
+    }
 
-		DWORD error = GetLastError();
-		if (error == ERROR_PIPE_BUSY) {
-			if (!WaitNamedPipe(DOKAN_CONTROL_PIPE, NMPWAIT_USE_DEFAULT_WAIT)) {
-				DbgPrint("DokanMountControl: DokanMounter service : ERROR_PIPE_BUSY\n");
-				return FALSE;
-			}
-			continue;
-		} else if (error == ERROR_ACCESS_DENIED) {
-			DbgPrint("DokanMountControl: Failed to connect DokanMounter service: access denied\n");
-			return FALSE;
-		} else {
-			DbgPrint("DokanMountControl: Failed to connect DokanMounter service: %d\n", GetLastError());
-			return FALSE;
-		}
-	}
+    DWORD error = GetLastError();
+    if (error == ERROR_PIPE_BUSY) {
+      if (!WaitNamedPipe(DOKAN_CONTROL_PIPE, NMPWAIT_USE_DEFAULT_WAIT)) {
+        DbgPrint("DokanMountControl: DokanMounter service : ERROR_PIPE_BUSY\n");
+        return FALSE;
+      }
+      continue;
+    } else if (error == ERROR_ACCESS_DENIED) {
+      DbgPrint("DokanMountControl: Failed to connect DokanMounter service: "
+               "access denied\n");
+      return FALSE;
+    } else {
+      DbgPrint(
+          "DokanMountControl: Failed to connect DokanMounter service: %d\n",
+          GetLastError());
+      return FALSE;
+    }
+  }
 
-	pipeMode = PIPE_READMODE_MESSAGE|PIPE_WAIT;
+  pipeMode = PIPE_READMODE_MESSAGE | PIPE_WAIT;
 
-	if(!SetNamedPipeHandleState(pipe, &pipeMode, NULL, NULL)) {
-		DbgPrint("DokanMountControl: Failed to set named pipe state: %d\n", GetLastError());
-		CloseHandle(pipe);
-		return FALSE;
-	}
+  if (!SetNamedPipeHandleState(pipe, &pipeMode, NULL, NULL)) {
+    DbgPrint("DokanMountControl: Failed to set named pipe state: %d\n",
+             GetLastError());
+    CloseHandle(pipe);
+    return FALSE;
+  }
 
+  if (!TransactNamedPipe(pipe, Control, sizeof(DOKAN_CONTROL), Control,
+                         sizeof(DOKAN_CONTROL), &readBytes, NULL)) {
+    DbgPrint("DokanMountControl: Failed to transact named pipe: %d\n",
+             GetLastError());
+  }
 
-	if(!TransactNamedPipe(pipe, Control, sizeof(DOKAN_CONTROL),
-		Control, sizeof(DOKAN_CONTROL), &readBytes, NULL)) {
-		DbgPrint("DokanMountControl: Failed to transact named pipe: %d\n", GetLastError());
-	}
-
-	CloseHandle(pipe);
-	if(Control->Status != DOKAN_CONTROL_FAIL) {
-		return TRUE;
-	} else {
-		return FALSE;
-	}
+  CloseHandle(pipe);
+  if (Control->Status != DOKAN_CONTROL_FAIL) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
 }
 
+BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
+                                  LPCWSTR ServiceFullPath) {
+  SC_HANDLE controlHandle;
+  SC_HANDLE serviceHandle;
 
+  controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
+  if (controlHandle == NULL) {
+    DokanDbgPrint("DokanServiceInstall: Failed to open Service Control "
+                  "Manager. error = %d\n",
+                  GetLastError());
+    return FALSE;
+  }
 
-BOOL DOKANAPI
-DokanServiceInstall(
-	LPCWSTR	ServiceName,
-	DWORD	ServiceType,
-	LPCWSTR ServiceFullPath)
-{
-	SC_HANDLE	controlHandle;
-	SC_HANDLE	serviceHandle;
-	
-	controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
-	if (controlHandle == NULL) {
-		DokanDbgPrint("DokanServiceInstall: Failed to open Service Control Manager. error = %d\n", GetLastError());
-		return FALSE;
-	}
+  serviceHandle =
+      CreateService(controlHandle, ServiceName, ServiceName, 0, ServiceType,
+                    SERVICE_AUTO_START, SERVICE_ERROR_IGNORE, ServiceFullPath,
+                    NULL, NULL, NULL, NULL, NULL);
 
-	serviceHandle = CreateService(controlHandle, ServiceName, ServiceName, 0,
-		ServiceType, SERVICE_AUTO_START, SERVICE_ERROR_IGNORE,
-		ServiceFullPath, NULL, NULL, NULL, NULL, NULL);
-	
-	if (serviceHandle == NULL) {
-		BOOL error = GetLastError();
-		if (error == ERROR_SERVICE_EXISTS) {
-			DokanDbgPrintW(L"DokanServiceInstall: Service (%s) is already installed\n", ServiceName);
-		} else {
-			DokanDbgPrintW(L"DokanServiceInstall: Failed to install service (%s). error = %d\n", ServiceName, error);
-		}
-		CloseServiceHandle(controlHandle);
-		return FALSE;
-	}
-	
-	CloseServiceHandle(serviceHandle);
-	CloseServiceHandle(controlHandle);
+  if (serviceHandle == NULL) {
+    BOOL error = GetLastError();
+    if (error == ERROR_SERVICE_EXISTS) {
+      DokanDbgPrintW(
+          L"DokanServiceInstall: Service (%s) is already installed\n",
+          ServiceName);
+    } else {
+      DokanDbgPrintW(
+          L"DokanServiceInstall: Failed to install service (%s). error = %d\n",
+          ServiceName, error);
+    }
+    CloseServiceHandle(controlHandle);
+    return FALSE;
+  }
 
-	DokanDbgPrintW(L"DokanServiceInstall: Service (%s) installed\n", ServiceName);
+  CloseServiceHandle(serviceHandle);
+  CloseServiceHandle(controlHandle);
 
-	if (DokanServiceControl(ServiceName, DOKAN_SERVICE_START)) {
-		DokanDbgPrintW(L"DokanServiceInstall: Service (%s) started\n", ServiceName);
-		return TRUE;
-	} else {
-		DokanDbgPrintW(L"DokanServiceInstall: Service (%s) start failed\n", ServiceName);
-		return FALSE;
-	}
+  DokanDbgPrintW(L"DokanServiceInstall: Service (%s) installed\n", ServiceName);
+
+  if (DokanServiceControl(ServiceName, DOKAN_SERVICE_START)) {
+    DokanDbgPrintW(L"DokanServiceInstall: Service (%s) started\n", ServiceName);
+    return TRUE;
+  } else {
+    DokanDbgPrintW(L"DokanServiceInstall: Service (%s) start failed\n",
+                   ServiceName);
+    return FALSE;
+  }
 }
 
-
-BOOL DOKANAPI
-DokanServiceDelete(
-	LPCWSTR	ServiceName)
-{
-	if (DokanServiceCheck(ServiceName)) {
-		DokanServiceControl(ServiceName, DOKAN_SERVICE_STOP);
-		if (DokanServiceControl(ServiceName, DOKAN_SERVICE_DELETE)) {
-			return TRUE;
-		} else {
-			return FALSE;
-		}
-	}
-	return TRUE;
+BOOL DOKANAPI DokanServiceDelete(LPCWSTR ServiceName) {
+  if (DokanServiceCheck(ServiceName)) {
+    DokanServiceControl(ServiceName, DOKAN_SERVICE_STOP);
+    if (DokanServiceControl(ServiceName, DOKAN_SERVICE_DELETE)) {
+      return TRUE;
+    } else {
+      return FALSE;
+    }
+  }
+  return TRUE;
 }
 
-
-BOOL DOKANAPI
-DokanUnmount(
-	WCHAR	DriveLetter)
-{
-	WCHAR mountPoint[] = L"M:";
-	mountPoint[0] = DriveLetter;
-	return DokanRemoveMountPoint(mountPoint);
+BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
+  WCHAR mountPoint[] = L"M:";
+  mountPoint[0] = DriveLetter;
+  return DokanRemoveMountPoint(mountPoint);
 }
 
+BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
+  DOKAN_CONTROL control;
+  BOOL result;
 
-BOOL DOKANAPI
-DokanRemoveMountPoint(
-	LPCWSTR MountPoint)
-{
-	DOKAN_CONTROL control;
-	BOOL result;
+  ZeroMemory(&control, sizeof(DOKAN_CONTROL));
+  control.Type = DOKAN_CONTROL_UNMOUNT;
+  wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR),
+           MountPoint);
 
-	ZeroMemory(&control, sizeof(DOKAN_CONTROL));
-	control.Type = DOKAN_CONTROL_UNMOUNT;
-	wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR), MountPoint);
+  DbgPrintW(L"DokanRemoveMountPoint %ws\n", MountPoint);
 
-	DbgPrintW(L"DokanRemoveMountPoint %ws\n", MountPoint);
-
-	result = DokanMountControl(&control);
-	if (result) {
-		DbgPrint("DokanControl recieved DeviceName:%ws\n", control.DeviceName);
-		SendReleaseIRP(control.DeviceName);
-	} else {
-		DbgPrint("DokanRemoveMountPoint failed\n");
-	}
-	return result;
+  result = DokanMountControl(&control);
+  if (result) {
+    DbgPrint("DokanControl recieved DeviceName:%ws\n", control.DeviceName);
+    SendReleaseIRP(control.DeviceName);
+  } else {
+    DbgPrint("DokanRemoveMountPoint failed\n");
+  }
+  return result;
 }
 
+BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
+  DOKAN_CONTROL control;
 
-BOOL
-DokanMount(
-	LPCWSTR	MountPoint,
-	LPCWSTR	DeviceName)
-{
-	DOKAN_CONTROL control;
+  ZeroMemory(&control, sizeof(DOKAN_CONTROL));
+  control.Type = DOKAN_CONTROL_MOUNT;
 
-	ZeroMemory(&control, sizeof(DOKAN_CONTROL));
-	control.Type = DOKAN_CONTROL_MOUNT;
+  wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR),
+           MountPoint);
+  wcscpy_s(control.DeviceName, sizeof(control.DeviceName) / sizeof(WCHAR),
+           DeviceName);
 
-	wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR), MountPoint);
-	wcscpy_s(control.DeviceName, sizeof(control.DeviceName) / sizeof(WCHAR), DeviceName);
-
-	return  DokanMountControl(&control);
+  return DokanMountControl(&control);
 }
 
+#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan"
+#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector"
+#define DOKAN_NP_NAME L"DokanNP"
+#define DOKAN_NP_PATH L"System32\\dokannp.dll"
+#define DOKAN_NP_ORDER_KEY                                                     \
+  L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
 
-#define DOKAN_NP_SERVICE_KEY	L"System\\CurrentControlSet\\Services\\Dokan"
-#define DOKAN_NP_DEVICE_NAME	L"\\Device\\DokanRedirector"
-#define DOKAN_NP_NAME			L"DokanNP"
-#define DOKAN_NP_PATH			L"System32\\dokannp.dll"
-#define DOKAN_NP_ORDER_KEY		L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
+BOOL DOKANAPI DokanNetworkProviderInstall() {
+  HKEY key;
+  DWORD position;
+  DWORD type;
+  WCHAR buffer[1024];
+  DWORD buffer_size = sizeof(buffer);
+  ZeroMemory(&buffer, sizeof(buffer));
 
-BOOL DOKANAPI
-DokanNetworkProviderInstall()
-{
-	HKEY key;
-	DWORD position;
-	DWORD type;
-	WCHAR buffer[1024];
-	DWORD buffer_size = sizeof(buffer);
-	ZeroMemory(&buffer, sizeof(buffer));
+  RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
+                 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+                 &position);
 
-	RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider", 0, NULL,
-		REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, &position);
+  RegSetValueEx(key, L"DeviceName", 0, REG_SZ, (BYTE *)DOKAN_NP_DEVICE_NAME,
+                (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
 
-	RegSetValueEx(key, L"DeviceName", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_DEVICE_NAME, (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
+  RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
+                (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
 
-	RegSetValueEx(key, L"Name", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_NAME, (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
+  RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)DOKAN_NP_PATH,
+                (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
 
-	RegSetValueEx(key, L"ProviderPath", 0, REG_SZ,
-		(BYTE*)DOKAN_NP_PATH, (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
+  RegCloseKey(key);
 
-    RegCloseKey(key);
+  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
 
-	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
+                  &buffer_size);
 
-	RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE*)&buffer, &buffer_size);
+  if (wcsstr(buffer, L",Dokan") == NULL) {
+    wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), L",Dokan");
+    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
+                  (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
+  }
 
-	if (wcsstr(buffer, L",Dokan") == NULL) {
-		wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), L",Dokan");
-		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ,
-			(BYTE*)&buffer, (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
-	}
-
-    RegCloseKey(key);
-	return TRUE;
+  RegCloseKey(key);
+  return TRUE;
 }
 
+BOOL DOKANAPI DokanNetworkProviderUninstall() {
+  HKEY key;
+  DWORD type;
+  WCHAR buffer[1024];
+  WCHAR buffer2[1024];
 
-BOOL DOKANAPI
-DokanNetworkProviderUninstall()
-{
-	HKEY key;
-	DWORD type;
-	WCHAR buffer[1024];
-	WCHAR buffer2[1024];
+  DWORD buffer_size = sizeof(buffer);
+  ZeroMemory(&buffer, sizeof(buffer));
+  ZeroMemory(&buffer2, sizeof(buffer));
 
-	DWORD buffer_size = sizeof(buffer);
-	ZeroMemory(&buffer, sizeof(buffer));
-	ZeroMemory(&buffer2, sizeof(buffer));
+  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
+               &key);
+  RegDeleteKey(key, L"NetworkProvider");
 
-	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS, &key);
-	RegDeleteKey(key, L"NetworkProvider");
+  RegCloseKey(key);
 
-    RegCloseKey(key);
+  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
 
-	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
+                  &buffer_size);
 
-	RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE*)&buffer, &buffer_size);
+  if (wcsstr(buffer, L",Dokan") != NULL) {
+    WCHAR *dokan_pos = wcsstr(buffer, L",Dokan");
+    wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
+              dokan_pos - buffer);
+    wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
+             dokan_pos + wcslen(L",Dokan"));
+    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
+                  (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
+  }
 
-	if (wcsstr(buffer, L",Dokan") != NULL) {
-		WCHAR* dokan_pos = wcsstr(buffer, L",Dokan");
-		wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer, dokan_pos - buffer);
-		wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), dokan_pos + wcslen(L",Dokan"));
-		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ,
-			(BYTE*)&buffer2, (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
-	}
+  RegCloseKey(key);
 
-    RegCloseKey(key);
-
-	return TRUE;
+  return TRUE;
 }

@@ -22,40 +22,33 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
+VOID DispatchCleanup(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                     PDOKAN_INSTANCE DokanInstance) {
+  PEVENT_INFORMATION eventInfo;
+  DOKAN_FILE_INFO fileInfo;
+  PDOKAN_OPEN_INFO openInfo;
+  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
-VOID
-DispatchCleanup(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	PEVENT_INFORMATION		eventInfo;
-	DOKAN_FILE_INFO			fileInfo;	
-	PDOKAN_OPEN_INFO		openInfo;
-	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  CheckFileName(EventContext->Operation.Cleanup.FileName);
 
-	CheckFileName(EventContext->Operation.Cleanup.FileName);
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
-	
-	eventInfo->Status = STATUS_SUCCESS; // return success at any case
+  eventInfo->Status = STATUS_SUCCESS; // return success at any case
 
-	DbgPrint("###Cleanup %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###Cleanup %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-	if (DokanInstance->DokanOperations->Cleanup) {
-		// ignore return value
-		DokanInstance->DokanOperations->Cleanup(
-			EventContext->Operation.Cleanup.FileName,
-			&fileInfo);
-	}
+  if (DokanInstance->DokanOperations->Cleanup) {
+    // ignore return value
+    DokanInstance->DokanOperations->Cleanup(
+        EventContext->Operation.Cleanup.FileName, &fileInfo);
+  }
 
-	if (openInfo != NULL)
-		openInfo->UserContext = fileInfo.Context;
+  if (openInfo != NULL)
+    openInfo->UserContext = fileInfo.Context;
 
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 
-	free(eventInfo);
-	return;
+  free(eventInfo);
+  return;
 }
-

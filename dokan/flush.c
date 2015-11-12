@@ -18,48 +18,40 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
 
+VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                   PDOKAN_INSTANCE DokanInstance) {
+  DOKAN_FILE_INFO fileInfo;
+  PEVENT_INFORMATION eventInfo;
+  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  PDOKAN_OPEN_INFO openInfo;
 
-VOID
-DispatchFlush(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	DOKAN_FILE_INFO		fileInfo;
-	PEVENT_INFORMATION	eventInfo;
-	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION);
-	PDOKAN_OPEN_INFO	openInfo;
+  CheckFileName(EventContext->Operation.Flush.FileName);
 
-	CheckFileName(EventContext->Operation.Flush.FileName);
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
+  DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-	DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  eventInfo->Status = STATUS_SUCCESS;
 
-	eventInfo->Status = STATUS_SUCCESS;
+  if (DokanInstance->DokanOperations->FlushFileBuffers) {
 
-	if (DokanInstance->DokanOperations->FlushFileBuffers) {
+    NTSTATUS status = DokanInstance->DokanOperations->FlushFileBuffers(
+        EventContext->Operation.Flush.FileName, &fileInfo);
 
-		NTSTATUS status = DokanInstance->DokanOperations->FlushFileBuffers(
-			EventContext->Operation.Flush.FileName,
-					&fileInfo);
+    eventInfo->Status =
+        status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
+  }
 
-		eventInfo->Status = status != STATUS_SUCCESS ?
-					STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
-	}
+  if (openInfo != NULL)
+    openInfo->UserContext = fileInfo.Context;
 
-	if (openInfo != NULL)
-		openInfo->UserContext = fileInfo.Context;
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-
-	free(eventInfo);
-	return;
+  free(eventInfo);
+  return;
 }
-

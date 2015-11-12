@@ -1,7 +1,0 @@
-# EditorConfig
-
-# top-most EditorConfig file
-root = true
-
-[*.{h,hpp,c,cpp}]
-indent_style = tab

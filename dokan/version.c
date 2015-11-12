@@ -18,7 +18,6 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
@@ -26,31 +25,21 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include "dokani.h"
 
+ULONG DOKANAPI DokanVersion() { return DOKAN_VERSION; }
 
-ULONG DOKANAPI
-DokanVersion()
-{
-	return DOKAN_VERSION;
-}
+ULONG DOKANAPI DokanDriverVersion() {
+  ULONG version = 0;
+  ULONG ret = 0;
 
+  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_TEST,
+                   NULL,          // InputBuffer
+                   0,             // InputLength
+                   &version,      // OutputBuffer
+                   sizeof(ULONG), // OutputLength
+                   &ret)) {
 
-ULONG DOKANAPI
-DokanDriverVersion()
-{
-	ULONG version = 0;
-	ULONG ret = 0;
+    return version;
+  }
 
-	if (SendToDevice(
-			DOKAN_GLOBAL_DEVICE_NAME,
-			IOCTL_TEST,
-			NULL, // InputBuffer
-			0, // InputLength
-			&version, // OutputBuffer
-			sizeof(ULONG), // OutputLength
-			&ret)) {
-
-		return version;
-	}
-
-	return STATUS_SUCCESS;
+  return STATUS_SUCCESS;
 }

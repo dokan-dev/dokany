@@ -21,108 +21,107 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanGetAccessToken(
-   __in PDEVICE_OBJECT	DeviceObject,
-   __in PIRP			Irp
-   )
-{
-	KIRQL				oldIrql = 0;
-    PLIST_ENTRY			thisEntry, nextEntry, listHead;
-	PIRP_ENTRY			irpEntry;
-	PDokanVCB			vcb;
-	PEVENT_INFORMATION	eventInfo;
-	PACCESS_TOKEN		accessToken;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	HANDLE				handle;
-	PIO_STACK_LOCATION	irpSp = NULL;
-	BOOLEAN				hasLock = FALSE;
-	ULONG				outBufferLen;
-	ULONG				inBufferLen;
-	PACCESS_STATE		accessState = NULL;
+DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  KIRQL oldIrql = 0;
+  PLIST_ENTRY thisEntry, nextEntry, listHead;
+  PIRP_ENTRY irpEntry;
+  PDokanVCB vcb;
+  PEVENT_INFORMATION eventInfo;
+  PACCESS_TOKEN accessToken;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  HANDLE handle;
+  PIO_STACK_LOCATION irpSp = NULL;
+  BOOLEAN hasLock = FALSE;
+  ULONG outBufferLen;
+  ULONG inBufferLen;
+  PACCESS_STATE accessState = NULL;
 
-	DDbgPrint("==> DokanGetAccessToken\n");
-    vcb = DeviceObject->DeviceExtension;
+  DDbgPrint("==> DokanGetAccessToken\n");
+  vcb = DeviceObject->DeviceExtension;
 
-	__try {
-		eventInfo		= (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-		ASSERT(eventInfo != NULL);
+  __try {
+    eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+    ASSERT(eventInfo != NULL);
 
-		if (Irp->RequestorMode != UserMode) {
-			DDbgPrint("  needs to be called from user-mode\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (Irp->RequestorMode != UserMode) {
+      DDbgPrint("  needs to be called from user-mode\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		if (GetIdentifierType(vcb) != VCB) {
-			DDbgPrint("  GetIdentifierType != VCB\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (GetIdentifierType(vcb) != VCB) {
+      DDbgPrint("  GetIdentifierType != VCB\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		irpSp = IoGetCurrentIrpStackLocation(Irp);
-		outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
-		inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
-		if (outBufferLen != sizeof(EVENT_INFORMATION) ||
-			inBufferLen != sizeof(EVENT_INFORMATION)) {
-			DDbgPrint("  wrong input or output buffer length\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
+    inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+    if (outBufferLen != sizeof(EVENT_INFORMATION) ||
+        inBufferLen != sizeof(EVENT_INFORMATION)) {
+      DDbgPrint("  wrong input or output buffer length\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-		KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
-		hasLock = TRUE;
+    ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+    KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
+    hasLock = TRUE;
 
-		// search corresponding IRP through pending IRP list
-		listHead = &vcb->Dcb->PendingIrp.ListHead;
+    // search corresponding IRP through pending IRP list
+    listHead = &vcb->Dcb->PendingIrp.ListHead;
 
-		for (thisEntry = listHead->Flink; thisEntry != listHead; thisEntry = nextEntry) {
+    for (thisEntry = listHead->Flink; thisEntry != listHead;
+         thisEntry = nextEntry) {
 
-			nextEntry = thisEntry->Flink;
+      nextEntry = thisEntry->Flink;
 
-			irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
+      irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
 
-			if (irpEntry->SerialNumber != eventInfo->SerialNumber)  {
-				continue;
-			}
+      if (irpEntry->SerialNumber != eventInfo->SerialNumber) {
+        continue;
+      }
 
-			// this irp must be IRP_MJ_CREATE
-			if (irpEntry->IrpSp->Parameters.Create.SecurityContext) {
-				accessState = irpEntry->IrpSp->Parameters.Create.SecurityContext->AccessState;
-			}
-			break;
-		}
-		KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
-		hasLock = FALSE;
+      // this irp must be IRP_MJ_CREATE
+      if (irpEntry->IrpSp->Parameters.Create.SecurityContext) {
+        accessState =
+            irpEntry->IrpSp->Parameters.Create.SecurityContext->AccessState;
+      }
+      break;
+    }
+    KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+    hasLock = FALSE;
 
-		if (accessState == NULL) {
-			DDbgPrint("  can't find pending Irp: %d\n", eventInfo->SerialNumber);
-			__leave;
-		}
+    if (accessState == NULL) {
+      DDbgPrint("  can't find pending Irp: %d\n", eventInfo->SerialNumber);
+      __leave;
+    }
 
-		accessToken = SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
-		if (accessToken == NULL) {
-			DDbgPrint("  accessToken == NULL\n");
-			__leave;
-		}
-		// NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
-		// BSOD on Windows XP.
-		status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
-			*SeTokenObjectType, KernelMode, &handle);
-		if (!NT_SUCCESS(status)) {
-			DDbgPrint("  ObOpenObjectByPointer failed: 0x%x\n", status);
-			__leave;
-		}
+    accessToken =
+        SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
+    if (accessToken == NULL) {
+      DDbgPrint("  accessToken == NULL\n");
+      __leave;
+    }
+    // NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
+    // BSOD on Windows XP.
+    status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
+                                   *SeTokenObjectType, KernelMode, &handle);
+    if (!NT_SUCCESS(status)) {
+      DDbgPrint("  ObOpenObjectByPointer failed: 0x%x\n", status);
+      __leave;
+    }
 
-		eventInfo->Operation.AccessToken.Handle = handle;
-		Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
-		status = STATUS_SUCCESS;
+    eventInfo->Operation.AccessToken.Handle = handle;
+    Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
+    status = STATUS_SUCCESS;
 
-	} __finally {
-		if (hasLock) {
-			KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
-		}
-	}
-	DDbgPrint("<== DokanGetAccessToken\n");
-	return status;
+  } __finally {
+    if (hasLock) {
+      KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+    }
+  }
+  DDbgPrint("<== DokanGetAccessToken\n");
+  return status;
 }

@@ -21,93 +21,85 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanExceptionFilter(
-__in PIRP Irp,
-__in PEXCEPTION_POINTERS  ExceptionPointer
-)
-{
-    UNREFERENCED_PARAMETER(Irp);
+DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer) {
+  UNREFERENCED_PARAMETER(Irp);
 
-    NTSTATUS Status = EXCEPTION_CONTINUE_SEARCH;
-    NTSTATUS ExceptionCode;
-    PEXCEPTION_RECORD ExceptRecord;
+  NTSTATUS Status = EXCEPTION_CONTINUE_SEARCH;
+  NTSTATUS ExceptionCode;
+  PEXCEPTION_RECORD ExceptRecord;
 
-    ExceptRecord = ExceptionPointer->ExceptionRecord;
-    ExceptionCode = ExceptRecord->ExceptionCode;
+  ExceptRecord = ExceptionPointer->ExceptionRecord;
+  ExceptionCode = ExceptRecord->ExceptionCode;
 
-    DbgPrint("-------------------------------------------------------------\n");
-    DbgPrint("Exception happends in Dokan (code %xh):\n", ExceptionCode);
-    DbgPrint(".exr %p;.cxr %p;\n", ExceptionPointer->ExceptionRecord,
-             ExceptionPointer->ContextRecord);
-    DbgPrint("-------------------------------------------------------------\n");
+  DbgPrint("-------------------------------------------------------------\n");
+  DbgPrint("Exception happends in Dokan (code %xh):\n", ExceptionCode);
+  DbgPrint(".exr %p;.cxr %p;\n", ExceptionPointer->ExceptionRecord,
+           ExceptionPointer->ContextRecord);
+  DbgPrint("-------------------------------------------------------------\n");
 
-    DbgBreakPoint();
+  DbgBreakPoint();
 
-    if (Status == EXCEPTION_EXECUTE_HANDLER ||
-        FsRtlIsNtstatusExpected(ExceptionCode)) {
-        //
-        // If the exception is expected execute our handler
-        //
+  if (Status == EXCEPTION_EXECUTE_HANDLER ||
+      FsRtlIsNtstatusExpected(ExceptionCode)) {
+    //
+    // If the exception is expected execute our handler
+    //
 
-        DDbgPrint("DokanExceptionFilter: Catching exception %xh\n", ExceptionCode);
+    DDbgPrint("DokanExceptionFilter: Catching exception %xh\n", ExceptionCode);
 
-        Status = EXCEPTION_EXECUTE_HANDLER;
+    Status = EXCEPTION_EXECUTE_HANDLER;
 
-    } else {
+  } else {
 
-        //
-        // Continue search for an higher level exception handler
-        //
+    //
+    // Continue search for an higher level exception handler
+    //
 
-        DDbgPrint("DokanExceptionFilter: Passing on exception %#x\n", ExceptionCode);
+    DDbgPrint("DokanExceptionFilter: Passing on exception %#x\n",
+              ExceptionCode);
 
-        Status = EXCEPTION_CONTINUE_SEARCH;
+    Status = EXCEPTION_CONTINUE_SEARCH;
+  }
 
-    }
-
-    return Status;
+  return Status;
 }
 
 NTSTATUS
-DokanExceptionHandler(
-    __in PDEVICE_OBJECT DeviceObject,
-    __in PIRP Irp,
-    __in NTSTATUS ExceptionCode)
-{
-    NTSTATUS Status;
+DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
+                      __in NTSTATUS ExceptionCode) {
+  NTSTATUS Status;
 
-    Status = ExceptionCode;
+  Status = ExceptionCode;
 
-    if (Irp) {
+  if (Irp) {
 
-        PDokanVCB  Vcb = NULL;
-        PIO_STACK_LOCATION IrpSp;
+    PDokanVCB Vcb = NULL;
+    PIO_STACK_LOCATION IrpSp;
 
-        IrpSp = IoGetCurrentIrpStackLocation(Irp);
-        Vcb = (PDokanVCB)DeviceObject->DeviceExtension;
+    IrpSp = IoGetCurrentIrpStackLocation(Irp);
+    Vcb = (PDokanVCB)DeviceObject->DeviceExtension;
 
-        if (NULL == Vcb) {
-            Status = STATUS_INVALID_PARAMETER;
-        } else if (Vcb->Identifier.Type != VCB) {
-            Status = STATUS_INVALID_PARAMETER;
-        } else if (!Vcb->Dcb->Mounted) {
-            Status = STATUS_VOLUME_DISMOUNTED;
-        }
-
-        if (Status == STATUS_PENDING) {
-            goto errorout;
-        }
-
-        DokanCompleteIrpRequest(Irp, Status, 0);
+    if (NULL == Vcb) {
+      Status = STATUS_INVALID_PARAMETER;
+    } else if (Vcb->Identifier.Type != VCB) {
+      Status = STATUS_INVALID_PARAMETER;
+    } else if (!Vcb->Dcb->Mounted) {
+      Status = STATUS_VOLUME_DISMOUNTED;
     }
 
-    else {
-
-        Status = STATUS_INVALID_PARAMETER;
+    if (Status == STATUS_PENDING) {
+      goto errorout;
     }
+
+    DokanCompleteIrpRequest(Irp, Status, 0);
+  }
+
+  else {
+
+    Status = STATUS_INVALID_PARAMETER;
+  }
 
 errorout:
 
-    return Status;
+  return Status;
 }
-

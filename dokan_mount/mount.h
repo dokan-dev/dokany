@@ -21,7 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-
 #ifndef _MOUNT_H_
 #define _MOUNT_H_
 
@@ -33,31 +32,25 @@ extern "C" {
 #endif
 
 typedef struct _MOUNT_ENTRY {
-	LIST_ENTRY		ListEntry;
-	DOKAN_CONTROL	MountControl;
+  LIST_ENTRY ListEntry;
+  DOKAN_CONTROL MountControl;
 } MOUNT_ENTRY, *PMOUNT_ENTRY;
 
-BOOL
-DokanControlMount(
-	LPCWSTR	MountPoint,
-	LPCWSTR	DeivceName);
+BOOL DokanControlMount(LPCWSTR MountPoint, LPCWSTR DeivceName);
 
-BOOL
-DokanControlUnmount(
-	LPCWSTR MountPoint);
+BOOL DokanControlUnmount(LPCWSTR MountPoint);
 
 /*
- * Currently this is only applicable to mount points that are a single drive letter.
+ * Currently this is only applicable to mount points that are a single drive
+ * letter.
  * This function will ensure drive letter mount points follow the format C:\
  */
-VOID
-NormalizeMountPoint(WCHAR *mountPoint, size_t mountPointMaxLength);
+VOID NormalizeMountPoint(WCHAR *mountPoint, size_t mountPointMaxLength);
 
 /*
  * Return TRUE if mountPoint has the format "C", "C:", or "C:\"
  */
-BOOL
-IsMountPointDriveLetter(WCHAR *mountPoint);
+BOOL IsMountPointDriveLetter(WCHAR *mountPoint);
 
 #ifdef __cplusplus
 }

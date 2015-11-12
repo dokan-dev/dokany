@@ -18,133 +18,125 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
-
 NTSTATUS
-DokanDispatchLock(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-	)
-{
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PFILE_OBJECT		fileObject;
-	PDokanCCB			ccb;
-	PDokanFCB			fcb;
-	PDokanVCB			vcb;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				eventLength;
+DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PFILE_OBJECT fileObject;
+  PDokanCCB ccb;
+  PDokanFCB fcb;
+  PDokanVCB vcb;
+  PEVENT_CONTEXT eventContext;
+  ULONG eventLength;
 
-	__try {
-		DDbgPrint("==> DokanLock\n");
-	
-		irpSp = IoGetCurrentIrpStackLocation(Irp);
-		fileObject = irpSp->FileObject;
+  __try {
+    DDbgPrint("==> DokanLock\n");
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		vcb = DeviceObject->DeviceExtension;
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject == NULL\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DokanPrintFileName(fileObject);
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		switch(irpSp->MinorFunction) {
-		case IRP_MN_LOCK:
-			DDbgPrint("  IRP_MN_LOCK\n");
-			break;
-		case IRP_MN_UNLOCK_ALL:
-			DDbgPrint("  IRP_MN_UNLOCK_ALL\n");
-			break;
-		case IRP_MN_UNLOCK_ALL_BY_KEY:
-			DDbgPrint("  IRP_MN_UNLOCK_ALL_BY_KEY\n");
-			break;
-		case IRP_MN_UNLOCK_SINGLE:
-			DDbgPrint("  IRP_MN_UNLOCK_SINGLE\n");
-			break;
-		default:
-			DDbgPrint("  unknown function : %d\n", irpSp->MinorFunction);
-			break;
-		}
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DokanPrintFileName(fileObject);
 
-		ccb = fileObject->FsContext2;
-		ASSERT(ccb != NULL);
+    switch (irpSp->MinorFunction) {
+    case IRP_MN_LOCK:
+      DDbgPrint("  IRP_MN_LOCK\n");
+      break;
+    case IRP_MN_UNLOCK_ALL:
+      DDbgPrint("  IRP_MN_UNLOCK_ALL\n");
+      break;
+    case IRP_MN_UNLOCK_ALL_BY_KEY:
+      DDbgPrint("  IRP_MN_UNLOCK_ALL_BY_KEY\n");
+      break;
+    case IRP_MN_UNLOCK_SINGLE:
+      DDbgPrint("  IRP_MN_UNLOCK_SINGLE\n");
+      break;
+    default:
+      DDbgPrint("  unknown function : %d\n", irpSp->MinorFunction);
+      break;
+    }
 
-		fcb = ccb->Fcb;
-		ASSERT(fcb != NULL);
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
 
-		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
-		if (eventContext == NULL) {
-			status = STATUS_INSUFFICIENT_RESOURCES;
-			__leave;
-		}
+    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-		eventContext->Context = ccb->UserContext;
-		DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+    if (eventContext == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
 
-		// copy file name to be locked
-		eventContext->Operation.Lock.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Lock.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+    eventContext->Context = ccb->UserContext;
+    DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-		// parameters of Lock
-		eventContext->Operation.Lock.ByteOffset = irpSp->Parameters.LockControl.ByteOffset;
-		if (irpSp->Parameters.LockControl.Length != NULL) {
-			eventContext->Operation.Lock.Length.QuadPart = irpSp->Parameters.LockControl.Length->QuadPart;
-		} else {
-			DDbgPrint("  LockControl.Length = NULL\n");
-		}
-		eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
+    // copy file name to be locked
+    eventContext->Operation.Lock.FileNameLength = fcb->FileName.Length;
+    RtlCopyMemory(eventContext->Operation.Lock.FileName, fcb->FileName.Buffer,
+                  fcb->FileName.Length);
 
-		// register this IRP to waiting IRP list and make it pending status
-		status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    // parameters of Lock
+    eventContext->Operation.Lock.ByteOffset =
+        irpSp->Parameters.LockControl.ByteOffset;
+    if (irpSp->Parameters.LockControl.Length != NULL) {
+      eventContext->Operation.Lock.Length.QuadPart =
+          irpSp->Parameters.LockControl.Length->QuadPart;
+    } else {
+      DDbgPrint("  LockControl.Length = NULL\n");
+    }
+    eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
 
-	} __finally {
+    // register this IRP to waiting IRP list and make it pending status
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
-        DokanCompleteIrpRequest(Irp, status, 0);
+  } __finally {
 
-		DDbgPrint("<== DokanLock\n");
-	}
+    DokanCompleteIrpRequest(Irp, status, 0);
 
-	return status;
+    DDbgPrint("<== DokanLock\n");
+  }
+
+  return status;
 }
 
+VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  PDokanCCB ccb;
+  PFILE_OBJECT fileObject;
 
-VOID
-DokanCompleteLock(
-	__in PIRP_ENTRY			IrpEntry,
-	__in PEVENT_INFORMATION	EventInfo
-	)
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	PDokanCCB			ccb;
-	PFILE_OBJECT		fileObject;
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
 
-	irp   = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;	
+  DDbgPrint("==> DokanCompleteLock\n");
 
-	DDbgPrint("==> DokanCompleteLock\n");
+  fileObject = irpSp->FileObject;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-	fileObject = irpSp->FileObject;
-	ccb = fileObject->FsContext2;
-	ASSERT(ccb != NULL);
+  ccb->UserContext = EventInfo->Context;
+  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-	ccb->UserContext = EventInfo->Context;
-	// DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+  DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
-    DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
-
-	DDbgPrint("<== DokanCompleteLock\n");
+  DDbgPrint("<== DokanCompleteLock\n");
 }

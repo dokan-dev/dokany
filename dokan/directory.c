@@ -28,564 +28,505 @@ typedef ULONG ULONG_PTR;
 #endif
 
 typedef struct _DOKAN_FIND_DATA {
-	WIN32_FIND_DATAW	FindData;
-	LIST_ENTRY			ListEntry;
+  WIN32_FIND_DATAW FindData;
+  LIST_ENTRY ListEntry;
 } DOKAN_FIND_DATA, *PDOKAN_FIND_DATA;
 
+VOID DokanFillDirInfo(PFILE_DIRECTORY_INFORMATION Buffer,
+                      PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-VOID
-DokanFillDirInfo(
-	PFILE_DIRECTORY_INFORMATION	Buffer,
-	PWIN32_FIND_DATAW			FindData,
-	ULONG						Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
 
-	Buffer->FileIndex = Index;
-	Buffer->FileAttributes = FindData->dwFileAttributes;
-	Buffer->FileNameLength = nameBytes;
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
-	Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
-	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
-	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
-	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
 
-	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
-	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
 
-	Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-	Buffer->LastAccessTime.LowPart  = FindData->ftLastAccessTime.dwLowDateTime;
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->LastWriteTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->ChangeTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillFullDirInfo(PFILE_FULL_DIR_INFORMATION Buffer,
+                          PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-VOID
-DokanFillFullDirInfo(
-	PFILE_FULL_DIR_INFORMATION	Buffer,
-	PWIN32_FIND_DATAW			FindData,
-	ULONG						Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
 
-	Buffer->FileIndex = Index;
-	Buffer->FileAttributes = FindData->dwFileAttributes;
-	Buffer->FileNameLength = nameBytes;
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
-	Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
-	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
-	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
-	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
 
-	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
-	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
 
-	Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-	Buffer->LastAccessTime.LowPart  = FindData->ftLastAccessTime.dwLowDateTime;
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->LastWriteTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->ChangeTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->EaSize = 0;
 
-	Buffer->EaSize = 0;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillIdFullDirInfo(PFILE_ID_FULL_DIR_INFORMATION Buffer,
+                            PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
 
-VOID
-DokanFillIdFullDirInfo(
-	PFILE_ID_FULL_DIR_INFORMATION	Buffer,
-	PWIN32_FIND_DATAW				FindData,
-	ULONG							Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
-	Buffer->FileIndex = Index;
-	Buffer->FileAttributes = FindData->dwFileAttributes;
-	Buffer->FileNameLength = nameBytes;
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
 
-	Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
-	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
-	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
-	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
 
-	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
-	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-	Buffer->LastAccessTime.LowPart  = FindData->ftLastAccessTime.dwLowDateTime;
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->LastWriteTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->EaSize = 0;
+  Buffer->FileId.QuadPart = 0;
 
-	Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->ChangeTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
-
-	Buffer->EaSize = 0;
-	Buffer->FileId.QuadPart = 0;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
+                            PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-VOID
-DokanFillIdBothDirInfo(
-	PFILE_ID_BOTH_DIR_INFORMATION	Buffer,
-	PWIN32_FIND_DATAW				FindData,
-	ULONG							Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
+  Buffer->ShortNameLength = 0;
 
-	Buffer->FileIndex = Index;
-	Buffer->FileAttributes = FindData->dwFileAttributes;
-	Buffer->FileNameLength = nameBytes;
-	Buffer->ShortNameLength = 0;
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
-	Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
-	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
-	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
-	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
 
-	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
-	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
 
-	Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-	Buffer->LastAccessTime.LowPart  = FindData->ftLastAccessTime.dwLowDateTime;
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->LastWriteTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->ChangeTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->EaSize = 0;
+  Buffer->FileId.QuadPart = 0;
 
-	Buffer->EaSize = 0;
-	Buffer->FileId.QuadPart = 0;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillBothDirInfo(PFILE_BOTH_DIR_INFORMATION Buffer,
+                          PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-VOID
-DokanFillBothDirInfo(
-	PFILE_BOTH_DIR_INFORMATION		Buffer,
-	PWIN32_FIND_DATAW				FindData,
-	ULONG							Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
+  Buffer->ShortNameLength = 0;
 
-	Buffer->FileIndex = Index;
-	Buffer->FileAttributes = FindData->dwFileAttributes;
-	Buffer->FileNameLength = nameBytes;
-	Buffer->ShortNameLength = 0;
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
 
-	Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
-	Buffer->EndOfFile.LowPart   = FindData->nFileSizeLow;
-	Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
-	Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-	ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
 
-	Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
-	Buffer->CreationTime.LowPart  = FindData->ftCreationTime.dwLowDateTime;
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
 
-	Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-	Buffer->LastAccessTime.LowPart  = FindData->ftLastAccessTime.dwLowDateTime;
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->LastWriteTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
 
-	Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-	Buffer->ChangeTime.LowPart  = FindData->ftLastWriteTime.dwLowDateTime;
+  Buffer->EaSize = 0;
 
-	Buffer->EaSize = 0;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillNamesInfo(PFILE_NAMES_INFORMATION Buffer,
+                        PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-VOID
-DokanFillNamesInfo(
-	PFILE_NAMES_INFORMATION	Buffer,
-	PWIN32_FIND_DATAW		FindData,
-	ULONG					Index)
-{
-	ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+  Buffer->FileIndex = Index;
+  Buffer->FileNameLength = nameBytes;
 
-	Buffer->FileIndex = Index;
-	Buffer->FileNameLength = nameBytes;
-
-	RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
-
 
 ULONG
-DokanFillDirectoryInformation(
-	FILE_INFORMATION_CLASS	DirectoryInfo,
-	PVOID					Buffer,
-	PULONG					LengthRemaining,
-	PWIN32_FIND_DATAW		FindData,
-	ULONG					Index)
-{
-	ULONG	nameBytes;
-	ULONG	thisEntrySize;
-	
-	nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
+                              PVOID Buffer, PULONG LengthRemaining,
+                              PWIN32_FIND_DATAW FindData, ULONG Index) {
+  ULONG nameBytes;
+  ULONG thisEntrySize;
 
-	thisEntrySize = nameBytes;
+  nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
-	switch (DirectoryInfo) {
-	case FileDirectoryInformation:
-		thisEntrySize += sizeof(FILE_DIRECTORY_INFORMATION);
-		break;
-	case FileFullDirectoryInformation:
-		thisEntrySize += sizeof(FILE_FULL_DIR_INFORMATION);
-		break;
-	case FileNamesInformation:
-		thisEntrySize += sizeof(FILE_NAMES_INFORMATION);
-		break;
-	case FileBothDirectoryInformation:
-		thisEntrySize += sizeof(FILE_BOTH_DIR_INFORMATION);
-		break;
-	case FileIdBothDirectoryInformation:
-		thisEntrySize += sizeof(FILE_ID_BOTH_DIR_INFORMATION);
-		break;
-	default:
-		break;
-	}
+  thisEntrySize = nameBytes;
 
-	// Must be align on a 8-byte boundary.
-	thisEntrySize = QuadAlign(thisEntrySize);
+  switch (DirectoryInfo) {
+  case FileDirectoryInformation:
+    thisEntrySize += sizeof(FILE_DIRECTORY_INFORMATION);
+    break;
+  case FileFullDirectoryInformation:
+    thisEntrySize += sizeof(FILE_FULL_DIR_INFORMATION);
+    break;
+  case FileNamesInformation:
+    thisEntrySize += sizeof(FILE_NAMES_INFORMATION);
+    break;
+  case FileBothDirectoryInformation:
+    thisEntrySize += sizeof(FILE_BOTH_DIR_INFORMATION);
+    break;
+  case FileIdBothDirectoryInformation:
+    thisEntrySize += sizeof(FILE_ID_BOTH_DIR_INFORMATION);
+    break;
+  default:
+    break;
+  }
 
-	// no more memory, don't fill any more
-	if (*LengthRemaining < thisEntrySize) {
-		DbgPrint("  no memory\n");
-		return 0;
-	}
+  // Must be align on a 8-byte boundary.
+  thisEntrySize = QuadAlign(thisEntrySize);
 
-	RtlZeroMemory(Buffer, thisEntrySize);
+  // no more memory, don't fill any more
+  if (*LengthRemaining < thisEntrySize) {
+    DbgPrint("  no memory\n");
+    return 0;
+  }
 
-	switch (DirectoryInfo) {
-	case FileDirectoryInformation:
-		DokanFillDirInfo(Buffer, FindData, Index);
-		break;
-	case FileFullDirectoryInformation:
-		DokanFillFullDirInfo(Buffer, FindData, Index);
-		break;
-	case FileNamesInformation:
-		DokanFillNamesInfo(Buffer, FindData, Index);
-		break;
-	case FileBothDirectoryInformation:
-		DokanFillBothDirInfo(Buffer, FindData, Index);
-		break;
-	case FileIdBothDirectoryInformation:
-		DokanFillIdBothDirInfo(Buffer, FindData, Index);
-		break;
-	default:
-		break;
-	}
+  RtlZeroMemory(Buffer, thisEntrySize);
 
-	*LengthRemaining -= thisEntrySize;
+  switch (DirectoryInfo) {
+  case FileDirectoryInformation:
+    DokanFillDirInfo(Buffer, FindData, Index);
+    break;
+  case FileFullDirectoryInformation:
+    DokanFillFullDirInfo(Buffer, FindData, Index);
+    break;
+  case FileNamesInformation:
+    DokanFillNamesInfo(Buffer, FindData, Index);
+    break;
+  case FileBothDirectoryInformation:
+    DokanFillBothDirInfo(Buffer, FindData, Index);
+    break;
+  case FileIdBothDirectoryInformation:
+    DokanFillIdBothDirInfo(Buffer, FindData, Index);
+    break;
+  default:
+    break;
+  }
 
-	return thisEntrySize;
+  *LengthRemaining -= thisEntrySize;
+
+  return thisEntrySize;
 }
 
+int WINAPI DokanFillFileData(PWIN32_FIND_DATAW FindData,
+                             PDOKAN_FILE_INFO FileInfo) {
+  PLIST_ENTRY listHead =
+      ((PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext)->DirListHead;
+  PDOKAN_FIND_DATA findData;
 
+  findData = (PDOKAN_FIND_DATA)malloc(sizeof(DOKAN_FIND_DATA));
+  if (findData == NULL) {
+    return 0;
+  }
+  ZeroMemory(findData, sizeof(DOKAN_FIND_DATA));
+  InitializeListHead(&findData->ListEntry);
 
+  findData->FindData = *FindData;
 
-
-int WINAPI
-DokanFillFileData(
-	PWIN32_FIND_DATAW	FindData,
-	PDOKAN_FILE_INFO	FileInfo)
-{
-    PLIST_ENTRY listHead = ((PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext)->DirListHead;
-	PDOKAN_FIND_DATA	findData;
-	
-    findData = (PDOKAN_FIND_DATA)malloc(sizeof(DOKAN_FIND_DATA));
-	if (findData == NULL) {
-		return 0;
-	}
-	ZeroMemory(findData, sizeof(DOKAN_FIND_DATA));
-	InitializeListHead(&findData->ListEntry);
-
-	findData->FindData = *FindData;
-
-	InsertTailList(listHead, &findData->ListEntry);
-	return 0;
+  InsertTailList(listHead, &findData->ListEntry);
+  return 0;
 }
 
-
-
-VOID
-ClearFindData(
-  PLIST_ENTRY	ListHead)
-{
-	// free all list entries
-	while(!IsListEmpty(ListHead)) {
-		PLIST_ENTRY entry = RemoveHeadList(ListHead);
-		PDOKAN_FIND_DATA find = CONTAINING_RECORD(entry, DOKAN_FIND_DATA, ListEntry);
-		free(find);
-	}
+VOID ClearFindData(PLIST_ENTRY ListHead) {
+  // free all list entries
+  while (!IsListEmpty(ListHead)) {
+    PLIST_ENTRY entry = RemoveHeadList(ListHead);
+    PDOKAN_FIND_DATA find =
+        CONTAINING_RECORD(entry, DOKAN_FIND_DATA, ListEntry);
+    free(find);
+  }
 }
-
-
 
 // add entry which matches the pattern specifed in EventContext
 // to the buffer specifed in EventInfo
 //
-LONG
-MatchFiles(
-	PEVENT_CONTEXT			EventContext,
-	PEVENT_INFORMATION		EventInfo,
-	PLIST_ENTRY				FindDataList,
-	BOOLEAN					PatternCheck)
-{
-	PLIST_ENTRY	thisEntry, listHead, nextEntry;
+LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
+                PLIST_ENTRY FindDataList, BOOLEAN PatternCheck) {
+  PLIST_ENTRY thisEntry, listHead, nextEntry;
 
-	ULONG	lengthRemaining = EventInfo->BufferLength;
-	PVOID	currentBuffer	= EventInfo->Buffer;
-	PVOID	lastBuffer		= currentBuffer;
-	ULONG	index = 0;
+  ULONG lengthRemaining = EventInfo->BufferLength;
+  PVOID currentBuffer = EventInfo->Buffer;
+  PVOID lastBuffer = currentBuffer;
+  ULONG index = 0;
 
-	PWCHAR pattern = NULL;
-	
-	// search patten is specified
-	if (PatternCheck && EventContext->Operation.Directory.SearchPatternLength != 0) {
-		pattern = (PWCHAR)((SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0]
-			+ (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
-	}
+  PWCHAR pattern = NULL;
 
-	listHead = FindDataList;
+  // search patten is specified
+  if (PatternCheck &&
+      EventContext->Operation.Directory.SearchPatternLength != 0) {
+    pattern = (PWCHAR)(
+        (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
+        (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
+  }
 
-    for(thisEntry = listHead->Flink;
-		thisEntry != listHead;
-		thisEntry = nextEntry) {
-        
-		PDOKAN_FIND_DATA	find;
-		nextEntry = thisEntry->Flink;
+  listHead = FindDataList;
 
-		find = CONTAINING_RECORD(thisEntry, DOKAN_FIND_DATA, ListEntry);
+  for (thisEntry = listHead->Flink; thisEntry != listHead;
+       thisEntry = nextEntry) {
 
-		DbgPrintW(L"FileMatch? : %s (%s,%d,%d)\n", find->FindData.cFileName,
-			(pattern ? pattern : L"null"),
-			EventContext->Operation.Directory.FileIndex, index);
+    PDOKAN_FIND_DATA find;
+    nextEntry = thisEntry->Flink;
 
-		// pattern is not specified or pattern match is ignore cases
-		if (!pattern || DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
-			
-			if (EventContext->Operation.Directory.FileIndex <= index) {
-				// index+1 is very important, should use next entry index
-				ULONG entrySize = DokanFillDirectoryInformation(
-					EventContext->Operation.Directory.FileInformationClass,
-					currentBuffer, &lengthRemaining, &find->FindData, index+1);
-				// buffer is full
-				if (entrySize == 0)
-					break;
-			
-				// pointer of the current last entry
-				lastBuffer = currentBuffer;
+    find = CONTAINING_RECORD(thisEntry, DOKAN_FIND_DATA, ListEntry);
 
-				// end if needs to return single entry
-				if (EventContext->Flags & SL_RETURN_SINGLE_ENTRY) {
-					DbgPrint("  =>return single entry\n");
-					index++;
-					break;
-				}
+    DbgPrintW(L"FileMatch? : %s (%s,%d,%d)\n", find->FindData.cFileName,
+              (pattern ? pattern : L"null"),
+              EventContext->Operation.Directory.FileIndex, index);
 
-				DbgPrint("  =>return\n");
+    // pattern is not specified or pattern match is ignore cases
+    if (!pattern ||
+        DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
 
-				// the offset of next entry
-				((PFILE_BOTH_DIR_INFORMATION)currentBuffer)->NextEntryOffset = entrySize;
+      if (EventContext->Operation.Directory.FileIndex <= index) {
+        // index+1 is very important, should use next entry index
+        ULONG entrySize = DokanFillDirectoryInformation(
+            EventContext->Operation.Directory.FileInformationClass,
+            currentBuffer, &lengthRemaining, &find->FindData, index + 1);
+        // buffer is full
+        if (entrySize == 0)
+          break;
 
-				// next buffer position
-                currentBuffer = (PCHAR)currentBuffer + entrySize;
-			}
-			index++;
-		}
-	}
+        // pointer of the current last entry
+        lastBuffer = currentBuffer;
 
-	// Since next of the last entry doesn't exist, clear next offset
-	((PFILE_BOTH_DIR_INFORMATION)lastBuffer)->NextEntryOffset = 0;
+        // end if needs to return single entry
+        if (EventContext->Flags & SL_RETURN_SINGLE_ENTRY) {
+          DbgPrint("  =>return single entry\n");
+          index++;
+          break;
+        }
 
-	// acctualy used length of buffer
-	EventInfo->BufferLength = EventContext->Operation.Directory.BufferLength - lengthRemaining;
+        DbgPrint("  =>return\n");
 
-	// NO_MORE_FILES
-	if (index <= EventContext->Operation.Directory.FileIndex)
-		return -1;
+        // the offset of next entry
+        ((PFILE_BOTH_DIR_INFORMATION)currentBuffer)->NextEntryOffset =
+            entrySize;
 
-	return index;
+        // next buffer position
+        currentBuffer = (PCHAR)currentBuffer + entrySize;
+      }
+      index++;
+    }
+  }
+
+  // Since next of the last entry doesn't exist, clear next offset
+  ((PFILE_BOTH_DIR_INFORMATION)lastBuffer)->NextEntryOffset = 0;
+
+  // acctualy used length of buffer
+  EventInfo->BufferLength =
+      EventContext->Operation.Directory.BufferLength - lengthRemaining;
+
+  // NO_MORE_FILES
+  if (index <= EventContext->Operation.Directory.FileIndex)
+    return -1;
+
+  return index;
 }
 
+VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                                  PDOKAN_INSTANCE DokanInstance) {
+  PEVENT_INFORMATION eventInfo;
+  DOKAN_FILE_INFO fileInfo;
+  PDOKAN_OPEN_INFO openInfo;
+  NTSTATUS status = STATUS_SUCCESS;
+  ULONG fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
+  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 +
+                          EventContext->Operation.Directory.BufferLength;
 
+  BOOLEAN patternCheck = TRUE;
 
-VOID
-DispatchDirectoryInformation(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	PEVENT_INFORMATION	eventInfo;
-	DOKAN_FILE_INFO		fileInfo;
-	PDOKAN_OPEN_INFO	openInfo;
-	NTSTATUS			status = STATUS_SUCCESS;
-	ULONG				fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
-	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Directory.BufferLength;
+  CheckFileName(EventContext->Operation.Directory.DirectoryName);
 
-	BOOLEAN				patternCheck = TRUE;
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	CheckFileName(EventContext->Operation.Directory.DirectoryName);
+  // check whether this is handled FileInfoClass
+  if (fileInfoClass != FileDirectoryInformation &&
+      fileInfoClass != FileFullDirectoryInformation &&
+      fileInfoClass != FileNamesInformation &&
+      fileInfoClass != FileIdBothDirectoryInformation &&
+      fileInfoClass != FileBothDirectoryInformation) {
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
+    DbgPrint("not suported type %d\n", fileInfoClass);
 
-	// check whether this is handled FileInfoClass
-	if (fileInfoClass != FileDirectoryInformation &&
-		fileInfoClass != FileFullDirectoryInformation &&
-		fileInfoClass != FileNamesInformation &&
-		fileInfoClass != FileIdBothDirectoryInformation &&
-		fileInfoClass != FileBothDirectoryInformation) {
-		
-		DbgPrint("not suported type %d\n", fileInfoClass);
+    // send directory info to driver
+    eventInfo->BufferLength = 0;
+    eventInfo->Status = STATUS_NOT_IMPLEMENTED;
+    SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+    free(eventInfo);
+    return;
+  }
 
-		// send directory info to driver
-		eventInfo->BufferLength = 0;
-		eventInfo->Status = STATUS_NOT_IMPLEMENTED;
-		SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-		free(eventInfo);
-		return;
-	}
+  // IMPORTANT!!
+  // this buffer length is fixed in MatchFiles funciton
+  eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
 
+  if (openInfo->DirListHead == NULL) {
+    openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
+    if (openInfo->DirListHead != NULL) {
+      InitializeListHead(openInfo->DirListHead);
+    } else {
+      eventInfo->BufferLength = 0;
+      eventInfo->Status = STATUS_NO_MEMORY;
+      SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+      free(eventInfo);
+      return;
+    }
+  }
 
-	// IMPORTANT!!
-	// this buffer length is fixed in MatchFiles funciton
-	eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
+  if (EventContext->Operation.Directory.FileIndex == 0) {
+    ClearFindData(openInfo->DirListHead);
+  }
 
-	if (openInfo->DirListHead == NULL) {
-		openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
-		if (openInfo->DirListHead != NULL) {
-			InitializeListHead(openInfo->DirListHead);
-		} else {
-			eventInfo->BufferLength = 0;
-			eventInfo->Status = STATUS_NO_MEMORY;
-			SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-			free(eventInfo);
-			return;
-		}
-	}
+  if (IsListEmpty(openInfo->DirListHead)) {
 
-	if (EventContext->Operation.Directory.FileIndex == 0) {
-		ClearFindData(openInfo->DirListHead);
-	}
+    DbgPrint("###FindFiles %04d\n", openInfo->EventId);
 
-	if (IsListEmpty(openInfo->DirListHead)) {
+    // if user defined FindFilesWithPattern
+    if (DokanInstance->DokanOperations->FindFilesWithPattern) {
+      LPCWSTR pattern = L"*";
 
-		DbgPrint("###FindFiles %04d\n", openInfo->EventId);
+      // if search pattern is specified
+      if (EventContext->Operation.Directory.SearchPatternLength != 0) {
+        pattern = (PWCHAR)(
+            (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
+            (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
+      }
 
-		// if user defined FindFilesWithPattern
-		if (DokanInstance->DokanOperations->FindFilesWithPattern) {
-			LPCWSTR	pattern = L"*";
-		
-			// if search pattern is specified
-			if (EventContext->Operation.Directory.SearchPatternLength != 0) {
-				pattern = (PWCHAR)((SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0]
-					+ (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
-			}
+      patternCheck = FALSE; // do not recheck pattern later in MatchFiles
 
-			patternCheck = FALSE; // do not recheck pattern later in MatchFiles
+      status = DokanInstance->DokanOperations->FindFilesWithPattern(
+          EventContext->Operation.Directory.DirectoryName, pattern,
+          DokanFillFileData, &fileInfo);
 
-			status = DokanInstance->DokanOperations->FindFilesWithPattern(
-				EventContext->Operation.Directory.DirectoryName,
-				pattern,
-				DokanFillFileData,
-				&fileInfo);
-	
-		} else if (DokanInstance->DokanOperations->FindFiles) {
+    } else if (DokanInstance->DokanOperations->FindFiles) {
 
-			patternCheck = TRUE; // do pattern check later in MachFiles
+      patternCheck = TRUE; // do pattern check later in MachFiles
 
-			// call FileSystem specifeid callback routine
-			status = DokanInstance->DokanOperations->FindFiles(
-				EventContext->Operation.Directory.DirectoryName,
-				DokanFillFileData,
-				&fileInfo);
-		} else {
-			status = STATUS_NOT_IMPLEMENTED;
-		}
-	}
+      // call FileSystem specifeid callback routine
+      status = DokanInstance->DokanOperations->FindFiles(
+          EventContext->Operation.Directory.DirectoryName, DokanFillFileData,
+          &fileInfo);
+    } else {
+      status = STATUS_NOT_IMPLEMENTED;
+    }
+  }
 
+  if (status != STATUS_SUCCESS) {
 
+    if (EventContext->Operation.Directory.FileIndex == 0) {
+      DbgPrint("  STATUS_NO_SUCH_FILE\n");
+      eventInfo->Status = STATUS_NO_SUCH_FILE;
+    } else {
+      DbgPrint("  STATUS_NO_MORE_FILES\n");
+      eventInfo->Status = STATUS_NO_MORE_FILES;
+    }
 
-	if (status != STATUS_SUCCESS) {
+    eventInfo->BufferLength = 0;
+    eventInfo->Operation.Directory.Index =
+        EventContext->Operation.Directory.FileIndex;
+    // free all of list entries
+    ClearFindData(openInfo->DirListHead);
+  } else {
+    LONG index;
+    eventInfo->Status = STATUS_SUCCESS;
 
-		if (EventContext->Operation.Directory.FileIndex == 0) {
-			DbgPrint("  STATUS_NO_SUCH_FILE\n");
-			eventInfo->Status = STATUS_NO_SUCH_FILE;
-		} else {
-			DbgPrint("  STATUS_NO_MORE_FILES\n");
-			eventInfo->Status = STATUS_NO_MORE_FILES;
-		}
+    DbgPrint("index from %d\n", EventContext->Operation.Directory.FileIndex);
+    // extract entries that match search pattern from FindFiles result
+    index = MatchFiles(EventContext, eventInfo, openInfo->DirListHead,
+                       patternCheck);
 
-		eventInfo->BufferLength = 0;
-		eventInfo->Operation.Directory.Index = EventContext->Operation.Directory.FileIndex;
-		// free all of list entries
-		ClearFindData(openInfo->DirListHead);
-	} else {
-		LONG	index;
-		eventInfo->Status = STATUS_SUCCESS;
+    // there is no matched file
+    if (index < 0) {
+      if (EventContext->Operation.Directory.FileIndex == 0) {
+        DbgPrint("  STATUS_NO_SUCH_FILE\n");
+        eventInfo->Status = STATUS_NO_SUCH_FILE;
+      } else {
+        DbgPrint("  STATUS_NO_MORE_FILES\n");
+        eventInfo->Status = STATUS_NO_MORE_FILES;
+      }
+      eventInfo->BufferLength = 0;
+      eventInfo->Operation.Directory.Index =
+          EventContext->Operation.Directory.FileIndex;
 
-		DbgPrint("index from %d\n", EventContext->Operation.Directory.FileIndex);
-		// extract entries that match search pattern from FindFiles result
-		index = MatchFiles(EventContext, eventInfo, openInfo->DirListHead, patternCheck);
+      ClearFindData(openInfo->DirListHead);
 
-		// there is no matched file
-		if (index <0) {
-			if (EventContext->Operation.Directory.FileIndex == 0) {
-				DbgPrint("  STATUS_NO_SUCH_FILE\n");
-				eventInfo->Status = STATUS_NO_SUCH_FILE;
-			} else {
-				DbgPrint("  STATUS_NO_MORE_FILES\n");
-				eventInfo->Status = STATUS_NO_MORE_FILES;
-			}
-			eventInfo->BufferLength = 0;
-			eventInfo->Operation.Directory.Index = EventContext->Operation.Directory.FileIndex;
+    } else {
+      DbgPrint("index to %d\n", index);
+      eventInfo->Operation.Directory.Index = index;
+    }
+  }
 
-			ClearFindData(openInfo->DirListHead);
+  // information for FileSystem
+  openInfo->UserContext = fileInfo.Context;
 
-		} else {
-			DbgPrint("index to %d\n", index);
-			eventInfo->Operation.Directory.Index = index;
-		}
-		
-	}
-
-	// information for FileSystem
-	openInfo->UserContext = fileInfo.Context;
-
-	// send directory information to driver
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-	free(eventInfo);
-	return;
+  // send directory information to driver
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  free(eventInfo);
+  return;
 }
 
-
-
-#define DOS_STAR                        (L'<')
-#define DOS_QM                          (L'>')
-#define DOS_DOT                         (L'"')
+#define DOS_STAR (L'<')
+#define DOS_QM (L'>')
+#define DOS_DOT (L'"')
 
 // check whether Name matches Expression
 // Expression can contain "?"(any one character) and "*" (any string)
@@ -600,95 +541,92 @@ DispatchDirectoryInformation(
 //        contiguous DOS_QMs.
 // DOS_STAR Matches zero or more characters until encountering and matching
 //          the final . in the name.
-BOOL DOKANAPI
-DokanIsNameInExpression(
-	LPCWSTR		Expression, // matching pattern
-	LPCWSTR		Name, // file name
-	BOOL		IgnoreCase)
-{
-	ULONG ei = 0;
-	ULONG ni = 0;
+BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, // matching pattern
+                                      LPCWSTR Name,       // file name
+                                      BOOL IgnoreCase) {
+  ULONG ei = 0;
+  ULONG ni = 0;
 
-	while (Expression[ei] != '\0') {
+  while (Expression[ei] != '\0') {
 
-		if (Expression[ei] == L'*') {
-			ei++;
-			if (Expression[ei] == '\0')
-				return TRUE;
+    if (Expression[ei] == L'*') {
+      ei++;
+      if (Expression[ei] == '\0')
+        return TRUE;
 
-			while (Name[ni] != '\0') {
-				if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
-					return TRUE;
-				ni++;
-			}
+      while (Name[ni] != '\0') {
+        if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
+          return TRUE;
+        ni++;
+      }
 
-		} else if (Expression[ei] == DOS_STAR) {
+    } else if (Expression[ei] == DOS_STAR) {
 
-			ULONG p = ni;
-			ULONG lastDot = 0;
-			ei++;
-			
-			while (Name[p] != '\0') {
-				if (Name[p] == L'.')
-					lastDot = p;
-				p++;
-			}
-			
-			BOOL endReached = FALSE;
-			while (!endReached) {
+      ULONG p = ni;
+      ULONG lastDot = 0;
+      ei++;
 
-				endReached = (Name[ni] == '\0' || ni == lastDot);
+      while (Name[p] != '\0') {
+        if (Name[p] == L'.')
+          lastDot = p;
+        p++;
+      }
 
-				if (!endReached) {
-					if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
-						return TRUE;
+      BOOL endReached = FALSE;
+      while (!endReached) {
 
-					ni++;
-				}
-			}
-			
-		} else if (Expression[ei] == DOS_QM)  {
-			
-			ei++;
-			if (Name[ni] != L'.') {
-				ni++;
-			} else {
+        endReached = (Name[ni] == '\0' || ni == lastDot);
 
-				ULONG p = ni + 1;
-				while (Name[p] != '\0') {
-					if (Name[p] == L'.')
-						break;
-					p++;
-				}
+        if (!endReached) {
+          if (DokanIsNameInExpression(&Expression[ei], &Name[ni], IgnoreCase))
+            return TRUE;
 
-				if (Name[p] == L'.')
-					ni++;
-			}
+          ni++;
+        }
+      }
 
-		} else if (Expression[ei] == DOS_DOT) {
-			ei++;
+    } else if (Expression[ei] == DOS_QM) {
 
-			if (Name[ni] == L'.')
-				ni++;
+      ei++;
+      if (Name[ni] != L'.') {
+        ni++;
+      } else {
 
-		} else {
-			if (Expression[ei] == L'?') {
-				ei++; ni++;
-			} else if(IgnoreCase && towupper(Expression[ei]) == towupper(Name[ni])) {
-				ei++; ni++;
-			} else if(!IgnoreCase && Expression[ei] == Name[ni]) {
-				ei++; ni++;
-			} else {
-				return FALSE;
-			}
-		}
-	}
+        ULONG p = ni + 1;
+        while (Name[p] != '\0') {
+          if (Name[p] == L'.')
+            break;
+          p++;
+        }
 
-	if (ei == wcslen(Expression) && ni == wcslen(Name))
-		return TRUE;
-	
+        if (Name[p] == L'.')
+          ni++;
+      }
 
-	return FALSE;
+    } else if (Expression[ei] == DOS_DOT) {
+      ei++;
+
+      if (Name[ni] == L'.')
+        ni++;
+
+    } else {
+      if (Expression[ei] == L'?') {
+        ei++;
+        ni++;
+      } else if (IgnoreCase && towupper(Expression[ei]) == towupper(Name[ni])) {
+        ei++;
+        ni++;
+      } else if (!IgnoreCase && Expression[ei] == Name[ni]) {
+        ei++;
+        ni++;
+      } else {
+        return FALSE;
+      }
+    }
+  }
+
+  if (ei == wcslen(Expression) && ni == wcslen(Name))
+    return TRUE;
+
+  return FALSE;
 }
-
-

@@ -22,94 +22,82 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <process.h>
 #include "dokani.h"
 
-BOOL DOKANAPI
-DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo)
-{
-	BOOL	status;
-	ULONG	returnedLength;
-	PDOKAN_INSTANCE		instance;
-	PDOKAN_OPEN_INFO	openInfo;
-	PEVENT_CONTEXT		eventContext;
-	PEVENT_INFORMATION	eventInfo;
-	ULONG				eventInfoSize = sizeof(EVENT_INFORMATION);
-	WCHAR				rawDeviceName[MAX_PATH];
+BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
+  BOOL status;
+  ULONG returnedLength;
+  PDOKAN_INSTANCE instance;
+  PDOKAN_OPEN_INFO openInfo;
+  PEVENT_CONTEXT eventContext;
+  PEVENT_INFORMATION eventInfo;
+  ULONG eventInfoSize = sizeof(EVENT_INFORMATION);
+  WCHAR rawDeviceName[MAX_PATH];
 
-	openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
+  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
 
-	if (openInfo == NULL) {
-		return FALSE;
-	}
+  if (openInfo == NULL) {
+    return FALSE;
+  }
 
-	eventContext = openInfo->EventContext;
-	if (eventContext == NULL) {
-		return FALSE;
-	}
+  eventContext = openInfo->EventContext;
+  if (eventContext == NULL) {
+    return FALSE;
+  }
 
-	instance = openInfo->DokanInstance;
-	if (instance == NULL) {
-		return FALSE;
-	}
+  instance = openInfo->DokanInstance;
+  if (instance == NULL) {
+    return FALSE;
+  }
 
-	eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
-	if (eventInfo == NULL) {
-		return FALSE;
-	}
-	RtlZeroMemory(eventInfo, eventInfoSize);
+  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+  if (eventInfo == NULL) {
+    return FALSE;
+  }
+  RtlZeroMemory(eventInfo, eventInfoSize);
 
-	eventInfo->SerialNumber = eventContext->SerialNumber;
-	eventInfo->Operation.ResetTimeout.Timeout = Timeout;
+  eventInfo->SerialNumber = eventContext->SerialNumber;
+  eventInfo->Operation.ResetTimeout.Timeout = Timeout;
 
-	status = SendToDevice(
-				GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
-				IOCTL_RESET_TIMEOUT,
-				eventInfo,
-				eventInfoSize,
-				NULL,
-				0,
-				&returnedLength);
-	free(eventInfo);
-	return status;
+  status = SendToDevice(
+      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+      IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
+  free(eventInfo);
+  return status;
 }
 
+UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
+  HANDLE device;
+  ULONG ReturnedLength;
+  WCHAR rawDeviceName[MAX_PATH];
 
-UINT WINAPI
-DokanKeepAlive(
-	PDOKAN_INSTANCE DokanInstance)
-{
-	HANDLE	device;
-	ULONG	ReturnedLength;
-	WCHAR	rawDeviceName[MAX_PATH];
+  device = CreateFile(
+      GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+      GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+      FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
+      NULL,                               // lpSecurityAttributes
+      OPEN_EXISTING,                      // dwCreationDistribution
+      0,                                  // dwFlagsAndAttributes
+      NULL                                // hTemplateFile
+      );
 
-	device = CreateFile(
-				GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
-				GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
-                FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
-                NULL,                               // lpSecurityAttributes
-                OPEN_EXISTING,                      // dwCreationDistribution
-                0,                                  // dwFlagsAndAttributes
-                NULL                                // hTemplateFile
-			);
+  while (device != INVALID_HANDLE_VALUE) {
 
-    while(device != INVALID_HANDLE_VALUE) {
+    BOOL status = DeviceIoControl(device,          // Handle to device
+                                  IOCTL_KEEPALIVE, // IO Control code
+                                  NULL,            // Input Buffer to driver.
+                                  0,    // Length of input buffer in bytes.
+                                  NULL, // Output Buffer from driver.
+                                  0,    // Length of output buffer in bytes.
+                                  &ReturnedLength, // Bytes placed in buffer.
+                                  NULL             // synchronous call
+                                  );
+    if (!status) {
+      break;
+    }
+    Sleep(DOKAN_KEEPALIVE_TIME);
+  }
 
-		BOOL status = DeviceIoControl(
-					device,                 // Handle to device
-					IOCTL_KEEPALIVE,			// IO Control code
-					NULL,		    // Input Buffer to driver.
-					0,			// Length of input buffer in bytes.
-					NULL,           // Output Buffer from driver.
-					0,			// Length of output buffer in bytes.
-					&ReturnedLength,		    // Bytes placed in buffer.
-					NULL                    // synchronous call
-				);
-		if (!status) {
-			break;
-		}
-		Sleep(DOKAN_KEEPALIVE_TIME);
-	}
+  CloseHandle(device);
 
-	CloseHandle(device);
-
-	_endthreadex(0);
-	return STATUS_SUCCESS;
+  _endthreadex(0);
+  return STATUS_SUCCESS;
 }

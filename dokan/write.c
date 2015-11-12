@@ -22,103 +22,91 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-VOID SendWriteRequest(
-	HANDLE				Handle,
-	PEVENT_INFORMATION	EventInfo,
-	ULONG				EventLength,
-	PVOID				Buffer,
-	ULONG				BufferLength)
-{
-	BOOL	status;
-	ULONG	returnedLength;
+VOID SendWriteRequest(HANDLE Handle, PEVENT_INFORMATION EventInfo,
+                      ULONG EventLength, PVOID Buffer, ULONG BufferLength) {
+  BOOL status;
+  ULONG returnedLength;
 
-	DbgPrint("SendWriteRequest\n");
+  DbgPrint("SendWriteRequest\n");
 
-	status = DeviceIoControl(
-					Handle,		            // Handle to device
-					IOCTL_EVENT_WRITE,		// IO Control code
-					EventInfo,			    // Input Buffer to driver.
-					EventLength,			// Length of input buffer in bytes.
-					Buffer,	                // Output Buffer from driver.
-					BufferLength,			// Length of output buffer in bytes.
-					&returnedLength,		// Bytes placed in buffer.
-					NULL                    // synchronous call
-                            );
+  status = DeviceIoControl(Handle,            // Handle to device
+                           IOCTL_EVENT_WRITE, // IO Control code
+                           EventInfo,         // Input Buffer to driver.
+                           EventLength,     // Length of input buffer in bytes.
+                           Buffer,          // Output Buffer from driver.
+                           BufferLength,    // Length of output buffer in bytes.
+                           &returnedLength, // Bytes placed in buffer.
+                           NULL             // synchronous call
+                           );
 
-	if ( !status ) {
-		DWORD errorCode = GetLastError();
-		DbgPrint("Ioctl failed with code %d\n", errorCode );
-	}
+  if (!status) {
+    DWORD errorCode = GetLastError();
+    DbgPrint("Ioctl failed with code %d\n", errorCode);
+  }
 
-	DbgPrint("SendWriteRequest got %d bytes\n", returnedLength);
+  DbgPrint("SendWriteRequest got %d bytes\n", returnedLength);
 }
 
+VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                   PDOKAN_INSTANCE DokanInstance) {
+  PEVENT_INFORMATION eventInfo;
+  PDOKAN_OPEN_INFO openInfo;
+  ULONG writtenLength = 0;
+  int status;
+  DOKAN_FILE_INFO fileInfo;
+  BOOL bufferAllocated = FALSE;
+  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
-VOID
-DispatchWrite(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	PEVENT_INFORMATION		eventInfo;
-	PDOKAN_OPEN_INFO		openInfo;
-	ULONG					writtenLength = 0;
-	int						status;
-	DOKAN_FILE_INFO			fileInfo;
-	BOOL					bufferAllocated = FALSE;
-	ULONG					sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
+  // Since driver requested bigger memory,
+  // allocate enough memory and send it to driver
+  if (EventContext->Operation.Write.RequestLength > 0) {
+    ULONG contextLength = EventContext->Operation.Write.RequestLength;
+    PEVENT_CONTEXT contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
+    if (contextBuf == NULL) {
+      free(eventInfo);
+      return;
+    }
+    SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf,
+                     contextLength);
+    EventContext = contextBuf;
+    bufferAllocated = TRUE;
+  }
 
-	// Since driver requested bigger memory,
-	// allocate enough memory and send it to driver
-	if (EventContext->Operation.Write.RequestLength > 0) {
-		ULONG contextLength = EventContext->Operation.Write.RequestLength;
-		PEVENT_CONTEXT	contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
-		if (contextBuf == NULL) {
-			free(eventInfo);
-			return;
-		}
-		SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf, contextLength);
-		EventContext = contextBuf;
-		bufferAllocated = TRUE;
-	}
+  CheckFileName(EventContext->Operation.Write.FileName);
 
-	CheckFileName(EventContext->Operation.Write.FileName);
+  DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-	DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  if (DokanInstance->DokanOperations->WriteFile) {
+    status = DokanInstance->DokanOperations->WriteFile(
+        EventContext->Operation.Write.FileName,
+        (PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
+        EventContext->Operation.Write.BufferLength, &writtenLength,
+        EventContext->Operation.Write.ByteOffset.QuadPart, &fileInfo);
+  } else {
+    status = STATUS_NOT_IMPLEMENTED;
+  }
 
-	if (DokanInstance->DokanOperations->WriteFile) {
-		status = DokanInstance->DokanOperations->WriteFile(
-			EventContext->Operation.Write.FileName,
-			(PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
-			EventContext->Operation.Write.BufferLength,
-			&writtenLength,
-			EventContext->Operation.Write.ByteOffset.QuadPart,
-			&fileInfo);
-	} else {
-		status = STATUS_NOT_IMPLEMENTED;
-	}
+  if (openInfo != NULL)
+    openInfo->UserContext = fileInfo.Context;
+  eventInfo->BufferLength = 0;
 
-	if (openInfo != NULL)
-		openInfo->UserContext = fileInfo.Context;
-	eventInfo->BufferLength = 0;
-	
-	if (status == STATUS_SUCCESS) {
-		eventInfo->Status = status;
-		eventInfo->BufferLength = writtenLength;
-		eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
-			EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
-	} else {
-		eventInfo->Status = STATUS_INVALID_PARAMETER;
-	}
+  if (status == STATUS_SUCCESS) {
+    eventInfo->Status = status;
+    eventInfo->BufferLength = writtenLength;
+    eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
+        EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
+  } else {
+    eventInfo->Status = STATUS_INVALID_PARAMETER;
+  }
 
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-	free(eventInfo);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  free(eventInfo);
 
-	if (bufferAllocated)
-		free(EventContext);
+  if (bufferAllocated)
+    free(EventContext);
 
-	return;
+  return;
 }

@@ -18,128 +18,123 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
-
-
 NTSTATUS
-DokanDispatchClose(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-	)
+DokanDispatchClose(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 /*++
 
 Routine Description:
 
-	This device control dispatcher handles create & close IRPs.
+        This device control dispatcher handles create & close IRPs.
 
 Arguments:
 
-	DeviceObject - Context for the activity.
-	Irp 		 - The device control argument block.
+        DeviceObject - Context for the activity.
+        Irp 		 - The device control argument block.
 
 Return Value:
 
-	NTSTATUS
+        NTSTATUS
 
 --*/
 {
-	PDokanVCB			vcb;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PFILE_OBJECT		fileObject;
-	PDokanCCB			ccb;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				eventLength;
-	PDokanFCB			fcb;
+  PDokanVCB vcb;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PFILE_OBJECT fileObject;
+  PDokanCCB ccb;
+  PEVENT_CONTEXT eventContext;
+  ULONG eventLength;
+  PDokanFCB fcb;
 
-	__try {
+  __try {
 
-		DDbgPrint("==> DokanClose\n");
-	
-		irpSp = IoGetCurrentIrpStackLocation(Irp);
-		fileObject = irpSp->FileObject;
+    DDbgPrint("==> DokanClose\n");
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject is NULL\n");
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DokanPrintFileName(fileObject);
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject is NULL\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		vcb = DeviceObject->DeviceExtension;
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DokanPrintFileName(fileObject);
 
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+    vcb = DeviceObject->DeviceExtension;
 
-			if (fileObject->FsContext2) {
-				ccb = fileObject->FsContext2;
-				ASSERT(ccb != NULL);
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
 
-				fcb = ccb->Fcb;
-				ASSERT(fcb != NULL);
+      if (fileObject->FsContext2) {
+        ccb = fileObject->FsContext2;
+        ASSERT(ccb != NULL);
 
-				DDbgPrint("   Free CCB:%p\n", ccb);
-				DokanFreeCCB(ccb);
+        fcb = ccb->Fcb;
+        ASSERT(fcb != NULL);
 
-				DokanFreeFCB(fcb);
-			}
+        DDbgPrint("   Free CCB:%p\n", ccb);
+        DokanFreeCCB(ccb);
 
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+        DokanFreeFCB(fcb);
+      }
 
-		ccb = fileObject->FsContext2;
-		ASSERT(ccb != NULL);
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		fcb = ccb->Fcb;
-		ASSERT(fcb != NULL);
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
 
-		eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
-		if (eventContext == NULL) {
-			//status = STATUS_INSUFFICIENT_RESOURCES;
-			DDbgPrint("   eventContext == NULL\n");
-			DDbgPrint("   Free CCB:%p\n", ccb);
-			DokanFreeCCB(ccb);
-			DokanFreeFCB(fcb);
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-		eventContext->Context = ccb->UserContext;
-		DDbgPrint("   UserContext:%X\n", (ULONG)ccb->UserContext);
+    if (eventContext == NULL) {
+      // status = STATUS_INSUFFICIENT_RESOURCES;
+      DDbgPrint("   eventContext == NULL\n");
+      DDbgPrint("   Free CCB:%p\n", ccb);
+      DokanFreeCCB(ccb);
+      DokanFreeFCB(fcb);
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		// copy the file name to be closed
-		eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
+    eventContext->Context = ccb->UserContext;
+    DDbgPrint("   UserContext:%X\n", (ULONG)ccb->UserContext);
 
-		DDbgPrint("   Free CCB:%p\n", ccb);
-		DokanFreeCCB(ccb);
+    // copy the file name to be closed
+    eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
+    RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer,
+                  fcb->FileName.Length);
 
-		DokanFreeFCB(fcb);
+    DDbgPrint("   Free CCB:%p\n", ccb);
+    DokanFreeCCB(ccb);
 
-		// Close can not be pending status
-		// don't register this IRP
-		//status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext->SerialNumber, 0);
+    DokanFreeFCB(fcb);
 
-		// inform it to user-mode
-		DokanEventNotification(&vcb->Dcb->NotifyEvent, eventContext);
+    // Close can not be pending status
+    // don't register this IRP
+    // status = DokanRegisterPendingIrp(DeviceObject, Irp,
+    // eventContext->SerialNumber, 0);
 
-		status = STATUS_SUCCESS;
+    // inform it to user-mode
+    DokanEventNotification(&vcb->Dcb->NotifyEvent, eventContext);
 
-	} __finally {
+    status = STATUS_SUCCESS;
 
-        DokanCompleteIrpRequest(Irp, status, 0);
+  } __finally {
 
-		DDbgPrint("<== DokanClose\n");
-	}
+    DokanCompleteIrpRequest(Irp, status, 0);
 
-	return status;
+    DDbgPrint("<== DokanClose\n");
+  }
+
+  return status;
 }
-
