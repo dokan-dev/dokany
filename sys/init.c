@@ -502,25 +502,19 @@ DokanCreateDiskDevice(
 	dcb->DiskDeviceName =  AllocateUnicodeString(diskDeviceNameBuf);
 	dcb->FileSystemDeviceName = AllocateUnicodeString(fsDeviceNameBuf);
 
-	if (dcb->SymbolicLinkName == NULL) {
-		DDbgPrint("  Can't allocate memory for SymbolicLinkName");
-		ExDeleteResourceLite(&dcb->Resource);
-		IoDeleteDevice(diskDeviceObject);
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
+	if (dcb->SymbolicLinkName == NULL ||
+		dcb->DiskDeviceName == NULL ||
+		dcb->FileSystemDeviceName == NULL) {
 
-	if (dcb->DiskDeviceName == NULL) {
-		DDbgPrint("  Can't allocate memory for DiskDeviceName");
-		ExFreePool(dcb->SymbolicLinkName);
-		ExDeleteResourceLite(&dcb->Resource);
-		IoDeleteDevice(diskDeviceObject);
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
+		DDbgPrint("  Failed to allocate memory for device naming");
 
-	if (dcb->FileSystemDeviceName == NULL) {
-		DDbgPrint("  Can't allocate memory for FileSystemDeviceName");
-		ExFreePool(dcb->SymbolicLinkName);
-		ExFreePool(dcb->DiskDeviceName);
+		if (dcb->SymbolicLinkName != NULL)
+			ExFreePool(dcb->SymbolicLinkName);
+		if (dcb->DiskDeviceName != NULL)
+			ExFreePool(dcb->DiskDeviceName);
+		if (dcb->FileSystemDeviceName != NULL)
+			ExFreePool(dcb->FileSystemDeviceName);
+
 		ExDeleteResourceLite(&dcb->Resource);
 		IoDeleteDevice(diskDeviceObject);
 		return STATUS_INSUFFICIENT_RESOURCES;
