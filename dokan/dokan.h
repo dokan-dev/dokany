@@ -49,14 +49,14 @@ extern "C" {
 #define DOKAN_OPTION_STDERR 2        // ouput debug message to stderr
 #define DOKAN_OPTION_ALT_STREAM 4    // use alternate stream
 #define DOKAN_OPTION_WRITE_PROTECT 8 // mount drive as write-protected.
-#define DOKAN_OPTION_NETWORK                                                   \
-  16 // use network drive, you need to install Dokan network provider.
+#define DOKAN_OPTION_NETWORK 16		 // use network drive, you need to
+                                     // install Dokan network provider.
 #define DOKAN_OPTION_REMOVABLE 32 // use removable drive
 
 typedef struct _DOKAN_OPTIONS {
   USHORT Version; // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
-  USHORT
-      ThreadCount; // number of threads to be used internally by Dokan library
+  USHORT ThreadCount; // number of threads to be
+					  // used internally by Dokan library
   ULONG Options;   // combination of DOKAN_OPTIONS_*
   ULONG64 GlobalContext; // FileSystem can store anything here
   LPCWSTR MountPoint; //  mount point "M:\" (drive letter) or "C:\mount\dokan"
@@ -67,8 +67,8 @@ typedef struct _DOKAN_OPTIONS {
 typedef struct _DOKAN_FILE_INFO {
   ULONG64 Context;      // FileSystem can store anything here
   ULONG64 DokanContext; // Used internally, never modify
-  PDOKAN_OPTIONS
-      DokanOptions; // A pointer to DOKAN_OPTIONS which was passed to DokanMain.
+  PDOKAN_OPTIONS DokanOptions; // A pointer to DOKAN_OPTIONS
+							   // which was passed to DokanMain.
   ULONG ProcessId;  // process id for the thread that originally requested a
                     // given I/O operation
   UCHAR IsDirectory;   // requesting a directory file
@@ -100,8 +100,8 @@ typedef struct _DOKAN_OPERATIONS {
   // (https://support.microsoft.com/en-us/kb/113996)
 
   // CreateFile
-  //	 In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already
-  //existing file,
+  //   In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already
+  //   existing file,
   //   you have to SetLastError(ERROR_ALREADY_EXISTS)
   //   If file is a directory, CreateFile (not OpenDirectory) may be called.
   //   In this case, CreateFile should return STATUS_SUCCESS when that directory
@@ -190,8 +190,7 @@ typedef struct _DOKAN_OPERATIONS {
   // STATUS_OBJECT_NAME_NOT_FOUND.
   // When you return STATUS_SUCCESS, you get a Cleanup call afterwards with
   // FileInfo->DeleteOnClose set to TRUE and only then you have to actually
-  // delete
-  // the file being closed.
+  // delete the file being closed.
   NTSTATUS(DOKAN_CALLBACK *DeleteFile)
   (LPCWSTR, // FileName
    PDOKAN_FILE_INFO);
