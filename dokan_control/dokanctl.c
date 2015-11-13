@@ -117,7 +117,7 @@ int Unmount(LPCWSTR MountPoint, BOOL ForceUnmount) {
 
 int InstallDriver(LPCWSTR driverFullPath) {
   fprintf(stderr, "Installing driver...\n");
-  if (!PathFileExistsW(driverFullPath)) {
+  if (GetFileAttributes(driverFullPath) == INVALID_FILE_ATTRIBUTES) {
     fwprintf(stderr, L"Error the file '%s' does not exist.\n", driverFullPath);
     return EXIT_FAILURE;
   }
@@ -134,7 +134,7 @@ int InstallDriver(LPCWSTR driverFullPath) {
 
 int InstallMounter(LPCWSTR mounterFullPath) {
   fprintf(stderr, "Installing mounter...\n");
-  if (!PathFileExistsW(mounterFullPath)) {
+  if (GetFileAttributes(mounterFullPath) == INVALID_FILE_ATTRIBUTES) {
     fwprintf(stderr, L"Error the file '%s' does not exist.\n", mounterFullPath);
     return EXIT_FAILURE;
   }
