@@ -124,24 +124,24 @@ UninstPage instfiles
 !macroend
 
 Section -Prerequisites
-  ; Check VC++ 2013 is installed on the system
+  ; Check VC++ 2015s is installed on the system
   
   SetOutPath "$INSTDIR"
   
   IfSilent endVCRedist
   ${If} ${RunningX64}
 	SetRegView 32
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A2563E55-3BEC-3828-8D67-E5E8B9E8B675}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x86
 	${EndIf}
 	SetRegView 64
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A749D8E6-B613-3BE3-8F5F-045C84EBA29B}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{0D3E9E15-DE7A-300B-96F1-B4AF12B96488}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x64
 	${EndIf}
   ${Else}
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{13A4EE12-23EA-3371-91EE-EFB36DDFFF3E}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A2563E55-3BEC-3828-8D67-E5E8B9E8B675}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x86
 	${EndIf}
@@ -159,7 +159,7 @@ Section -Prerequisites
 	  ${EndIf}
   !else
 	beginVCRedist_x64:
-	MessageBox MB_YESNO "Your system does not appear to have Microsoft Visual C++ 2013 Runtime installed.$\n$\nWould you like to download it?" IDNO endVCRedist
+	MessageBox MB_YESNO "Your system does not appear to have Microsoft Visual C++ 2015 Runtime installed.$\n$\nWould you like to download it?" IDNO endVCRedist
 	ExecShell "open" "https://www.microsoft.com/en-US/download/details.aspx?id=40784"
 	Abort
   !endif
