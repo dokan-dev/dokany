@@ -171,9 +171,11 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   WCHAR driverFullPath[MAX_PATH] = {0};
   WCHAR mounterFullPath[MAX_PATH] = {0};
   WCHAR type;
+  PVOID wow64OldValue;
 
   DokanUseStdErr(TRUE); // Set dokan library debug output
 
+  Wow64DisableWow64FsRedirection(&wow64OldValue); //Disable system32 direct
   // setlocale(LC_ALL, "");
 
   GetModuleFileName(NULL, fileName, MAX_PATH);
