@@ -91,8 +91,8 @@ UninstPage instfiles
 !macroend
 
 !macro DokanSetup
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
+    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
+	ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
   DetailPrint "dokanctl returned $0"
   WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
 
@@ -188,6 +188,8 @@ Section "Dokan PDB x86" section_x86_pdb
     !insertmacro PDBFiles "Win8.1" "Win32" $PROGRAMFILES32
   ${ElseIf} ${IsWin2012R2}
     !insertmacro PDBFiles "Win8.1" "Win32" $PROGRAMFILES32
+  ${ElseIf} ${IsWin10}
+    !insertmacro PDBFiles "Win10" "Win32" $PROGRAMFILES32
   ${EndIf}
 SectionEnd
 
@@ -204,6 +206,8 @@ Section "Dokan PDB x64" section_x64_pdb
     !insertmacro PDBFiles "Win8.1" "x64" $PROGRAMFILES64
   ${ElseIf} ${IsWin2012R2}
     !insertmacro PDBFiles "Win8.1" "x64" $PROGRAMFILES64
+  ${ElseIf} ${IsWin10}
+    !insertmacro PDBFiles "Win10" "x64" $PROGRAMFILES64
   ${EndIf}
 SectionEnd
 
@@ -220,6 +224,8 @@ Section "Dokan Driver x86" section_x86_driver
     !insertmacro Driver "Win8.1" "Win32"
   ${ElseIf} ${IsWin2012R2}
     !insertmacro Driver "Win8.1" "Win32"
+  ${ElseIf} ${IsWin10}
+    !insertmacro Driver "Win10" "Win32"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
@@ -237,6 +243,8 @@ Section "Dokan Driver x64" section_x64_driver
     !insertmacro Driver "Win8.1" "x64"
   ${ElseIf} ${IsWin2012R2}
     !insertmacro Driver "Win8.1" "x64"
+  ${ElseIf} ${IsWin10}
+    !insertmacro Driver "Win10" "x64"
   ${EndIf}
   !insertmacro DokanSetup
 SectionEnd
