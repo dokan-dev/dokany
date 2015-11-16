@@ -20,3 +20,4 @@ bin
 obj
 *.exe
 ReleasePS
+*.zip
