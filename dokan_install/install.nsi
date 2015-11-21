@@ -160,7 +160,7 @@ Section -Prerequisites
   !else
 	beginVCRedist_x64:
 	MessageBox MB_YESNO "Your system does not appear to have Microsoft Visual C++ 2015 Runtime installed.$\n$\nWould you like to download it?" IDNO endVCRedist
-	ExecShell "open" "https://www.microsoft.com/en-US/download/details.aspx?id=40784"
+	ExecShell "open" "https://www.microsoft.com/en-us/download/details.aspx?id=48145"
 	Abort
   !endif
   endVCRedist:
