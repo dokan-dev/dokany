@@ -67,6 +67,8 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb) {
 
   fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
 
+  FsRtlInitializeOplock(&(fcb->Oplock));
+
   ExInitializeResourceLite(&fcb->Resource);
 
   InitializeListHead(&fcb->NextCCB);
@@ -159,6 +161,8 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
   ExAcquireResourceExclusiveLite(&Fcb->Resource, TRUE);
 
   InterlockedDecrement(&Fcb->FileCount);
+
+  FsRtlUninitializeOplock(&(Fcb->Oplock));
 
   if (Fcb->FileCount == 0) {
 

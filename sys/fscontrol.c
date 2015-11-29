@@ -61,6 +61,49 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = STATUS_SUCCESS;
     break;
 
+  case FSCTL_OPLOCK_BREAK_ACK_NO_2:
+    DDbgPrint("    FSCTL_OPLOCK_BREAK_ACK_NO_2\n");
+    break;
+
+  case FSCTL_REQUEST_FILTER_OPLOCK:
+    DDbgPrint("    FSCTL_REQUEST_FILTER_OPLOCK\n");
+    break;
+
+#if (NTDDI_VERSION >= NTDDI_WIN7)
+  case FSCTL_REQUEST_OPLOCK:
+    DDbgPrint("    FSCTL_REQUEST_OPLOCK\n");
+    PREQUEST_OPLOCK_INPUT_BUFFER InputBuffer = NULL;
+    ULONG InputBufferLength;
+    ULONG OutputBufferLength;
+    PDokanFCB fcb;
+    PDokanCCB ccb;
+    PFILE_OBJECT fileObject;
+
+    InputBufferLength = irpSp->Parameters.FileSystemControl.InputBufferLength;
+    InputBuffer = (PREQUEST_OPLOCK_INPUT_BUFFER)Irp->AssociatedIrp.SystemBuffer;
+    OutputBufferLength = irpSp->Parameters.FileSystemControl.OutputBufferLength;
+
+    if ((InputBufferLength < sizeof(REQUEST_OPLOCK_INPUT_BUFFER)) ||
+        (OutputBufferLength < sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER))) {
+      DDbgPrint("    STATUS_BUFFER_TOO_SMALL\n");
+      return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    fileObject = irpSp->FileObject;
+    DokanPrintFileName(fileObject);
+
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
+
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
+
+    status = FsRtlOplockFsctrl(
+        &(fcb->Oplock), Irp,
+        0); // Fake OpenCount - TODO: Manage shared/locked files
+    break;
+#endif
+
   case FSCTL_LOCK_VOLUME:
     DDbgPrint("    FSCTL_LOCK_VOLUME\n");
     status = STATUS_SUCCESS;
@@ -104,20 +147,12 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    FSCTL_MARK_AS_SYSTEM_HIVE\n");
     break;
 
-  case FSCTL_OPLOCK_BREAK_ACK_NO_2:
-    DDbgPrint("    FSCTL_OPLOCK_BREAK_ACK_NO_2\n");
-    break;
-
   case FSCTL_INVALIDATE_VOLUMES:
     DDbgPrint("    FSCTL_INVALIDATE_VOLUMES\n");
     break;
 
   case FSCTL_QUERY_FAT_BPB:
     DDbgPrint("    FSCTL_QUERY_FAT_BPB\n");
-    break;
-
-  case FSCTL_REQUEST_FILTER_OPLOCK:
-    DDbgPrint("    FSCTL_REQUEST_FILTER_OPLOCK\n");
     break;
 
   case FSCTL_FILESYSTEM_GET_STATISTICS:

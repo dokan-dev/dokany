@@ -257,6 +257,8 @@ typedef struct _DokanFileControlBlock {
 
   UNICODE_STRING FileName;
 
+  OPLOCK Oplock;
+
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
 } DokanFCB, *PDokanFCB;
