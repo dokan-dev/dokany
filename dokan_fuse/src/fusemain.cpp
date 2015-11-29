@@ -819,8 +819,12 @@ int impl_fuse_context::get_disk_free_space(PULONGLONG free_bytes_available,
                                            PULONGLONG number_of_bytes,
                                            PULONGLONG number_of_free_bytes,
                                            PDOKAN_FILE_INFO dokan_file_info) {
-  if (!ops_.statfs)
-    return -EINVAL;
+  if (!ops_.statfs) {
+    *free_bytes_available = 0;
+    *number_of_bytes = 0;
+    *number_of_free_bytes = 0;
+    return 0;
+  }
 
   struct statvfs vfs = {0};
   // Why do we need path argument??
