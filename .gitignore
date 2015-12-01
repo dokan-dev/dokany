@@ -21,3 +21,4 @@ obj
 *.exe
 ReleasePS
 *.zip
+*.VC.opendb
