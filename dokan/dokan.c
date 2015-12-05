@@ -209,6 +209,14 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
+  if (DokanOperations->Mount) {
+    DOKAN_FILE_INFO fileInfo;
+    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+    fileInfo.DokanOptions = DokanOptions;
+    // ignore return value
+    DokanOperations->Mount(&fileInfo);
+  }
+
   // Start Keep Alive thread
   threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
                                                   0, // stack size

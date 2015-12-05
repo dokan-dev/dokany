@@ -1190,6 +1190,13 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
   return STATUS_SUCCESS;
 }
 
+static NTSTATUS DOKAN_CALLBACK MirrorMount(PDOKAN_FILE_INFO DokanFileInfo) {
+	UNREFERENCED_PARAMETER(DokanFileInfo);
+
+	DbgPrint(L"Mount\n");
+	return STATUS_SUCCESS;
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
@@ -1314,6 +1321,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
   dokanOperations->Unmount = MirrorUnmount;
   dokanOperations->FindStreams = MirrorFindStreams;
+  dokanOperations->Mount = MirrorMount;
 
   status = DokanMain(dokanOptions, dokanOperations);
   switch (status) {
