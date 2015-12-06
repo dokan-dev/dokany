@@ -22,18 +22,18 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <windows.h>
 #undef WIN32_NO_STATUS
 
-#include <winioctl.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include "dokani.h"
+#include "fileinfo.h"
+#include "list.h"
 #include <conio.h>
-#include <tchar.h>
-#include <process.h>
 #include <locale.h>
 #include <ntstatus.h>
-#include "fileinfo.h"
-#include "dokani.h"
-#include "list.h"
+#include <process.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <tchar.h>
+#include <winioctl.h>
 
 #define DokanMapKernelBit(dest, src, userBit, kernelBit)                       \
   if (((src) & (kernelBit)) == (kernelBit))                                    \
@@ -209,7 +209,8 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
-  if (DokanOperations->Mount) {
+  if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
+      DokanOperations->Mount) {
     DOKAN_FILE_INFO fileInfo;
     RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
     fileInfo.DokanOptions = DokanOptions;
@@ -219,7 +220,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   // Start Keep Alive thread
   threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                  0, // stack size
+                                                  0,    // stack size
                                                   DokanKeepAlive,
                                                   (PVOID)instance, // param
                                                   0, // create flag
@@ -227,7 +228,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   for (i = 0; i < DokanOptions->ThreadCount; ++i) {
     threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                    0, // stack size
+                                                    0,    // stack size
                                                     DokanLoop,
                                                     (PVOID)instance, // param
                                                     0, // create flag

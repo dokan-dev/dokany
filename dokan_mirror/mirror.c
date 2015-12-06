@@ -24,13 +24,13 @@ THE SOFTWARE.
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
-#include <winbase.h>
+#include "../dokan/dokan.h"
+#include "../dokan/fileinfo.h"
+#include <malloc.h>
 #include <ntstatus.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
-#include "../dokan/dokan.h"
-#include "../dokan/fileinfo.h"
+#include <winbase.h>
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
@@ -1191,10 +1191,10 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorMount(PDOKAN_FILE_INFO DokanFileInfo) {
-	UNREFERENCED_PARAMETER(DokanFileInfo);
+  UNREFERENCED_PARAMETER(DokanFileInfo);
 
-	DbgPrint(L"Mount\n");
-	return STATUS_SUCCESS;
+  DbgPrint(L"Mount\n");
+  return STATUS_SUCCESS;
 }
 
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
