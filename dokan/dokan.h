@@ -255,6 +255,8 @@ typedef struct _DOKAN_OPERATIONS {
    DWORD,   // FileSystemNameSize in num of chars
    PDOKAN_FILE_INFO);
 
+  NTSTATUS(DOKAN_CALLBACK *Mount)(PDOKAN_FILE_INFO);
+
   NTSTATUS(DOKAN_CALLBACK *Unmount)(PDOKAN_FILE_INFO);
 
   // Suported since 0.6.0. You must specify the version at
@@ -281,8 +283,6 @@ typedef struct _DOKAN_OPERATIONS {
   (LPCWSTR,             // FileName
    PFillFindStreamData, // call this function with PWIN32_FIND_STREAM_DATA
    PDOKAN_FILE_INFO);   //  (see PFillFindStreamData definition)
-
-  NTSTATUS(DOKAN_CALLBACK *Mount)(PDOKAN_FILE_INFO);
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
