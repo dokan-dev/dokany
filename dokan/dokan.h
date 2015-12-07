@@ -255,9 +255,9 @@ typedef struct _DOKAN_OPERATIONS {
    DWORD,   // FileSystemNameSize in num of chars
    PDOKAN_FILE_INFO);
 
-  NTSTATUS(DOKAN_CALLBACK *Mount)(PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *Mounted)(PDOKAN_FILE_INFO);
 
-  NTSTATUS(DOKAN_CALLBACK *Unmount)(PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *Unmounted)(PDOKAN_FILE_INFO);
 
   // Suported since 0.6.0. You must specify the version at
   // DOKAN_OPTIONS.Version.

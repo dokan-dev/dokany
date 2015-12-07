@@ -864,13 +864,13 @@ int impl_fuse_context::get_volume_information(LPWSTR volume_name_buffer,
   return 0;
 }
 
-int impl_fuse_context::mount(PDOKAN_FILE_INFO DokanFileInfo) {
+int impl_fuse_context::mounted(PDOKAN_FILE_INFO DokanFileInfo) {
 	if (ops_.destroy)
 		ops_.destroy(user_data_); // Ignoring result
 	return 0;
 }
 
-int impl_fuse_context::unmount(PDOKAN_FILE_INFO DokanFileInfo) {
+int impl_fuse_context::unmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   if (ops_.destroy)
     ops_.destroy(user_data_); // Ignoring result
   return 0;

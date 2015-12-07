@@ -118,9 +118,6 @@ VOID DispatchCleanup(HANDLE Handle, PEVENT_CONTEXT EventContext,
 VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
                    PDOKAN_INSTANCE DokanInstance);
 
-VOID DispatchUnmount(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                     PDOKAN_INSTANCE DokanInstance);
-
 VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
                   PDOKAN_INSTANCE DokanInstance);
 

@@ -210,12 +210,12 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
   if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-      DokanOperations->Mount) {
+      DokanOperations->Mounted) {
     DOKAN_FILE_INFO fileInfo;
     RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
     fileInfo.DokanOptions = DokanOptions;
     // ignore return value
-    DokanOperations->Mount(&fileInfo);
+    DokanOperations->Mounted(&fileInfo);
   }
 
   // Start Keep Alive thread
@@ -245,12 +245,12 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   CloseHandle(device);
 
   if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-      DokanOperations->Unmount) {
+      DokanOperations->Unmounted) {
     DOKAN_FILE_INFO fileInfo;
     RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
     fileInfo.DokanOptions = DokanOptions;
     // ignore return value
-    DokanOperations->Unmount(&fileInfo);
+    DokanOperations->Unmounted(&fileInfo);
   }
 
   Sleep(1000);
@@ -536,37 +536,6 @@ VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInformation,
   LeaveCriticalSection(&DokanInstance->CriticalSection);
 }
 
-VOID DispatchUnmount(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                     PDOKAN_INSTANCE DokanInstance) {
-  UNREFERENCED_PARAMETER(Handle);
-
-  DOKAN_FILE_INFO fileInfo;
-  static int count = 0;
-
-  // Unmount is called only once
-  EnterCriticalSection(&DokanInstance->CriticalSection);
-
-  if (count > 0) {
-    LeaveCriticalSection(&DokanInstance->CriticalSection);
-    return;
-  }
-  count++;
-
-  RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
-
-  fileInfo.ProcessId = EventContext->ProcessId;
-
-  if (DokanInstance->DokanOperations->Unmount) {
-    // ignore return value
-    DokanInstance->DokanOperations->Unmount(&fileInfo);
-  }
-
-  LeaveCriticalSection(&DokanInstance->CriticalSection);
-
-  // do not notice anything to the driver
-  return;
-}
-
 // ask driver to release all pending IRP to prepare for Unmount.
 BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   ULONG returnedLength;
@@ -702,11 +671,11 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
 
       if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-          instance->DokanOperations->Unmount) {
+          instance->DokanOperations->Unmounted) {
         DOKAN_FILE_INFO fileInfo;
         RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
         fileInfo.DokanOptions = instance->DokanOptions;
-        instance->DokanOperations->Unmount(&fileInfo);
+        instance->DokanOperations->Unmounted(&fileInfo);
       }
 
       DokanRemoveMountPoint(instance->MountPoint);

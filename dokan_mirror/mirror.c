@@ -1115,13 +1115,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorUnmount(PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
-  DbgPrint(L"Unmount\n");
-  return STATUS_SUCCESS;
-}
-
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
  * definition.
@@ -1190,10 +1183,17 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorMount(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
-  DbgPrint(L"Mount\n");
+  DbgPrint(L"Mounted\n");
+  return STATUS_SUCCESS;
+}
+
+static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  DbgPrint(L"Unmounted\n");
   return STATUS_SUCCESS;
 }
 
@@ -1319,9 +1319,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
   dokanOperations->GetDiskFreeSpace = NULL;
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
-  dokanOperations->Unmount = MirrorUnmount;
+  dokanOperations->Unmounted = MirrorUnmounted;
   dokanOperations->FindStreams = MirrorFindStreams;
-  dokanOperations->Mount = MirrorMount;
+  dokanOperations->Mounted = MirrorMounted;
 
   status = DokanMain(dokanOptions, dokanOperations);
   switch (status) {

@@ -380,22 +380,22 @@ GetVolumeInformation(LPWSTR VolumeNameBuffer, DWORD VolumeNameSize,
       FileSystemNameSize, DokanFileInfo, FileSystemFlags));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseMount(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseMounted(PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
-    FWPRINTF(stderr, L"Mount\n");
+    FWPRINTF(stderr, L"Mounted\n");
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-  return errno_to_ntstatus_error(impl->mount(DokanFileInfo));
+  return errno_to_ntstatus_error(impl->mounted(DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseUnmount(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
     FWPRINTF(stderr, L"Unmount\n");
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-  return errno_to_ntstatus_error(impl->unmount(DokanFileInfo));
+  return errno_to_ntstatus_error(impl->unmounted(DokanFileInfo));
 }
 
 int fuse_interrupted(void) {
@@ -423,8 +423,8 @@ static DOKAN_OPERATIONS dokanOperations = {
     FuseUnlockFile,
     FuseGetDiskFreeSpace,
     GetVolumeInformation,
-    FuseMount,
-    FuseUnmount,
+    FuseMounted,
+    FuseUnmounted,
     NULL, // GetFileSecurity
     NULL, // SetFileSecurity
 };
