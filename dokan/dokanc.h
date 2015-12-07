@@ -28,7 +28,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-#define DOKAN_MOUNT_POINT_SUPPORTED_VERSION 600
 #define DOKAN_SECURITY_SUPPORTED_VERSION 600
 #define DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION 800
 #define DOKAN_MOUNT_SUPPORTED_VERSION 800

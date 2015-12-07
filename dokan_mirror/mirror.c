@@ -1346,6 +1346,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   case DOKAN_MOUNT_POINT_ERROR:
     fprintf(stderr, "Mount point error\n");
     break;
+  case DOKAN_VERSION_ERROR:
+    fprintf(stderr, "Version error\n");
+    break;
   default:
     fprintf(stderr, "Unknown error: %d\n", status);
     break;
