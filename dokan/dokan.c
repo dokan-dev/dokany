@@ -244,6 +244,15 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   CloseHandle(device);
 
+  if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
+      DokanOperations->Unmount) {
+    DOKAN_FILE_INFO fileInfo;
+    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+    fileInfo.DokanOptions = DokanOptions;
+    // ignore return value
+    DokanOperations->Unmount(&fileInfo);
+  }
+
   Sleep(1000);
 
   DbgPrint("\nunload\n");
@@ -377,10 +386,6 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
         break;
       case IRP_MJ_SET_SECURITY:
         DispatchSetSecurity(device, context, DokanInstance);
-        break;
-      case IRP_MJ_SHUTDOWN:
-        // this case is used before unmount not shutdown
-        DispatchUnmount(device, context, DokanInstance);
         break;
       default:
         break;
@@ -695,6 +700,14 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
+
+      if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
+          instance->DokanOperations->Unmount) {
+        DOKAN_FILE_INFO fileInfo;
+        RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+        fileInfo.DokanOptions = instance->DokanOptions;
+        instance->DokanOperations->Unmount(&fileInfo);
+      }
 
       DokanRemoveMountPoint(instance->MountPoint);
       free(instance);
