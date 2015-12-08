@@ -21,11 +21,11 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
+#include "dokani.h"
+#include "fileinfo.h"
 #include <ntstatus.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "dokani.h"
-#include "fileinfo.h"
 
 NTSTATUS
 DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
@@ -277,9 +277,7 @@ DokanFindStreams(PFILE_STREAM_INFORMATION StreamInfo, PDOKAN_FILE_INFO FileInfo,
       (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
   NTSTATUS status = STATUS_SUCCESS;
 
-  if (DokanInstance->DokanOptions->Version <
-          DOKAN_ENUMERATE_STREAMS_SUPPORTED_VERSION ||
-      !DokanInstance->DokanOperations->FindStreams) {
+  if (!DokanInstance->DokanOperations->FindStreams) {
     return STATUS_NOT_IMPLEMENTED;
   }
 

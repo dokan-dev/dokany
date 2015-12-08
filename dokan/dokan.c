@@ -138,8 +138,9 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   if (DokanOptions->Version < DOKAN_MINIMUM_COMPATIBLE_VERSION) {
-    DokanDbgPrintW(L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
-                   DokanOptions->Version, DOKAN_MINIMUM_COMPATIBLE_VERSION);
+    DokanDbgPrintW(
+        L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
+        DokanOptions->Version, DOKAN_MINIMUM_COMPATIBLE_VERSION);
     return DOKAN_VERSION_ERROR;
   }
 
@@ -196,8 +197,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
-  if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-      DokanOperations->Mounted) {
+  if (DokanOperations->Mounted) {
     DOKAN_FILE_INFO fileInfo;
     RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
     fileInfo.DokanOptions = DokanOptions;
@@ -231,8 +231,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   CloseHandle(device);
 
-  if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-      DokanOperations->Unmounted) {
+  if (DokanOperations->Unmounted) {
     DOKAN_FILE_INFO fileInfo;
     RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
     fileInfo.DokanOptions = DokanOptions;
@@ -657,8 +656,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
 
-      if (instance->DokanOptions->Version >= DOKAN_MOUNT_SUPPORTED_VERSION &&
-          instance->DokanOperations->Unmounted) {
+      if (instance->DokanOperations->Unmounted) {
         DOKAN_FILE_INFO fileInfo;
         RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
         fileInfo.DokanOptions = instance->DokanOptions;
