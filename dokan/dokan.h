@@ -44,6 +44,7 @@ extern "C" {
 // The current Dokan version (ver 0.8.0). Please set this constant on
 // DokanOptions->Version.
 #define DOKAN_VERSION 800
+#define DOKAN_MINIMUM_COMPATIBLE_VERSION 800
 
 #define DOKAN_OPTION_DEBUG 1         // ouput debug message
 #define DOKAN_OPTION_STDERR 2        // ouput debug message to stderr
@@ -292,8 +293,9 @@ typedef struct _DOKAN_OPERATIONS {
 #define DOKAN_DRIVE_LETTER_ERROR -2   /* Bad Drive letter */
 #define DOKAN_DRIVER_INSTALL_ERROR -3 /* Can't install driver */
 #define DOKAN_START_ERROR -4          /* Driver something wrong */
-#define DOKAN_MOUNT_ERROR -5 /* Can't assign a drive letter or mount point */
-#define DOKAN_MOUNT_POINT_ERROR -6 /* Mount point is invalid */
+#define DOKAN_MOUNT_ERROR -5          /* Can't assign a drive letter or mount point */
+#define DOKAN_MOUNT_POINT_ERROR -6    /* Mount point is invalid */
+#define DOKAN_VERSION_ERROR -7        /* Requested an incompatible version */
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations);

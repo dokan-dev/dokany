@@ -123,7 +123,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   ULONG i;
   HANDLE device;
   HANDLE threadIds[DOKAN_MAX_THREAD];
-  BOOL useMountPoint = FALSE;
   PDOKAN_INSTANCE instance;
 
   g_DebugMode = DokanOptions->Options & DOKAN_OPTION_DEBUG;
@@ -138,6 +137,12 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if (DokanOptions->Version < DOKAN_MINIMUM_COMPATIBLE_VERSION) {
+    DokanDbgPrintW(L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
+                   DokanOptions->Version, DOKAN_MINIMUM_COMPATIBLE_VERSION);
+    return DOKAN_VERSION_ERROR;
+  }
+
   if (DokanOptions->ThreadCount == 0) {
     DokanOptions->ThreadCount = 5;
 
@@ -149,19 +154,9 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
   }
 
-  if (DOKAN_MOUNT_POINT_SUPPORTED_VERSION <= DokanOptions->Version &&
-      DokanOptions->MountPoint) {
-    int error = CheckMountPoint(DokanOptions->MountPoint);
-    if (error != DOKAN_SUCCESS) {
-      return error;
-    }
-    useMountPoint = TRUE;
-  } else if (!IsValidDriveLetter((WCHAR)DokanOptions->Version)) {
-    // Older versions use the first 2 bytes of DokanOptions struct as
-    // DriveLetter.
-    DokanDbgPrintW(L"Dokan Error: bad drive letter %wc\n",
-                   (WCHAR)DokanOptions->Version);
-    return DOKAN_DRIVE_LETTER_ERROR;
+  int error = CheckMountPoint(DokanOptions->MountPoint);
+  if (error != DOKAN_SUCCESS) {
+    return error;
   }
 
   device = CreateFile(DOKAN_GLOBAL_DEVICE_NAME,           // lpFileName
@@ -184,16 +179,8 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   instance = NewDokanInstance();
   instance->DokanOptions = DokanOptions;
   instance->DokanOperations = DokanOperations;
-  if (useMountPoint) {
-    wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
-             DokanOptions->MountPoint);
-  } else {
-    // Older versions use the first 2 bytes of DokanOptions struct as
-    // DriveLetter.
-    instance->MountPoint[0] = (WCHAR)DokanOptions->Version;
-    instance->MountPoint[1] = L':';
-    instance->MountPoint[2] = L'\\';
-  }
+  wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
+           DokanOptions->MountPoint);
 
   if (!DokanStart(instance)) {
     CloseHandle(device);
