@@ -292,75 +292,85 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
 
 BOOL DOKANAPI DokanNetworkProviderInstall() {
-  HKEY key;
-  DWORD position;
-  DWORD type;
-  WCHAR buffer[1024];
-  DWORD buffer_size = sizeof(buffer);
-  ZeroMemory(&buffer, sizeof(buffer));
+	HKEY key;
+	DWORD position;
+	DWORD type;
+	WCHAR commanp[64];
+	WCHAR buffer[1024];
+	DWORD buffer_size = sizeof(buffer);
+	ZeroMemory(&buffer, sizeof(buffer));
+	ZeroMemory(commanp, sizeof(commanp));
 
-  RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
-                 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
-                 &position);
+	RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
+		0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+		&position);
 
-  RegSetValueEx(key, L"DeviceName", 0, REG_SZ, (BYTE *)DOKAN_NP_DEVICE_NAME,
-                (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
+	RegSetValueEx(key, L"DeviceName", 0, REG_SZ, (BYTE *)DOKAN_NP_DEVICE_NAME,
+		(DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
 
-  RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
-                (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
+	RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
+		(DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
 
-  RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)DOKAN_NP_PATH,
-                (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
+	RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)DOKAN_NP_PATH,
+		(DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
 
-  RegCloseKey(key);
+	RegCloseKey(key);
 
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
 
-  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
-                  &buffer_size);
+	RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
+		&buffer_size);
 
-  if (wcsstr(buffer, L",Dokan") == NULL) {
-    wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), L",Dokan");
-    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
-                  (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
-  }
+	wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
+	wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
 
-  RegCloseKey(key);
-  return TRUE;
+	if (wcsstr(buffer, commanp) == NULL) {
+		wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), commanp);
+		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
+			(DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
+	}
+
+	RegCloseKey(key);
+	return TRUE;
 }
 
 BOOL DOKANAPI DokanNetworkProviderUninstall() {
-  HKEY key;
-  DWORD type;
-  WCHAR buffer[1024];
-  WCHAR buffer2[1024];
+	HKEY key;
+	DWORD type;
+	WCHAR commanp[64];
+	WCHAR buffer[1024];
+	WCHAR buffer2[1024];
 
-  DWORD buffer_size = sizeof(buffer);
-  ZeroMemory(&buffer, sizeof(buffer));
-  ZeroMemory(&buffer2, sizeof(buffer));
+	DWORD buffer_size = sizeof(buffer);
+	ZeroMemory(&buffer, sizeof(buffer));
+	ZeroMemory(&buffer2, sizeof(buffer));
+	ZeroMemory(commanp, sizeof(commanp));
 
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
-               &key);
-  RegDeleteKey(key, L"NetworkProvider");
+	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
+		&key);
+	RegDeleteKey(key, L"NetworkProvider");
 
-  RegCloseKey(key);
+	RegCloseKey(key);
 
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+	RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
 
-  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
-                  &buffer_size);
+	RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
+		&buffer_size);
 
-  if (wcsstr(buffer, L",Dokan") != NULL) {
-    WCHAR *dokan_pos = wcsstr(buffer, L",Dokan");
-    wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
-              dokan_pos - buffer);
-    wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
-             dokan_pos + wcslen(L",Dokan"));
-    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
-                  (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
-  }
+	wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
+	wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
 
-  RegCloseKey(key);
+	if (wcsstr(buffer, commanp) != NULL) {
+		WCHAR *dokan_pos = wcsstr(buffer, commanp);
+		wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
+			dokan_pos - buffer);
+		wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
+			dokan_pos + wcslen(commanp));
+		RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
+			(DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
+	}
 
-  return TRUE;
+	RegCloseKey(key);
+
+	return TRUE;
 }
