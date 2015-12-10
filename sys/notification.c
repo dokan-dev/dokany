@@ -394,15 +394,12 @@ VOID DokanStopEventNotificationThreadInternal(__in PDEVICE_OBJECT DeviceObject,
   DDbgPrint("==> DokanStopEventNotificationThreadInternal\n");
 
   Dcb = DeviceObject->DeviceExtension;
-  KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE);
-
-  if (Dcb->EventNotificationThread) {
+  if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
+      Dcb->EventNotificationThread) {
     KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
                           FALSE, NULL);
-    if (Dcb->EventNotificationThread) {
-      ObDereferenceObject(Dcb->EventNotificationThread);
-      Dcb->EventNotificationThread = NULL;
-    }
+    ObDereferenceObject(Dcb->EventNotificationThread);
+    Dcb->EventNotificationThread = NULL;
   }
 
   DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");

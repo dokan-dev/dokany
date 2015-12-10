@@ -354,15 +354,11 @@ VOID DokanStopCheckThreadInternal(__in PDEVICE_OBJECT DeviceObject,
   DDbgPrint("==> DokanStopCheckThreadInternal\n");
 
   Dcb = DeviceObject->DeviceExtension;
-  KeSetEvent(&Dcb->KillEvent, 0, FALSE);
-
-  if (Dcb->TimeoutThread) {
+  if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
     KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
                           NULL);
-    if (Dcb->TimeoutThread) {
-      ObDereferenceObject(Dcb->TimeoutThread);
-      Dcb->TimeoutThread = NULL;
-    }
+    ObDereferenceObject(Dcb->TimeoutThread);
+    Dcb->TimeoutThread = NULL;
   }
 
   DDbgPrint("<== DokanStopCheckThreadInternal\n");
