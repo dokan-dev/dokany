@@ -131,17 +131,17 @@ Section -Prerequisites
   IfSilent endVCRedist
   ${If} ${RunningX64}
 	SetRegView 32
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A2563E55-3BEC-3828-8D67-E5E8B9E8B675}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{65AD78AD-D23D-3A1E-9305-3AE65CD522C2}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x86
 	${EndIf}
 	SetRegView 64
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{0D3E9E15-DE7A-300B-96F1-B4AF12B96488}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1C31BA5-5438-3A07-9EEE-A5FB2D0FDE36}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x64
 	${EndIf}
   ${Else}
-	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A2563E55-3BEC-3828-8D67-E5E8B9E8B675}" "Version"
+	ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{65AD78AD-D23D-3A1E-9305-3AE65CD522C2}" "Version"
 	${If} $0 == ""
 		Goto beginVCRedist_x86
 	${EndIf}
