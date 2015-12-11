@@ -24,13 +24,13 @@ THE SOFTWARE.
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
-#include <winbase.h>
+#include "../dokan/dokan.h"
+#include "../dokan/fileinfo.h"
+#include <malloc.h>
 #include <ntstatus.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
-#include "../dokan/dokan.h"
-#include "../dokan/fileinfo.h"
+#include <winbase.h>
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
@@ -1115,13 +1115,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorUnmount(PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
-  DbgPrint(L"Unmount\n");
-  return STATUS_SUCCESS;
-}
-
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
  * definition.
@@ -1187,6 +1180,20 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 
   DbgPrint(L"\tFindStreams return %d entries in %s\n\n", count, filePath);
 
+  return STATUS_SUCCESS;
+}
+
+static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  DbgPrint(L"Mounted\n");
+  return STATUS_SUCCESS;
+}
+
+static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  DbgPrint(L"Unmounted\n");
   return STATUS_SUCCESS;
 }
 
@@ -1312,8 +1319,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
   dokanOperations->GetDiskFreeSpace = NULL;
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
-  dokanOperations->Unmount = MirrorUnmount;
+  dokanOperations->Unmounted = MirrorUnmounted;
   dokanOperations->FindStreams = MirrorFindStreams;
+  dokanOperations->Mounted = MirrorMounted;
 
   status = DokanMain(dokanOptions, dokanOperations);
   switch (status) {
@@ -1337,6 +1345,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     break;
   case DOKAN_MOUNT_POINT_ERROR:
     fprintf(stderr, "Mount point error\n");
+    break;
+  case DOKAN_VERSION_ERROR:
+    fprintf(stderr, "Version error\n");
     break;
   default:
     fprintf(stderr, "Unknown error: %d\n", status);

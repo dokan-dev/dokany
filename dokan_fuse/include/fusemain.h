@@ -176,7 +176,9 @@ public:
 		LPWSTR file_system_name_buffer, DWORD file_system_name_size, 
 		PDOKAN_FILE_INFO dokan_file_info, LPDWORD volume_flags);
 
-	int unmount(PDOKAN_FILE_INFO DokanFileInfo);
+	int mounted(PDOKAN_FILE_INFO DokanFileInfo);
+
+	int unmounted(PDOKAN_FILE_INFO DokanFileInfo);
 };
 
 

@@ -672,7 +672,7 @@ Return Value:
       RtlCopyMemory((char *)eventContext + alignedEventContextSize,
                     newFileSecurityDescriptor,
                     RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
-      SeDeassignSecurity(newFileSecurityDescriptor);
+      SeDeassignSecurity(&newFileSecurityDescriptor);
       newFileSecurityDescriptor = NULL;
     }
 

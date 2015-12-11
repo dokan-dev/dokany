@@ -18,9 +18,9 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <ntstatus.h>
 #include "dokani.h"
 #include "fileinfo.h"
+#include <ntstatus.h>
 
 VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
                            PDOKAN_INSTANCE DokanInstance) {
@@ -38,9 +38,7 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
                              &fileInfo, &openInfo);
 
-  if (DOKAN_SECURITY_SUPPORTED_VERSION <=
-          DokanInstance->DokanOptions->Version &&
-      DokanInstance->DokanOperations->GetFileSecurity) {
+  if (DokanInstance->DokanOperations->GetFileSecurity) {
     status = DokanInstance->DokanOperations->GetFileSecurity(
         EventContext->Operation.Security.FileName,
         &EventContext->Operation.Security.SecurityInformation,
@@ -84,9 +82,7 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
   securityDescriptor =
       (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;
 
-  if (DOKAN_SECURITY_SUPPORTED_VERSION <=
-          DokanInstance->DokanOptions->Version &&
-      DokanInstance->DokanOperations->SetFileSecurity) {
+  if (DokanInstance->DokanOperations->SetFileSecurity) {
     status = DokanInstance->DokanOperations->SetFileSecurity(
         EventContext->Operation.SetSecurity.FileName,
         &EventContext->Operation.SetSecurity.SecurityInformation,

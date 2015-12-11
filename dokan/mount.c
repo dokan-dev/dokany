@@ -18,9 +18,9 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <windows.h>
-#include <stdio.h>
 #include "dokani.h"
+#include <stdio.h>
+#include <windows.h>
 
 static BOOL DokanServiceCheck(LPCWSTR ServiceName) {
   SC_HANDLE controlHandle;
@@ -295,9 +295,11 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   HKEY key;
   DWORD position;
   DWORD type;
+  WCHAR commanp[64];
   WCHAR buffer[1024];
   DWORD buffer_size = sizeof(buffer);
   ZeroMemory(&buffer, sizeof(buffer));
+  ZeroMemory(commanp, sizeof(commanp));
 
   RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
                  0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
@@ -319,8 +321,11 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
                   &buffer_size);
 
-  if (wcsstr(buffer, L",Dokan") == NULL) {
-    wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), L",Dokan");
+  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
+  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
+
+  if (wcsstr(buffer, commanp) == NULL) {
+    wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), commanp);
     RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
                   (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
   }
@@ -332,12 +337,14 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
 BOOL DOKANAPI DokanNetworkProviderUninstall() {
   HKEY key;
   DWORD type;
+  WCHAR commanp[64];
   WCHAR buffer[1024];
   WCHAR buffer2[1024];
 
   DWORD buffer_size = sizeof(buffer);
   ZeroMemory(&buffer, sizeof(buffer));
   ZeroMemory(&buffer2, sizeof(buffer));
+  ZeroMemory(commanp, sizeof(commanp));
 
   RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
                &key);
@@ -350,12 +357,15 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
   RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
                   &buffer_size);
 
-  if (wcsstr(buffer, L",Dokan") != NULL) {
-    WCHAR *dokan_pos = wcsstr(buffer, L",Dokan");
+  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
+  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
+
+  if (wcsstr(buffer, commanp) != NULL) {
+    WCHAR *dokan_pos = wcsstr(buffer, commanp);
     wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
               dokan_pos - buffer);
     wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
-             dokan_pos + wcslen(L",Dokan"));
+             dokan_pos + wcslen(commanp));
     RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
                   (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
   }

@@ -22,18 +22,18 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <windows.h>
 #undef WIN32_NO_STATUS
 
-#include <winioctl.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include "dokani.h"
+#include "fileinfo.h"
+#include "list.h"
 #include <conio.h>
-#include <tchar.h>
-#include <process.h>
 #include <locale.h>
 #include <ntstatus.h>
-#include "fileinfo.h"
-#include "dokani.h"
-#include "list.h"
+#include <process.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <tchar.h>
+#include <winioctl.h>
 
 #define DokanMapKernelBit(dest, src, userBit, kernelBit)                       \
   if (((src) & (kernelBit)) == (kernelBit))                                    \
@@ -123,7 +123,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   ULONG i;
   HANDLE device;
   HANDLE threadIds[DOKAN_MAX_THREAD];
-  BOOL useMountPoint = FALSE;
   PDOKAN_INSTANCE instance;
 
   g_DebugMode = DokanOptions->Options & DOKAN_OPTION_DEBUG;
@@ -138,6 +137,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if (DokanOptions->Version < DOKAN_MINIMUM_COMPATIBLE_VERSION) {
+    DokanDbgPrintW(
+        L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
+        DokanOptions->Version, DOKAN_MINIMUM_COMPATIBLE_VERSION);
+    return DOKAN_VERSION_ERROR;
+  }
+
   if (DokanOptions->ThreadCount == 0) {
     DokanOptions->ThreadCount = 5;
 
@@ -149,19 +155,9 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
   }
 
-  if (DOKAN_MOUNT_POINT_SUPPORTED_VERSION <= DokanOptions->Version &&
-      DokanOptions->MountPoint) {
-    int error = CheckMountPoint(DokanOptions->MountPoint);
-    if (error != DOKAN_SUCCESS) {
-      return error;
-    }
-    useMountPoint = TRUE;
-  } else if (!IsValidDriveLetter((WCHAR)DokanOptions->Version)) {
-    // Older versions use the first 2 bytes of DokanOptions struct as
-    // DriveLetter.
-    DokanDbgPrintW(L"Dokan Error: bad drive letter %wc\n",
-                   (WCHAR)DokanOptions->Version);
-    return DOKAN_DRIVE_LETTER_ERROR;
+  int error = CheckMountPoint(DokanOptions->MountPoint);
+  if (error != DOKAN_SUCCESS) {
+    return error;
   }
 
   device = CreateFile(DOKAN_GLOBAL_DEVICE_NAME,           // lpFileName
@@ -184,16 +180,8 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   instance = NewDokanInstance();
   instance->DokanOptions = DokanOptions;
   instance->DokanOperations = DokanOperations;
-  if (useMountPoint) {
-    wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
-             DokanOptions->MountPoint);
-  } else {
-    // Older versions use the first 2 bytes of DokanOptions struct as
-    // DriveLetter.
-    instance->MountPoint[0] = (WCHAR)DokanOptions->Version;
-    instance->MountPoint[1] = L':';
-    instance->MountPoint[2] = L'\\';
-  }
+  wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
+           DokanOptions->MountPoint);
 
   if (!DokanStart(instance)) {
     CloseHandle(device);
@@ -209,9 +197,17 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
+  if (DokanOperations->Mounted) {
+    DOKAN_FILE_INFO fileInfo;
+    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+    fileInfo.DokanOptions = DokanOptions;
+    // ignore return value
+    DokanOperations->Mounted(&fileInfo);
+  }
+
   // Start Keep Alive thread
   threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                  0, // stack size
+                                                  0,    // stack size
                                                   DokanKeepAlive,
                                                   (PVOID)instance, // param
                                                   0, // create flag
@@ -219,7 +215,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   for (i = 0; i < DokanOptions->ThreadCount; ++i) {
     threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                    0, // stack size
+                                                    0,    // stack size
                                                     DokanLoop,
                                                     (PVOID)instance, // param
                                                     0, // create flag
@@ -234,6 +230,14 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   CloseHandle(device);
+
+  if (DokanOperations->Unmounted) {
+    DOKAN_FILE_INFO fileInfo;
+    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+    fileInfo.DokanOptions = DokanOptions;
+    // ignore return value
+    DokanOperations->Unmounted(&fileInfo);
+  }
 
   Sleep(1000);
 
@@ -368,10 +372,6 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
         break;
       case IRP_MJ_SET_SECURITY:
         DispatchSetSecurity(device, context, DokanInstance);
-        break;
-      case IRP_MJ_SHUTDOWN:
-        // this case is used before unmount not shutdown
-        DispatchUnmount(device, context, DokanInstance);
         break;
       default:
         break;
@@ -522,37 +522,6 @@ VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInformation,
   LeaveCriticalSection(&DokanInstance->CriticalSection);
 }
 
-VOID DispatchUnmount(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                     PDOKAN_INSTANCE DokanInstance) {
-  UNREFERENCED_PARAMETER(Handle);
-
-  DOKAN_FILE_INFO fileInfo;
-  static int count = 0;
-
-  // Unmount is called only once
-  EnterCriticalSection(&DokanInstance->CriticalSection);
-
-  if (count > 0) {
-    LeaveCriticalSection(&DokanInstance->CriticalSection);
-    return;
-  }
-  count++;
-
-  RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
-
-  fileInfo.ProcessId = EventContext->ProcessId;
-
-  if (DokanInstance->DokanOperations->Unmount) {
-    // ignore return value
-    DokanInstance->DokanOperations->Unmount(&fileInfo);
-  }
-
-  LeaveCriticalSection(&DokanInstance->CriticalSection);
-
-  // do not notice anything to the driver
-  return;
-}
-
 // ask driver to release all pending IRP to prepare for Unmount.
 BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   ULONG returnedLength;
@@ -686,6 +655,13 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
+
+      if (instance->DokanOperations->Unmounted) {
+        DOKAN_FILE_INFO fileInfo;
+        RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+        fileInfo.DokanOptions = instance->DokanOptions;
+        instance->DokanOperations->Unmounted(&fileInfo);
+      }
 
       DokanRemoveMountPoint(instance->MountPoint);
       free(instance);

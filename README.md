@@ -15,8 +15,8 @@ is similar to FUSE (Linux file system in user space) but works on Windows.
 
 Because the original [Dokan](http://dokan-dev.net/en/docs/) project is no longer maintained.
 
-Because other forks like [DokanX](https://github.com/BenjaminKim/dokanx) have undesired changes or are not really maintained.
-
+Since version 0.8.0, dokany break dokan API compatibility.
+See [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#choose-a-version) for more informations.
 
 **Signed x86 / x64 drivers** are provided at each release.
 
