@@ -26,6 +26,7 @@
       Win64="no"/>-->
     
 		<Chain>
+      <!-- VC redist deployment info: https://msdn.microsoft.com/en-us/library/ms235316.aspx -->
       <ExePackage
         SourceFile="$(var.ProjectDir)Dependencies\vcredist 2015 update 1\VC_redist.x64.exe"
         Cache="no"
@@ -73,6 +74,8 @@
        For more information or examples see Heath Stewart's blog or the WiX source:
        http://blogs.msdn.com/b/heaths/archive/2011/10/28/introducing-managed-bootstrapper-applications.aspx
     -->
+    
+    <!-- MSDN Guide: https://msdn.microsoft.com/en-us/library/ee942965(v=vs.110).aspx#chaining -->
     
     <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\Net Framework Setup\NDP\v4\Full" Value="Release" Variable="Netfx4FullVersion" />
     <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\Net Framework Setup\NDP\v4\Full" Value="Release" Variable="Netfx4x64FullVersion" Win64="yes" />

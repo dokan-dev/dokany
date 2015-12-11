@@ -286,7 +286,7 @@
       <Component Id="Component_win10_dokan.sys" Guid="36E48ED7-F3FE-480B-98E8-C1702BD8049F" Win64="yes" Transitive="yes">
         <File Id="File_win10_dokan.sys" Source="$(var.ProjectDir)..\..\x64\Win10$(var.Configuration)\dokan.sys" KeyPath="yes"/>
         <File Id="File_win10_dokan.inf" Source="$(var.ProjectDir)..\dokan.inf" KeyPath="no"/>
-        <difx:Driver AddRemovePrograms="no" PlugAndPlayPrompt="no" Legacy="yes"/>
+        <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
         <Condition><![CDATA[VersionNT >= 603 AND WIN10FOUND]]></Condition>
       </Component>
     </ComponentGroup>
@@ -303,7 +303,7 @@
       <Component Id="Component_win8.1_dokan.sys" Guid="B0AE0045-A1B5-4A51-AE26-9DED6878120F" Win64="yes" Transitive="yes">
         <File Id="File_win8.1_dokan.sys" Source="$(var.ProjectDir)..\..\x64\Win8.1$(var.Configuration)\dokan.sys" KeyPath="yes"/>
         <File Id="File_win8.1_dokan.inf" Source="$(var.ProjectDir)..\dokan.inf" KeyPath="no"/>
-        <difx:Driver AddRemovePrograms="no" PlugAndPlayPrompt="no" Legacy="yes"/>
+        <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
         <Condition><![CDATA[VersionNT = 603 AND NOT WIN10FOUND]]></Condition>
       </Component>
     </ComponentGroup>
@@ -320,7 +320,7 @@
       <Component Id="Component_win8_dokan.sys" Guid="7EE366DF-4055-47F2-BBC4-E989C328BC54" Win64="yes" Transitive="yes">
         <File Id="File_win8_dokan.sys" Source="$(var.ProjectDir)..\..\x64\Win8$(var.Configuration)\dokan.sys" KeyPath="yes"/>
         <File Id="File_win8_dokan.inf" Source="$(var.ProjectDir)..\dokan.inf" KeyPath="no"/>
-        <difx:Driver AddRemovePrograms="no" PlugAndPlayPrompt="no" Legacy="yes"/>
+        <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
         <Condition><![CDATA[VersionNT = 602]]></Condition>
       </Component>
     </ComponentGroup>
@@ -337,7 +337,7 @@
       <Component Id="Component_win7_dokan.sys" Guid="369580BF-222B-4D6E-B4A7-E98E73425218" Win64="yes" Transitive="yes">
         <File Id="File_win7_dokan.sys" Source="$(var.ProjectDir)..\..\x64\Win7$(var.Configuration)\dokan.sys" KeyPath="yes"/>
         <File Id="File_win7_dokan.inf" Source="$(var.ProjectDir)..\dokan.inf" KeyPath="no"/>
-        <difx:Driver AddRemovePrograms="no" PlugAndPlayPrompt="no" Legacy="yes"/>
+        <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
         <Condition><![CDATA[VersionNT = 601]]></Condition>
       </Component>
     </ComponentGroup>
