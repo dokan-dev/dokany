@@ -85,7 +85,7 @@
                   Permanent="yes"
                   Vital="yes"
                   Protocol="netfx4"
-                  SourceFile="$(var.ProjectDir)Dependencies\.net 4.6.1\NDP46-KB3045560-Web.exe"
+                  SourceFile="$(var.ProjectDir)Dependencies\netfx 4.6.1\NDP46-KB3045560-Web.exe"
                   DetectCondition='Netfx4FullVersion AND Netfx4FullVersion &gt;= 394271 AND (NOT VersionNT64 OR (Netfx4x64FullVersion AND Netfx4x64FullVersion &gt;= 394271))'
                   InstallCommand="/q /norestart /ChainingPackage &quot;[WixBundleName]&quot;"
                   RepairCommand="/q /norestart /repair /ChainingPackage &quot;[WixBundleName]&quot;"
