@@ -2,7 +2,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   
-	<Bundle Name="Dokan" Version="0.8.3.0" Manufacturer="Dokan" UpgradeCode="801a8a2d-1f21-43c2-8e01-be1375e3f2b3">
+	<Bundle Name="Dokan" Version="0.8.0.0" Manufacturer="Dokan" UpgradeCode="801a8a2d-1f21-43c2-8e01-be1375e3f2b3">
     <BootstrapperApplicationRef Id="ManagedBootstrapperApplicationHost">
       <PayloadGroupRef Id="InstallerPayload"/>
     </BootstrapperApplicationRef>
