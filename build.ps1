@@ -1,5 +1,6 @@
 param(
 	[Parameter(Mandatory = $false)] [switch] $d,
+	[Parameter(Mandatory = $false)] [switch] $installonly,
 	[Parameter(Mandatory = $false)] [string] $vsver = '14.0'
 )
 
@@ -72,4 +73,4 @@ popd
 
 Write-Host "Environment for Visual C++ $vsver has been setup." -ForegroundColor Yellow
 
-& "$($msbuild.MSBuildToolsPath)MSBuild.exe" BuildAll.target /p:Configuration=$configuration
+& "$($msbuild.MSBuildToolsPath)MSBuild.exe" BuildAll.target /p:Configuration=$configuration /p:InstallersOnly=$installonly

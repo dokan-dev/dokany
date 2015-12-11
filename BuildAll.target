@@ -95,8 +95,8 @@
   </ItemGroup>
 
   <Target Name="Build">
-    <MSBuild Projects="@(UserModeProjectsToBuild)" BuildInParallel="true" />
-    <MSBuild Projects="@(KernelModeProjectsToBuild)" BuildInParallel="true" />
+    <MSBuild Projects="@(UserModeProjectsToBuild)" BuildInParallel="true" Condition="'$(InstallersOnly)' != 'true'"/>
+    <MSBuild Projects="@(KernelModeProjectsToBuild)" BuildInParallel="true" Condition="'$(InstallersOnly)' != 'true'"/>
     <MSBuild Projects="@(InstallersToBuild)" BuildInParallel="true" />
     <MSBuild Projects="@(BootstrappersToBuild)" BuildInParallel="false" />
   </Target>
