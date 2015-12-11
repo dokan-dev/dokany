@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  
+	<Bundle Name="Dokan" Version="0.8.3.0" Manufacturer="Dokan" UpgradeCode="801a8a2d-1f21-43c2-8e01-be1375e3f2b3">
+    <BootstrapperApplicationRef Id="ManagedBootstrapperApplicationHost">
+      <PayloadGroupRef Id="InstallerPayload"/>
+    </BootstrapperApplicationRef>
+
+    <!--<util:RegistrySearch
+      Variable="VCVersion_x64"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
+      Value="Version"
+      Result="value"
+      Id="VC_x64_RegistrySearch"
+      Win64="yes"/>
+
+    <util:RegistrySearch
+      Variable="VCVersion_x86"
+      Root="HKLM"
+      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
+      Value="Version"
+      Result="value"
+      Id="VC_x86_RegistrySearch"
+      Win64="no"/>-->
+    
+		<Chain>
+      <ExePackage
+        SourceFile="$(var.ProjectDir)Dependencies\vcredist 2015 update 1\VC_redist.x64.exe"
+        Cache="no"
+        Protocol="burn"
+        Permanent="yes"
+        Vital="yes"
+        PerMachine="yes"
+        InstallCondition="VersionNT64"
+        InstallCommand="/q /norestart"
+        UninstallCommand="/q /uninstall /norestart"
+        RepairCommand="/q /repair /norestart"/>
+
+      <ExePackage
+        Cache="no"
+        Protocol="burn"
+        SourceFile="$(var.ProjectDir)Dependencies\vcredist 2015 update 1\VC_redist.x86.exe"
+        Permanent="yes"
+        Vital="yes"
+        PerMachine="yes"
+        InstallCondition="NOT VersionNT64"
+        InstallCommand="/q /norestart"
+        UninstallCommand="/q /uninstall /norestart"
+        RepairCommand="/q /repair /norestart"/>
+
+      <MsiPackage SourceFile="$(var.DokanInstaller_x64.TargetPath)" Vital="yes" InstallCondition="VersionNT64" EnableFeatureSelection="yes"/>
+      <MsiPackage SourceFile="$(var.DokanInstaller_x86.TargetPath)" Vital="yes" InstallCondition="NOT VersionNT64" EnableFeatureSelection="yes"/>
+		</Chain>
+	</Bundle>
+
+  <Fragment>
+    <WixVariable Id="WixMbaPrereqPackageId" Value="Netfx4Full" />
+    <WixVariable Id="WixMbaPrereqLicenseUrl" Value="NetfxLicense.rtf" />
+      
+    <PayloadGroup Id="InstallerPayload">
+      <Payload SourceFile="$(var.Dokan.BootstrapperUX.TargetPath)"/>
+      <Payload SourceFile="$(var.Dokan.BootstrapperUX.TargetDir)BootstrapperCore.config"/>
+      <Payload SourceFile="$(var.Dokan.BootstrapperUX.TargetDir)Microsoft.Deployment.WindowsInstaller.dll"/>
+    <Payload SourceFile="$(var.Dokan.BootstrapperUX.TargetDir)Microsoft.Deployment.WindowsInstaller.Linq.dll"/>
+    </PayloadGroup>
+  </Fragment>
+  
+  <Fragment>
+    <!-- Managed bootstrapper requires .NET as a dependency, since it was written in .NET.
+       WiX provides a Bootstrapper for the bootstrapper. The fragment below includes .NET.
+       For more information or examples see Heath Stewart's blog or the WiX source:
+       http://blogs.msdn.com/b/heaths/archive/2011/10/28/introducing-managed-bootstrapper-applications.aspx
+    -->
+    
+    <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\Net Framework Setup\NDP\v4\Full" Value="Release" Variable="Netfx4FullVersion" />
+    <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\Net Framework Setup\NDP\v4\Full" Value="Release" Variable="Netfx4x64FullVersion" Win64="yes" />
+    
+    <PackageGroup Id="Netfx4Full">
+      <ExePackage Id="Netfx4Full"
+                  Cache="no"
+                  Compressed="yes"
+                  PerMachine="yes"
+                  Permanent="yes"
+                  Vital="yes"
+                  Protocol="netfx4"
+                  SourceFile="$(var.ProjectDir)Dependencies\.net 4.6.1\NDP46-KB3045560-Web.exe"
+                  DetectCondition='Netfx4FullVersion AND Netfx4FullVersion &gt;= 394271 AND (NOT VersionNT64 OR (Netfx4x64FullVersion AND Netfx4x64FullVersion &gt;= 394271))'
+                  InstallCommand="/q /norestart /ChainingPackage &quot;[WixBundleName]&quot;"
+                  RepairCommand="/q /norestart /repair /ChainingPackage &quot;[WixBundleName]&quot;"
+                  UninstallCommand="/q /norestart /uninstall /ChainingPackage &quot;[WixBundleName]&quot;"
+      />
+    </PackageGroup>
+  </Fragment>
+</Wix>

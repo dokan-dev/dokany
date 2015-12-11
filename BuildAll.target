@@ -1,0 +1,103 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <ItemGroup>
+    <UserModeProjectsToBuild Include="dokan.sln">
+      <Properties>Platform=Win32</Properties>
+    </UserModeProjectsToBuild>
+    <UserModeProjectsToBuild Include="dokan.sln">
+      <Properties>Platform=x64</Properties>
+    </UserModeProjectsToBuild>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NOTE: When building a project there is no solution so $(SolutionDir) defaults to the project directory.
+    Thus we set it to ..\ to move it up one directory though we could pass in a property from build.ps1 that
+    contained the full solution path.-->
+    
+    <!-- ******************* Windows 7 ******************* -->
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=Win32;Configuration=Win7 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=Win32;Configuration=Win7 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=x64;Configuration=Win7 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=x64;Configuration=Win7 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <!-- ******************* Windows 8 ******************* -->
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=Win32;Configuration=Win8 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=Win32;Configuration=Win8 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=x64;Configuration=Win8 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=x64;Configuration=Win8 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <!-- ******************* Windows 8.1 ******************* -->
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=Win32;Configuration=Win8.1 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=Win32;Configuration=Win8.1 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=x64;Configuration=Win8.1 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=x64;Configuration=Win8.1 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <!-- ******************* Windows 10 ******************* -->
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=Win32;Configuration=Win10 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=Win32;Configuration=Win10 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Debug'">
+      <Properties>Platform=x64;Configuration=Win10 Debug;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+    <KernelModeProjectsToBuild Include="sys\sys.vcxproj" Condition="'$(Configuration)' == 'Release'">
+      <Properties>Platform=x64;Configuration=Win10 Release;SolutionDir=..\</Properties>
+    </KernelModeProjectsToBuild>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <InstallersToBuild Include="dokan_install\DokanInstaller_x86\DokanInstaller_x86.wixproj">
+      <Properties>Platform=x86</Properties>
+      <Properties>BuildProjectReferences=false</Properties>
+      <Properties>LinkerAdditionalOptions="%25WIX%25bin\difxapp_x86.wixlib"</Properties>
+    </InstallersToBuild>
+    <InstallersToBuild Include="dokan_install\DokanInstaller_x64\DokanInstaller_x64.wixproj">
+      <Properties>Platform=x86</Properties>
+      <Properties>BuildProjectReferences=false</Properties>
+      <Properties>LinkerAdditionalOptions="%25WIX%25bin\difxapp_x64.wixlib"</Properties>
+    </InstallersToBuild>
+  </ItemGroup>
+
+  <ItemGroup>
+    <BootstrappersToBuild Include="dokan_install\DokanInstaller_Bootstrapper\DokanInstaller_Bootstrapper.wixproj">
+      <Properties>Platform=x86</Properties>
+      <Properties>BuildProjectReferences=false</Properties>
+    </BootstrappersToBuild>
+  </ItemGroup>
+
+  <Target Name="Build">
+    <MSBuild Projects="@(UserModeProjectsToBuild)" BuildInParallel="true" />
+    <MSBuild Projects="@(KernelModeProjectsToBuild)" BuildInParallel="true" />
+    <MSBuild Projects="@(InstallersToBuild)" BuildInParallel="true" />
+    <MSBuild Projects="@(BootstrappersToBuild)" BuildInParallel="false" />
+  </Target>
+</Project>

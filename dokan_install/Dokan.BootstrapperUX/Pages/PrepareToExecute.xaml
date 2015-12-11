@@ -1,0 +1,22 @@
+﻿<UserControl x:Class="Dokan.BootstrapperUX.Pages.PrepareToExecute"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Dokan.BootstrapperUX.Pages"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <Grid>
+        <TextBlock Name="m_txtInstall" TextWrapping="Wrap" Visibility="Collapsed">Click Install to begin the installation. Click Back to review or change any of your installation settings. Click X to cancel installation and close the wizard.</TextBlock>
+        <RichTextBox IsReadOnly="True" Background="Transparent" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Auto" BorderThickness="0" Focusable="False" IsReadOnlyCaretVisible="False" Cursor="Arrow">
+            <RichTextBox.Document>
+                <FlowDocument>
+                    <Paragraph>
+                        <!-- NOTE: It is *VERY* important that there are no new-lines between any of these <Run/> tags or else it will screw up formatting -->
+                        <Run Text="Click "/><Run Name="m_runAction" Text="Install"/><Run Text=" to begin the "/><Run Name="m_runInstallType" Text="installation"/><Run Text="."/><Run Name="m_runBack" Text=" Click Back to review or change any of your installation settings."/>
+                    </Paragraph>
+                </FlowDocument>
+            </RichTextBox.Document>
+        </RichTextBox>
+    </Grid>
+</UserControl>
