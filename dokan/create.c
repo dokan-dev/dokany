@@ -184,6 +184,11 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     ioSecurityContext.DesiredAccess =
         EventContext->Operation.Create.SecurityContext.DesiredAccess;
 
+    // Call SetLastError() to reset the error code to a known state
+    // so we can check whether or not the user-mode driver set ERROR_ALREADY_EXISTS
+    SetLastError(ERROR_SUCCESS);
+
+    // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
     status = DokanInstance->DokanOperations->ZwCreateFile(
         fileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
         EventContext->Operation.Create.FileAttributes,
