@@ -26,12 +26,16 @@
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
     <DefineConstants>Debug;SourceDir=.\Sources</DefineConstants>
     <SuppressIces>ICE30</SuppressIces>
-    <LinkerAdditionalOptions>-sw1137</LinkerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x64.wixlib"</LinkerAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Dokan_x64.wxs" />
   </ItemGroup>
   <ItemGroup>
+    <WixExtension Include="WixDifxAppExtension">
+      <HintPath>$(WixExtDir)\WixDifxAppExtension.dll</HintPath>
+      <Name>WixDifxAppExtension</Name>
+    </WixExtension>
     <WixExtension Include="WixUtilExtension">
       <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
       <Name>WixUtilExtension</Name>
@@ -51,6 +55,9 @@
   </PropertyGroup>
   <PropertyGroup>
     <PreBuildEvent />
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" O:\Produkte\gpg4o\signing\signtool.exe sign /fd SHA256 /tr http://timestamp.geotrust.com/tsa /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
   </PropertyGroup>
   <!--
 	To modify your build process, add your task inside one of the targets below and uncomment it.

@@ -90,8 +90,8 @@ namespace WiXCA
                     return ActionResult.NotExecuted;
                 }
                 
-                string executeResult = ExecuteProcessAndWaitForResult(dokanctlPath, @"/i a");
-                session.Log("ExecuteInstall '" + dokanctlPath + "' result:\n" + executeResult);
+                // string executeResult = ExecuteProcessAndWaitForResult(dokanctlPath, @"/i a");
+                // session.Log("ExecuteInstall '" + dokanctlPath + "' result:\n" + executeResult);
 
                 string executeResult2 = ExecuteProcessAndWaitForResult(dokanctlPath, @"/i n");
                 session.Log("ExecuteInstall '" + dokanctlPath + "' result:\n " + executeResult2);
@@ -150,8 +150,8 @@ namespace WiXCA
                 string executeResult = ExecuteProcessAndWaitForResult(dokanctlPath, @"/r n");
                 session.Log("ExecuteUninstall '" + dokanctlPath + "' result:\n" + executeResult);
 
-                string executeResult2 = ExecuteProcessAndWaitForResult(dokanctlPath, @"/r a");
-                session.Log("ExecuteUninstall '" + dokanctlPath + "' result:\n" + executeResult2);
+                // string executeResult2 = ExecuteProcessAndWaitForResult(dokanctlPath, @"/r a");
+                // session.Log("ExecuteUninstall '" + dokanctlPath + "' result:\n" + executeResult2);
 
             }
             catch (Exception e)

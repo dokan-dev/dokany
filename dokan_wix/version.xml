@@ -12,6 +12,6 @@
 <?define CompanyName="Dokany Project" ?>
 <?define ShortCompanyName="Dokany Project" ?>
 <?define UpdateURL="https://http://dokan-dev.github.io/" ?>
-<?define InstallerVersion="200" ?>
+<?define InstallerVersion="500" ?>
 <?define Compressed="no" ?>
 </Include>

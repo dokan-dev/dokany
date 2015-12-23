@@ -1,0 +1,48 @@
+[Version]
+Signature         = "$Windows NT$"
+Provider          = %Dokan%
+DriverVer         = 12/23/2015,0.8.0.0
+CatalogFile       = 
+DriverPackageType = FileSystem
+
+[DestinationDirs]
+DefaultDestDir              = 12
+DokanFileSystem.DriverFiles = 12
+
+[DefaultInstall]
+OptionDesc = %ServiceDesc%
+CopyFiles = DokanFileSystem.DriverFiles
+
+[DefaultInstall.Services]
+AddService = %ServiceName%,,DokanFileSystem.Service
+
+[DefaultUninstall]
+DelFiles   = DokanFileSystem.DriverFiles
+
+[DefaultUninstall.Services]
+DelService = %ServiceName%,0x200
+
+[SourceDisksNames]
+1 = %Disk1%
+
+[SourceDisksFiles]
+%DriverName%.sys = 1
+
+[DokanFileSystem.DriverFiles]
+%DriverName%.sys
+
+[DokanFileSystem.Service]
+DisplayName    = %ServiceName%
+Description    = %ServiceDesc%
+ServiceBinary  = %12%\%DriverName%.sys
+ServiceType    = 2 ;    SERVICE_FILE_SYSTEM_DRIVER
+StartType      = 1 ;    SERVICE_SYSTEM_START
+ErrorControl   = 1 ;    SERVICE_ERROR_NORMAL
+LoadOrderGroup = "File System"
+
+[Strings]
+Dokan = "Dokan"
+DriverName = "dokan"
+Disk1 = "Dokan installation media"
+ServiceDesc = "Dokan kernel-mode file system driver."
+ServiceName = "dokan"
