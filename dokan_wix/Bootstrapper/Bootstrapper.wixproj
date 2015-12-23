@@ -46,6 +46,9 @@
     <Content Include="licdata.rtf" />
   </ItemGroup>
   <Import Project="$(WixTargetsPath)" />
+  <PropertyGroup>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" signtool.exe sign /fd SHA256 /tr http://timestamp.geotrust.com/tsa /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
+  </PropertyGroup>
   <!--
 	To modify your build process, add your task inside one of the targets below and uncomment it.
 	Other similar extension points exist, see Wix.targets.
