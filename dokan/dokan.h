@@ -132,6 +132,9 @@ typedef struct _DOKAN_OPERATIONS {
   void(DOKAN_CALLBACK *CloseFile)(LPCWSTR, // FileName
                                   PDOKAN_FILE_INFO);
 
+  // ReadFile and WriteFile can be called from multiple threads in
+  // the same time with the same DOKAN_FILE_INFO.Context if a OVERLAPPED is
+  // requested.
   NTSTATUS(DOKAN_CALLBACK *ReadFile)
   (LPCWSTR,  // FileName
    LPVOID,   // Buffer
