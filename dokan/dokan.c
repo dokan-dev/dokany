@@ -655,14 +655,6 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
-
-      if (instance->DokanOperations->Unmounted) {
-        DOKAN_FILE_INFO fileInfo;
-        RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
-        fileInfo.DokanOptions = instance->DokanOptions;
-        instance->DokanOperations->Unmounted(&fileInfo);
-      }
-
       DokanRemoveMountPoint(instance->MountPoint);
       free(instance);
     }
