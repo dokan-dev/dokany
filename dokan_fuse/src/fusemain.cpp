@@ -430,18 +430,19 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
       // Existing file
       // Check if we'll be able to truncate or delete the opened file
       // TODO: race condition here?
-      if (creation_disposition == CREATE_ALWAYS) {
+      if (creation_disposition == FILE_OVERWRITE) {
         if (!ops_.unlink)
           return -EINVAL;
         CHECKED(ops_.unlink(fname.c_str())); // Delete file
         // And create it!
         return do_create_file(file_name, creation_disposition, share_mode,
                               access_mode, dokan_file_info);
-      } else if (creation_disposition == TRUNCATE_EXISTING) {
+      } else if (creation_disposition == FILE_SUPERSEDE ||
+                 creation_disposition == FILE_OVERWRITE_IF) {
         if (!ops_.truncate)
           return -EINVAL;
         CHECKED(ops_.truncate(fname.c_str(), 0));
-      } else if (creation_disposition == CREATE_NEW) {
+      } else if (creation_disposition == FILE_CREATE) {
         return win_error(ERROR_FILE_EXISTS, true);
       }
 
