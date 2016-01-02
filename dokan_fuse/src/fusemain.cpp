@@ -1,4 +1,7 @@
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 #include <errno.h>
 #include <sys/utime.h>
 #include <sys/stat.h>
@@ -443,7 +446,7 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
           return -EINVAL;
         CHECKED(ops_.truncate(fname.c_str(), 0));
       } else if (creation_disposition == FILE_CREATE) {
-        return win_error(ERROR_FILE_EXISTS, true);
+        return win_error(STATUS_OBJECT_NAME_COLLISION, true);
       }
 
       return do_open_file(file_name, share_mode, access_mode, dokan_file_info);
