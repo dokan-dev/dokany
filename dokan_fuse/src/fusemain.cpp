@@ -146,6 +146,41 @@ int impl_fuse_context::do_open_file(LPCWSTR FileName, DWORD share_mode,
   return 0;
 }
 
+int impl_fuse_context::do_delete_directory(LPCWSTR file_name,
+                                           PDOKAN_FILE_INFO dokan_file_info) {
+  std::string fname = unixify(wchar_to_utf8_cstr(file_name));
+
+  if (!ops_.rmdir || !ops_.getattr)
+    return -EINVAL;
+
+  // Make sure directory is NOT opened
+  // TODO: potential race here - Unix filesystems typically allow
+  // to delete open files and directories.
+  impl_file_handle *hndl =
+      reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
+  if (hndl)
+    return -EBUSY;
+
+  // A special case: symlinks are deleted by unlink, not rmdir
+  struct FUSE_STAT stbuf = {0};
+  CHECKED(ops_.getattr(fname.c_str(), &stbuf));
+  if (S_ISLNK(stbuf.st_mode) && ops_.unlink)
+    return ops_.unlink(fname.c_str());
+
+  // Ok, try to rmdir it.
+  return ops_.rmdir(fname.c_str());
+}
+
+int impl_fuse_context::do_delete_file(LPCWSTR file_name,
+                                      PDOKAN_FILE_INFO dokan_file_info) {
+  if (!ops_.unlink)
+    return -EINVAL;
+
+  // Note: we do not try to resolve symlink target
+  std::string fname = unixify(wchar_to_utf8_cstr(file_name));
+  return ops_.unlink(fname.c_str());
+}
+
 int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition,
                                       DWORD share_mode, DWORD Flags,
                                       PDOKAN_FILE_INFO DokanFileInfo)
@@ -361,6 +396,18 @@ int impl_fuse_context::cleanup(LPCWSTR file_name,
 
   // The one way to solve this is to keep a table of files 'still in flight'
   // and block until the file is closed. We're not doing this yet.
+
+  if (dokan_file_info->Context) {
+    if (dokan_file_info->DeleteOnClose) {
+      close_file(file_name, dokan_file_info);
+      if (dokan_file_info->IsDirectory) {
+        do_delete_directory(file_name, dokan_file_info);
+      } else {
+        do_delete_file(file_name, dokan_file_info);
+      }
+    }
+  }
+
   return 0;
 }
 
@@ -378,25 +425,11 @@ int impl_fuse_context::delete_directory(LPCWSTR file_name,
                                         PDOKAN_FILE_INFO dokan_file_info) {
   std::string fname = unixify(wchar_to_utf8_cstr(file_name));
 
-  if (!ops_.rmdir || !ops_.getattr)
+  if (!ops_.getattr)
     return -EINVAL;
 
-  // Make sure directory is NOT opened
-  // TODO: potential race here - Unix filesystems typically allow
-  // to delete open files and directories.
-  impl_file_handle *hndl =
-      reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
-  if (hndl)
-    return -EBUSY;
-
-  // A special case: symlinks are deleted by unlink, not rmdir
   struct FUSE_STAT stbuf = {0};
-  CHECKED(ops_.getattr(fname.c_str(), &stbuf));
-  if (S_ISLNK(stbuf.st_mode) && ops_.unlink)
-    return ops_.unlink(fname.c_str());
-
-  // Ok, try to rmdir it.
-  return ops_.rmdir(fname.c_str());
+  return ops_.getattr(fname.c_str(), &stbuf);
 }
 
 win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
@@ -619,12 +652,13 @@ int impl_fuse_context::get_file_information(
 
 int impl_fuse_context::delete_file(LPCWSTR file_name,
                                    PDOKAN_FILE_INFO dokan_file_info) {
-  if (!ops_.unlink)
+  std::string fname = unixify(wchar_to_utf8_cstr(file_name));
+
+  if (!ops_.getattr)
     return -EINVAL;
 
-  // Note: we do not try to resolve symlink target
-  std::string fname = unixify(wchar_to_utf8_cstr(file_name));
-  return ops_.unlink(fname.c_str());
+  struct FUSE_STAT stbuf = {0};
+  return ops_.getattr(fname.c_str(), &stbuf);
 }
 
 int impl_fuse_context::move_file(LPCWSTR file_name, LPCWSTR new_file_name,
