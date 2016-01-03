@@ -49,6 +49,21 @@
   <PropertyGroup>
     <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" signtool.exe sign /fd SHA256 /tr http://timestamp.geotrust.com/tsa /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
   </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>cd /d "$(ProjectDir)"
+if NOT exist Redist\VCRedist_2015\vc_redist.x86.exe (
+wget https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x86.exe
+if NOT exist Redist\ mkdir Redist
+if NOT exist Redist\VCRedist_2015\ mkdir Redist\VCRedist_2015\
+if exist VC_redist.x86.exe move VC_redist.x86.exe Redist\VCRedist_2015\
+)
+if NOT exist Redist\VCRedist_2015\vc_redist.x64.exe (
+wget https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x64.exe
+if NOT exist Redist\ mkdir Redist
+if NOT exist Redist\VCRedist_2015\ mkdir Redist\VCRedist_2015\
+if exist VC_redist.x64.exe move VC_redist.x64.exe Redist\VCRedist_2015\
+)</PreBuildEvent>
+  </PropertyGroup>
   <!--
 	To modify your build process, add your task inside one of the targets below and uncomment it.
 	Other similar extension points exist, see Wix.targets.

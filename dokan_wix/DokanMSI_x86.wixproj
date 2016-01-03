@@ -18,9 +18,8 @@
     <DefineConstants>Debug;SourceDir=.\Sources</DefineConstants>
     <SuppressPdbOutput>False</SuppressPdbOutput>
     <SuppressIces>ICE30</SuppressIces>
-    <LinkerAdditionalOptions>-sw1137</LinkerAdditionalOptions>
-    <CompilerAdditionalOptions>
-    </CompilerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib"</LinkerAdditionalOptions>
+    <CompilerAdditionalOptions>-sw1077</CompilerAdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
@@ -28,6 +27,7 @@
     <DefineConstants>Debug;SourceDir=.\Sources</DefineConstants>
     <SuppressIces>ICE30</SuppressIces>
     <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib"</LinkerAdditionalOptions>
+    <CompilerAdditionalOptions>-sw1077</CompilerAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Dokan_x86.wxs" />
