@@ -894,17 +894,11 @@ int impl_fuse_context::unmounted(PDOKAN_FILE_INFO DokanFileInfo) {
 // get required shared mode given an access mode
 static DWORD required_share(DWORD access_mode) {
   DWORD share = 0;
-  if (access_mode & (STANDARD_RIGHTS_EXECUTE | STANDARD_RIGHTS_READ |
-                     GENERIC_READ | GENERIC_EXECUTE | FILE_GENERIC_EXECUTE |
-                     FILE_GENERIC_READ | READ_CONTROL | FILE_EXECUTE |
-                     FILE_LIST_DIRECTORY | FILE_READ_DATA | FILE_READ_EA))
+  if (access_mode & (FILE_EXECUTE | FILE_READ_DATA))
     share |= FILE_SHARE_READ;
-  if (access_mode &
-      (STANDARD_RIGHTS_WRITE | GENERIC_WRITE | FILE_GENERIC_WRITE | WRITE_DAC |
-       WRITE_OWNER | FILE_WRITE_ATTRIBUTES | FILE_WRITE_DATA | FILE_WRITE_EA |
-       FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_APPEND_DATA))
+  if (access_mode & (FILE_WRITE_DATA | FILE_APPEND_DATA))
     share |= FILE_SHARE_WRITE;
-  if (access_mode & (DELETE | FILE_DELETE_CHILD))
+  if (access_mode & DELETE)
     share |= FILE_SHARE_DELETE;
   return share;
 }
