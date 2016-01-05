@@ -95,6 +95,10 @@ public:
 	int do_create_file(LPCWSTR FileName, DWORD Disposition, DWORD share_mode, DWORD Flags,
 		PDOKAN_FILE_INFO DokanFileInfo);
 
+    int do_delete_directory(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
+
+    int do_delete_file(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
+
 	int convert_flags(DWORD Flags);
 
 	int resolve_symlink(const std::string &name, std::string *res);
