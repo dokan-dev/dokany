@@ -264,7 +264,7 @@
       <ComponentRef Id="LibFilesComponent"/>
       <ComponentRef Id="SampleFilesComponent"/>
     </Feature>
-    <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="1">
+    <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
       <ComponentRef Id="Win7_x64pdb"/>
       <ComponentRef Id="Win8_x64pdb"/>
       <ComponentRef Id="Win81_x64pdb"/>
