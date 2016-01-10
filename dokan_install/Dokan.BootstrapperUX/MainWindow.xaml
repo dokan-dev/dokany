@@ -1,0 +1,78 @@
+﻿<Window x:Class="Dokan.BootstrapperUX.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Dokan.BootstrapperUX.Controls"
+        xmlns:ux="clr-namespace:Dokan.BootstrapperUX"
+        xmlns:page="clr-namespace:Dokan.BootstrapperUX.Pages"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="500" Width="500" ResizeMode="NoResize" WindowStartupLocation="CenterScreen" WindowStyle="None" BorderThickness="1" BorderBrush="#FFA9A9A9">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/EatCake.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="ux:InstallerCommands.InstallTypical" Executed="CommandBinding_InstallTypical_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.ChooseFeatures" Executed="CommandBinding_ChooseFeatures_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.InstallComplete" Executed="CommandBinding_InstallComplete_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Back" Executed="CommandBinding_Back_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Next" Executed="CommandBinding_Next_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Install" Executed="CommandBinding_ExecutePlan_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Uninstall" Executed="CommandBinding_ExecutePlan_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Modify" Executed="CommandBinding_ExecutePlan_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Repair" Executed="CommandBinding_ExecutePlan_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Cancel" Executed="CommandBinding_Cancel_Executed"/>
+        <CommandBinding Command="ApplicationCommands.Close" Executed="CommandBinding_Close_Executed"/>
+        <CommandBinding Command="ux:InstallerCommands.Restart" Executed="CommandBinding_Restart_Executed"/>
+    </Window.CommandBindings>
+    
+    <DockPanel LastChildFill="True">
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" HorizontalAlignment="Right">
+            <local:MinimizeAppButton/>
+            <local:CloseAppButton/>
+        </StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="80"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" HorizontalAlignment="Center" TextWrapping="Wrap" Text="Dokan" VerticalAlignment="Top" FontSize="40" Margin="0,0,0,20" Foreground="{StaticResource ThemeWindowTextBrush}"/>
+
+            <StackPanel Grid.Row="1"  Orientation="Horizontal" HorizontalAlignment="Left" TextBlock.Foreground="{StaticResource ThemeWindowLightTextBrush}">
+                <Canvas Height="42" Width="20">
+                    <Polygon Points="0,0 20,21 0,42" Fill="{StaticResource ThemeControlBorder2Brush}"/>
+                </Canvas>
+                <TextBlock Text="Version " Margin="10,5,0,0" FontSize="24"/>
+                <TextBlock Name="m_txtVersion" Text="0.8.3" Margin="0,5,0,0" FontSize="24"/>
+            </StackPanel>
+
+            <Grid Name="m_gridPages" Grid.Row="2" Background="{StaticResource ThemeWindowBackgroundBrush}" TextBlock.Foreground="{StaticResource ThemeWindowTextBrush}">
+                <local:ProgressRing x:Name="m_progressRing" Height="90" Width="90" Foreground="{StaticResource ThemeControlBorder2Brush}"/>
+                <page:InstallationType x:Name="m_pageInstallationType" Visibility="Collapsed" Margin="30,0"/>
+                <page:FeatureSelection x:Name="m_pageFeatureSelection" Visibility="Collapsed" Margin="30"/>
+                <page:PrepareToExecute x:Name="m_pagePrepareToExecute" Visibility="Collapsed" Margin="30"/>
+                <page:Progress x:Name="m_pageProgress" Visibility="Collapsed" Margin="30"/>
+                <page:Complete x:Name="m_pageComplete" Visibility="Collapsed" Margin="30"/>
+            </Grid>
+            
+            <Grid Grid.Row="3" Background="{StaticResource ThemeFooterBackgroundBrush}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button x:Name="m_btnBack" Content="Back" Width="85" Visibility="Collapsed" Command="ux:InstallerCommands.Back" Margin="0,0,5,0"/>
+                    <Button x:Name="m_btnNext" Content="Next" Width="85" Visibility="Collapsed" Command="ux:InstallerCommands.Next"/>
+                    <local:UACButton x:Name="m_btnInstall" Content="Install" Width="85" Visibility="Collapsed"/>
+                    <Button x:Name="m_btnRestart" Content="Restart" Width="85" Visibility="Collapsed" Command="ux:InstallerCommands.Restart"/>
+                    <Button x:Name="m_btnCancel" Content="Cancel" Width="85" Visibility="Collapsed" Command="ux:InstallerCommands.Cancel"/>
+                    <Button x:Name="m_btnClose" Content="Close" Width="85" Visibility="Collapsed" Command="ApplicationCommands.Close"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

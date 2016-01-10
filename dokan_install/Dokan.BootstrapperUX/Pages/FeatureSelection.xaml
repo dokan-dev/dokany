@@ -1,0 +1,40 @@
+﻿<UserControl x:Class="Dokan.BootstrapperUX.Pages.FeatureSelection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Dokan.BootstrapperUX.Pages"
+             xmlns:ux="clr-namespace:Dokan.BootstrapperUX"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Name="m_txtModify" Grid.Row="0" TextWrapping="Wrap" Text="Select features to install or uninstall:" Visibility="Collapsed"/>
+        <TextBlock Name="m_txtInstall" Grid.Row="0" TextWrapping="Wrap" Text="Select features to install:"/>
+        
+        <TreeView Name="m_treeView" Grid.Row="1" Margin="0,10,0,0">
+            <TreeView.Resources>
+                <ux:InverseBoolValueConverter x:Key="InverseBoolValueConverter"/>
+            </TreeView.Resources>
+
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="{x:Type TreeViewItem}">
+                    <Setter Property="Focusable" Value="False"/>
+                </Style>
+            </TreeView.ItemContainerStyle>
+
+            <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal" ToolTip="{Binding Description}">
+                        <CheckBox Focusable="False" IsChecked="{Binding IsChecked}" VerticalAlignment="Center" IsEnabled="{Binding DisallowAbsent, Converter={StaticResource InverseBoolValueConverter}}" IsThreeState="True"/>
+                        <ContentPresenter Content="{Binding Title}" Margin="2,0"/>
+                    </StackPanel>
+                </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </Grid>
+</UserControl>
