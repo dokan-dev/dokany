@@ -1036,7 +1036,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
   DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
   HANDLE handle = CreateFile(
       filePath,
-      READ_CONTROL | ((*SecurityInformation & SACL_SECURITY_INFORMATION)
+      READ_CONTROL
+	  | (((*SecurityInformation & SACL_SECURITY_INFORMATION)
+		|| (*SecurityInformation & BACKUP_SECURITY_INFORMATION))
                           ? ACCESS_SYSTEM_SECURITY
                           : 0),
       FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
@@ -1057,7 +1059,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
     if (error == ERROR_INSUFFICIENT_BUFFER) {
       DbgPrint(L"  GetUserObjectSecurity failed: ERROR_INSUFFICIENT_BUFFER\n");
       CloseHandle(handle);
-      return ToNtStatus(error);
+      return STATUS_BUFFER_OVERFLOW;
     } else {
       DbgPrint(L"  GetUserObjectSecurity failed: %d\n", error);
       CloseHandle(handle);
