@@ -63,11 +63,20 @@ static void DbgPrint(LPCWSTR format, ...) {
 
 static WCHAR RootDirectory[MAX_PATH] = L"C:";
 static WCHAR MountPoint[MAX_PATH] = L"M:\\";
+static WCHAR UNCName[MAX_PATH] = L"";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
   wcsncpy_s(filePath, numberOfElements, RootDirectory, wcslen(RootDirectory));
-  wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
+  size_t unclen = wcslen(UNCName);
+  if (unclen > 0 && _wcsnicmp(FileName, UNCName, unclen) == 0) {
+    if (_wcsnicmp(FileName + unclen, L".", 1) != 0) {
+      wcsncat_s(filePath, numberOfElements, FileName + unclen,
+                wcslen(FileName) - unclen);
+    }
+  } else {
+    wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
+  }
 }
 
 static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
@@ -1036,9 +1045,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
   DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
   HANDLE handle = CreateFile(
       filePath,
-      READ_CONTROL
-	  | (((*SecurityInformation & SACL_SECURITY_INFORMATION)
-		|| (*SecurityInformation & BACKUP_SECURITY_INFORMATION))
+      READ_CONTROL | (((*SecurityInformation & SACL_SECURITY_INFORMATION) ||
+                       (*SecurityInformation & BACKUP_SECURITY_INFORMATION))
                           ? ACCESS_SYSTEM_SECURITY
                           : 0),
       FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
@@ -1213,7 +1221,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     return EXIT_FAILURE;
   }
 
-  if (argc < 5) {
+  if (argc < 3) {
     fprintf(stderr, "mirror.exe\n"
                     "  /r RootDirectory (ex. /r c:\\test)\n"
                     "  /l DriveLetter (ex. /l m)\n"
@@ -1223,6 +1231,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /n (use network drive)\n"
                     "  /m (use removable drive)\n"
                     "  /w (write-protect drive)\n"
+                    "  /g (use mount manager)\n"
+                    "  /u UNC provider name"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
     free(dokanOptions);
@@ -1268,6 +1278,15 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'w':
       dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
       break;
+    case L'g':
+      dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
+      break;
+    case L'u':
+      command++;
+      wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
+      dokanOptions->UNCName = UNCName;
+      DbgPrint(L"UNC Name: %ls\n", UNCName);
+      break;
     case L'i':
       command++;
       dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
@@ -1278,6 +1297,29 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       free(dokanOptions);
       return EXIT_FAILURE;
     }
+  }
+
+  if (wcscmp(UNCName, L"") != 0 &&
+      !(dokanOptions->Options & DOKAN_OPTION_NETWORK)) {
+    fwprintf(
+        stderr,
+        L"  Warning: UNC provider name should be set on network drive only.\n");
+  }
+
+  if (dokanOptions->Options & DOKAN_OPTION_NETWORK &&
+      dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
+    fwprintf(stderr, L"Mount manager cannot be used on network drive.\n");
+    free(dokanOperations);
+    free(dokanOptions);
+    return -1;
+  }
+
+  if (!(dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+      wcscmp(MountPoint, L"") == 0) {
+    fwprintf(stderr, L"Mount Point required.\n");
+    free(dokanOperations);
+    free(dokanOptions);
+    return -1;
   }
 
   // Add security name privilege. Required here to handle GetFileSecurity

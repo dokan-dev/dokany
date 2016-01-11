@@ -33,7 +33,6 @@ UninstPage instfiles
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\${arch}\Release\dokanctl.exe
-    File ..\${arch}\Release\mounter.exe
 	
   SetOutPath ${folder}\Dokan\DokanLibrary\include\dokan
 	
@@ -78,7 +77,6 @@ UninstPage instfiles
   SetOutPath ${folder}\Dokan\DokanLibrary\pdb
  
     File ..\${arch}\Release\dokanctl.pdb
-    File ..\${arch}\Release\mounter.pdb
 	
   SetOutPath ${folder}\Dokan\DokanLibrary\pdb\mirror
   
@@ -91,7 +89,7 @@ UninstPage instfiles
 !macroend
 
 !macro DokanSetup
-    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
+    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i d' $0
 	ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
   DetailPrint "dokanctl returned $0"
   WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
@@ -251,7 +249,7 @@ SectionEnd
 
 Section "Uninstall"
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r n' $0
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r a' $0
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r d' $0
   DetailPrint "dokanctl.exe returned $0"
 
   RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary

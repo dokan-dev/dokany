@@ -80,6 +80,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="dispatch.c">
+	  <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pnp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

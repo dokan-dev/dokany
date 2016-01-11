@@ -66,6 +66,11 @@ Return Value:
     DokanPrintFileName(fileObject);
 
     vcb = DeviceObject->DeviceExtension;
+    if (vcb == NULL) {
+      DDbgPrint("  No device extension\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
     if (GetIdentifierType(vcb) != VCB ||
         !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {

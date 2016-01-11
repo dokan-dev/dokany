@@ -29,9 +29,7 @@ extern "C" {
 #endif
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\\\.\\Dokan"
-#define DOKAN_CONTROL_PIPE L"\\\\.\\pipe\\DokanMounter"
 
-#define DOKAN_MOUNTER_SERVICE L"DokanMounter"
 #define DOKAN_DRIVER_SERVICE L"Dokan"
 
 #define DOKAN_CONTROL_MOUNT 1
@@ -148,8 +146,6 @@ BOOL DOKANAPI DokanNetworkProviderInstall();
 BOOL DOKANAPI DokanNetworkProviderUninstall();
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode);
-
-BOOL DOKANAPI DokanMountControl(PDOKAN_CONTROL Control);
 
 #ifdef __cplusplus
 }

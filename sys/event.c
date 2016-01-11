@@ -382,6 +382,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   GUID baseGuid = DOKAN_BASE_GUID;
   UNICODE_STRING unicodeGuid;
   ULONG deviceNamePos;
+  BOOLEAN useMountManager = FALSE;
 
   DDbgPrint("==> DokanEventStart\n");
 
@@ -437,6 +438,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     deviceCharacteristics |= FILE_READ_ONLY_DEVICE;
   }
 
+  if (eventStart.Flags & DOKAN_EVENT_MOUNT_MANAGER) {
+    DDbgPrint("  Using Mount Manager\n");
+    useMountManager = TRUE;
+  }
+
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
   baseGuid.Data3 = (USHORT)(dokanGlobal->MountId >> 16) ^ baseGuid.Data3;
 
@@ -455,8 +461,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
 
   status = DokanCreateDiskDevice(
-      DeviceObject->DriverObject, dokanGlobal->MountId, baseGuidString,
-      dokanGlobal, deviceType, deviceCharacteristics, &dcb);
+      DeviceObject->DriverObject, dokanGlobal->MountId, eventStart.MountPoint,
+      eventStart.UNCName, baseGuidString, dokanGlobal, deviceType,
+      deviceCharacteristics, useMountManager, &dcb);
 
   if (!NT_SUCCESS(status)) {
     ExReleaseResourceLite(&dokanGlobal->Resource);

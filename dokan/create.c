@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <ntstatus.h>
 #include "dokani.h"
+#include <ntstatus.h>
 
 VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                                    // Dokan Device Driver(which is doing
@@ -111,6 +111,8 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     }
   }
 
+  DbgPrint("###Create %04d\n", eventId);
+
   // to open no directory file
   // event if this flag is not specified,
   // there is a case to open non directory file
@@ -118,7 +120,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     // DbgPrint("FILE_NON_DIRECTORY_FILE\n");
   }
 
-  DbgPrint("###Create %04d\n", eventId);
   // DbgPrint("### OpenInfo %X\n", openInfo);
   openInfo->EventId = eventId++;
 
@@ -185,7 +186,8 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
         EventContext->Operation.Create.SecurityContext.DesiredAccess;
 
     // Call SetLastError() to reset the error code to a known state
-    // so we can check whether or not the user-mode driver set ERROR_ALREADY_EXISTS
+    // so we can check whether or not the user-mode driver set
+    // ERROR_ALREADY_EXISTS
     SetLastError(ERROR_SUCCESS);
 
     // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate

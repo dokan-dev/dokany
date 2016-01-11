@@ -405,8 +405,7 @@ VOID DokanStopEventNotificationThreadInternal(__in PDEVICE_OBJECT DeviceObject,
   DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");
 }
 
-NTSTATUS
-DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
+NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   PDokanDCB dcb;
   PDokanVCB vcb;
   PDokanFCB fcb;
@@ -420,6 +419,8 @@ DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
     return STATUS_INVALID_PARAMETER;
   }
   dcb = vcb->Dcb;
+
+  DokanDeleteMountPoint(dcb);
 
   // ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
   dcb->Mounted = 0;
@@ -463,4 +464,54 @@ DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   DokanDeleteDeviceObject(dcb);
 
   return status;
+}
+
+NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
+                                 __in PIRP Irp) {
+  PDOKAN_GLOBAL dokanGlobal;
+  PIO_STACK_LOCATION irpSp;
+  PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint;
+  DOKAN_CONTROL dokanControl;
+  PMOUNT_ENTRY mountEntry;
+
+  dokanGlobal = DeviceObject->DeviceExtension;
+  if (GetIdentifierType(dokanGlobal) != DGL) {
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
+
+  if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
+      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) {
+    DDbgPrint(
+        "Input buffer is too small (< DOKAN_UNICODE_STRING_INTERMEDIATE)\n");
+    return STATUS_BUFFER_TOO_SMALL;
+  }
+  szMountPoint =
+      (PDOKAN_UNICODE_STRING_INTERMEDIATE)Irp->AssociatedIrp.SystemBuffer;
+  if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
+      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + szMountPoint->MaximumLength) {
+    DDbgPrint("Input buffer is too small\n");
+    return STATUS_BUFFER_TOO_SMALL;
+  }
+
+  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
+                    L"\\DosDevices\\");
+  if ((szMountPoint->Length / sizeof(WCHAR)) < 4) {
+    dokanControl.MountPoint[12] = towupper(szMountPoint->Buffer[0]);
+    dokanControl.MountPoint[13] = L':';
+    dokanControl.MountPoint[14] = L'\0';
+  } else {
+    RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
+                  szMountPoint->Length);
+  }
+  mountEntry = FindMountEntry(dokanGlobal, &dokanControl);
+  if (mountEntry == NULL) {
+    DDbgPrint("Cannot found device associated to mount point %ws\n",
+              dokanControl.MountPoint);
+    return STATUS_BUFFER_TOO_SMALL;
+  }
+
+  return DokanEventRelease(mountEntry->MountControl.DeviceObject);
 }

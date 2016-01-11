@@ -46,32 +46,34 @@ extern "C" {
 #define DOKAN_VERSION 800
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 800
 
-#define DOKAN_OPTION_DEBUG 1         // ouput debug message
-#define DOKAN_OPTION_STDERR 2        // ouput debug message to stderr
-#define DOKAN_OPTION_ALT_STREAM 4    // use alternate stream
-#define DOKAN_OPTION_WRITE_PROTECT 8 // mount drive as write-protected.
-#define DOKAN_OPTION_NETWORK 16		 // use network drive, you need to
-                                     // install Dokan network provider.
-#define DOKAN_OPTION_REMOVABLE 32 // use removable drive
+#define DOKAN_OPTION_DEBUG 1          // ouput debug message
+#define DOKAN_OPTION_STDERR 2         // ouput debug message to stderr
+#define DOKAN_OPTION_ALT_STREAM 4     // use alternate stream
+#define DOKAN_OPTION_WRITE_PROTECT 8  // mount drive as write-protected.
+#define DOKAN_OPTION_NETWORK 16       // use network drive, you need to
+                                      // install Dokan network provider.
+#define DOKAN_OPTION_REMOVABLE 32     // use removable drive
+#define DOKAN_OPTION_MOUNT_MANAGER 64 // use mount manager
 
 typedef struct _DOKAN_OPTIONS {
-  USHORT Version; // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
-  USHORT ThreadCount; // number of threads to be
-					  // used internally by Dokan library
-  ULONG Options;   // combination of DOKAN_OPTIONS_*
+  USHORT Version;        // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
+  USHORT ThreadCount;    // number of threads to be
+                         // used internally by Dokan library
+  ULONG Options;         // combination of DOKAN_OPTIONS_*
   ULONG64 GlobalContext; // FileSystem can store anything here
   LPCWSTR MountPoint; //  mount point "M:\" (drive letter) or "C:\mount\dokan"
                       //  (path in NTFS)
+  LPCWSTR UNCName;    // UNC provider name
   ULONG Timeout;      // IrpTimeout in milliseconds
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 typedef struct _DOKAN_FILE_INFO {
-  ULONG64 Context;      // FileSystem can store anything here
-  ULONG64 DokanContext; // Used internally, never modify
+  ULONG64 Context;             // FileSystem can store anything here
+  ULONG64 DokanContext;        // Used internally, never modify
   PDOKAN_OPTIONS DokanOptions; // A pointer to DOKAN_OPTIONS
-							   // which was passed to DokanMain.
-  ULONG ProcessId;  // process id for the thread that originally requested a
-                    // given I/O operation
+                               // which was passed to DokanMain.
+  ULONG ProcessId;     // process id for the thread that originally requested a
+                       // given I/O operation
   UCHAR IsDirectory;   // requesting a directory file
   UCHAR DeleteOnClose; // Delete on when "cleanup" is called
   UCHAR PagingIo;      // Read or write is paging IO.
@@ -296,9 +298,9 @@ typedef struct _DOKAN_OPERATIONS {
 #define DOKAN_DRIVE_LETTER_ERROR -2   /* Bad Drive letter */
 #define DOKAN_DRIVER_INSTALL_ERROR -3 /* Can't install driver */
 #define DOKAN_START_ERROR -4          /* Driver something wrong */
-#define DOKAN_MOUNT_ERROR -5          /* Can't assign a drive letter or mount point */
-#define DOKAN_MOUNT_POINT_ERROR -6    /* Mount point is invalid */
-#define DOKAN_VERSION_ERROR -7        /* Requested an incompatible version */
+#define DOKAN_MOUNT_ERROR -5 /* Can't assign a drive letter or mount point */
+#define DOKAN_MOUNT_POINT_ERROR -6 /* Mount point is invalid */
+#define DOKAN_VERSION_ERROR -7     /* Requested an incompatible version */
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations);

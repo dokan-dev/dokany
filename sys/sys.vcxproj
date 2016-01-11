@@ -477,6 +477,7 @@
     <ClCompile Include="init.c" />
     <ClCompile Include="lock.c" />
     <ClCompile Include="notification.c" />
+    <ClCompile Include="pnp.c" />
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
     <ClCompile Include="timeout.c" />
