@@ -41,10 +41,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-// The current Dokan version (ver 0.8.0). Please set this constant on
+// The current Dokan version (ver 1.0.0). Please set this constant on
 // DokanOptions->Version.
-#define DOKAN_VERSION 800
-#define DOKAN_MINIMUM_COMPATIBLE_VERSION 800
+#define DOKAN_VERSION 100
+#define DOKAN_MINIMUM_COMPATIBLE_VERSION 100
 
 #define DOKAN_OPTION_DEBUG 1          // ouput debug message
 #define DOKAN_OPTION_STDERR 2         // ouput debug message to stderr

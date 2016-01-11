@@ -40,10 +40,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 extern ULONG g_Debug;
 
-#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan"
-#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Dokan"
-#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME L"\\Device\\DokanFs"
-#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME L"\\Device\\DokanCdFs"
+#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan1"
+#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Dokan1"
+#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME L"\\Device\\DokanFs1"
+#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME L"\\Device\\DokanCdFs1"
 
 #define DOKAN_DISK_DEVICE_NAME L"\\Device\\Volume"
 #define DOKAN_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Volume"
