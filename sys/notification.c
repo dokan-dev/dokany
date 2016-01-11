@@ -370,18 +370,15 @@ DokanStartEventNotificationThread(__in PDokanDCB Dcb) {
 }
 
 VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
-  PIO_WORKITEM workItem;
-
   DDbgPrint("==> DokanStopEventNotificationThread\n");
 
-  workItem = IoAllocateWorkItem(Dcb->DeviceObject);
-  if (workItem != NULL) {
-    IoQueueWorkItem(workItem, DokanStopEventNotificationThreadInternal,
-                    DelayedWorkQueue, workItem);
-  } else {
-    DDbgPrint("Can't create work item.");
+  if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
+      Dcb->EventNotificationThread) {
+    KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
+                          FALSE, NULL);
+    ObDereferenceObject(Dcb->EventNotificationThread);
+    Dcb->EventNotificationThread = NULL;
   }
-
   DDbgPrint("<== DokanStopEventNotificationThread\n");
 }
 
