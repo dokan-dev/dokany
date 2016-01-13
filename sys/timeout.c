@@ -327,19 +327,19 @@ Routine Description:
 
 --*/
 {
-	DDbgPrint("==> DokanStopCheckThread");
+  DDbgPrint("==> DokanStopCheckThread");
 
-	if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
-		DDbgPrint("Waiting for Timeout thread to terminate.\n");
-		ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
-		KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
-			NULL);
-		DDbgPrint("Timeout thread successfully terminated.\n");
-		ObDereferenceObject(Dcb->TimeoutThread);
-		Dcb->TimeoutThread = NULL;
-	}
+  if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
+    DDbgPrint("Waiting for Timeout thread to terminate.\n");
+    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+    KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
+                          NULL);
+    DDbgPrint("Timeout thread successfully terminated.\n");
+    ObDereferenceObject(Dcb->TimeoutThread);
+    Dcb->TimeoutThread = NULL;
+  }
 
-	DDbgPrint("<== DokanStopCheckThread");
+  DDbgPrint("<== DokanStopCheckThread");
 }
 
 NTSTATUS
