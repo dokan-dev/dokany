@@ -327,38 +327,19 @@ Routine Description:
 
 --*/
 {
-  PIO_WORKITEM workItem;
+	DDbgPrint("==> DokanStopCheckThread");
 
-  DDbgPrint("==> DokanStopCheckThread\n");
+	if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
+		DDbgPrint("Waiting for Timeout thread to terminate.\n");
+		ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+		KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
+			NULL);
+		DDbgPrint("Timeout thread successfully terminated.\n");
+		ObDereferenceObject(Dcb->TimeoutThread);
+		Dcb->TimeoutThread = NULL;
+	}
 
-  workItem = IoAllocateWorkItem(Dcb->DeviceObject);
-  if (workItem != NULL) {
-    IoQueueWorkItem(workItem, DokanStopCheckThreadInternal, DelayedWorkQueue,
-                    workItem);
-  } else {
-    DDbgPrint("Can't create work item.");
-  }
-
-  DDbgPrint("<== DokanStopCheckThread\n");
-}
-
-VOID DokanStopCheckThreadInternal(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PVOID Context) {
-  PDokanDCB Dcb;
-
-  UNREFERENCED_PARAMETER(Context);
-
-  DDbgPrint("==> DokanStopCheckThreadInternal\n");
-
-  Dcb = DeviceObject->DeviceExtension;
-  if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
-    KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
-                          NULL);
-    ObDereferenceObject(Dcb->TimeoutThread);
-    Dcb->TimeoutThread = NULL;
-  }
-
-  DDbgPrint("<== DokanStopCheckThreadInternal\n");
+	DDbgPrint("<== DokanStopCheckThread");
 }
 
 NTSTATUS

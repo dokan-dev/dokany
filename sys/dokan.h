@@ -412,10 +412,6 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 
 DRIVER_DISPATCH DokanGetAccessToken;
 
-IO_WORKITEM_ROUTINE DokanStopCheckThreadInternal;
-
-IO_WORKITEM_ROUTINE DokanStopEventNotificationThreadInternal;
-
 NTSTATUS
 DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
@@ -536,9 +532,6 @@ DokanStartCheckThread(__in PDokanDCB Dcb);
 
 VOID DokanStopCheckThread(__in PDokanDCB Dcb);
 
-VOID DokanStopCheckThreadInternal(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PVOID Context);
-
 BOOLEAN
 DokanCheckCCB(__in PDokanDCB Dcb, __in_opt PDokanCCB Ccb);
 
@@ -548,9 +541,6 @@ NTSTATUS
 DokanStartEventNotificationThread(__in PDokanDCB Dcb);
 
 VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb);
-
-VOID DokanStopEventNotificationThreadInternal(__in PDEVICE_OBJECT DeviceObject,
-                                              __in PVOID Context);
 
 VOID DokanUpdateTimeout(__out PLARGE_INTEGER KickCount, __in ULONG Timeout);
 
