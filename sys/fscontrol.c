@@ -325,11 +325,8 @@ VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT DiskDevice,
                   __in PDEVICE_OBJECT VolumeDevice) {
   if (Vpb != NULL) {
     Vpb->DeviceObject = VolumeDevice;
-    Vpb->RealDevice = DiskDevice;
-    Vpb->Flags |= VPB_MOUNTED;
-    Vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
-    RtlStringCchCopyW(Vpb->VolumeLabel,
-                      sizeof(Vpb->VolumeLabel) / sizeof(WCHAR), VOLUME_LABEL);
+    Vpb->VolumeLabelLength = sizeof(VOLUME_LABEL) - sizeof(WCHAR);
+    RtlStringCbCopyW(Vpb->VolumeLabel, Vpb->VolumeLabelLength, VOLUME_LABEL);
     Vpb->SerialNumber = 0x19831116;
   }
 }
