@@ -1,7 +1,7 @@
 [Version]
 Signature         = "$Windows NT$"
 Provider          = %Dokan%
-DriverVer         = 12/23/2015,0.8.0.0
+DriverVer         = 14/1/2016,1.0.0.0
 CatalogFile       = 
 DriverPackageType = FileSystem
 

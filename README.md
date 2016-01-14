@@ -1,7 +1,9 @@
 # Dokany
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/6789/badge.svg)](https://scan.coverity.com/projects/6789)
+|
 [![Bounty](https://img.shields.io/bountysource/team/dokan-dev/activity.svg)](https://www.bountysource.com/teams/dokan-dev/issues)
+[![PayPayl donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=dev@islog.com&lc=US&item_name=Dokany&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted "Donate!")
 
 ## What is Dokan
 When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system

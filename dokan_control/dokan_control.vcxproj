@@ -38,6 +38,7 @@
     <ProjectGuid>{A1881DF2-0A37-4AF4-86DC-EE0251CC6EA6}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>dokanx_control</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -176,6 +177,9 @@
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <AdditionalLibraryDirectories>../debug</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
     <ClCompile>
@@ -193,6 +197,9 @@
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <AdditionalLibraryDirectories>../debug</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -210,6 +217,9 @@
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <AdditionalLibraryDirectories>../debug</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <ClCompile>
@@ -227,6 +237,9 @@
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <AdditionalLibraryDirectories>../debug</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -245,6 +258,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">
     <ClCompile>
@@ -263,6 +279,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -281,6 +300,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
     <ClCompile>
@@ -299,6 +321,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dokanctl.c" />

@@ -40,13 +40,13 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 extern ULONG g_Debug;
 
-#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan"
-#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Dokan"
+#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan1"
+#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Dokan1"
+#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME L"\\Device\\DokanFs1"
+#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME L"\\Device\\DokanCdFs1"
 
-#define DOKAN_FS_DEVICE_NAME L"\\Device\\Dokan"
 #define DOKAN_DISK_DEVICE_NAME L"\\Device\\Volume"
 #define DOKAN_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Volume"
-
 #define DOKAN_NET_DEVICE_NAME L"\\Device\\DokanRedirector"
 #define DOKAN_NET_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\DokanRedirector"
 
@@ -144,14 +144,29 @@ typedef struct _IRP_LIST {
   KSPIN_LOCK ListLock;
 } IRP_LIST, *PIRP_LIST;
 
+typedef struct _DOKAN_CONTROL {
+  ULONG Type;                  // File System Type
+  WCHAR MountPoint[255];       // Mount Point
+  WCHAR DeviceName[64];        // Disk Device Name
+  PDEVICE_OBJECT DeviceObject; // Volume Device Object
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
+
+typedef struct _MOUNT_ENTRY {
+  LIST_ENTRY ListEntry;
+  DOKAN_CONTROL MountControl;
+} MOUNT_ENTRY, *PMOUNT_ENTRY;
+
 typedef struct _DOKAN_GLOBAL {
   FSD_IDENTIFIER Identifier;
   ERESOURCE Resource;
   PDEVICE_OBJECT DeviceObject;
+  PDEVICE_OBJECT FsDiskDeviceObject;
+  PDEVICE_OBJECT FsCdDeviceObject;
   ULONG MountId;
   // the list of waiting IRP for mount service
   IRP_LIST PendingService;
   IRP_LIST NotifyService;
+  LIST_ENTRY MountPointList;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 // make sure Identifier is the top of struct
@@ -173,8 +188,9 @@ typedef struct _DokanDiskControlBlock {
   IRP_LIST NotifyEvent;
 
   PUNICODE_STRING DiskDeviceName;
-  PUNICODE_STRING FileSystemDeviceName;
   PUNICODE_STRING SymbolicLinkName;
+  PUNICODE_STRING MountPoint;
+  PUNICODE_STRING UNCName;
 
   DEVICE_TYPE DeviceType;
   ULONG DeviceCharacteristics;
@@ -194,6 +210,7 @@ typedef struct _DokanDiskControlBlock {
   // When UseAltStream is 1, use Alternate stream
   USHORT UseAltStream;
   USHORT Mounted;
+  USHORT UseMountManager;
 
   // to make a unique id for pending IRP
   ULONG SerialNumber;
@@ -406,6 +423,9 @@ NTSTATUS
 DokanEventRelease(__in PDEVICE_OBJECT DeviceObject);
 
 NTSTATUS
+DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+
+NTSTATUS
 DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer);
 
 NTSTATUS
@@ -431,9 +451,6 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
-
-NTSTATUS
-DokanUnmountNotification(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext);
 
 VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
                                    __in PEVENT_INFORMATION EventInfo);
@@ -482,12 +499,17 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
+                      __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
-                      __in ULONG DeviceCharacteristics, __out PDokanDCB *Dcb);
+                      __in ULONG DeviceCharacteristics,
+                      __in BOOLEAN UseMountManager, __out PDokanDCB *Dcb);
 
+VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT DiskDevice,
+                  __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
-
+NTSTATUS IsMountPointDriveLetter(__in PUNICODE_STRING mountPoint);
+VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
 VOID DokanPrintNTStatus(NTSTATUS Status);
 
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
@@ -534,12 +556,19 @@ VOID DokanUpdateTimeout(__out PLARGE_INTEGER KickCount, __in ULONG Timeout);
 
 VOID DokanUnmount(__in PDokanDCB Dcb);
 
+PMOUNT_ENTRY
+FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
+               __out PDOKAN_CONTROL DokanControl);
+
 VOID PrintIdType(__in VOID *Id);
 
 NTSTATUS
 DokanAllocateMdl(__in PIRP Irp, __in ULONG Length);
 
 VOID DokanFreeMdl(__in PIRP Irp);
+
+PUNICODE_STRING
+DokanAllocateUnicodeString(__in PCWSTR String);
 
 ULONG
 PointerAlignSize(ULONG sizeInBytes);

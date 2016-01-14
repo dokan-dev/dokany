@@ -19,8 +19,38 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include <Dbt.h>
 #include <stdio.h>
 #include <windows.h>
+
+typedef struct _REPARSE_DATA_BUFFER {
+  ULONG ReparseTag;
+  USHORT ReparseDataLength;
+  USHORT Reserved;
+  union {
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      ULONG Flags;
+      WCHAR PathBuffer[1];
+    } SymbolicLinkReparseBuffer;
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      WCHAR PathBuffer[1];
+    } MountPointReparseBuffer;
+    struct {
+      UCHAR DataBuffer[1];
+    } GenericReparseBuffer;
+  } DUMMYUNIONNAME;
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
+
+#define REPARSE_DATA_BUFFER_HEADER_SIZE                                        \
+  FIELD_OFFSET(REPARSE_DATA_BUFFER, GenericReparseBuffer)
 
 static BOOL DokanServiceCheck(LPCWSTR ServiceName) {
   SC_HANDLE controlHandle;
@@ -129,60 +159,6 @@ static BOOL DokanServiceControl(LPCWSTR ServiceName, ULONG Type) {
   return result;
 }
 
-BOOL DOKANAPI DokanMountControl(PDOKAN_CONTROL Control) {
-  HANDLE pipe;
-  DWORD readBytes;
-  DWORD pipeMode;
-
-  for (;;) {
-    pipe = CreateFile(DOKAN_CONTROL_PIPE, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-                      OPEN_EXISTING, 0, NULL);
-    if (pipe != INVALID_HANDLE_VALUE) {
-      break;
-    }
-
-    DWORD error = GetLastError();
-    if (error == ERROR_PIPE_BUSY) {
-      if (!WaitNamedPipe(DOKAN_CONTROL_PIPE, NMPWAIT_USE_DEFAULT_WAIT)) {
-        DbgPrint("DokanMountControl: DokanMounter service : ERROR_PIPE_BUSY\n");
-        return FALSE;
-      }
-      continue;
-    } else if (error == ERROR_ACCESS_DENIED) {
-      DbgPrint("DokanMountControl: Failed to connect DokanMounter service: "
-               "access denied\n");
-      return FALSE;
-    } else {
-      DbgPrint(
-          "DokanMountControl: Failed to connect DokanMounter service: %d\n",
-          GetLastError());
-      return FALSE;
-    }
-  }
-
-  pipeMode = PIPE_READMODE_MESSAGE | PIPE_WAIT;
-
-  if (!SetNamedPipeHandleState(pipe, &pipeMode, NULL, NULL)) {
-    DbgPrint("DokanMountControl: Failed to set named pipe state: %d\n",
-             GetLastError());
-    CloseHandle(pipe);
-    return FALSE;
-  }
-
-  if (!TransactNamedPipe(pipe, Control, sizeof(DOKAN_CONTROL), Control,
-                         sizeof(DOKAN_CONTROL), &readBytes, NULL)) {
-    DbgPrint("DokanMountControl: Failed to transact named pipe: %d\n",
-             GetLastError());
-  }
-
-  CloseHandle(pipe);
-  if (Control->Status != DOKAN_CONTROL_FAIL) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
 BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
                                   LPCWSTR ServiceFullPath) {
   SC_HANDLE controlHandle;
@@ -247,41 +223,6 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   WCHAR mountPoint[] = L"M:";
   mountPoint[0] = DriveLetter;
   return DokanRemoveMountPoint(mountPoint);
-}
-
-BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
-  DOKAN_CONTROL control;
-  BOOL result;
-
-  ZeroMemory(&control, sizeof(DOKAN_CONTROL));
-  control.Type = DOKAN_CONTROL_UNMOUNT;
-  wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR),
-           MountPoint);
-
-  DbgPrintW(L"DokanRemoveMountPoint %ws\n", MountPoint);
-
-  result = DokanMountControl(&control);
-  if (result) {
-    DbgPrint("DokanControl recieved DeviceName:%ws\n", control.DeviceName);
-    SendReleaseIRP(control.DeviceName);
-  } else {
-    DbgPrint("DokanRemoveMountPoint failed\n");
-  }
-  return result;
-}
-
-BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
-  DOKAN_CONTROL control;
-
-  ZeroMemory(&control, sizeof(DOKAN_CONTROL));
-  control.Type = DOKAN_CONTROL_MOUNT;
-
-  wcscpy_s(control.MountPoint, sizeof(control.MountPoint) / sizeof(WCHAR),
-           MountPoint);
-  wcscpy_s(control.DeviceName, sizeof(control.DeviceName) / sizeof(WCHAR),
-           DeviceName);
-
-  return DokanMountControl(&control);
 }
 
 #define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan"
@@ -373,4 +314,147 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
   RegCloseKey(key);
 
   return TRUE;
+}
+
+BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
+  HANDLE handle;
+  PREPARSE_DATA_BUFFER reparseData;
+  USHORT bufferLength;
+  USHORT targetLength;
+  BOOL result;
+  ULONG resultLength;
+  WCHAR targetDeviceName[MAX_PATH] = L"\\??";
+
+  wcscat_s(targetDeviceName, MAX_PATH, DeviceName);
+  wcscat_s(targetDeviceName, MAX_PATH, L"\\");
+
+  handle = CreateFile(MountPoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                      FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                      NULL);
+
+  if (handle == INVALID_HANDLE_VALUE) {
+    DbgPrintW(L"CreateFile failed: %s (%d)\n", MountPoint, GetLastError());
+    return FALSE;
+  }
+
+  targetLength = (USHORT)wcslen(targetDeviceName) * sizeof(WCHAR);
+  bufferLength =
+      FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) +
+      targetLength + sizeof(WCHAR) + sizeof(WCHAR);
+
+  reparseData = (PREPARSE_DATA_BUFFER)malloc(bufferLength);
+  if (reparseData == NULL) {
+    CloseHandle(handle);
+    return FALSE;
+  }
+
+  ZeroMemory(reparseData, bufferLength);
+
+  reparseData->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+  reparseData->ReparseDataLength =
+      bufferLength - REPARSE_DATA_BUFFER_HEADER_SIZE;
+
+  reparseData->MountPointReparseBuffer.SubstituteNameOffset = 0;
+  reparseData->MountPointReparseBuffer.SubstituteNameLength = targetLength;
+  reparseData->MountPointReparseBuffer.PrintNameOffset =
+      targetLength + sizeof(WCHAR);
+  reparseData->MountPointReparseBuffer.PrintNameLength = 0;
+
+  RtlCopyMemory(reparseData->MountPointReparseBuffer.PathBuffer,
+                targetDeviceName, targetLength);
+
+  result = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, reparseData,
+                           bufferLength, NULL, 0, &resultLength, NULL);
+
+  CloseHandle(handle);
+  free(reparseData);
+
+  if (result) {
+    DbgPrintW(L"CreateMountPoint %s -> %s success\n", MountPoint,
+              targetDeviceName);
+  } else {
+    DbgPrintW(L"CreateMountPoint %s -> %s failed: %d\n", MountPoint,
+              targetDeviceName, GetLastError());
+  }
+  return result;
+}
+
+BOOL DeleteMountPoint(LPCWSTR MountPoint) {
+  HANDLE handle;
+  BOOL result;
+  ULONG resultLength;
+  REPARSE_GUID_DATA_BUFFER reparseData = {0};
+
+  handle = CreateFile(MountPoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                      FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                      NULL);
+
+  if (handle == INVALID_HANDLE_VALUE) {
+    DbgPrintW(L"CreateFile failed: %s (%d)\n", MountPoint, GetLastError());
+    return FALSE;
+  }
+
+  reparseData.ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+
+  result = DeviceIoControl(handle, FSCTL_DELETE_REPARSE_POINT, &reparseData,
+                           REPARSE_GUID_DATA_BUFFER_HEADER_SIZE, NULL, 0,
+                           &resultLength, NULL);
+
+  CloseHandle(handle);
+
+  if (result) {
+    DbgPrintW(L"DeleteMountPoint %s success\n", MountPoint);
+  } else {
+    DbgPrintW(L"DeleteMountPoint %s failed: %d\n", MountPoint, GetLastError());
+  }
+  return result;
+}
+
+BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
+
+  if (MountPoint != NULL) {
+    if (!IsMountPointDriveLetter(MountPoint)) {
+      // Unfortunately mount manager is not working as excepted and don't
+      // support mount folder on associated IOCTL, which breaks dokan (ghost
+      // drive, ...)
+      // In that case we cannot use mount manager ; doesn't this should be done
+      // kernel-mode too?
+      return CreateMountPoint(MountPoint, DeviceName);
+    }
+  }
+  return TRUE;
+}
+
+BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
+  if (MountPoint != NULL) {
+    size_t length = wcslen(MountPoint);
+    if (length > 0) {
+      WCHAR mountPoint[MAX_PATH];
+
+      if (IsMountPointDriveLetter(MountPoint)) {
+        wcscpy_s(mountPoint, sizeof(mountPoint) / sizeof(WCHAR), L"C:");
+        mountPoint[0] = MountPoint[0];
+      } else {
+        wcscpy_s(mountPoint, sizeof(mountPoint) / sizeof(WCHAR), MountPoint);
+        if (mountPoint[length - 1] == L'\\') {
+          mountPoint[length - 1] = L'\0';
+        }
+      }
+
+      if (SendGlobalReleaseIRP(mountPoint)) {
+        if (!IsMountPointDriveLetter(MountPoint)) {
+          length = wcslen(mountPoint);
+          if (length < MAX_PATH) {
+            mountPoint[length] = L'\\';
+            // Required to remove reparse point (could also be done through
+            // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
+            DeleteVolumeMountPoint(mountPoint);
+          }
+        }
+        return TRUE;
+      }
+    }
+  }
+
+  return FALSE;
 }

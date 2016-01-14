@@ -37,6 +37,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F25BA22F-2AB8-4859-9B89-8FE1E774B472}</ProjectGuid>
     <RootNamespace>dokan</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -162,6 +163,9 @@
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
     <ClCompile>
@@ -178,6 +182,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -194,6 +201,9 @@
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <ClCompile>
@@ -209,6 +219,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -224,6 +237,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">
     <ClCompile>
@@ -239,6 +255,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -254,6 +273,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
     <ClCompile>
@@ -269,6 +291,9 @@
     <Link>
       <ModuleDefinitionFile>dokan.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="access.c" />

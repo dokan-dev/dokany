@@ -28,7 +28,17 @@
 
     <Property Id="WIN10FOUND">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="searchFile" Name="advapi32.dll" MinVersion="6.3.10000.0"/>
+        <FileSearch Id="searchFile" 
+                    Name="advapi32.dll" 
+                    MinVersion="6.3.10000.0"/>
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="UCRTINSTALLED">
+      <DirectorySearch Id="searchSystem2" Path="[SystemFolder]" Depth="0">
+        <FileSearch Id="UCRT_FileSearch"
+                    Name="ucrtbase.dll"
+                    MinVersion="6.2.10585.0"/>
       </DirectorySearch>
     </Property>
 
@@ -59,13 +69,15 @@
                       Win64="no"/>
     </Property>
     <Condition Message="Installation failed because the 32-bit version of Dokan cannot be installed on a 64-bit version of Windows."><![CDATA[Installed OR NOT VersionNT64]]></Condition>
-    <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
+    <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23506")]]></Condition>
-
+    
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
 
     <CustomAction Id='CheckForOldDokanLibrary' Error='An obsolete version of the Dokan Library is still installed on this system. Please uninstall it before executing this setup again. Installing a newer Dokan driver might break compatibilty with applications relying on the older version.' />
 
+    <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. You can download it here: https://support.microsoft.com/en-us/kb/2999226" />
+    
     <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
     <CustomAction Id="SetFolderValue"
@@ -105,7 +117,10 @@
     <InstallExecuteSequence>
 
       <Custom Action='CheckForOldDokanLibrary' Before='LaunchConditions'>
-        DOKANNSISINSTALL
+        <![CDATA[Installed AND DOKANNSISINSTALL]]>
+      </Custom>
+      <Custom Action='CheckForUCRT' Before='LaunchConditions'>
+        <![CDATA[Installed AND UCRTINSTALLED = ""]]>
       </Custom>
       <Custom Action='GetInstallDir' Before='CostFinalize'><![CDATA[REMOVE="ALL"]]></Custom>
       <Custom Action="SetFolderValue" Before="ExecuteInstallAction" />
@@ -136,21 +151,6 @@
               <File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
               <File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no"/>
               <RemoveFolder Id="RemoveINSTALLDIR" On="uninstall" />
-            </Component>
-            <Component Id="MounterComponent" Win64="no" Guid="{1278BCD5-1872-4C3E-BEAB-BF84978C405E}">
-              <File Id="mounterEXE" Source="..\Win32\$(var.Configuration)\mounter.exe" Name="mounter.exe" KeyPath="yes"/>
-              <ServiceInstall
-                  Account="LocalSystem"
-                  Description="A service for mounting Dokan user-mode file system drivers."
-                  DisplayName="DokanMounter"
-                  ErrorControl="normal"
-                  Interactive="no"
-                  Name="DokanMounter"
-                  Start="auto"
-                  Type="ownProcess"
-                  Vital="yes"
-              />
-              <ServiceControl Id="DokanMounter" Start="install" Stop="both" Remove="uninstall" Name="DokanMounter" Wait="yes" />
             </Component>
             <Directory Id="INCLUDEDIR" Name="include">
               <Directory Id="DOKANINCLUDEDIR" Name="dokan">
@@ -201,6 +201,10 @@
             <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp.dll" Name="dokannp.dll" KeyPath="no"/>
             <File Id="DokanfuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse.dll" Name="dokanfuse.dll" KeyPath="no"/>
           </Component>
+          <Component Id="Sys32PDBFiles" Guid="{D88F93D7-C6AA-4476-ABF0-1C3273303F08}">
+            <File Id="DokanPDB" Source="..\x64\$(var.Configuration)\dokan.pdb" Name="dokan.pdb" KeyPath="yes"/>
+            <File Id="DokannpPDB" Source="..\x64\$(var.Configuration)\dokannp.pdb" Name="dokannp.pdb" KeyPath="no"/>
+          </Component>
           <Directory Id="DriversFolder" Name="Drivers">
             <Component Id="Win7_Win32" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
               <Condition>VersionNT = 601</Condition>
@@ -249,7 +253,6 @@
 
     <Feature Id="DokanDriverFeature" Title="Dokan driver" Level="1">
       <ComponentRef Id="ProgramFilesComponent"/>
-      <ComponentRef Id="MounterComponent"/>
       <ComponentRef Id="Win7_Win32"/>
       <ComponentRef Id="Win8_Win32"/>
       <ComponentRef Id="Win81_Win32"/>
@@ -268,6 +271,7 @@
       <ComponentRef Id="Win8_Win32pdb"/>
       <ComponentRef Id="Win81_Win32pdb"/>
       <ComponentRef Id="Win10_Win32pdb"/>
+      <ComponentRef Id="Sys32PDBFiles"/>
     </Feature>
   </Product>
 

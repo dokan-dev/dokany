@@ -339,6 +339,12 @@ Return Value:
     DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
 
     vcb = DeviceObject->DeviceExtension;
+    if (vcb == NULL) {
+      DDbgPrint("  No device extension\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     PrintIdType(vcb);
     if (GetIdentifierType(vcb) != VCB) {
       DDbgPrint("  IdentifierType is not vcb\n");
@@ -547,6 +553,8 @@ Return Value:
 
           securityDescriptorSize = PointerAlignSize(
               RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
+        } else {
+          newFileSecurityDescriptor = NULL;
         }
       }
 
@@ -667,7 +675,7 @@ Return Value:
                  alignedObjectTypeNameSize) -
                 (char *)&eventContext->Operation.Create);
 
-    if (newFileSecurityDescriptor) {
+    if (newFileSecurityDescriptor != NULL) {
       // Copy security descriptor
       RtlCopyMemory((char *)eventContext + alignedEventContextSize,
                     newFileSecurityDescriptor,

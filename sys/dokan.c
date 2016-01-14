@@ -199,6 +199,8 @@ Return Value:
 
   fastIoDispatch = ExAllocatePool(sizeof(FAST_IO_DISPATCH));
   if (!fastIoDispatch) {
+    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
     IoDeleteDevice(dokanGlobal->DeviceObject);
     DDbgPrint("  ExAllocatePool failed");
     return STATUS_INSUFFICIENT_RESOURCES;
@@ -240,6 +242,8 @@ Return Value:
       FsRtlRegisterFileSystemFilterCallbacks(DriverObject, &filterCallbacks);
 
   if (!NT_SUCCESS(status)) {
+    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
     IoDeleteDevice(dokanGlobal->DeviceObject);
     DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x\n",
               status);
@@ -273,14 +277,23 @@ Return Value:
   PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
   WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
   UNICODE_STRING symbolicLinkName;
+  PDOKAN_GLOBAL dokanGlobal;
 
   // PAGED_CODE();
   DDbgPrint("==> DokanUnload\n");
 
-  if (GetIdentifierType(deviceObject->DeviceExtension) == DGL) {
+  dokanGlobal = deviceObject->DeviceExtension;
+  if (GetIdentifierType(dokanGlobal) == DGL) {
     DDbgPrint("  Delete Global DeviceObject\n");
+
     RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
     IoDeleteSymbolicLink(&symbolicLinkName);
+
+    IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
+    IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
+
+    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
     IoDeleteDevice(deviceObject);
   }
 
@@ -301,52 +314,6 @@ DokanDispatchShutdown(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   DDbgPrint("<== DokanShutdown\n");
   return STATUS_SUCCESS;
-}
-
-NTSTATUS
-DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  PIO_STACK_LOCATION irpSp;
-  NTSTATUS status = STATUS_SUCCESS;
-
-  UNREFERENCED_PARAMETER(DeviceObject);
-
-  // PAGED_CODE();
-
-  __try {
-    DDbgPrint("==> DokanPnp\n");
-
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-
-    switch (irpSp->MinorFunction) {
-    case IRP_MN_QUERY_REMOVE_DEVICE:
-      DDbgPrint("  IRP_MN_QUERY_REMOVE_DEVICE\n");
-      break;
-    case IRP_MN_SURPRISE_REMOVAL:
-      DDbgPrint("  IRP_MN_SURPRISE_REMOVAL\n");
-      break;
-    case IRP_MN_REMOVE_DEVICE:
-      DDbgPrint("  IRP_MN_REMOVE_DEVICE\n");
-      break;
-    case IRP_MN_CANCEL_REMOVE_DEVICE:
-      DDbgPrint("  IRP_MN_CANCEL_REMOVE_DEVICE\n");
-      break;
-    case IRP_MN_QUERY_DEVICE_RELATIONS:
-      DDbgPrint("  IRP_MN_QUERY_DEVICE_RELATIONS\n");
-      status = STATUS_INVALID_PARAMETER;
-      break;
-    default:
-      DDbgPrint("   other minnor function %d\n", irpSp->MinorFunction);
-      break;
-      // IoSkipCurrentIrpStackLocation(Irp);
-      // status = IoCallDriver(Vcb->TargetDeviceObject, Irp);
-    }
-  } __finally {
-    DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanPnp\n");
-  }
-
-  return status;
 }
 
 BOOLEAN

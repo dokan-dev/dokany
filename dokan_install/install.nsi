@@ -1,4 +1,4 @@
-!define VERSION "0.8.0"
+!define VERSION "1.0.0"
 
 !include LogicLib.nsh
 !include x64.nsh
@@ -33,7 +33,6 @@ UninstPage instfiles
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\${arch}\Release\dokanctl.exe
-    File ..\${arch}\Release\mounter.exe
 	
   SetOutPath ${folder}\Dokan\DokanLibrary\include\dokan
 	
@@ -78,7 +77,6 @@ UninstPage instfiles
   SetOutPath ${folder}\Dokan\DokanLibrary\pdb
  
     File ..\${arch}\Release\dokanctl.pdb
-    File ..\${arch}\Release\mounter.pdb
 	
   SetOutPath ${folder}\Dokan\DokanLibrary\pdb\mirror
   
@@ -91,7 +89,7 @@ UninstPage instfiles
 !macroend
 
 !macro DokanSetup
-    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i a' $0
+    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i d' $0
 	ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
   DetailPrint "dokanctl returned $0"
   WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
@@ -160,7 +158,7 @@ Section -Prerequisites
   !else
 	beginVCRedist_x64:
 	MessageBox MB_YESNO "Your system does not appear to have Microsoft Visual C++ 2015 Runtime installed.$\n$\nWould you like to download it?" IDNO endVCRedist
-	ExecShell "open" "https://www.microsoft.com/en-us/download/details.aspx?id=48145"
+	ExecShell "open" "https://www.microsoft.com/en-us/download/details.aspx?id=49984"
 	Abort
   !endif
   endVCRedist:
@@ -251,7 +249,7 @@ SectionEnd
 
 Section "Uninstall"
   ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r n' $0
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r a' $0
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r d' $0
   DetailPrint "dokanctl.exe returned $0"
 
   RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary

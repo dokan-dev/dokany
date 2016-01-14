@@ -43,6 +43,7 @@ typedef struct _DOKAN_INSTANCE {
   // (when there are many mounts, each mount uses different DeviceName)
   WCHAR DeviceName[64];
   WCHAR MountPoint[MAX_PATH];
+  WCHAR UNCName[64];
 
   ULONG DeviceNumber;
   ULONG MountId;
@@ -79,6 +80,8 @@ void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size);
 UINT __stdcall DokanLoop(PVOID Param);
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName);
+
+BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 
 VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
                           ULONG EventLength, PDOKAN_INSTANCE DokanInstance);
@@ -143,6 +146,8 @@ BOOLEAN
 ManageDriver(LPCWSTR DriverName, LPCWSTR ServiceName, USHORT Function);
 
 BOOL SendReleaseIRP(LPCWSTR DeviceName);
+
+BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint);
 
 VOID CheckFileName(LPWSTR FileName);
 

@@ -57,9 +57,6 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
                         sizeof(WCHAR),
                     &(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
-  eventContext->Operation.Unmount.Option =
-      1; // DOKAN_CONTROL_OPTION_FORCE_UNMOUNT dokanc.h
-
   DDbgPrint("  Send Unmount to Service : %ws\n",
             eventContext->Operation.Unmount.DeviceName);
 
@@ -96,7 +93,7 @@ VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
 
     ExReleaseResourceLite(&Dcb->Resource);
 
-    DDbgPrint("  Timeout, force to umount\n");
+    DDbgPrint("  Timeout, umount\n");
 
     if (!mounted) {
       // not mounted

@@ -85,36 +85,77 @@ VOID DeleteDokanInstance(PDOKAN_INSTANCE Instance) {
   free(Instance);
 }
 
+BOOL IsMountPointDriveLetter(LPCWSTR mountPoint) {
+  size_t mountPointLength;
+
+  if (!mountPoint || *mountPoint == 0) {
+    return FALSE;
+  }
+
+  mountPointLength = wcslen(mountPoint);
+
+  if (mountPointLength == 1 ||
+      (mountPointLength == 2 && mountPoint[1] == L':') ||
+      (mountPointLength == 3 && mountPoint[1] == L':' &&
+       mountPoint[2] == L'\\')) {
+
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
 BOOL IsValidDriveLetter(WCHAR DriveLetter) {
   return (L'b' <= DriveLetter && DriveLetter <= L'z') ||
          (L'B' <= DriveLetter && DriveLetter <= L'Z');
 }
 
-int CheckMountPoint(LPCWSTR MountPoint) {
-  size_t length = wcslen(MountPoint);
+BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
+  DWORD result = 0;
+  WCHAR buffer[MAX_PATH];
+  WCHAR dosDevice[] = L"\\\\.\\C:";
+  WCHAR driveName[] = L"C:";
+  WCHAR driveLetter = towupper(DriveLetter);
+  HANDLE device = NULL;
+  dosDevice[4] = driveLetter;
+  driveName[0] = driveLetter;
 
-  if ((length == 1) || (length == 2 && MountPoint[1] == L':') ||
-      (length == 3 && MountPoint[1] == L':' && MountPoint[2] == L'\\')) {
-    WCHAR driveLetter = MountPoint[0];
-
-    if (IsValidDriveLetter(driveLetter)) {
-      return DOKAN_SUCCESS;
-    } else {
-      DokanDbgPrintW(L"Dokan Error: bad drive letter %s\n", MountPoint);
-      return DOKAN_DRIVE_LETTER_ERROR;
-    }
-  } else if (length > 3) {
-    HANDLE handle = CreateFile(
-        MountPoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
-        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DokanDbgPrintW(L"Dokan Error: bad mount point %s\n", MountPoint);
-      return DOKAN_MOUNT_POINT_ERROR;
-    }
-    CloseHandle(handle);
-    return DOKAN_SUCCESS;
+  if (!IsValidDriveLetter(driveLetter)) {
+    DbgPrintW(L"CheckDriveLetterAvailability failed, bad drive letter %c\n",
+              DriveLetter);
+    return FALSE;
   }
-  return DOKAN_MOUNT_POINT_ERROR;
+
+  device = CreateFile(dosDevice, GENERIC_READ | GENERIC_WRITE,
+                      FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+                      FILE_FLAG_NO_BUFFERING, NULL);
+
+  if (device != INVALID_HANDLE_VALUE) {
+    DbgPrintW(L"CheckDriveLetterAvailability failed, %c: is already used\n",
+              DriveLetter);
+    CloseHandle(device);
+    return FALSE;
+  }
+
+  ZeroMemory(buffer, MAX_PATH * sizeof(WCHAR));
+  result = QueryDosDevice(driveName, buffer, MAX_PATH);
+  if (result > 0) {
+    DbgPrintW(L"CheckDriveLetterAvailability failed, QueryDosDevice detected "
+              L"drive \"%c\"\n",
+              DriveLetter);
+    return FALSE;
+  }
+
+  DWORD drives = GetLogicalDrives();
+  result = (drives >> (driveLetter - L'A') & 0x00000001);
+  if (result > 0) {
+    DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives detected "
+              L"drive \"%c\"\n",
+              DriveLetter);
+    return FALSE;
+  }
+
+  return TRUE;
 }
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
@@ -155,11 +196,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
   }
 
-  int error = CheckMountPoint(DokanOptions->MountPoint);
-  if (error != DOKAN_SUCCESS) {
-    return error;
-  }
-
   device = CreateFile(DOKAN_GLOBAL_DEVICE_NAME,           // lpFileName
                       GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
                       FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
@@ -176,12 +212,30 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   DbgPrint("device opened\n");
-
   instance = NewDokanInstance();
   instance->DokanOptions = DokanOptions;
   instance->DokanOperations = DokanOperations;
-  wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
-           DokanOptions->MountPoint);
+
+  if (DokanOptions->MountPoint != NULL) {
+    wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
+             DokanOptions->MountPoint);
+    if (IsMountPointDriveLetter(instance->MountPoint)) {
+      if (!CheckDriveLetterAvailability(instance->MountPoint[0])) {
+        DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
+        CloseHandle(device);
+
+        EnterCriticalSection(&g_InstanceCriticalSection);
+        RemoveTailList(&g_InstanceList);
+        LeaveCriticalSection(&g_InstanceCriticalSection);
+        return DOKAN_MOUNT_ERROR;
+      }
+    }
+  }
+
+  if (DokanOptions->UNCName != NULL) {
+    wcscpy_s(instance->UNCName, sizeof(instance->UNCName) / sizeof(WCHAR),
+             DokanOptions->UNCName);
+  }
 
   if (!DokanStart(instance)) {
     CloseHandle(device);
@@ -190,11 +244,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   if (!DokanMount(instance->MountPoint, instance->DeviceName)) {
     SendReleaseIRP(instance->DeviceName);
-    DokanDbgPrint("Dokan Error: DefineDosDevice Failed\n");
+    DokanDbgPrint("Dokan Error: DokanMount Failed\n");
     CloseHandle(device);
     return DOKAN_MOUNT_ERROR;
   }
 
+  // Here we should have been mounter by mountmanager thanks to
+  // IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
 
   if (DokanOperations->Mounted) {
@@ -527,7 +583,7 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   ULONG returnedLength;
   WCHAR rawDeviceName[MAX_PATH];
 
-  DbgPrint("send release\n");
+  DbgPrint("send release to %ws\n", DeviceName);
 
   if (!SendToDevice(GetRawDeviceName(DeviceName, rawDeviceName, MAX_PATH),
                     IOCTL_EVENT_RELEASE, NULL, 0, NULL, 0, &returnedLength)) {
@@ -537,6 +593,37 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   }
 
   return TRUE;
+}
+
+BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
+  if (MountPoint != NULL) {
+    size_t length = wcslen(MountPoint);
+    if (length > 0) {
+      ULONG returnedLength;
+      ULONG inputLength = sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
+                          (MAX_PATH * sizeof(WCHAR));
+      PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint = malloc(inputLength);
+      ZeroMemory(szMountPoint, inputLength);
+      szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
+      szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
+      CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
+
+      DbgPrint("send global release for %ws\n", MountPoint);
+
+      if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
+                        szMountPoint, inputLength, NULL, 0, &returnedLength)) {
+
+        DbgPrint("Failed to unmount: %ws\n", MountPoint);
+        free(szMountPoint);
+        return FALSE;
+      }
+
+      free(szMountPoint);
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 BOOL DokanStart(PDOKAN_INSTANCE Instance) {
@@ -560,6 +647,14 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_WRITE_PROTECT) {
     eventStart.Flags |= DOKAN_EVENT_WRITE_PROTECT;
   }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
+    eventStart.Flags |= DOKAN_EVENT_MOUNT_MANAGER;
+  }
+
+  memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
+           Instance->MountPoint, sizeof(Instance->MountPoint));
+  memcpy_s(eventStart.UNCName, sizeof(eventStart.UNCName), Instance->UNCName,
+           sizeof(Instance->UNCName));
 
   eventStart.IrpTimeout = Instance->DokanOptions->Timeout;
 
@@ -655,14 +750,6 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
-
-      if (instance->DokanOperations->Unmounted) {
-        DOKAN_FILE_INFO fileInfo;
-        RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
-        fileInfo.DokanOptions = instance->DokanOptions;
-        instance->DokanOperations->Unmounted(&fileInfo);
-      }
-
       DokanRemoveMountPoint(instance->MountPoint);
       free(instance);
     }

@@ -304,6 +304,14 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    FSCTL_RECALL_FILE\n");
     break;
 
+  case FSCTL_SET_ZERO_ON_DEALLOCATION:
+    DDbgPrint("    FSCTL_SET_ZERO_ON_DEALLOCATION\n");
+    break;
+
+  case FSCTL_CSC_INTERNAL:
+    DDbgPrint("    FSCTL_CSC_INTERNAL\n");
+    break;
+
   default:
     DDbgPrint("    Unknown FSCTL %d\n",
               (irpSp->Parameters.FileSystemControl.FsControlCode >> 2) & 0xFFF);
@@ -313,22 +321,28 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
+VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT DiskDevice,
+                  __in PDEVICE_OBJECT VolumeDevice) {
+  if (Vpb != NULL) {
+    Vpb->DeviceObject = VolumeDevice;
+    Vpb->RealDevice = DiskDevice;
+    Vpb->Flags |= VPB_MOUNTED;
+    Vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
+    RtlStringCchCopyW(Vpb->VolumeLabel,
+                      sizeof(Vpb->VolumeLabel) / sizeof(WCHAR), VOLUME_LABEL);
+    Vpb->SerialNumber = 0x19831116;
+  }
+}
+
 NTSTATUS
 DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
                                __in PIRP Irp) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PIO_STACK_LOCATION irpSp;
-  PDokanVCB vcb;
 
   __try {
     DDbgPrint("==> DokanFileSystemControl\n");
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-
-    vcb = DeviceObject->DeviceExtension;
-    if (GetIdentifierType(vcb) != VCB) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
 
@@ -342,22 +356,31 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
       break;
 
     case IRP_MN_MOUNT_VOLUME: {
-      PVPB vpb;
+      PDokanDCB dcb = NULL;
+      PDokanVCB vcb = NULL;
+      PVPB vpb = NULL;
       DDbgPrint("	 IRP_MN_MOUNT_VOLUME\n");
-      if (irpSp->Parameters.MountVolume.DeviceObject !=
-          vcb->Dcb->DeviceObject) {
+
+      // Could be better to check it is mounted on a Dokan disk using
+      // ObQueryNameString?
+      dcb = irpSp->Parameters.MountVolume.DeviceObject->DeviceExtension;
+      if (!dcb) {
+        DDbgPrint("   Not DokanDiskDevice (no device extension)\n");
+        status = STATUS_INVALID_PARAMETER;
+        __leave;
+      }
+      PrintIdType(dcb);
+      if (GetIdentifierType(dcb) != DCB) {
         DDbgPrint("   Not DokanDiskDevice\n");
         status = STATUS_INVALID_PARAMETER;
-        break;
+        __leave;
       }
+      vcb = dcb->Vcb;
+
       vpb = irpSp->Parameters.MountVolume.Vpb;
-      vpb->DeviceObject = vcb->DeviceObject;
-      vpb->RealDevice = vcb->DeviceObject;
-      vpb->Flags |= VPB_MOUNTED;
-      vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
-      RtlStringCchCopyW(vpb->VolumeLabel,
-                        sizeof(vpb->VolumeLabel) / sizeof(WCHAR), VOLUME_LABEL);
-      vpb->SerialNumber = 0x19831116;
+      DokanInitVpb(vpb, dcb->DeviceObject, vcb->DeviceObject);
+
+      // FsRtlNotifyVolumeEvent(, FSRTL_VOLUME_MOUNT);
       status = STATUS_SUCCESS;
     } break;
 
