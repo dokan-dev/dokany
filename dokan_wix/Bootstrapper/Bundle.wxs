@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?include ..\version.xml ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:dep='http://schemas.microsoft.com/wix/DependencyExtension'
+     xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
+>
+    <Bundle Name="$(var.ProductName) $(var.BaseVersion) Bundle"
+            IconSourceFile="..\dokan.ico"
+            Version="$(var.BaseVersion)"
+            Manufacturer="$(var.CompanyName)"
+            dep:ProviderKey="$(var.ProviderKey)"
+            UpgradeCode="$(var.BundleUpgradeCode)"
+            UpdateUrl="$(var.UpdateURL)"
+            DisableModify="yes"
+            >
+
+      <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+      <bal:WixStandardBootstrapperApplication
+        LicenseFile="licdata.rtf"
+        LogoFile="dokan.png"
+        ShowVersion="yes"
+        SuppressOptionsUI="no"
+        SuppressRepair="yes"/>
+    </BootstrapperApplicationRef>
+
+    <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library"/>
+    <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
+
+      <util:RegistrySearch Id="vcredist_2015_x86_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2015_x86_installed" Win64="no"/>
+      <util:RegistrySearch Id="vcredist_2015_x86_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2015_x86_version" Result="exists" Win64="no"/>
+      <util:RegistrySearch Id="vcredist_2015_x86_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2015_x86_versionnumber" Result="value" Win64="no"/>
+
+      <util:RegistrySearch Id="vcredist_2015_x64_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2015_x64_installed" Win64="yes"/>
+      <util:RegistrySearch Id="vcredist_2015_x64_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_version" Result="exists" Win64="yes"/>
+      <util:RegistrySearch Id="vcredist_2015_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_versionnumber" Result="value" Win64="yes"/>
+
+      <Chain>
+
+        <ExePackage Id="vcredist_2015_x86.exe"
+                    Name="vc_redist.x86.exe"
+                    InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    Protocol="netfx4"
+                    Compressed="$(var.Compressed)"
+                    Permanent="yes"
+                    InstallCondition="NOT VersionNT64"
+                    DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23506"
+                    PerMachine="yes"
+                    Vital="yes"
+                    Cache="no"
+                    SuppressSignatureVerification="yes"
+                    SourceFile="Redist\VCRedist_2015\vc_redist.x86.exe"
+                    DownloadUrl="https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x86.exe"
+                    />
+<!-- VC 2015 old
+DownloadUrl="https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe"
+-->
+
+        <ExePackage Id="vcredist_2015_x64.exe"
+                    Name="vc_redist.x64.exe"
+                    InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                    Protocol="netfx4"
+                    Compressed="$(var.Compressed)"
+                    Permanent="yes"
+                    InstallCondition="VersionNT64"
+                    DetectCondition="vcredist_2015_x64_installed AND vcredist_2015_x64_version AND vcredist_2015_x64_versionnumber &gt;= v14.0.23506"
+                    PerMachine="yes"
+                    Vital="yes"
+                    Cache="yes"
+                    SuppressSignatureVerification="yes"
+                    SourceFile="Redist\VCRedist_2015\vc_redist.x64.exe"
+                    DownloadUrl="https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x64.exe"
+                    />
+<!-- VC 2015 old
+DownloadUrl="https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe"
+-->
+
+        <MsiPackage SourceFile="..\bin\x86\$(var.Configuration)\Dokan_x86.msi" 
+                    InstallCondition="NOT VersionNT64"
+                    Compressed="yes"
+                    Visible="no"
+                    >
+          <MsiProperty Name="ADDLOCAL" Value="All"/>
+          <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+          <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        </MsiPackage>
+
+        <MsiPackage SourceFile="..\bin\x64\$(var.Configuration)\Dokan_x64.msi"
+                    InstallCondition="VersionNT64"
+                    Compressed="yes"
+                    Visible="no"
+                    >
+          <MsiProperty Name="ADDLOCAL" Value="All"/>
+          <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+          <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        </MsiPackage>
+
+      </Chain>
+	</Bundle>
+</Wix>
