@@ -249,6 +249,12 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_MOUNT_ERROR;
   }
 
+  
+  // wait until the device is realy mounted
+  if (DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
+	  WaitForMount(instance);
+  }
+
   // Here we should have been mounter by mountmanager thanks to
   // IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
@@ -321,6 +327,68 @@ void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size) {
       (size->QuadPart + (r > 0 ? DOKAN_ALLOCATION_UNIT_SIZE - r : 0));
 }
 
+BOOL WINAPI WaitForMount(PDOKAN_INSTANCE DokanInstance) {
+	HANDLE device;
+	char buffer[EVENT_CONTEXT_MAX_SIZE];
+	BOOL status;
+	ULONG returnedLength;
+	DWORD lastError = 0;
+	WCHAR rawDeviceName[MAX_PATH];
+
+	RtlZeroMemory(buffer, sizeof(buffer));
+
+	
+	device = CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
+		MAX_PATH),         // lpFileName
+		GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+		FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
+		NULL,          // lpSecurityAttributes
+		OPEN_EXISTING, // dwCreationDistribution
+		0,             // dwFlagsAndAttributes
+		NULL           // hTemplateFile
+		);
+
+	if (device == INVALID_HANDLE_VALUE) {
+		DbgPrint(
+			"WaitForMount Error: CreateFile failed %ws: %d\n",
+			GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+			GetLastError());
+		return FALSE;
+	}
+
+	status = TRUE;
+	while (status) {
+
+		status =
+			DeviceIoControl(device,           // Handle to device
+				IOCTL_EVENT_INFO, // IO Control code
+				NULL,             // Input Buffer to driver.
+				0,                // Length of input buffer in bytes.
+				buffer,           // Output Buffer from driver.
+				sizeof(buffer),   // Length of output buffer in bytes.
+				&returnedLength,  // Bytes placed in buffer.
+				NULL              // synchronous call
+				);
+
+		if (!status) {
+			lastError = GetLastError();
+			DbgPrint("WaitForMount Ioctl failed for wait with code %d.\n", lastError);
+			if (lastError == ERROR_DEV_NOT_EXIST) {
+				DbgPrint("Device is still not there so continue wait\n");
+				status = TRUE;
+				Sleep(200);
+				continue;
+			}
+			DbgPrint("WaitForMount we got different error %d\n", status);
+			return FALSE;
+		}
+		break;
+	}
+
+	DbgPrint("Device is now mounted and ready for access");
+	return TRUE;
+}
+
 UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   HANDLE device;
   char buffer[EVENT_CONTEXT_MAX_SIZE];
@@ -369,7 +437,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
     if (!status) {
       lastError = GetLastError();
       DbgPrint("Ioctl failed for wait with code %d.\n", lastError);
-      if (lastError == ERROR_NO_SYSTEM_RESOURCES) {
+      if (lastError == ERROR_DEV_NOT_EXIST) {
         DbgPrint("Processing will continue\n");
         status = TRUE;
         Sleep(200);

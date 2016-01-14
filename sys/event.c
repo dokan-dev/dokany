@@ -127,11 +127,13 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   irpEntry->Flags = Flags;
 
   // Update the irp timeout for the entry
+  ExAcquireResourceExclusiveLite(&vcb->Dcb->Resource, TRUE);
   if (vcb) {
     DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
   } else {
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
+  ExReleaseResourceLite(&vcb->Dcb->Resource);
 
   // DDbgPrint("  Lock IrpList.ListLock\n");
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
@@ -503,7 +505,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   DDbgPrint("  DeviceName:%ws\n", driverInfo->DeviceName);
-  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
 
   dcb->UseAltStream = 0;
   if (eventStart.Flags & DOKAN_EVENT_ALTERNATIVE_STREAM_ON) {
@@ -513,7 +514,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   dcb->Mounted = 1;
 
   DokanStartEventNotificationThread(dcb);
-  DokanStartCheckThread(dcb);
 
   ExReleaseResourceLite(&dokanGlobal->Resource);
   KeLeaveCriticalRegion();

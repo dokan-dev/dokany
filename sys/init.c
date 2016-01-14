@@ -935,8 +935,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   //
   volDeviceObject->Flags |= DO_DIRECT_IO;
 
-  DokanInitVpb(diskDeviceObject->Vpb, diskDeviceObject, volDeviceObject);
-
   // Mark devices as initialized
   diskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
   volDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;

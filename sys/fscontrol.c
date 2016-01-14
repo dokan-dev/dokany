@@ -325,8 +325,6 @@ VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT DiskDevice,
                   __in PDEVICE_OBJECT VolumeDevice) {
   if (Vpb != NULL) {
     Vpb->DeviceObject = VolumeDevice;
-    Vpb->RealDevice = DiskDevice;
-    Vpb->Flags |= VPB_MOUNTED;
     Vpb->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
     RtlStringCchCopyW(Vpb->VolumeLabel,
                       sizeof(Vpb->VolumeLabel) / sizeof(WCHAR), VOLUME_LABEL);
@@ -380,7 +378,26 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
       vpb = irpSp->Parameters.MountVolume.Vpb;
       DokanInitVpb(vpb, dcb->DeviceObject, vcb->DeviceObject);
 
-      // FsRtlNotifyVolumeEvent(, FSRTL_VOLUME_MOUNT);
+	  
+	  PFILE_OBJECT VolumeFileObject = NULL;
+	  status = STATUS_SUCCESS;
+	  try {
+		  VolumeFileObject = IoCreateStreamFileObjectLite(NULL, vcb->DeviceObject);
+	  } except(EXCEPTION_EXECUTE_HANDLER) {
+		  status = GetExceptionCode();
+		  DDbgPrint("   IoCreateStreamFileObjectLite failed with status code %d\n", status);
+	  }
+
+	  if (status == STATUS_SUCCESS) {
+		  // notify all application about volume mount
+		  FsRtlNotifyVolumeEvent(VolumeFileObject, FSRTL_VOLUME_MOUNT);
+	  }
+
+	  DokanStartCheckThread(dcb);
+	  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+	  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT * 3);
+	  ExReleaseResourceLite(&dcb->Resource);
+
       status = STATUS_SUCCESS;
     } break;
 
