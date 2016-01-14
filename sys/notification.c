@@ -250,7 +250,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
     }
 
     if (IoSetCancelRoutine(irp, NULL) == NULL) {
-	  DDbgPrint("IoSetCancelRoutine return NULL\n");
+      DDbgPrint("IoSetCancelRoutine return NULL\n");
       // Cancel routine will run as soon as we release the lock
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
