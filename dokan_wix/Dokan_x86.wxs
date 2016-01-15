@@ -76,7 +76,7 @@
 
     <CustomAction Id='CheckForOldDokanLibrary' Error='An obsolete version of the Dokan Library is still installed on this system. Please uninstall it before executing this setup again. Installing a newer Dokan driver might break compatibilty with applications relying on the older version.' />
 
-    <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. You can download it here: https://support.microsoft.com/en-us/kb/2999226" />
+    <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
     
     <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
@@ -117,10 +117,10 @@
     <InstallExecuteSequence>
 
       <Custom Action='CheckForOldDokanLibrary' Before='LaunchConditions'>
-        <![CDATA[Installed AND DOKANNSISINSTALL]]>
+        <![CDATA[DOKANNSISINSTALL]]>
       </Custom>
       <Custom Action='CheckForUCRT' Before='LaunchConditions'>
-        <![CDATA[Installed AND UCRTINSTALLED = ""]]>
+        <![CDATA[Not REMOVE="ALL" AND UCRTINSTALLED = ""]]>
       </Custom>
       <Custom Action='GetInstallDir' Before='CostFinalize'><![CDATA[REMOVE="ALL"]]></Custom>
       <Custom Action="SetFolderValue" Before="ExecuteInstallAction" />
