@@ -1,4 +1,5 @@
 !define VERSION "1.0.0"
+!define MAJOR_VERSION "1"
 
 !include LogicLib.nsh
 !include x64.nsh
@@ -12,7 +13,7 @@ BrandingText http://dokan-dev.github.io
 	OutFile "DokanInstall_${VERSION}.exe"
 !endif
 
-InstallDir $PROGRAMFILES32\Dokan\DokanLibrary
+InstallDir $PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}
 RequestExecutionLevel admin
 LicenseData "licdata.rtf"
 ShowUninstDetails show
@@ -26,33 +27,35 @@ UninstPage instfiles
 
 !macro Files arch folder
 
-  SetOutPath ${folder}\Dokan\DokanLibrary
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}
 
     File README.url
     File ..\license.gpl.txt
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\${arch}\Release\dokanctl.exe
+	File ..\${arch}\Release\dokan-${MAJOR_VERSION}.dll
+	File ..\${arch}\Release\dokanfuse-${MAJOR_VERSION}.dll
 	
-  SetOutPath ${folder}\Dokan\DokanLibrary\include\dokan
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\include\dokan
 	
 	File ..\dokan\dokan.h
 	File ..\dokan\fileinfo.h
 	File ..\sys\public.h
 	
-  SetOutPath ${folder}\Dokan\DokanLibrary\lib
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\lib
   
-	File ..\${arch}\Release\dokan.lib
-	File ..\${arch}\Release\dokanfuse.lib
-    File ..\${arch}\Release\dokanfuse.lib
+	File ..\${arch}\Release\dokan-${MAJOR_VERSION}.lib
+	File ..\${arch}\Release\dokanfuse-${MAJOR_VERSION}.lib
 
-  SetOutPath ${folder}\Dokan\DokanLibrary\sample\mirror
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\sample\mirror
 
     File ..\dokan_mirror\dokan_mirror.vcxproj
     File ..\dokan_mirror\mirror.c
     File ..\${arch}\Release\mirror.exe
+    File ..\${arch}\Release\dokan-${MAJOR_VERSION}.dll
 
-  SetOutPath ${folder}\Dokan\DokanLibrary\include\fuse
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\include\fuse
 
     File /r "..\dokan_fuse\include\"
 	
@@ -61,10 +64,8 @@ UninstPage instfiles
   ${EndIf}
 
   SetOutPath $SYSDIR
-
-    File ..\${arch}\Release\dokan.dll
-	File ..\${arch}\Release\dokanfuse.dll
-    File ..\${arch}\Release\dokannp.dll
+  
+    File ..\${arch}\Release\dokannp-${MAJOR_VERSION}.dll
 
   ${If} ${arch} == "x64"
 	${EnableX64FSRedirection}
@@ -74,25 +75,25 @@ UninstPage instfiles
 
 !macro PDBFiles os arch folder
 
-  SetOutPath ${folder}\Dokan\DokanLibrary\pdb
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\pdb
  
     File ..\${arch}\Release\dokanctl.pdb
 	
-  SetOutPath ${folder}\Dokan\DokanLibrary\pdb\mirror
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\pdb\mirror
   
 	File ..\${arch}\Release\mirror.pdb
 	
-  SetOutPath ${folder}\Dokan\DokanLibrary\pdb\driver
+  SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\pdb\driver
  
-    File ..\${arch}\${os}Release\dokan.pdb
+    File ..\${arch}\${os}Release\dokan-${MAJOR_VERSION}.pdb
 	
 !macroend
 
 !macro DokanSetup
-    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i d' $0
-	ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /i n' $0
+    ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\dokanctl.exe" /i d' $0
+	ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\dokanctl.exe" /i n' $0
   DetailPrint "dokanctl returned $0"
-  WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe
+  WriteUninstaller $PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\DokanUninstall.exe
 
   ; Write the uninstall keys for Windows
   ${If} ${RunningX64}
@@ -100,10 +101,10 @@ UninstPage instfiles
   ${Else}
     SetRegView 32
   ${EndIf}
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "DisplayName" "Dokan Library ${VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "UninstallString" '"$PROGRAMFILES32\Dokan\DokanLibrary\DokanUninstall.exe"'
-  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "NoModify" 1
-  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" "NoRepair" 1
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary${VERSION}" "DisplayName" "Dokan Library ${VERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary${VERSION}" "UninstallString" '"$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\DokanUninstall.exe"'
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary${VERSION}" "NoModify" 1
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary${VERSION}" "NoRepair" 1
 
 !macroend
 
@@ -114,7 +115,7 @@ UninstPage instfiles
 
   SetOutPath $SYSDIR\drivers
 
-    File ..\${arch}\${os}Release\dokan.sys
+    File ..\${arch}\${os}Release\dokan-${MAJOR_VERSION}.sys
 
   ${If} ${arch} == "x64"
     ${EnableX64FSRedirection}
@@ -248,27 +249,21 @@ Section "Dokan Driver x64" section_x64_driver
 SectionEnd
 
 Section "Uninstall"
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r n' $0
-  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary\dokanctl.exe" /r d' $0
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\dokanctl.exe" /r n' $0
+  ExecWait '"$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}\dokanctl.exe" /r d' $0
   DetailPrint "dokanctl.exe returned $0"
 
-  RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary
+  RMDir /r $PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}
   RMDir $PROGRAMFILES32\Dokan
-  Delete $SYSDIR\dokan.dll
-  Delete $SYSDIR\dokanfuse.dll
-  Delete $SYSDIR\dokannp.dll
 
   ${If} ${RunningX64}
-    RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary
+    RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary-${VERSION}
     RMDir $PROGRAMFILES64\Dokan
     ${DisableX64FSRedirection}
-      Delete /REBOOTOK $SYSDIR\drivers\dokan.sys
-      Delete $SYSDIR\dokan.dll
-	  Delete $SYSDIR\dokanfuse.dll
-      Delete $SYSDIR\dokannp.dll
+      Delete /REBOOTOK $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys
     ${EnableX64FSRedirection}
   ${Else}
-    Delete /REBOOTOK $SYSDIR\drivers\dokan.sys
+    Delete /REBOOTOK $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys
   ${EndIf}
 
   ; Remove registry keys
@@ -277,7 +272,7 @@ Section "Uninstall"
   ${Else}
     SetRegView 32
   ${EndIf}
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary${VERSION}"
 
   IfSilent noreboot
     MessageBox MB_YESNO "A reboot is required to finish the uninstallation. Do you wish to reboot now?" IDNO noreboot
@@ -337,7 +332,7 @@ Function .onInit
   ; Previous version
   ${If} ${RunningX64}
     ${DisableX64FSRedirection}
-      IfFileExists $SYSDIR\drivers\dokan.sys HasPreviousVersionX64 NoPreviousVersionX64
+      IfFileExists $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys HasPreviousVersionX64 NoPreviousVersionX64
       ; To make EnableX64FSRedirection called in both cases, needs duplicated MessageBox code. How can I avoid this?
       HasPreviousVersionX64:
         MessageBox MB_OK "Please uninstall the previous version and restart your computer before running this installer."
@@ -345,7 +340,7 @@ Function .onInit
       NoPreviousVersionX64:
     ${EnableX64FSRedirection}
   ${Else}
-    IfFileExists $SYSDIR\drivers\dokan.sys HasPreviousVersion NoPreviousVersion
+    IfFileExists $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys HasPreviousVersion NoPreviousVersion
     HasPreviousVersion:
       MessageBox MB_OK "Please uninstall the previous version and restart your computer before running this installer."
       Abort
@@ -357,7 +352,7 @@ FunctionEnd
 
 Function .onInstSuccess
   IfSilent noshellopen
-    ExecShell "open" "$PROGRAMFILES32\Dokan\DokanLibrary"
+    ExecShell "open" "$PROGRAMFILES32\Dokan\DokanLibrary-${VERSION}"
   noshellopen:
 FunctionEnd
 

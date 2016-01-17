@@ -225,10 +225,10 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   return DokanRemoveMountPoint(mountPoint);
 }
 
-#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan"
-#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector"
-#define DOKAN_NP_NAME L"DokanNP"
-#define DOKAN_NP_PATH L"System32\\dokannp.dll"
+#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan-" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector-" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_NAME L"DokanNP-" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_PATH L"System32\\dokannp-" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
 

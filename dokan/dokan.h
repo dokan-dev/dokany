@@ -26,7 +26,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "public.h"
 
-#define DOKAN_DRIVER_NAME L"dokan.sys"
+#define DOKAN_DRIVER_NAME L"dokan-" DOKAN_MAJOR_API_VERSION L".sys"
 
 #ifdef _EXPORTING
 #define DOKANAPI /*__declspec(dllexport)*/                                     \

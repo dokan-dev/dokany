@@ -1,4 +1,4 @@
-LIBRARY	dokanfuse
+LIBRARY	dokanfuse-1
 
 EXPORTS
 

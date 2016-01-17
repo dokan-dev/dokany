@@ -89,27 +89,35 @@
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\Dokan.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
@@ -148,28 +156,28 @@
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'" />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
-    <TargetName>dokannp</TargetName>
+    <TargetName>dokannp-$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -296,6 +304,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="dokannp.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="dokan_np.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef _PUBLIC_H_
 #define _PUBLIC_H_
 
+#define DOKAN_MAJOR_API_VERSION L"1"
 #define DOKAN_DRIVER_VERSION 0x0000190
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
