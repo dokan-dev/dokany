@@ -50,6 +50,6 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(WixCATargetsPath)" />
   <PropertyGroup>
-    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" signtool.exe sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f certificate.pfx /p PASSWORD "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release"  "%25SIGNTOOL%25" sign /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /f "%25CODESIGNCERT%25" /p %25CODESIGNPASS%25 "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
   </PropertyGroup>
 </Project>

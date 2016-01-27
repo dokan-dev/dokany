@@ -8,6 +8,7 @@
 <?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
 <?define BundleUpgradeCode="{A30D29CD-FA58-4542-8D41-7EDD1FB1EE5A}" ?>
 <?define BaseVersion="1.0.0" ?>
+<?define MajorVersion="1" ?>
 <?define BuildVersion="0" ?>
 <?define CompanyName="Dokany Project" ?>
 <?define ShortCompanyName="Dokany Project" ?>

@@ -1,7 +1,7 @@
 [Version]
 Signature         = "$Windows NT$"
 Provider          = %Dokan%
-DriverVer         = 14/1/2016,1.0.0.0
+DriverVer         = 01/01/2016,0.8.0.0
 CatalogFile       = 
 DriverPackageType = FileSystem
 
@@ -42,7 +42,7 @@ LoadOrderGroup = "File System"
 
 [Strings]
 Dokan = "Dokan"
-DriverName = "dokan"
+DriverName = "dokan-1"
 Disk1 = "Dokan installation media"
 ServiceDesc = "Dokan kernel-mode file system driver."
 ServiceName = "dokan"
