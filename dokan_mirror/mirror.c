@@ -1120,7 +1120,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
                      FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
                      FILE_PERSISTENT_ACLS;
 
-  wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"Dokan");
+  // File system name could be anything up to 10 characters.
+  // But Windows check few feature availability based on file system name.
+  // For this, it is recommended to set NTFS or FAT here.
+  wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"NTFS");
 
   return STATUS_SUCCESS;
 }
