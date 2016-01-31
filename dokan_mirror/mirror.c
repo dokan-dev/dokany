@@ -1234,7 +1234,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /n (use network drive)\n"
                     "  /m (use removable drive)\n"
                     "  /w (write-protect drive)\n"
-                    "  /g (use mount manager)\n"
+                    "  /o (use mount manager)\n"
+					"  /c (mount for current session only)\n"
                     "  /u UNC provider name"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
@@ -1281,9 +1282,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'w':
       dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
       break;
-    case L'g':
+    case L'o':
       dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
       break;
+	case L'c':
+		dokanOptions->Options |= DOKAN_OPTION_CURRENT_SESSION;
+	  break;
     case L'u':
       command++;
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
@@ -1325,13 +1329,20 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     return -1;
   }
 
+  if ((dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+	  (dokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION)) {
+	  fwprintf(stderr, L"Mount Manager always mount the drive for all user sessions.\n");
+	  free(dokanOperations);
+	  free(dokanOptions);
+	  return -1;
+  }
+
   // Add security name privilege. Required here to handle GetFileSecurity
   // properly.
   if (!AddSeSecurityNamePrivilege()) {
     fwprintf(stderr, L"  Failed to add security privilege to process\n");
-    free(dokanOperations);
-    free(dokanOptions);
-    return -1;
+	fwprintf(stderr, L"  => GetFileSecurity/SetFileSecurity may not work properly\n");
+	fwprintf(stderr, L"  => Please restart mirror sample with administrator rights to fix it\n");
   }
 
   if (g_DebugMode) {

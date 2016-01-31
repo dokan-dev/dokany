@@ -383,6 +383,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   UNICODE_STRING unicodeGuid;
   ULONG deviceNamePos;
   BOOLEAN useMountManager = FALSE;
+  BOOLEAN mountGlobally = TRUE;
 
   DDbgPrint("==> DokanEventStart\n");
 
@@ -443,6 +444,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     useMountManager = TRUE;
   }
 
+  if (eventStart.Flags & DOKAN_EVENT_CURRENT_SESSION) {
+	  DDbgPrint("  Mounting on current session only\n");
+	  mountGlobally = FALSE;
+  }
+
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
   baseGuid.Data3 = (USHORT)(dokanGlobal->MountId >> 16) ^ baseGuid.Data3;
 
@@ -463,7 +469,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   status = DokanCreateDiskDevice(
       DeviceObject->DriverObject, dokanGlobal->MountId, eventStart.MountPoint,
       eventStart.UNCName, baseGuidString, dokanGlobal, deviceType,
-      deviceCharacteristics, useMountManager, &dcb);
+      deviceCharacteristics, useMountManager, mountGlobally, &dcb);
 
   if (!NT_SUCCESS(status)) {
     ExReleaseResourceLite(&dokanGlobal->Resource);

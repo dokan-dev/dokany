@@ -410,7 +410,7 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
-BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
+BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName, PDOKAN_OPTIONS DokanOptions) {
 
   if (MountPoint != NULL) {
     if (!IsMountPointDriveLetter(MountPoint)) {
@@ -420,7 +420,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName) {
       // In that case we cannot use mount manager ; doesn't this should be done
       // kernel-mode too?
       return CreateMountPoint(MountPoint, DeviceName);
-    }
+	}
   }
   return TRUE;
 }
@@ -450,7 +450,7 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
             // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
             DeleteVolumeMountPoint(mountPoint);
           }
-        }
+		}
         return TRUE;
       }
     }

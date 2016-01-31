@@ -622,11 +622,15 @@ KSTART_ROUTINE DokanCreateMountPointSysProc;
 VOID DokanCreateMountPointSysProc(__in PDokanDCB Dcb) {
   NTSTATUS status;
 
+  DDbgPrint("=> DokanCreateMountPointSysProc\n");
+
   status = IoCreateSymbolicLink(Dcb->MountPoint, Dcb->DiskDeviceName);
   if (!NT_SUCCESS(status)) {
     DDbgPrint("IoCreateSymbolicLink for mount point %wZ failed: 0x%X\n",
               Dcb->MountPoint, status);
   }
+
+  DDbgPrint("<= DokanCreateMountPointSysProc\n");
 }
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
@@ -636,36 +640,42 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
     if (Dcb->UseMountManager) {
       DokanSendVolumeCreatePoint(Dcb->DiskDeviceName, Dcb->MountPoint);
     } else {
-      // Run DokanCreateMountPointProc in System thread.
-      HANDLE handle;
-      PKTHREAD thread;
-      OBJECT_ATTRIBUTES objectAttribs;
+	  if (Dcb->MountGlobally) {
+        // Run DokanCreateMountPointProc in system thread.
+        HANDLE handle;
+        PKTHREAD thread;
+        OBJECT_ATTRIBUTES objectAttribs;
 
-      InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                                 NULL);
-      status = PsCreateSystemThread(
-          &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-          (PKSTART_ROUTINE)DokanCreateMountPointSysProc, Dcb);
-      if (!NT_SUCCESS(status)) {
-        DDbgPrint("DokanCreateMountPoint PsCreateSystemThread failed: 0x%X\n",
-                  status);
-      } else {
-        ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                  &thread, NULL);
-        ZwClose(handle);
-        KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-        ObDereferenceObject(thread);
-      }
+        InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
+                                   NULL);
+        status = PsCreateSystemThread(
+            &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
+            (PKSTART_ROUTINE)DokanCreateMountPointSysProc, Dcb);
+        if (!NT_SUCCESS(status)) {
+          DDbgPrint("DokanCreateMountPoint PsCreateSystemThread failed: 0x%X\n",
+                    status);
+        } else {
+          ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                                    &thread, NULL);
+          ZwClose(handle);
+          KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+          ObDereferenceObject(thread);
+        }
+	  } else {
+		DokanCreateMountPointSysProc(Dcb);
+	  }
     }
   }
 }
 
 KSTART_ROUTINE DokanDeleteMountPointSysProc;
 VOID DokanDeleteMountPointSysProc(__in PDokanDCB Dcb) {
+  DDbgPrint("=> DokanDeleteMountPointSysProc\n");
   if (Dcb->MountPoint != NULL && Dcb->MountPoint->Length > 0) {
     DDbgPrint("  Delete Mount Point Symbolic Name: %wZ\n", Dcb->MountPoint);
     IoDeleteSymbolicLink(Dcb->MountPoint);
   }
+  DDbgPrint("<= DokanDeleteMountPointSysProc\n");
 }
 
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
@@ -676,26 +686,30 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
       Dcb->UseMountManager = FALSE; // To avoid recursive call
       DokanSendVolumeDeletePoints(Dcb->MountPoint, Dcb->DiskDeviceName);
     } else {
-      // Run DokanDeleteMountPointProc in System thread.
-      HANDLE handle;
-      PKTHREAD thread;
-      OBJECT_ATTRIBUTES objectAttribs;
+      if (Dcb->MountGlobally) {
+        // Run DokanDeleteMountPointProc in System thread.
+        HANDLE handle;
+        PKTHREAD thread;
+        OBJECT_ATTRIBUTES objectAttribs;
 
-      InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                                 NULL);
-      status = PsCreateSystemThread(
-          &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-          (PKSTART_ROUTINE)DokanDeleteMountPointSysProc, Dcb);
-      if (!NT_SUCCESS(status)) {
-        DDbgPrint("DokanDeleteMountPoint PsCreateSystemThread failed: 0x%X\n",
-                  status);
-      } else {
-        ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                  &thread, NULL);
-        ZwClose(handle);
-        KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-        ObDereferenceObject(thread);
-      }
+        InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
+                                   NULL);
+        status = PsCreateSystemThread(
+            &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
+            (PKSTART_ROUTINE)DokanDeleteMountPointSysProc, Dcb);
+        if (!NT_SUCCESS(status)) {
+          DDbgPrint("DokanDeleteMountPoint PsCreateSystemThread failed: 0x%X\n",
+                    status);
+        } else {
+          ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                                    &thread, NULL);
+          ZwClose(handle);
+          KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+          ObDereferenceObject(thread);
+        }
+	  } else {
+		  DokanDeleteMountPointSysProc(Dcb);
+	  }
     }
   }
 }
@@ -707,7 +721,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
-                      __in ULONG DeviceCharacteristics,
+                      __in ULONG DeviceCharacteristics, __in BOOLEAN MountGlobally,
                       __in BOOLEAN UseMountManager, __out PDokanDCB *Dcb) {
   WCHAR diskDeviceNameBuf[MAXIMUM_FILENAME_LENGTH];
   WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
@@ -818,6 +832,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   dcb->CacheManagerNoOpCallbacks.AcquireForReadAhead = &DokanNoOpAcquire;
   dcb->CacheManagerNoOpCallbacks.ReleaseFromReadAhead = &DokanNoOpRelease;
 
+  dcb->MountGlobally = MountGlobally;
   dcb->UseMountManager = UseMountManager;
   if (wcscmp(MountPoint, L"") != 0) {
     RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH,

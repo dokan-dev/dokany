@@ -242,7 +242,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_START_ERROR;
   }
 
-  if (!DokanMount(instance->MountPoint, instance->DeviceName)) {
+  if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
     SendReleaseIRP(instance->DeviceName);
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
     CloseHandle(device);
@@ -649,6 +649,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
     eventStart.Flags |= DOKAN_EVENT_MOUNT_MANAGER;
+  }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
+	  eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

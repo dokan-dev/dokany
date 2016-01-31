@@ -212,6 +212,7 @@ typedef struct _DokanDiskControlBlock {
   USHORT UseAltStream;
   USHORT Mounted;
   USHORT UseMountManager;
+  USHORT MountGlobally;
 
   // to make a unique id for pending IRP
   ULONG SerialNumber;
@@ -499,7 +500,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
-                      __in ULONG DeviceCharacteristics,
+                      __in ULONG DeviceCharacteristics, __in BOOLEAN MountGlobally,
                       __in BOOLEAN UseMountManager, __out PDokanDCB *Dcb);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT DiskDevice,
