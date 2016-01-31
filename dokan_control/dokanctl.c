@@ -57,6 +57,8 @@ int ShowUsage() {
 int Unmount(LPCWSTR MountPoint, BOOL ForceUnmount) {
   int status = EXIT_SUCCESS;
 
+  UNREFERENCED_PARAMETER(ForceUnmount);
+
   if (!DokanRemoveMountPoint(MountPoint)) {
     status = EXIT_FAILURE;
   }

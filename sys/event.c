@@ -128,11 +128,13 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
   // Update the irp timeout for the entry
   if (vcb) {
+	ExAcquireResourceExclusiveLite(&vcb->Dcb->Resource, TRUE);
     DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
+	ExReleaseResourceLite(&vcb->Dcb->Resource);
   } else {
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
-
+  
   // DDbgPrint("  Lock IrpList.ListLock\n");
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
   KeAcquireSpinLock(&IrpList->ListLock, &oldIrql);
@@ -205,6 +207,7 @@ DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
   }
 
   // DDbgPrint("DokanRegisterPendingIrpForEvent\n");
+  vcb->HasEventWait = TRUE;
 
   return RegisterPendingIrpMain(DeviceObject, Irp,
                                 0, // SerialNumber
@@ -377,7 +380,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanDCB dcb;
   NTSTATUS status;
   DEVICE_TYPE deviceType;
-  ULONG deviceCharacteristics;
+  ULONG deviceCharacteristics = 0;
   WCHAR baseGuidString[64];
   GUID baseGuid = DOKAN_BASE_GUID;
   UNICODE_STRING unicodeGuid;
@@ -412,8 +415,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
     return STATUS_SUCCESS;
   }
-
-  deviceCharacteristics = FILE_DEVICE_IS_MOUNTED;
 
   switch (eventStart.DeviceType) {
   case DOKAN_DISK_FILE_SYSTEM:
@@ -503,17 +504,14 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   DDbgPrint("  DeviceName:%ws\n", driverInfo->DeviceName);
-  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
 
   dcb->UseAltStream = 0;
   if (eventStart.Flags & DOKAN_EVENT_ALTERNATIVE_STREAM_ON) {
     DDbgPrint("  ALT_STREAM_ON\n");
     dcb->UseAltStream = 1;
   }
-  dcb->Mounted = 1;
 
   DokanStartEventNotificationThread(dcb);
-  DokanStartCheckThread(dcb);
 
   ExReleaseResourceLite(&dokanGlobal->Resource);
   KeLeaveCriticalRegion();

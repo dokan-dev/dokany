@@ -250,7 +250,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
     }
 
     if (IoSetCancelRoutine(irp, NULL) == NULL) {
-	  DDbgPrint("IoSetCancelRoutine return NULL\n");
+      DDbgPrint("IoSetCancelRoutine return NULL\n");
       // Cancel routine will run as soon as we release the lock
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
@@ -405,6 +405,8 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
   NTSTATUS status = STATUS_SUCCESS;
 
+  DDbgPrint("==> DokanEventRelease\n");
+
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
     return STATUS_INVALID_PARAMETER;
@@ -453,6 +455,8 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   DokanStopEventNotificationThread(dcb);
 
   DokanDeleteDeviceObject(dcb);
+
+  DDbgPrint("<== DokanEventRelease\n");
 
   return status;
 }

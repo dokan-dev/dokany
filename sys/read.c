@@ -59,16 +59,29 @@ Return Value:
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
 
+	//
+	//  If this is a zero length read then return SUCCESS immediately.
+	//
+	if (irpSp->Parameters.Read.Length == 0) {
+		DDbgPrint("  Parameters.Read.Length == 0 \n")
+		return STATUS_SUCCESS;
+	}
+
+	if (irpSp->MinorFunction == IRP_MN_COMPLETE) {
+		Irp->MdlAddress = NULL;
+		return STATUS_SUCCESS;
+	}
+
     if (fileObject == NULL) {
       DDbgPrint("  fileObject == NULL\n");
-      status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_DEVICE_REQUEST;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB ||
         !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-      status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_DEVICE_REQUEST;
       __leave;
     }
 
