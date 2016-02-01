@@ -829,7 +829,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   dcb->UseMountManager = UseMountManager;
   if (wcscmp(MountPoint, L"") != 0) {
     RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH,
-                      L"\\DosDevices\\Global\\");
+                      L"\\DosDevices\\");
     if (wcslen(MountPoint) < 4) {
       mountPointBuf[12] = towupper(MountPoint[0]);
       mountPointBuf[13] = L':';
@@ -903,30 +903,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   
   InsertMountEntry(DokanGlobal, &dokanControl);
 
-  if (dcb->UseMountManager) {
-	  status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
-	  if (!NT_SUCCESS(status)) {
-		  DDbgPrint("  DokanSendVolumeArrivalNotification failed: 0x%x\n", status);
-		  if (diskDeviceObject->Vpb) {
-			  diskDeviceObject->Vpb->DeviceObject = NULL;
-			  diskDeviceObject->Vpb->RealDevice = NULL;
-			  diskDeviceObject->Vpb->Flags = 0;
-		  }
-		  ExDeleteResourceLite(&dcb->Resource);
-		  IoDeleteDevice(diskDeviceObject);
-		  FreeDcbNames(dcb);
-		  return status;
-	  }
-  }
-
-  DokanCreateMountPoint(dcb);
-  
-  if (!NT_SUCCESS(status)) {
-	  DDbgPrint("  Failed to create symbolik link %wZ -> %wZ created\n", dcb->MountPoint, dcb->DiskDeviceName);
-  }
-  else {
-	  DDbgPrint("  Created symbolik link %wZ -> %wZ created\n", dcb->MountPoint, dcb->DiskDeviceName);
-  }
     if (isNetworkFileSystem) {
 	  // Run FsRtlRegisterUncProvider in System thread.
 	  HANDLE handle;

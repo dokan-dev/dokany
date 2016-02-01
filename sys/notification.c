@@ -407,6 +407,10 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
 
   DDbgPrint("==> DokanEventRelease\n");
 
+  if (DeviceObject == NULL) {
+	return STATUS_INVALID_PARAMETER;
+  }
+
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
     return STATUS_INVALID_PARAMETER;
