@@ -373,6 +373,8 @@ VOID DokanPrintNTStatus(NTSTATUS Status) {
   PrintStatus(Status, STATUS_INVALID_HANDLE);
   PrintStatus(Status, STATUS_INSUFFICIENT_RESOURCES);
   PrintStatus(Status, STATUS_DEVICE_DOES_NOT_EXIST);
+  PrintStatus(Status, STATUS_INVALID_DEVICE_REQUEST);
+  PrintStatus(Status, STATUS_VOLUME_DISMOUNTED);
 }
 
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,

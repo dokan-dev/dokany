@@ -405,6 +405,12 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
   NTSTATUS status = STATUS_SUCCESS;
 
+  DDbgPrint("==> DokanEventRelease\n");
+
+  if (DeviceObject == NULL) {
+	return STATUS_INVALID_PARAMETER;
+  }
+
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
     return STATUS_INVALID_PARAMETER;
@@ -453,6 +459,8 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   DokanStopEventNotificationThread(dcb);
 
   DokanDeleteDeviceObject(dcb);
+
+  DDbgPrint("<== DokanEventRelease\n");
 
   return status;
 }

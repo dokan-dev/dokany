@@ -25,10 +25,6 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
 
-  UNREFERENCED_PARAMETER(DeviceObject);
-
-  // PAGED_CODE();
-
   __try {
     DDbgPrint("==> DokanPnp\n");
 
@@ -49,7 +45,7 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     case IRP_MN_QUERY_DEVICE_RELATIONS:
       DDbgPrint("  IRP_MN_QUERY_DEVICE_RELATIONS\n");
-      status = STATUS_INVALID_PARAMETER;
+	  status = QueryDeviceRelations(DeviceObject, Irp);
       break;
     default:
       DDbgPrint("   other minnor function %d\n", irpSp->MinorFunction);
@@ -58,10 +54,58 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       // status = IoCallDriver(Vcb->TargetDeviceObject, Irp);
     }
   } __finally {
-    DokanCompleteIrpRequest(Irp, status, 0);
+    DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
 
     DDbgPrint("<== DokanPnp\n");
   }
 
   return status;
+}
+
+
+NTSTATUS
+QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+	NTSTATUS status = STATUS_SUCCESS;
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
+	DEVICE_RELATION_TYPE type = irpSp->Parameters.QueryDeviceRelations.Type;
+	PDEVICE_RELATIONS DeviceRelations;
+	PDokanVCB vcb;
+
+	vcb = DeviceObject->DeviceExtension;
+
+	switch (type)
+	{
+	case RemovalRelations:
+		DDbgPrint("  QueryDeviceRelations - RemovalRelations\n");
+		break;
+	case TargetDeviceRelation:
+		
+		DDbgPrint("  QueryDeviceRelations - TargetDeviceRelation\n");
+
+		DeviceRelations = (PDEVICE_RELATIONS)ExAllocatePool(sizeof(DEVICE_RELATIONS));
+		if (!DeviceRelations) {
+			DDbgPrint("  can't allocate DeviceRelations\n");
+			return STATUS_INSUFFICIENT_RESOURCES;
+		}
+
+		/* The PnP manager will remove this when it is done with device */
+		ObReferenceObject(DeviceObject);
+
+		DeviceRelations->Count = 1;
+		DeviceRelations->Objects[0] = DeviceObject;
+		Irp->IoStatus.Information = (ULONG_PTR)DeviceRelations;
+		
+		return STATUS_SUCCESS;
+
+	case EjectionRelations:
+		DDbgPrint("  QueryDeviceRelations - EjectionRelations\n");
+		break;
+	case BusRelations:
+		DDbgPrint("  QueryDeviceRelations - BusRelations\n");
+		break;
+	default:
+		break;
+	}
+
+	return status;
 }

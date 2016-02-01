@@ -225,8 +225,8 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   return DokanRemoveMountPoint(mountPoint);
 }
 
-#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan-" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector-" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_NAME L"DokanNP-" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_PATH L"System32\\dokannp-" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
@@ -411,7 +411,7 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
 }
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName, PDOKAN_OPTIONS DokanOptions) {
-
+  UNREFERENCED_PARAMETER(DokanOptions);
   if (MountPoint != NULL) {
     if (!IsMountPointDriveLetter(MountPoint)) {
       // Unfortunately mount manager is not working as excepted and don't
