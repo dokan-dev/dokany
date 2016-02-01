@@ -30,7 +30,8 @@ THE SOFTWARE.
 #include "../dokan/dokan.h"
 #include "../dokan/dokanc.h"
 
-#define DOKAN_DRIVER_FULL_PATH L"%SystemRoot%\\system32\\drivers\\dokan-" DOKAN_MAJOR_API_VERSION  L".sys"
+#define DOKAN_DRIVER_FULL_PATH                                                 \
+  L"%SystemRoot%\\system32\\drivers\\dokan-" DOKAN_MAJOR_API_VERSION L".sys"
 
 int ShowUsage() {
   fprintf(stderr,

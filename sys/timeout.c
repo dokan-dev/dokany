@@ -31,16 +31,15 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
 
   DDbgPrint("==> DokanUnmount\n");
 
-   
   eventLength = sizeof(EVENT_CONTEXT);
   eventContext = AllocateEventContextRaw(eventLength);
 
   if (eventContext == NULL) {
     ; // STATUS_INSUFFICIENT_RESOURCES;
     DDbgPrint(" Not able to allocate eventContext.\n");
-	if (vcb) {
-		DokanEventRelease(vcb->DeviceObject);
-	}
+    if (vcb) {
+      DokanEventRelease(vcb->DeviceObject);
+    }
     return;
   }
 
@@ -72,7 +71,7 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   }
 
   if (vcb) {
-	  DokanEventRelease(vcb->DeviceObject);
+    DokanEventRelease(vcb->DeviceObject);
   }
 
   if (completedEvent) {

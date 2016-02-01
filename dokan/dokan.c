@@ -651,7 +651,7 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
     eventStart.Flags |= DOKAN_EVENT_MOUNT_MANAGER;
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
-	  eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
+    eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

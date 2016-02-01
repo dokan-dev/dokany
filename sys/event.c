@@ -128,13 +128,13 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
   // Update the irp timeout for the entry
   if (vcb) {
-	ExAcquireResourceExclusiveLite(&vcb->Dcb->Resource, TRUE);
+    ExAcquireResourceExclusiveLite(&vcb->Dcb->Resource, TRUE);
     DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
-	ExReleaseResourceLite(&vcb->Dcb->Resource);
+    ExReleaseResourceLite(&vcb->Dcb->Resource);
   } else {
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
-  
+
   // DDbgPrint("  Lock IrpList.ListLock\n");
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
   KeAcquireSpinLock(&IrpList->ListLock, &oldIrql);
@@ -446,8 +446,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   if (eventStart.Flags & DOKAN_EVENT_CURRENT_SESSION) {
-	  DDbgPrint("  Mounting on current session only\n");
-	  mountGlobally = FALSE;
+    DDbgPrint("  Mounting on current session only\n");
+    mountGlobally = FALSE;
   }
 
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;

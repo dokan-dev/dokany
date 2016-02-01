@@ -256,23 +256,23 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   ExFreePool(ccb);
   InterlockedIncrement(&fcb->Vcb->CcbFreed);
 
-return STATUS_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
 LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
-	__in WCHAR Char) {
-	ULONG i = 0;
-	for (; i < UnicodeString->Length / sizeof(WCHAR); ++i) {
-		if (UnicodeString->Buffer[i] == Char) {
-			return i;
-		}
-	}
-	return -1;
+                            __in WCHAR Char) {
+  ULONG i = 0;
+  for (; i < UnicodeString->Length / sizeof(WCHAR); ++i) {
+    if (UnicodeString->Buffer[i] == Char) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 VOID SetFileObjectForVCB(__in PFILE_OBJECT FileObject, __in PDokanVCB Vcb) {
-	FileObject->SectionObjectPointer = &Vcb->SectionObjectPointers;
-	FileObject->FsContext = &Vcb->VolumeFileHeader;
+  FileObject->SectionObjectPointer = &Vcb->SectionObjectPointers;
+  FileObject->FsContext = &Vcb->VolumeFileHeader;
 }
 
 NTSTATUS
@@ -282,88 +282,87 @@ DokanDispatchCreate(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 Routine Description:
 
-		This device control dispatcher handles create & close IRPs.
+                This device control dispatcher handles create & close IRPs.
 
 Arguments:
 
-		DeviceObject - Context for the activity.
-		Irp 		 - The device control argument block.
+                DeviceObject - Context for the activity.
+                Irp 		 - The device control argument block.
 
 Return Value:
 
-		NTSTATUS
+                NTSTATUS
 
 --*/
 {
-	PDokanVCB vcb;
-	PDokanDCB dcb;
-	PIO_STACK_LOCATION irpSp;
-	NTSTATUS status = STATUS_INVALID_PARAMETER;
-	PFILE_OBJECT fileObject;
-	ULONG info = 0;
-	PEVENT_CONTEXT eventContext;
-	PFILE_OBJECT relatedFileObject;
-	ULONG fileNameLength = 0;
-	ULONG eventLength;
-	PDokanFCB fcb;
-	PDokanCCB ccb;
-	PWCHAR fileName = NULL;
-	BOOLEAN needBackSlashAfterRelatedFile = FALSE;
-	ULONG securityDescriptorSize = 0;
-	ULONG alignedEventContextSize = 0;
-	ULONG alignedObjectNameSize =
-		PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
-	ULONG alignedObjectTypeNameSize =
-		PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
-	PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateUnicodeStr = NULL;
-	PUNICODE_STRING relatedFileName = NULL;
-	PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
+  PDokanVCB vcb;
+  PDokanDCB dcb;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PFILE_OBJECT fileObject;
+  ULONG info = 0;
+  PEVENT_CONTEXT eventContext;
+  PFILE_OBJECT relatedFileObject;
+  ULONG fileNameLength = 0;
+  ULONG eventLength;
+  PDokanFCB fcb;
+  PDokanCCB ccb;
+  PWCHAR fileName = NULL;
+  BOOLEAN needBackSlashAfterRelatedFile = FALSE;
+  ULONG securityDescriptorSize = 0;
+  ULONG alignedEventContextSize = 0;
+  ULONG alignedObjectNameSize =
+      PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
+  ULONG alignedObjectTypeNameSize =
+      PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
+  PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateUnicodeStr = NULL;
+  PUNICODE_STRING relatedFileName = NULL;
+  PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
 
-	PAGED_CODE();
+  PAGED_CODE();
 
-	__try {
-		DDbgPrint("==> DokanCreate\n");
+  __try {
+    DDbgPrint("==> DokanCreate\n");
 
-		irpSp = IoGetCurrentIrpStackLocation(Irp);
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
 
-		if (irpSp->FileObject == NULL) {
-			DDbgPrint("  irpSp->FileObject == NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (irpSp->FileObject == NULL) {
+      DDbgPrint("  irpSp->FileObject == NULL\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		fileObject = irpSp->FileObject;
-		relatedFileObject = fileObject->RelatedFileObject;
+    fileObject = irpSp->FileObject;
+    relatedFileObject = fileObject->RelatedFileObject;
 
-		//
-		//  Set up the file object's Vpb pointer in case anything happens.
-		//  This will allow us to get a reasonable pop-up.
-		//
-		if (relatedFileObject != NULL) {
-			fileObject->Vpb = relatedFileObject->Vpb;
-		}
+    //
+    //  Set up the file object's Vpb pointer in case anything happens.
+    //  This will allow us to get a reasonable pop-up.
+    //
+    if (relatedFileObject != NULL) {
+      fileObject->Vpb = relatedFileObject->Vpb;
+    }
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
 
-		vcb = DeviceObject->DeviceExtension;
-		if (vcb == NULL) {
-			DDbgPrint("  No device extension\n");
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    vcb = DeviceObject->DeviceExtension;
+    if (vcb == NULL) {
+      DDbgPrint("  No device extension\n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
+    PrintIdType(vcb);
 
-		PrintIdType(vcb);
-
-	if (GetIdentifierType(vcb) == DCB) {
-		dcb = DeviceObject->DeviceExtension;
-		if (!dcb->Mounted) {
-			DDbgPrint("  IdentifierType is dcb which is not mounted\n");
-			status = STATUS_VOLUME_DISMOUNTED;
-			__leave;
-		}
-	}
+    if (GetIdentifierType(vcb) == DCB) {
+      dcb = DeviceObject->DeviceExtension;
+      if (!dcb->Mounted) {
+        DDbgPrint("  IdentifierType is dcb which is not mounted\n");
+        status = STATUS_VOLUME_DISMOUNTED;
+        __leave;
+      }
+    }
 
     if (GetIdentifierType(vcb) != VCB) {
       DDbgPrint("  IdentifierType is not vcb\n");

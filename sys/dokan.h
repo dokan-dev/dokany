@@ -42,14 +42,19 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern ULONG g_Debug;
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME L"\\Device\\DokanFs" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME L"\\Device\\DokanCdFs" DOKAN_MAJOR_API_VERSION
+#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
+  L"\\DosDevices\\Global\\Dokan" DOKAN_MAJOR_API_VERSION
+#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME                                       \
+  L"\\Device\\DokanFs" DOKAN_MAJOR_API_VERSION
+#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME                                         \
+  L"\\Device\\DokanCdFs" DOKAN_MAJOR_API_VERSION
 
 #define DOKAN_DISK_DEVICE_NAME L"\\Device\\Volume"
 #define DOKAN_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Volume"
-#define DOKAN_NET_DEVICE_NAME L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NET_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\DokanRedirector" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NET_DEVICE_NAME                                                  \
+  L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NET_SYMBOLIC_LINK_NAME                                           \
+  L"\\DosDevices\\Global\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 
 #define VOLUME_LABEL L"DOKAN"
 // {D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
@@ -506,8 +511,9 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
-                      __in ULONG DeviceCharacteristics, __in BOOLEAN MountGlobally,
-                      __in BOOLEAN UseMountManager, __out PDokanDCB *Dcb);
+                      __in ULONG DeviceCharacteristics,
+                      __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
+                      __out PDokanDCB *Dcb);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
@@ -574,6 +580,6 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
-	L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
+    L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
 #endif // _DOKAN_H_

@@ -59,18 +59,17 @@ Return Value:
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
 
-	//
-	//  If this is a zero length read then return SUCCESS immediately.
-	//
-	if (irpSp->Parameters.Read.Length == 0) {
-		DDbgPrint("  Parameters.Read.Length == 0 \n")
-		return STATUS_SUCCESS;
-	}
+    //
+    //  If this is a zero length read then return SUCCESS immediately.
+    //
+    if (irpSp->Parameters.Read.Length == 0) {
+      DDbgPrint("  Parameters.Read.Length == 0 \n") return STATUS_SUCCESS;
+    }
 
-	if (irpSp->MinorFunction == IRP_MN_COMPLETE) {
-		Irp->MdlAddress = NULL;
-		return STATUS_SUCCESS;
-	}
+    if (irpSp->MinorFunction == IRP_MN_COMPLETE) {
+      Irp->MdlAddress = NULL;
+      return STATUS_SUCCESS;
+    }
 
     if (fileObject == NULL) {
       DDbgPrint("  fileObject == NULL\n");

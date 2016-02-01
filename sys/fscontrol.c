@@ -313,8 +313,8 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    FSCTL_CSC_INTERNAL\n");
     break;
   case FSCTL_QUERY_ON_DISK_VOLUME_INFO:
-	  DDbgPrint("    FSCTL_QUERY_ON_DISK_VOLUME_INFO\n");
-	  break;
+    DDbgPrint("    FSCTL_QUERY_ON_DISK_VOLUME_INFO\n");
+    break;
   default:
     DDbgPrint("    Unknown FSCTL %d\n",
               (irpSp->Parameters.FileSystemControl.FsControlCode >> 2) & 0xFFF);
@@ -325,146 +325,149 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS NotifyAllApps(__in PDEVICE_OBJECT VolumeDeviceObject) {
-	PFILE_OBJECT VolumeFileObject = NULL;
-	NTSTATUS status = STATUS_SUCCESS;
-	try {
-		VolumeFileObject = IoCreateStreamFileObjectLite(NULL, VolumeDeviceObject);
-	} except(EXCEPTION_EXECUTE_HANDLER) {
-		status = GetExceptionCode();
-		DDbgPrint("   IoCreateStreamFileObjectLite failed with status code 0x%x\n", status);
-	}
+  PFILE_OBJECT VolumeFileObject = NULL;
+  NTSTATUS status = STATUS_SUCCESS;
+  try {
+    VolumeFileObject = IoCreateStreamFileObjectLite(NULL, VolumeDeviceObject);
+  }
+  except(EXCEPTION_EXECUTE_HANDLER) {
+    status = GetExceptionCode();
+    DDbgPrint("   IoCreateStreamFileObjectLite failed with status code 0x%x\n",
+              status);
+  }
 
-	if (NT_SUCCESS(status)) {
-		// notify all application about volume mount
-		status = FsRtlNotifyVolumeEvent(VolumeFileObject, FSRTL_VOLUME_MOUNT);
-		ObDereferenceObject(VolumeFileObject);
-		if (NT_SUCCESS(status)) {
-			DDbgPrint("   FsRtlNotifyVolumeEvent has been successfully sent\n");
-		}
-		else {
-			DDbgPrint("   FsRtlNotifyVolumeEvent failed with status code 0x%x\n", status);
-		}
-	}
+  if (NT_SUCCESS(status)) {
+    // notify all application about volume mount
+    status = FsRtlNotifyVolumeEvent(VolumeFileObject, FSRTL_VOLUME_MOUNT);
+    ObDereferenceObject(VolumeFileObject);
+    if (NT_SUCCESS(status)) {
+      DDbgPrint("   FsRtlNotifyVolumeEvent has been successfully sent\n");
+    } else {
+      DDbgPrint("   FsRtlNotifyVolumeEvent failed with status code 0x%x\n",
+                status);
+    }
+  }
 
-	return status;
+  return status;
 }
 
 NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
-	PDokanDCB dcb = NULL;
-	PDokanVCB vcb = NULL;
-	PVPB vpb = NULL;
-	DOKAN_CONTROL dokanControl;
-	PMOUNT_ENTRY mountEntry = NULL;
-	PIO_STACK_LOCATION irpSp;
-	PDEVICE_OBJECT volDeviceObject;
-	PDRIVER_OBJECT DriverObject = DiskDevice->DriverObject;
-	NTSTATUS status = STATUS_UNRECOGNIZED_VOLUME;
-	
-	irpSp = IoGetCurrentIrpStackLocation(Irp);
-	dcb = irpSp->Parameters.MountVolume.DeviceObject->DeviceExtension;
-	if (!dcb) {
-		DDbgPrint("   Not DokanDiskDevice (no device extension)\n");
-		return status;
-	}
-	PrintIdType(dcb);
-	if (GetIdentifierType(dcb) != DCB) {
-		DDbgPrint("   Not DokanDiskDevice\n");
-		return status;
-	}
-	BOOLEAN isNetworkFileSystem = (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+  PDokanDCB dcb = NULL;
+  PDokanVCB vcb = NULL;
+  PVPB vpb = NULL;
+  DOKAN_CONTROL dokanControl;
+  PMOUNT_ENTRY mountEntry = NULL;
+  PIO_STACK_LOCATION irpSp;
+  PDEVICE_OBJECT volDeviceObject;
+  PDRIVER_OBJECT DriverObject = DiskDevice->DriverObject;
+  NTSTATUS status = STATUS_UNRECOGNIZED_VOLUME;
 
-	if (!isNetworkFileSystem) {
-		status = IoCreateDevice(DriverObject,          // DriverObject
-			sizeof(DokanVCB),      // DeviceExtensionSize
-			NULL,                  // DeviceName
-			dcb->VolumeDeviceType,            // DeviceType
-			dcb->DeviceCharacteristics, // DeviceCharacteristics
-			FALSE,                 // Not Exclusive
-			&volDeviceObject);     // DeviceObject
-	}
-	else {
-		status =
-			IoCreateDeviceSecure(DriverObject,          // DriverObject
-				sizeof(DokanVCB),      // DeviceExtensionSize
-				dcb->DiskDeviceName,       // DeviceName
-				dcb->VolumeDeviceType,            // DeviceType
-				dcb->DeviceCharacteristics, // DeviceCharacteristics
-				FALSE,                 // Not Exclusive
-				&sddl,                 // Default SDDL String
-				NULL,                  // Device Class GUID
-				&volDeviceObject);     // DeviceObject
-	}
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
+  dcb = irpSp->Parameters.MountVolume.DeviceObject->DeviceExtension;
+  if (!dcb) {
+    DDbgPrint("   Not DokanDiskDevice (no device extension)\n");
+    return status;
+  }
+  PrintIdType(dcb);
+  if (GetIdentifierType(dcb) != DCB) {
+    DDbgPrint("   Not DokanDiskDevice\n");
+    return status;
+  }
+  BOOLEAN isNetworkFileSystem =
+      (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
-	if (!NT_SUCCESS(status)) {
-		DDbgPrint("  IoCreateDevice failed: 0x%x\n", status);
-		return status;
-	}
+  if (!isNetworkFileSystem) {
+    status = IoCreateDevice(DriverObject,               // DriverObject
+                            sizeof(DokanVCB),           // DeviceExtensionSize
+                            NULL,                       // DeviceName
+                            dcb->VolumeDeviceType,      // DeviceType
+                            dcb->DeviceCharacteristics, // DeviceCharacteristics
+                            FALSE,                      // Not Exclusive
+                            &volDeviceObject);          // DeviceObject
+  } else {
+    status = IoCreateDeviceSecure(
+        DriverObject,               // DriverObject
+        sizeof(DokanVCB),           // DeviceExtensionSize
+        dcb->DiskDeviceName,        // DeviceName
+        dcb->VolumeDeviceType,      // DeviceType
+        dcb->DeviceCharacteristics, // DeviceCharacteristics
+        FALSE,                      // Not Exclusive
+        &sddl,                      // Default SDDL String
+        NULL,                       // Device Class GUID
+        &volDeviceObject);          // DeviceObject
+  }
 
-	vcb = volDeviceObject->DeviceExtension;
-	vcb->Identifier.Type = VCB;
-	vcb->Identifier.Size = sizeof(DokanVCB);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("  IoCreateDevice failed: 0x%x\n", status);
+    return status;
+  }
 
-	vcb->DeviceObject = volDeviceObject;
-	vcb->Dcb = dcb;
-	dcb->Vcb = vcb;
+  vcb = volDeviceObject->DeviceExtension;
+  vcb->Identifier.Type = VCB;
+  vcb->Identifier.Size = sizeof(DokanVCB);
 
-	InitializeListHead(&vcb->NextFCB);
+  vcb->DeviceObject = volDeviceObject;
+  vcb->Dcb = dcb;
+  dcb->Vcb = vcb;
 
-	InitializeListHead(&vcb->DirNotifyList);
-	FsRtlNotifyInitializeSync(&vcb->NotifySync);
+  InitializeListHead(&vcb->NextFCB);
 
-	ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
+  InitializeListHead(&vcb->DirNotifyList);
+  FsRtlNotifyInitializeSync(&vcb->NotifySync);
+
+  ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
 
 #if _WIN32_WINNT >= 0x0501
-	FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-		&vcb->AdvancedFCBHeaderMutex);
+  FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
+                           &vcb->AdvancedFCBHeaderMutex);
 #else
-	if (DokanFsRtlTeardownPerStreamContexts) {
-		FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-			&vcb->AdvancedFCBHeaderMutex);
-	}
+  if (DokanFsRtlTeardownPerStreamContexts) {
+    FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
+                             &vcb->AdvancedFCBHeaderMutex);
+  }
 #endif
 
-	vpb = irpSp->Parameters.MountVolume.Vpb;
-	DokanInitVpb(vpb, vcb->DeviceObject);
+  vpb = irpSp->Parameters.MountVolume.Vpb;
+  DokanInitVpb(vpb, vcb->DeviceObject);
 
-	//
-	// Establish user-buffer access method.
-	//
-	volDeviceObject->Flags |= DO_DIRECT_IO;
+  //
+  // Establish user-buffer access method.
+  //
+  volDeviceObject->Flags |= DO_DIRECT_IO;
 
-	volDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+  volDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
-	dcb->Mounted = 1;
-	ObReferenceObject(volDeviceObject);
+  dcb->Mounted = 1;
+  ObReferenceObject(volDeviceObject);
 
-	// set the device on dokanControl
-	RtlZeroMemory(&dokanControl, sizeof(dokanControl));
-	RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,	dcb->DiskDeviceName->Length);
-	mountEntry = FindMountEntry(dcb->Global, &dokanControl);
-	if (mountEntry != NULL) {
-		mountEntry->MountControl.DeviceObject = volDeviceObject;
-	}
-	else {
-		DDbgPrint("MountEntry not found. This way the dokanControl does not have the DeviceObject")
-	}
+  // set the device on dokanControl
+  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
+                dcb->DiskDeviceName->Length);
+  mountEntry = FindMountEntry(dcb->Global, &dokanControl);
+  if (mountEntry != NULL) {
+    mountEntry->MountControl.DeviceObject = volDeviceObject;
+  } else {
+    DDbgPrint("MountEntry not found. This way the dokanControl does not have "
+              "the DeviceObject")
+  }
 
-	// Start check thread
-	DokanStartCheckThread(dcb);
-	ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-	DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT * 3);
-	ExReleaseResourceLite(&dcb->Resource);
+  // Start check thread
+  DokanStartCheckThread(dcb);
+  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT * 3);
+  ExReleaseResourceLite(&dcb->Resource);
 
-	// Create mount point for the volume
-	if (dcb->UseMountManager) {
-		status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
-		if (!NT_SUCCESS(status)) {
-			DDbgPrint("  DokanSendVolumeArrivalNotification failed: 0x%x\n", status);
-		}
-	}
-	DokanCreateMountPoint(dcb);
+  // Create mount point for the volume
+  if (dcb->UseMountManager) {
+    status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
+    if (!NT_SUCCESS(status)) {
+      DDbgPrint("  DokanSendVolumeArrivalNotification failed: 0x%x\n", status);
+    }
+  }
+  DokanCreateMountPoint(dcb);
 
-	return STATUS_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice) {
@@ -499,8 +502,8 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
       break;
 
     case IRP_MN_MOUNT_VOLUME: {
-	  DDbgPrint("	 IRP_MN_MOUNT_VOLUME\n");
-	  status = DokanMountVolume(DeviceObject, Irp);
+      DDbgPrint("	 IRP_MN_MOUNT_VOLUME\n");
+      status = DokanMountVolume(DeviceObject, Irp);
     } break;
 
     case IRP_MN_USER_FS_REQUEST:

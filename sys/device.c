@@ -118,8 +118,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   dcb = DeviceObject->DeviceExtension;
   outputLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
 
-
-
   switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_DISK_GET_DRIVE_GEOMETRY: {
     PDISK_GEOMETRY diskGeometry;
@@ -307,24 +305,23 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = STATUS_SUCCESS;
   } break;
 
-
   case IOCTL_STORAGE_CHECK_VERIFY:
   case IOCTL_DISK_CHECK_VERIFY:
     DDbgPrint("  IOCTL_STORAGE_CHECK_VERIFY\n");
-	status = STATUS_SUCCESS;
-	break;
+    status = STATUS_SUCCESS;
+    break;
 
   case IOCTL_STORAGE_CHECK_VERIFY2:
     DDbgPrint("  IOCTL_STORAGE_CHECK_VERIFY2\n");
     status = STATUS_SUCCESS;
     break;
   case IOCTL_STORAGE_QUERY_PROPERTY:
-	DDbgPrint("  IOCTL_STORAGE_QUERY_PROPERTY\n");
-	PSTORAGE_PROPERTY_QUERY query = NULL;
-	query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
-	ASSERT(query != NULL);
-	status = STATUS_SUCCESS;
-	break;
+    DDbgPrint("  IOCTL_STORAGE_QUERY_PROPERTY\n");
+    PSTORAGE_PROPERTY_QUERY query = NULL;
+    query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
+    ASSERT(query != NULL);
+    status = STATUS_SUCCESS;
+    break;
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
     PMOUNTDEV_NAME mountdevName;
     PUNICODE_STRING deviceName = dcb->DiskDeviceName;
@@ -538,8 +535,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("   IOCTL_VOLUME_IS_CLUSTERED\n");
     break;
   case IOCTL_VOLUME_PREPARE_FOR_CRITICAL_IO:
-	  DDbgPrint("   IOCTL_VOLUME_PREPARE_FOR_CRITICAL_IO\n");
-	  break;
+    DDbgPrint("   IOCTL_VOLUME_PREPARE_FOR_CRITICAL_IO\n");
+    break;
   case IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS: {
     PVOLUME_DISK_EXTENTS volume;
     ULONG bufferLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
@@ -687,11 +684,11 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ASSERT(deviceNumber != NULL);
 
     vcb = dcb->Vcb;
-	deviceNumber->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
-	if (vcb) {
-		deviceNumber->DeviceType = vcb->DeviceObject->DeviceType;
-	}
-	
+    deviceNumber->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
+    if (vcb) {
+      deviceNumber->DeviceType = vcb->DeviceObject->DeviceType;
+    }
+
     deviceNumber->DeviceNumber = 0; // Always one volume only per disk device
     deviceNumber->PartitionNumber = (ULONG)-1; // Not partitionable
 
@@ -791,7 +788,7 @@ Return Value:
       break;
 
     case IOCTL_KEEPALIVE:
-		DDbgPrint("  IOCTL_KEEPALIVE\n");
+      DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (dcb->Mounted) {
         ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
         DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);

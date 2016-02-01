@@ -39,14 +39,13 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
 
-	//
-	//  If this is a zero length write then return SUCCESS immediately.
-	//
-	if (irpSp->Parameters.Write.Length == 0) {
+    //
+    //  If this is a zero length write then return SUCCESS immediately.
+    //
+    if (irpSp->Parameters.Write.Length == 0) {
 
-		DDbgPrint("  Parameters.Write.Length == 0")
-		return STATUS_SUCCESS;
-	}
+      DDbgPrint("  Parameters.Write.Length == 0") return STATUS_SUCCESS;
+    }
 
     if (fileObject == NULL) {
       DDbgPrint("  fileObject == NULL\n");

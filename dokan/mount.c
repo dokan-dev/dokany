@@ -225,8 +225,10 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   return DokanRemoveMountPoint(mountPoint);
 }
 
-#define DOKAN_NP_SERVICE_KEY L"System\\CurrentControlSet\\Services\\Dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_DEVICE_NAME L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_SERVICE_KEY                                                   \
+  L"System\\CurrentControlSet\\Services\\Dokan" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_DEVICE_NAME                                                   \
+  L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_NAME L"DokanNP-" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_PATH L"System32\\dokannp-" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
@@ -410,7 +412,8 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
-BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName, PDOKAN_OPTIONS DokanOptions) {
+BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
+                PDOKAN_OPTIONS DokanOptions) {
   UNREFERENCED_PARAMETER(DokanOptions);
   if (MountPoint != NULL) {
     if (!IsMountPointDriveLetter(MountPoint)) {
@@ -420,7 +423,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName, PDOKAN_OPTIONS DokanOpti
       // In that case we cannot use mount manager ; doesn't this should be done
       // kernel-mode too?
       return CreateMountPoint(MountPoint, DeviceName);
-	}
+    }
   }
   return TRUE;
 }
@@ -450,7 +453,7 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
             // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
             DeleteVolumeMountPoint(mountPoint);
           }
-		}
+        }
         return TRUE;
       }
     }
