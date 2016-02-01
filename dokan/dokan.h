@@ -163,8 +163,8 @@ typedef struct _DOKAN_OPERATIONS {
    LPBY_HANDLE_FILE_INFORMATION, // Buffer
    PDOKAN_FILE_INFO);
 
-  // You should implement either FindFiles or FindFilesWithPattern
-
+  // FindFilesWithPattern is checking first. If it is not implemented or
+  // returns STATUS_NOT_IMPLEMENTED, then FindFiles is called, if implemented.
   NTSTATUS(DOKAN_CALLBACK *FindFiles)
   (LPCWSTR,           // PathName
    PFillFindData,     // call this function with PWIN32_FIND_DATAW
@@ -176,6 +176,8 @@ typedef struct _DOKAN_OPERATIONS {
    PFillFindData, // call this function with PWIN32_FIND_DATAW
    PDOKAN_FILE_INFO);
 
+  // SetFileAttributes and SetFileTime are called only if both of them
+  // are implemented.
   NTSTATUS(DOKAN_CALLBACK *SetFileAttributes)
   (LPCWSTR, // FileName
    DWORD,   // FileAttributes

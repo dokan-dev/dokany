@@ -457,7 +457,12 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
           EventContext->Operation.Directory.DirectoryName, pattern,
           DokanFillFileData, &fileInfo);
 
-    } else if (DokanInstance->DokanOperations->FindFiles) {
+    } else {
+      status = STATUS_NOT_IMPLEMENTED;
+    }
+
+    if (status == STATUS_NOT_IMPLEMENTED &&
+        DokanInstance->DokanOperations->FindFiles) {
 
       patternCheck = TRUE; // do pattern check later in MachFiles
 
@@ -465,8 +470,6 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       status = DokanInstance->DokanOperations->FindFiles(
           EventContext->Operation.Directory.DirectoryName, DokanFillFileData,
           &fileInfo);
-    } else {
-      status = STATUS_NOT_IMPLEMENTED;
     }
   }
 
