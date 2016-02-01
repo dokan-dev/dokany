@@ -470,7 +470,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   status = DokanCreateDiskDevice(
       DeviceObject->DriverObject, dokanGlobal->MountId, eventStart.MountPoint,
       eventStart.UNCName, baseGuidString, dokanGlobal, deviceType,
-      deviceCharacteristics, useMountManager, mountGlobally, &dcb);
+      deviceCharacteristics, mountGlobally, useMountManager, &dcb);
 
   if (!NT_SUCCESS(status)) {
     ExReleaseResourceLite(&dokanGlobal->Resource);
