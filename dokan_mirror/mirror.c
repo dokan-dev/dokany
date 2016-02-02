@@ -505,7 +505,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
     return ToNtStatus(error);
 
   } else {
-    DbgPrint(L"\tread %d, offset %d\n\n", *ReadLength, offset);
+    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength, *ReadLength, offset);
   }
 
   if (opened)

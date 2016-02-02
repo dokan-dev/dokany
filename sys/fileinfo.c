@@ -97,6 +97,10 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileCompressionInformation:
       DDbgPrint("  FileCompressionInformation\n");
       break;
+    case FileNormalizedNameInformation: // Fake implementation by returning
+                                        // FileNameInformation result.
+                                        // TODO: implement it
+      DDbgPrint("  FileNormalizedNameInformation\n");
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
 
