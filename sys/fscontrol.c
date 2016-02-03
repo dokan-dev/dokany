@@ -467,6 +467,9 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   }
   DokanCreateMountPoint(dcb);
 
+  if (isNetworkFileSystem) {
+      DokanRegisterUncProviderSystem(dcb);
+  }
   return STATUS_SUCCESS;
 }
 
