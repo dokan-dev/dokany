@@ -522,9 +522,9 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   // Establish user-buffer access method.
   //
   fsDiskDeviceObject->Flags |= DO_DIRECT_IO;
-  // fsDiskDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
+  fsDiskDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
   fsCdDeviceObject->Flags |= DO_DIRECT_IO;
-  // fsCdDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
+  fsCdDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
 
   fsDiskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
   fsCdDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
