@@ -53,20 +53,7 @@ DokanSetAllocationInformation(PEVENT_CONTEXT EventContext,
     status = STATUS_NOT_IMPLEMENTED;
   }
 
-  if( status != STATUS_NOT_IMPLEMENTED )
-    return status;
-
-  // How can we check the current end-of-file position?
-  if (allocInfo->AllocationSize.QuadPart == 0) {
-    return DokanOperations->SetEndOfFile(
-        EventContext->Operation.SetFile.FileName,
-        allocInfo->AllocationSize.QuadPart, FileInfo);
-  } else {
-    DbgPrint("  SetAllocationInformation %I64d, can't handle this parameter.\n",
-             allocInfo->AllocationSize.QuadPart);
-  }
-
-  return STATUS_SUCCESS;
+  return status;
 }
 
 NTSTATUS
