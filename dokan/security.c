@@ -90,7 +90,7 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
         &fileInfo);
   }
 
-  if (status > 0) {
+  if (status != STATUS_SUCCESS) {
     eventInfo->Status = STATUS_INVALID_PARAMETER;
     eventInfo->BufferLength = 0;
   } else {

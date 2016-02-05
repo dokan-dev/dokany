@@ -465,8 +465,8 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       status = STATUS_NOT_IMPLEMENTED;
       break;
 
-	case FileNormalizedNameInformation:
-	  DbgPrint("\tFileNormalizedNameInformation\n");
+    case FileNormalizedNameInformation:
+      DbgPrint("\tFileNormalizedNameInformation\n");
     case FileNameInformation:
       // this case is not used because driver deal with
       DbgPrint("\tFileNameInformation\n");

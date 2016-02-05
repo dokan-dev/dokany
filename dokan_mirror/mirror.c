@@ -505,7 +505,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
     return ToNtStatus(error);
 
   } else {
-    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength, *ReadLength, offset);
+    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,
+             *ReadLength, offset);
   }
 
   if (opened)
@@ -1341,10 +1342,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   // Add security name privilege. Required here to handle GetFileSecurity
   // properly.
   if (!AddSeSecurityNamePrivilege()) {
-    fwprintf(stderr, L"  Failed to add security privilege to process\n");
+    fwprintf(stderr, L"Failed to add security privilege to process\n");
     fwprintf(stderr,
-             L"  => GetFileSecurity/SetFileSecurity may not work properly\n");
-    fwprintf(stderr, L"  => Please restart mirror sample with administrator "
+             L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
+    fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
                      L"rights to fix it\n");
   }
 
