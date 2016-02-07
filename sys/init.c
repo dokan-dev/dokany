@@ -283,10 +283,11 @@ DokanRegisterDeviceInterface(__in PDRIVER_OBJECT DriverObject,
                              __in PDokanDCB Dcb) {
   PDEVICE_OBJECT pnpDeviceObject = NULL;
   NTSTATUS status;
+  DDbgPrint("=> DokanRegisterDeviceInterface\n");
 
   status = IoReportDetectedDevice(DriverObject, InterfaceTypeUndefined, 0, 0,
                                   NULL, NULL, FALSE, &pnpDeviceObject);
-
+  pnpDeviceObject->DeviceExtension = Dcb;
   if (NT_SUCCESS(status)) {
     DDbgPrint("  IoReportDetectedDevice success\n");
   } else {
@@ -343,6 +344,7 @@ DokanRegisterDeviceInterface(__in PDRIVER_OBJECT DriverObject,
     return status;
   }
 
+  DDbgPrint("<= DokanRegisterDeviceInterface\n");
   return status;
 }
 
@@ -886,8 +888,8 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
   ObReferenceObject(diskDeviceObject);
 
-  // DokanRegisterMountedDeviceInterface(diskDeviceObject, dcb);
-  // DokanRegisterDeviceInterface(DriverObject, diskDeviceObject, dcb);
+  //DokanRegisterDeviceInterface(DriverObject, dcb->DeviceObject, dcb);
+  //DokanRegisterMountedDeviceInterface(dcb->DeviceObject, dcb);
 
   // Save to the global mounted list
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));

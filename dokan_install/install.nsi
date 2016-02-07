@@ -34,8 +34,8 @@ UninstPage instfiles
     File ..\license.lgpl.txt
     File ..\license.mit.txt
     File ..\${arch}\Release\dokanctl.exe
-	File ..\${arch}\Release\dokan-${MAJOR_VERSION}.dll
-	File ..\${arch}\Release\dokanfuse-${MAJOR_VERSION}.dll
+	File ..\${arch}\Release\dokan${MAJOR_VERSION}.dll
+	File ..\${arch}\Release\dokanfuse${MAJOR_VERSION}.dll
 	
   SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\include\dokan
 	
@@ -45,15 +45,15 @@ UninstPage instfiles
 	
   SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\lib
   
-	File ..\${arch}\Release\dokan-${MAJOR_VERSION}.lib
-	File ..\${arch}\Release\dokanfuse-${MAJOR_VERSION}.lib
+	File ..\${arch}\Release\dokan${MAJOR_VERSION}.lib
+	File ..\${arch}\Release\dokanfuse${MAJOR_VERSION}.lib
 
   SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\sample\mirror
 
     File ..\dokan_mirror\dokan_mirror.vcxproj
     File ..\dokan_mirror\mirror.c
     File ..\${arch}\Release\mirror.exe
-    File ..\${arch}\Release\dokan-${MAJOR_VERSION}.dll
+    File ..\${arch}\Release\dokan${MAJOR_VERSION}.dll
 
   SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\include\fuse
 
@@ -65,7 +65,7 @@ UninstPage instfiles
 
   SetOutPath $SYSDIR
   
-    File ..\${arch}\Release\dokannp-${MAJOR_VERSION}.dll
+    File ..\${arch}\Release\dokannp${MAJOR_VERSION}.dll
 
   ${If} ${arch} == "x64"
 	${EnableX64FSRedirection}
@@ -85,7 +85,7 @@ UninstPage instfiles
 	
   SetOutPath ${folder}\Dokan\DokanLibrary-${VERSION}\pdb\driver
  
-    File ..\${arch}\${os}Release\dokan-${MAJOR_VERSION}.pdb
+    File ..\${arch}\${os}Release\dokan${MAJOR_VERSION}.pdb
 	
 !macroend
 
@@ -115,7 +115,7 @@ UninstPage instfiles
 
   SetOutPath $SYSDIR\drivers
 
-    File ..\${arch}\${os}Release\dokan-${MAJOR_VERSION}.sys
+    File ..\${arch}\${os}Release\dokan${MAJOR_VERSION}.sys
 
   ${If} ${arch} == "x64"
     ${EnableX64FSRedirection}
@@ -260,10 +260,10 @@ Section "Uninstall"
     RMDir /r $PROGRAMFILES64\Dokan\DokanLibrary-${VERSION}
     RMDir $PROGRAMFILES64\Dokan
     ${DisableX64FSRedirection}
-      Delete /REBOOTOK $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys
+      Delete /REBOOTOK $SYSDIR\drivers\dokan${MAJOR_VERSION}.sys
     ${EnableX64FSRedirection}
   ${Else}
-    Delete /REBOOTOK $SYSDIR\drivers\dokan-${MAJOR_VERSION}.sys
+    Delete /REBOOTOK $SYSDIR\drivers\dokan${MAJOR_VERSION}.sys
   ${EndIf}
 
   ; Remove registry keys

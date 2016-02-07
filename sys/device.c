@@ -23,6 +23,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <mountdev.h>
 #include <mountmgr.h>
 #include <ntddvol.h>
+#include <storduid.h>
 
 VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
   PCHAR baseCodeStr = "unknown";
@@ -320,7 +321,49 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     PSTORAGE_PROPERTY_QUERY query = NULL;
     query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
     ASSERT(query != NULL);
-    status = STATUS_SUCCESS;
+	if (query->QueryType == PropertyExistsQuery) {
+      if (query->PropertyId == StorageDeviceUniqueIdProperty) {
+		PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage;
+		DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
+		if (outputLength < sizeof(STORAGE_DEVICE_UNIQUE_IDENTIFIER)) {
+		  status = STATUS_BUFFER_TOO_SMALL;
+		  Irp->IoStatus.Information = 0;
+		  break;
+		}
+		storage = Irp->AssociatedIrp.SystemBuffer;
+
+		status = STATUS_SUCCESS;
+	  } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
+		DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
+		status = STATUS_NOT_IMPLEMENTED;
+	  } else {
+		DDbgPrint("    PropertyExistsQuery Unknown\n");
+		status = STATUS_NOT_IMPLEMENTED;
+	  }
+	} else if (query->QueryType == PropertyStandardQuery) {
+	  if (query->PropertyId == StorageDeviceProperty) {
+		PSTORAGE_DEVICE_DESCRIPTOR storage;
+		DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
+		if (outputLength < sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
+			status = STATUS_BUFFER_TOO_SMALL;
+			Irp->IoStatus.Information = 0;
+			break;
+		}
+		storage = Irp->AssociatedIrp.SystemBuffer;
+
+		status = STATUS_SUCCESS;
+	  }
+	  else if (query->PropertyId == StorageAdapterProperty) {
+		DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
+		status = STATUS_NOT_IMPLEMENTED;
+	  } else {
+		DDbgPrint("    PropertyStandardQuery Unknown\n");
+		status = STATUS_ACCESS_DENIED;
+	  }
+	} else {
+		DDbgPrint("    Unknown query type\n");
+		status = STATUS_ACCESS_DENIED;
+	}
     break;
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
     PMOUNTDEV_NAME mountdevName;
