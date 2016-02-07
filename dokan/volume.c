@@ -58,9 +58,9 @@ DokanFsVolumeInformation(PEVENT_INFORMATION EventInfo,
                          PEVENT_CONTEXT EventContext, PDOKAN_FILE_INFO FileInfo,
                          PDOKAN_OPERATIONS DokanOperations) {
   WCHAR volumeName[MAX_PATH];
-  DWORD volumeSerial;
-  DWORD maxComLength;
-  DWORD fsFlags;
+  DWORD volumeSerial = 0;
+  DWORD maxComLength = 0;
+  DWORD fsFlags = 0;
   WCHAR fsName[MAX_PATH];
   ULONG remainingLength;
   ULONG bytesToCopy;

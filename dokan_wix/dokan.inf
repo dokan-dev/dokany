@@ -42,7 +42,7 @@ LoadOrderGroup = "File System"
 
 [Strings]
 Dokan = "Dokan"
-DriverName = "dokan-1"
+DriverName = "dokan1"
 Disk1 = "Dokan installation media"
 ServiceDesc = "Dokan kernel-mode file system driver."
 ServiceName = "dokan"
