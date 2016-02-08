@@ -259,9 +259,8 @@ Routine Description:
   PVOID pollevents[2];
   LARGE_INTEGER timeout = {0};
   BOOLEAN waitObj = TRUE;
-
-  LARGE_INTEGER LastTime = { 0 };
-  LARGE_INTEGER CurrentTime = { 0 };
+  LARGE_INTEGER LastTime = {0};
+  LARGE_INTEGER CurrentTime = {0};
 
   DDbgPrint("==> DokanTimeoutThread\n");
 
@@ -283,19 +282,21 @@ Routine Description:
       // KillEvent or something error is occured
       waitObj = FALSE;
     } else {
-		// in this case the timer was executed and we are checking if the timer occured
-		// regulary using the period DOKAN_CHECK_INTERVAL. If not, this means the system
-		// was in sleep mode. If in this case the timer is faster awaken than the incoming IOCTL_KEEPALIVE
-		// the MountPoint would be removed by mistake (DokanCheckKeepAlive).
-		KeQuerySystemTime(&CurrentTime);
-		if ((CurrentTime.QuadPart - LastTime.QuadPart) > ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
-			DDbgPrint("  System seems to be awaken from sleep mode. So do not Check Keep Alive yet.\n");
-		}
-		else {
-			ReleaseTimeoutPendingIrp(Dcb);
-			DokanCheckKeepAlive(Dcb);
-		}
-		KeQuerySystemTime(&LastTime);
+      // in this case the timer was executed and we are checking if the timer
+      // occured regulary using the period DOKAN_CHECK_INTERVAL. If not, this
+      // means the system was in sleep mode. If in this case the timer is
+      // faster awaken than the incoming IOCTL_KEEPALIVE
+      // the MountPoint would be removed by mistake (DokanCheckKeepAlive).
+      KeQuerySystemTime(&CurrentTime);
+      if ((CurrentTime.QuadPart - LastTime.QuadPart) >
+          ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
+        DDbgPrint("  System seems to be awaken from sleep mode. So do not "
+                  "Check Keep Alive yet.\n");
+      } else {
+        ReleaseTimeoutPendingIrp(Dcb);
+        DokanCheckKeepAlive(Dcb);
+      }
+      KeQuerySystemTime(&LastTime);
     }
   }
 
