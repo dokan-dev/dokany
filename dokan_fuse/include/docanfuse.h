@@ -14,6 +14,7 @@ struct fuse_config
 	int help;
     int debug;
 	int setsignals;
+    unsigned int timeoutInMilisec;
 };
 
 struct fuse_session
