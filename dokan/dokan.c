@@ -603,23 +603,27 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
       ULONG inputLength = sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
                           (MAX_PATH * sizeof(WCHAR));
       PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint = malloc(inputLength);
-      ZeroMemory(szMountPoint, inputLength);
-      szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
-      szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
-      CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
-      DbgPrint("send global release for %ws\n", MountPoint);
+      if (szMountPoint != NULL) {
+        ZeroMemory(szMountPoint, inputLength);
+        szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
+        szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
+        CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
-      if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
-                        szMountPoint, inputLength, NULL, 0, &returnedLength)) {
+        DbgPrint("send global release for %ws\n", MountPoint);
 
-        DbgPrint("Failed to unmount: %ws\n", MountPoint);
+        if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
+                          szMountPoint, inputLength, NULL, 0,
+                          &returnedLength)) {
+
+          DbgPrint("Failed to unmount: %ws\n", MountPoint);
+          free(szMountPoint);
+          return FALSE;
+        }
+
         free(szMountPoint);
-        return FALSE;
+        return TRUE;
       }
-
-      free(szMountPoint);
-      return TRUE;
     }
   }
 

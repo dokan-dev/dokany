@@ -110,46 +110,48 @@ static BOOL DokanServiceControl(LPCWSTR ServiceName, ULONG Type) {
     return FALSE;
   }
 
-  QueryServiceStatus(serviceHandle, &ss);
-
-  if (Type == DOKAN_SERVICE_DELETE) {
-    if (DeleteService(serviceHandle)) {
-      DokanDbgPrintW(L"DokanServiceControl: Service (%s) deleted\n",
-                     ServiceName);
-      result = TRUE;
-    } else {
-      DokanDbgPrintW(
-          L"DokanServiceControl: Failed to delete service (%s). error = %d\n",
-          ServiceName, GetLastError());
-      result = FALSE;
+  if (QueryServiceStatus(serviceHandle, &ss) != 0) {
+    if (Type == DOKAN_SERVICE_DELETE) {
+      if (DeleteService(serviceHandle)) {
+        DokanDbgPrintW(L"DokanServiceControl: Service (%s) deleted\n",
+                       ServiceName);
+        result = TRUE;
+      } else {
+        DokanDbgPrintW(
+            L"DokanServiceControl: Failed to delete service (%s). error = %d\n",
+            ServiceName, GetLastError());
+        result = FALSE;
+      }
+    } else if (ss.dwCurrentState == SERVICE_STOPPED &&
+               Type == DOKAN_SERVICE_START) {
+      if (StartService(serviceHandle, 0, NULL)) {
+        DokanDbgPrintW(L"DokanServiceControl: Service (%s) started\n",
+                       ServiceName);
+        result = TRUE;
+      } else {
+        DokanDbgPrintW(
+            L"DokanServiceControl: Failed to start service (%s). error = %d\n",
+            ServiceName, GetLastError());
+        result = FALSE;
+      }
+    } else if (ss.dwCurrentState == SERVICE_RUNNING &&
+               Type == DOKAN_SERVICE_STOP) {
+      if (ControlService(serviceHandle, SERVICE_CONTROL_STOP, &ss)) {
+        DokanDbgPrintW(L"DokanServiceControl: Service (%s) stopped\n",
+                       ServiceName);
+        result = TRUE;
+      } else {
+        DokanDbgPrintW(
+            L"DokanServiceControl: Failed to stop service (%s). error = %d\n",
+            ServiceName, GetLastError());
+        result = FALSE;
+      }
     }
-
-  } else if (ss.dwCurrentState == SERVICE_STOPPED &&
-             Type == DOKAN_SERVICE_START) {
-    if (StartService(serviceHandle, 0, NULL)) {
-      DokanDbgPrintW(L"DokanServiceControl: Service (%s) started\n",
-                     ServiceName);
-      result = TRUE;
-    } else {
-      DokanDbgPrintW(
-          L"DokanServiceControl: Failed to start service (%s). error = %d\n",
-          ServiceName, GetLastError());
-      result = FALSE;
-    }
-
-  } else if (ss.dwCurrentState == SERVICE_RUNNING &&
-             Type == DOKAN_SERVICE_STOP) {
-
-    if (ControlService(serviceHandle, SERVICE_CONTROL_STOP, &ss)) {
-      DokanDbgPrintW(L"DokanServiceControl: Service (%s) stopped\n",
-                     ServiceName);
-      result = TRUE;
-    } else {
-      DokanDbgPrintW(
-          L"DokanServiceControl: Failed to stop service (%s). error = %d\n",
-          ServiceName, GetLastError());
-      result = FALSE;
-    }
+  } else {
+    DokanDbgPrintW(
+        L"DokanServiceControl: QueryServiceStatus Failed (%s). error = %d\n",
+        ServiceName, GetLastError());
+    result = FALSE;
   }
 
   CloseServiceHandle(serviceHandle);
@@ -325,8 +327,10 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
   USHORT targetLength;
   BOOL result;
   ULONG resultLength;
-  WCHAR targetDeviceName[MAX_PATH] = L"\\??";
+  WCHAR targetDeviceName[MAX_PATH];
 
+  ZeroMemory(targetDeviceName, sizeof(targetDeviceName));
+  wcscat_s(targetDeviceName, MAX_PATH, L"\\??");
   wcscat_s(targetDeviceName, MAX_PATH, DeviceName);
   wcscat_s(targetDeviceName, MAX_PATH, L"\\");
 
