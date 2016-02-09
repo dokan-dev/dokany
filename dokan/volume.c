@@ -183,8 +183,8 @@ DokanFsAttributeInformation(PEVENT_INFORMATION EventInfo,
                             PDOKAN_OPERATIONS DokanOperations) {
   WCHAR volumeName[MAX_PATH];
   DWORD volumeSerial;
-  DWORD maxComLength;
-  DWORD fsFlags;
+  DWORD maxComLength = 0;
+  DWORD fsFlags = 0;
   WCHAR fsName[MAX_PATH];
   ULONG remainingLength;
   ULONG bytesToCopy;
