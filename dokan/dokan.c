@@ -323,14 +323,20 @@ void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size) {
 
 UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   HANDLE device;
-  char buffer[EVENT_CONTEXT_MAX_SIZE];
+  char *buffer = NULL;
   BOOL status;
   ULONG returnedLength;
   DWORD result = 0;
   DWORD lastError = 0;
   WCHAR rawDeviceName[MAX_PATH];
 
-  RtlZeroMemory(buffer, sizeof(buffer));
+  buffer = malloc(sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
+  if (buffer == NULL) {
+    result = (DWORD)-1;
+    _endthreadex(result);
+    return result;
+  }
+  RtlZeroMemory(buffer, sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
 
   device = CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
                                        MAX_PATH),         // lpFileName
@@ -347,6 +353,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
         "Dokan Error: CreateFile failed %ws: %d\n",
         GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
         GetLastError());
+    free(buffer);
     result = (DWORD)-1;
     _endthreadex(result);
     return result;
@@ -355,16 +362,17 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   status = TRUE;
   while (status) {
 
-    status =
-        DeviceIoControl(device,           // Handle to device
-                        IOCTL_EVENT_WAIT, // IO Control code
-                        NULL,             // Input Buffer to driver.
-                        0,                // Length of input buffer in bytes.
-                        buffer,           // Output Buffer from driver.
-                        sizeof(buffer),   // Length of output buffer in bytes.
-                        &returnedLength,  // Bytes placed in buffer.
-                        NULL              // synchronous call
-                        );
+    status = DeviceIoControl(
+        device,           // Handle to device
+        IOCTL_EVENT_WAIT, // IO Control code
+        NULL,             // Input Buffer to driver.
+        0,                // Length of input buffer in bytes.
+        buffer,           // Output Buffer from driver.
+        sizeof(char) *
+            EVENT_CONTEXT_MAX_SIZE, // Length of output buffer in bytes.
+        &returnedLength,            // Bytes placed in buffer.
+        NULL                        // synchronous call
+        );
 
     if (!status) {
       lastError = GetLastError();
@@ -439,6 +447,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   }
 
   CloseHandle(device);
+  free(buffer);
   _endthreadex(result);
 
   return result;
