@@ -880,10 +880,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     DokanFreeFCB(fcb);
   }
 
-  irp->IoStatus.Status = status;
-  irp->IoStatus.Information = info;
-  IoCompleteRequest(irp, IO_NO_INCREMENT);
+  DokanCompleteIrpRequest(irp, status, info);
 
-  DokanPrintNTStatus(status);
   DDbgPrint("<== DokanCompleteCreate\n");
 }

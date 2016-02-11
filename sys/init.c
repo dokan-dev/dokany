@@ -522,9 +522,9 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   // Establish user-buffer access method.
   //
   fsDiskDeviceObject->Flags |= DO_DIRECT_IO;
-  // fsDiskDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
+  fsDiskDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
   fsCdDeviceObject->Flags |= DO_DIRECT_IO;
-  // fsCdDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
+  fsCdDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
 
   fsDiskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
   fsCdDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
@@ -603,6 +603,31 @@ VOID DokanRegisterUncProvider(__in PDokanDCB Dcb) {
     }
   }
   PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb) {
+    // Run FsRtlRegisterUncProvider in System thread.
+    HANDLE handle;
+    PKTHREAD thread;
+    OBJECT_ATTRIBUTES objectAttribs;
+    NTSTATUS status;
+
+    InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
+        NULL);
+    status = PsCreateSystemThread(
+        &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
+        (PKSTART_ROUTINE)DokanRegisterUncProvider, dcb);
+    if (!NT_SUCCESS(status)) {
+        DDbgPrint("PsCreateSystemThread failed: 0x%X\n", status);
+    }
+    else {
+        ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+            &thread, NULL);
+        ZwClose(handle);
+        KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+        ObDereferenceObject(thread);
+    }
+    return status;
 }
 
 KSTART_ROUTINE DokanDeregisterUncProvider;
@@ -775,7 +800,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     status = IoCreateDevice(DriverObject,          // DriverObject
                             sizeof(DokanDCB),      // DeviceExtensionSize
                             NULL,                  // DeviceName
-                            FILE_DEVICE_UNKNOWN,   // DeviceType
+                            FILE_DEVICE_DISK,   // DeviceType
                             DeviceCharacteristics, // DeviceCharacteristics
                             FALSE,                 // Not Exclusive
                             &diskDeviceObject);    // DeviceObject
@@ -904,25 +929,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   InsertMountEntry(DokanGlobal, &dokanControl);
 
   if (isNetworkFileSystem) {
-    // Run FsRtlRegisterUncProvider in System thread.
-    HANDLE handle;
-    PKTHREAD thread;
-    OBJECT_ATTRIBUTES objectAttribs;
-
-    InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                               NULL);
-    status = PsCreateSystemThread(
-        &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-        (PKSTART_ROUTINE)DokanRegisterUncProvider, dcb);
-    if (!NT_SUCCESS(status)) {
-      DDbgPrint("PsCreateSystemThread failed: 0x%X\n", status);
-    } else {
-      ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                &thread, NULL);
-      ZwClose(handle);
-      KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-      ObDereferenceObject(thread);
-    }
+      IoVerifyVolume(dcb->DeviceObject, FALSE);
   }
 
   return STATUS_SUCCESS;
