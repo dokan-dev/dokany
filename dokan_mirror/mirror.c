@@ -774,24 +774,23 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
     return ToNtStatus(error);
   }
 
-  while (hFind != INVALID_HANDLE_VALUE) {
+  do {
     if (wcscmp(findData.cFileName, L"..") != 0 &&
         wcscmp(findData.cFileName, L".") != 0) {
       FindClose(hFind);
       DbgPrint(L"\tDirectory is not empty: %s\n", findData.cFileName);
       return STATUS_DIRECTORY_NOT_EMPTY;
     }
-    if (!FindNextFile(hFind, &findData)) {
-      break;
-    }
-  }
+  } while (FindNextFile(hFind, &findData) != 0);
+
   DWORD error = GetLastError();
-  FindClose(hFind);
 
   if (error != ERROR_NO_MORE_FILES) {
     DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
     return ToNtStatus(error);
   }
+
+  FindClose(hFind);
 
   return STATUS_SUCCESS;
 }
