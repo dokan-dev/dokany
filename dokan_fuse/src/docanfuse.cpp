@@ -463,7 +463,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   dokanOptions->Version = DOKAN_VERSION;
   dokanOptions->MountPoint = mount;
   dokanOptions->ThreadCount = mt ? FUSE_THREAD_COUNT : 1;
-  dokanOptions->Timeout = fs->conf.timeoutInMilisec;
+  dokanOptions->Timeout = fs->conf.timeoutInSec * 1000;
 
   // Debug
   if (fs->conf.debug)
@@ -533,7 +533,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("fsname=%s", fsname, 0),
     FUSE_LIB_OPT("volname=%s", volname, 0),
     FUSE_LIB_OPT("setsignals=%s", setsignals, 0),
-    FUSE_LIB_OPT("daemon_timeout=%d", timeoutInMilisec, 0),
+    FUSE_LIB_OPT("daemon_timeout=%d", timeoutInSec, 0),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -545,7 +545,7 @@ static void fuse_lib_help(void) {
       "    -o fsname=M            set filesystem name\n"
       "    -o volname=M           set volume name\n"
       "    -o setsignals=M        set signal usage (1 to use)\n"
-      "    -o daemon_timeout=M    set timeout in miliseconds\n"
+      "    -o daemon_timeout=M    set timeout in seconds\n"
       "\n");
 }
 
