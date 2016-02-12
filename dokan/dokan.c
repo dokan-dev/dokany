@@ -178,6 +178,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if (DokanOptions->Options & DOKAN_OPTION_NETWORK &&
+      !IsMountPointDriveLetter(DokanOptions->MountPoint)) {
+    DokanOptions->Options &= ~DOKAN_OPTION_NETWORK;
+    DbgPrintW(L"Dokan: Mount point folder is specified with network device "
+              L"option. Disable network device.\n");
+  }
+
   if (DokanOptions->Version < DOKAN_MINIMUM_COMPATIBLE_VERSION) {
     DokanDbgPrintW(
         L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
