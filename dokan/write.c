@@ -52,7 +52,7 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   PDOKAN_OPEN_INFO openInfo;
   ULONG writtenLength = 0;
-  int status;
+  NTSTATUS status;
   DOKAN_FILE_INFO fileInfo;
   BOOL bufferAllocated = FALSE;
   ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);

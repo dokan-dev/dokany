@@ -97,6 +97,10 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileCompressionInformation:
       DDbgPrint("  FileCompressionInformation\n");
       break;
+    case FileNormalizedNameInformation: // Fake implementation by returning
+                                        // FileNameInformation result.
+                                        // TODO: implement it
+      DDbgPrint("  FileNormalizedNameInformation\n");
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
 
@@ -155,9 +159,15 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileStreamInformation:
       DDbgPrint("  FileStreamInformation\n");
       break;
+	case FileStandardLinkInformation:
+	  DDbgPrint("  FileStandardLinkInformation\n");
+	  break;
     case FileNetworkPhysicalNameInformation:
       DDbgPrint("  FileNetworkPhysicalNameInformation\n");
       break;
+	case FileRemoteProtocolInformation:
+	  DDbgPrint("  FileRemoteProtocolInformation\n");
+	  break;
     default:
       DDbgPrint("  unknown type:%d\n",
                 irpSp->Parameters.QueryFile.FileInformationClass);

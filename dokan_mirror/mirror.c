@@ -505,7 +505,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
     return ToNtStatus(error);
 
   } else {
-    DbgPrint(L"\tread %d, offset %d\n\n", *ReadLength, offset);
+    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,
+             *ReadLength, offset);
   }
 
   if (opened)
@@ -773,24 +774,23 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
     return ToNtStatus(error);
   }
 
-  while (hFind != INVALID_HANDLE_VALUE) {
+  do {
     if (wcscmp(findData.cFileName, L"..") != 0 &&
         wcscmp(findData.cFileName, L".") != 0) {
       FindClose(hFind);
       DbgPrint(L"\tDirectory is not empty: %s\n", findData.cFileName);
       return STATUS_DIRECTORY_NOT_EMPTY;
     }
-    if (!FindNextFile(hFind, &findData)) {
-      break;
-    }
-  }
+  } while (FindNextFile(hFind, &findData) != 0);
+
   DWORD error = GetLastError();
-  FindClose(hFind);
 
   if (error != ERROR_NO_MORE_FILES) {
     DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
     return ToNtStatus(error);
   }
+
+  FindClose(hFind);
 
   return STATUS_SUCCESS;
 }
@@ -1120,7 +1120,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
                      FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
                      FILE_PERSISTENT_ACLS;
 
-  wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"Dokan");
+  // File system name could be anything up to 10 characters.
+  // But Windows check few feature availability based on file system name.
+  // For this, it is recommended to set NTFS or FAT here.
+  wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"NTFS");
 
   return STATUS_SUCCESS;
 }
@@ -1231,7 +1234,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /n (use network drive)\n"
                     "  /m (use removable drive)\n"
                     "  /w (write-protect drive)\n"
-                    "  /g (use mount manager)\n"
+                    "  /o (use mount manager)\n"
+                    "  /c (mount for current session only)\n"
                     "  /u UNC provider name"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
@@ -1278,8 +1282,11 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'w':
       dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
       break;
-    case L'g':
+    case L'o':
       dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
+      break;
+    case L'c':
+      dokanOptions->Options |= DOKAN_OPTION_CURRENT_SESSION;
       break;
     case L'u':
       command++;
@@ -1322,13 +1329,23 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     return -1;
   }
 
-  // Add security name privilege. Required here to handle GetFileSecurity
-  // properly.
-  if (!AddSeSecurityNamePrivilege()) {
-    fwprintf(stderr, L"  Failed to add security privilege to process\n");
+  if ((dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+      (dokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION)) {
+    fwprintf(stderr,
+             L"Mount Manager always mount the drive for all user sessions.\n");
     free(dokanOperations);
     free(dokanOptions);
     return -1;
+  }
+
+  // Add security name privilege. Required here to handle GetFileSecurity
+  // properly.
+  if (!AddSeSecurityNamePrivilege()) {
+    fwprintf(stderr, L"Failed to add security privilege to process\n");
+    fwprintf(stderr,
+             L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
+    fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
+                     L"rights to fix it\n");
   }
 
   if (g_DebugMode) {

@@ -43,23 +43,17 @@ DokanSetAllocationInformation(PEVENT_CONTEXT EventContext,
   // is less than the end-of-file position, the end-of-file position is
   // automatically
   // adjusted to match the allocation size.
+  NTSTATUS status;
 
   if (DokanOperations->SetAllocationSize) {
-    return DokanOperations->SetAllocationSize(
-        EventContext->Operation.SetFile.FileName,
-        allocInfo->AllocationSize.QuadPart, FileInfo);
-  }
-  // How can we check the current end-of-file position?
-  if (allocInfo->AllocationSize.QuadPart == 0) {
-    return DokanOperations->SetEndOfFile(
+    status = DokanOperations->SetAllocationSize(
         EventContext->Operation.SetFile.FileName,
         allocInfo->AllocationSize.QuadPart, FileInfo);
   } else {
-    DbgPrint("  SetAllocationInformation %I64d, can't handle this parameter.\n",
-             allocInfo->AllocationSize.QuadPart);
+    status = STATUS_NOT_IMPLEMENTED;
   }
 
-  return STATUS_SUCCESS;
+  return status;
 }
 
 NTSTATUS
@@ -81,7 +75,7 @@ DokanSetBasicInformation(PEVENT_CONTEXT EventContext, PDOKAN_FILE_INFO FileInfo,
       EventContext->Operation.SetFile.FileName, basicInfo->FileAttributes,
       FileInfo);
 
-  if (status > 0)
+  if (status != STATUS_SUCCESS)
     return status;
 
   creation.dwLowDateTime = basicInfo->CreationTime.LowPart;

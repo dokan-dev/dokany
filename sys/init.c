@@ -24,9 +24,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntddstor.h>
 #include <wdmsec.h>
 
-static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
-    L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
-
 NTSTATUS IsMountPointDriveLetter(__in PUNICODE_STRING mountPoint) {
   if (mountPoint != NULL) {
     // Check if mount point match \DosDevices\C:
@@ -286,10 +283,11 @@ DokanRegisterDeviceInterface(__in PDRIVER_OBJECT DriverObject,
                              __in PDokanDCB Dcb) {
   PDEVICE_OBJECT pnpDeviceObject = NULL;
   NTSTATUS status;
+  DDbgPrint("=> DokanRegisterDeviceInterface\n");
 
   status = IoReportDetectedDevice(DriverObject, InterfaceTypeUndefined, 0, 0,
                                   NULL, NULL, FALSE, &pnpDeviceObject);
-
+  pnpDeviceObject->DeviceExtension = Dcb;
   if (NT_SUCCESS(status)) {
     DDbgPrint("  IoReportDetectedDevice success\n");
   } else {
@@ -346,6 +344,7 @@ DokanRegisterDeviceInterface(__in PDRIVER_OBJECT DriverObject,
     return status;
   }
 
+  DDbgPrint("<= DokanRegisterDeviceInterface\n");
   return status;
 }
 
@@ -427,10 +426,7 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
 NTSTATUS
 DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
                             __out PDOKAN_GLOBAL *DokanGlobal) {
-  WCHAR deviceNameBuf[] = DOKAN_GLOBAL_DEVICE_NAME;
-  WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
-  WCHAR fsDiskDeviceNameBuf[] = DOKAN_GLOBAL_FS_DISK_DEVICE_NAME;
-  WCHAR fsCdDeviceNameBuf[] = DOKAN_GLOBAL_FS_CD_DEVICE_NAME;
+
   NTSTATUS status;
   UNICODE_STRING deviceName;
   UNICODE_STRING symbolicLinkName;
@@ -441,10 +437,10 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   PDEVICE_OBJECT fsCdDeviceObject;
   PDOKAN_GLOBAL dokanGlobal;
 
-  RtlInitUnicodeString(&deviceName, deviceNameBuf);
-  RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
-  RtlInitUnicodeString(&fsDiskDeviceName, fsDiskDeviceNameBuf);
-  RtlInitUnicodeString(&fsCdDeviceName, fsCdDeviceNameBuf);
+  RtlInitUnicodeString(&deviceName, DOKAN_GLOBAL_DEVICE_NAME);
+  RtlInitUnicodeString(&symbolicLinkName, DOKAN_GLOBAL_SYMBOLIC_LINK_NAME);
+  RtlInitUnicodeString(&fsDiskDeviceName, DOKAN_GLOBAL_FS_DISK_DEVICE_NAME);
+  RtlInitUnicodeString(&fsCdDeviceName, DOKAN_GLOBAL_FS_CD_DEVICE_NAME);
 
   status = IoCreateDeviceSecure(DriverObject,         // DriverObject
                                 sizeof(DOKAN_GLOBAL), // DeviceExtensionSize
@@ -609,6 +605,30 @@ VOID DokanRegisterUncProvider(__in PDokanDCB Dcb) {
   PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
+NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb) {
+  // Run FsRtlRegisterUncProvider in System thread.
+  HANDLE handle;
+  PKTHREAD thread;
+  OBJECT_ATTRIBUTES objectAttribs;
+  NTSTATUS status;
+
+  InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
+                             NULL);
+  status = PsCreateSystemThread(&handle, THREAD_ALL_ACCESS, &objectAttribs,
+                                NULL, NULL,
+                                (PKSTART_ROUTINE)DokanRegisterUncProvider, dcb);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("PsCreateSystemThread failed: 0x%X\n", status);
+  } else {
+    ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                              &thread, NULL);
+    ZwClose(handle);
+    KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(thread);
+  }
+  return status;
+}
+
 KSTART_ROUTINE DokanDeregisterUncProvider;
 VOID DokanDeregisterUncProvider(__in PDokanDCB Dcb) {
   if (Dcb->MupHandle) {
@@ -622,11 +642,15 @@ KSTART_ROUTINE DokanCreateMountPointSysProc;
 VOID DokanCreateMountPointSysProc(__in PDokanDCB Dcb) {
   NTSTATUS status;
 
+  DDbgPrint("=> DokanCreateMountPointSysProc\n");
+
   status = IoCreateSymbolicLink(Dcb->MountPoint, Dcb->DiskDeviceName);
   if (!NT_SUCCESS(status)) {
     DDbgPrint("IoCreateSymbolicLink for mount point %wZ failed: 0x%X\n",
               Dcb->MountPoint, status);
   }
+
+  DDbgPrint("<= DokanCreateMountPointSysProc\n");
 }
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
@@ -636,25 +660,29 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
     if (Dcb->UseMountManager) {
       DokanSendVolumeCreatePoint(Dcb->DiskDeviceName, Dcb->MountPoint);
     } else {
-      // Run DokanCreateMountPointProc in System thread.
-      HANDLE handle;
-      PKTHREAD thread;
-      OBJECT_ATTRIBUTES objectAttribs;
+      if (Dcb->MountGlobally) {
+        // Run DokanCreateMountPointProc in system thread.
+        HANDLE handle;
+        PKTHREAD thread;
+        OBJECT_ATTRIBUTES objectAttribs;
 
-      InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                                 NULL);
-      status = PsCreateSystemThread(
-          &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-          (PKSTART_ROUTINE)DokanCreateMountPointSysProc, Dcb);
-      if (!NT_SUCCESS(status)) {
-        DDbgPrint("DokanCreateMountPoint PsCreateSystemThread failed: 0x%X\n",
-                  status);
+        InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE,
+                                   NULL, NULL);
+        status = PsCreateSystemThread(
+            &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
+            (PKSTART_ROUTINE)DokanCreateMountPointSysProc, Dcb);
+        if (!NT_SUCCESS(status)) {
+          DDbgPrint("DokanCreateMountPoint PsCreateSystemThread failed: 0x%X\n",
+                    status);
+        } else {
+          ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                                    &thread, NULL);
+          ZwClose(handle);
+          KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+          ObDereferenceObject(thread);
+        }
       } else {
-        ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                  &thread, NULL);
-        ZwClose(handle);
-        KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-        ObDereferenceObject(thread);
+        DokanCreateMountPointSysProc(Dcb);
       }
     }
   }
@@ -662,10 +690,12 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
 
 KSTART_ROUTINE DokanDeleteMountPointSysProc;
 VOID DokanDeleteMountPointSysProc(__in PDokanDCB Dcb) {
+  DDbgPrint("=> DokanDeleteMountPointSysProc\n");
   if (Dcb->MountPoint != NULL && Dcb->MountPoint->Length > 0) {
     DDbgPrint("  Delete Mount Point Symbolic Name: %wZ\n", Dcb->MountPoint);
     IoDeleteSymbolicLink(Dcb->MountPoint);
   }
+  DDbgPrint("<= DokanDeleteMountPointSysProc\n");
 }
 
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
@@ -676,25 +706,29 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
       Dcb->UseMountManager = FALSE; // To avoid recursive call
       DokanSendVolumeDeletePoints(Dcb->MountPoint, Dcb->DiskDeviceName);
     } else {
-      // Run DokanDeleteMountPointProc in System thread.
-      HANDLE handle;
-      PKTHREAD thread;
-      OBJECT_ATTRIBUTES objectAttribs;
+      if (Dcb->MountGlobally) {
+        // Run DokanDeleteMountPointProc in System thread.
+        HANDLE handle;
+        PKTHREAD thread;
+        OBJECT_ATTRIBUTES objectAttribs;
 
-      InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                                 NULL);
-      status = PsCreateSystemThread(
-          &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-          (PKSTART_ROUTINE)DokanDeleteMountPointSysProc, Dcb);
-      if (!NT_SUCCESS(status)) {
-        DDbgPrint("DokanDeleteMountPoint PsCreateSystemThread failed: 0x%X\n",
-                  status);
+        InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE,
+                                   NULL, NULL);
+        status = PsCreateSystemThread(
+            &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
+            (PKSTART_ROUTINE)DokanDeleteMountPointSysProc, Dcb);
+        if (!NT_SUCCESS(status)) {
+          DDbgPrint("DokanDeleteMountPoint PsCreateSystemThread failed: 0x%X\n",
+                    status);
+        } else {
+          ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                                    &thread, NULL);
+          ZwClose(handle);
+          KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+          ObDereferenceObject(thread);
+        }
       } else {
-        ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                  &thread, NULL);
-        ZwClose(handle);
-        KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-        ObDereferenceObject(thread);
+        DokanDeleteMountPointSysProc(Dcb);
       }
     }
   }
@@ -708,14 +742,13 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
-                      __in BOOLEAN UseMountManager, __out PDokanDCB *Dcb) {
+                      __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
+                      __out PDokanDCB *Dcb) {
   WCHAR diskDeviceNameBuf[MAXIMUM_FILENAME_LENGTH];
   WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
   WCHAR mountPointBuf[MAXIMUM_FILENAME_LENGTH];
   PDEVICE_OBJECT diskDeviceObject;
-  PDEVICE_OBJECT volDeviceObject;
   PDokanDCB dcb;
-  PDokanVCB vcb;
   UNICODE_STRING diskDeviceName;
   NTSTATUS status;
   BOOLEAN isNetworkFileSystem = (DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
@@ -766,7 +799,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     status = IoCreateDevice(DriverObject,          // DriverObject
                             sizeof(DokanDCB),      // DeviceExtensionSize
                             NULL,                  // DeviceName
-                            FILE_DEVICE_UNKNOWN,   // DeviceType
+                            FILE_DEVICE_DISK,      // DeviceType
                             DeviceCharacteristics, // DeviceCharacteristics
                             FALSE,                 // Not Exclusive
                             &diskDeviceObject);    // DeviceObject
@@ -792,6 +825,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   dcb->Identifier.Size = sizeof(DokanDCB);
 
   dcb->MountId = MountId;
+  dcb->VolumeDeviceType = DeviceType;
   dcb->DeviceType = FILE_DEVICE_DISK;
   dcb->DeviceCharacteristics = DeviceCharacteristics;
   KeInitializeEvent(&dcb->KillEvent, NotificationEvent, FALSE);
@@ -818,6 +852,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   dcb->CacheManagerNoOpCallbacks.AcquireForReadAhead = &DokanNoOpAcquire;
   dcb->CacheManagerNoOpCallbacks.ReleaseFromReadAhead = &DokanNoOpRelease;
 
+  dcb->MountGlobally = MountGlobally;
   dcb->UseMountManager = UseMountManager;
   if (wcscmp(MountPoint, L"") != 0) {
     RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH,
@@ -857,64 +892,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
   DDbgPrint("  IoCreateDevice DeviceType: %d\n", DeviceType);
 
-  // Directly create volume device and init vcb here because it has strong
-  // dependency with fs/disk
-  // Otherwise we would have done this work when mounting the volume
-
-  if (!isNetworkFileSystem) {
-    status = IoCreateDevice(DriverObject,          // DriverObject
-                            sizeof(DokanVCB),      // DeviceExtensionSize
-                            NULL,                  // DeviceName
-                            DeviceType,            // DeviceType
-                            DeviceCharacteristics, // DeviceCharacteristics
-                            FALSE,                 // Not Exclusive
-                            &volDeviceObject);     // DeviceObject
-  } else {
-    status =
-        IoCreateDeviceSecure(DriverObject,          // DriverObject
-                             sizeof(DokanVCB),      // DeviceExtensionSize
-                             &diskDeviceName,       // DeviceName
-                             DeviceType,            // DeviceType
-                             DeviceCharacteristics, // DeviceCharacteristics
-                             FALSE,                 // Not Exclusive
-                             &sddl,                 // Default SDDL String
-                             NULL,                  // Device Class GUID
-                             &volDeviceObject);     // DeviceObject
-  }
-
-  if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateDevice failed: 0x%x\n", status);
-    ExDeleteResourceLite(&dcb->Resource);
-    IoDeleteDevice(diskDeviceObject);
-    FreeDcbNames(dcb);
-    return status;
-  }
-
-  vcb = volDeviceObject->DeviceExtension;
-  vcb->Identifier.Type = VCB;
-  vcb->Identifier.Size = sizeof(DokanVCB);
-
-  vcb->DeviceObject = volDeviceObject;
-  vcb->Dcb = dcb;
-  dcb->Vcb = vcb;
-
-  InitializeListHead(&vcb->NextFCB);
-
-  InitializeListHead(&vcb->DirNotifyList);
-  FsRtlNotifyInitializeSync(&vcb->NotifySync);
-
-  ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
-
-#if _WIN32_WINNT >= 0x0501
-  FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-                           &vcb->AdvancedFCBHeaderMutex);
-#else
-  if (DokanFsRtlTeardownPerStreamContexts) {
-    FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-                             &vcb->AdvancedFCBHeaderMutex);
-  }
-#endif
-
   //
   // Create a symbolic link for userapp to interact with the driver.
   //
@@ -930,21 +907,13 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   DDbgPrint("SymbolicLink: %wZ -> %wZ created\n", dcb->SymbolicLinkName,
             dcb->DiskDeviceName);
 
-  //
-  // Establish user-buffer access method.
-  //
-  volDeviceObject->Flags |= DO_DIRECT_IO;
-
-  DokanInitVpb(diskDeviceObject->Vpb, diskDeviceObject, volDeviceObject);
-
   // Mark devices as initialized
   diskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
-  volDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
-  ObReferenceObject(volDeviceObject);
   ObReferenceObject(diskDeviceObject);
 
-  // DokanRegisterMountedDeviceInterface(diskDeviceObject, dcb);
+  // DokanRegisterDeviceInterface(DriverObject, dcb->DeviceObject, dcb);
+  // DokanRegisterMountedDeviceInterface(dcb->DeviceObject, dcb);
 
   // Save to the global mounted list
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
@@ -955,51 +924,12 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                     sizeof(dokanControl.MountPoint) / sizeof(WCHAR),
                     mountPointBuf);
   dokanControl.Type = DeviceType;
-  dokanControl.DeviceObject = volDeviceObject;
+
   InsertMountEntry(DokanGlobal, &dokanControl);
 
-  dcb->Mounted = 1;
-
-  if (dcb->UseMountManager) {
-    status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
-    if (!NT_SUCCESS(status)) {
-      DDbgPrint("  DokanSendVolumeArrivalNotification failed: 0x%x\n", status);
-      if (diskDeviceObject->Vpb) {
-        diskDeviceObject->Vpb->DeviceObject = NULL;
-        diskDeviceObject->Vpb->RealDevice = NULL;
-        diskDeviceObject->Vpb->Flags = 0;
-      }
-      ExDeleteResourceLite(&dcb->Resource);
-      IoDeleteDevice(diskDeviceObject);
-      FreeDcbNames(dcb);
-      return status;
-    }
-  }
-
-  DokanCreateMountPoint(dcb);
-
   if (isNetworkFileSystem) {
-    // Run FsRtlRegisterUncProvider in System thread.
-    HANDLE handle;
-    PKTHREAD thread;
-    OBJECT_ATTRIBUTES objectAttribs;
-
-    InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
-                               NULL);
-    status = PsCreateSystemThread(
-        &handle, THREAD_ALL_ACCESS, &objectAttribs, NULL, NULL,
-        (PKSTART_ROUTINE)DokanRegisterUncProvider, dcb);
-    if (!NT_SUCCESS(status)) {
-      DDbgPrint("PsCreateSystemThread failed: 0x%X\n", status);
-    } else {
-      ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-                                &thread, NULL);
-      ZwClose(handle);
-      KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
-      ObDereferenceObject(thread);
-    }
+    IoVerifyVolume(dcb->DeviceObject, FALSE);
   }
-  // DokanRegisterDeviceInterface(DriverObject, diskDeviceObject, dcb);
 
   return STATUS_SUCCESS;
 }

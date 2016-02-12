@@ -1,4 +1,4 @@
-LIBRARY	dokanfuse
+LIBRARY	dokanfuse1
 
 EXPORTS
 
@@ -81,3 +81,16 @@ ntstatus_error_to_errno
 errno_to_ntstatus_error
 convert_args
 free_converted_args
+
+; Utils
+utf8_to_wchar_buf_old
+utf8_to_wchar_buf
+wchar_to_utf8_cstr
+
+unixify
+extract_file_name
+extract_dir_name
+
+unixTimeToFiletime
+filetimeToUnixTime
+is_filetime_set

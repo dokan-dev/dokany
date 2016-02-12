@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?include version.xml ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:difx="http://schemas.microsoft.com/wix/DifxAppExtension">
+  
+  <Product Id="$(var.ProductCodeX64)"
+           Name="$(var.ProductName) $(var.BaseVersion) (x64)"
+           Language="1033" 
+           Version="$(var.BaseVersion)" 
+           Manufacturer="$(var.CompanyName)" 
+           UpgradeCode="$(var.UpgradeCodeX64)">
+
+    <Package InstallerVersion="500" 
+             Compressed="yes" 
+             InstallScope="perMachine"
+             Platform="x64"
+             InstallPrivileges="elevated"
+             />
+
+    <Icon Id="DokanIcon" 
+          SourceFile="Dokan.ico"
+          />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPPRODUCTICON" Value="DokanIcon" />
+    <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+
+    <Property Id="WIN10FOUND">
+      <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
+        <FileSearch Id="searchFile" 
+                    Name="advapi32.dll" 
+                    MinVersion="6.3.10000.0"/>
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="UCRTINSTALLED">
+      <DirectorySearch Id="searchSystem2" Path="[WindowsFolder]System32" Depth="0">
+        <FileSearch Id="UCRT_FileSearch"
+                    Name="ucrtbase.dll"
+                    MinVersion="6.2.10585.0"/>
+      </DirectorySearch>
+    </Property>
+    
+    <Property Id="DOKANNSISINSTALL">
+      <RegistrySearch Id="DOKANUNINSTALLNSIS" 
+                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary" 
+                      Name="DisplayName" 
+                      Type="raw" 
+                      Win64="yes" >
+      </RegistrySearch>
+    </Property>
+
+    <Property Id="REGINSTALLDIR">
+      <RegistrySearch Id="RegInstallDirSearch" 
+                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)" 
+					  Name="AppLocation" 
+                      Type="directory" 
+                      Win64="yes" >
+      </RegistrySearch>
+    </Property>
+
+    <Property Id="VCREDISTINSTALLEDX64">
+      <RegistrySearch Id="VCRedist_RegSearch_x64"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
+                      Name="Version"
+                      Type="raw"
+                      Win64="yes"/>
+    </Property>
+
+    <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
+    <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
+    <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23506")]]></Condition>
+
+    <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
+
+    <CustomAction Id='CheckForOldDokanLibrary' Error="An obsolete version of the Dokan Library is still installed on this system. Please uninstall it before executing this setup again. Installing a newer Dokan driver might break compatibilty with applications relying on the older version." />
+
+    <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
+
+    <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
+    
+    <CustomAction Id="SetFolderValue"
+                  Return="check"
+                  Property="ExecuteInstallAction"
+                  Value="INSTALLFOLDER=[INSTALLDIR]" 
+                  />
+
+    <CustomAction Id="GetInstallDir"
+                  Return="check"
+                  Property="INSTALLDIR"
+                  Value="[REGINSTALLDIR]" 
+                  />
+
+    <CustomAction Id="ExecuteInstallAction"
+                BinaryKey="SetupCA2"
+                DllEntry="ExecuteInstall"
+                Execute="deferred"
+                Return="check"
+                Impersonate="no"
+                />
+
+    <CustomAction Id="SetUninstallFolderValue"
+                  Return="check"
+                  Property="ExecuteUninstallAction"
+                  Value="INSTALLFOLDER=[INSTALLDIR]" 
+                  />
+
+    <CustomAction Id="ExecuteUninstallAction"
+                BinaryKey="SetupCA2"
+                DllEntry="ExecuteUninstall"
+                Execute="deferred"
+                Return="check"
+                Impersonate="no"
+                />
+
+    <InstallExecuteSequence>
+
+      <Custom Action='CheckForOldDokanLibrary' Before='LaunchConditions'>
+        <![CDATA[DOKANNSISINSTALL]]>
+      </Custom>
+      <Custom Action='CheckForUCRT' Before='LaunchConditions'>
+        <![CDATA[Not REMOVE="ALL" AND UCRTINSTALLED = ""]]>
+      </Custom>
+      <Custom Action='GetInstallDir' Before='CostFinalize'><![CDATA[REMOVE="ALL"]]></Custom>
+      <Custom Action="SetFolderValue" Before="ExecuteInstallAction" />
+      <Custom Action='ExecuteInstallAction' After="PublishProduct"><![CDATA[Not REMOVE="ALL"]]></Custom>
+      <Custom Action="SetUninstallFolderValue" Before="ExecuteUninstallAction" />
+      <Custom Action='ExecuteUninstallAction' Before="RemoveFiles"><![CDATA[REMOVE="ALL"]]></Custom>
+      <Custom Action="SetARPINSTALLLOCATION" After="InstallValidate"></Custom>
+      
+    </InstallExecuteSequence>
+  
+    <Media Id="1" Cabinet="Dokan.cab" EmbedCab="yes"/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="DOKANDIR" Name="Dokan">
+          <Directory Id="INSTALLDIR" Name="DokanLibrary">
+            <Component Id="ProgramFilesComponent" Win64="yes" Guid="{EBBC0221-B7A4-4AE5-91AB-7DDB3C90FE31}">
+              <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)" >
+                <RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no" />
+              </RegistryKey>
+              <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)" >
+                <RegistryValue Type="string" Name="FullVersion" Value="$(var.BaseVersion).$(var.BuildVersion)" KeyPath="no"/>
+              </RegistryKey>
+              <File Id="DokanDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokanfuseDLL" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="dokanctlEXE" Source="..\x64\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
+              <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
+              <File Id="licensegplTXT" Source="..\license.gpl.txt" Name="license.gpl.txt" KeyPath="no"/>
+              <File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
+              <File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no"/>
+              <RemoveFolder Id="RemoveINSTALLDIR" On="uninstall" />
+            </Component>
+            <Component Id="SysPDBFiles" Guid="{D88F93D7-C6AA-4476-ABF0-1C3273303F08}">
+              <File Id="DokanPDB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              <File Id="DokannpPDB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
+            </Component>
+            <Directory Id="X86PROGRAMSDIR" Name="x86">
+              <Component Id="X86PROGRAMFiles" Guid="{90E88E0C-9009-451F-9AEA-873960C9598C}">
+                <File Id="X86DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
+                <File Id="X86DokanfuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+                <File Id="X86dokanctlEXE" Source="..\Win32\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
+                <File Id="X86DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="no"/>
+              </Component>
+              <Component Id="SysX86PDBFiles" Guid="{3FBAD92A-2AD9-4A9B-98B0-060C8D154188}">
+                <File Id="DokanX86PDB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+                <File Id="DokannpX86PDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
+              </Component>
+            </Directory>
+            <Directory Id="DRIVERDIR" Name="driver">
+              <Component Id="Win7_x64" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
+                <Condition>VersionNT = 601</Condition>
+                <File Id="Win7_Sys" Source="..\x64\Win7$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+                <File Id="Win7_Inf" Source="dokan.inf" Name="dokan.inf" KeyPath="no"/>
+                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+              </Component>
+              <Component Id="Win7_x64pdb" Guid="{184A5365-8C4C-4853-A9DA-381C0B12D8D1}">
+                <Condition>VersionNT = 601</Condition>
+                <File Id="Win7_Syspdb" Source="..\x64\Win7$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              </Component>
+              <Component Id="Win8_x64" Guid="{E240A626-C658-4B58-8A7B-D59EE9C0C037}">
+                <Condition>VersionNT = 602</Condition>
+                <File Id="Win8_Sys" Source="..\x64\Win8$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+                <File Id="Win8_Inf" Source="dokan.inf" Name="dokan.inf" KeyPath="no"/>
+                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+              </Component>
+              <Component Id="Win8_x64pdb" Guid="{E6D0C487-2775-4BB6-AE1D-A805CC12015D}">
+                <Condition>VersionNT = 602</Condition>
+                <File Id="Win8_Syspdb" Source="..\x64\Win8$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              </Component>
+              <Component Id="Win81_x64" Guid="{D393D1D9-6557-4A79-8253-58D3BD1B0D2C}">
+                <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
+                <File Id="Win81_Sys" Source="..\x64\Win8.1$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+                <File Id="Win81_Inf" Source="dokan.inf" Name="dokan.inf" KeyPath="no"/>
+                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+              </Component>
+              <Component Id="Win81_x64pdb" Guid="{95EBC8B9-32DD-4F95-B262-058EDD8C63BC}">
+                <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
+                <File Id="Win81_Syspdb" Source="..\x64\Win8.1$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              </Component>
+              <Component Id="Win10_x64" Guid="{7FB1B753-B85C-4B39-B21C-B5061769E0C4}">
+                <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
+                <File Id="Win10_Sys" Source="..\x64\Win10$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+                <File Id="Win10_Inf" Source="dokan.inf" Name="dokan.inf" KeyPath="no"/>
+                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+              </Component>
+              <Component Id="Win10_x64pdb" Guid="{C98CC102-523D-41CA-A6F8-A06E6638F566}">
+                <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
+                <File Id="Win10_Syspdb" Source="..\x64\Win10$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              </Component>
+            </Directory>
+            <Directory Id="INCLUDEDIR" Name="include">
+              <Directory Id="DOKANINCLUDEDIR" Name="dokan">
+                <Component Id="IncludeDokanFilesComponent" Win64="yes" Guid="{6D001C3A-F866-40F7-9E16-492766A8A3C7}">
+                  <File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes"/>
+                  <File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no"/>
+                  <File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
+                </Component>
+              </Directory>
+              <Directory Id="FUSEINCLUDEDIR" Name="fuse">
+                <Component Id="IncludeFuseFilesComponent" Win64="yes" Guid="{113F4C52-C272-4346-B65F-E827B8150815}">
+                  <File Id="docanfuseH" Source="..\dokan_fuse\include\docanfuse.h" Name="docanfuse.h" KeyPath="yes"/>
+                  <File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="no"/>
+                  <File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
+                  <File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>
+                  <File Id="fuse_sem_fixH" Source="..\dokan_fuse\include\fuse_sem_fix.h" Name="fuse_sem_fix.h" KeyPath="no"/>
+                  <File Id="fuse_winH" Source="..\dokan_fuse\include\fuse_win.h" Name="fuse_win.h" KeyPath="no"/>
+                  <File Id="fusemainH" Source="..\dokan_fuse\include\fusemain.h" Name="fusemain.h" KeyPath="no"/>
+                  <File Id="ScopeGuardH" Source="..\dokan_fuse\include\ScopeGuard.h" Name="ScopeGuard.h" KeyPath="no"/>
+                  <File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no"/>                
+                </Component>
+              </Directory>
+            </Directory>
+            <Directory Id="LIBDIR" Name="lib">
+              <Component Id="LibFilesComponent" Win64="yes" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
+                <File Id="dokanLIB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
+                <File Id="dokanfuseLIB" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
+                <File Id="dokannpLIB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
+              </Component>
+            </Directory>
+            <Directory Id="SAMPLEDIR" Name="sample">
+              <Directory Id="MIRRORDIR" Name="mirror">
+                <Component Id="SampleFilesComponent" Win64="yes" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
+                  <File Id="mirrorEXE" Source="..\x64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                  <File Id="dokan_mirrorvcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
+                  <File Id="mirrorC" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
+                </Component>
+                <Directory Id="MIRRORX86DIR" Name="x86">
+                  <Component Id="SampleFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
+                    <File Id="mirrorEXEX86" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                  </Component>
+                </Directory>
+              </Directory>
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+
+      <Directory Id="WindowsFolder" >
+        <Directory Id="Sys32Folder" Name="System32">
+          <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
+            <File Id="DokannpDLL" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="yes"/>
+          </Component>
+          <Directory Id="DriversFolder" Name="Drivers">
+            <Component Id="Win7_x64Drv" Guid="{1A1C0E3A-3559-4EBF-BD28-F8F16EE5EF64}">
+              <Condition>VersionNT = 601</Condition>
+              <File Id="Win7_SysDrv" Source="..\x64\Win7$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+            </Component>
+            <Component Id="Win8_x64Drv" Guid="{7F723226-AED7-45D2-98E3-3262F3371C5D}">
+              <Condition>VersionNT = 602</Condition>
+              <File Id="Win8_SysDrv" Source="..\x64\Win8$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+            </Component>
+            <Component Id="Win81_x64Drv" Guid="{C2424A0C-8476-4588-9FE5-CCD2A3A9F526}">
+              <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
+              <File Id="Win81_SysDrv" Source="..\x64\Win8.1$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+            </Component>
+            <Component Id="Win10_x64Drv" Guid="{D9610089-6B37-4586-9238-8755B502828A}">
+              <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
+              <File Id="Win10_SysDrv" Source="..\x64\Win10$(var.Configuration)\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="DokanDriverFeature" Title="Dokan driver" Level="1">
+      <ComponentRef Id="ProgramFilesComponent"/>
+      <ComponentRef Id="Win7_x64"/>
+      <ComponentRef Id="Win8_x64"/>
+      <ComponentRef Id="Win81_x64"/>
+      <ComponentRef Id="Win10_x64"/>
+      <ComponentRef Id="Win7_x64Drv"/>
+      <ComponentRef Id="Win8_x64Drv"/>
+      <ComponentRef Id="Win81_x64Drv"/>
+      <ComponentRef Id="Win10_x64Drv"/>
+      <ComponentRef Id="Sys32Files"/>
+      <ComponentRef Id="X86PROGRAMFiles"/>
+    </Feature>
+    <Feature Id="DokanLibBFeature" Title="Dokan headers and libs" Level="1">
+      <ComponentRef Id="IncludeDokanFilesComponent"/>
+      <ComponentRef Id="IncludeFuseFilesComponent"/>
+      <ComponentRef Id="LibFilesComponent"/>
+      <ComponentRef Id="SampleFilesComponent"/>
+      <ComponentRef Id="SampleFilesComponentX86"/>
+    </Feature>
+    <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
+      <ComponentRef Id="Win7_x64pdb"/>
+      <ComponentRef Id="Win8_x64pdb"/>
+      <ComponentRef Id="Win81_x64pdb"/>
+      <ComponentRef Id="Win10_x64pdb"/>
+      <ComponentRef Id="SysPDBFiles"/>
+      <ComponentRef Id="SysX86PDBFiles"/>
+    </Feature>
+  </Product>
+
+</Wix>

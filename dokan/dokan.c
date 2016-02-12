@@ -178,6 +178,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if (DokanOptions->Options & DOKAN_OPTION_NETWORK &&
+      !IsMountPointDriveLetter(DokanOptions->MountPoint)) {
+    DokanOptions->Options &= ~DOKAN_OPTION_NETWORK;
+    DbgPrintW(L"Dokan: Mount point folder is specified with network device "
+              L"option. Disable network device.\n");
+  }
+
   if (DokanOptions->Version < DOKAN_MINIMUM_COMPATIBLE_VERSION) {
     DokanDbgPrintW(
         L"Dokan Error: Incompatible version (%d), minimum is (%d) \n",
@@ -242,7 +249,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_START_ERROR;
   }
 
-  if (!DokanMount(instance->MountPoint, instance->DeviceName)) {
+  if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
     SendReleaseIRP(instance->DeviceName);
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
     CloseHandle(device);
@@ -323,14 +330,20 @@ void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size) {
 
 UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   HANDLE device;
-  char buffer[EVENT_CONTEXT_MAX_SIZE];
+  char *buffer = NULL;
   BOOL status;
   ULONG returnedLength;
   DWORD result = 0;
   DWORD lastError = 0;
   WCHAR rawDeviceName[MAX_PATH];
 
-  RtlZeroMemory(buffer, sizeof(buffer));
+  buffer = malloc(sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
+  if (buffer == NULL) {
+    result = (DWORD)-1;
+    _endthreadex(result);
+    return result;
+  }
+  RtlZeroMemory(buffer, sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
 
   device = CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
                                        MAX_PATH),         // lpFileName
@@ -347,6 +360,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
         "Dokan Error: CreateFile failed %ws: %d\n",
         GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
         GetLastError());
+    free(buffer);
     result = (DWORD)-1;
     _endthreadex(result);
     return result;
@@ -355,16 +369,17 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   status = TRUE;
   while (status) {
 
-    status =
-        DeviceIoControl(device,           // Handle to device
-                        IOCTL_EVENT_WAIT, // IO Control code
-                        NULL,             // Input Buffer to driver.
-                        0,                // Length of input buffer in bytes.
-                        buffer,           // Output Buffer from driver.
-                        sizeof(buffer),   // Length of output buffer in bytes.
-                        &returnedLength,  // Bytes placed in buffer.
-                        NULL              // synchronous call
-                        );
+    status = DeviceIoControl(
+        device,           // Handle to device
+        IOCTL_EVENT_WAIT, // IO Control code
+        NULL,             // Input Buffer to driver.
+        0,                // Length of input buffer in bytes.
+        buffer,           // Output Buffer from driver.
+        sizeof(char) *
+            EVENT_CONTEXT_MAX_SIZE, // Length of output buffer in bytes.
+        &returnedLength,            // Bytes placed in buffer.
+        NULL                        // synchronous call
+        );
 
     if (!status) {
       lastError = GetLastError();
@@ -439,6 +454,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   }
 
   CloseHandle(device);
+  free(buffer);
   _endthreadex(result);
 
   return result;
@@ -603,23 +619,27 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
       ULONG inputLength = sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
                           (MAX_PATH * sizeof(WCHAR));
       PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint = malloc(inputLength);
-      ZeroMemory(szMountPoint, inputLength);
-      szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
-      szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
-      CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
-      DbgPrint("send global release for %ws\n", MountPoint);
+      if (szMountPoint != NULL) {
+        ZeroMemory(szMountPoint, inputLength);
+        szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
+        szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
+        CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
-      if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
-                        szMountPoint, inputLength, NULL, 0, &returnedLength)) {
+        DbgPrint("send global release for %ws\n", MountPoint);
 
-        DbgPrint("Failed to unmount: %ws\n", MountPoint);
+        if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
+                          szMountPoint, inputLength, NULL, 0,
+                          &returnedLength)) {
+
+          DbgPrint("Failed to unmount: %ws\n", MountPoint);
+          free(szMountPoint);
+          return FALSE;
+        }
+
         free(szMountPoint);
-        return FALSE;
+        return TRUE;
       }
-
-      free(szMountPoint);
-      return TRUE;
     }
   }
 
@@ -649,6 +669,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
     eventStart.Flags |= DOKAN_EVENT_MOUNT_MANAGER;
+  }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
+    eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

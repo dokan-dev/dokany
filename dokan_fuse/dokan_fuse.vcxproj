@@ -96,6 +96,30 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
+    <Import Project="..\Dokan.props" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
@@ -107,10 +131,10 @@
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">$(Platform)\$(Configuration)\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">$(Platform)\$(Configuration)\</IntDir>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">dokanfuse</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">dokanfuse$(DOKANAPIVersion)</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">.dll</TargetExt>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">.dll</TargetExt>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.dll</TargetExt>
@@ -131,10 +155,10 @@
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">$(Platform)\$(Configuration)\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(Platform)\$(Configuration)\</IntDir>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">dokanfuse</TargetName>
-    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">dokanfuse</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">dokanfuse$(DOKANAPIVersion)</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">dokanfuse$(DOKANAPIVersion)</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.dll</TargetExt>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">.dll</TargetExt>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.dll</TargetExt>

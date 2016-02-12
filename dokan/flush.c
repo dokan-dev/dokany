@@ -28,6 +28,7 @@ VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
   PDOKAN_OPEN_INFO openInfo;
+  NTSTATUS status;
 
   CheckFileName(EventContext->Operation.Flush.FileName);
 
@@ -36,13 +37,18 @@ VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-  eventInfo->Status = STATUS_SUCCESS;
-
   if (DokanInstance->DokanOperations->FlushFileBuffers) {
 
-    NTSTATUS status = DokanInstance->DokanOperations->FlushFileBuffers(
+    status = DokanInstance->DokanOperations->FlushFileBuffers(
         EventContext->Operation.Flush.FileName, &fileInfo);
 
+  } else {
+    status = STATUS_NOT_IMPLEMENTED;
+  }
+
+  if (status == STATUS_NOT_IMPLEMENTED) {
+    eventInfo->Status = STATUS_SUCCESS;
+  } else {
     eventInfo->Status =
         status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
   }

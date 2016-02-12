@@ -37,7 +37,9 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   if (eventContext == NULL) {
     ; // STATUS_INSUFFICIENT_RESOURCES;
     DDbgPrint(" Not able to allocate eventContext.\n");
-    DokanEventRelease(vcb->DeviceObject);
+    if (vcb) {
+      DokanEventRelease(vcb->DeviceObject);
+    }
     return;
   }
 
@@ -68,7 +70,9 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
                           &timeout);
   }
 
-  DokanEventRelease(vcb->DeviceObject);
+  if (vcb) {
+    DokanEventRelease(vcb->DeviceObject);
+  }
 
   if (completedEvent) {
     ExFreePool(completedEvent);
@@ -255,6 +259,8 @@ Routine Description:
   PVOID pollevents[2];
   LARGE_INTEGER timeout = {0};
   BOOLEAN waitObj = TRUE;
+  LARGE_INTEGER LastTime = {0};
+  LARGE_INTEGER CurrentTime = {0};
 
   DDbgPrint("==> DokanTimeoutThread\n");
 
@@ -265,6 +271,8 @@ Routine Description:
 
   KeSetTimerEx(&timer, timeout, DOKAN_CHECK_INTERVAL, NULL);
 
+  KeQuerySystemTime(&LastTime);
+
   while (waitObj) {
     status = KeWaitForMultipleObjects(2, pollevents, WaitAny, Executive,
                                       KernelMode, FALSE, NULL, NULL);
@@ -274,8 +282,21 @@ Routine Description:
       // KillEvent or something error is occured
       waitObj = FALSE;
     } else {
-      ReleaseTimeoutPendingIrp(Dcb);
-      DokanCheckKeepAlive(Dcb);
+      // in this case the timer was executed and we are checking if the timer
+      // occured regulary using the period DOKAN_CHECK_INTERVAL. If not, this
+      // means the system was in sleep mode. If in this case the timer is
+      // faster awaken than the incoming IOCTL_KEEPALIVE
+      // the MountPoint would be removed by mistake (DokanCheckKeepAlive).
+      KeQuerySystemTime(&CurrentTime);
+      if ((CurrentTime.QuadPart - LastTime.QuadPart) >
+          ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
+        DDbgPrint("  System seems to be awaken from sleep mode. So do not "
+                  "Check Keep Alive yet.\n");
+      } else {
+        ReleaseTimeoutPendingIrp(Dcb);
+        DokanCheckKeepAlive(Dcb);
+      }
+      KeQuerySystemTime(&LastTime);
     }
   }
 
@@ -327,38 +348,19 @@ Routine Description:
 
 --*/
 {
-  PIO_WORKITEM workItem;
+  DDbgPrint("==> DokanStopCheckThread");
 
-  DDbgPrint("==> DokanStopCheckThread\n");
-
-  workItem = IoAllocateWorkItem(Dcb->DeviceObject);
-  if (workItem != NULL) {
-    IoQueueWorkItem(workItem, DokanStopCheckThreadInternal, DelayedWorkQueue,
-                    workItem);
-  } else {
-    DDbgPrint("Can't create work item.");
-  }
-
-  DDbgPrint("<== DokanStopCheckThread\n");
-}
-
-VOID DokanStopCheckThreadInternal(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PVOID Context) {
-  PDokanDCB Dcb;
-
-  UNREFERENCED_PARAMETER(Context);
-
-  DDbgPrint("==> DokanStopCheckThreadInternal\n");
-
-  Dcb = DeviceObject->DeviceExtension;
   if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
+    DDbgPrint("Waiting for Timeout thread to terminate.\n");
+    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
     KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
                           NULL);
+    DDbgPrint("Timeout thread successfully terminated.\n");
     ObDereferenceObject(Dcb->TimeoutThread);
     Dcb->TimeoutThread = NULL;
   }
 
-  DDbgPrint("<== DokanStopCheckThreadInternal\n");
+  DDbgPrint("<== DokanStopCheckThread");
 }
 
 NTSTATUS

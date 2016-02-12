@@ -49,6 +49,7 @@ Return Value:
   PDokanCCB ccb;
   PDokanFCB fcb;
   PDokanVCB vcb;
+  PVOID currentAddress = NULL;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
 
@@ -59,16 +60,48 @@ Return Value:
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
 
+    //
+    //  If this is a zero length read then return SUCCESS immediately.
+    //
+    if (irpSp->Parameters.Read.Length == 0) {
+      DDbgPrint("  Parameters.Read.Length == 0 \n");
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
+    if (irpSp->MinorFunction == IRP_MN_COMPLETE) {
+      Irp->MdlAddress = NULL;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
+    if (fileObject == NULL && Irp->MdlAddress != NULL) {
+      DDbgPrint("  Reads by File System Recognizers\n");
+
+      currentAddress =
+          MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
+      if (currentAddress == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
+
+      // here we could return the bootsector. If we don't have one
+      // the requested read lenght must be returned as requested
+      readLength = irpSp->Parameters.Read.Length;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     if (fileObject == NULL) {
       DDbgPrint("  fileObject == NULL\n");
-      status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_DEVICE_REQUEST;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB ||
         !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-      status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_DEVICE_REQUEST;
       __leave;
     }
 

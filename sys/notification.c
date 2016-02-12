@@ -217,8 +217,11 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
   InitializeListHead(&completeList);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  DDbgPrint("Try acquire SpinLock...\n");
   KeAcquireSpinLock(&PendingIrp->ListLock, &irpIrql);
+  DDbgPrint("SpinLock irp Acquired\n");
   KeAcquireSpinLock(&NotifyEvent->ListLock, &notifyIrql);
+  DDbgPrint("SpinLock notify Acquired\n");
 
   while (!IsListEmpty(&PendingIrp->ListHead) &&
          !IsListEmpty(&NotifyEvent->ListHead)) {
@@ -238,6 +241,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
 
     if (irp == NULL) {
       // this IRP has already been canceled
+      DDbgPrint("Irp canceled\n");
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
       DokanFreeIrpEntry(irpEntry);
       // push back
@@ -246,6 +250,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
     }
 
     if (IoSetCancelRoutine(irp, NULL) == NULL) {
+      DDbgPrint("IoSetCancelRoutine return NULL\n");
       // Cancel routine will run as soon as we release the lock
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
@@ -281,11 +286,17 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
     InsertTailList(&completeList, &irpEntry->ListEntry);
   }
 
+  DDbgPrint("Clear Events...\n");
   KeClearEvent(&NotifyEvent->NotEmpty);
+  DDbgPrint("Notify event cleared\n");
   KeClearEvent(&PendingIrp->NotEmpty);
+  DDbgPrint("Pending event cleared\n");
 
+  DDbgPrint("Release SpinLock...\n");
   KeReleaseSpinLock(&NotifyEvent->ListLock, notifyIrql);
+  DDbgPrint("SpinLock notify Released\n");
   KeReleaseSpinLock(&PendingIrp->ListLock, irpIrql);
+  DDbgPrint("SpinLock irp Released\n");
 
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
@@ -374,32 +385,15 @@ VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
 
   if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
       Dcb->EventNotificationThread) {
+    DDbgPrint("Waiting for Notify thread to terminate.\n");
+    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
     KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
                           FALSE, NULL);
+    DDbgPrint("Notify thread successfully terminated.\n");
     ObDereferenceObject(Dcb->EventNotificationThread);
     Dcb->EventNotificationThread = NULL;
   }
   DDbgPrint("<== DokanStopEventNotificationThread\n");
-}
-
-VOID DokanStopEventNotificationThreadInternal(__in PDEVICE_OBJECT DeviceObject,
-                                              __in PVOID Context) {
-  PDokanDCB Dcb;
-
-  UNREFERENCED_PARAMETER(Context);
-
-  DDbgPrint("==> DokanStopEventNotificationThreadInternal\n");
-
-  Dcb = DeviceObject->DeviceExtension;
-  if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
-      Dcb->EventNotificationThread) {
-    KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
-                          FALSE, NULL);
-    ObDereferenceObject(Dcb->EventNotificationThread);
-    Dcb->EventNotificationThread = NULL;
-  }
-
-  DDbgPrint("<== DokanStopEventNotificationThreadInternal\n");
 }
 
 NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
@@ -410,6 +404,12 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   PLIST_ENTRY fcbEntry, fcbNext, fcbHead;
   PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
   NTSTATUS status = STATUS_SUCCESS;
+
+  DDbgPrint("==> DokanEventRelease\n");
+
+  if (DeviceObject == NULL) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
@@ -459,6 +459,8 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   DokanStopEventNotificationThread(dcb);
 
   DokanDeleteDeviceObject(dcb);
+
+  DDbgPrint("<== DokanEventRelease\n");
 
   return status;
 }

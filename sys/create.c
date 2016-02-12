@@ -282,16 +282,16 @@ DokanDispatchCreate(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 Routine Description:
 
-        This device control dispatcher handles create & close IRPs.
+                This device control dispatcher handles create & close IRPs.
 
 Arguments:
 
-        DeviceObject - Context for the activity.
-        Irp 		 - The device control argument block.
+                DeviceObject - Context for the activity.
+                Irp 		 - The device control argument block.
 
 Return Value:
 
-        NTSTATUS
+                NTSTATUS
 
 --*/
 {
@@ -335,6 +335,14 @@ Return Value:
     fileObject = irpSp->FileObject;
     relatedFileObject = fileObject->RelatedFileObject;
 
+    //
+    //  Set up the file object's Vpb pointer in case anything happens.
+    //  This will allow us to get a reasonable pop-up.
+    //
+    if (relatedFileObject != NULL) {
+      fileObject->Vpb = relatedFileObject->Vpb;
+    }
+
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
 
@@ -346,6 +354,16 @@ Return Value:
     }
 
     PrintIdType(vcb);
+
+    if (GetIdentifierType(vcb) == DCB) {
+      dcb = DeviceObject->DeviceExtension;
+      if (!dcb->Mounted) {
+        DDbgPrint("  IdentifierType is dcb which is not mounted\n");
+        status = STATUS_VOLUME_DISMOUNTED;
+        __leave;
+      }
+    }
+
     if (GetIdentifierType(vcb) != VCB) {
       DDbgPrint("  IdentifierType is not vcb\n");
       status = STATUS_SUCCESS;
@@ -862,10 +880,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     DokanFreeFCB(fcb);
   }
 
-  irp->IoStatus.Status = status;
-  irp->IoStatus.Information = info;
-  IoCompleteRequest(irp, IO_NO_INCREMENT);
+  DokanCompleteIrpRequest(irp, status, info);
 
-  DokanPrintNTStatus(status);
   DDbgPrint("<== DokanCompleteCreate\n");
 }

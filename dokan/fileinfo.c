@@ -465,6 +465,8 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       status = STATUS_NOT_IMPLEMENTED;
       break;
 
+    case FileNormalizedNameInformation:
+      DbgPrint("\tFileNormalizedNameInformation\n");
     case FileNameInformation:
       // this case is not used because driver deal with
       DbgPrint("\tFileNameInformation\n");
@@ -510,6 +512,8 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     eventInfo->BufferLength =
         EventContext->Operation.File.BufferLength - remainingLength;
   }
+
+  DbgPrint("\tDispatchQueryInformation result =  %lu\n", status);
 
   // information for FileSystem
   if (openInfo != NULL)

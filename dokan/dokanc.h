@@ -28,9 +28,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-#define DOKAN_GLOBAL_DEVICE_NAME L"\\\\.\\Dokan1"
+#define DOKAN_GLOBAL_DEVICE_NAME L"\\\\.\\Dokan" DOKAN_MAJOR_API_VERSION
 
-#define DOKAN_DRIVER_SERVICE L"Dokan"
+#define DOKAN_DRIVER_SERVICE L"Dokan" DOKAN_MAJOR_API_VERSION
 
 #define DOKAN_CONTROL_MOUNT 1
 #define DOKAN_CONTROL_UNMOUNT 2

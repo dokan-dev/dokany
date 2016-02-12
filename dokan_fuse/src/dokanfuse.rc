@@ -16,8 +16,8 @@
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -32,14 +32,14 @@ BEGIN
     BEGIN
         BLOCK "000004e3"
         BEGIN
-            VALUE "CompanyName", "AlexBesogonov"
+            VALUE "CompanyName", "Dokan Project"
             VALUE "FileDescription", "Dokan Fuse library"
-            VALUE "FileVersion", "1.0.0.1"
+            VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "dokanfuse.dll"
-            VALUE "LegalCopyright", "(c) Alex Besogonov.  All rights reserved."
+            VALUE "LegalCopyright", "Copyright (C) 2016"
             VALUE "OriginalFilename", "dokanfuse.dll"
-            VALUE "ProductName", "Dokan Fuse"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductName", "Dokan"
+            VALUE "ProductVersion", "1.0.0.0"
         END
     END
     BLOCK "VarFileInfo"

@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>3.9</ProductVersion>
+    <ProjectGuid>D8A3E7DE-948C-4686-B015-BC342BECA990</ProjectGuid>
+    <SchemaVersion>2.0</SchemaVersion>
+    <OutputName>DokanSetup</OutputName>
+    <OutputType>Bundle</OutputType>
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <DefineConstants>Debug</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Bundle.wxs" />
+  </ItemGroup>
+  <ItemGroup>
+    <WixExtension Include="WixDependencyExtension">
+      <HintPath>$(WixExtDir)\WixDependencyExtension.dll</HintPath>
+      <Name>WixDependencyExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUtilExtension">
+      <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
+      <Name>WixUtilExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixNetFxExtension">
+      <HintPath>$(WixExtDir)\WixNetFxExtension.dll</HintPath>
+      <Name>WixNetFxExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixBalExtension">
+      <HintPath>$(WixExtDir)\WixBalExtension.dll</HintPath>
+      <Name>WixBalExtension</Name>
+    </WixExtension>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="dokan.png" />
+    <Content Include="licdata.rtf" />
+  </ItemGroup>
+  <Import Project="$(WixTargetsPath)" />
+  <PropertyGroup>
+    <PreBuildEvent>cd /d "$(ProjectDir)"
+if NOT exist Redist\VCRedist_2015\vc_redist.x86.exe (
+if NOT exist Redist\ mkdir Redist
+if NOT exist Redist\VCRedist_2015\ mkdir Redist\VCRedist_2015\
+powershell -command "wget https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x86.exe -OutFile Redist\VCRedist_2015\VC_redist.x86.exe"
+powershell -command "wget https://download.microsoft.com/download/C/E/5/CE514EAE-78A8-4381-86E8-29108D78DBD4/VC_redist.x64.exe -OutFile Redist\VCRedist_2015\VC_redist.x64.exe"
+)
+if NOT exist RedistKB2999226\Windows8.1-KB2999226-x64.msu (
+if NOT exist Redist\ mkdir Redist
+if NOT exist Redist\KB2999226\ mkdir Redist\KB2999226\
+powershell -command "wget https://download.microsoft.com/download/4/F/E/4FE73868-5EDD-4B47-8B33-CE1BB7B2B16A/Windows6.1-KB2999226-x86.msu -OutFile Redist\KB2999226\Windows6.1-KB2999226-x86.msu"
+powershell -command "wget https://download.microsoft.com/download/1/1/5/11565A9A-EA09-4F0A-A57E-520D5D138140/Windows6.1-KB2999226-x64.msu -OutFile Redist\KB2999226\Windows6.1-KB2999226-x64.msu"
+powershell -command "wget https://download.microsoft.com/download/1/E/8/1E8AFE90-5217-464D-9292-7D0B95A56CE4/Windows8-RT-KB2999226-x86.msu -OutFile Redist\KB2999226\Windows8-RT-KB2999226-x86.msu"
+powershell -command "wget https://download.microsoft.com/download/A/C/1/AC15393F-A6E6-469B-B222-C44B3BB6ECCC/Windows8-RT-KB2999226-x64.msu -OutFile Redist\KB2999226\Windows8-RT-KB2999226-x64.msu"
+powershell -command "wget https://download.microsoft.com/download/E/4/6/E4694323-8290-4A08-82DB-81F2EB9452C2/Windows8.1-KB2999226-x86.msu -OutFile Redist\KB2999226\Windows8.1-KB2999226-x86.msu"
+powershell -command "wget https://download.microsoft.com/download/9/6/F/96FD0525-3DDF-423D-8845-5F92F4A6883E/Windows8.1-KB2999226-x64.msu -OutFile Redist\KB2999226\Windows8.1-KB2999226-x64.msu"
+)</PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" (
+  "%25WIX%25\bin\insignia.exe" -ib "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)engine.exe"
+  "%25SIGNTOOL%25" sign /v /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 /i %25CERTISSUER%25 /ac "%25ADDITIONALCERT%25" "$(TargetDir)engine.exe"
+  "%25WIX%25\bin\insignia.exe" -ab "$(TargetDir)engine.exe" "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)$(TargetFileName)"
+  "%25SIGNTOOL%25" sign /v /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 /i %25CERTISSUER%25 /ac "%25ADDITIONALCERT%25" "$(TargetDir)$(TargetFileName)"
+  del "$(TargetDir)engine.exe"
+)</PostBuildEvent>
+  </PropertyGroup>
+  <!--
+	To modify your build process, add your task inside one of the targets below and uncomment it.
+	Other similar extension points exist, see Wix.targets.
+	<Target Name="BeforeBuild">
+	</Target>
+	<Target Name="AfterBuild">
+	</Target>
+	-->
+</Project>
