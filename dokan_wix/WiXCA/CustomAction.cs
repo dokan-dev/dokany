@@ -17,39 +17,6 @@ namespace WiXCA
         private static Session mySession;
 
         /// <summary>
-        /// Check for previous Dokan NSIS install
-        /// </summary>
-        [CustomAction]
-        public static ActionResult CheckDokanNSISInstalled(Session session)
-        {
-            session.Log("CheckDokanNSISInstalled initiated");
-
-
-            if (!CheckAdminRights())
-            {
-                session.Log("No admin privileges, terminating CustomAction now");
-                return ActionResult.NotExecuted;
-            }
-
-            try
-            {
-                session.Log("CheckDokanNSISInstalled find regentries");
-                string dokanUninstallEntry = GetRegvalueContent("HKLM", @"Software\Microsoft\Windows\CurrentVersion\Uninstall\DokanLibrary", "DisplayName");
-                if (!String.IsNullOrEmpty(dokanUninstallEntry))
-                {
-                    return ActionResult.SkipRemainingActions;
-                }
-            }
-            catch (Exception e)
-            {
-                session.Log("CheckDokanNSISInstalled Exception: " + e.ToString());
-                return ActionResult.NotExecuted;
-            }
-            session.Log("CheckDokanNSISInstalled completed");
-            return ActionResult.Success;
-        }
-
-        /// <summary>
         /// Execute dokanctl /i a and dokanctl /i n
         /// </summary>
         [CustomAction]

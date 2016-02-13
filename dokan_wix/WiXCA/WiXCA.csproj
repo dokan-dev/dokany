@@ -50,6 +50,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(WixCATargetsPath)" />
   <PropertyGroup>
-    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" "%25SIGNTOOL%25" sign /v /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /i %25CERTISSUER%25 /ac "%25ADDITIONALCERT%25" "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" "%25SIGNTOOL%25" sign /v /i "%25CERTISSUER%25" /ac "%25ADDITIONALCERT%25" /t http://timestamp.verisign.com/scripts/timstamp.dll "$(TargetDir)$(TargetFileName)"
+if /I "$(ConfigurationName)" == "Release" "%25SIGNTOOL%25" sign /as /v /fd SHA256 /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 /i %25CERTISSUER%25 /ac "%25ADDITIONALCERT%25" "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
   </PropertyGroup>
 </Project>
