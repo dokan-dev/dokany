@@ -433,6 +433,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
 	  // Notify applications / explorer
 	  WCHAR drive[4] = L"C:\\";
 	  DEV_BROADCAST_VOLUME hdr;
+	  ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
 	  hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
 	  hdr.dbcv_flags &= DBTF_MEDIA;
 	  hdr.dbcv_unitmask = 0xffffffff;
@@ -474,6 +475,7 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
 			// Notify applications / explorer
 			WCHAR drive[4] = L"C:\\";
 			DEV_BROADCAST_VOLUME hdr;
+			ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
 			hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
 			hdr.dbcv_flags &= DBTF_MEDIA;
 			hdr.dbcv_unitmask = 0xffffffff;
