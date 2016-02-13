@@ -325,33 +325,6 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS NotifyAllApps(__in PDEVICE_OBJECT VolumeDeviceObject) {
-  PFILE_OBJECT VolumeFileObject = NULL;
-  NTSTATUS status = STATUS_SUCCESS;
-  try {
-    VolumeFileObject = IoCreateStreamFileObjectLite(NULL, VolumeDeviceObject);
-  }
-  except(EXCEPTION_EXECUTE_HANDLER) {
-    status = GetExceptionCode();
-    DDbgPrint("   IoCreateStreamFileObjectLite failed with status code 0x%x\n",
-              status);
-  }
-
-  if (NT_SUCCESS(status)) {
-    // notify all application about volume mount
-    status = FsRtlNotifyVolumeEvent(VolumeFileObject, FSRTL_VOLUME_MOUNT);
-    ObDereferenceObject(VolumeFileObject);
-    if (NT_SUCCESS(status)) {
-      DDbgPrint("   FsRtlNotifyVolumeEvent has been successfully sent\n");
-    } else {
-      DDbgPrint("   FsRtlNotifyVolumeEvent failed with status code 0x%x\n",
-                status);
-    }
-  }
-
-  return status;
-}
-
 NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   PDokanDCB dcb = NULL;
   PDokanVCB vcb = NULL;
