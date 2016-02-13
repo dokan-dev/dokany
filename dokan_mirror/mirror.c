@@ -1,6 +1,10 @@
 /*
+  Dokan : user-mode file system library for Windows
 
-Copyright (c) 2007, 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C.
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
+
+  http://dokan-dev.github.io
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
