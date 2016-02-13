@@ -1,9 +1,10 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
-  http://dokan-dev.net/en
+  http://dokan-dev.github.io
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the Free
@@ -319,33 +320,6 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    Unknown FSCTL %d\n",
               (irpSp->Parameters.FileSystemControl.FsControlCode >> 2) & 0xFFF);
     status = STATUS_INVALID_DEVICE_REQUEST;
-  }
-
-  return status;
-}
-
-NTSTATUS NotifyAllApps(__in PDEVICE_OBJECT VolumeDeviceObject) {
-  PFILE_OBJECT VolumeFileObject = NULL;
-  NTSTATUS status = STATUS_SUCCESS;
-  try {
-    VolumeFileObject = IoCreateStreamFileObjectLite(NULL, VolumeDeviceObject);
-  }
-  except(EXCEPTION_EXECUTE_HANDLER) {
-    status = GetExceptionCode();
-    DDbgPrint("   IoCreateStreamFileObjectLite failed with status code 0x%x\n",
-              status);
-  }
-
-  if (NT_SUCCESS(status)) {
-    // notify all application about volume mount
-    status = FsRtlNotifyVolumeEvent(VolumeFileObject, FSRTL_VOLUME_MOUNT);
-    ObDereferenceObject(VolumeFileObject);
-    if (NT_SUCCESS(status)) {
-      DDbgPrint("   FsRtlNotifyVolumeEvent has been successfully sent\n");
-    } else {
-      DDbgPrint("   FsRtlNotifyVolumeEvent failed with status code 0x%x\n",
-                status);
-    }
   }
 
   return status;

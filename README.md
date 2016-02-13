@@ -25,17 +25,16 @@ See [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#cho
 ## Licensing
 Dokan contains LGPL and MIT licensed programs.
 
-- user-mode library (dokan.dll)  LGPL
-- driver (dokan.sys)             LGPL
-- network library (dokannp.dll)  LGPL
-- fuse library (dokanfuse.lib)   LGPL
-- control program (dokanctl.exe) MIT
-- mount service (mounter.exe)    MIT
-- samples (mirror.c)             MIT
+- user-mode library (dokan1.dll)  LGPL
+- driver (dokan1.sys)             LGPL
+- network library (dokannp1.dll)  LGPL
+- fuse library (dokanfuse1.dll)   LGPL
+- installer (DokanSetup.exe)      LGPL
+- control program (dokanctl.exe)  MIT
+- samples (mirror.c)              MIT
 
 For details, please check license files.
  * **LGPL** license.lgpl.txt
- * **GPL**  license.gpl.txt
  * **MIT**  license.mit.txt
 
 You can obtain source files from https://dokan-dev.github.io
@@ -50,8 +49,8 @@ Dokan works on
  * Windows 7
 
 ## How it works
-Dokan library contains a user mode DLL (dokan.dll) and a kernel mode
-file system driver (dokan.sys). Once Dokan file system driver is
+Dokan library contains a user mode DLL (dokan1.dll) and a kernel mode
+file system driver (dokan1.sys). Once Dokan file system driver is
 installed, you can create file systems which can be seen as normal
 file systems in Windows. The application that creates file systems
 using Dokan library is called File system application.
@@ -59,8 +58,8 @@ using Dokan library is called File system application.
 File operation requests from user programs (e.g., CreateFile, ReadFile,
 WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel
 mode) which will subsequently forward the requests to the Dokan file system
-driver (dokan.sys). By using functions provided by the Dokan user mode
-library (dokan.dll), file system applications are able to register
+driver (dokan1.sys). By using functions provided by the Dokan user mode
+library (dokan1.dll), file system applications are able to register
 callback functions to the file system driver. The file system driver
 will invoke these callback routines in order to response to the
 requests it received. The results of the callback routines will be
