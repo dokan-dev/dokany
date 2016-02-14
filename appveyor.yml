@@ -61,6 +61,10 @@
       
       } elseif ($env:CONFIGURATION -eq "WiX") {
         
+        if (!($env:PLATFORM -eq "Win32") -or "$env:APPVEYOR_PULL_REQUEST_TITLE") {
+          return;
+        }
+        
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10"
         
         & .\build.bat
