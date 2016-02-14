@@ -240,12 +240,14 @@
               <Directory Id="MIRRORDIR" Name="mirror">
                 <Component Id="SampleFilesComponent" Win64="yes" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
                   <File Id="mirrorEXE" Source="..\x64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                  <File Id="DokanMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_mirrorvcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
                   <File Id="mirrorC" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                 </Component>
                 <Directory Id="MIRRORX86DIR" Name="x86">
                   <Component Id="SampleFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
                     <File Id="mirrorEXEX86" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                    <File Id="DokanMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   </Component>
                 </Directory>
               </Directory>
