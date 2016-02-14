@@ -12,6 +12,7 @@
   - Win8.1 Release
   - Win10 Release
   - Coverity
+  - WiX
   platform:
   - Win32
   - x64
@@ -57,7 +58,24 @@
         -z "coverity.zip" `
         -d "Appveyor build." `
         --codeVersion "$env:APPVEYOR_BUILD_VERSION"
+      
+      } elseif ($env:CONFIGURATION -eq "WiX") {
         
+        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10"
+        
+        & .\build.bat
+        cd dokan_wix
+        (gc version.xml) -replace 'no', 'yes' | sc version.xml
+        
+        $Platform = "Mixed Platforms"
+        $buildArgs = @(
+        "Dokan_WiX.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Debug",
+        "/p:Platform=${Platform}")
+        
+        & $buildCmd $buildArgs
       } else {
         $buildArgs = @(
         "/m",
