@@ -214,7 +214,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   // FILE_OVERWRITTEN
   // FILE_SUPERSEDED
 
-  DbgPrint("CreateFile status = %lu - lastError = %d\n", status, lastError);
+  DbgPrint("CreateFile status = %lx - lastError = %d\n", status, lastError);
   if (status != STATUS_SUCCESS) {
     if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
       DbgPrint("SL_OPEN_TARGET_DIRECTORY spcefied\n");
