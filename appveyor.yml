@@ -4,7 +4,7 @@
       secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
-  version: 0.8.0-{build}
+  version: 1.0.0-{build}
   configuration:
   - Release
   - Win7 Release
@@ -26,7 +26,7 @@
 
       if ($env:CONFIGURATION -eq "Coverity") {
         
-        if (!($env:PLATFORM -eq "Win32") -or "$env:APPVEYOR_PULL_REQUEST_TITLE") {
+        if (!($env:PLATFORM -eq "Win32") -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or !($env:APPVEYOR_REPO_BRANCH -eq 'master')) {
           return;
         }
         
