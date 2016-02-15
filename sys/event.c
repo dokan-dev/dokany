@@ -87,6 +87,63 @@ VOID DokanIrpCancelRoutine(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return;
 }
 
+VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
+/*++
+Routine Description:
+This routine is called by the oplock package when an oplock break has
+completed, allowing an Irp to resume execution.  If the status in
+the Irp is STATUS_SUCCESS, then we queue the Irp to the Fsp queue.
+Otherwise we complete the Irp with the status in the Irp.
+Arguments:
+Context - Pointer to the EventContext to be queued to the Fsp
+Irp - I/O Request Packet.
+Return Value:
+None.
+--*/
+{
+  PIO_STACK_LOCATION irpSp;
+
+  DDbgPrint("==> DokanOplockComplete\n");
+  PAGED_CODE();
+
+  irpSp = IoGetCurrentIrpStackLocation(Irp);
+
+  //
+  //  Check on the return value in the Irp.
+  //
+  if (Irp->IoStatus.Status == STATUS_SUCCESS) {
+    DokanRegisterPendingIrp(irpSp->DeviceObject, Irp, (PEVENT_CONTEXT)Context,
+                            0);
+  } else {
+    DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status, 0);
+  }
+
+  DDbgPrint("<== DokanOplockComplete\n");
+
+  return;
+}
+
+VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
+/*++
+Routine Description:
+This routine performs any neccessary work before STATUS_PENDING is
+returned with the Fsd thread.  This routine is called within the
+filesystem and by the oplock package.
+Arguments:
+Context - Pointer to the EventContext to be queued to the Fsp
+Irp - I/O Request Packet.
+Return Value:
+None.
+--*/
+{
+  DDbgPrint("==> DokanPrePostIrp\n");
+
+  UNREFERENCED_PARAMETER(Context);
+  UNREFERENCED_PARAMETER(Irp);
+
+  DDbgPrint("<== DokanPrePostIrp\n");
+}
+
 NTSTATUS
 RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                        __in ULONG SerialNumber, __in PIRP_LIST IrpList,
@@ -388,6 +445,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG deviceNamePos;
   BOOLEAN useMountManager = FALSE;
   BOOLEAN mountGlobally = TRUE;
+  BOOLEAN fileLockUserMode = FALSE;
 
   DDbgPrint("==> DokanEventStart\n");
 
@@ -451,6 +509,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     mountGlobally = FALSE;
   }
 
+  if (eventStart.Flags & DOKAN_EVENT_FILELOCK_USER_MODE) {
+    DDbgPrint("  FileLock in User Mode\n");
+    fileLockUserMode = TRUE;
+  }
+
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
   baseGuid.Data3 = (USHORT)(dokanGlobal->MountId >> 16) ^ baseGuid.Data3;
 
@@ -478,6 +541,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     KeLeaveCriticalRegion();
     return status;
   }
+
+  dcb->FileLockInUserMode = fileLockUserMode;
 
   DDbgPrint("  MountId:%d\n", dcb->MountId);
   driverInfo->DeviceNumber = dokanGlobal->MountId;
