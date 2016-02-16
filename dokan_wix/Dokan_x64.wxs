@@ -153,6 +153,13 @@
               <File Id="DokanPDB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
               <File Id="DokannpPDB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
             </Component>
+            <Directory Id="LIBDIR" Name="lib">
+              <Component Id="LibFilesComponent" Win64="yes" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
+                <File Id="dokanLIB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
+                <File Id="dokanfuseLIB" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
+                <File Id="dokannpLIB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
+              </Component>
+            </Directory>
             <Directory Id="X86PROGRAMSDIR" Name="x86">
               <Component Id="X86PROGRAMFiles" Guid="{90E88E0C-9009-451F-9AEA-873960C9598C}">
                 <File Id="X86DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
@@ -164,6 +171,13 @@
                 <File Id="DokanX86PDB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
                 <File Id="DokannpX86PDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
               </Component>
+              <Directory Id="LIBX86DIR" Name="lib">
+                <Component Id="LibX86FilesComponent" Guid="{89B7DD30-FB5C-43E9-9BFF-9874B4531836}">
+                  <File Id="dokanX86LIB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
+                  <File Id="dokanfuseX86LIB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
+                  <File Id="dokannpX86LIB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
+                </Component>
+              </Directory>
             </Directory>
             <Directory Id="DRIVERDIR" Name="driver">
               <Component Id="Win7_x64" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
@@ -229,25 +243,22 @@
                 </Component>
               </Directory>
             </Directory>
-            <Directory Id="LIBDIR" Name="lib">
-              <Component Id="LibFilesComponent" Win64="yes" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
-                <File Id="dokanLIB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
-                <File Id="dokanfuseLIB" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
-                <File Id="dokannpLIB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
-              </Component>
-            </Directory>
             <Directory Id="SAMPLEDIR" Name="sample">
               <Directory Id="MIRRORDIR" Name="mirror">
-                <Component Id="SampleFilesComponent" Win64="yes" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
+                <Component Id="SampleMirrorFilesComponent" Win64="yes" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
                   <File Id="mirrorEXE" Source="..\x64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
                   <File Id="DokanMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_mirrorvcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
                   <File Id="mirrorC" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                 </Component>
-                <Directory Id="MIRRORX86DIR" Name="x86">
-                  <Component Id="SampleFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
+              </Directory>
+              <Directory Id="SAMPLEX86DIR" Name="x86">
+                <Directory Id="MIRRORX86DIR" Name="mirror">
+                  <Component Id="SampleMirrorFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
                     <File Id="mirrorEXEX86" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
                     <File Id="DokanMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                    <File Id="dokan_mirrorX86vcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
+                    <File Id="mirrorX86C" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                   </Component>
                 </Directory>
               </Directory>
@@ -300,8 +311,9 @@
       <ComponentRef Id="IncludeDokanFilesComponent"/>
       <ComponentRef Id="IncludeFuseFilesComponent"/>
       <ComponentRef Id="LibFilesComponent"/>
-      <ComponentRef Id="SampleFilesComponent"/>
-      <ComponentRef Id="SampleFilesComponentX86"/>
+      <ComponentRef Id="LibX86FilesComponent"/>
+      <ComponentRef Id="SampleMirrorFilesComponent"/>
+      <ComponentRef Id="SampleMirrorFilesComponentX86"/>
     </Feature>
     <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
       <ComponentRef Id="Win7_x64pdb"/>
