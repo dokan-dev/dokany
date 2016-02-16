@@ -4,7 +4,7 @@
 #include <string>
 
 #define FUSE_THREAD_COUNT 10
-#define DOKAN_DLL L"dokan.dll"
+#define DOKAN_DLL L"dokan" DOKAN_MAJOR_API_VERSION L".dll"
 
 struct fuse_config 
 {
