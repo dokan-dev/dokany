@@ -1,8 +1,10 @@
 [Version]
 Signature         = "$Windows NT$"
+Class             = DiskDrive
+ClassGuid         = {4d36e967-e325-11ce-bfc1-08002be10318}
 Provider          = %Dokan%
 DriverVer         = 01/01/2016,1.0.0.0
-CatalogFile       = 
+CatalogFile       = %DriverName%.cat
 DriverPackageType = FileSystem
 
 [DestinationDirs]
@@ -26,7 +28,7 @@ DelService = %ServiceName%,0x200
 1 = %Disk1%
 
 [SourceDisksFiles]
-%DriverName%.sys = 1
+dokan1.sys = 1
 
 [DokanFileSystem.DriverFiles]
 %DriverName%.sys
@@ -45,4 +47,4 @@ Dokan = "Dokan"
 DriverName = "dokan1"
 Disk1 = "Dokan installation media"
 ServiceDesc = "Dokan kernel-mode file system driver."
-ServiceName = "dokan"
+ServiceName = "dokan1"

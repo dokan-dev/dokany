@@ -3,12 +3,17 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
     <DOKANAPIVersion>1</DOKANAPIVersion>
+	<DOKANVersion>1.0.0</DOKANVersion>
   </PropertyGroup>
   <PropertyGroup />
   <ItemDefinitionGroup />
   <ItemGroup>
     <BuildMacro Include="DOKANAPIVersion">
       <Value>$(DOKANAPIVersion)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+	<BuildMacro Include="DOKANVersion">
+      <Value>$(DOKANVersion)</Value>
       <EnvironmentVariable>true</EnvironmentVariable>
     </BuildMacro>
   </ItemGroup>

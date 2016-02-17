@@ -386,6 +386,11 @@
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <AdditionalDependencies>wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Inf>
+      <SpecifyDriverVerDirectiveVersion>true</SpecifyDriverVerDirectiveVersion>
+      <TimeStamp>%DOKANVersion%.0</TimeStamp>
+      <EnableVerbose>false</EnableVerbose>
+    </Inf>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">
     <ClCompile>
@@ -538,6 +543,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dokan.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="dokan.inf" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
