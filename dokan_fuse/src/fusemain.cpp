@@ -397,7 +397,9 @@ int impl_fuse_context::cleanup(LPCWSTR file_name,
   // The one way to solve this is to keep a table of files 'still in flight'
   // and block until the file is closed. We're not doing this yet.
 
-  if (dokan_file_info->Context) {
+  // No context for directories when ops_.opendir is not set
+  if (dokan_file_info->Context
+    || (dokan_file_info->IsDirectory && !ops_.opendir)) {
     if (dokan_file_info->DeleteOnClose) {
       close_file(file_name, dokan_file_info);
       if (dokan_file_info->IsDirectory) {
