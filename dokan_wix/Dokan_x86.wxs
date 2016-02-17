@@ -28,8 +28,8 @@
 
     <Property Id="WIN10FOUND">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="searchFile" 
-                    Name="advapi32.dll" 
+        <FileSearch Id="searchFile"
+                    Name="advapi32.dll"
                     MinVersion="6.3.10000.0"/>
       </DirectorySearch>
     </Property>
@@ -43,14 +43,14 @@
     </Property>
 
     <Property Id="REGINSTALLDIR">
-      <RegistrySearch Id="RegInstallDirSearch" 
-                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)" 
-                      Name="AppLocation" 
-                      Type="directory" 
+      <RegistrySearch Id="RegInstallDirSearch"
+                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)"
+                      Name="AppLocation"
+                      Type="directory"
                       Win64="no" >
       </RegistrySearch>
     </Property>
-    
+
     <Property Id="VCREDISTINSTALLEDX86">
       <RegistrySearch Id="VCRedist_RegSearch_x86"
                       Root="HKLM"
@@ -70,11 +70,11 @@
     <Condition Message="Installation failed because the 32-bit version of Dokan cannot be installed on a 64-bit version of Windows."><![CDATA[Installed OR NOT VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23506")]]></Condition>
-    
+
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
 
     <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
-    
+
     <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
     <CustomAction Id="SetFolderValue"
@@ -238,7 +238,7 @@
       <Directory Id="WindowsFolder" >
         <Directory Id="Sys32Folder" Name="System32">
           <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
-            <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="yes"/>            
+            <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="yes"/>
           </Component>
           <Directory Id="DriversFolder" Name="Drivers">
             <Component Id="Win7_Win32Drv" Guid="{1A1C0E3A-3559-4EBF-BD28-F8F16EE5EF64}">

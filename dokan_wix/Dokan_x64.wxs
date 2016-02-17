@@ -2,22 +2,22 @@
 <?include version.xml ?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:difx="http://schemas.microsoft.com/wix/DifxAppExtension">
-  
+
   <Product Id="$(var.ProductCodeX64)"
            Name="$(var.ProductName) $(var.BaseVersion) (x64)"
-           Language="1033" 
-           Version="$(var.BaseVersion)" 
-           Manufacturer="$(var.CompanyName)" 
+           Language="1033"
+           Version="$(var.BaseVersion)"
+           Manufacturer="$(var.CompanyName)"
            UpgradeCode="$(var.UpgradeCodeX64)">
 
-    <Package InstallerVersion="500" 
-             Compressed="yes" 
+    <Package InstallerVersion="500"
+             Compressed="yes"
              InstallScope="perMachine"
              Platform="x64"
              InstallPrivileges="elevated"
              />
 
-    <Icon Id="DokanIcon" 
+    <Icon Id="DokanIcon"
           SourceFile="Dokan.ico"
           />
 
@@ -31,8 +31,8 @@
 
     <Property Id="WIN10FOUND">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="searchFile" 
-                    Name="advapi32.dll" 
+        <FileSearch Id="searchFile"
+                    Name="advapi32.dll"
                     MinVersion="6.3.10000.0"/>
       </DirectorySearch>
     </Property>
@@ -44,12 +44,12 @@
                     MinVersion="6.2.10585.0"/>
       </DirectorySearch>
     </Property>
-    
+
     <Property Id="REGINSTALLDIR">
-      <RegistrySearch Id="RegInstallDirSearch" 
-                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)" 
-					  Name="AppLocation" 
-                      Type="directory" 
+      <RegistrySearch Id="RegInstallDirSearch"
+                      Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)"
+					  Name="AppLocation"
+                      Type="directory"
                       Win64="yes" >
       </RegistrySearch>
     </Property>
@@ -79,17 +79,17 @@
     <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
 
     <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
-    
+
     <CustomAction Id="SetFolderValue"
                   Return="check"
                   Property="ExecuteInstallAction"
-                  Value="INSTALLFOLDER=[INSTALLDIR]" 
+                  Value="INSTALLFOLDER=[INSTALLDIR]"
                   />
 
     <CustomAction Id="GetInstallDir"
                   Return="check"
                   Property="INSTALLDIR"
-                  Value="[REGINSTALLDIR]" 
+                  Value="[REGINSTALLDIR]"
                   />
 
     <CustomAction Id="ExecuteInstallAction"
@@ -103,7 +103,7 @@
     <CustomAction Id="SetUninstallFolderValue"
                   Return="check"
                   Property="ExecuteUninstallAction"
-                  Value="INSTALLFOLDER=[INSTALLDIR]" 
+                  Value="INSTALLFOLDER=[INSTALLDIR]"
                   />
 
     <CustomAction Id="ExecuteUninstallAction"
@@ -125,9 +125,9 @@
       <Custom Action="SetUninstallFolderValue" Before="ExecuteUninstallAction" />
       <Custom Action='ExecuteUninstallAction' Before="RemoveFiles"><![CDATA[REMOVE="ALL"]]></Custom>
       <Custom Action="SetARPINSTALLLOCATION" After="InstallValidate"></Custom>
-      
+
     </InstallExecuteSequence>
-  
+
     <Media Id="1" Cabinet="Dokan.cab" EmbedCab="yes"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -176,6 +176,14 @@
                   <File Id="dokanX86LIB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
                   <File Id="dokanfuseX86LIB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
                   <File Id="dokannpX86LIB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
+                </Component>
+              </Directory>
+              <Directory Id="SAMPLEX86DIR" Name="sample">
+                <Component Id="SampleMirrorFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
+                  <File Id="mirrorEXEX86" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                  <File Id="DokanMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokan_mirrorX86vcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
+                  <File Id="mirrorX86C" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                 </Component>
               </Directory>
             </Directory>
@@ -239,7 +247,7 @@
                   <File Id="fuse_winH" Source="..\dokan_fuse\include\fuse_win.h" Name="fuse_win.h" KeyPath="no"/>
                   <File Id="fusemainH" Source="..\dokan_fuse\include\fusemain.h" Name="fusemain.h" KeyPath="no"/>
                   <File Id="ScopeGuardH" Source="..\dokan_fuse\include\ScopeGuard.h" Name="ScopeGuard.h" KeyPath="no"/>
-                  <File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no"/>                
+                  <File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no"/>
                 </Component>
               </Directory>
             </Directory>
@@ -251,16 +259,6 @@
                   <File Id="dokan_mirrorvcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
                   <File Id="mirrorC" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                 </Component>
-              </Directory>
-              <Directory Id="SAMPLEX86DIR" Name="x86">
-                <Directory Id="MIRRORX86DIR" Name="mirror">
-                  <Component Id="SampleMirrorFilesComponentX86" Win64="yes" Guid="{B13E60ED-4D42-4919-BDB8-01A08288E894}">
-                    <File Id="mirrorEXEX86" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-                    <File Id="DokanMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
-                    <File Id="dokan_mirrorX86vcxproj" Source="..\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
-                    <File Id="mirrorX86C" Source="..\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
-                  </Component>
-                </Directory>
               </Directory>
             </Directory>
           </Directory>
