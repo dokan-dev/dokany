@@ -14,6 +14,12 @@
  * This file defines the option parsing interface of FUSE
  */
 
+#ifdef _MSC_VER
+#define STRDUP _strdup
+#else
+#define STRDUP strdup
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -28,8 +28,8 @@ THE SOFTWARE.
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
-#include "../dokan/dokan.h"
-#include "../dokan/fileinfo.h"
+#include "../../dokan/dokan.h"
+#include "../../dokan/fileinfo.h"
 #include <malloc.h>
 #include <ntstatus.h>
 #include <stdio.h>

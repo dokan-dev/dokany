@@ -45,7 +45,7 @@ private:
 struct fuse
 {
 	bool within_loop;
-	std::auto_ptr<fuse_chan> ch;
+	std::unique_ptr<fuse_chan> ch;
 	fuse_session sess;
 	fuse_config conf;
 

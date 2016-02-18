@@ -575,7 +575,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args) {
   if (mountpoint == NULL || mountpoint[0] == '\0')
     return NULL;
 
-  std::auto_ptr<fuse_chan> chan(new fuse_chan());
+  std::unique_ptr<fuse_chan> chan(new fuse_chan());
   // NOTE: we used to do chan->init() here to check that Dokan DLLs can be
   // loaded.
   // However, this does not live well with Cygwin. It's common for filesystem
@@ -622,7 +622,7 @@ extern "C" int fuse_session_exit(struct fuse_session *se) {
 struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
                       const struct fuse_operations *op, size_t op_size,
                       void *user_data) {
-  std::auto_ptr<fuse> res(new fuse());
+  std::unique_ptr<fuse> res(new fuse());
   res->sess.ch = ch;
   res->ch.reset(ch); // Attach channel
   res->user_data = user_data;

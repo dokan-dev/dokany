@@ -27,7 +27,7 @@ private:
 public:
 	impl_file_locks() { InitializeCriticalSection(&lock); }
 	~impl_file_locks() { DeleteCriticalSection(&lock); };
-	int get_file(const std::string &name, bool is_dir, DWORD access_mode, DWORD shared_mode, std::auto_ptr<impl_file_handle>& out);
+	int get_file(const std::string &name, bool is_dir, DWORD access_mode, DWORD shared_mode, std::unique_ptr<impl_file_handle>& out);
 	void renamed_file(const std::string &name,const std::string &new_name);
 	void remove_file(const std::string& name);
 };

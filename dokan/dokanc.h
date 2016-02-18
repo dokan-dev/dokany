@@ -67,6 +67,8 @@ typedef struct _DOKAN_CONTROL {
 
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
+#ifdef _MSC_VER
+
 static VOID DokanDbgPrint(LPCSTR format, ...) {
   const char *outputString;
   char *buffer;
@@ -132,6 +134,8 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
   }                                                                            \
   __pragma(warning(push)) __pragma(warning(disable : 4127)) while (0)          \
       __pragma(warning(pop))
+
+#endif // MSVC
 
 VOID DOKANAPI DokanUseStdErr(BOOL Status);
 
