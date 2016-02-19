@@ -243,6 +243,8 @@
         <Directory Id="Sys32Folder" Name="System32">
           <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
             <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="yes"/>
+            <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll"/>
+            <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
           </Component>
           <Directory Id="DriversFolder" Name="Drivers">
             <Component Id="Win7_Win32Drv" Guid="{1A1C0E3A-3559-4EBF-BD28-F8F16EE5EF64}">
