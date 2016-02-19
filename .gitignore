@@ -26,8 +26,8 @@ ReleasePS
 /dokan_wix/msbuild.log
 /dokan_fuse/CMakeFiles
 /dokan_fuse/CMakeCache.txt
-/dokan_fuse/cygdokanfuse.dll
-/dokan_fuse/libdokanfuse.dll.a
+/dokan_fuse/cygdokanfuse1.dll
+/dokan_fuse/libdokanfuse1.dll.a
 /dokan_fuse/Makefile
 /dokan_fuse/cmake_install.cmake
 /samples/fuse_mirror/cygdokanfuse.dll
