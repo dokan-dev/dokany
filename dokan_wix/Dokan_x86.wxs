@@ -154,7 +154,7 @@
               <Component Id="Win7_Win32" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
                 <Condition>VersionNT = 601</Condition>
                 <File Id="Win7_Sys" Source="..\Win32\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-                <File Id="Win7_Cat" Source="..\Win32\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+                <File Id="Win7_Cat" Source="..\Win32\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win7_Inf" Source="..\Win32\Win7$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
               </Component>
@@ -165,7 +165,7 @@
               <Component Id="Win8_Win32" Guid="{E240A626-C658-4B58-8A7B-D59EE9C0C037}">
                 <Condition>VersionNT = 602</Condition>
                 <File Id="Win8_Sys" Source="..\Win32\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-                <File Id="Win8_Cat" Source="..\Win32\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+                <File Id="Win8_Cat" Source="..\Win32\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win8_Inf" Source="..\Win32\Win8$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
               </Component>
@@ -176,7 +176,7 @@
               <Component Id="Win81_Win32" Guid="{D393D1D9-6557-4A79-8253-58D3BD1B0D2C}">
                 <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
                 <File Id="Win81_Sys" Source="..\Win32\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-                <File Id="Win81_Cat" Source="..\Win32\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+                <File Id="Win81_Cat" Source="..\Win32\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win81_Inf" Source="..\Win32\Win8.1$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
               </Component>
@@ -187,7 +187,7 @@
               <Component Id="Win10_Win32" Guid="{7FB1B753-B85C-4B39-B21C-B5061769E0C4}">
                 <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
                 <File Id="Win10_Sys" Source="..\Win32\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-                <File Id="Win10_Cat" Source="..\Win32\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+                <File Id="Win10_Cat" Source="..\Win32\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win10_Inf" Source="..\Win32\Win10$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
               </Component>
@@ -246,24 +246,6 @@
             <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll"/>
             <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
           </Component>
-          <Directory Id="DriversFolder" Name="Drivers">
-            <Component Id="Win7_Win32Drv" Guid="{1A1C0E3A-3559-4EBF-BD28-F8F16EE5EF64}">
-              <Condition>VersionNT = 601</Condition>
-              <File Id="Win7_SysDrv" Source="..\Win32\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-            </Component>
-            <Component Id="Win8_Win32Drv" Guid="{7F723226-AED7-45D2-98E3-3262F3371C5D}">
-              <Condition>VersionNT = 602</Condition>
-              <File Id="Win8_SysDrv" Source="..\Win32\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-            </Component>
-            <Component Id="Win81_Win32Drv" Guid="{C2424A0C-8476-4588-9FE5-CCD2A3A9F526}">
-              <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
-              <File Id="Win81_SysDrv" Source="..\Win32\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-            </Component>
-            <Component Id="Win10_Win32Drv" Guid="{D9610089-6B37-4586-9238-8755B502828A}">
-              <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
-              <File Id="Win10_SysDrv" Source="..\Win32\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-            </Component>
-          </Directory>
         </Directory>
       </Directory>
     </Directory>
@@ -274,10 +256,6 @@
       <ComponentRef Id="Win8_Win32"/>
       <ComponentRef Id="Win81_Win32"/>
       <ComponentRef Id="Win10_Win32"/>
-      <ComponentRef Id="Win7_Win32Drv"/>
-      <ComponentRef Id="Win8_Win32Drv"/>
-      <ComponentRef Id="Win81_Win32Drv"/>
-      <ComponentRef Id="Win10_Win32Drv"/>
       <ComponentRef Id="Sys32Files"/>
     </Feature>
     <Feature Id="DokanLibBFeature" Title="Dokan headers and libs" Level="1">
