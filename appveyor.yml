@@ -4,6 +4,13 @@
       secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
+    global:
+      CYG_ROOT: C:\cygwin
+      CYG_MIRROR: http://cygwin.mirror.constant.com
+      CYG_CACHE: C:\cygwin\var\cache\setup
+      CYG_BASH: C:\cygwin\bin\bash
+
+  os: Visual Studio 2015
   version: 1.0.0-{build}
   configuration:
   - Release
@@ -13,14 +20,23 @@
   - Win10 Release
   - Coverity
   - WiX
+  - Cygwin
   platform:
   - Win32
   - x64
-
-  os: Visual Studio 2015
+  
+  cache:
+    - '%CYG_CACHE%'
+    
+  install:
+    - ps: 'Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"'
+    - 'setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1'
+    - '%CYG_BASH% -lc "cygcheck -dc cygwin"'
 
   build_script:
   - ps: |
+      if ($env:PLATFORM -eq "Cygwin")
+        return;
 
       $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 
@@ -89,3 +105,8 @@
         
         & $buildCmd $buildArgs
       }
+  - ps: |
+      if (!($env:PLATFORM -eq "Cygwin") || !($env:PLATFORM -eq "x64"))
+        return;
+      & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/dokan_fuse/; exec 0</dev/null;cmake .;make"'
+      & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/samples/fuse_mirror/; exec 0</dev/null;gcc fusexmp.c -I../../dokan_fuse/include -D_FILE_OFFSET_BITS=64 -L../../dokan_fuse -lcygdokanfuse1"'
