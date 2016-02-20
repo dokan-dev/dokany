@@ -35,8 +35,9 @@
 
   build_script:
   - ps: |
-      if ($env:PLATFORM -eq "Cygwin")
+      if ($env:PLATFORM -eq "Cygwin") {
         return;
+      }
 
       $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 
@@ -106,7 +107,8 @@
         & $buildCmd $buildArgs
       }
   - ps: |
-      if (!($env:PLATFORM -eq "Cygwin") || !($env:PLATFORM -eq "x64"))
+      if (!($env:PLATFORM -eq "Cygwin") || !($env:PLATFORM -eq "x64")) {
         return;
+      }
       & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/dokan_fuse/; exec 0</dev/null;cmake .;make"'
       & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/samples/fuse_mirror/; exec 0</dev/null;gcc fusexmp.c -I../../dokan_fuse/include -D_FILE_OFFSET_BITS=64 -L../../dokan_fuse -lcygdokanfuse1"'
