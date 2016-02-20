@@ -30,7 +30,7 @@
     
   install:
   - ps: |
-      if (!($env:PLATFORM -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
+      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
         return;
       }
   
@@ -40,7 +40,7 @@
 
   build_script:
   - ps: |
-      if ($env:PLATFORM -eq "Cygwin") {
+      if ($env:CONFIGURATION -eq "Cygwin") {
         return;
       }
 
@@ -112,7 +112,7 @@
         & $buildCmd $buildArgs
       }
   - ps: |
-      if (!($env:PLATFORM -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
+      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
         return;
       }
       & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/dokan_fuse/; exec 0</dev/null;cmake .;make"'
