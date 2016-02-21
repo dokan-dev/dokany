@@ -195,7 +195,7 @@
                 <File Id="Win7_Sys" Source="..\x64\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Win7_Cat" Source="..\x64\Win7$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win7_Inf" Source="..\x64\Win7$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
-                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+                <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Win7_x64pdb" Guid="{184A5365-8C4C-4853-A9DA-381C0B12D8D1}">
                 <Condition>VersionNT = 601</Condition>
@@ -206,7 +206,7 @@
                 <File Id="Win8_Sys" Source="..\x64\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Win8_Cat" Source="..\x64\Win8$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win8_Inf" Source="..\x64\Win8$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
-                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+                <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Win8_x64pdb" Guid="{E6D0C487-2775-4BB6-AE1D-A805CC12015D}">
                 <Condition>VersionNT = 602</Condition>
@@ -217,7 +217,7 @@
                 <File Id="Win81_Sys" Source="..\x64\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Win81_Cat" Source="..\x64\Win8.1$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win81_Inf" Source="..\x64\Win8.1$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
-                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+                <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Win81_x64pdb" Guid="{95EBC8B9-32DD-4F95-B262-058EDD8C63BC}">
                 <Condition>VersionNT = 603 AND NOT WIN10FOUND</Condition>
@@ -228,7 +228,7 @@
                 <File Id="Win10_Sys" Source="..\x64\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Win10_Cat" Source="..\x64\Win10$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Win10_Inf" Source="..\x64\Win10$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
-                <difx:Driver AddRemovePrograms="no" Legacy="yes"/>
+                <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Win10_x64pdb" Guid="{C98CC102-523D-41CA-A6F8-A06E6638F566}">
                 <Condition>VersionNT = 603 AND WIN10FOUND</Condition>
