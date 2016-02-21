@@ -29,14 +29,9 @@
     - '%CYG_CACHE%'
     
   install:
-  - ps: |
-      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
-        return;
-      }
-  
-      'Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"'
-      & 'setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1'
-      & '%CYG_BASH% -lc "cygcheck -dc cygwin"'
+    - ps: 'Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"'
+    - 'setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1'
+    - '%CYG_BASH% -lc "cygcheck -dc cygwin"'
 
   build_script:
   - ps: |
@@ -112,8 +107,8 @@
         & $buildCmd $buildArgs
       }
   - ps: |
-      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "x64")) {
+      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "Win32")) {
         return;
       }
-      & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/dokan_fuse/; exec 0</dev/null;cmake .;make"'
-      & '%CYG_BASH% -lc "cd $APPVEYOR_BUILD_FOLDER/samples/fuse_mirror/; exec 0</dev/null;gcc fusexmp.c -I../../dokan_fuse/include -D_FILE_OFFSET_BITS=64 -L../../dokan_fuse -lcygdokanfuse1"'
+      & $env:CYG_BASH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/dokan_fuse/; exec 0</dev/null;cmake .;make"
+      & $env:CYG_BASH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/samples/fuse_mirror/; exec 0</dev/null;gcc fusexmp.c -I../../dokan_fuse/include -D_FILE_OFFSET_BITS=64 -L../../dokan_fuse -lcygdokanfuse1"
