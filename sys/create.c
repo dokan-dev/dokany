@@ -372,6 +372,12 @@ Return Value:
     }
     dcb = vcb->Dcb;
 
+    if (!vcb->HasEventWait) {
+        DDbgPrint("  Here we only go in if some antivirus software tries to create files before startup is finished.\n");
+        status = STATUS_SUCCESS;
+        __leave;
+    }
+
     DDbgPrint("  IrpSp->Flags = %d\n", irpSp->Flags);
     if (irpSp->Flags & SL_CASE_SENSITIVE) {
       DDbgPrint("  IrpSp->Flags SL_CASE_SENSITIVE\n");

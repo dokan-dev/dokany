@@ -928,9 +928,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
   InsertMountEntry(DokanGlobal, &dokanControl);
 
-  if (isNetworkFileSystem) {
-    IoVerifyVolume(dcb->DeviceObject, FALSE);
-  }
+  IoVerifyVolume(dcb->DeviceObject, FALSE);
 
   return STATUS_SUCCESS;
 }
