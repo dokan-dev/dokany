@@ -10,6 +10,8 @@
 #include <errno.h>
 
 #ifdef __CYGWIN__
+#define _BSD_SOURCE
+#include <unistd.h>
 #include <semaphore.h>
 #endif
 
