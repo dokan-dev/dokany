@@ -218,6 +218,7 @@ int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition,
 
   CHECKED(ops_.create(fname.c_str(), filemask_, &finfo));
 
+  file->set_finfo(finfo);
   DokanFileInfo->Context = reinterpret_cast<ULONG64>(file.release());
   return 0;
 }
