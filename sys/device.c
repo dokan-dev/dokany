@@ -535,8 +535,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           // If deleted mount point match user requested mount point, release
           // devices
           if (dcb->MountPoint->Length == mountdevName->NameLength &&
-              memcmp(mountdevName->Name, dcb->MountPoint->Buffer,
-                     mountdevName->NameLength) == 0) {
+			  RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
+                     mountdevName->NameLength) == mountdevName->NameLength) {
             status = DokanEventRelease(vcb->DeviceObject);
           } else {
             DDbgPrint("   Deleted Mount Point doesn't match device excepted "
