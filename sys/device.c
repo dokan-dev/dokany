@@ -358,11 +358,11 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 		DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
 		status = STATUS_NOT_IMPLEMENTED;
 	  } else {
-		DDbgPrint("    PropertyStandardQuery Unknown\n");
+		DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
 		status = STATUS_ACCESS_DENIED;
 	  }
 	} else {
-		DDbgPrint("    Unknown query type\n");
+		DDbgPrint("    Unknown query type %d\n", query->QueryType);
 		status = STATUS_ACCESS_DENIED;
 	}
     break;
