@@ -338,7 +338,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 		DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
 		status = STATUS_NOT_IMPLEMENTED;
 	  } else {
-		DDbgPrint("    PropertyExistsQuery Unknown\n");
+		DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
 		status = STATUS_NOT_IMPLEMENTED;
 	  }
 	} else if (query->QueryType == PropertyStandardQuery) {
