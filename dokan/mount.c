@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C.
+<maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -21,9 +22,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 #include <Dbt.h>
+#include <Shlobj.h>
 #include <stdio.h>
 #include <windows.h>
-#include <Shlobj.h>
 
 typedef struct _REPARSE_DATA_BUFFER {
   ULONG ReparseTag;
@@ -429,19 +430,28 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
       // In that case we cannot use mount manager ; doesn't this should be done
       // kernel-mode too?
       return CreateMountPoint(MountPoint, DeviceName);
-	} else {
-	  // Notify applications / explorer
-	  WCHAR drive[4] = L"C:\\";
-	  DEV_BROADCAST_VOLUME hdr;
-	  ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-	  hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-	  hdr.dbcv_flags &= DBTF_MEDIA;
-	  hdr.dbcv_unitmask = 0xffffffff;
-	  drive[0] = MountPoint[0];
+    } else {
+      // Notify applications / explorer
+      WCHAR drive[4] = L"C:\\";
+      DEV_BROADCAST_VOLUME hdr;
+      ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
+      hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
+      hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
+      hdr.dbcv_reserved = 0;
+      hdr.dbcv_flags = DBTF_MEDIA;
+      hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
 
-	  SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE, DBT_DEVICEARRIVAL, (LPARAM)(&hdr), SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG, 1000, NULL);
-	  SHChangeNotify(SHCNE_DRIVEADD, SHCNF_PATH, drive, NULL);
-	}
+      drive[0] = MountPoint[0];
+
+      if (SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE, DBT_DEVICEARRIVAL,
+                             (LPARAM)(&hdr),
+                             SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG, 1000,
+                             NULL) != 0)
+        SHChangeNotify(SHCNE_DRIVEADD, SHCNF_PATH, drive, NULL);
+      else
+        DbgPrint("DokanMount: SendMessageTimeout Failed. error = %d\n",
+                 GetLastError());
+    }
   }
   return TRUE;
 }
@@ -471,19 +481,28 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
             // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
             DeleteVolumeMountPoint(mountPoint);
           }
-		} else {
-			// Notify applications / explorer
-			WCHAR drive[4] = L"C:\\";
-			DEV_BROADCAST_VOLUME hdr;
-			ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-			hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-			hdr.dbcv_flags &= DBTF_MEDIA;
-			hdr.dbcv_unitmask = 0xffffffff;
-			drive[0] = MountPoint[0];
+        } else {
+          // Notify applications / explorer
+          WCHAR drive[4] = L"C:\\";
+          DEV_BROADCAST_VOLUME hdr;
+          ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
+		  hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
+          hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
+		  hdr.dbcv_reserved = 0;
+          hdr.dbcv_flags &= DBTF_MEDIA;
+		  hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
+          drive[0] = MountPoint[0];
 
-			SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE, DBT_DEVICEREMOVECOMPLETE, (LPARAM)(&hdr), SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG, 1000, NULL);
-			SHChangeNotify(SHCNE_DRIVEREMOVED, SHCNF_PATH, drive, NULL);
-		}
+          if (SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE,
+                                 DBT_DEVICEREMOVECOMPLETE, (LPARAM)(&hdr),
+                                 SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG,
+                                 1000, NULL) != 0)
+            SHChangeNotify(SHCNE_DRIVEREMOVED, SHCNF_PATH, drive, NULL);
+          else
+            DbgPrint("DokanRemoveMountPoint: SendMessageTimeout Failed. error "
+                     "= %d\n",
+                     GetLastError());
+        }
         return TRUE;
       }
     }
