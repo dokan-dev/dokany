@@ -419,6 +419,44 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
+void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
+  DWORD receipients;
+  DWORD device_event;
+  DEV_BROADCAST_VOLUME params;
+  WCHAR drive[4] = L"C:\\";
+  LONG    wEventId;
+
+  if (!isalpha(cLetter)) {
+    DbgPrint("DokanBroadcastLink: invalid parameter\n");
+    return;
+  }
+
+  receipients = BSM_APPLICATIONS;
+  device_event = bRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
+
+  ZeroMemory(&params, sizeof(params));
+  params.dbcv_size = sizeof(params);
+  params.dbcv_devicetype = DBT_DEVTYP_VOLUME;
+  params.dbcv_reserved = 0;
+  params.dbcv_unitmask = (1 << (toupper(cLetter) - 'A'));
+  params.dbcv_flags = 0;
+
+  if (BroadcastSystemMessage(
+          BSF_NOHANG | BSF_FORCEIFHUNG | BSF_NOTIMEOUTIFNOTHUNG, &receipients,
+          WM_DEVICECHANGE, device_event, (LPARAM)&params) <= 0) {
+
+    DbgPrint("DokanBroadcastLink: BroadcastSystemMessage failed - %d\n",
+             GetLastError());
+  }
+
+  drive[0] = towupper(cLetter);
+  wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
+  //On Win7 32bit - SHChangeNotify during remove happened to crash
+  DbgPrint("DokanBroadcastLink: Begin SHChangeNotify\n");
+  SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
+  DbgPrint("DokanBroadcastLink: SHChangeNotify done\n");
+}
+
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
                 PDOKAN_OPTIONS DokanOptions) {
   UNREFERENCED_PARAMETER(DokanOptions);
@@ -432,25 +470,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
       return CreateMountPoint(MountPoint, DeviceName);
     } else {
       // Notify applications / explorer
-      WCHAR drive[4] = L"C:\\";
-      DEV_BROADCAST_VOLUME hdr;
-      ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-      hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
-      hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-      hdr.dbcv_reserved = 0;
-      hdr.dbcv_flags = DBTF_MEDIA;
-      hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
-
-      drive[0] = MountPoint[0];
-
-      if (SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE, DBT_DEVICEARRIVAL,
-                             (LPARAM)(&hdr),
-                             SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG, 1000,
-                             NULL) != 0)
-        SHChangeNotify(SHCNE_DRIVEADD, SHCNF_PATH, drive, NULL);
-      else
-        DbgPrint("DokanMount: SendMessageTimeout Failed. error = %d\n",
-                 GetLastError());
+      DokanBroadcastLink(MountPoint[0], FALSE);
     }
   }
   return TRUE;
@@ -483,30 +503,11 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
           }
         } else {
           // Notify applications / explorer
-          WCHAR drive[4] = L"C:\\";
-          DEV_BROADCAST_VOLUME hdr;
-          ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-		  hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
-          hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-		  hdr.dbcv_reserved = 0;
-          hdr.dbcv_flags &= DBTF_MEDIA;
-		  hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
-          drive[0] = MountPoint[0];
-
-          if (SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE,
-                                 DBT_DEVICEREMOVECOMPLETE, (LPARAM)(&hdr),
-                                 SMTO_ABORTIFHUNG | SMTO_NOTIMEOUTIFNOTHUNG,
-                                 1000, NULL) != 0)
-            SHChangeNotify(SHCNE_DRIVEREMOVED, SHCNF_PATH, drive, NULL);
-          else
-            DbgPrint("DokanRemoveMountPoint: SendMessageTimeout Failed. error "
-                     "= %d\n",
-                     GetLastError());
+          DokanBroadcastLink(MountPoint[0], TRUE);
+          return TRUE;
         }
-        return TRUE;
       }
     }
   }
-
   return FALSE;
 }
