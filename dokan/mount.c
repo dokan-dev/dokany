@@ -419,6 +419,14 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
+static void DokanInitializeDevBroadcastVolume(DEV_BROADCAST_VOLUME* hdrp, LPCWSTR MountPoint) {
+  ZeroMemory(hdrp, sizeof(DEV_BROADCAST_VOLUME));
+  hdrp->dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
+  hdrp->dbcv_devicetype = DBT_DEVTYP_VOLUME;
+  hdrp->dbcv_flags = DBTF_MEDIA;
+  hdrp->dbcv_unitmask = (1 << (MountPoint[0] - L'A'));
+}
+
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
                 PDOKAN_OPTIONS DokanOptions) {
   UNREFERENCED_PARAMETER(DokanOptions);
@@ -434,12 +442,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
       // Notify applications / explorer
       WCHAR drive[4] = L"C:\\";
       DEV_BROADCAST_VOLUME hdr;
-      ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-      hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
-      hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-      hdr.dbcv_reserved = 0;
-      hdr.dbcv_flags = DBTF_MEDIA;
-      hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
+      DokanInitializeDevBroadcastVolume(&hdr, MountPoint);
 
       drive[0] = MountPoint[0];
 
@@ -485,12 +488,7 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
           // Notify applications / explorer
           WCHAR drive[4] = L"C:\\";
           DEV_BROADCAST_VOLUME hdr;
-          ZeroMemory(&hdr, sizeof(DEV_BROADCAST_VOLUME));
-		  hdr.dbcv_size = sizeof(DEV_BROADCAST_VOLUME);
-          hdr.dbcv_devicetype = DBT_DEVTYP_VOLUME;
-		  hdr.dbcv_reserved = 0;
-          hdr.dbcv_flags &= DBTF_MEDIA;
-		  hdr.dbcv_unitmask |= (1 << (MountPoint[0] - L'A'));
+          DokanInitializeDevBroadcastVolume(&hdr, MountPoint);
           drive[0] = MountPoint[0];
 
           if (SendMessageTimeout(HWND_BROADCAST, WM_DEVICECHANGE,
