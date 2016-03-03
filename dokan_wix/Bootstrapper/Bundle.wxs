@@ -5,9 +5,9 @@
      xmlns:dep='http://schemas.microsoft.com/wix/DependencyExtension'
      xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
 >
-    <Bundle Name="$(var.ProductName) $(var.BaseVersion) Bundle"
+    <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
             IconSourceFile="..\dokan.ico"
-            Version="$(var.BaseVersion)"
+            Version="$(var.BaseVersion).$(var.BuildVersion)"
             Manufacturer="$(var.CompanyName)"
             dep:ProviderKey="$(var.ProviderKey)"
             UpgradeCode="$(var.BundleUpgradeCode)"
