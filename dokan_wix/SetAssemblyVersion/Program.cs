@@ -415,7 +415,7 @@ namespace SetAssemblyVersion
                 }
                 else if (line.ToLower().Contains("majorversion"))
 				{
-					value = string.Format("{0}.{1}", productVer.Major, productVer.Minor);
+					value = string.Format("{0}", productVer.Major);
 					line = string.Format(cLineFormat, parts[0], value);
 				}
 				else if (line.ToLower().Contains("baseversion"))
