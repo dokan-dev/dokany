@@ -9,6 +9,7 @@
       CYG_MIRROR: http://cygwin.mirror.constant.com
       CYG_CACHE: C:\cygwin\var\cache\setup
       CYG_BASH: C:\cygwin\bin\bash
+      MSYS2_LOG_FILE: C:/Users/appveyor/msys2output.log
 
   os: Visual Studio 2015
   version: 1.0.0-{build}
@@ -21,21 +22,27 @@
   - Coverity
   - WiX
   - Cygwin
+  - MSYS2
   platform:
   - Win32
   - x64
   
   cache:
     - '%CYG_CACHE%'
-    
+
+  init:
+    - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
+
   install:
-    - ps: 'Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"'
-    - 'setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1'
-    - '%CYG_BASH% -lc "cygcheck -dc cygwin"'
+    - ps: 'if (($env:CONFIGURATION -eq "Cygwin") -and ($env:PLATFORM -eq "Win32")) { Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe" }'
+    - 'IF "%CONFIGURATION%" ==  "Cygwin" IF "%PLATFORM%" ==  "Win32" ( setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
+      && %CYG_BASH% -lc "cygcheck -dc cygwin" )'
+    - 'IF "%CONFIGURATION%" ==  "MSYS2" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
+      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm && C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc --noconfirm )'
 
   build_script:
   - ps: |
-      if ($env:CONFIGURATION -eq "Cygwin") {
+      if (($env:CONFIGURATION -eq "Cygwin") -or ($env:CONFIGURATION -eq "MSYS2")) {
         return;
       }
 
@@ -43,7 +50,7 @@
 
       if ($env:CONFIGURATION -eq "Coverity") {
         
-        if (!($env:PLATFORM -eq "Win32") -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or !($env:APPVEYOR_REPO_BRANCH -eq 'master')) {
+        if (($env:PLATFORM -eq "x64") -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or !($env:APPVEYOR_REPO_BRANCH -eq 'master')) {
           return;
         }
         
@@ -78,7 +85,7 @@
       
       } elseif ($env:CONFIGURATION -eq "WiX") {
         
-        if (!($env:PLATFORM -eq "Win32") -or "$env:APPVEYOR_PULL_REQUEST_TITLE") {
+        if ($env:PLATFORM -eq "x64") {
           return;
         }
         
@@ -107,8 +114,19 @@
         & $buildCmd $buildArgs
       }
   - ps: |
-      if (!($env:CONFIGURATION -eq "Cygwin") -or !($env:PLATFORM -eq "Win32")) {
+      if (!($env:CONFIGURATION -eq "Cygwin") -or ($env:PLATFORM -eq "x64")) {
         return;
       }
       & $env:CYG_BASH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/dokan_fuse/; exec 0</dev/null;cmake .;make"
       & $env:CYG_BASH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/samples/fuse_mirror/; exec 0</dev/null;gcc fusexmp.c -I../../dokan_fuse/include -D_FILE_OFFSET_BITS=64 -L../../dokan_fuse -lcygdokanfuse1"
+
+  - ps: |
+      if (!($env:CONFIGURATION -eq "MSYS2")) {
+        return;
+      }
+      & echo "$env:MSYS2_PATH"
+      & $env:MSYS2_PATH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/dokan_fuse/; exec 0</dev/null;cmake . -G 'MSYS Makefiles' > '$Env:MSYS2_LOG_FILE' 2>&1 ;make >> '$Env:MSYS2_LOG_FILE' 2>&1" | Out-Host
+      Get-Content "$Env:MSYS2_LOG_FILE"
+      if ( !(Test-Path "$env:APPVEYOR_BUILD_FOLDER/dokan_fuse/libdokanfuse1.dll")) {
+        exit -1;
+      }
