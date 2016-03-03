@@ -70,6 +70,11 @@ struct timespec
 //Block sizes
 typedef unsigned __int64 fsfilcnt64_t;
 typedef unsigned __int64 fsblkcnt64_t;
+typedef struct timespec timestruc_t;
+typedef unsigned short nlink_t;
+typedef unsigned __int64 uint64_t;
+typedef unsigned int blksize_t;
+typedef unsigned __int64 blkcnt_t;
 
 /** Transplanted from <sys/statvfs.h>*/
 struct statvfs
