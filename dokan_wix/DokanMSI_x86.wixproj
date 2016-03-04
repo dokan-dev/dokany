@@ -18,7 +18,7 @@
     <DefineConstants>Debug;SourceDir=.\Sources</DefineConstants>
     <SuppressPdbOutput>False</SuppressPdbOutput>
     <SuppressIces>ICE30</SuppressIces>
-    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib"</LinkerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib" -sw1076</LinkerAdditionalOptions>
     <CompilerAdditionalOptions>-sw1077</CompilerAdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
@@ -26,7 +26,7 @@
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
     <DefineConstants>Debug;SourceDir=.\Sources</DefineConstants>
     <SuppressIces>ICE30</SuppressIces>
-    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib"</LinkerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1137 "%25WIX%25bin\difxapp_x86.wixlib" -sw1076</LinkerAdditionalOptions>
     <CompilerAdditionalOptions>-sw1077</CompilerAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
