@@ -28,3 +28,5 @@ msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=Win32 /t:Build
 msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=x64 /t:Build
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=Win32 /t:Build
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=x64 /t:Build
+
+call dokan_fuse/build.bat

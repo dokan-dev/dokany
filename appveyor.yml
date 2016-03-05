@@ -8,6 +8,7 @@
       CYG_ROOT: C:\cygwin
       CYG_MIRROR: http://cygwin.mirror.constant.com
       CYG_CACHE: C:\cygwin\var\cache\setup
+      CYG64_CACHE: C:\cygwin64\var\cache\setup
       CYG_BASH: C:\cygwin\bin\bash
       MSYS2_LOG_FILE: C:/Users/appveyor/msys2output.log
 
@@ -29,13 +30,29 @@
   
   cache:
     - '%CYG_CACHE%'
+    - '%CYG64_CACHE%'
 
   init:
     - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
 
   install:
-    - ps: 'if (($env:CONFIGURATION -eq "Cygwin") -and ($env:PLATFORM -eq "Win32")) { Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe" }'
-    - 'IF "%CONFIGURATION%" ==  "Cygwin" IF "%PLATFORM%" ==  "Win32" ( setup-x86.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
+    - ps: |
+        if ($env:CONFIGURATION -eq "Cygwin") {
+          if ($env:PLATFORM -eq "Win32") {
+            Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
+            $env:CYG_INSTALLER = "setup-x86.exe"
+            $env:CYG_ROOT = "C:\cygwin"
+            $env:CYG_CACHE = "C:\cygwin\var\cache\setup"
+            $env:CYG_BASH = "C:\cygwin\bin\bash"
+          } else {
+            Start-FileDownload "https://cygwin.com/setup-x86_64.exe" -FileName "setup-x86_64.exe"
+            $env:CYG_INSTALLER = "setup-x86_64.exe"
+            $env:CYG_ROOT = "C:\cygwin64"
+            $env:CYG_CACHE = "C:\cygwin64\var\cache\setup"
+            $env:CYG_BASH = "C:\cygwin64\bin\bash"
+          }
+        }
+    - 'IF "%CONFIGURATION%" ==  "Cygwin" ( %CYG_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
       && %CYG_BASH% -lc "cygcheck -dc cygwin" )'
     - 'IF "%CONFIGURATION%" ==  "MSYS2" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
       && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm && C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc --noconfirm )'
@@ -114,7 +131,7 @@
         & $buildCmd $buildArgs
       }
   - ps: |
-      if (!($env:CONFIGURATION -eq "Cygwin") -or ($env:PLATFORM -eq "x64")) {
+      if (!($env:CONFIGURATION -eq "Cygwin")) {
         return;
       }
       & $env:CYG_BASH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/dokan_fuse/; exec 0</dev/null;cmake .;make"
@@ -127,6 +144,6 @@
       & echo "$env:MSYS2_PATH"
       & $env:MSYS2_PATH -lc "cd '$env:APPVEYOR_BUILD_FOLDER'/dokan_fuse/; exec 0</dev/null;cmake . -G 'MSYS Makefiles' > '$Env:MSYS2_LOG_FILE' 2>&1 ;make >> '$Env:MSYS2_LOG_FILE' 2>&1" | Out-Host
       Get-Content "$Env:MSYS2_LOG_FILE"
-      if ( !(Test-Path "$env:APPVEYOR_BUILD_FOLDER/dokan_fuse/libdokanfuse1.dll")) {
+      if (!(Test-Path "$env:APPVEYOR_BUILD_FOLDER/dokan_fuse/libdokanfuse1.dll")) {
         exit -1;
       }

@@ -264,7 +264,7 @@ void fuse_remove_signal_handlers(struct fuse_session *se)
 
 int my_sem_init(sem_t *sem, int pshared, int initial)
 {
-	*sem=CreateSemaphore (NULL, initial, LONG_MAX, NULL);
+	*sem=CreateSemaphore (NULL, initial, SEM_VALUE_MAX, NULL);
 	return *sem==NULL?-1:0;
 }
 

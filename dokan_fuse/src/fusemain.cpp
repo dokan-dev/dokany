@@ -80,8 +80,8 @@ impl_fuse_context::impl_fuse_context(const struct fuse_operations *ops,
 {
   // Reset connection info
   memset(&conn_info_, 0, sizeof(fuse_conn_info));
-  conn_info_.max_write = ULONG_MAX;
-  conn_info_.max_readahead = ULONG_MAX;
+  conn_info_.max_write = UINT_MAX;
+  conn_info_.max_readahead = UINT_MAX;
   conn_info_.proto_major = FUSE_MAJOR_VERSION;
   conn_info_.proto_minor = FUSE_MINOR_VERSION;
 
