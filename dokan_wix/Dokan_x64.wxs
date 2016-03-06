@@ -144,7 +144,8 @@
               </RegistryKey>
               <File Id="DokanDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="DokanfuseDLL" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-              <File Id="DokanfusecygwinDLL" Source="..\x64\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokanfuseCygwinDLL" Source="..\x64\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokanfuseMsys2DLL" Source="..\x64\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="dokanctlEXE" Source="..\x64\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
               <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
               <File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
@@ -157,6 +158,7 @@
             </Component>
             <Directory Id="LIBDIR" Name="lib">
               <Component Id="LibFilesComponent" Win64="yes" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
+                <Environment Id="DokanLibraryLibx64EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_x64" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes" />
                 <File Id="dokanLIB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
                 <File Id="dokanfuseLIB" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
                 <File Id="dokannpLIB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
@@ -167,6 +169,7 @@
                 <File Id="X86DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
                 <File Id="X86DokanFuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
                 <File Id="X86DokanCygFuseDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+                <File Id="X86DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
                 <File Id="X86dokanctlEXE" Source="..\Win32\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
                 <File Id="X86DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="no"/>
               </Component>
@@ -176,6 +179,7 @@
               </Component>
               <Directory Id="LIBX86DIR" Name="lib">
                 <Component Id="LibX86FilesComponent" Guid="{89B7DD30-FB5C-43E9-9BFF-9874B4531836}">
+                  <Environment Id="DokanLibraryLibx86EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_x86" Value="[LIBX86DIR]" Permanent="no" Part="all" Action="set" System="yes" />
                   <File Id="dokanX86LIB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
                   <File Id="dokanfuseX86LIB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
                   <File Id="dokannpX86LIB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>

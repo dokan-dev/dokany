@@ -32,3 +32,4 @@ ReleasePS
 /dokan_fuse/cmake_install.cmake
 /samples/fuse_mirror/cygdokanfuse.dll
 /dokan_vsix/ProjectTemplates/dokanfs
+/dokan_fuse/libdokanfuse1.dll
