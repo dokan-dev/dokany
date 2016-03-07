@@ -325,6 +325,41 @@ static NTSTATUS DOKAN_CALLBACK FuseSetEndOfFile(
       impl->set_end_of_file(FileName, ByteOffset, DokanFileInfo));
 }
 
+static NTSTATUS DOKAN_CALLBACK FuseSetAllocationSize(
+  LPCWSTR FileName, LONGLONG ByteOffset, PDOKAN_FILE_INFO DokanFileInfo) {
+  impl_fuse_context *impl = the_impl;
+  if (impl->debug())
+    FWPRINTF(stderr, L"SetAllocationSize %s, %I64d\n", FileName, ByteOffset);
+
+  impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
+
+  BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
+  ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
+
+  NTSTATUS ret = errno_to_ntstatus_error(
+      impl->get_file_information(FileName, &byHandleFileInfo, DokanFileInfo));
+
+  LARGE_INTEGER fileSize;
+  fileSize.LowPart = byHandleFileInfo.nFileSizeLow;
+  fileSize.HighPart = byHandleFileInfo.nFileSizeHigh;
+
+  if (ret != 0) {
+    return ret;
+  }
+  else if (ByteOffset < fileSize.QuadPart) {
+    /* https://msdn.microsoft.com/en-us/library/windows/hardware/ff540232(v=vs.85).aspx
+    * The end-of-file position must always be less than or equal to the
+    * allocation size. If the allocation size is set to a value that is
+    * less than the end - of - file position, the end - of - file position
+    * is automatically adjusted to match the allocation size.*/
+    return errno_to_ntstatus_error(
+        impl->set_end_of_file(FileName, ByteOffset, DokanFileInfo));
+  }
+  else {
+    return 0;
+  }
+}
+
 static NTSTATUS DOKAN_CALLBACK FuseSetFileAttributes(
     LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
@@ -418,7 +453,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     FuseDeleteDirectory,
     FuseMoveFile,
     FuseSetEndOfFile,
-    NULL, // SetAllocationSize
+    FuseSetAllocationSize,
     FuseLockFile,
     FuseUnlockFile,
     FuseGetDiskFreeSpace,
