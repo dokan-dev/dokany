@@ -145,10 +145,7 @@
         <Directory Id="DOKANDIR" Name="Dokan">
           <Directory Id="INSTALLDIR" Name="DokanLibrary-$(var.BaseVersion)">
             <Component Id="ProgramFilesComponent" Win64="no" Guid="{93E94825-DE3C-4B8E-9C35-6D130386EFEA}">
-<<<<<<< HEAD
-=======
               <Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes" />
->>>>>>> refs/remotes/dokan-dev/master
               <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)" >
                 <RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no" />
               </RegistryKey>
