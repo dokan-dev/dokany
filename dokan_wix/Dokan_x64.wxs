@@ -41,7 +41,7 @@
     <Property Id="ARPPRODUCTICON" Value="DokanIcon" />
     <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
 
-    <Property Id="WIN10FOUND">
+    <Property Id="WIN10FOUND" Secure="yes">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
         <FileSearch Id="searchFile"
                     Name="advapi32.dll"
@@ -49,7 +49,7 @@
       </DirectorySearch>
     </Property>
 
-    <Property Id="UCRTINSTALLED">
+    <Property Id="UCRTINSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem2" Path="[WindowsFolder]System32" Depth="0">
         <FileSearch Id="UCRT_FileSearch"
                     Name="ucrtbase.dll"
@@ -57,7 +57,7 @@
       </DirectorySearch>
     </Property>
 
-    <Property Id="REGINSTALLDIR">
+    <Property Id="REGINSTALLDIR" Secure="yes">
       <RegistrySearch Id="RegInstallDirSearch"
                       Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)"
 					  Name="AppLocation"
@@ -66,7 +66,7 @@
       </RegistrySearch>
     </Property>
 
-    <Property Id="VCREDISTINSTALLEDX64">
+    <Property Id="VCREDISTINSTALLEDX64" Secure="yes">
       <RegistrySearch Id="VCRedist_RegSearch_x64"
                       Root="HKLM"
                       Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
@@ -75,7 +75,7 @@
                       Win64="yes"/>
     </Property>
 
-    <Property Id="DOKANSYSALREADYINSTALLED">
+    <Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
       <DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
         <FileSearch Name="dokan$(var.MajorVersion).sys" />
       </DirectorySearch>
