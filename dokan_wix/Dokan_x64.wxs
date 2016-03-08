@@ -4,9 +4,9 @@
      xmlns:difx="http://schemas.microsoft.com/wix/DifxAppExtension">
 
   <Product Id="$(var.ProductCodeX64)"
-           Name="$(var.ProductName) $(var.BaseVersion) (x64)"
+           Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) (x64)"
            Language="1033"
-           Version="$(var.BaseVersion)"
+           Version="$(var.BaseVersion).$(var.BuildVersion)" 
            Manufacturer="$(var.CompanyName)"
            UpgradeCode="$(var.UpgradeCodeX64)">
 
@@ -21,15 +21,27 @@
           SourceFile="Dokan.ico"
           />
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <Upgrade Id='$(var.UpgradeCodeX64)'>
+      <UpgradeVersion
+        OnlyDetect='no'
+        Property='PREVIOUSFOUND'
+        IgnoreRemoveFailure='no'
+        Minimum='0.1.0' IncludeMinimum='yes'
+        Maximum='$(var.BaseVersion)' IncludeMaximum='no'
+      />
+    </Upgrade>
 
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  AllowSameVersionUpgrades="yes"
+                  DisallowUpgradeErrorMessage="A previous version of [ProductName] is already installed. Please uninstall the existing version first, reboot the system and start the setup again."
+                  Disallow="yes"/>
 
     <Property Id="ARPNOREPAIR" Value="1" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPPRODUCTICON" Value="DokanIcon" />
     <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
 
-    <Property Id="WIN10FOUND">
+    <Property Id="WIN10FOUND" Secure="yes">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
         <FileSearch Id="searchFile"
                     Name="advapi32.dll"
@@ -37,7 +49,7 @@
       </DirectorySearch>
     </Property>
 
-    <Property Id="UCRTINSTALLED">
+    <Property Id="UCRTINSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem2" Path="[WindowsFolder]System32" Depth="0">
         <FileSearch Id="UCRT_FileSearch"
                     Name="ucrtbase.dll"
@@ -45,7 +57,7 @@
       </DirectorySearch>
     </Property>
 
-    <Property Id="REGINSTALLDIR">
+    <Property Id="REGINSTALLDIR" Secure="yes">
       <RegistrySearch Id="RegInstallDirSearch"
                       Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX64)"
 					  Name="AppLocation"
@@ -54,7 +66,7 @@
       </RegistrySearch>
     </Property>
 
-    <Property Id="VCREDISTINSTALLEDX64">
+    <Property Id="VCREDISTINSTALLEDX64" Secure="yes">
       <RegistrySearch Id="VCRedist_RegSearch_x64"
                       Root="HKLM"
                       Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
@@ -63,13 +75,13 @@
                       Win64="yes"/>
     </Property>
 
-    <Property Id="DOKANSYSALREADYINSTALLED">
+    <Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
       <DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
         <FileSearch Name="dokan$(var.MajorVersion).sys" />
       </DirectorySearch>
     </Property>
 
-    <Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>
+    <!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23506")]]></Condition>
@@ -116,8 +128,9 @@
 
     <InstallExecuteSequence>
 
+
       <Custom Action='CheckForUCRT' Before='LaunchConditions'>
-        <![CDATA[Not REMOVE="ALL" AND UCRTINSTALLED = ""]]>
+        <![CDATA[Not REMOVE="ALL" AND Not PREVIOUSFOUND AND UCRTINSTALLED = ""]]>
       </Custom>
       <Custom Action='GetInstallDir' Before='CostFinalize'><![CDATA[REMOVE="ALL"]]></Custom>
       <Custom Action="SetFolderValue" Before="ExecuteInstallAction" />

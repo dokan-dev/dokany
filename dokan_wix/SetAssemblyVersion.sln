@@ -1,0 +1,70 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6D7E56F9-3617-46F4-8153-29A6AA2929AE}"
+	ProjectSection(SolutionItems) = preProject
+		version.txt = version.txt
+		version.xml = version.xml
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SetAssemblyVersion", "SetAssemblyVersion\SetAssemblyVersion.csproj", "{A48003E4-F999-4398-8C94-92A0BE018B05}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		DebugRemote|Any CPU = DebugRemote|Any CPU
+		DebugRemote|Mixed Platforms = DebugRemote|Mixed Platforms
+		DebugRemote|x64 = DebugRemote|x64
+		DebugRemote|x86 = DebugRemote|x86
+		Release|Any CPU = Release|Any CPU
+		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+		UnitTests|Any CPU = UnitTests|Any CPU
+		UnitTests|Mixed Platforms = UnitTests|Mixed Platforms
+		UnitTests|x64 = UnitTests|x64
+		UnitTests|x86 = UnitTests|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|x64.ActiveCfg = Debug|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|x64.Build.0 = Debug|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|x86.ActiveCfg = Debug|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Debug|x86.Build.0 = Debug|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|Any CPU.ActiveCfg = DebugRemote|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|Any CPU.Build.0 = DebugRemote|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|Mixed Platforms.ActiveCfg = DebugRemote|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|Mixed Platforms.Build.0 = DebugRemote|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|x64.ActiveCfg = DebugRemote|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|x64.Build.0 = DebugRemote|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|x86.ActiveCfg = DebugRemote|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.DebugRemote|x86.Build.0 = DebugRemote|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|Mixed Platforms.Build.0 = Release|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|x64.ActiveCfg = Release|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|x64.Build.0 = Release|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|x86.ActiveCfg = Release|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.Release|x86.Build.0 = Release|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|Any CPU.ActiveCfg = UnitTests|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|Any CPU.Build.0 = UnitTests|Any CPU
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|Mixed Platforms.ActiveCfg = UnitTests|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|Mixed Platforms.Build.0 = UnitTests|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|x64.ActiveCfg = UnitTests|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|x64.Build.0 = UnitTests|x64
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|x86.ActiveCfg = UnitTests|x86
+		{A48003E4-F999-4398-8C94-92A0BE018B05}.UnitTests|x86.Build.0 = UnitTests|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
