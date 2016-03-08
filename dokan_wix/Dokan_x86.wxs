@@ -145,6 +145,10 @@
         <Directory Id="DOKANDIR" Name="Dokan">
           <Directory Id="INSTALLDIR" Name="DokanLibrary-$(var.BaseVersion)">
             <Component Id="ProgramFilesComponent" Win64="no" Guid="{93E94825-DE3C-4B8E-9C35-6D130386EFEA}">
+<<<<<<< HEAD
+=======
+              <Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes" />
+>>>>>>> refs/remotes/dokan-dev/master
               <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)" >
                 <RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no" />
               </RegistryKey>
@@ -153,6 +157,8 @@
               </RegistryKey>
               <File Id="DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="DokanfuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokanfuseCygwinDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="dokanctlEXE" Source="..\Win32\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
               <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
               <File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
@@ -233,6 +239,7 @@
             </Directory>
             <Directory Id="LIBDIR" Name="lib">
               <Component Id="LibFilesComponent" Win64="no" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
+                <Environment Id="DokanLibraryLibx86EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_x86" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes" />
                 <File Id="dokanLIB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
                 <File Id="dokanfuseLIB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
                 <File Id="dokannpLIB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
@@ -242,9 +249,17 @@
               <Directory Id="MIRRORDIR" Name="mirror">
                 <Component Id="SampleMirrorFilesComponent" Win64="no" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
                   <File Id="mirrorEXE" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-                  <File Id="DokanMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokanMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
                   <File Id="mirrorC" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
+                </Component>
+              </Directory>
+              <Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
+                <Component Id="SampleFuseMirrorFilesComponent" Guid="{DAA40F27-5A21-45B1-B781-E44ED9DDC42D}">
+                  <File Id="fuseMirrorEXE" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+                  <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokanCygFuseMirrorDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
                 </Component>
               </Directory>
             </Directory>
@@ -276,6 +291,7 @@
       <ComponentRef Id="IncludeFuseFilesComponent"/>
       <ComponentRef Id="LibFilesComponent"/>
       <ComponentRef Id="SampleMirrorFilesComponent"/>
+      <ComponentRef Id="SampleFuseMirrorFilesComponent"/>
     </Feature>
     <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
       <ComponentRef Id="Win7_Win32pdb"/>
