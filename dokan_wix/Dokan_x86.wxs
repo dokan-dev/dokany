@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?include version.xml ?>
+
+<?ifndef BuildCygwin ?>
+<?define BuildCygwin="false" ?>
+<?endif?>
+
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:difx="http://schemas.microsoft.com/wix/DifxAppExtension">
   <Product Id="$(var.ProductCodeX86)"
@@ -154,8 +159,6 @@
               </RegistryKey>
               <File Id="DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="DokanfuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-              <File Id="DokanfuseCygwinDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-              <File Id="DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="dokanctlEXE" Source="..\Win32\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
               <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
               <File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
@@ -253,9 +256,7 @@
               </Directory>
               <Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
                 <Component Id="SampleFuseMirrorFilesComponent" Guid="{DAA40F27-5A21-45B1-B781-E44ED9DDC42D}">
-                  <File Id="fuseMirrorEXE" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-                  <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
-                  <File Id="dokanCygFuseMirrorDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
                   <File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
                 </Component>
               </Directory>
@@ -282,6 +283,9 @@
       <ComponentRef Id="Win81_Win32"/>
       <ComponentRef Id="Win10_Win32"/>
       <ComponentRef Id="Sys32Files"/>
+      <?if $(var.BuildCygwin)=true ?>
+        <ComponentRef Id="ProgramFilesCygwinComponent" />
+      <?endif?>
     </Feature>
     <Feature Id="DokanLibBFeature" Title="Dokan headers and libs" Level="1">
       <ComponentRef Id="IncludeDokanFilesComponent"/>
@@ -289,6 +293,9 @@
       <ComponentRef Id="LibFilesComponent"/>
       <ComponentRef Id="SampleMirrorFilesComponent"/>
       <ComponentRef Id="SampleFuseMirrorFilesComponent"/>
+      <?if $(var.BuildCygwin)=true ?>
+        <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
+      <?endif?>
     </Feature>
     <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
       <ComponentRef Id="Win7_Win32pdb"/>
@@ -299,4 +306,14 @@
     </Feature>
   </Product>
 
+  <Fragment>
+    <Component Id="ProgramFilesCygwinComponent" Win64="no" Guid="{44994086-D28C-4041-B3C0-01FEE13F95F7}" Directory="INSTALLDIR">
+        <File Id="X86DokanCygFuseDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
+        <File Id="X86DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+    </Component>
+    <Component Id="SampleFuseMirrorCygwinComponent" Win64="no" Guid="{BBFA5102-DB04-438D-BECC-861116145FC0}" Directory="FUSEMIRRORDIR">
+      <File Id="fuseMirrorEXE" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+      <File Id="dokanCygFuseMirrorDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+    </Component>
+  </Fragment>
 </Wix>

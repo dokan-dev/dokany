@@ -15,4 +15,5 @@
 <?define UpdateURL="https://dokan-dev.github.io/" ?>
 <?define InstallerVersion="500" ?>
 <?define Compressed="no" ?>
+<?define BuildCygwin="true" ?>
 </Include>
