@@ -29,4 +29,4 @@ msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=x64 /t:Build
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=Win32 /t:Build
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=x64 /t:Build
 
-Powershell.exe -executionpolicy remotesigned -File dokan_fuse/build.ps1
+IF EXIST C:\cygwin ( Powershell.exe -executionpolicy remotesigned -File dokan_fuse/build.ps1 ) ELSE ( echo "Cygwin/Msys2 build disabled" )
