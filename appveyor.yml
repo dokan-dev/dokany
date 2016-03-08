@@ -55,7 +55,7 @@
     - 'IF "%CONFIGURATION%" ==  "Cygwin" ( %CYG_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
       && %CYG_BASH% -lc "cygcheck -dc cygwin" )'
     - 'IF "%CONFIGURATION%" ==  "MSYS2" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
-      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm && C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc --noconfirm )'
+      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm && C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc mingw-w64-i686-cmake mingw-w64-x86_64-cmake make --noconfirm )'
 
   build_script:
   - ps: |
