@@ -9,6 +9,8 @@ if NOT exist SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe (
 )
 SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml
 
+IF EXIST C:\cygwin ( powershell -Command "(gc version.xml) -replace 'false', 'true' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'true', 'false' | sc version.xml" )
+
 REM build light installer
 powershell -Command "(gc version.xml) -replace 'yes', 'no' | sc version.xml"
 msbuild Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger
