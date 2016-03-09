@@ -1214,6 +1214,21 @@ static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   return STATUS_SUCCESS;
 }
 
+BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
+  switch (dwCtrlType) {
+  case CTRL_C_EVENT:
+  case CTRL_BREAK_EVENT:
+  case CTRL_CLOSE_EVENT:
+  case CTRL_LOGOFF_EVENT:
+  case CTRL_SHUTDOWN_EVENT:
+    SetConsoleCtrlHandler(CtrlHandler, FALSE);
+    DokanRemoveMountPoint(MountPoint);
+    return TRUE;
+  default:
+    return FALSE;
+  }
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
@@ -1340,6 +1355,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     free(dokanOperations);
     free(dokanOptions);
     return -1;
+  }
+
+  if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+    fwprintf(stderr, L"Control Handler is not set.\n");
   }
 
   // Add security name privilege. Required here to handle GetFileSecurity
