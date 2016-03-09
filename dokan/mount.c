@@ -451,10 +451,13 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
 
   drive[0] = towupper(cLetter);
   wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
+#if (_WIN32_WINNT > _WIN32_WINNT_WIN7)
   //On Win7 32bit - SHChangeNotify during remove happened to crash
+  //"read of address 0x00000000" somewhere inside ole32.dll
   DbgPrint("DokanBroadcastLink: Begin SHChangeNotify\n");
   SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
   DbgPrint("DokanBroadcastLink: SHChangeNotify done\n");
+#endif /* _WIN32_WINNT > _WIN32_WINNT_WIN7 */
 }
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
