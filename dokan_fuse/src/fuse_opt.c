@@ -50,7 +50,7 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
 
     assert(!args->argv || args->allocated);
 
-    newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
+    newargv = (char **)realloc(args->argv, (args->argc + 2) * sizeof(char *));
     newarg = newargv ? STRDUP(arg) : NULL;
 	if (!newargv || !newarg)
 	{
@@ -103,7 +103,7 @@ int fuse_opt_add_opt(char **opts, const char *opt)
         newopts = STRDUP(opt);
     else {
 		size_t oldlen = strlen(*opts);
-        newopts = realloc(*opts, oldlen + 1 + strlen(opt) + 1);
+        newopts = (char *)realloc(*opts, oldlen + 1 + strlen(opt) + 1);
         if (newopts) {
             newopts[oldlen] = ',';
             strcpy(newopts + oldlen + 1, opt);
@@ -227,7 +227,7 @@ static int process_opt_sep_arg(struct fuse_opt_context *ctx,
         return -1;
 
     param = ctx->argv[ctx->argctr];
-    newarg = malloc(sep + strlen(param) + 1);
+    newarg = (char *)malloc(sep + strlen(param) + 1);
     if (!newarg)
         return alloc_failed();
 
