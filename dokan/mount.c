@@ -235,7 +235,7 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
 #define DOKAN_NP_DEVICE_NAME                                                   \
   L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_NAME L"DokanNP" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_PATH L"System32\\dokannp" DOKAN_MAJOR_API_VERSION L".dll"
+#define DOKAN_BINARY_NAME L"dokannp" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
 
@@ -246,8 +246,22 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   WCHAR commanp[64];
   WCHAR buffer[1024];
   DWORD buffer_size = sizeof(buffer);
+  WCHAR pBuf[MAX_PATH];
+
   ZeroMemory(&buffer, sizeof(buffer));
   ZeroMemory(commanp, sizeof(commanp));
+
+  int length = GetModuleFileName(NULL, pBuf, MAX_PATH);
+  if (length == 0) {
+    DokanDbgPrintW(
+        L"DokanNetworkProviderInstall: GetModuleFileName failed %d\n",
+        GetLastError());
+    return FALSE;
+  }
+
+  while (length >= 0 && pBuf[length] != '\\')
+    pBuf[length--] = '\0';
+  wcscat_s(pBuf, sizeof(pBuf) / sizeof(WCHAR), DOKAN_BINARY_NAME);
 
   RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
                  0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
@@ -259,8 +273,8 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
                 (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
 
-  RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)DOKAN_NP_PATH,
-                (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
+  RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)pBuf,
+                (DWORD)(wcslen(pBuf) + 1) * sizeof(WCHAR));
 
   RegCloseKey(key);
 
@@ -424,7 +438,7 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   DWORD device_event;
   DEV_BROADCAST_VOLUME params;
   WCHAR drive[4] = L"C:\\";
-  LONG    wEventId;
+  LONG wEventId;
 
   if (!isalpha(cLetter)) {
     DbgPrint("DokanBroadcastLink: invalid parameter\n");
@@ -449,8 +463,8 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
              GetLastError());
   }
 
-  //Cannot SHChangeNotify during DLL_PROCESS_DETACH cannot
-  //ole32.dll is probably already unload
+  // Cannot SHChangeNotify during DLL_PROCESS_DETACH cannot
+  // ole32.dll is probably already unload
   if (bRemoved)
     return;
 
