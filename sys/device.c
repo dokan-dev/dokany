@@ -101,11 +101,11 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
 VOID DokanPopulateDiskGeometry(__in PDISK_GEOMETRY diskGeometry) {
   diskGeometry->Cylinders.QuadPart =
-      DOKAN_DISK_SIZE / DOKAN_SECTOR_SIZE / 32 / 2;
+      DOKAN_DEFAULT_DISK_SIZE / DOKAN_DEFAULT_SECTOR_SIZE / 32 / 2;
   diskGeometry->MediaType = FixedMedia;
   diskGeometry->TracksPerCylinder = 2;
   diskGeometry->SectorsPerTrack = 32;
-  diskGeometry->BytesPerSector = DOKAN_SECTOR_SIZE;
+  diskGeometry->BytesPerSector = DOKAN_DEFAULT_SECTOR_SIZE;
 }
 
 NTSTATUS
@@ -229,7 +229,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       partitionInfo->HiddenSectors = 0;
       partitionInfo->StartingOffset.QuadPart = 0;
       partitionInfo->PartitionLength.QuadPart =
-          DOKAN_DISK_SIZE; // Partition size equels disk size here
+		  DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
       partitionInfo->PartitionNumber = 0;
     } else {
       PPARTITION_INFORMATION_EX partitionInfo;
@@ -242,7 +242,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       partitionInfo->Mbr.HiddenSectors = 0;
       partitionInfo->StartingOffset.QuadPart = 0;
       partitionInfo->PartitionLength.QuadPart =
-          DOKAN_DISK_SIZE; // Partition size equels disk size here
+		  DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
       partitionInfo->PartitionNumber = 0;
     }
 

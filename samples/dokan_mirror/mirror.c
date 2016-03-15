@@ -1256,6 +1256,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /o (use mount manager)\n"
                     "  /c (mount for current session only)\n"
                     "  /u UNC provider name"
+                    "  /a Allocation unit size (ex. /a 512)"
+                    "  /k Sector size (ex. /k 512)"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
     free(dokanOptions);
@@ -1316,6 +1318,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'i':
       command++;
       dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
+      break;
+    case L'a':
+      command++;
+      dokanOptions->AllocationUnitSize = (ULONG)_wtol(argv[command]);
+      break;
+    case L'k':
+      command++;
+      dokanOptions->SectorSize = (ULONG)_wtol(argv[command]);
       break;
     default:
       fwprintf(stderr, L"unknown command: %s\n", argv[command]);

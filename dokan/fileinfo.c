@@ -55,14 +55,16 @@ DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
 NTSTATUS
 DokanFillFileStandardInfo(PFILE_STANDARD_INFORMATION StandardInfo,
                           PBY_HANDLE_FILE_INFORMATION FileInfo,
-                          PULONG RemainingLength) {
+                          PULONG RemainingLength,
+                          PDOKAN_INSTANCE DokanInstance) {
   if (*RemainingLength < sizeof(FILE_STANDARD_INFORMATION)) {
     return STATUS_BUFFER_OVERFLOW;
   }
 
   StandardInfo->AllocationSize.HighPart = FileInfo->nFileSizeHigh;
   StandardInfo->AllocationSize.LowPart = FileInfo->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&StandardInfo->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&StandardInfo->AllocationSize,
+                        DokanInstance->DokanOptions);
   StandardInfo->EndOfFile.HighPart = FileInfo->nFileSizeHigh;
   StandardInfo->EndOfFile.LowPart = FileInfo->nFileSizeLow;
   StandardInfo->NumberOfLinks = FileInfo->nNumberOfLinks;
@@ -100,7 +102,8 @@ DokanFillFilePositionInfo(PFILE_POSITION_INFORMATION PosInfo,
 NTSTATUS
 DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
                      PBY_HANDLE_FILE_INFORMATION FileInfo,
-                     PULONG RemainingLength, PEVENT_CONTEXT EventContext) {
+                     PULONG RemainingLength, PEVENT_CONTEXT EventContext,
+                     PDOKAN_INSTANCE DokanInstance) {
   ULONG allRemainingLength = *RemainingLength;
 
   if (*RemainingLength < sizeof(FILE_ALL_INFORMATION)) {
@@ -112,7 +115,7 @@ DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
 
   // FileStandardInformation
   DokanFillFileStandardInfo(&AllInfo->StandardInformation, FileInfo,
-                            RemainingLength);
+                            RemainingLength, DokanInstance);
 
   // FilePositionInformation
   DokanFillFilePositionInfo(&AllInfo->PositionInformation, FileInfo,
@@ -194,7 +197,8 @@ DokanFillFileAttributeTagInfo(PFILE_ATTRIBUTE_TAG_INFORMATION AttrTagInfo,
 NTSTATUS
 DokanFillNetworkOpenInfo(PFILE_NETWORK_OPEN_INFORMATION NetInfo,
                          PBY_HANDLE_FILE_INFORMATION FileInfo,
-                         PULONG RemainingLength) {
+                         PULONG RemainingLength,
+                         PDOKAN_INSTANCE DokanInstance) {
   if (*RemainingLength < sizeof(FILE_NETWORK_OPEN_INFORMATION)) {
     return STATUS_BUFFER_OVERFLOW;
   }
@@ -209,7 +213,7 @@ DokanFillNetworkOpenInfo(PFILE_NETWORK_OPEN_INFORMATION NetInfo,
   NetInfo->ChangeTime.HighPart = FileInfo->ftLastWriteTime.dwHighDateTime;
   NetInfo->AllocationSize.HighPart = FileInfo->nFileSizeHigh;
   NetInfo->AllocationSize.LowPart = FileInfo->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&NetInfo->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&NetInfo->AllocationSize, DokanInstance->DokanOptions);
   NetInfo->EndOfFile.HighPart = FileInfo->nFileSizeHigh;
   NetInfo->EndOfFile.LowPart = FileInfo->nFileSizeLow;
   NetInfo->FileAttributes = FileInfo->dwFileAttributes;
@@ -357,7 +361,8 @@ DokanFindStreams(PFILE_STREAM_INFORMATION StreamInfo, PDOKAN_FILE_INFO FileInfo,
       StreamInfo->StreamSize = find->FindStreamData.StreamSize;
       StreamInfo->StreamAllocationSize = find->FindStreamData.StreamSize;
       StreamInfo->NextEntryOffset = 0;
-      ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize);
+      ALIGN_ALLOCATION_SIZE(&StreamInfo->StreamAllocationSize,
+                            DokanInstance->DokanOptions);
 
       *RemainingLength -= entrySize;
     }
@@ -439,14 +444,14 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       DbgPrint("\tFileStandardInformation\n");
       status = DokanFillFileStandardInfo(
           (PFILE_STANDARD_INFORMATION)eventInfo->Buffer, &byHandleFileInfo,
-          &remainingLength);
+          &remainingLength, DokanInstance);
       break;
 
     case FileAllInformation:
       DbgPrint("\tFileAllInformation\n");
       status = DokanFillFileAllInfo((PFILE_ALL_INFORMATION)eventInfo->Buffer,
                                     &byHandleFileInfo, &remainingLength,
-                                    EventContext);
+                                    EventContext, DokanInstance);
       break;
 
     case FileAlternateNameInformation:
@@ -480,7 +485,7 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       DbgPrint("\tFileNetworkOpenInformation\n");
       status = DokanFillNetworkOpenInfo(
           (PFILE_NETWORK_OPEN_INFORMATION)eventInfo->Buffer, &byHandleFileInfo,
-          &remainingLength);
+          &remainingLength, DokanInstance);
       break;
 
     case FilePositionInformation:

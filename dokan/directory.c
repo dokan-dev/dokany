@@ -34,7 +34,8 @@ typedef struct _DOKAN_FIND_DATA {
 } DOKAN_FIND_DATA, *PDOKAN_FIND_DATA;
 
 VOID DokanFillDirInfo(PFILE_DIRECTORY_INFORMATION Buffer,
-                      PWIN32_FIND_DATAW FindData, ULONG Index) {
+                      PWIN32_FIND_DATAW FindData, ULONG Index,
+                      PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
   Buffer->FileIndex = Index;
@@ -45,7 +46,7 @@ VOID DokanFillDirInfo(PFILE_DIRECTORY_INFORMATION Buffer,
   Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
   Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
   Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
 
   Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
   Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
@@ -63,7 +64,8 @@ VOID DokanFillDirInfo(PFILE_DIRECTORY_INFORMATION Buffer,
 }
 
 VOID DokanFillFullDirInfo(PFILE_FULL_DIR_INFORMATION Buffer,
-                          PWIN32_FIND_DATAW FindData, ULONG Index) {
+                          PWIN32_FIND_DATAW FindData, ULONG Index,
+                          PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
   Buffer->FileIndex = Index;
@@ -74,7 +76,7 @@ VOID DokanFillFullDirInfo(PFILE_FULL_DIR_INFORMATION Buffer,
   Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
   Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
   Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
 
   Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
   Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
@@ -94,7 +96,8 @@ VOID DokanFillFullDirInfo(PFILE_FULL_DIR_INFORMATION Buffer,
 }
 
 VOID DokanFillIdFullDirInfo(PFILE_ID_FULL_DIR_INFORMATION Buffer,
-                            PWIN32_FIND_DATAW FindData, ULONG Index) {
+                            PWIN32_FIND_DATAW FindData, ULONG Index,
+                            PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
   Buffer->FileIndex = Index;
@@ -105,7 +108,7 @@ VOID DokanFillIdFullDirInfo(PFILE_ID_FULL_DIR_INFORMATION Buffer,
   Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
   Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
   Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
 
   Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
   Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
@@ -126,7 +129,8 @@ VOID DokanFillIdFullDirInfo(PFILE_ID_FULL_DIR_INFORMATION Buffer,
 }
 
 VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
-                            PWIN32_FIND_DATAW FindData, ULONG Index) {
+                            PWIN32_FIND_DATAW FindData, ULONG Index,
+                            PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
   Buffer->FileIndex = Index;
@@ -138,7 +142,7 @@ VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
   Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
   Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
   Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
 
   Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
   Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
@@ -159,7 +163,8 @@ VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
 }
 
 VOID DokanFillBothDirInfo(PFILE_BOTH_DIR_INFORMATION Buffer,
-                          PWIN32_FIND_DATAW FindData, ULONG Index) {
+                          PWIN32_FIND_DATAW FindData, ULONG Index,
+                          PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
 
   Buffer->FileIndex = Index;
@@ -171,7 +176,7 @@ VOID DokanFillBothDirInfo(PFILE_BOTH_DIR_INFORMATION Buffer,
   Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
   Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
   Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize);
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
 
   Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
   Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
@@ -203,7 +208,8 @@ VOID DokanFillNamesInfo(PFILE_NAMES_INFORMATION Buffer,
 ULONG
 DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
                               PVOID Buffer, PULONG LengthRemaining,
-                              PWIN32_FIND_DATAW FindData, ULONG Index) {
+                              PWIN32_FIND_DATAW FindData, ULONG Index,
+                              PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes;
   ULONG thisEntrySize;
 
@@ -244,19 +250,19 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
 
   switch (DirectoryInfo) {
   case FileDirectoryInformation:
-    DokanFillDirInfo(Buffer, FindData, Index);
+    DokanFillDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileFullDirectoryInformation:
-    DokanFillFullDirInfo(Buffer, FindData, Index);
+    DokanFillFullDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileNamesInformation:
     DokanFillNamesInfo(Buffer, FindData, Index);
     break;
   case FileBothDirectoryInformation:
-    DokanFillBothDirInfo(Buffer, FindData, Index);
+    DokanFillBothDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileIdBothDirectoryInformation:
-    DokanFillIdBothDirInfo(Buffer, FindData, Index);
+    DokanFillIdBothDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   default:
     break;
@@ -300,7 +306,8 @@ VOID ClearFindData(PLIST_ENTRY ListHead) {
 // to the buffer specifed in EventInfo
 //
 LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
-                PLIST_ENTRY FindDataList, BOOLEAN PatternCheck) {
+                PLIST_ENTRY FindDataList, BOOLEAN PatternCheck,
+                PDOKAN_INSTANCE DokanInstance) {
   PLIST_ENTRY thisEntry, listHead, nextEntry;
 
   ULONG lengthRemaining = EventInfo->BufferLength;
@@ -340,7 +347,8 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
         // index+1 is very important, should use next entry index
         ULONG entrySize = DokanFillDirectoryInformation(
             EventContext->Operation.Directory.FileInformationClass,
-            currentBuffer, &lengthRemaining, &find->FindData, index + 1);
+            currentBuffer, &lengthRemaining, &find->FindData, index + 1,
+            DokanInstance);
         // buffer is full
         if (entrySize == 0)
           break;
@@ -496,7 +504,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     DbgPrint("index from %d\n", EventContext->Operation.Directory.FileIndex);
     // extract entries that match search pattern from FindFiles result
     index = MatchFiles(EventContext, eventInfo, openInfo->DirListHead,
-                       patternCheck);
+                       patternCheck, DokanInstance);
 
     // there is no matched file
     if (index < 0) {

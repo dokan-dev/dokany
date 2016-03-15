@@ -67,6 +67,8 @@ typedef struct _DOKAN_OPTIONS {
                       //  (path in NTFS)
   LPCWSTR UNCName;    // UNC provider name
   ULONG Timeout;      // IrpTimeout in milliseconds
+  ULONG AllocationUnitSize; // Device allocation size
+  ULONG SectorSize;         // Device sector size
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 typedef struct _DOKAN_FILE_INFO {
