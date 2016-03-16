@@ -141,7 +141,7 @@ NTSTATUS ToNtStatus(DWORD dwError) {
   case ERROR_NOT_READY:
     return STATUS_DEVICE_NOT_READY;
   default:
-    DbgPrint(L"Create got unknown error code %d\n", dwError);
+    DbgPrint(L"Unknown error code %d\n", dwError);
     return STATUS_ACCESS_DENIED;
   }
 }
