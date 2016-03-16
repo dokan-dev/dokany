@@ -255,10 +255,6 @@
                 </Component>
               </Directory>
               <Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
-                <Component Id="SampleFuseMirrorFilesComponent" Guid="{DAA40F27-5A21-45B1-B781-E44ED9DDC42D}">
-                  <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
-                  <File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
-                </Component>
               </Directory>
             </Directory>
           </Directory>
@@ -268,8 +264,7 @@
       <Directory Id="WindowsFolder" >
         <Directory Id="Sys32Folder" Name="System32">
           <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
-            <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="yes"/>
-            <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll"/>
+            <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
             <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
           </Component>
         </Directory>
@@ -292,7 +287,6 @@
       <ComponentRef Id="IncludeFuseFilesComponent"/>
       <ComponentRef Id="LibFilesComponent"/>
       <ComponentRef Id="SampleMirrorFilesComponent"/>
-      <ComponentRef Id="SampleFuseMirrorFilesComponent"/>
       <?if $(var.BuildCygwin)=true ?>
         <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
       <?endif?>
@@ -313,7 +307,9 @@
     </Component>
     <Component Id="SampleFuseMirrorCygwinComponent" Win64="no" Guid="{BBFA5102-DB04-438D-BECC-861116145FC0}" Directory="FUSEMIRRORDIR">
       <File Id="fuseMirrorEXE" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+	  <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="dokanCygFuseMirrorDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+      <File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
     </Component>
   </Fragment>
 </Wix>

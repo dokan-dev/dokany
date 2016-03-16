@@ -76,7 +76,7 @@ LPWSTR
 GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
                  rsize_t DestinationBufferSizeInElements);
 
-void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size);
+void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions);
 
 UINT __stdcall DokanLoop(PVOID Param);
 

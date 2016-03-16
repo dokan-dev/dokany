@@ -137,6 +137,9 @@ DokanFsSizeInformation(PEVENT_INFORMATION EventInfo,
   ULONGLONG freeBytes = 0;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
+  ULONG allocationUnitSize = FileInfo->DokanOptions->AllocationUnitSize;
+  ULONG sectorSize = FileInfo->DokanOptions->SectorSize;
+
   PFILE_FS_SIZE_INFORMATION sizeInfo =
       (PFILE_FS_SIZE_INFORMATION)EventInfo->Buffer;
 
@@ -165,12 +168,12 @@ DokanFsSizeInformation(PEVENT_INFORMATION EventInfo,
   }
 
   sizeInfo->TotalAllocationUnits.QuadPart =
-      totalBytes / DOKAN_ALLOCATION_UNIT_SIZE;
+      totalBytes / allocationUnitSize;
   sizeInfo->AvailableAllocationUnits.QuadPart =
-      freeBytesAvailable / DOKAN_ALLOCATION_UNIT_SIZE;
+      freeBytesAvailable / allocationUnitSize;
   sizeInfo->SectorsPerAllocationUnit =
-      DOKAN_ALLOCATION_UNIT_SIZE / DOKAN_SECTOR_SIZE;
-  sizeInfo->BytesPerSector = DOKAN_SECTOR_SIZE;
+	  allocationUnitSize / sectorSize;
+  sizeInfo->BytesPerSector = sectorSize;
 
   EventInfo->BufferLength = sizeof(FILE_FS_SIZE_INFORMATION);
 
@@ -262,6 +265,9 @@ DokanFsFullSizeInformation(PEVENT_INFORMATION EventInfo,
   ULONGLONG freeBytes = 0;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
+  ULONG allocationUnitSize = FileInfo->DokanOptions->AllocationUnitSize;
+  ULONG sectorSize = FileInfo->DokanOptions->SectorSize;
+
   PFILE_FS_FULL_SIZE_INFORMATION sizeInfo =
       (PFILE_FS_FULL_SIZE_INFORMATION)EventInfo->Buffer;
 
@@ -290,14 +296,14 @@ DokanFsFullSizeInformation(PEVENT_INFORMATION EventInfo,
   }
 
   sizeInfo->TotalAllocationUnits.QuadPart =
-      totalBytes / DOKAN_ALLOCATION_UNIT_SIZE;
+      totalBytes / allocationUnitSize;
   sizeInfo->ActualAvailableAllocationUnits.QuadPart =
-      freeBytes / DOKAN_ALLOCATION_UNIT_SIZE;
+      freeBytes / allocationUnitSize;
   sizeInfo->CallerAvailableAllocationUnits.QuadPart =
-      freeBytesAvailable / DOKAN_ALLOCATION_UNIT_SIZE;
+      freeBytesAvailable / allocationUnitSize;
   sizeInfo->SectorsPerAllocationUnit =
-      DOKAN_ALLOCATION_UNIT_SIZE / DOKAN_SECTOR_SIZE;
-  sizeInfo->BytesPerSector = DOKAN_SECTOR_SIZE;
+	  allocationUnitSize / sectorSize;
+  sizeInfo->BytesPerSector = sectorSize;
 
   EventInfo->BufferLength = sizeof(FILE_FS_FULL_SIZE_INFORMATION);
 

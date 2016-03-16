@@ -141,7 +141,7 @@ NTSTATUS ToNtStatus(DWORD dwError) {
   case ERROR_NOT_READY:
     return STATUS_DEVICE_NOT_READY;
   default:
-    DbgPrint(L"Create got unknown error code %d\n", dwError);
+    DbgPrint(L"Unknown error code %d\n", dwError);
     return STATUS_ACCESS_DENIED;
   }
 }
@@ -1214,6 +1214,21 @@ static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   return STATUS_SUCCESS;
 }
 
+BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
+  switch (dwCtrlType) {
+  case CTRL_C_EVENT:
+  case CTRL_BREAK_EVENT:
+  case CTRL_CLOSE_EVENT:
+  case CTRL_LOGOFF_EVENT:
+  case CTRL_SHUTDOWN_EVENT:
+    SetConsoleCtrlHandler(CtrlHandler, FALSE);
+    DokanRemoveMountPoint(MountPoint);
+    return TRUE;
+  default:
+    return FALSE;
+  }
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
@@ -1241,6 +1256,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /o (use mount manager)\n"
                     "  /c (mount for current session only)\n"
                     "  /u UNC provider name"
+                    "  /a Allocation unit size (ex. /a 512)"
+                    "  /k Sector size (ex. /k 512)"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
     free(dokanOptions);
@@ -1302,6 +1319,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       command++;
       dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
       break;
+    case L'a':
+      command++;
+      dokanOptions->AllocationUnitSize = (ULONG)_wtol(argv[command]);
+      break;
+    case L'k':
+      command++;
+      dokanOptions->SectorSize = (ULONG)_wtol(argv[command]);
+      break;
     default:
       fwprintf(stderr, L"unknown command: %s\n", argv[command]);
       free(dokanOperations);
@@ -1340,6 +1365,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     free(dokanOperations);
     free(dokanOptions);
     return -1;
+  }
+
+  if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+    fwprintf(stderr, L"Control Handler is not set.\n");
   }
 
   // Add security name privilege. Required here to handle GetFileSecurity

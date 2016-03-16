@@ -1,10 +1,18 @@
 ---------------------------------
-v1.0.0.100 (RC2)
-Build date: 20160303
+v1.0.0.102 (RC2)
+Build date: 20160309
 ---------------------------------
 Changes:
----------------------------------
-v1.0.0.99 (RC2)
-Build date: 20160303
----------------------------------
-Changes:
+Add dokan.info to solution - .cab is now build and embedded with installer
+Add FUSE Cygwin / Msys2 binaries in installer (optional)
+Add FUSE Cygwin mirror as example
+Add log for unknow IOCTL_STORAGE_QUERY_PROPERTY
+Use control handler function to gracefully close mirror sample on Ctrl+C
+Fuse: handle SetAllocationSize
+Add environement variable to dokan path: DokanLibrary1 / DokanLibrary1_LibraryPath_x64 / DokanLibrary1_LibraryPath_x86
+Improve installer: ProductCodes generated, better check if other version installed,...
+Fix uninitialized variables
+Fuse: Fix directory deleting if opendir is not hooked
+Fix Driver start failure on Win7 x86
+Fix unsee device: Use BroadcastSystemMessage instead of SendMessageTimeout
+Fix Win7 mirror crash: Remove SHChangeNotify during remove for Win7 

@@ -69,9 +69,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #define DOKAN_DEVICE_MAX 10
 
-#define DOKAN_SECTOR_SIZE 512
-#define DOKAN_ALLOCATION_UNIT_SIZE 512
-#define DOKAN_DISK_SIZE 1024 * 1024 * 1024
+#define DOKAN_DEFAULT_SECTOR_SIZE 512
+#define DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE 512
+#define DOKAN_DEFAULT_DISK_SIZE 1024 * 1024 * 1024
 
 // used in CCB->Flags and FCB->Flags
 #define DOKAN_FILE_DIRECTORY 1
