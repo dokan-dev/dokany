@@ -234,7 +234,7 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   L"System\\CurrentControlSet\\Services\\dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_DEVICE_NAME                                                   \
   L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_NAME L"DokanNP" DOKAN_MAJOR_API_VERSION
+#define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_BINARY_NAME L"dokannp" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
