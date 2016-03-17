@@ -1255,9 +1255,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
                     "  /w (write-protect drive)\n"
                     "  /o (use mount manager)\n"
                     "  /c (mount for current session only)\n"
-                    "  /u UNC provider name"
-                    "  /a Allocation unit size (ex. /a 512)"
-                    "  /k Sector size (ex. /k 512)"
+                    "  /u UNC provider name\n"
+                    "  /a Allocation unit size (ex. /a 512)\n"
+                    "  /k Sector size (ex. /k 512)\n"
                     "  /i (Timeout in Milliseconds ex. /i 30000)\n");
     free(dokanOperations);
     free(dokanOptions);
