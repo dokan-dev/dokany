@@ -854,8 +854,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
   length.QuadPart = Length;
   offset.QuadPart = ByteOffset;
 
-  if (!LockFile(handle, offset.HighPart, offset.LowPart, length.HighPart,
-                length.LowPart)) {
+  if (!LockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
+                length.HighPart)) {
     DWORD error = GetLastError();
     DbgPrint(L"\tfailed(%d)\n", error);
     return ToNtStatus(error);
@@ -1007,8 +1007,8 @@ MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
   length.QuadPart = Length;
   offset.QuadPart = ByteOffset;
 
-  if (!UnlockFile(handle, offset.HighPart, offset.LowPart, length.HighPart,
-                  length.LowPart)) {
+  if (!UnlockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
+                  length.HighPart)) {
     DWORD error = GetLastError();
     DbgPrint(L"\terror code = %d\n\n", error);
     return ToNtStatus(error);
