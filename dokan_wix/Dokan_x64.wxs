@@ -80,6 +80,15 @@
                       Win64="yes"/>
     </Property>
 
+    <Property Id="VCREDISTINSTALLEDX86" Secure="yes">
+      <RegistrySearch Id="VCRedist_RegSearch_x86"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
+                      Name="Version"
+                      Type="raw"
+                      Win64="no"/>
+    </Property>
+
     <Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
       <DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
         <FileSearch Name="dokan$(var.MajorVersion).sys" />
@@ -90,6 +99,7 @@
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23506")]]></Condition>
+    <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.microsoft.com/en-us/download/details.aspx?id=49984"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23506")]]></Condition>
 
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
 
