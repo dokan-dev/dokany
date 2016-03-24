@@ -673,7 +673,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   EaLength = %d\n", pathReqEx->EaLength);
         DDbgPrint("   pEaBuffer = %p\n", pathReqEx->pEaBuffer);
         DDbgPrint("   PathNameLength = %d\n", pathReqEx->PathName.Length);
-        DDbgPrint("   FilePathName = %.*ls\n",
+        DDbgPrint("   FilePathName = %*ls\n",
                   pathReqEx->PathName.Length / sizeof(WCHAR),
                   pathReqEx->PathName.Buffer);
 

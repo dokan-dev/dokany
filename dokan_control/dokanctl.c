@@ -192,9 +192,12 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       ULONG nbRead = 0;
 	  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
 	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
-	    for (int i = 0; i < nbRead; ++i) {
+		fwprintf(stderr, L"  Mount points: %d\n", nbRead);
+	    for (unsigned int i = 0; i < nbRead; ++i) {
 		  fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", i, dokanControl[i].MountPoint, dokanControl[i].UNCName, dokanControl[i].DeviceName);
 		}
+	  } else {
+		  fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
 	  }
     }
     break;
