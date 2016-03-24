@@ -623,6 +623,10 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       if (Irp->RequestorMode != KernelMode) {
         break;
       }
+
+	  WCHAR* lpPath = NULL;
+	  ULONG ulPath = 0;
+
       if (irpSp->Parameters.DeviceIoControl.IoControlCode ==
           IOCTL_REDIR_QUERY_PATH) {
         PQUERY_PATH_REQUEST pathReq;
@@ -643,6 +647,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   FilePathName = %.*ls\n",
                   pathReq->PathNameLength / sizeof(WCHAR),
                   pathReq->FilePathName);
+
+		lpPath = pathReq->FilePathName;
+		ulPath = pathReq->PathNameLength / sizeof(WCHAR);
 
         if (pathReq->PathNameLength >= dcb->UNCName->Length / sizeof(WCHAR)) {
           prefixOk = (_wcsnicmp(pathReq->FilePathName, dcb->UNCName->Buffer,
@@ -669,6 +676,10 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   FilePathName = %.*ls\n",
                   pathReqEx->PathName.Length / sizeof(WCHAR),
                   pathReqEx->PathName.Buffer);
+
+		lpPath = pathReqEx->PathName.Buffer;
+		ulPath = pathReqEx->PathName.Length / sizeof(WCHAR);
+
         if (pathReqEx->PathName.Length >= dcb->UNCName->Length) {
           prefixOk =
               (_wcsnicmp(pathReqEx->PathName.Buffer, dcb->UNCName->Buffer,
@@ -676,10 +687,32 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         }
       }
 
+	  unsigned int i = 1;
+	  for (; i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && !prefixOk; ++i) {
+		  if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
+			  break;
+		  }
+
+		  if ((i + 1) * sizeof(WCHAR) < dcb->UNCName->Length) {
+			  prefixOk = (dcb->UNCName->Buffer[i + 1] == L'\\');
+		  }
+	  }
+
       if (!prefixOk) {
-        status = STATUS_BAD_NETWORK_NAME;
+        status = STATUS_BAD_NETWORK_PATH;
         break;
       }
+
+	  for (; i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && prefixOk; ++i) {
+		  if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
+			  prefixOk = FALSE;
+		  }
+	  }
+
+	  if (!prefixOk) {
+		  status = STATUS_BAD_NETWORK_NAME;
+		  break;
+	  }
 
       pathResp = (PQUERY_PATH_RESPONSE)Irp->UserBuffer;
       pathResp->LengthAccepted = dcb->UNCName->Length;

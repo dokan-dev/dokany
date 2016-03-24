@@ -773,14 +773,30 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
   return TRUE;
 }
 
-BOOL DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length) {
+BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length, BOOL uncOnly, PULONG nbRead) {
 	ULONG returnedLength = 0;
 
-	ZeroMemory(list, sizeof(DOKAN_CONTROL) * length);
+	DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+	ZeroMemory(dokanControl, sizeof(dokanControl));
 
-	return SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL, 0,
-		list, sizeof(DOKAN_CONTROL) * length,
-		&returnedLength);
+	if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL, 0,
+		dokanControl, sizeof(dokanControl),
+		&returnedLength)) {
+		*nbRead = 0;
+		for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
+			if (wcscmp(dokanControl[i].DeviceName, L"") == 0) {
+				break;
+			}
+			if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0) {
+				if (length < *nbRead + 1)
+					return TRUE;
+
+				CopyMemory(&list[*nbRead], &dokanControl[i], sizeof(DOKAN_CONTROL));
+			}
+		}
+	}
+
+	return FALSE;
 }
 
 BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {

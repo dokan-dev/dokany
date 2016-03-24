@@ -348,7 +348,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
 // The caller must call CloseHandle for the returned handle.
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 
-BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length);
+BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length, BOOL uncOnly, PULONG nbRead);
 
 void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,

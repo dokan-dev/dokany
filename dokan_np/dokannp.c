@@ -232,18 +232,21 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
                                __inout LPDWORD BufferSize) {
   DbgPrintW(L"NpGetConnection %s, %d\n", LocalName, *BufferSize);
 
+  ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
   DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES)) {
+  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
 	  DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
 	  return WN_NOT_CONNECTED;
   }
   dosDevice[12] = LocalName[0];
 
-  for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
+  for (unsigned int i = 0; i < nbRead; ++i) {
 	if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
 	  if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
-		return WN_NO_NETWORK;
+		// No UNC, always return success
+		*BufferSize = 0;
+		return WN_SUCCESS;
 	  }
 
 	  DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
@@ -568,13 +571,14 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 	PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
 	PWCHAR pDst;
 
+	ULONG nbRead = 0;
 	DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-	if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES)) {
+	if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, TRUE, &nbRead)) {
 		DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
 		return WN_NO_MORE_ENTRIES;
 	}
 
-	while (cEntriesCopied < *Count && pCtx->index < DOKAN_MAX_INSTANCES) {
+	while (cEntriesCopied < *Count && pCtx->index < nbRead) {
 		if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
 			DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
 			break;
@@ -749,7 +753,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
 	if (cEntriesCopied == 0 && dwStatus == WN_SUCCESS)
 	{
-		if (pCtx->index >= DOKAN_MAX_INSTANCES || wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0)
+		if (pCtx->index >= nbRead || wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0)
 		{
 			dwStatus = WN_NO_MORE_ENTRIES;
 		}

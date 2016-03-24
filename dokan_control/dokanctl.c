@@ -189,12 +189,11 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   case L'l':
     {
+      ULONG nbRead = 0;
 	  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES)) {
-	    for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
-          if (wcscmp(dokanControl[i].DeviceName, L"") != 0) {
-			fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", i, dokanControl[i].MountPoint, dokanControl[i].UNCName, dokanControl[i].DeviceName);
-		  }
+	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
+	    for (int i = 0; i < nbRead; ++i) {
+		  fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", i, dokanControl[i].MountPoint, dokanControl[i].UNCName, dokanControl[i].DeviceName);
 		}
 	  }
     }

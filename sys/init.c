@@ -582,7 +582,6 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
   PUNICODE_STRING unicode;
   PWSTR buffer;
   ULONG length;
-
   unicode = ExAllocatePool(sizeof(UNICODE_STRING));
   if (unicode == NULL) {
     return NULL;
