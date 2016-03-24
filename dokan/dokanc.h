@@ -33,12 +33,6 @@ extern "C" {
 
 #define DOKAN_DRIVER_SERVICE L"Dokan" DOKAN_MAJOR_API_VERSION
 
-#define DOKAN_CONTROL_MOUNT 1
-#define DOKAN_CONTROL_UNMOUNT 2
-#define DOKAN_CONTROL_CHECK 3
-#define DOKAN_CONTROL_FIND 4
-#define DOKAN_CONTROL_LIST 5
-
 #define DOKAN_CONTROL_OPTION_FORCE_UNMOUNT 1
 
 #define DOKAN_CONTROL_SUCCESS 1
@@ -57,15 +51,6 @@ extern BOOL g_DebugMode;
 
 // DokanOptions->UseStdErr is ON?
 extern BOOL g_UseStdErr;
-
-typedef struct _DOKAN_CONTROL {
-  ULONG Type;
-  WCHAR MountPoint[MAX_PATH];
-  WCHAR DeviceName[64];
-  ULONG Option;
-  ULONG Status;
-
-} DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 #ifdef _MSC_VER
 

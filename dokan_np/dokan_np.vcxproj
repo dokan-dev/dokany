@@ -170,6 +170,11 @@
   <ItemGroup>
     <ResourceCompile Include="dokan_np.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\dokan\dokan.vcxproj">
+      <Project>{f25ba22f-2ab8-4859-9b89-8fe1e774b472}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

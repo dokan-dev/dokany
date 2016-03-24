@@ -57,10 +57,12 @@ VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
 NTSTATUS
 GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
+  PDOKAN_GLOBAL dokanGlobal;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
   DDbgPrint("   => DokanGlobalDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
+  dokanGlobal = DeviceObject->DeviceExtension;
 
   switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_EVENT_START:
@@ -77,6 +79,12 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
     DDbgPrint("  IOCTL_SET_DEBUG_MODE: %d\n", g_Debug);
     break;
+  case IOCTL_EVENT_MOUNTPOINT_LIST:
+	if (GetIdentifierType(dokanGlobal) != DGL) {
+	  return STATUS_INVALID_PARAMETER;
+	}
+	status = DokanGetMountPointList(DeviceObject, Irp, dokanGlobal);
+	break;
   case IOCTL_TEST:
     if (irpSp->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(ULONG)) {
       *(ULONG *)Irp->AssociatedIrp.SystemBuffer = DOKAN_DRIVER_VERSION;
@@ -496,6 +504,10 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
             RtlZeroMemory(&dokanControl, sizeof(dokanControl));
             RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
                           dcb->DiskDeviceName->Length);
+			if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
+			  RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
+                            dcb->UNCName->Length);
+			}
             mountEntry = FindMountEntry(dcb->Global, &dokanControl);
             if (mountEntry != NULL) {
               RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
@@ -626,9 +638,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         pathReq = (PQUERY_PATH_REQUEST)
                       irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
 
-        DDbgPrint("   PathNameLength = %d.\n", pathReq->PathNameLength);
-        DDbgPrint("   SecurityContext = %p.\n", pathReq->SecurityContext);
-        DDbgPrint("   FilePathName = %.*ls.\n",
+        DDbgPrint("   PathNameLength = %d\n", pathReq->PathNameLength);
+        DDbgPrint("   SecurityContext = %p\n", pathReq->SecurityContext);
+        DDbgPrint("   FilePathName = %.*ls\n",
                   pathReq->PathNameLength / sizeof(WCHAR),
                   pathReq->FilePathName);
 
@@ -650,11 +662,11 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         pathReqEx = (PQUERY_PATH_REQUEST_EX)
                         irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
 
-        DDbgPrint("   pSecurityContext = %p.\n", pathReqEx->pSecurityContext);
-        DDbgPrint("   EaLength = %d.\n", pathReqEx->EaLength);
-        DDbgPrint("   pEaBuffer = %p.\n", pathReqEx->pEaBuffer);
-        DDbgPrint("   PathNameLength = %d.\n", pathReqEx->PathName.Length);
-        DDbgPrint("   FilePathName = %.*ls.\n",
+        DDbgPrint("   pSecurityContext = %p\n", pathReqEx->pSecurityContext);
+        DDbgPrint("   EaLength = %d\n", pathReqEx->EaLength);
+        DDbgPrint("   pEaBuffer = %p\n", pathReqEx->pEaBuffer);
+        DDbgPrint("   PathNameLength = %d\n", pathReqEx->PathName.Length);
+        DDbgPrint("   FilePathName = %.*ls\n",
                   pathReqEx->PathName.Length / sizeof(WCHAR),
                   pathReqEx->PathName.Buffer);
         if (pathReqEx->PathName.Length >= dcb->UNCName->Length) {

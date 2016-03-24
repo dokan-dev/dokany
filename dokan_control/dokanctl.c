@@ -54,6 +54,7 @@ int ShowUsage() {
           "  /i n                : Install network provider\n"
           "  /r d                : Remove driver\n"
           "  /r n                : Remove network provider\n"
+          "  /l a                : List current mount points\n"
           "  /d [0-9]            : Enable Kernel Debug output\n"
           "  /v                  : Print Dokan version\n");
   return EXIT_FAILURE;
@@ -174,6 +175,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
         fprintf(stderr, "network provider remove failed\n");
     }
     break;
+
   case L'd':
     if (L'0' <= type && type <= L'9') {
       ULONG mode = type - L'0';
@@ -184,6 +186,20 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       }
     }
     break;
+
+  case L'l':
+    {
+	  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES)) {
+	    for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
+          if (wcscmp(dokanControl[i].DeviceName, L"") != 0) {
+			fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", i, dokanControl[i].MountPoint, dokanControl[i].UNCName, dokanControl[i].DeviceName);
+		  }
+		}
+	  }
+    }
+    break;
+
   default:
     fprintf(stderr, "unknown option\n");
   }

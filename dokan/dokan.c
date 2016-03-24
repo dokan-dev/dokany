@@ -773,6 +773,16 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
   return TRUE;
 }
 
+BOOL DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length) {
+	ULONG returnedLength = 0;
+
+	ZeroMemory(list, sizeof(DOKAN_CONTROL) * length);
+
+	return SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL, 0,
+		list, sizeof(DOKAN_CONTROL) * length,
+		&returnedLength);
+}
+
 BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   UNREFERENCED_PARAMETER(Reserved);
   UNREFERENCED_PARAMETER(Instance);
