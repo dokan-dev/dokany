@@ -140,6 +140,10 @@ NTSTATUS ToNtStatus(DWORD dwError) {
     return STATUS_PRIVILEGE_NOT_HELD;
   case ERROR_NOT_READY:
     return STATUS_DEVICE_NOT_READY;
+  case ERROR_DIRECTORY:
+	return STATUS_NOT_A_DIRECTORY;
+  case ERROR_HANDLE_EOF:
+	  return STATUS_END_OF_FILE;
   default:
     DbgPrint(L"Unknown error code %d\n", dwError);
     return STATUS_ACCESS_DENIED;
@@ -742,8 +746,13 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, FileName);
-
   DbgPrint(L"DeleteFile %s\n", filePath);
+
+  DWORD dwAttrib = GetFileAttributes(filePath);
+
+  if (dwAttrib != INVALID_FILE_ATTRIBUTES &&
+	  (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+	  return STATUS_ACCESS_DENIED;
 
   return STATUS_SUCCESS;
 }
