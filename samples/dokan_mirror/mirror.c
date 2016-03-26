@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C.
+<maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -141,9 +142,9 @@ NTSTATUS ToNtStatus(DWORD dwError) {
   case ERROR_NOT_READY:
     return STATUS_DEVICE_NOT_READY;
   case ERROR_DIRECTORY:
-	return STATUS_NOT_A_DIRECTORY;
+    return STATUS_NOT_A_DIRECTORY;
   case ERROR_HANDLE_EOF:
-	  return STATUS_END_OF_FILE;
+    return STATUS_END_OF_FILE;
   default:
     DbgPrint(L"Unknown error code %d\n", dwError);
     return STATUS_ACCESS_DENIED;
@@ -373,15 +374,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     // It is a create file request
 
     if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-        (fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
-      if (CreateDisposition == FILE_CREATE) {
-        return STATUS_OBJECT_NAME_COLLISION; // File already exist because
-                                             // GetFileAttributes found it
-      } else {
-        handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                             &securityAttrib, OPEN_EXISTING,
-                             FILE_FLAG_BACKUP_SEMANTICS, NULL);
-      }
+        (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
+        CreateDisposition == FILE_CREATE) {
+      return STATUS_OBJECT_NAME_COLLISION; // File already exist because
+                                           // GetFileAttributes found it
     } else {
       handle = CreateFile(
           filePath,
@@ -751,8 +747,8 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   DWORD dwAttrib = GetFileAttributes(filePath);
 
   if (dwAttrib != INVALID_FILE_ATTRIBUTES &&
-	  (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
-	  return STATUS_ACCESS_DENIED;
+      (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+    return STATUS_ACCESS_DENIED;
 
   return STATUS_SUCCESS;
 }
