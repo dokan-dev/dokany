@@ -25,6 +25,9 @@
   platform:
   - x64
   
+  cache:
+  - '%CYG_CACHE%'
+  - '%CYG64_CACHE%'
 
   init:
     - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
