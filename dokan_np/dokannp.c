@@ -122,6 +122,9 @@ static const WCHAR* parseServerName(const WCHAR *lpRemoteName, const WCHAR **lpS
 		cLeadingBackslashes++;
 	}
 
+	DbgPrintW(L"parseServerName: cLeadingBackslashes %d\n",
+		cLeadingBackslashes);
+
 	if (cLeadingBackslashes == 0 || cLeadingBackslashes == 2)
 	{
 		if (lpServerName != NULL) {
@@ -130,11 +133,11 @@ static const WCHAR* parseServerName(const WCHAR *lpRemoteName, const WCHAR **lpS
 		if (ulServerName != NULL) {
 			*ulServerName = 0;
 		}
-
+		
 		while (*lpRemoteName && *lpRemoteName != L'\\') {
 			lpRemoteName++;
 			if (ulServerName != NULL) {
-				*ulServerName++;
+				(*ulServerName)++;
 			}
 		}
 
@@ -213,10 +216,10 @@ DWORD APIENTRY NPAddConnection3(__in HWND WndOwner,
   }
 
   if (QueryDosDevice(local, temp, MAX_PATH / 2)) {
-    DbgPrintW(L"  WN_ALREADY_CONNECTED");
+    DbgPrintW(L"  WN_ALREADY_CONNECTED\n");
     status = WN_ALREADY_CONNECTED;
   } else {
-    DbgPrintW(L"  WN_BAD_NETNAME");
+    DbgPrintW(L"  WN_BAD_NETNAME\n");
     status = WN_BAD_NETNAME;
   }
 
@@ -798,6 +801,10 @@ DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
 		DbgPrintW(L"NPGetResourceInformation: WN_BAD_NETNAME\n");
 		return WN_BAD_NETNAME;
 	}
+	DbgPrintW(L"NPGetResourceInformation: lpServerName %ls - %lu\n",
+		lpServerName, ulServerName);
+	DbgPrintW(L"NPGetResourceInformation: lpAfterName %ls\n",
+		lpAfterName);
 
 	if (NetResource->dwType != 0 && NetResource->dwType != RESOURCETYPE_DISK)
 	{
@@ -822,6 +829,7 @@ DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
 	*/
 	if (lpAfterName[0] == 0 || lpAfterName[1] == 0)
 	{
+		DbgPrintW(L"NPGetResourceInformation: type 1\n");
 		/* "\\DOKAN" or "\\DOKAN\" */
 		cbEntry = sizeof(NETRESOURCE);
 		cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name */
@@ -875,6 +883,7 @@ DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
 
 	if (*lp == 0)
 	{
+		DbgPrintW(L"NPGetResourceInformation: type 2\n");
 		/* It is a share only: \\dokan\share */
 		cbEntry = sizeof(NETRESOURCE);
 		cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name with trailing nul */

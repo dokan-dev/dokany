@@ -193,8 +193,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 	  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
 	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
 		fwprintf(stderr, L"  Mount points: %d\n", nbRead);
-	    for (unsigned int i = 0; i < nbRead; ++i) {
-		  fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", i, dokanControl[i].MountPoint, dokanControl[i].UNCName, dokanControl[i].DeviceName);
+	    for (unsigned int p = 0; i < nbRead; ++p) {
+		  fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", p, dokanControl[p].MountPoint, dokanControl[p].UNCName, dokanControl[p].DeviceName);
 		}
 	  } else {
 		  fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
