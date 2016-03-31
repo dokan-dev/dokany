@@ -936,7 +936,7 @@ DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
 
   DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
             pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
-  DbgPrintW(L"NPGetResourceInformation: *System: %ls\n", *System);
+  DbgPrintW(L"NPGetResourceInformation: *System: %ls\n", (System != NULL) ? *System : L"NULL");
 
   return WN_SUCCESS;
 }

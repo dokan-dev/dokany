@@ -193,7 +193,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
                                &nbRead)) {
       fwprintf(stderr, L"  Mount points: %d\n", nbRead);
-      for (unsigned int p = 0; i < nbRead; ++p) {
+      for (unsigned int p = 0; p < nbRead; ++p) {
         fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
                  p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
                  dokanControl[p].DeviceName);
