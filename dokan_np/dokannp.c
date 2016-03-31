@@ -25,34 +25,33 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 */
 
+#include "../dokan/dokan.h"
+#include <malloc.h>
+#include <npapi.h>
+#include <stdio.h>
+#include <strsafe.h>
 #include <windows.h>
 #include <winnetwk.h>
 #include <winsvc.h>
-#include <stdio.h>
-#include <npapi.h>
-#include <strsafe.h>
-#include <malloc.h>
-#include "../dokan/dokan.h"
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
-	const WCHAR *outputString;
-	WCHAR *buffer;
-	size_t length;
-	va_list argp;
+  const WCHAR *outputString;
+  WCHAR *buffer;
+  size_t length;
+  va_list argp;
 
-	va_start(argp, format);
-	length = _vscwprintf(format, argp) + 1;
-	buffer = _malloca(length * sizeof(WCHAR));
-	if (buffer) {
-		StringCchVPrintfW(buffer, length, format, argp);
-		outputString = buffer;
-	}
-	else {
-		outputString = format;
-	}
-	OutputDebugStringW(outputString);
-	_freea(buffer);
-	va_end(argp);
+  va_start(argp, format);
+  length = _vscwprintf(format, argp) + 1;
+  buffer = _malloca(length * sizeof(WCHAR));
+  if (buffer) {
+    StringCchVPrintfW(buffer, length, format, argp);
+    outputString = buffer;
+  } else {
+    outputString = format;
+  }
+  OutputDebugStringW(outputString);
+  _freea(buffer);
+  va_end(argp);
 }
 
 #define DbgPrintW(format, ...) DokanDbgPrintW(format, __VA_ARGS__)
@@ -114,37 +113,36 @@ DWORD APIENTRY NPGetCaps(DWORD Index) {
   return rc;
 }
 
-static const WCHAR* parseServerName(const WCHAR *lpRemoteName, const WCHAR **lpServerName, ULONG *ulServerName) {
-	int cLeadingBackslashes = 0;
-	while (*lpRemoteName == L'\\')
-	{
-		lpRemoteName++;
-		cLeadingBackslashes++;
-	}
+static const WCHAR *parseServerName(const WCHAR *lpRemoteName,
+                                    const WCHAR **lpServerName,
+                                    ULONG *ulServerName) {
+  int cLeadingBackslashes = 0;
+  while (*lpRemoteName == L'\\') {
+    lpRemoteName++;
+    cLeadingBackslashes++;
+  }
 
-	DbgPrintW(L"parseServerName: cLeadingBackslashes %d\n",
-		cLeadingBackslashes);
+  DbgPrintW(L"parseServerName: cLeadingBackslashes %d\n", cLeadingBackslashes);
 
-	if (cLeadingBackslashes == 0 || cLeadingBackslashes == 2)
-	{
-		if (lpServerName != NULL) {
-			*lpServerName = lpRemoteName;
-		}
-		if (ulServerName != NULL) {
-			*ulServerName = 0;
-		}
-		
-		while (*lpRemoteName && *lpRemoteName != L'\\') {
-			lpRemoteName++;
-			if (ulServerName != NULL) {
-				(*ulServerName)++;
-			}
-		}
+  if (cLeadingBackslashes == 0 || cLeadingBackslashes == 2) {
+    if (lpServerName != NULL) {
+      *lpServerName = lpRemoteName;
+    }
+    if (ulServerName != NULL) {
+      *ulServerName = 0;
+    }
 
-		return lpRemoteName;
-	}
+    while (*lpRemoteName && *lpRemoteName != L'\\') {
+      lpRemoteName++;
+      if (ulServerName != NULL) {
+        (*ulServerName)++;
+      }
+    }
 
-	return NULL;
+    return lpRemoteName;
+  }
+
+  return NULL;
 }
 
 DWORD APIENTRY NPLogonNotify(__in PLUID LogonId, __in PCWSTR AuthentInfoType,
@@ -238,29 +236,30 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
   ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
   DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
-	  DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
-	  return WN_NOT_CONNECTED;
+  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
+                              &nbRead)) {
+    DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
+    return WN_NOT_CONNECTED;
   }
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-	if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
-	  if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
-		// No UNC, always return success
-		*BufferSize = 0;
-		return WN_SUCCESS;
-	  }
+    if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
+      if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
+        // No UNC, always return success
+        *BufferSize = 0;
+        return WN_SUCCESS;
+      }
 
-	  DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
+      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
       if (len > *BufferSize) {
-		*BufferSize = len;
-		return WN_MORE_DATA;
-	  }
-	  CopyMemory(RemoteName, dokanControl[i].UNCName, len);
-	  *BufferSize = len;
-	  return WN_SUCCESS;
-	}
+        *BufferSize = len;
+        return WN_MORE_DATA;
+      }
+      CopyMemory(RemoteName, dokanControl[i].UNCName, len);
+      *BufferSize = len;
+      return WN_SUCCESS;
+    }
   }
 
   return WN_NOT_CONNECTED;
@@ -272,711 +271,674 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
 * |                     \
 * Folder1(connectable)  FolderN(connectable)
 */
-typedef struct _NPENUMCTX
-{
-	ULONG index; /* Index of last entry returned. */
-	DWORD dwScope;
-	DWORD dwOriginalScope;
-	DWORD dwType;
-	DWORD dwUsage;
-	BOOL fRoot;
+typedef struct _NPENUMCTX {
+  ULONG index; /* Index of last entry returned. */
+  DWORD dwScope;
+  DWORD dwOriginalScope;
+  DWORD dwType;
+  DWORD dwUsage;
+  BOOL fRoot;
 } NPENUMCTX;
 
 DWORD APIENTRY NPOpenEnum(__in DWORD Scope, __in DWORD Type, __in DWORD Usage,
                           __in LPNETRESOURCE NetResource, __in LPHANDLE Enum) {
-	DWORD dwStatus;
+  DWORD dwStatus;
 
-	DbgPrintW(L"NPOpenEnum: dwScope 0x%08X, dwType 0x%08X, dwUsage 0x%08X, lpNetResource %p\n",
-		Scope, Type, Usage, NetResource);
+  DbgPrintW(L"NPOpenEnum: dwScope 0x%08X, dwType 0x%08X, dwUsage 0x%08X, "
+            L"lpNetResource %p\n",
+            Scope, Type, Usage, NetResource);
 
-	if (Usage == 0)
-	{
-		/* The bitmask may be zero to match all of the flags. */
-		Usage = RESOURCEUSAGE_CONNECTABLE | RESOURCEUSAGE_CONTAINER;
-	}
+  if (Usage == 0) {
+    /* The bitmask may be zero to match all of the flags. */
+    Usage = RESOURCEUSAGE_CONNECTABLE | RESOURCEUSAGE_CONTAINER;
+  }
 
-	*Enum = NULL;
+  *Enum = NULL;
 
-	/* Allocate the context structure. */
-	NPENUMCTX *pCtx = (NPENUMCTX *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(NPENUMCTX));
+  /* Allocate the context structure. */
+  NPENUMCTX *pCtx = (NPENUMCTX *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+                                           sizeof(NPENUMCTX));
 
-	if (pCtx == NULL)
-	{
-		dwStatus = WN_OUT_OF_MEMORY;
-	}
-	else
-	{
-		if (NetResource && NetResource->lpRemoteName)
-		{
-			DbgPrintW(L"NPOpenEnum: lpRemoteName %ls\n", NetResource->lpRemoteName);
-		}
+  if (pCtx == NULL) {
+    dwStatus = WN_OUT_OF_MEMORY;
+  } else {
+    if (NetResource && NetResource->lpRemoteName) {
+      DbgPrintW(L"NPOpenEnum: lpRemoteName %ls\n", NetResource->lpRemoteName);
+    }
 
-		switch (Scope)
-		{
-		case 6: /* Advertised as WNNC_ENUM_SHAREABLE. This returns C$ system shares.
-				* NpEnumResource will return NO_MORE_ENTRIES.
-				*/
-		{
-			if (NetResource == NULL || NetResource->lpRemoteName == NULL)
-			{
-				/* If it is NULL or if the lpRemoteName field of the NETRESOURCE is NULL,
-				* the provider should enumerate the top level of its network.
-				* But system shares can't be on top level.
-				*/
-				dwStatus = WN_NOT_CONTAINER;
-				break;
-			}
+    switch (Scope) {
+    case 6: /* Advertised as WNNC_ENUM_SHAREABLE. This returns C$ system shares.
+                    * NpEnumResource will return NO_MORE_ENTRIES.
+                    */
+    {
+      if (NetResource == NULL || NetResource->lpRemoteName == NULL) {
+        /* If it is NULL or if the lpRemoteName field of the NETRESOURCE is
+        * NULL,
+        * the provider should enumerate the top level of its network.
+        * But system shares can't be on top level.
+        */
+        dwStatus = WN_NOT_CONTAINER;
+        break;
+      }
 
-			const WCHAR *lpAfterName = parseServerName(NetResource->lpRemoteName, NULL, NULL);
-			if (lpAfterName == NULL
-				|| (*lpAfterName != L'\\' && *lpAfterName != 0))
-			{
-				dwStatus = WN_NOT_CONTAINER;
-				break;
-			}
+      const WCHAR *lpAfterName =
+          parseServerName(NetResource->lpRemoteName, NULL, NULL);
+      if (lpAfterName == NULL || (*lpAfterName != L'\\' && *lpAfterName != 0)) {
+        dwStatus = WN_NOT_CONTAINER;
+        break;
+      }
 
-			/* Valid server name. */
-			pCtx->index = 0;
-			pCtx->dwScope = 6;
-			pCtx->dwOriginalScope = Scope;
-			pCtx->dwType = Type;
-			pCtx->dwUsage = Usage;
+      /* Valid server name. */
+      pCtx->index = 0;
+      pCtx->dwScope = 6;
+      pCtx->dwOriginalScope = Scope;
+      pCtx->dwType = Type;
+      pCtx->dwUsage = Usage;
 
-			dwStatus = WN_SUCCESS;
-			break;
-		}
-		case RESOURCE_GLOBALNET: /* All resources on the network. */
-		{
-			if (NetResource == NULL || NetResource->lpRemoteName == NULL)
-			{
-				/* If it is NULL or if the lpRemoteName field of the NETRESOURCE is NULL,
-				* the provider should enumerate the top level of its network.
-				*/
-				pCtx->fRoot = TRUE;
-			}
-			else
-			{
-				/* Enumerate lpNetResource->lpRemoteName container, which can be only the VBOXSVR container. */
-				const WCHAR *lpAfterName = parseServerName(NetResource->lpRemoteName, NULL, NULL);
-				if (lpAfterName == NULL
-					|| (*lpAfterName != L'\\' && *lpAfterName != 0))
-				{
-					dwStatus = WN_NOT_CONTAINER;
-					break;
-				}
+      dwStatus = WN_SUCCESS;
+      break;
+    }
+    case RESOURCE_GLOBALNET: /* All resources on the network. */
+    {
+      if (NetResource == NULL || NetResource->lpRemoteName == NULL) {
+        /* If it is NULL or if the lpRemoteName field of the NETRESOURCE is
+        * NULL,
+        * the provider should enumerate the top level of its network.
+        */
+        pCtx->fRoot = TRUE;
+      } else {
+        /* Enumerate lpNetResource->lpRemoteName container, which can be only
+         * the Dokan container. */
+        const WCHAR *lpAfterName =
+            parseServerName(NetResource->lpRemoteName, NULL, NULL);
+        if (lpAfterName == NULL ||
+            (*lpAfterName != L'\\' && *lpAfterName != 0)) {
+          dwStatus = WN_NOT_CONTAINER;
+          break;
+        }
 
-				/* Valid server name. */
-				pCtx->fRoot = FALSE;
-			}
+        /* Valid server name. */
+        pCtx->fRoot = FALSE;
+      }
 
-			pCtx->index = 0;
-			pCtx->dwScope = RESOURCE_GLOBALNET;
-			pCtx->dwOriginalScope = Scope;
-			pCtx->dwType = Type;
-			pCtx->dwUsage = Usage;
+      pCtx->index = 0;
+      pCtx->dwScope = RESOURCE_GLOBALNET;
+      pCtx->dwOriginalScope = Scope;
+      pCtx->dwType = Type;
+      pCtx->dwUsage = Usage;
 
-			dwStatus = WN_SUCCESS;
-			break;
-		}
+      dwStatus = WN_SUCCESS;
+      break;
+    }
 
-		case RESOURCE_CONNECTED: /* All currently connected resources. */
-		case RESOURCE_CONTEXT: /* The interpretation of this is left to the provider. Treat this as RESOURCE_GLOBALNET. */
-		{
-			pCtx->index = 0;
-			pCtx->dwScope = RESOURCE_CONNECTED;
-			pCtx->dwOriginalScope = Scope;
-			pCtx->dwType = Type;
-			pCtx->dwUsage = Usage;
-			pCtx->fRoot = FALSE; /* Actually ignored for RESOURCE_CONNECTED. */
+    case RESOURCE_CONNECTED: /* All currently connected resources. */
+    case RESOURCE_CONTEXT:   /* The interpretation of this is left to the
+                                provider. Treat this as RESOURCE_GLOBALNET. */
+    {
+      pCtx->index = 0;
+      pCtx->dwScope = RESOURCE_CONNECTED;
+      pCtx->dwOriginalScope = Scope;
+      pCtx->dwType = Type;
+      pCtx->dwUsage = Usage;
+      pCtx->fRoot = FALSE; /* Actually ignored for RESOURCE_CONNECTED. */
 
-			dwStatus = WN_SUCCESS;
-			break;
-		}
+      dwStatus = WN_SUCCESS;
+      break;
+    }
 
-		default:
-			DbgPrintW(L"NPOpenEnum: unsupported scope 0x%lx\n", Scope);
-			dwStatus = WN_NOT_SUPPORTED;
-			break;
-		}
-	}
+    default:
+      DbgPrintW(L"NPOpenEnum: unsupported scope 0x%lx\n", Scope);
+      dwStatus = WN_NOT_SUPPORTED;
+      break;
+    }
+  }
 
-	if (dwStatus != WN_SUCCESS)
-	{
-		DbgPrintW(L"NPOpenEnum: Returned error 0x%08X\n", dwStatus);
-		if (pCtx)
-		{
-			HeapFree(GetProcessHeap(), 0, pCtx);
-		}
-	}
-	else
-	{
-		DbgPrintW(L"NPOpenEnum: pCtx %p\n", pCtx);
-		*Enum = pCtx;
-	}
+  if (dwStatus != WN_SUCCESS) {
+    DbgPrintW(L"NPOpenEnum: Returned error 0x%08X\n", dwStatus);
+    if (pCtx) {
+      HeapFree(GetProcessHeap(), 0, pCtx);
+    }
+  } else {
+    DbgPrintW(L"NPOpenEnum: pCtx %p\n", pCtx);
+    *Enum = pCtx;
+  }
 
-	return dwStatus;
+  return dwStatus;
 }
 
 DWORD APIENTRY NPCloseEnum(__in HANDLE Enum) {
-	NPENUMCTX *pCtx = (NPENUMCTX *)Enum;
+  NPENUMCTX *pCtx = (NPENUMCTX *)Enum;
 
-	DbgPrintW(L"NPCloseEnum: hEnum %p\n", Enum);
+  DbgPrintW(L"NPCloseEnum: hEnum %p\n", Enum);
 
-	if (pCtx)
-	{
-		HeapFree(GetProcessHeap(), 0, pCtx);
-	}
+  if (pCtx) {
+    HeapFree(GetProcessHeap(), 0, pCtx);
+  }
 
-	DbgPrintW(L"NPCloseEnum: returns\n");
-	return WN_SUCCESS;
+  DbgPrintW(L"NPCloseEnum: returns\n");
+  return WN_SUCCESS;
 }
 
 DWORD APIENTRY NPGetResourceParent(__in LPNETRESOURCE NetResource,
                                    __in LPVOID Buffer,
                                    __in LPDWORD BufferSize) {
-	DbgPrintW(L"NPGetResourceParent: lpNetResource %p, lpBuffer %p, lpBufferSize %p\n",
-		NetResource, Buffer, BufferSize);
+  DbgPrintW(
+      L"NPGetResourceParent: lpNetResource %p, lpBuffer %p, lpBufferSize %p\n",
+      NetResource, Buffer, BufferSize);
 
-	/* Construct a new NETRESOURCE which is syntactically a parent of lpNetResource,
-	* then call NPGetResourceInformation to actually fill the buffer.
-	*/
-	if (!NetResource || !NetResource->lpRemoteName || !BufferSize)
-	{
-		return WN_BAD_NETNAME;
-	}
+  /* Construct a new NETRESOURCE which is syntactically a parent of
+  * lpNetResource,
+  * then call NPGetResourceInformation to actually fill the buffer.
+  */
+  if (!NetResource || !NetResource->lpRemoteName || !BufferSize) {
+    return WN_BAD_NETNAME;
+  }
 
-	const WCHAR *lpAfterName = parseServerName(NetResource->lpRemoteName, NULL, NULL);
-	if (lpAfterName == NULL
-		|| (*lpAfterName != L'\\' && *lpAfterName != 0))
-	{
-		DbgPrintW(L"NPGetResourceParent: WN_BAD_NETNAME\n");
-		return WN_BAD_NETNAME;
-	}
+  const WCHAR *lpAfterName =
+      parseServerName(NetResource->lpRemoteName, NULL, NULL);
+  if (lpAfterName == NULL || (*lpAfterName != L'\\' && *lpAfterName != 0)) {
+    DbgPrintW(L"NPGetResourceParent: WN_BAD_NETNAME\n");
+    return WN_BAD_NETNAME;
+  }
 
-	DWORD RemoteNameLength = lstrlen(NetResource->lpRemoteName);
+  DWORD RemoteNameLength = lstrlen(NetResource->lpRemoteName);
 
-	DWORD cbEntry = sizeof(NETRESOURCE);
-	cbEntry += (RemoteNameLength + 1) * sizeof(WCHAR);
+  DWORD cbEntry = sizeof(NETRESOURCE);
+  cbEntry += (RemoteNameLength + 1) * sizeof(WCHAR);
 
-	NETRESOURCE *pParent = (NETRESOURCE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cbEntry);
+  NETRESOURCE *pParent =
+      (NETRESOURCE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cbEntry);
 
-	if (!pParent)
-	{
-		return WN_OUT_OF_MEMORY;
-	}
+  if (!pParent) {
+    return WN_OUT_OF_MEMORY;
+  }
 
-	pParent->lpRemoteName = (WCHAR *)((PBYTE)pParent + sizeof(NETRESOURCE));
-	lstrcpy(pParent->lpRemoteName, NetResource->lpRemoteName);
+  pParent->lpRemoteName = (WCHAR *)((PBYTE)pParent + sizeof(NETRESOURCE));
+  lstrcpy(pParent->lpRemoteName, NetResource->lpRemoteName);
 
-	/* Remove last path component of the pParent->lpRemoteName. */
-	WCHAR *pLastSlash = pParent->lpRemoteName + RemoteNameLength;
-	if (*pLastSlash == L'\\')
-	{
-		/* \\server\share\path\, skip last slash immediately. */
-		pLastSlash--;
-	}
+  /* Remove last path component of the pParent->lpRemoteName. */
+  WCHAR *pLastSlash = pParent->lpRemoteName + RemoteNameLength;
+  if (*pLastSlash == L'\\') {
+    /* \\server\share\path\, skip last slash immediately. */
+    pLastSlash--;
+  }
 
-	while (pLastSlash != pParent->lpRemoteName)
-	{
-		if (*pLastSlash == L'\\')
-		{
-			break;
-		}
+  while (pLastSlash != pParent->lpRemoteName) {
+    if (*pLastSlash == L'\\') {
+      break;
+    }
 
-		pLastSlash--;
-	}
+    pLastSlash--;
+  }
 
-	DWORD dwStatus = WN_SUCCESS;
+  DWORD dwStatus = WN_SUCCESS;
 
-	if (pLastSlash == pParent->lpRemoteName
-		|| pLastSlash == pParent->lpRemoteName + 1)
-	{
-		/* It is a leading backslash. Construct "no parent" NETRESOURCE. */
-		NETRESOURCE *pNetResource = (NETRESOURCE *)Buffer;
+  if (pLastSlash == pParent->lpRemoteName ||
+      pLastSlash == pParent->lpRemoteName + 1) {
+    /* It is a leading backslash. Construct "no parent" NETRESOURCE. */
+    NETRESOURCE *pNetResource = (NETRESOURCE *)Buffer;
 
-		cbEntry = sizeof(NETRESOURCE);
-		cbEntry += sizeof(DOKAN_NP_NAME); /* remote name */
-		cbEntry += sizeof(DOKAN_NP_NAME); /* provider name */
+    cbEntry = sizeof(NETRESOURCE);
+    cbEntry += sizeof(DOKAN_NP_NAME); /* remote name */
+    cbEntry += sizeof(DOKAN_NP_NAME); /* provider name */
 
-		if (cbEntry > *BufferSize)
-		{
-			DbgPrintW(L"NPGetResourceParent: WN_MORE_DATA 0x%x\n", cbEntry);
-			*BufferSize = cbEntry;
-			dwStatus = WN_MORE_DATA;
-		}
-		else
-		{
-			memset(pNetResource, 0, sizeof(*pNetResource));
+    if (cbEntry > *BufferSize) {
+      DbgPrintW(L"NPGetResourceParent: WN_MORE_DATA 0x%x\n", cbEntry);
+      *BufferSize = cbEntry;
+      dwStatus = WN_MORE_DATA;
+    } else {
+      memset(pNetResource, 0, sizeof(*pNetResource));
 
-			pNetResource->dwType = RESOURCETYPE_ANY;
-			pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_NETWORK;
-			pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
+      pNetResource->dwType = RESOURCETYPE_ANY;
+      pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_NETWORK;
+      pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
 
-			WCHAR *pStrings = (WCHAR *)((PBYTE)Buffer + *BufferSize);
-			pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+      WCHAR *pStrings = (WCHAR *)((PBYTE)Buffer + *BufferSize);
+      pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
 
-			pNetResource->lpRemoteName = pStrings;
-			CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
-			pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
+      pNetResource->lpRemoteName = pStrings;
+      CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+      pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
 
-			pNetResource->lpProvider = pStrings;
-			CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
-			pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
+      pNetResource->lpProvider = pStrings;
+      CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+      pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
 
-			DbgPrintW(L"NPGetResourceParent: no parent, strings %p/%p\n",
-				pStrings, (PBYTE)Buffer + *BufferSize);
-		}
-	}
-	else
-	{
-		/* Make the parent remote name and get its information. */
-		*pLastSlash = 0;
+      DbgPrintW(L"NPGetResourceParent: no parent, strings %p/%p\n", pStrings,
+                (PBYTE)Buffer + *BufferSize);
+    }
+  } else {
+    /* Make the parent remote name and get its information. */
+    *pLastSlash = 0;
 
-		LPWSTR lpSystem = NULL;
-		dwStatus = NPGetResourceInformation(pParent, Buffer, BufferSize, &lpSystem);
-	}
+    LPWSTR lpSystem = NULL;
+    dwStatus = NPGetResourceInformation(pParent, Buffer, BufferSize, &lpSystem);
+  }
 
-	if (pParent)
-	{
-		HeapFree(GetProcessHeap(), 0, pParent);
-	}
+  if (pParent) {
+    HeapFree(GetProcessHeap(), 0, pParent);
+  }
 
-	return dwStatus;
+  return dwStatus;
 }
 
 DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
                               __in LPVOID Buffer, __in LPDWORD BufferSize) {
-	DWORD dwStatus = WN_SUCCESS;
-	NPENUMCTX *pCtx = (NPENUMCTX *)Enum;
-	ULONG cbEntry = 0;
+  DWORD dwStatus = WN_SUCCESS;
+  NPENUMCTX *pCtx = (NPENUMCTX *)Enum;
+  ULONG cbEntry = 0;
 
-	DbgPrintW(L"NPEnumResource: hEnum %p, lpcCount %p, lpBuffer %p, lpBufferSize %p.\n",
-		Enum, Count, Buffer, BufferSize);
+  DbgPrintW(
+      L"NPEnumResource: hEnum %p, lpcCount %p, lpBuffer %p, lpBufferSize %p.\n",
+      Enum, Count, Buffer, BufferSize);
 
-	if (pCtx == NULL)
-	{
-		DbgPrintW(L"NPEnumResource: WN_BAD_HANDLE\n");
-		return WN_BAD_HANDLE;
-	}
+  if (pCtx == NULL) {
+    DbgPrintW(L"NPEnumResource: WN_BAD_HANDLE\n");
+    return WN_BAD_HANDLE;
+  }
 
-	if (Count == NULL || Buffer == NULL)
-	{
-		DbgPrintW(L"NPEnumResource: WN_BAD_VALUE\n");
-		return WN_BAD_VALUE;
-	}
+  if (Count == NULL || Buffer == NULL) {
+    DbgPrintW(L"NPEnumResource: WN_BAD_VALUE\n");
+    return WN_BAD_VALUE;
+  }
 
-	DbgPrintW(L"NPEnumResource: *lpcCount 0x%x, *lpBufferSize 0x%x, pCtx->index %d\n",
-		*Count, *BufferSize, pCtx->index);
+  DbgPrintW(
+      L"NPEnumResource: *lpcCount 0x%x, *lpBufferSize 0x%x, pCtx->index %d\n",
+      *Count, *BufferSize, pCtx->index);
 
-	LPNETRESOURCE pNetResource = (LPNETRESOURCE)Buffer;
-	ULONG cbRemaining = *BufferSize;
-	ULONG cEntriesCopied = 0;
-	PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
-	PWCHAR pDst;
+  LPNETRESOURCE pNetResource = (LPNETRESOURCE)Buffer;
+  ULONG cbRemaining = *BufferSize;
+  ULONG cEntriesCopied = 0;
+  PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
+  PWCHAR pDst;
 
-	ULONG nbRead = 0;
-	DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-	if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, TRUE, &nbRead)) {
-		DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
-		return WN_NO_MORE_ENTRIES;
-	}
+  ULONG nbRead = 0;
+  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, TRUE,
+                              &nbRead)) {
+    DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
+    return WN_NO_MORE_ENTRIES;
+  }
 
-	while (cEntriesCopied < *Count && pCtx->index < nbRead) {
-		if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
-			DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
-			break;
-		}
+  while (cEntriesCopied < *Count && pCtx->index < nbRead) {
+    if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
+      DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
+      break;
+    }
 
-		if (pCtx->dwScope == RESOURCE_CONNECTED)
-		{
-			DbgPrintW(L"NPEnumResource: RESOURCE_CONNECTED\n");
+    if (pCtx->dwScope == RESOURCE_CONNECTED) {
+      DbgPrintW(L"NPEnumResource: RESOURCE_CONNECTED\n");
 
-			if (lstrlenW(dokanControl[pCtx->index].MountPoint) > 12 /* \DosDevices\C: */) {
-				/* How many bytes is needed for the current NETRESOURCE data. */
-				ULONG cbRemoteName = (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
-				cbEntry = sizeof(NETRESOURCE);
-				cbEntry += 3 * sizeof(WCHAR); /* C:\0*/
-				cbEntry += sizeof(WCHAR) + cbRemoteName; /* Leading \. */
-				cbEntry += sizeof(DOKAN_NP_NAME);
+      if (lstrlenW(dokanControl[pCtx->index].MountPoint) >
+          12 /* \DosDevices\C: */) {
+        /* How many bytes is needed for the current NETRESOURCE data. */
+        ULONG cbRemoteName =
+            (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+        cbEntry = sizeof(NETRESOURCE);
+        cbEntry += 3 * sizeof(WCHAR);            /* C:\0*/
+        cbEntry += sizeof(WCHAR) + cbRemoteName; /* Leading \. */
+        cbEntry += sizeof(DOKAN_NP_NAME);
 
-				if (cbEntry > cbRemaining)
-				{
-					break;
-				}
+        if (cbEntry > cbRemaining) {
+          break;
+        }
 
-				cbRemaining -= cbEntry;
+        cbRemaining -= cbEntry;
 
-				memset(pNetResource, 0, sizeof(*pNetResource));
+        memset(pNetResource, 0, sizeof(*pNetResource));
 
-				pNetResource->dwScope = RESOURCE_CONNECTED;
-				pNetResource->dwType = RESOURCETYPE_DISK;
-				pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
-				pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
+        pNetResource->dwScope = RESOURCE_CONNECTED;
+        pNetResource->dwType = RESOURCETYPE_DISK;
+        pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
+        pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
 
-				/* Reserve the space in the string area. */
-				pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
-				pDst = pStrings;
+        /* Reserve the space in the string area. */
+        pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+        pDst = pStrings;
 
-				pNetResource->lpLocalName = pDst;
-				*pDst++ = dokanControl[pCtx->index].MountPoint[12];
-				*pDst++ = L':';
-				*pDst++ = L'\0';
+        pNetResource->lpLocalName = pDst;
+        *pDst++ = dokanControl[pCtx->index].MountPoint[12];
+        *pDst++ = L':';
+        *pDst++ = L'\0';
 
-				pNetResource->lpRemoteName = pDst;
-				*pDst++ = L'\\';
-				CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
-				pDst += cbRemoteName / sizeof(WCHAR);
+        pNetResource->lpRemoteName = pDst;
+        *pDst++ = L'\\';
+        CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
+        pDst += cbRemoteName / sizeof(WCHAR);
 
-				pNetResource->lpComment = NULL;
+        pNetResource->lpComment = NULL;
 
-				pNetResource->lpProvider = pDst;
-				CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+        pNetResource->lpProvider = pDst;
+        CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
 
-				DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
-					pNetResource->lpRemoteName);
+        DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
+                  pNetResource->lpRemoteName);
 
-				cEntriesCopied++;
-				pNetResource++;
-			}
+        cEntriesCopied++;
+        pNetResource++;
+      }
 
-			pCtx->index++;
-		}
-		else if (pCtx->dwScope == RESOURCE_GLOBALNET)
-		{
-			DbgPrintW(L"NPEnumResource: RESOURCE_GLOBALNET: root %d\n", pCtx->fRoot);
+      pCtx->index++;
+    } else if (pCtx->dwScope == RESOURCE_GLOBALNET) {
+      DbgPrintW(L"NPEnumResource: RESOURCE_GLOBALNET: root %d\n", pCtx->fRoot);
 
-			if (pCtx->fRoot)
-			{
-				WCHAR* lpServerName = NULL;
-				ULONG ulServerName = 0;
-				parseServerName(&dokanControl[pCtx->index].UNCName[1], &lpServerName, &ulServerName);
+      if (pCtx->fRoot) {
+        WCHAR *lpServerName = NULL;
+        ULONG ulServerName = 0;
+        parseServerName(&dokanControl[pCtx->index].UNCName[1], &lpServerName,
+                        &ulServerName);
 
-				/* Return server.
-				* Determine the space needed for this entry.
-				*/
-				cbEntry = sizeof(NETRESOURCE);
-				cbEntry += (2 + ulServerName) * sizeof(WCHAR); /* \\ + the server name */
-				cbEntry += sizeof(DOKAN_NP_NAME);
+        /* Return server.
+        * Determine the space needed for this entry.
+        */
+        cbEntry = sizeof(NETRESOURCE);
+        cbEntry +=
+            (2 + ulServerName) * sizeof(WCHAR); /* \\ + the server name */
+        cbEntry += sizeof(DOKAN_NP_NAME);
 
-				if (cbEntry > cbRemaining)
-				{
-					break;
-				}
-					
-				cbRemaining -= cbEntry;
+        if (cbEntry > cbRemaining) {
+          break;
+        }
 
-				memset(pNetResource, 0, sizeof(*pNetResource));
+        cbRemaining -= cbEntry;
 
-				pNetResource->dwScope = RESOURCE_GLOBALNET;
-				pNetResource->dwType = RESOURCETYPE_ANY;
-				pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SERVER;
-				pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
+        memset(pNetResource, 0, sizeof(*pNetResource));
 
-				pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
-				pDst = pStrings;
+        pNetResource->dwScope = RESOURCE_GLOBALNET;
+        pNetResource->dwType = RESOURCETYPE_ANY;
+        pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SERVER;
+        pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
 
-				pNetResource->lpLocalName = NULL;
+        pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+        pDst = pStrings;
 
-				pNetResource->lpRemoteName = pDst;
-				*pDst++ = L'\\';
-				*pDst++ = L'\\';
-				CopyMemory(pDst, lpServerName, ulServerName * sizeof(WCHAR));
-				pDst += ulServerName;
+        pNetResource->lpLocalName = NULL;
 
-				pNetResource->lpComment = NULL;
+        pNetResource->lpRemoteName = pDst;
+        *pDst++ = L'\\';
+        *pDst++ = L'\\';
+        CopyMemory(pDst, lpServerName, ulServerName * sizeof(WCHAR));
+        pDst += ulServerName;
 
-				pNetResource->lpProvider = pDst;
-				CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+        pNetResource->lpComment = NULL;
 
-				cEntriesCopied++;
+        pNetResource->lpProvider = pDst;
+        CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
 
-				pCtx->index++;
-			}
-			else
-			{
-				/* How many bytes is needed for the current NETRESOURCE data. */
-				ULONG cbRemoteName = (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
-				cbEntry = sizeof(NETRESOURCE);
-				/* Remote name: \\ + server + \ + name. */
-				cbEntry += 1 * sizeof(WCHAR) + cbRemoteName;
-				cbEntry += sizeof(DOKAN_NP_NAME);
+        cEntriesCopied++;
 
-				if (cbEntry > cbRemaining)
-				{
-					break;
-				}
+        pCtx->index++;
+      } else {
+        /* How many bytes is needed for the current NETRESOURCE data. */
+        ULONG cbRemoteName =
+            (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+        cbEntry = sizeof(NETRESOURCE);
+        /* Remote name: \\ + server + \ + name. */
+        cbEntry += 1 * sizeof(WCHAR) + cbRemoteName;
+        cbEntry += sizeof(DOKAN_NP_NAME);
 
-				cbRemaining -= cbEntry;
+        if (cbEntry > cbRemaining) {
+          break;
+        }
 
-				memset(pNetResource, 0, sizeof(*pNetResource));
+        cbRemaining -= cbEntry;
 
-				pNetResource->dwScope = pCtx->dwOriginalScope;
-				pNetResource->dwType = RESOURCETYPE_DISK;
-				pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
-				pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
+        memset(pNetResource, 0, sizeof(*pNetResource));
 
-				pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
-				pDst = pStrings;
+        pNetResource->dwScope = pCtx->dwOriginalScope;
+        pNetResource->dwType = RESOURCETYPE_DISK;
+        pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
+        pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
 
-				pNetResource->lpLocalName = NULL;
+        pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+        pDst = pStrings;
 
-				pNetResource->lpRemoteName = pDst;
-				*pDst++ = L'\\';
-				CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
-				pDst += cbRemoteName / sizeof(WCHAR);
+        pNetResource->lpLocalName = NULL;
 
-				pNetResource->lpComment = NULL;
+        pNetResource->lpRemoteName = pDst;
+        *pDst++ = L'\\';
+        CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
+        pDst += cbRemoteName / sizeof(WCHAR);
 
-				pNetResource->lpProvider = pDst;
-				CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+        pNetResource->lpComment = NULL;
 
-				DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
-					pNetResource->lpRemoteName);
+        pNetResource->lpProvider = pDst;
+        CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
 
-				cEntriesCopied++;
-				pNetResource++;
+        DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
+                  pNetResource->lpRemoteName);
 
-				pCtx->index++;
-			}
-		}
-		else if (pCtx->dwScope == 6)
-		{
-			DbgPrintW(L"NPEnumResource: dwScope 6\n");
-			dwStatus = WN_NO_MORE_ENTRIES;
-		}
-		else
-		{
-			DbgPrintW(L"NPEnumResource: invalid dwScope 0x%x\n",
-				pCtx->dwScope);
-			return WN_BAD_HANDLE;
-		}
-	}
+        cEntriesCopied++;
+        pNetResource++;
 
-	*Count = cEntriesCopied;
+        pCtx->index++;
+      }
+    } else if (pCtx->dwScope == 6) {
+      DbgPrintW(L"NPEnumResource: dwScope 6\n");
+      dwStatus = WN_NO_MORE_ENTRIES;
+    } else {
+      DbgPrintW(L"NPEnumResource: invalid dwScope 0x%x\n", pCtx->dwScope);
+      return WN_BAD_HANDLE;
+    }
+  }
 
-	if (cEntriesCopied == 0 && dwStatus == WN_SUCCESS)
-	{
-		if (pCtx->index >= nbRead || wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0)
-		{
-			dwStatus = WN_NO_MORE_ENTRIES;
-		}
-		else
-		{
-			DbgPrintW(L"NPEnumResource: More Data Needed - %d\n",
-				cbEntry);
-			*BufferSize = cbEntry;
-			dwStatus = WN_MORE_DATA;
-		}
-	}
+  *Count = cEntriesCopied;
 
-	DbgPrintW(L"NPEnumResource: Entries returned %d, dwStatus 0x%08X\n",
-		cEntriesCopied, dwStatus);
-	return dwStatus;
+  if (cEntriesCopied == 0 && dwStatus == WN_SUCCESS) {
+    if (pCtx->index >= nbRead ||
+        wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
+      dwStatus = WN_NO_MORE_ENTRIES;
+    } else {
+      DbgPrintW(L"NPEnumResource: More Data Needed - %d\n", cbEntry);
+      *BufferSize = cbEntry;
+      dwStatus = WN_MORE_DATA;
+    }
+  }
+
+  DbgPrintW(L"NPEnumResource: Entries returned %d, dwStatus 0x%08X\n",
+            cEntriesCopied, dwStatus);
+  return dwStatus;
 }
 
 DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
                                         __out LPVOID Buffer,
                                         __out LPDWORD BufferSize,
                                         __out LPWSTR *System) {
-	DbgPrintW(L"NPGetResourceInformation: NetResource %p, Buffer %p, BufferSize %p, System %p\n",
-		NetResource, Buffer, BufferSize, System);
+  DbgPrintW(L"NPGetResourceInformation: NetResource %p, Buffer %p, BufferSize "
+            L"%p, System %p\n",
+            NetResource, Buffer, BufferSize, System);
 
-	if (NetResource == NULL
-		|| NetResource->lpRemoteName == NULL
-		|| BufferSize == NULL)
-	{
-		DbgPrintW(L"NPGetResourceInformation: WN_BAD_VALUE\n");
-		return WN_BAD_VALUE;
-	}
+  if (NetResource == NULL || NetResource->lpRemoteName == NULL ||
+      BufferSize == NULL) {
+    DbgPrintW(L"NPGetResourceInformation: WN_BAD_VALUE\n");
+    return WN_BAD_VALUE;
+  }
 
-	DbgPrintW(L"NPGetResourceInformation: lpRemoteName %ls, *BufferSize 0x%x\n",
-		NetResource->lpRemoteName, *BufferSize);
+  DbgPrintW(L"NPGetResourceInformation: lpRemoteName %ls, *BufferSize 0x%x\n",
+            NetResource->lpRemoteName, *BufferSize);
 
-	WCHAR *lpServerName = NULL;
-	ULONG ulServerName = 0;
-	const WCHAR *lpAfterName = parseServerName(NetResource->lpRemoteName, &lpServerName, &ulServerName);
-	if (lpServerName == NULL || lpAfterName == NULL
-		|| (*lpAfterName != L'\\' && *lpAfterName != 0))
-	{
-		DbgPrintW(L"NPGetResourceInformation: WN_BAD_NETNAME\n");
-		return WN_BAD_NETNAME;
-	}
-	DbgPrintW(L"NPGetResourceInformation: lpServerName %ls - %lu\n",
-		lpServerName, ulServerName);
-	DbgPrintW(L"NPGetResourceInformation: lpAfterName %ls\n",
-		lpAfterName);
+  WCHAR *lpServerName = NULL;
+  ULONG ulServerName = 0;
+  const WCHAR *lpAfterName =
+      parseServerName(NetResource->lpRemoteName, &lpServerName, &ulServerName);
+  if (lpServerName == NULL || lpAfterName == NULL ||
+      (*lpAfterName != L'\\' && *lpAfterName != 0)) {
+    DbgPrintW(L"NPGetResourceInformation: WN_BAD_NETNAME\n");
+    return WN_BAD_NETNAME;
+  }
+  DbgPrintW(L"NPGetResourceInformation: lpServerName %ls - %lu\n", lpServerName,
+            ulServerName);
+  DbgPrintW(L"NPGetResourceInformation: lpAfterName %ls\n", lpAfterName);
 
-	if (NetResource->dwType != 0 && NetResource->dwType != RESOURCETYPE_DISK)
-	{
-		/* The caller passed in a nonzero dwType that does not match
-		* the actual type of the network resource.
-		*/
-		return WN_BAD_DEV_TYPE;
-	}
+  if (NetResource->dwType != 0 && NetResource->dwType != RESOURCETYPE_DISK) {
+    /* The caller passed in a nonzero dwType that does not match
+    * the actual type of the network resource.
+    */
+    return WN_BAD_DEV_TYPE;
+  }
 
-	/*
-	* If the input remote resource name was "\\server\share\dir1\dir2",
-	* then the output NETRESOURCE contains information about the resource "\\server\share".
-	* The lpRemoteName, lpProvider, dwType, dwDisplayType, and dwUsage fields are returned
-	* containing values, all other fields being set to NULL.
-	*/
-	DWORD cbEntry;
-	WCHAR *pStrings = (WCHAR *)((PBYTE)Buffer + *BufferSize);
-	NETRESOURCE *pNetResource = (NETRESOURCE *)Buffer;
+  /*
+  * If the input remote resource name was "\\server\share\dir1\dir2",
+  * then the output NETRESOURCE contains information about the resource
+  * "\\server\share".
+  * The lpRemoteName, lpProvider, dwType, dwDisplayType, and dwUsage fields are
+  * returned
+  * containing values, all other fields being set to NULL.
+  */
+  DWORD cbEntry;
+  WCHAR *pStrings = (WCHAR *)((PBYTE)Buffer + *BufferSize);
+  NETRESOURCE *pNetResource = (NETRESOURCE *)Buffer;
 
-	/* Check what kind of the resource is that by parsing path components.
-	* lpAfterName points to first WCHAR after a valid server name.
-	*/
-	if (lpAfterName[0] == 0 || lpAfterName[1] == 0)
-	{
-		DbgPrintW(L"NPGetResourceInformation: type 1\n");
-		/* "\\DOKAN" or "\\DOKAN\" */
-		cbEntry = sizeof(NETRESOURCE);
-		cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name */
-		cbEntry += sizeof(DOKAN_NP_NAME); /* provider name */
+  /* Check what kind of the resource is that by parsing path components.
+  * lpAfterName points to first WCHAR after a valid server name.
+  */
+  if (lpAfterName[0] == 0 || lpAfterName[1] == 0) {
+    DbgPrintW(L"NPGetResourceInformation: type 1\n");
+    /* "\\DOKAN" or "\\DOKAN\" */
+    cbEntry = sizeof(NETRESOURCE);
+    cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name */
+    cbEntry += sizeof(DOKAN_NP_NAME);                  /* provider name */
 
-		if (cbEntry > *BufferSize)
-		{
-			DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
-			*BufferSize = cbEntry;
-			return WN_MORE_DATA;
-		}
+    if (cbEntry > *BufferSize) {
+      DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
+      *BufferSize = cbEntry;
+      return WN_MORE_DATA;
+    }
 
-		memset(pNetResource, 0, sizeof(*pNetResource));
+    memset(pNetResource, 0, sizeof(*pNetResource));
 
-		pNetResource->dwType = RESOURCETYPE_ANY;
-		pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SERVER;
-		pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
+    pNetResource->dwType = RESOURCETYPE_ANY;
+    pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SERVER;
+    pNetResource->dwUsage = RESOURCEUSAGE_CONTAINER;
 
-		pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+    pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
 
-		pNetResource->lpRemoteName = pStrings;
-		*pStrings++ = L'\\';
-		*pStrings++ = L'\\';
-		CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
-		pStrings += ulServerName;
-		*pStrings++ = L'\0';
+    pNetResource->lpRemoteName = pStrings;
+    *pStrings++ = L'\\';
+    *pStrings++ = L'\\';
+    CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
+    pStrings += ulServerName;
+    *pStrings++ = L'\0';
 
-		pNetResource->lpProvider = pStrings;
-		CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
-		pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
+    pNetResource->lpProvider = pStrings;
+    CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+    pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
 
-		DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
-			pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
+    DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
+              pNetResource->lpRemoteName, pStrings,
+              (PBYTE)Buffer + *BufferSize);
 
-		if (System)
-		{
-			*System = NULL;
-		}
+    if (System) {
+      *System = NULL;
+    }
 
-		return WN_SUCCESS;
-	}
+    return WN_SUCCESS;
+  }
 
-	/* *lpAfterName == L'\\', could be share or share + path.
-	* Check if there are more path components after the share name.
-	*/
-	const WCHAR *lp = lpAfterName + 1;
-	while (*lp && *lp != L'\\')
-	{
-		lp++;
-	}
+  /* *lpAfterName == L'\\', could be share or share + path.
+  * Check if there are more path components after the share name.
+  */
+  const WCHAR *lp = lpAfterName + 1;
+  while (*lp && *lp != L'\\') {
+    lp++;
+  }
 
-	if (*lp == 0)
-	{
-		DbgPrintW(L"NPGetResourceInformation: type 2\n");
-		/* It is a share only: \\dokan\share */
-		cbEntry = sizeof(NETRESOURCE);
-		cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name with trailing nul */
-		cbEntry += (DWORD)((lp - lpAfterName) * sizeof(WCHAR)); /* The share name with leading \\ */
-		cbEntry += sizeof(DOKAN_NP_NAME); /* provider name */
+  if (*lp == 0) {
+    DbgPrintW(L"NPGetResourceInformation: type 2\n");
+    /* It is a share only: \\dokan\share */
+    cbEntry = sizeof(NETRESOURCE);
+    cbEntry += (2 + ulServerName + 1) *
+               sizeof(WCHAR); /* \\ + server name with trailing nul */
+    cbEntry += (DWORD)((lp - lpAfterName) *
+                       sizeof(WCHAR)); /* The share name with leading \\ */
+    cbEntry += sizeof(DOKAN_NP_NAME);  /* provider name */
 
-		if (cbEntry > *BufferSize)
-		{
-			DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
-			*BufferSize = cbEntry;
-			return WN_MORE_DATA;
-		}
+    if (cbEntry > *BufferSize) {
+      DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
+      *BufferSize = cbEntry;
+      return WN_MORE_DATA;
+    }
 
-		memset(pNetResource, 0, sizeof(*pNetResource));
+    memset(pNetResource, 0, sizeof(*pNetResource));
 
-		pNetResource->dwType = RESOURCETYPE_DISK;
-		pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
-		pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
+    pNetResource->dwType = RESOURCETYPE_DISK;
+    pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
+    pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
 
-		pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+    pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
 
-		pNetResource->lpRemoteName = pStrings;
-		*pStrings++ = L'\\';
-		*pStrings++ = L'\\';
-		CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
-		pStrings += ulServerName;
-		CopyMemory(pStrings, lpAfterName, (lp - lpAfterName + 1) * sizeof(WCHAR));
-		pStrings += lp - lpAfterName + 1;
+    pNetResource->lpRemoteName = pStrings;
+    *pStrings++ = L'\\';
+    *pStrings++ = L'\\';
+    CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
+    pStrings += ulServerName;
+    CopyMemory(pStrings, lpAfterName, (lp - lpAfterName + 1) * sizeof(WCHAR));
+    pStrings += lp - lpAfterName + 1;
 
-		pNetResource->lpProvider = pStrings;
-		CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
-		pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
+    pNetResource->lpProvider = pStrings;
+    CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+    pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
 
-		DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
-			pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
+    DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
+              pNetResource->lpRemoteName, pStrings,
+              (PBYTE)Buffer + *BufferSize);
 
-		if (System)
-		{
-			*System = NULL;
-		}
+    if (System) {
+      *System = NULL;
+    }
 
-		return WN_SUCCESS;
-	}
+    return WN_SUCCESS;
+  }
 
-	/* \\dokan\share\path */
-	cbEntry = sizeof(NETRESOURCE);
-	cbEntry += (2 + ulServerName + 1) * sizeof(WCHAR); /* \\ + server name with trailing nul */
-	cbEntry += (DWORD)((lp - lpAfterName) * sizeof(WCHAR)); /* The share name with leading \\ */
-	cbEntry += sizeof(DOKAN_NP_NAME); /* provider name */
-	cbEntry += (lstrlen(lp) + 1) * sizeof(WCHAR); /* path string for lplpSystem */
+  /* \\dokan\share\path */
+  cbEntry = sizeof(NETRESOURCE);
+  cbEntry += (2 + ulServerName + 1) *
+             sizeof(WCHAR); /* \\ + server name with trailing nul */
+  cbEntry += (DWORD)((lp - lpAfterName) *
+                     sizeof(WCHAR)); /* The share name with leading \\ */
+  cbEntry += sizeof(DOKAN_NP_NAME);  /* provider name */
+  cbEntry += (lstrlen(lp) + 1) * sizeof(WCHAR); /* path string for lplpSystem */
 
-	if (cbEntry > *BufferSize)
-	{
-		DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
-		*BufferSize = cbEntry;
-		return WN_MORE_DATA;
-	}
+  if (cbEntry > *BufferSize) {
+    DbgPrintW(L"NPGetResourceInformation: WN_MORE_DATA 0x%x\n", cbEntry);
+    *BufferSize = cbEntry;
+    return WN_MORE_DATA;
+  }
 
-	memset(pNetResource, 0, sizeof(*pNetResource));
+  memset(pNetResource, 0, sizeof(*pNetResource));
 
-	pNetResource->dwType = RESOURCETYPE_DISK;
-	pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
-	pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
+  pNetResource->dwType = RESOURCETYPE_DISK;
+  pNetResource->dwDisplayType = RESOURCEDISPLAYTYPE_SHARE;
+  pNetResource->dwUsage = RESOURCEUSAGE_CONNECTABLE;
 
-	pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
+  pStrings = (PWCHAR)((PBYTE)pStrings - (cbEntry - sizeof(NETRESOURCE)));
 
-	/* The server + share. */
-	pNetResource->lpRemoteName = pStrings;
-	*pStrings++ = L'\\';
-	*pStrings++ = L'\\';
-	CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
-	pStrings += ulServerName;
-	CopyMemory(pStrings, lpAfterName, (lp - lpAfterName) * sizeof(WCHAR));
-	pStrings += lp - lpAfterName;
-	*pStrings++ = 0;
+  /* The server + share. */
+  pNetResource->lpRemoteName = pStrings;
+  *pStrings++ = L'\\';
+  *pStrings++ = L'\\';
+  CopyMemory(pStrings, lpServerName, ulServerName * sizeof(WCHAR));
+  pStrings += ulServerName;
+  CopyMemory(pStrings, lpAfterName, (lp - lpAfterName) * sizeof(WCHAR));
+  pStrings += lp - lpAfterName;
+  *pStrings++ = 0;
 
-	pNetResource->lpProvider = pStrings;
-	CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
-	pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
+  pNetResource->lpProvider = pStrings;
+  CopyMemory(pStrings, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
+  pStrings += sizeof(DOKAN_NP_NAME) / sizeof(WCHAR);
 
-	if (System)
-	{
-		*System = pStrings;
-	}
+  if (System) {
+    *System = pStrings;
+  }
 
-	lstrcpy(pStrings, lp);
-	pStrings += lstrlen(lp) + 1;
+  lstrcpy(pStrings, lp);
+  pStrings += lstrlen(lp) + 1;
 
-	DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
-		pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
-	DbgPrintW(L"NPGetResourceInformation: *System: %ls\n", *System);
+  DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
+            pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
+  DbgPrintW(L"NPGetResourceInformation: *System: %ls\n", *System);
 
-	return WN_SUCCESS;
+  return WN_SUCCESS;
 }
 
 DWORD APIENTRY NPGetUniversalName(__in LPCWSTR LocalPath, __in DWORD InfoLevel,
@@ -993,178 +955,178 @@ DWORD APIENTRY NPGetUniversalName(__in LPCWSTR LocalPath, __in DWORD InfoLevel,
   const WCHAR *lpRemainingPath;
   WCHAR *lpString;
 
-  DbgPrintW(L"NPGetUniversalName LocalPath = %s, InfoLevel = %d, *BufferSize = %d\n", LocalPath, InfoLevel, *BufferSize);
+  DbgPrintW(
+      L"NPGetUniversalName LocalPath = %s, InfoLevel = %d, *BufferSize = %d\n",
+      LocalPath, InfoLevel, *BufferSize);
 
   /* Check is input parameter is OK. */
-  if (InfoLevel != UNIVERSAL_NAME_INFO_LEVEL
-	  && InfoLevel != REMOTE_NAME_INFO_LEVEL)
-  {
-	  DbgPrintW(L"NPGetUniversalName: Bad dwInfoLevel InfoLevel: %d\n", InfoLevel);
-	  return WN_BAD_LEVEL;
+  if (InfoLevel != UNIVERSAL_NAME_INFO_LEVEL &&
+      InfoLevel != REMOTE_NAME_INFO_LEVEL) {
+    DbgPrintW(L"NPGetUniversalName: Bad dwInfoLevel InfoLevel: %d\n",
+              InfoLevel);
+    return WN_BAD_LEVEL;
   }
 
-  /* The 'LocalPath' is "X:\something". Extract the "X:" to pass to NPGetConnection. */
-  if (LocalPath == NULL
-	  || LocalPath[0] == 0
-	  || LocalPath[1] != L':')
-  {
-	  DbgPrintW(L"NPGetUniversalName: Bad LocalPath.\n");
-	  return WN_BAD_LOCALNAME;
+  /* The 'LocalPath' is "X:\something". Extract the "X:" to pass to
+   * NPGetConnection. */
+  if (LocalPath == NULL || LocalPath[0] == 0 || LocalPath[1] != L':') {
+    DbgPrintW(L"NPGetUniversalName: Bad LocalPath.\n");
+    return WN_BAD_LOCALNAME;
   }
 
   LocalDrive[0] = LocalPath[0];
   LocalDrive[1] = LocalPath[1];
   LocalDrive[2] = 0;
 
-  /* Length of the original path without the driver letter, including trailing NULL. */
+  /* Length of the original path without the driver letter, including trailing
+   * NULL. */
   lpRemainingPath = &LocalPath[2];
   RemainingPathLength = (DWORD)((wcslen(lpRemainingPath) + 1) * sizeof(WCHAR));
 
   /* Build the required structure in place of the supplied buffer. */
-  if (InfoLevel == UNIVERSAL_NAME_INFO_LEVEL)
-  {
-	  LPUNIVERSAL_NAME_INFOW pUniversalNameInfo = (LPUNIVERSAL_NAME_INFOW)Buffer;
+  if (InfoLevel == UNIVERSAL_NAME_INFO_LEVEL) {
+    LPUNIVERSAL_NAME_INFOW pUniversalNameInfo = (LPUNIVERSAL_NAME_INFOW)Buffer;
 
-	  BufferRequired = sizeof(UNIVERSAL_NAME_INFOW);
+    BufferRequired = sizeof(UNIVERSAL_NAME_INFOW);
 
-	  if (*BufferSize >= BufferRequired)
-	  {
-		  /* Enough place for the structure. */
-		  pUniversalNameInfo->lpUniversalName = (PWCHAR)((PBYTE)Buffer + sizeof(UNIVERSAL_NAME_INFOW));
+    if (*BufferSize >= BufferRequired) {
+      /* Enough place for the structure. */
+      pUniversalNameInfo->lpUniversalName =
+          (PWCHAR)((PBYTE)Buffer + sizeof(UNIVERSAL_NAME_INFOW));
 
-		  /* At least so many bytes are available for obtaining the remote name. */
-		  RemoteNameLength = *BufferSize - BufferRequired;
-	  }
-	  else
-	  {
-		  RemoteNameLength = 0;
-	  }
+      /* At least so many bytes are available for obtaining the remote name. */
+      RemoteNameLength = *BufferSize - BufferRequired;
+    } else {
+      RemoteNameLength = 0;
+    }
 
-	  /* Put the remote name directly to the buffer if possible and get the name length. */
-	  dwStatus = NPGetConnection(LocalDrive,
-		  RemoteNameLength ? pUniversalNameInfo->lpUniversalName : NULL,
-		  &RemoteNameLength);
+    /* Put the remote name directly to the buffer if possible and get the name
+     * length. */
+    dwStatus = NPGetConnection(
+        LocalDrive,
+        RemoteNameLength ? pUniversalNameInfo->lpUniversalName : NULL,
+        &RemoteNameLength);
 
-	  if (dwStatus != WN_SUCCESS
-		  && dwStatus != WN_MORE_DATA)
-	  {
-		  if (dwStatus != WN_NOT_CONNECTED)
-		  {
-			  DbgPrintW(L"NPGetUniversalName: NPGetConnection returned error 0x%lx\n", dwStatus);
-		  }
-		  return dwStatus;
-	  }
+    if (dwStatus != WN_SUCCESS && dwStatus != WN_MORE_DATA) {
+      if (dwStatus != WN_NOT_CONNECTED) {
+        DbgPrintW(L"NPGetUniversalName: NPGetConnection returned error 0x%lx\n",
+                  dwStatus);
+      }
+      return dwStatus;
+    }
 
-	  if (RemoteNameLength < sizeof(WCHAR))
-	  {
-		  DbgPrintW(L"NPGetUniversalName: Remote name is empty.\n");
-		  return WN_NO_NETWORK;
-	  }
+    if (RemoteNameLength < sizeof(WCHAR)) {
+      DbgPrintW(L"NPGetUniversalName: Remote name is empty.\n");
+      return WN_NO_NETWORK;
+    }
 
-	  /* Adjust for actual remote name length. */
-	  BufferRequired += RemoteNameLength;
+    /* Adjust for actual remote name length. */
+    BufferRequired += RemoteNameLength;
 
-	  /* And for required place for remaining path. */
-	  BufferRequired += RemainingPathLength;
+    /* And for required place for remaining path. */
+    BufferRequired += RemainingPathLength;
 
-	  if (*BufferSize < BufferRequired)
-	  {
-		  DbgPrintW(L"NPGetUniversalName: WN_MORE_DATA BufferRequired: %d\n", BufferRequired);
-		  *BufferSize = BufferRequired;
-		  return WN_MORE_DATA;
-	  }
+    if (*BufferSize < BufferRequired) {
+      DbgPrintW(L"NPGetUniversalName: WN_MORE_DATA BufferRequired: %d\n",
+                BufferRequired);
+      *BufferSize = BufferRequired;
+      return WN_MORE_DATA;
+    }
 
-	  /* Enough memory in the buffer. Add '\' and remaining path to the remote name. */
-	  lpString = &pUniversalNameInfo->lpUniversalName[RemoteNameLength / sizeof(WCHAR)];
-	  lpString--; /* Trailing NULL */
+    /* Enough memory in the buffer. Add '\' and remaining path to the remote
+     * name. */
+    lpString =
+        &pUniversalNameInfo->lpUniversalName[RemoteNameLength / sizeof(WCHAR)];
+    lpString--; /* Trailing NULL */
 
-	  CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
-  }
-  else
-  {
-	  LPREMOTE_NAME_INFOW pRemoteNameInfo = (LPREMOTE_NAME_INFOW)Buffer;
-	  WCHAR *lpDelimiter;
+    CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
+  } else {
+    LPREMOTE_NAME_INFOW pRemoteNameInfo = (LPREMOTE_NAME_INFOW)Buffer;
+    WCHAR *lpDelimiter;
 
-	  BufferRequired = sizeof(REMOTE_NAME_INFOW);
+    BufferRequired = sizeof(REMOTE_NAME_INFOW);
 
-	  if (*BufferSize >= BufferRequired)
-	  {
-		  /* Enough place for the structure. */
-		  pRemoteNameInfo->lpUniversalName = (PWCHAR)((PBYTE)Buffer + sizeof(REMOTE_NAME_INFOW));
-		  pRemoteNameInfo->lpConnectionName = NULL;
-		  pRemoteNameInfo->lpRemainingPath = NULL;
+    if (*BufferSize >= BufferRequired) {
+      /* Enough place for the structure. */
+      pRemoteNameInfo->lpUniversalName =
+          (PWCHAR)((PBYTE)Buffer + sizeof(REMOTE_NAME_INFOW));
+      pRemoteNameInfo->lpConnectionName = NULL;
+      pRemoteNameInfo->lpRemainingPath = NULL;
 
-		  /* At least so many bytes are available for obtaining the remote name. */
-		  RemoteNameLength = *BufferSize - BufferRequired;
-	  }
-	  else
-	  {
-		  RemoteNameLength = 0;
-	  }
+      /* At least so many bytes are available for obtaining the remote name. */
+      RemoteNameLength = *BufferSize - BufferRequired;
+    } else {
+      RemoteNameLength = 0;
+    }
 
-	  /* Put the remote name directly to the buffer if possible and get the name length. */
-	  dwStatus = NPGetConnection(LocalDrive, RemoteNameLength ? pRemoteNameInfo->lpUniversalName : NULL, &RemoteNameLength);
+    /* Put the remote name directly to the buffer if possible and get the name
+     * length. */
+    dwStatus = NPGetConnection(
+        LocalDrive, RemoteNameLength ? pRemoteNameInfo->lpUniversalName : NULL,
+        &RemoteNameLength);
 
-	  if (dwStatus != WN_SUCCESS
-		  && dwStatus != WN_MORE_DATA)
-	  {
-		  if (dwStatus != WN_NOT_CONNECTED)
-		  {
-			  DbgPrintW(L"NPGetUniversalName: NPGetConnection returned error 0x%lx\n", dwStatus);
-		  }
-		  return dwStatus;
-	  }
+    if (dwStatus != WN_SUCCESS && dwStatus != WN_MORE_DATA) {
+      if (dwStatus != WN_NOT_CONNECTED) {
+        DbgPrintW(L"NPGetUniversalName: NPGetConnection returned error 0x%lx\n",
+                  dwStatus);
+      }
+      return dwStatus;
+    }
 
-	  if (RemoteNameLength < sizeof(WCHAR))
-	  {
-		  DbgPrintW(L"NPGetUniversalName: Remote name is empty.\n");
-		  return WN_NO_NETWORK;
-	  }
+    if (RemoteNameLength < sizeof(WCHAR)) {
+      DbgPrintW(L"NPGetUniversalName: Remote name is empty.\n");
+      return WN_NO_NETWORK;
+    }
 
-	  /* Adjust for actual remote name length as a part of the universal name. */
-	  BufferRequired += RemoteNameLength;
+    /* Adjust for actual remote name length as a part of the universal name. */
+    BufferRequired += RemoteNameLength;
 
-	  /* And for required place for remaining path as a part of the universal name. */
-	  BufferRequired += RemainingPathLength;
+    /* And for required place for remaining path as a part of the universal
+     * name. */
+    BufferRequired += RemainingPathLength;
 
-	  /* lpConnectionName, which is the remote name. */
-	  BufferRequired += RemoteNameLength;
+    /* lpConnectionName, which is the remote name. */
+    BufferRequired += RemoteNameLength;
 
-	  /* lpRemainingPath. */
-	  BufferRequired += RemainingPathLength;
+    /* lpRemainingPath. */
+    BufferRequired += RemainingPathLength;
 
-	  if (*BufferSize < BufferRequired)
-	  {
-		  DbgPrintW(L"NPGetUniversalName: WN_MORE_DATA BufferRequired: %d\n", BufferRequired);
-		  *BufferSize = BufferRequired;
-		  return WN_MORE_DATA;
-	  }
+    if (*BufferSize < BufferRequired) {
+      DbgPrintW(L"NPGetUniversalName: WN_MORE_DATA BufferRequired: %d\n",
+                BufferRequired);
+      *BufferSize = BufferRequired;
+      return WN_MORE_DATA;
+    }
 
-	  /* Enough memory in the buffer. Add \ and remaining path to the remote name. */
-	  lpString = &pRemoteNameInfo->lpUniversalName[RemoteNameLength / sizeof(WCHAR)];
-	  lpString--; /* Trailing NULL */
+    /* Enough memory in the buffer. Add \ and remaining path to the remote name.
+     */
+    lpString =
+        &pRemoteNameInfo->lpUniversalName[RemoteNameLength / sizeof(WCHAR)];
+    lpString--; /* Trailing NULL */
 
-	  lpDelimiter = lpString; /* Delimiter between the remote name and the remaining path.
-							  * May be 0 if the remaining path is empty.
-							  */
+    lpDelimiter = lpString; /* Delimiter between the remote name and the
+                             * remaining path.
+                                                    * May be 0 if the remaining
+                             * path is empty.
+                                                    */
 
-	  CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
-	  lpString += RemainingPathLength / sizeof(WCHAR);
+    CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
+    lpString += RemainingPathLength / sizeof(WCHAR);
 
-	  *lpDelimiter = 0; /* Keep NULL terminated remote name. */
+    *lpDelimiter = 0; /* Keep NULL terminated remote name. */
 
-	  pRemoteNameInfo->lpConnectionName = lpString;
-	  CopyMemory(lpString, pRemoteNameInfo->lpUniversalName, RemoteNameLength);
-	  lpString += RemoteNameLength / sizeof(WCHAR);
+    pRemoteNameInfo->lpConnectionName = lpString;
+    CopyMemory(lpString, pRemoteNameInfo->lpUniversalName, RemoteNameLength);
+    lpString += RemoteNameLength / sizeof(WCHAR);
 
-	  pRemoteNameInfo->lpRemainingPath = lpString;
-	  CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
+    pRemoteNameInfo->lpRemainingPath = lpString;
+    CopyMemory(lpString, lpRemainingPath, RemainingPathLength);
 
-	  /* If remaining path was not empty, restore the delimiter in the universal name. */
-	  if (RemainingPathLength > sizeof(WCHAR))
-	  {
-		  *lpDelimiter = L'\\';
-	  }
+    /* If remaining path was not empty, restore the delimiter in the universal
+     * name. */
+    if (RemainingPathLength > sizeof(WCHAR)) {
+      *lpDelimiter = L'\\';
+    }
   }
 
   return WN_SUCCESS;

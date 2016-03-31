@@ -772,33 +772,33 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
   return TRUE;
 }
 
-BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length, BOOL uncOnly, PULONG nbRead) {
-	ULONG returnedLength = 0;
+BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
+                                     BOOL uncOnly, PULONG nbRead) {
+  ULONG returnedLength = 0;
 
-	DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-	ZeroMemory(dokanControl, sizeof(dokanControl));
-	*nbRead = 0;
+  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+  ZeroMemory(dokanControl, sizeof(dokanControl));
+  *nbRead = 0;
 
-	if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL, 0,
-		dokanControl, sizeof(dokanControl),
-		&returnedLength)) {
-		for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
-			if (wcscmp(dokanControl[i].DeviceName, L"") == 0) {
-				break;
-			}
-			if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0) {
-				if (length < ((*nbRead) + 1))
-					return TRUE;
+  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL,
+                   0, dokanControl, sizeof(dokanControl), &returnedLength)) {
+    for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
+      if (wcscmp(dokanControl[i].DeviceName, L"") == 0) {
+        break;
+      }
+      if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0) {
+        if (length < ((*nbRead) + 1))
+          return TRUE;
 
-				CopyMemory(&list[*nbRead], &dokanControl[i], sizeof(DOKAN_CONTROL));
-				(*nbRead)++;
-			}
-		}
+        CopyMemory(&list[*nbRead], &dokanControl[i], sizeof(DOKAN_CONTROL));
+        (*nbRead)++;
+      }
+    }
 
-		return TRUE;
-	}
+    return TRUE;
+  }
 
-	return FALSE;
+  return FALSE;
 }
 
 BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {

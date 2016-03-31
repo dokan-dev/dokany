@@ -152,8 +152,8 @@ typedef struct _IRP_LIST {
 } IRP_LIST, *PIRP_LIST;
 
 typedef struct _DOKAN_CONTROL {
-  ULONG Type;                  // File System Type
-  WCHAR MountPoint[260];       // Mount Point
+  ULONG Type;            // File System Type
+  WCHAR MountPoint[260]; // Mount Point
   WCHAR UNCName[64];
   WCHAR DeviceName[64];        // Disk Device Name
   PDEVICE_OBJECT DeviceObject; // Volume Device Object
@@ -428,7 +428,8 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 DRIVER_DISPATCH DokanGetAccessToken;
 
 NTSTATUS
-DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp, __in PDOKAN_GLOBAL dokanGlobal);
+DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
+                       __in PDOKAN_GLOBAL dokanGlobal);
 
 NTSTATUS
 DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);

@@ -80,11 +80,11 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("  IOCTL_SET_DEBUG_MODE: %d\n", g_Debug);
     break;
   case IOCTL_EVENT_MOUNTPOINT_LIST:
-	if (GetIdentifierType(dokanGlobal) != DGL) {
-	  return STATUS_INVALID_PARAMETER;
-	}
-	status = DokanGetMountPointList(DeviceObject, Irp, dokanGlobal);
-	break;
+    if (GetIdentifierType(dokanGlobal) != DGL) {
+      return STATUS_INVALID_PARAMETER;
+    }
+    status = DokanGetMountPointList(DeviceObject, Irp, dokanGlobal);
+    break;
   case IOCTL_TEST:
     if (irpSp->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(ULONG)) {
       *(ULONG *)Irp->AssociatedIrp.SystemBuffer = DOKAN_DRIVER_VERSION;
@@ -237,7 +237,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       partitionInfo->HiddenSectors = 0;
       partitionInfo->StartingOffset.QuadPart = 0;
       partitionInfo->PartitionLength.QuadPart =
-		  DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
+          DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
       partitionInfo->PartitionNumber = 0;
     } else {
       PPARTITION_INFORMATION_EX partitionInfo;
@@ -250,7 +250,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       partitionInfo->Mbr.HiddenSectors = 0;
       partitionInfo->StartingOffset.QuadPart = 0;
       partitionInfo->PartitionLength.QuadPart =
-		  DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
+          DOKAN_DEFAULT_DISK_SIZE; // Partition size equels disk size here
       partitionInfo->PartitionNumber = 0;
     }
 
@@ -330,49 +330,48 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     PSTORAGE_PROPERTY_QUERY query = NULL;
     query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
     ASSERT(query != NULL);
-	if (query->QueryType == PropertyExistsQuery) {
+    if (query->QueryType == PropertyExistsQuery) {
       if (query->PropertyId == StorageDeviceUniqueIdProperty) {
-		PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage;
-		DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
-		if (outputLength < sizeof(STORAGE_DEVICE_UNIQUE_IDENTIFIER)) {
-		  status = STATUS_BUFFER_TOO_SMALL;
-		  Irp->IoStatus.Information = 0;
-		  break;
-		}
-		storage = Irp->AssociatedIrp.SystemBuffer;
+        PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage;
+        DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
+        if (outputLength < sizeof(STORAGE_DEVICE_UNIQUE_IDENTIFIER)) {
+          status = STATUS_BUFFER_TOO_SMALL;
+          Irp->IoStatus.Information = 0;
+          break;
+        }
+        storage = Irp->AssociatedIrp.SystemBuffer;
 
-		status = STATUS_SUCCESS;
-	  } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
-		DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
-		status = STATUS_NOT_IMPLEMENTED;
-	  } else {
-		DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
-		status = STATUS_NOT_IMPLEMENTED;
-	  }
-	} else if (query->QueryType == PropertyStandardQuery) {
-	  if (query->PropertyId == StorageDeviceProperty) {
-		PSTORAGE_DEVICE_DESCRIPTOR storage;
-		DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
-		if (outputLength < sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
-			status = STATUS_BUFFER_TOO_SMALL;
-			Irp->IoStatus.Information = 0;
-			break;
-		}
-		storage = Irp->AssociatedIrp.SystemBuffer;
+        status = STATUS_SUCCESS;
+      } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
+        DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
+        status = STATUS_NOT_IMPLEMENTED;
+      } else {
+        DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
+        status = STATUS_NOT_IMPLEMENTED;
+      }
+    } else if (query->QueryType == PropertyStandardQuery) {
+      if (query->PropertyId == StorageDeviceProperty) {
+        PSTORAGE_DEVICE_DESCRIPTOR storage;
+        DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
+        if (outputLength < sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
+          status = STATUS_BUFFER_TOO_SMALL;
+          Irp->IoStatus.Information = 0;
+          break;
+        }
+        storage = Irp->AssociatedIrp.SystemBuffer;
 
-		status = STATUS_SUCCESS;
-	  }
-	  else if (query->PropertyId == StorageAdapterProperty) {
-		DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
-		status = STATUS_NOT_IMPLEMENTED;
-	  } else {
-		DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
-		status = STATUS_ACCESS_DENIED;
-	  }
-	} else {
-		DDbgPrint("    Unknown query type %d\n", query->QueryType);
-		status = STATUS_ACCESS_DENIED;
-	}
+        status = STATUS_SUCCESS;
+      } else if (query->PropertyId == StorageAdapterProperty) {
+        DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
+        status = STATUS_NOT_IMPLEMENTED;
+      } else {
+        DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
+        status = STATUS_ACCESS_DENIED;
+      }
+    } else {
+      DDbgPrint("    Unknown query type %d\n", query->QueryType);
+      status = STATUS_ACCESS_DENIED;
+    }
     break;
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
     PMOUNTDEV_NAME mountdevName;
@@ -504,10 +503,10 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
             RtlZeroMemory(&dokanControl, sizeof(dokanControl));
             RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
                           dcb->DiskDeviceName->Length);
-			if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
-			  RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
+            if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
+              RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
                             dcb->UNCName->Length);
-			}
+            }
             mountEntry = FindMountEntry(dcb->Global, &dokanControl);
             if (mountEntry != NULL) {
               RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
@@ -547,8 +546,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           // If deleted mount point match user requested mount point, release
           // devices
           if (dcb->MountPoint->Length == mountdevName->NameLength &&
-			  RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
-                     mountdevName->NameLength) == mountdevName->NameLength) {
+              RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
+                               mountdevName->NameLength) ==
+                  mountdevName->NameLength) {
             status = DokanEventRelease(vcb->DeviceObject);
           } else {
             DDbgPrint("   Deleted Mount Point doesn't match device excepted "
@@ -624,8 +624,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         break;
       }
 
-	  WCHAR* lpPath = NULL;
-	  ULONG ulPath = 0;
+      WCHAR *lpPath = NULL;
+      ULONG ulPath = 0;
 
       if (irpSp->Parameters.DeviceIoControl.IoControlCode ==
           IOCTL_REDIR_QUERY_PATH) {
@@ -648,8 +648,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   pathReq->PathNameLength / sizeof(WCHAR),
                   pathReq->FilePathName);
 
-		lpPath = pathReq->FilePathName;
-		ulPath = pathReq->PathNameLength / sizeof(WCHAR);
+        lpPath = pathReq->FilePathName;
+        ulPath = pathReq->PathNameLength / sizeof(WCHAR);
 
         if (pathReq->PathNameLength >= dcb->UNCName->Length / sizeof(WCHAR)) {
           prefixOk = (_wcsnicmp(pathReq->FilePathName, dcb->UNCName->Buffer,
@@ -677,8 +677,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   pathReqEx->PathName.Length / sizeof(WCHAR),
                   pathReqEx->PathName.Buffer);
 
-		lpPath = pathReqEx->PathName.Buffer;
-		ulPath = pathReqEx->PathName.Length / sizeof(WCHAR);
+        lpPath = pathReqEx->PathName.Buffer;
+        ulPath = pathReqEx->PathName.Length / sizeof(WCHAR);
 
         if (pathReqEx->PathName.Length >= dcb->UNCName->Length) {
           prefixOk =
@@ -687,32 +687,35 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         }
       }
 
-	  unsigned int i = 1;
-	  for (; i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && !prefixOk; ++i) {
-		  if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
-			  break;
-		  }
+      unsigned int i = 1;
+      for (;
+           i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && !prefixOk;
+           ++i) {
+        if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
+          break;
+        }
 
-		  if ((i + 1) * sizeof(WCHAR) < dcb->UNCName->Length) {
-			  prefixOk = (dcb->UNCName->Buffer[i + 1] == L'\\');
-		  }
-	  }
+        if ((i + 1) * sizeof(WCHAR) < dcb->UNCName->Length) {
+          prefixOk = (dcb->UNCName->Buffer[i + 1] == L'\\');
+        }
+      }
 
       if (!prefixOk) {
         status = STATUS_BAD_NETWORK_PATH;
         break;
       }
 
-	  for (; i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && prefixOk; ++i) {
-		  if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
-			  prefixOk = FALSE;
-		  }
-	  }
+      for (; i < ulPath && i * sizeof(WCHAR) < dcb->UNCName->Length && prefixOk;
+           ++i) {
+        if (_wcsnicmp(&lpPath[i], &dcb->UNCName->Buffer[i], 1) != 0) {
+          prefixOk = FALSE;
+        }
+      }
 
-	  if (!prefixOk) {
-		  status = STATUS_BAD_NETWORK_NAME;
-		  break;
-	  }
+      if (!prefixOk) {
+        status = STATUS_BAD_NETWORK_NAME;
+        break;
+      }
 
       pathResp = (PQUERY_PATH_RESPONSE)Irp->UserBuffer;
       pathResp->LengthAccepted = dcb->UNCName->Length;
