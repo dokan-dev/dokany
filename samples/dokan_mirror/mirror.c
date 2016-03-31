@@ -356,8 +356,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (status == STATUS_SUCCESS) {
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
       handle = CreateFile(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                           &securityAttrib, OPEN_EXISTING,
-                           FILE_FLAG_BACKUP_SEMANTICS, NULL);
+                          &securityAttrib, OPEN_EXISTING,
+                          FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -1136,6 +1136,21 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
+/*
+//Uncomment for personalize disk space
+static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
+    PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
+    PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  *FreeBytesAvailable = (ULONGLONG)(512 * 1024 * 1024);
+  *TotalNumberOfBytes = 9223372036854775807;
+  *TotalNumberOfFreeBytes = 9223372036854775807;
+
+  return STATUS_SUCCESS;
+}
+*/
+
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
  * definition.
@@ -1415,7 +1430,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->UnlockFile = MirrorUnlockFile;
   dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
   dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
-  dokanOperations->GetDiskFreeSpace = NULL;
+  dokanOperations->GetDiskFreeSpace = NULL; // MirrorDokanGetDiskFreeSpace;
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
   dokanOperations->Unmounted = MirrorUnmounted;
   dokanOperations->FindStreams = MirrorFindStreams;
