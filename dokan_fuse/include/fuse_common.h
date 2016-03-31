@@ -31,7 +31,7 @@
 
 /* This interface uses 64 bit off_t, except on Windows where it's 
 possible to use 32-bit filelengths for compatibility with MSVC CRT */
-#ifndef WIN32
+#ifndef _WIN32
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
 #error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
