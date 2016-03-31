@@ -54,6 +54,7 @@ int ShowUsage() {
           "  /i n                : Install network provider\n"
           "  /r d                : Remove driver\n"
           "  /r n                : Remove network provider\n"
+          "  /l a                : List current mount points\n"
           "  /d [0-9]            : Enable Kernel Debug output\n"
           "  /v                  : Print Dokan version\n");
   return EXIT_FAILURE;
@@ -185,6 +186,22 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       }
     }
     break;
+
+  case L'l':
+    {
+      ULONG nbRead = 0;
+	  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+	  if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE, &nbRead)) {
+		fwprintf(stderr, L"  Mount points: %d\n", nbRead);
+	    for (unsigned int p = 0; i < nbRead; ++p) {
+		  fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n", p, dokanControl[p].MountPoint, dokanControl[p].UNCName, dokanControl[p].DeviceName);
+		}
+	  } else {
+		  fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
+	  }
+    }
+    break;
+
   default:
     fprintf(stderr, "unknown option\n");
   }

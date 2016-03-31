@@ -19,3 +19,4 @@ DokanRemoveMountPoint
 DokanUseStdErr
 DokanDebugMode
 DokanMapKernelToUserCreateFileFlags
+DokanGetMountPointList
