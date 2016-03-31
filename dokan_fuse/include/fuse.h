@@ -10,7 +10,7 @@
 #define _FUSE_H_
 
 /* Include Windows compatibility stuff early*/
-#ifdef WIN32
+#ifdef _WIN32
 #include "fuse_win.h"
 typedef struct _FILETIME FILETIME;
 #else
@@ -445,7 +445,7 @@ struct fuse_operations {
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 
-#ifdef WIN32
+#ifdef _WIN32
 	/* these to support extented windows calls */
 	uint32_t (*win_get_attributes) (const char *fn);
 	int (*win_set_attributes) (const char *fn, uint32_t attr);
