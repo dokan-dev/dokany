@@ -426,6 +426,7 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
 
 NTSTATUS
 DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp, __in PDOKAN_GLOBAL dokanGlobal) {
+  UNREFERENCED_PARAMETER(DeviceObject);
   PIO_STACK_LOCATION irpSp = NULL;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PLIST_ENTRY listEntry;
