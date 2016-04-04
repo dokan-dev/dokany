@@ -60,6 +60,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define IOCTL_GET_ACCESS_TOKEN                                                 \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80C, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#define IOCTL_EVENT_MOUNTPOINT_LIST                                            \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80D, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define DRIVER_FUNC_INSTALL 0x01
 #define DRIVER_FUNC_REMOVE 0x02
 

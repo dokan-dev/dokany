@@ -54,6 +54,7 @@ int ShowUsage() {
           "  /i n                : Install network provider\n"
           "  /r d                : Remove driver\n"
           "  /r n                : Remove network provider\n"
+          "  /l a                : List current mount points\n"
           "  /d [0-9]            : Enable Kernel Debug output\n"
           "  /v                  : Print Dokan version\n");
   return EXIT_FAILURE;
@@ -73,7 +74,7 @@ int Unmount(LPCWSTR MountPoint, BOOL ForceUnmount) {
 }
 
 int InstallDriver(LPCWSTR driverFullPath) {
-  fprintf(stderr, "Installing driver...\n");
+  fprintf(stdout, "Installing driver...\n");
   if (GetFileAttributes(driverFullPath) == INVALID_FILE_ATTRIBUTES) {
     fwprintf(stderr, L"Error the file '%s' does not exist.\n", driverFullPath);
     return EXIT_FAILURE;
@@ -85,17 +86,17 @@ int InstallDriver(LPCWSTR driverFullPath) {
     return EXIT_FAILURE;
   }
 
-  fprintf(stderr, "Driver installation succeeded!\n");
+  fprintf(stdout, "Driver installation succeeded!\n");
   return EXIT_SUCCESS;
 }
 
 int DeleteDokanService(LPCWSTR ServiceName) {
-  fwprintf(stderr, L"Removing '%s'...\n", ServiceName);
+  fwprintf(stdout, L"Removing '%s'...\n", ServiceName);
   if (!DokanServiceDelete(ServiceName)) {
     fwprintf(stderr, L"Error removing '%s'\n", ServiceName);
     return EXIT_FAILURE;
   }
-  fwprintf(stderr, L"'%s' removed.\n", ServiceName);
+  fwprintf(stdout, L"'%s' removed.\n", ServiceName);
   return EXIT_SUCCESS;
 }
 
@@ -127,12 +128,12 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   ExpandEnvironmentStringsW(DOKAN_DRIVER_FULL_PATH, driverFullPath, MAX_PATH);
 
-  fwprintf(stderr, L"Driver path: '%s'\n", driverFullPath);
+  fwprintf(stdout, L"Driver path: '%s'\n", driverFullPath);
 
   if (GetOption(argc, argv, 1) == L'v') {
-    fprintf(stderr, "dokanctl : %s %s\n", __DATE__, __TIME__);
-    fprintf(stderr, "Dokan version : %d\n", DokanVersion());
-    fprintf(stderr, "Dokan driver version : 0x%lx\n", DokanDriverVersion());
+    fprintf(stdout, "dokanctl : %s %s\n", __DATE__, __TIME__);
+    fprintf(stdout, "Dokan version : %d\n", DokanVersion());
+    fprintf(stdout, "Dokan driver version : 0x%lx\n", DokanDriverVersion());
     return EXIT_SUCCESS;
 
   } else if (GetOption(argc, argv, 1) == L'u' && argc == 3) {
@@ -156,7 +157,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
     } else if (type == L'n') {
       if (DokanNetworkProviderInstall())
-        fprintf(stderr, "network provider install ok\n");
+        fprintf(stdout, "network provider install ok\n");
       else
         fprintf(stderr, "network provider install failed\n");
     }
@@ -169,21 +170,39 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
     } else if (type == L'n') {
       if (DokanNetworkProviderUninstall())
-        fprintf(stderr, "network provider remove ok\n");
+        fprintf(stdout, "network provider remove ok\n");
       else
         fprintf(stderr, "network provider remove failed\n");
     }
     break;
+
   case L'd':
     if (L'0' <= type && type <= L'9') {
       ULONG mode = type - L'0';
       if (DokanSetDebugMode(mode)) {
-        fprintf(stderr, "set debug mode ok\n");
+        fprintf(stdout, "set debug mode ok\n");
       } else {
         fprintf(stderr, "set debug mode failed\n");
       }
     }
     break;
+
+  case L'l': {
+    ULONG nbRead = 0;
+    DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+    if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
+                               &nbRead)) {
+      fwprintf(stderr, L"  Mount points: %d\n", nbRead);
+      for (unsigned int p = 0; p < nbRead; ++p) {
+        fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
+                 p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
+                 dokanControl[p].DeviceName);
+      }
+    } else {
+      fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
+    }
+  } break;
+
   default:
     fprintf(stderr, "unknown option\n");
   }

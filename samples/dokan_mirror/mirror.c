@@ -140,6 +140,10 @@ NTSTATUS ToNtStatus(DWORD dwError) {
     return STATUS_PRIVILEGE_NOT_HELD;
   case ERROR_NOT_READY:
     return STATUS_DEVICE_NOT_READY;
+  case ERROR_DIRECTORY:
+    return STATUS_NOT_A_DIRECTORY;
+  case ERROR_HANDLE_EOF:
+    return STATUS_END_OF_FILE;
   default:
     DbgPrint(L"Unknown error code %d\n", dwError);
     return STATUS_ACCESS_DENIED;
@@ -351,9 +355,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
     if (status == STATUS_SUCCESS) {
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-      handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                           &securityAttrib, OPEN_EXISTING,
-                           FILE_FLAG_BACKUP_SEMANTICS, NULL);
+      handle = CreateFile(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          &securityAttrib, OPEN_EXISTING,
+                          FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -369,15 +373,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     // It is a create file request
 
     if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-        (fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
-      if (CreateDisposition == FILE_CREATE) {
-        return STATUS_OBJECT_NAME_COLLISION; // File already exist because
-                                             // GetFileAttributes found it
-      } else {
-        handle = CreateFileW(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                             &securityAttrib, OPEN_EXISTING,
-                             FILE_FLAG_BACKUP_SEMANTICS, NULL);
-      }
+        (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
+        CreateDisposition == FILE_CREATE) {
+      return STATUS_OBJECT_NAME_COLLISION; // File already exist because
+                                           // GetFileAttributes found it
     } else {
       handle = CreateFile(
           filePath,
@@ -742,8 +741,13 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, FileName);
-
   DbgPrint(L"DeleteFile %s\n", filePath);
+
+  DWORD dwAttrib = GetFileAttributes(filePath);
+
+  if (dwAttrib != INVALID_FILE_ATTRIBUTES &&
+      (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+    return STATUS_ACCESS_DENIED;
 
   return STATUS_SUCCESS;
 }
@@ -1132,6 +1136,21 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
+/*
+//Uncomment for personalize disk space
+static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
+    PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
+    PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  *FreeBytesAvailable = (ULONGLONG)(512 * 1024 * 1024);
+  *TotalNumberOfBytes = 9223372036854775807;
+  *TotalNumberOfFreeBytes = 9223372036854775807;
+
+  return STATUS_SUCCESS;
+}
+*/
+
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
  * definition.
@@ -1411,7 +1430,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->UnlockFile = MirrorUnlockFile;
   dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
   dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
-  dokanOperations->GetDiskFreeSpace = NULL;
+  dokanOperations->GetDiskFreeSpace = NULL; // MirrorDokanGetDiskFreeSpace;
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
   dokanOperations->Unmounted = MirrorUnmounted;
   dokanOperations->FindStreams = MirrorFindStreams;

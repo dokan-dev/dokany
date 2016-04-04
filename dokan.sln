@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sys", "sys\sys.vcxproj", "{C0269F86-24E0-40DD-B5C8-29CDFDFF2AFB}"
 EndProject
@@ -14,12 +14,6 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_np", "dokan_np\dokan_np.vcxproj", "{EC90ED56-551B-4784-9B07-4B49B972448F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_fuse", "dokan_fuse\dokan_fuse.vcxproj", "{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dokan_install", "dokan_install", "{61F8073A-5C2F-4DC0-9A91-F4FDEECD3C5B}"
-	ProjectSection(SolutionItems) = preProject
-		dokan_install\install-redist.nsi = dokan_install\install-redist.nsi
-		dokan_install\install.nsi = dokan_install\install.nsi
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

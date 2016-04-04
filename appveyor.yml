@@ -21,12 +21,13 @@
   configuration:
   - All
   - Coverity
+  - FsTest
   platform:
   - x64
   
   cache:
-    - '%CYG_CACHE%'
-    - '%CYG64_CACHE%'
+  - '%CYG_CACHE%'
+  - '%CYG64_CACHE%'
 
   init:
     - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
@@ -43,10 +44,19 @@
     - 'IF "%CONFIGURATION%" == "All" ( %CYG64_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG64_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG64_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
       && %CYG64_BASH% -lc "cygcheck -dc cygwin" ) '
     - 'IF "%CONFIGURATION%" == "All" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
-      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm && C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc mingw-w64-i686-cmake mingw-w64-x86_64-cmake make --noconfirm ) '
+      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm ) '
+      # C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc mingw-w64-i686-cmake mingw-w64-x86_64-cmake make --noconfirm
+    - ps: |
+        if ($env:CONFIGURATION -eq "FsTest") {
+          & Bcdedit.exe -set TESTSIGNING ON;
+          echo "Before reboot";
+          Restart-Computer -Force;
+          Start-Sleep -s 10;
+        }
 
   build_script:
   - ps: |
+      Write-Host Start building...
       $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 
       if ($env:CONFIGURATION -eq "Coverity") {
@@ -101,5 +111,40 @@
         "/p:Platform=${Platform}")
         
         & $buildCmd $buildArgs
+      } elseif ($env:CONFIGURATION -eq "FsTest") {
+        
+        $buildArgs = @(
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Win10 Debug",
+        "/p:Platform=$env:PLATFORM")
+        
+        & $buildCmd $buildArgs
+
+        $certMgr = "C:\Program Files (x86)\Windows Kits\10\bin\x64\certmgr.exe"
+        & $certMgr /add x64\Win10Debug\dokan1.cer /s /r localMachine root
+        & $certMgr /add x64\Win10Debug\dokan1.cer /s /r localMachine trustedpublisher
+        
+        cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
+        & .\x64\Debug\dokanctl.exe /i d
+        & .\x64\Debug\dokanctl.exe /i n
+        $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
+        Start-Sleep -s 5
+        
+        git clone https://github.com/Liryna/winfstest.git
+        $buildArgs = @(
+        ".\winfstest\winfstest.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Debug",
+        "/p:Platform=$env:PLATFORM")
+        
+        New-Item C:\TMP -type directory
+        & $buildCmd $buildArgs
+        & .\winfstest\TestSuite\run-winfstest.bat M:\
+
+        Start-Sleep -s 5
+        Stop-Process $app.Id
       }
+      Write-Host Build Finished !
 

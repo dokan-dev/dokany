@@ -418,6 +418,10 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
   RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
                 dcb->DiskDeviceName->Length);
+  if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
+    RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
+                  dcb->UNCName->Length);
+  }
   mountEntry = FindMountEntry(dcb->Global, &dokanControl);
   if (mountEntry != NULL) {
     mountEntry->MountControl.DeviceObject = volDeviceObject;
@@ -442,7 +446,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   DokanCreateMountPoint(dcb);
 
   if (isNetworkFileSystem) {
-      DokanRegisterUncProviderSystem(dcb);
+    DokanRegisterUncProviderSystem(dcb);
   }
   return STATUS_SUCCESS;
 }

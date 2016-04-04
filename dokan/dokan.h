@@ -28,6 +28,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "public.h"
 
 #define DOKAN_DRIVER_NAME L"dokan" DOKAN_MAJOR_API_VERSION L".sys"
+#define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
 
 #ifdef _EXPORTING
 #define DOKANAPI /*__declspec(dllexport)*/                                     \
@@ -46,6 +47,8 @@ extern "C" {
 // DokanOptions->Version.
 #define DOKAN_VERSION 100
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 100
+
+#define DOKAN_MAX_INSTANCES 32 // Maximum number of dokan instances
 
 #define DOKAN_OPTION_DEBUG 1          // ouput debug message
 #define DOKAN_OPTION_STDERR 2         // ouput debug message to stderr
@@ -298,6 +301,14 @@ typedef struct _DOKAN_OPERATIONS {
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
+typedef struct _DOKAN_CONTROL {
+  ULONG Type;
+  WCHAR MountPoint[MAX_PATH];
+  WCHAR UNCName[64];
+  WCHAR DeviceName[64];
+  PVOID DeviceObject;
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
+
 /* DokanMain returns error codes */
 #define DOKAN_SUCCESS 0
 #define DOKAN_ERROR -1                /* General Error */
@@ -336,6 +347,9 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
 // callback.
 // The caller must call CloseHandle for the returned handle.
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
+
+BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
+                                     BOOL uncOnly, PULONG nbRead);
 
 void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
