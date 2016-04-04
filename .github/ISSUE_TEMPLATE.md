@@ -9,9 +9,8 @@ Feature request can skip this form. Bug report **must** complete it. `Check List
 # Check List
   - [ ] I checked my issue [doesn't exist yet](https://github.com/dokan-dev/dokany/issues?utf8=%E2%9C%93&q=is%3Aissue)
   - [ ] My issue is valid with mirror default sample and not specific to my user-mode driver implementation
-  - [ ] I can always reproduce the issue with the provided description bellow
-  - [ ] If I updated Dokan driver (installer or .sys), I tried to restart the computer before my tests
-  - [ ] It can be reproduced on latest [release and pre-release](https://github.com/dokan-dev/dokany/releases)
+  - [ ] I can always reproduce the issue with the provided description below.
+  - [ ] I have updated Dokany to the latest version (https://github.com/dokan-dev/dokany/releases) and have reboot my computer after.
 
 # Description
 

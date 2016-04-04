@@ -6,6 +6,7 @@
     <Description xml:space="preserve">Dokan User-Mode File System project</Description>
     <MoreInfo>http://dokan-dev.github.io</MoreInfo>
     <License>license.mit.txt</License>
+    <Icon>dokan_logo.png</Icon>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[14.0]" />

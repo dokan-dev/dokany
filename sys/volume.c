@@ -77,7 +77,6 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
       DDbgPrint("  Still no threads for processing available\n");
       PFILE_FS_VOLUME_INFORMATION FsVolInfo;
-      ULONG VolumeLabelLength;
 
       if (irpSp->Parameters.QueryVolume.Length <
           sizeof(FILE_FS_VOLUME_INFORMATION)) {
@@ -89,12 +88,11 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       FsVolInfo->VolumeCreationTime.QuadPart = 0;
       FsVolInfo->VolumeSerialNumber = 0x19831116;
 
-      VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
-      FsVolInfo->VolumeLabelLength = VolumeLabelLength;
+      FsVolInfo->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
       /* We don't support ObjectId */
       FsVolInfo->SupportsObjects = FALSE;
 
-      RequiredLength = sizeof(FILE_FS_VOLUME_INFORMATION) + VolumeLabelLength -
+      RequiredLength = sizeof(FILE_FS_VOLUME_INFORMATION) + FsVolInfo->VolumeLabelLength -
                        sizeof(WCHAR);
 
       if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
@@ -103,7 +101,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         __leave;
       }
 
-      RtlCopyMemory(FsVolInfo->VolumeLabel, L"DOKAN", VolumeLabelLength);
+      RtlCopyMemory(FsVolInfo->VolumeLabel, VOLUME_LABEL, FsVolInfo->VolumeLabelLength);
 
       Irp->IoStatus.Information = RequiredLength;
       status = STATUS_SUCCESS;
@@ -160,7 +158,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       FsAttrInfo->FileSystemNameLength = 8;
 
       RequiredLength =
-          sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + 8 - sizeof(WCHAR);
+          sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + FsAttrInfo->FileSystemNameLength - sizeof(WCHAR);
 
       if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
         Irp->IoStatus.Information = sizeof(FILE_FS_ATTRIBUTE_INFORMATION);
@@ -168,7 +166,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         __leave;
       }
 
-      RtlCopyMemory(FsAttrInfo->FileSystemName, L"Dokan\0", 10);
+      RtlCopyMemory(FsAttrInfo->FileSystemName, L"NTFS", FsAttrInfo->FileSystemNameLength);
       Irp->IoStatus.Information = RequiredLength;
       status = STATUS_SUCCESS;
       __leave;
