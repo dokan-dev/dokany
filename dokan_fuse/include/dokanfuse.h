@@ -1,5 +1,5 @@
-#ifndef _DOCAN_FUSE_H_
-#define _DOCAN_FUSE_H_
+#ifndef _DOKAN_FUSE_H_
+#define _DOKAN_FUSE_H_
 
 #include <string>
 
@@ -60,4 +60,4 @@ struct fuse
 	}
 };
 
-#endif //_DOCAN_FUSE_H_
+#endif //_DOKAN_FUSE_H_

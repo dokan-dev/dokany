@@ -2,7 +2,7 @@
 #include "utils.h"
 #include "fusemain.h"
 #include "ScopeGuard.h"
-#include "docanfuse.h"
+#include "dokanfuse.h"
 #include "../../dokan/dokani.h"
 #include <stdio.h>
 

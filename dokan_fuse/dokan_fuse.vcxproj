@@ -292,7 +292,7 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\docanfuse.h" />
+    <ClInclude Include="include\dokanfuse.h" />
     <ClInclude Include="include\fuse.h" />
     <ClInclude Include="include\fusemain.h" />
     <ClInclude Include="include\fuse_common.h" />
@@ -313,7 +313,7 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="src\docanfuse.cpp" />
+    <ClCompile Include="src\dokanfuse.cpp" />
     <ClCompile Include="src\fusemain.cpp" />
     <ClCompile Include="src\utils.cpp" />
     <ResourceCompile Include="src\dokanfuse.rc" />
