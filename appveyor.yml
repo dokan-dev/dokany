@@ -141,7 +141,7 @@
         
         New-Item C:\TMP -type directory
         & $buildCmd $buildArgs
-        & .\winfstest\TestSuite\run-winfstest.bat M:\
+        & .\winfstest\TestSuite\run-winfstest.bat . M:\
 
         Start-Sleep -s 5
         Stop-Process $app.Id
