@@ -79,6 +79,7 @@ fuse_remove_signal_handlers
 ; Win32 Helpers
 ntstatus_error_to_errno
 errno_to_ntstatus_error
+lasterror_to_ntstatus
 convert_args
 free_converted_args
 

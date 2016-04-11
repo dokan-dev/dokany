@@ -433,6 +433,101 @@ static NTSTATUS DOKAN_CALLBACK FuseUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   return errno_to_ntstatus_error(impl->unmounted(DokanFileInfo));
 }
 
+static DWORD AddSeSecurityNamePrivilege() {
+    LUID luid;
+    if (!LookupPrivilegeValue(0, SE_SECURITY_NAME, &luid)) {
+        DWORD err = GetLastError();
+        if (err != ERROR_SUCCESS) {
+            return err;
+        }
+    }
+
+    HANDLE token = 0;
+    if (!OpenProcessToken(GetCurrentProcess(),
+        TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+        return GetLastError();
+    }
+
+    ON_BLOCK_EXIT([token] {
+        CloseHandle(token);
+    });
+
+    LUID_AND_ATTRIBUTES attr;
+    attr.Attributes = SE_PRIVILEGE_ENABLED;
+    attr.Luid = luid;
+
+    TOKEN_PRIVILEGES priv;
+    priv.PrivilegeCount = 1;
+    priv.Privileges[0] = attr;
+
+    AdjustTokenPrivileges(token, FALSE, &priv, NULL, NULL, NULL);
+    DWORD err = GetLastError();
+    if (err != ERROR_SUCCESS) {
+        return err;
+    }
+
+    return ERROR_SUCCESS;
+}
+
+static NTSTATUS DOKAN_CALLBACK FuseGetFileSecurity(
+    LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
+    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
+    PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
+  impl_fuse_context *impl = the_impl;
+  if (impl->debug())
+    FWPRINTF(stderr, L"GetFileSecurity %x\n", *SecurityInformation);
+
+  BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
+  ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
+
+  int ret;
+  {
+      impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
+      ret = impl->get_file_information(FileName, &byHandleFileInfo, DokanFileInfo);
+  }
+
+  if (0 != ret) {
+    return errno_to_ntstatus_error(ret);
+  }
+
+  if (byHandleFileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+    // We handle directories for the Explorer's 
+    // context menu. (New Folder, ...)
+
+    HANDLE handle = CreateFileW(
+        DokanFileInfo->DokanOptions->MountPoint,
+        READ_CONTROL | (((*SecurityInformation & SACL_SECURITY_INFORMATION) ||
+        (*SecurityInformation & BACKUP_SECURITY_INFORMATION)) 
+            ? ACCESS_SYSTEM_SECURITY : 0),
+        FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+        NULL, // security attribute
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL);
+    
+    if (!handle || handle == INVALID_HANDLE_VALUE) {
+      int error = GetLastError();
+      return lasterror_to_ntstatus(error);
+    }
+    
+    ON_BLOCK_EXIT([handle] {
+      CloseHandle(handle);
+    });
+    
+    if (FALSE == GetUserObjectSecurity(handle, SecurityInformation,
+        SecurityDescriptor, BufferLength, LengthNeeded)) {
+      int error = GetLastError();
+      return lasterror_to_ntstatus(error);
+    }
+    
+    return lasterror_to_ntstatus(ERROR_SUCCESS);
+  } 
+  else {
+    return lasterror_to_ntstatus(ERROR_CALL_NOT_IMPLEMENTED);
+  }
+}
+
+
 int fuse_interrupted(void) {
   return 0; // TODO: fix this
 }
@@ -460,7 +555,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     GetVolumeInformation,
     FuseMounted,
     FuseUnmounted,
-    NULL, // GetFileSecurity
+    FuseGetFileSecurity,
     NULL, // SetFileSecurity
 };
 
@@ -508,6 +603,14 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   if (!fs->ch->init()) {
     free(dokanOptions);
     return -1; // Couldn't load DLL. TODO: UGLY!!
+  }
+
+  // For SACL_SECURITY_INFORMATION
+  int err = AddSeSecurityNamePrivilege();
+  if (ERROR_SUCCESS != err) {
+    if (impl.debug())
+      FWPRINTF(stderr, L"AddSeSecurityNamePrivilege was unsuccessful. GtLastError:%x\n", err);
+    // do nothing, we don't care about it
   }
 
   // The main loop!
