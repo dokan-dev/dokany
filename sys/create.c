@@ -186,7 +186,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     ExDeleteResourceLite(&Fcb->PagingIoResource);
 
     InterlockedIncrement(&vcb->FcbFreed);
-	ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
 
   } else {
     ExReleaseResourceLite(&Fcb->Resource);
@@ -373,9 +373,10 @@ Return Value:
     dcb = vcb->Dcb;
 
     if (!vcb->HasEventWait) {
-        DDbgPrint("  Here we only go in if some antivirus software tries to create files before startup is finished.\n");
-        status = STATUS_SUCCESS;
-        __leave;
+      DDbgPrint("  Here we only go in if some antivirus software tries to "
+                "create files before startup is finished.\n");
+      status = STATUS_SUCCESS;
+      __leave;
     }
 
     DDbgPrint("  IrpSp->Flags = %d\n", irpSp->Flags);

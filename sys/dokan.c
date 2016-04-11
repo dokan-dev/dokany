@@ -267,18 +267,18 @@ Return Value:
   }
 
   if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
-	  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-	  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-	  IoDeleteDevice(dokanGlobal->DeviceObject);
-	  return STATUS_INSUFFICIENT_RESOURCES;
+    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+    IoDeleteDevice(dokanGlobal->DeviceObject);
+    return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
-	  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-	  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-	  IoDeleteDevice(dokanGlobal->DeviceObject);
-	  ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
-	  return STATUS_INSUFFICIENT_RESOURCES;
+    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+    IoDeleteDevice(dokanGlobal->DeviceObject);
+    ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
+    return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   DDbgPrint("<== DriverEntry\n");
