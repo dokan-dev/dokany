@@ -41,6 +41,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DEBUG_DEFAULT 0
 
 extern ULONG g_Debug;
+extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
+extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \

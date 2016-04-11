@@ -27,7 +27,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 // We must NOT call without VCB lock
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb) {
-  PDokanFCB fcb = ExAllocatePool(sizeof(DokanFCB));
+  PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
 
   if (fcb == NULL) {
     return NULL;
@@ -186,7 +186,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     ExDeleteResourceLite(&Fcb->PagingIoResource);
 
     InterlockedIncrement(&vcb->FcbFreed);
-    ExFreePool(Fcb);
+	ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
 
   } else {
     ExReleaseResourceLite(&Fcb->Resource);
@@ -199,7 +199,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
 }
 
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
-  PDokanCCB ccb = ExAllocatePool(sizeof(DokanCCB));
+  PDokanCCB ccb = ExAllocateFromLookasideListEx(&g_DokanCCBLookasideList);
 
   if (ccb == NULL)
     return NULL;
@@ -254,7 +254,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
     ExFreePool(ccb->SearchPattern);
   }
 
-  ExFreePool(ccb);
+  ExFreeToLookasideListEx(&g_DokanCCBLookasideList, ccb);
   InterlockedIncrement(&fcb->Vcb->CcbFreed);
 
   return STATUS_SUCCESS;

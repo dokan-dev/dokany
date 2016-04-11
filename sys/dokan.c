@@ -27,6 +27,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 ULONG g_Debug = DOKAN_DEBUG_DEFAULT;
+LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
+LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 
 #if _WIN32_WINNT < 0x0501
 PFN_FSRTLTEARDOWNPERSTREAMCONTEXTS DokanFsRtlTeardownPerStreamContexts;
@@ -127,6 +129,19 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
   } else {
     return STATUS_FILE_LOCKED_WITH_WRITERS;
   }
+}
+
+BOOLEAN
+DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
+  NTSTATUS Status = ExInitializeLookasideListEx(
+      pCache, NULL, NULL, NonPagedPool, 0, cbElement, TAG, 0);
+
+  if (!NT_SUCCESS(Status)) {
+    DDbgPrint("ExInitializeLookasideListEx failed, Status (0x%x)", Status);
+    return FALSE;
+  }
+
+  return TRUE;
 }
 
 NTSTATUS
@@ -251,6 +266,21 @@ Return Value:
     return status;
   }
 
+  if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
+	  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+	  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+	  IoDeleteDevice(dokanGlobal->DeviceObject);
+	  return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
+	  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+	  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+	  IoDeleteDevice(dokanGlobal->DeviceObject);
+	  ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
+	  return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
   DDbgPrint("<== DriverEntry\n");
 
   return (status);
@@ -299,6 +329,9 @@ Return Value:
   }
 
   ExDeleteNPagedLookasideList(&DokanIrpEntryLookasideList);
+
+  ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
+  ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
 
   DDbgPrint("<== DokanUnload\n");
   return;
