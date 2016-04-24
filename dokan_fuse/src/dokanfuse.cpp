@@ -456,11 +456,12 @@ static DWORD AddSeSecurityNamePrivilege() {
     attr.Attributes = SE_PRIVILEGE_ENABLED;
     attr.Luid = luid;
 
-    TOKEN_PRIVILEGES priv;
+    TOKEN_PRIVILEGES priv, oldPriv;
     priv.PrivilegeCount = 1;
     priv.Privileges[0] = attr;
+	DWORD retSize;
 
-    AdjustTokenPrivileges(token, FALSE, &priv, NULL, NULL, NULL);
+    AdjustTokenPrivileges(token, FALSE, &priv, sizeof(TOKEN_PRIVILEGES), &oldPriv, &retSize);
     DWORD err = GetLastError();
     if (err != ERROR_SUCCESS) {
         return err;
