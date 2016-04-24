@@ -712,13 +712,14 @@ MirrorFindFiles(LPCWSTR FileName,
     return ToNtStatus(error);
   }
 
-  FillFindData(&findData, DokanFileInfo);
-  count++;
-
-  while (FindNextFile(hFind, &findData) != 0) {
-    FillFindData(&findData, DokanFileInfo);
+  // Root folder does not have . and .. folder - we remove them
+  BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
+  do {
+    if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 &&
+                        wcscmp(findData.cFileName, L"..") != 0))
+      FillFindData(&findData, DokanFileInfo);
     count++;
-  }
+  } while (FindNextFile(hFind, &findData) != 0);
 
   error = GetLastError();
   FindClose(hFind);
