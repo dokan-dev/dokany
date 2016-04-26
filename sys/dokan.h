@@ -201,6 +201,7 @@ typedef struct _DokanDiskControlBlock {
   PUNICODE_STRING SymbolicLinkName;
   PUNICODE_STRING MountPoint;
   PUNICODE_STRING UNCName;
+  LPWSTR VolumeLabel;
 
   DEVICE_TYPE DeviceType;
   DEVICE_TYPE VolumeDeviceType;
@@ -494,7 +495,8 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo);
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject);
 
 VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo);

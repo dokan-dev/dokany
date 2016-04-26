@@ -326,7 +326,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DokanCompleteQueryInformation(irpEntry, eventInfo);
       break;
     case IRP_MJ_QUERY_VOLUME_INFORMATION:
-      DokanCompleteQueryVolumeInformation(irpEntry, eventInfo);
+      DokanCompleteQueryVolumeInformation(irpEntry, eventInfo, DeviceObject);
       break;
     case IRP_MJ_CREATE:
       DokanCompleteCreate(irpEntry, eventInfo);
