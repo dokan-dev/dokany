@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef _DOKAN_H_
 #define _DOKAN_H_
 
-#include <Windows.h>
+#include <windows.h>
 
 #include "fileinfo.h"
 #include "public.h"
