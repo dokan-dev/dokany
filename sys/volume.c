@@ -243,7 +243,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 }
 
 VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo) {
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -251,6 +252,8 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
   PDokanCCB ccb;
+  PDokanDCB dcb;
+  PDokanVCB vcb;
 
   DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
 
@@ -258,6 +261,8 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   irpSp = IrpEntry->IrpSp;
 
   ccb = IrpEntry->FileObject->FsContext2;
+  vcb = DeviceObject->DeviceExtension;
+  dcb = vcb->Dcb;
 
   // ASSERT(ccb != NULL);
 
@@ -292,6 +297,28 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
     // copy the information from user-mode to specified buffer
     ASSERT(buffer != NULL);
 
+    if (irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsVolumeInformation &&
+        dcb->VolumeLabel != NULL) {
+
+      PFILE_FS_VOLUME_INFORMATION volumeInfo =
+          (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
+
+      ULONG remainingLength = bufferLen;
+      remainingLength -=
+          FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG bytesToCopy = (ULONG)wcslen(dcb->VolumeLabel) * sizeof(WCHAR);
+      if (remainingLength < bytesToCopy) {
+        bytesToCopy = remainingLength;
+      }
+
+      volumeInfo->VolumeLabelLength = bytesToCopy;
+      RtlCopyMemory(volumeInfo->VolumeLabel, dcb->VolumeLabel, bytesToCopy);
+      remainingLength -= bytesToCopy;
+
+      EventInfo->BufferLength = bufferLen - remainingLength;
+    }
+
     RtlZeroMemory(buffer, bufferLen);
     RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
@@ -310,14 +337,64 @@ NTSTATUS
 DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
                                   __in PIRP Irp) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PDokanVCB vcb;
+  PDokanDCB dcb;
+  PIO_STACK_LOCATION irpSp;
+  PVOID buffer;
+  FS_INFORMATION_CLASS FsInformationClass;
 
-  UNREFERENCED_PARAMETER(DeviceObject);
+  __try
 
-  DDbgPrint("==> DokanSetVolumeInformation\n");
+  {
+    DDbgPrint("==> DokanSetVolumeInformation\n");
 
-  DokanCompleteIrpRequest(Irp, status, 0);
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB) {
+      return STATUS_INVALID_PARAMETER;
+    }
 
-  DDbgPrint("<== DokanSetVolumeInformation");
+    dcb = vcb->Dcb;
+
+    if (!dcb->Mounted) {
+      status = STATUS_VOLUME_DISMOUNTED;
+      __leave;
+    }
+
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    buffer = Irp->AssociatedIrp.SystemBuffer;
+    FsInformationClass = irpSp->Parameters.SetVolume.FsInformationClass;
+
+    switch (FsInformationClass) {
+    case FileFsLabelInformation:
+
+      DDbgPrint("  FileFsLabelInformation\n");
+
+      if (sizeof(FILE_FS_LABEL_INFORMATION) >
+          irpSp->Parameters.SetVolume.Length)
+        return STATUS_INVALID_PARAMETER;
+
+      PFILE_FS_LABEL_INFORMATION Info = (PFILE_FS_LABEL_INFORMATION)buffer;
+      ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+      if (dcb->VolumeLabel != NULL)
+        ExFreePool(dcb->VolumeLabel);
+      dcb->VolumeLabel =
+          ExAllocatePool(Info->VolumeLabelLength + sizeof(WCHAR));
+      RtlCopyMemory(dcb->VolumeLabel, Info->VolumeLabel,
+                    Info->VolumeLabelLength);
+      dcb->VolumeLabel[Info->VolumeLabelLength / sizeof(WCHAR)] = '\0';
+      ExReleaseResourceLite(&dcb->Resource);
+      DDbgPrint(" volume label changed to %ws\n", dcb->VolumeLabel);
+
+      status = STATUS_SUCCESS;
+      break;
+    }
+
+  } __finally {
+
+    DokanCompleteIrpRequest(Irp, status, 0);
+  }
+
+  DDbgPrint("<== DokanSetVolumeInformation\n");
 
   return status;
 }
