@@ -24,8 +24,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 --*/
 
-#ifndef _DOKAN_H_
-#define _DOKAN_H_
+#ifndef DOKAN_H_
+#define DOKAN_H_
 
 #include <ntifs.h>
 #include <ntdddisk.h>
@@ -593,4 +593,4 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
-#endif // _DOKAN_H_
+#endif // DOKAN_H_

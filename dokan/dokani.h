@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _DOKANI_H_
-#define _DOKANI_H_
+#ifndef DOKANI_H_
+#define DOKANI_H_
 
 #define WIN32_NO_STATUS
 #include <windows.h>
@@ -169,4 +169,4 @@ VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInfomation,
 }
 #endif
 
-#endif
+#endif // DOKANI_H_

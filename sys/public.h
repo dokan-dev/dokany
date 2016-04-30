@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _PUBLIC_H_
-#define _PUBLIC_H_
+#ifndef PUBLIC_H_
+#define PUBLIC_H_
 
 #define DOKAN_MAJOR_API_VERSION L"1"
 #define DOKAN_DRIVER_VERSION 0x0000190
@@ -365,4 +365,4 @@ typedef struct _DOKAN_LINK_INFORMATION {
   WCHAR FileName[1];
 } DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
 
-#endif // _PUBLIC_H_
+#endif // PUBLIC_H_

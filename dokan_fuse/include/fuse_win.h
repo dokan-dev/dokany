@@ -2,8 +2,8 @@
 * Win32 helper functions                                       *
 * Compilation on MSVC requires /Zc:wchar_t compiler option     *
 * ----------------------------------------------------------- */
-#ifndef _FUSE_WIN_H_
-#define _FUSE_WIN_H_
+#ifndef FUSE_WIN_H_
+#define FUSE_WIN_H_
 
 #include <time.h>
 #include <sys/types.h>
@@ -217,4 +217,4 @@ struct stat64 {
 #define F_UNLCK	2
 #define F_SETLK	6
 
-#endif //_FUSE_WIN_H_
+#endif // FUSE_WIN_H_

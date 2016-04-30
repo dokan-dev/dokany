@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _DOKAN_H_
-#define _DOKAN_H_
+#ifndef DOKAN_H_
+#define DOKAN_H_
 
 #include <windows.h>
 
@@ -359,4 +359,4 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
 }
 #endif
 
-#endif // _DOKAN_H_
+#endif // DOKAN_H_
