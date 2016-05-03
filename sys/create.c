@@ -336,14 +336,6 @@ Return Value:
     fileObject = irpSp->FileObject;
     relatedFileObject = fileObject->RelatedFileObject;
 
-    //
-    //  Set up the file object's Vpb pointer in case anything happens.
-    //  This will allow us to get a reasonable pop-up.
-    //
-    if (relatedFileObject != NULL) {
-      fileObject->Vpb = relatedFileObject->Vpb;
-    }
-
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
 
@@ -371,6 +363,17 @@ Return Value:
       __leave;
     }
     dcb = vcb->Dcb;
+
+    BOOLEAN isNetworkFileSystem = (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+
+    if (!isNetworkFileSystem) {
+        if (relatedFileObject != NULL) {
+            fileObject->Vpb = relatedFileObject->Vpb;
+        }
+        else {
+            fileObject->Vpb = dcb->DeviceObject->Vpb;
+        }
+    }
 
     if (!vcb->HasEventWait) {
       DDbgPrint("  Here we only go in if some antivirus software tries to "
@@ -402,12 +405,6 @@ Return Value:
       RtlMoveMemory(&fileObject->FileName.Buffer[0],
                     &fileObject->FileName.Buffer[1],
                     fileObject->FileName.Length);
-    }
-
-    if (relatedFileObject != NULL) {
-      fileObject->Vpb = relatedFileObject->Vpb;
-    } else {
-      fileObject->Vpb = dcb->DeviceObject->Vpb;
     }
 
     // Get RelatedFileObject filename.
