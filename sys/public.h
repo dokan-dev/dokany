@@ -22,7 +22,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef PUBLIC_H_
 #define PUBLIC_H_
 
+#ifndef DOKAN_MAJOR_API_VERSION
 #define DOKAN_MAJOR_API_VERSION L"1"
+#endif
+
 #define DOKAN_DRIVER_VERSION 0x0000190
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
