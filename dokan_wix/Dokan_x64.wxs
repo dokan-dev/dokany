@@ -278,7 +278,7 @@
               </Directory>
               <Directory Id="FUSEINCLUDEDIR" Name="fuse">
                 <Component Id="IncludeFuseFilesComponent" Win64="yes" Guid="{113F4C52-C272-4346-B65F-E827B8150815}">
-                  <File Id="docanfuseH" Source="..\dokan_fuse\include\docanfuse.h" Name="docanfuse.h" KeyPath="yes"/>
+                  <File Id="dokanfuseH" Source="..\dokan_fuse\include\dokanfuse.h" Name="dokanfuse.h" KeyPath="yes"/>
                   <File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="no"/>
                   <File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
                   <File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>

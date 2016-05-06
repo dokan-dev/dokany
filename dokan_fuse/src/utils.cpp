@@ -336,6 +336,44 @@ extern "C" int errno_to_ntstatus_error(int err) {
   return ERROR_INVALID_FUNCTION;
 }
 
+extern "C" NTSTATUS lasterror_to_ntstatus(DWORD last_err) {
+  switch (last_err) {
+  case ERROR_SUCCESS:
+    return STATUS_SUCCESS;
+  case ERROR_INSUFFICIENT_BUFFER:
+    return STATUS_BUFFER_OVERFLOW;
+  case ERROR_FILE_NOT_FOUND:
+    return STATUS_OBJECT_NAME_NOT_FOUND;
+  case ERROR_PATH_NOT_FOUND:
+    return STATUS_OBJECT_PATH_NOT_FOUND;
+  case ERROR_INVALID_PARAMETER:
+    return STATUS_INVALID_PARAMETER;
+  case ERROR_ACCESS_DENIED:
+    return STATUS_ACCESS_DENIED;
+  case ERROR_SHARING_VIOLATION:
+    return STATUS_SHARING_VIOLATION;
+  case ERROR_INVALID_NAME:
+    return STATUS_OBJECT_NAME_NOT_FOUND;
+  case ERROR_FILE_EXISTS:
+  case ERROR_ALREADY_EXISTS:
+    return STATUS_OBJECT_NAME_COLLISION;
+  case ERROR_PRIVILEGE_NOT_HELD:
+    return STATUS_PRIVILEGE_NOT_HELD;
+  case ERROR_NOT_READY:
+    return STATUS_DEVICE_NOT_READY;
+  case ERROR_DIRECTORY:
+    return STATUS_NOT_A_DIRECTORY;
+  case ERROR_HANDLE_EOF:
+    return STATUS_END_OF_FILE;
+  case ERROR_NOT_ALL_ASSIGNED:
+    return STATUS_NOT_ALL_ASSIGNED;
+  case ERROR_CALL_NOT_IMPLEMENTED:
+    return STATUS_NOT_IMPLEMENTED;
+  default:
+    return STATUS_ACCESS_DENIED;
+  }
+}
+
 extern "C" char **convert_args(int argc, wchar_t *argv[]) {
   char **arr = (char **)malloc(sizeof(char *) * (argc + 1));
   if (arr == NULL)

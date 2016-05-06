@@ -27,7 +27,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 // We must NOT call without VCB lock
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb) {
-  PDokanFCB fcb = ExAllocatePool(sizeof(DokanFCB));
+  PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
 
   if (fcb == NULL) {
     return NULL;
@@ -186,7 +186,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     ExDeleteResourceLite(&Fcb->PagingIoResource);
 
     InterlockedIncrement(&vcb->FcbFreed);
-    ExFreePool(Fcb);
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
 
   } else {
     ExReleaseResourceLite(&Fcb->Resource);
@@ -199,7 +199,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
 }
 
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
-  PDokanCCB ccb = ExAllocatePool(sizeof(DokanCCB));
+  PDokanCCB ccb = ExAllocateFromLookasideListEx(&g_DokanCCBLookasideList);
 
   if (ccb == NULL)
     return NULL;
@@ -254,7 +254,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
     ExFreePool(ccb->SearchPattern);
   }
 
-  ExFreePool(ccb);
+  ExFreeToLookasideListEx(&g_DokanCCBLookasideList, ccb);
   InterlockedIncrement(&fcb->Vcb->CcbFreed);
 
   return STATUS_SUCCESS;
@@ -336,14 +336,6 @@ Return Value:
     fileObject = irpSp->FileObject;
     relatedFileObject = fileObject->RelatedFileObject;
 
-    //
-    //  Set up the file object's Vpb pointer in case anything happens.
-    //  This will allow us to get a reasonable pop-up.
-    //
-    if (relatedFileObject != NULL) {
-      fileObject->Vpb = relatedFileObject->Vpb;
-    }
-
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DDbgPrint("  FileName:%wZ\n", &fileObject->FileName);
 
@@ -372,10 +364,22 @@ Return Value:
     }
     dcb = vcb->Dcb;
 
+    BOOLEAN isNetworkFileSystem = (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+
+    if (!isNetworkFileSystem) {
+        if (relatedFileObject != NULL) {
+            fileObject->Vpb = relatedFileObject->Vpb;
+        }
+        else {
+            fileObject->Vpb = dcb->DeviceObject->Vpb;
+        }
+    }
+
     if (!vcb->HasEventWait) {
-        DDbgPrint("  Here we only go in if some antivirus software tries to create files before startup is finished.\n");
-        status = STATUS_SUCCESS;
-        __leave;
+      DDbgPrint("  Here we only go in if some antivirus software tries to "
+                "create files before startup is finished.\n");
+      status = STATUS_SUCCESS;
+      __leave;
     }
 
     DDbgPrint("  IrpSp->Flags = %d\n", irpSp->Flags);
@@ -401,12 +405,6 @@ Return Value:
       RtlMoveMemory(&fileObject->FileName.Buffer[0],
                     &fileObject->FileName.Buffer[1],
                     fileObject->FileName.Length);
-    }
-
-    if (relatedFileObject != NULL) {
-      fileObject->Vpb = relatedFileObject->Vpb;
-    } else {
-      fileObject->Vpb = dcb->DeviceObject->Vpb;
     }
 
     // Get RelatedFileObject filename.

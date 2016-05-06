@@ -1,5 +1,5 @@
-#ifndef FUSEMAIN_H
-#define FUSEMAIN_H
+#ifndef FUSEMAIN_H_
+#define FUSEMAIN_H_
 
 #include "../../dokan/dokan.h"
 #include "fuse.h"
@@ -231,4 +231,4 @@ public:
 	int unlock(long long start, long long len) { return file_lock->unlock_file(this, start, len); }
 };
 
-#endif //FUSEMAIN_H
+#endif // FUSEMAIN_H_

@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _FILEINFO_H_
-#define _FILEINFO_H_
+#ifndef FILEINFO_H_
+#define FILEINFO_H_
 
 #define IRP_MJ_CREATE 0x00
 #define IRP_MJ_CREATE_NAMED_PIPE 0x01
@@ -505,4 +505,4 @@ typedef struct _UNICODE_STRING {
   PWSTR Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
 
-#endif // _FILEINFO_H_
+#endif // FILEINFO_H_

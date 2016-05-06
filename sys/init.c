@@ -425,7 +425,8 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
 }
 
 NTSTATUS
-DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp, __in PDOKAN_GLOBAL dokanGlobal) {
+DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
+                       __in PDOKAN_GLOBAL dokanGlobal) {
   UNREFERENCED_PARAMETER(DeviceObject);
   PIO_STACK_LOCATION irpSp = NULL;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
@@ -438,23 +439,24 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp, __in PDO
   irpSp = IoGetCurrentIrpStackLocation(Irp);
 
   try {
-	dokanControl = (PDOKAN_CONTROL)Irp->AssociatedIrp.SystemBuffer;
-	for (listEntry = dokanGlobal->MountPointList.Flink;
-	     listEntry != &dokanGlobal->MountPointList;
-	     listEntry = listEntry->Flink, ++i) {
+    dokanControl = (PDOKAN_CONTROL)Irp->AssociatedIrp.SystemBuffer;
+    for (listEntry = dokanGlobal->MountPointList.Flink;
+         listEntry != &dokanGlobal->MountPointList;
+         listEntry = listEntry->Flink, ++i) {
       Irp->IoStatus.Information = sizeof(DOKAN_CONTROL) * (i + 1);
-	  if (irpSp->Parameters.DeviceIoControl.OutputBufferLength < (sizeof(DOKAN_CONTROL) * (i + 1))) {
-	    status = STATUS_BUFFER_OVERFLOW;
-		__leave;
+      if (irpSp->Parameters.DeviceIoControl.OutputBufferLength <
+          (sizeof(DOKAN_CONTROL) * (i + 1))) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
       }
-	  
-	  mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
-	  RtlCopyMemory(&dokanControl[i], &mountEntry->MountControl, sizeof(DOKAN_CONTROL));
-	}
 
-	status = STATUS_SUCCESS;
+      mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+      RtlCopyMemory(&dokanControl[i], &mountEntry->MountControl,
+                    sizeof(DOKAN_CONTROL));
+    }
+
+    status = STATUS_SUCCESS;
   } finally {
-
   }
 
   DDbgPrint("<== DokanGetMountPointList\n");
@@ -962,8 +964,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                     mountPointBuf);
   if (UNCName != NULL) {
     RtlStringCchCopyW(dokanControl.UNCName,
-                      sizeof(dokanControl.UNCName) / sizeof(WCHAR),
-                      UNCName);
+                      sizeof(dokanControl.UNCName) / sizeof(WCHAR), UNCName);
   }
   dokanControl.Type = DeviceType;
 

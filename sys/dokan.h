@@ -24,8 +24,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 --*/
 
-#ifndef _DOKAN_H_
-#define _DOKAN_H_
+#ifndef DOKAN_H_
+#define DOKAN_H_
 
 #include <ntifs.h>
 #include <ntdddisk.h>
@@ -41,6 +41,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DEBUG_DEFAULT 0
 
 extern ULONG g_Debug;
+extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
+extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
@@ -199,6 +201,7 @@ typedef struct _DokanDiskControlBlock {
   PUNICODE_STRING SymbolicLinkName;
   PUNICODE_STRING MountPoint;
   PUNICODE_STRING UNCName;
+  LPWSTR VolumeLabel;
 
   DEVICE_TYPE DeviceType;
   DEVICE_TYPE VolumeDeviceType;
@@ -492,7 +495,8 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo);
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject);
 
 VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo);
@@ -589,4 +593,4 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
-#endif // _DOKAN_H_
+#endif // DOKAN_H_

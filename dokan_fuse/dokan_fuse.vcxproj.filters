@@ -1,9 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="src\docanfuse.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\fuse_opt.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -14,6 +11,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dokanfuse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -33,9 +33,6 @@
     <ClInclude Include="include\fuse_win.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\docanfuse.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\fusemain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -43,6 +40,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dokanfuse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
