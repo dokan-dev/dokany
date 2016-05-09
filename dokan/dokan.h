@@ -50,15 +50,17 @@ extern "C" {
 
 #define DOKAN_MAX_INSTANCES 32 // Maximum number of dokan instances
 
-#define DOKAN_OPTION_DEBUG 1          // ouput debug message
-#define DOKAN_OPTION_STDERR 2         // ouput debug message to stderr
-#define DOKAN_OPTION_ALT_STREAM 4     // use alternate stream
-#define DOKAN_OPTION_WRITE_PROTECT 8  // mount drive as write-protected.
-#define DOKAN_OPTION_NETWORK 16       // use network drive, you need to
-                                      // install Dokan network provider.
-#define DOKAN_OPTION_REMOVABLE 32     // use removable drive
-#define DOKAN_OPTION_MOUNT_MANAGER 64 // use mount manager
-#define DOKAN_OPTION_CURRENT_SESSION 128 // mount the drive on current session only
+#define DOKAN_OPTION_DEBUG					1			// ouput debug message
+#define DOKAN_OPTION_STDERR					(1 << 1)    // ouput debug message to stderr
+#define DOKAN_OPTION_ALT_STREAM				(1 << 2)    // use alternate stream
+#define DOKAN_OPTION_WRITE_PROTECT			(1 << 3)	// mount drive as write-protected.
+#define DOKAN_OPTION_NETWORK				(1 << 4)    // use network drive, you need to
+														// install Dokan network provider.
+#define DOKAN_OPTION_REMOVABLE				(1 << 5)	// use removable drive
+#define DOKAN_OPTION_MOUNT_MANAGER			(1 << 6)	// use mount manager
+#define DOKAN_OPTION_CURRENT_SESSION		(1 << 7)	// mount the drive on current session only
+#define DOKAN_OPTION_ASYNC_IO				(1 << 8)	// use asynchronous IO
+#define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 8)	// Dokan uses a single thread. If DOKAN_OPTION_ASYNC_IO is specified the thread waits until the async job is over before starting another.
 
 typedef struct _DOKAN_OPTIONS {
   USHORT Version;        // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
