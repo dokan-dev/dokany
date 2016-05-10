@@ -27,8 +27,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef DOKAN_H_
 #define DOKAN_H_
 
-#include <ntdddisk.h>
 #include <ntifs.h>
+#include <ntdddisk.h>
 #include <ntstrsafe.h>
 
 #include "..\dokan\dokan.h"
