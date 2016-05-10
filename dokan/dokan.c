@@ -694,6 +694,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
     eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
   }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_FILELOCK_USER_MODE) {
+    eventStart.Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
+  }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
            Instance->MountPoint, sizeof(Instance->MountPoint));
