@@ -63,7 +63,6 @@
                   Protocol="netfx4"
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
-                  InstallCondition="NOT VersionNT64"
                   DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23506"
                   PerMachine="yes"
                   Vital="yes"
