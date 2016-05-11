@@ -430,6 +430,8 @@ VOID AddMissingCurrentAndParentFolder(PEVENT_CONTEXT EventContext,
       currentFolder = TRUE;
     if (wcscmp(find->FindData.cFileName, L"..") == 0)
       parentFolder = TRUE;
+	if (currentFolder == TRUE && parentFolder == TRUE)
+		return; // folders are already there
   }
 
   GetSystemTimeAsFileTime(&systime);
