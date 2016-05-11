@@ -365,7 +365,7 @@ Return Value:
   PUNICODE_STRING relatedFileName = NULL;
   PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
   BOOLEAN OpenRequiringOplock = FALSE;
-  BOOLEAN UnwindShareAccess = FALSE;
+  //BOOLEAN UnwindShareAccess = FALSE;
 
   PAGED_CODE();
 
