@@ -999,9 +999,11 @@ create is over.
                            NULL);
       }
 
-      if (UnwindShareAccess) {
+      /*
+	  if (UnwindShareAccess) {
         IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
       }
+	  */
     }
 #endif
 
