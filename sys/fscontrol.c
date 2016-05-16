@@ -623,10 +623,10 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   }
 
   // Start check thread
-  DokanStartCheckThread(dcb);
   ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
   DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT * 3);
   ExReleaseResourceLite(&dcb->Resource);
+  DokanStartCheckThread(dcb);
 
   // Create mount point for the volume
   if (dcb->UseMountManager) {
