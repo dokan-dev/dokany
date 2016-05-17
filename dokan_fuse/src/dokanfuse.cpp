@@ -585,6 +585,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
     return -1;
   }
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
+  if (fs->conf.useNetworkDrive) dokanOptions->Options |= DOKAN_OPTION_NETWORK;
   dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
   dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
 
@@ -673,6 +674,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("volname=%s", volname, 0),
     FUSE_LIB_OPT("setsignals=%s", setsignals, 0),
     FUSE_LIB_OPT("daemon_timeout=%d", timeoutInSec, 0),
+	FUSE_LIB_OPT("-n", useNetworkDrive, 1),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -685,6 +687,7 @@ static void fuse_lib_help(void) {
       "    -o volname=M           set volume name\n"
       "    -o setsignals=M        set signal usage (1 to use)\n"
       "    -o daemon_timeout=M    set timeout in seconds\n"
+      "    -n                     use network drive\n"
       "\n");
 }
 

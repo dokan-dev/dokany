@@ -15,6 +15,7 @@ struct fuse_config
     int debug;
 	int setsignals;
     unsigned int timeoutInSec;
+	int useNetworkDrive;
 };
 
 struct fuse_session
