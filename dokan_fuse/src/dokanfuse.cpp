@@ -579,6 +579,9 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
                          fileumask, dirumask, fs->conf.fsname,
                          fs->conf.volname);
 
+#define DOKAN_NETWORKDRIVE_NAME_KEY                                                   \
+  L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2"
+
   // Parse Dokan options
   PDOKAN_OPTIONS dokanOptions = (PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
   if (dokanOptions == NULL) {
@@ -596,6 +599,20 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   dokanOptions->MountPoint = mount;
   dokanOptions->ThreadCount = mt ? FUSE_THREAD_COUNT : 1;
   dokanOptions->Timeout = fs->conf.timeoutInSec * 1000;
+
+  if (fs->conf.useNetworkDrive && fs->conf.volname)
+  {
+      HKEY key;
+      DWORD position;
+      WCHAR buff_volname[MAX_PATH];
+      utf8_to_wchar_buf(fs->conf.volname, buff_volname, MAX_PATH);
+      RegCreateKeyExW(HKEY_CURRENT_USER, DOKAN_NETWORKDRIVE_NAME_KEY L"\\DAV RPC SERVICE",
+          0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+          &position);
+      RegSetValueExW(key, L"_LabelFromReg", 0, REG_SZ, (BYTE *)buff_volname,
+          (DWORD)(wcslen(buff_volname) + 1) * sizeof(WCHAR));
+      RegCloseKey(key);
+  }
 
   // Debug
   if (fs->conf.debug)
