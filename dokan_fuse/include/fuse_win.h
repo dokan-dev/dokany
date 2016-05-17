@@ -8,7 +8,7 @@
 #include <time.h>
 #include <sys/types.h>
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #include <windows.h>
 #endif
 
@@ -74,6 +74,7 @@ typedef unsigned __int64 fsblkcnt64_t;
 typedef struct timespec timestruc_t;
 typedef unsigned short nlink_t;
 typedef unsigned __int64 uint64_t;
+typedef unsigned __int32 uint32_t;
 typedef unsigned int blksize_t;
 typedef unsigned __int64 blkcnt_t;
 
@@ -169,22 +170,37 @@ struct flock {
 // use stat from cygwin instead for having more members and 
 // being more compatible
 // stat ported from cygwin sys/stat.h
+
+// for binary compatible
+#define FUSE_DEV_T uint64_t
+#define FUSE_MODE_T uint32_t
+#define FUSE_NLINK_T uint32_t
+#define FUSE_UID_T uint32_t
+#define FUSE_GID_T uint32_t
+#define FUSE_BLKSIZE_T uint64_t
+#define FUSE_BLKCNT_T uint64_t
+typedef struct __fuse_timespec
+{
+	uint64_t tv_sec;				/* Seconds.  */
+	uint64_t tv_nsec;           /* Nanoseconds.  */
+} FUSE_TIMESPEC_T;
+
 struct stat64_cygwin
 {
-	dev_t         st_dev;
+	FUSE_DEV_T    st_dev;
 	uint64_t      st_ino;
-	mode_t        st_mode;
-	nlink_t       st_nlink;
-	uid_t         st_uid;
-	gid_t         st_gid;
-	dev_t         st_rdev;
+	FUSE_MODE_T   st_mode;
+	FUSE_NLINK_T  st_nlink;
+	FUSE_UID_T    st_uid;
+	FUSE_GID_T    st_gid;
+	FUSE_DEV_T    st_rdev;
 	FUSE_OFF_T    st_size;
-	timestruc_t   st_atim;
-	timestruc_t   st_mtim;
-	timestruc_t   st_ctim;
-	blksize_t     st_blksize;
-	blkcnt_t      st_blocks;
-	timestruc_t   st_birthtim;
+	FUSE_TIMESPEC_T   st_atim;
+	FUSE_TIMESPEC_T   st_mtim;
+	FUSE_TIMESPEC_T   st_ctim;
+	FUSE_BLKSIZE_T    st_blksize;
+	FUSE_BLKCNT_T     st_blocks;
+	FUSE_TIMESPEC_T   st_birthtim;
 };
 /* The following breaks struct stat definiton in native Windows stats.h
 * So whenever referencing st_atime|st_ctime|st_mtime, replacing is needed.
