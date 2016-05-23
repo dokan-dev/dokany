@@ -282,16 +282,15 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
 
   struct FUSE_STAT stat = {0};
 
-  if (stbuf != NULL)
+  /* if (stbuf != NULL)
     stat = *stbuf;
-  else {
-    // No stat buffer - use 'getattr'.
-    // TODO: fill directory params here!!!
+  else { */
+    // stat (*stbuf) has only st_ino and st_mode -> request other info with getattr
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) // Special entries
-      stat.st_mode |= S_IFDIR;
+      stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
     else
       CHECKED(wd->ctx->ops_.getattr((wd->dirname + name).c_str(), &stat));
-  }
+  //}
 
   if (S_ISLNK(stat.st_mode)) {
     std::string resolved;
