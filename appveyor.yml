@@ -96,9 +96,18 @@
       
       } elseif ($env:CONFIGURATION -eq "All") {
 
-        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10"
+        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
         
         & .\build.bat
+        
+        Write-Host Install cert and sign...
+        .\cert\dokan-import.ps1
+        .\cert\dokan-sign.ps1
+        $env:CERTISSUER="DokanCA"
+        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+        Write-Host Binaries signed !	
+        
         cd dokan_wix
         (gc version.xml) -replace 'no', 'yes' | sc version.xml
         
@@ -107,10 +116,15 @@
         "Dokan_WiX.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Debug",
+        "/p:Configuration=Release",
         "/p:Platform=${Platform}")
         
         & $buildCmd $buildArgs
+        
+        Write-Host Upload Artifcat...
+        Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName "DokanSetup.exe"
+        Write-Host Artifcat uploaded!
+        
       } elseif ($env:CONFIGURATION -eq "FsTest") {
         
         $buildArgs = @(
