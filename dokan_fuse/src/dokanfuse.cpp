@@ -579,12 +579,16 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
                          fileumask, dirumask, fs->conf.fsname,
                          fs->conf.volname);
 
+#define DOKAN_NETWORKDRIVE_NAME_KEY                                                   \
+  L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2"
+
   // Parse Dokan options
   PDOKAN_OPTIONS dokanOptions = (PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
   if (dokanOptions == NULL) {
     return -1;
   }
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
+  if (fs->conf.useNetworkDrive) dokanOptions->Options |= DOKAN_OPTION_NETWORK;
   dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
   dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
 
@@ -595,6 +599,20 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   dokanOptions->MountPoint = mount;
   dokanOptions->ThreadCount = mt ? FUSE_THREAD_COUNT : 1;
   dokanOptions->Timeout = fs->conf.timeoutInSec * 1000;
+
+  if (fs->conf.useNetworkDrive && fs->conf.volname)
+  {
+      HKEY key;
+      DWORD position;
+      WCHAR buff_volname[MAX_PATH];
+      utf8_to_wchar_buf(fs->conf.volname, buff_volname, MAX_PATH);
+      RegCreateKeyExW(HKEY_CURRENT_USER, DOKAN_NETWORKDRIVE_NAME_KEY L"\\DAV RPC SERVICE",
+          0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+          &position);
+      RegSetValueExW(key, L"_LabelFromReg", 0, REG_SZ, (BYTE *)buff_volname,
+          (DWORD)(wcslen(buff_volname) + 1) * sizeof(WCHAR));
+      RegCloseKey(key);
+  }
 
   // Debug
   if (fs->conf.debug)
@@ -673,6 +691,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("volname=%s", volname, 0),
     FUSE_LIB_OPT("setsignals=%s", setsignals, 0),
     FUSE_LIB_OPT("daemon_timeout=%d", timeoutInSec, 0),
+	FUSE_LIB_OPT("-n", useNetworkDrive, 1),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -685,6 +704,7 @@ static void fuse_lib_help(void) {
       "    -o volname=M           set volume name\n"
       "    -o setsignals=M        set signal usage (1 to use)\n"
       "    -o daemon_timeout=M    set timeout in seconds\n"
+      "    -n                     use network drive\n"
       "\n");
 }
 
