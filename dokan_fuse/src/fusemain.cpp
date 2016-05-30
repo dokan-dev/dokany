@@ -874,8 +874,7 @@ int impl_fuse_context::get_disk_free_space(PULONGLONG free_bytes_available,
   }
 
   struct statvfs vfs = {0};
-  // Why do we need path argument??
-  CHECKED(ops_.statfs("", &vfs));
+  CHECKED(ops_.statfs("/", &vfs));
 
   if (free_bytes_available != NULL)
     *free_bytes_available = uint64_t(vfs.f_bsize) * vfs.f_bavail;
