@@ -193,7 +193,7 @@ int fuse_daemonize(int foreground)
 		/** No daemons on Windows but we detach from current console **/
 		if (FreeConsole() == 0) {
 			DWORD currentError = GetLastError();
-			fprintf(stderr, "fuse: daemonize failed = %d\n", currentError);
+			fprintf(stderr, "fuse: daemonize failed = %lu\n", currentError);
 			return -1;
 		}
 #endif
