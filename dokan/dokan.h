@@ -59,6 +59,7 @@ extern "C" {
 #define DOKAN_OPTION_REMOVABLE 32     // use removable drive
 #define DOKAN_OPTION_MOUNT_MANAGER 64 // use mount manager
 #define DOKAN_OPTION_CURRENT_SESSION 128 // mount the drive on current session only
+#define DOKAN_OPTION_FILELOCK_USER_MODE 256 // FileLock in User Mode
 
 typedef struct _DOKAN_OPTIONS {
   USHORT Version;        // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)

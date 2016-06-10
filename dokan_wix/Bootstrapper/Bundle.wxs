@@ -16,12 +16,15 @@
             >
 
       <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
-      <bal:WixStandardBootstrapperApplication
-        LicenseFile="licdata.rtf"
-        LogoFile="dokan.png"
-        ShowVersion="yes"
-        SuppressOptionsUI="no"
-        SuppressRepair="yes"/>
+        <bal:WixStandardBootstrapperApplication
+          LicenseFile="Resources\licdata.rtf"
+          LogoFile="Resources\dokan.png"
+          ShowVersion="yes"
+          SuppressOptionsUI="no"
+          SuppressRepair="yes"
+          ThemeFile="Resources\RtfTheme.xml"
+          LocalizationFile="Resources\1033\RtfTheme.wxl"/>
+        <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
     </BootstrapperApplicationRef>
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
@@ -63,7 +66,6 @@
                   Protocol="netfx4"
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
-                  InstallCondition="NOT VersionNT64"
                   DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23506"
                   PerMachine="yes"
                   Vital="yes"
@@ -174,9 +176,10 @@
                   Compressed="yes"
                   Visible="no"
                   >
-        <MsiProperty Name="ADDLOCAL" Value="ALL"/>
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
         <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
         <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
       </MsiPackage>
 
       <MsiPackage SourceFile="..\bin\x64\$(var.Configuration)\Dokan_x64.msi"
@@ -184,9 +187,10 @@
                   Compressed="yes"
                   Visible="no"
                   >
-        <MsiProperty Name="ADDLOCAL" Value="ALL"/>
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
         <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
         <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
       </MsiPackage>
 
     </Chain>

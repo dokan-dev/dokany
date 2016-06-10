@@ -282,16 +282,15 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
 
   struct FUSE_STAT stat = {0};
 
-  if (stbuf != NULL)
+  /* if (stbuf != NULL)
     stat = *stbuf;
-  else {
-    // No stat buffer - use 'getattr'.
-    // TODO: fill directory params here!!!
+  else { */
+    // stat (*stbuf) has only st_ino and st_mode -> request other info with getattr
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) // Special entries
-      stat.st_mode |= S_IFDIR;
+      stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
     else
       CHECKED(wd->ctx->ops_.getattr((wd->dirname + name).c_str(), &stat));
-  }
+  //}
 
   if (S_ISLNK(stat.st_mode)) {
     std::string resolved;
@@ -875,8 +874,7 @@ int impl_fuse_context::get_disk_free_space(PULONGLONG free_bytes_available,
   }
 
   struct statvfs vfs = {0};
-  // Why do we need path argument??
-  CHECKED(ops_.statfs("", &vfs));
+  CHECKED(ops_.statfs("/", &vfs));
 
   if (free_bytes_available != NULL)
     *free_bytes_available = uint64_t(vfs.f_bsize) * vfs.f_bavail;
@@ -913,8 +911,6 @@ int impl_fuse_context::get_volume_information(LPWSTR volume_name_buffer,
 }
 
 int impl_fuse_context::mounted(PDOKAN_FILE_INFO DokanFileInfo) {
-	if (ops_.destroy)
-		ops_.destroy(user_data_); // Ignoring result
 	return 0;
 }
 

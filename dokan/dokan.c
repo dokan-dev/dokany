@@ -270,25 +270,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_START_ERROR;
   }
 
-  if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
-    SendReleaseIRP(instance->DeviceName);
-    DokanDbgPrint("Dokan Error: DokanMount Failed\n");
-    CloseHandle(device);
-    return DOKAN_MOUNT_ERROR;
-  }
-
-  // Here we should have been mounter by mountmanager thanks to
-  // IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME
-  DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
-
-  if (DokanOperations->Mounted) {
-    DOKAN_FILE_INFO fileInfo;
-    RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
-    fileInfo.DokanOptions = DokanOptions;
-    // ignore return value
-    DokanOperations->Mounted(&fileInfo);
-  }
-
   // Start Keep Alive thread
   threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
                                                   0,    // stack size
@@ -304,6 +285,25 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                                                     (PVOID)instance, // param
                                                     0, // create flag
                                                     NULL);
+  }
+
+  if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
+	  SendReleaseIRP(instance->DeviceName);
+	  DokanDbgPrint("Dokan Error: DokanMount Failed\n");
+	  CloseHandle(device);
+	  return DOKAN_MOUNT_ERROR;
+  }
+
+  // Here we should have been mounter by mountmanager thanks to
+  // IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME
+  DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
+
+  if (DokanOperations->Mounted) {
+	  DOKAN_FILE_INFO fileInfo;
+	  RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+	  fileInfo.DokanOptions = DokanOptions;
+	  // ignore return value
+	  DokanOperations->Mounted(&fileInfo);
   }
 
   // wait for thread terminations
@@ -693,6 +693,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
     eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
+  }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_FILELOCK_USER_MODE) {
+    eventStart.Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

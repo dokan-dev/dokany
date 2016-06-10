@@ -44,7 +44,8 @@
     <Property Id="ARPNOREPAIR" Value="1" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPPRODUCTICON" Value="DokanIcon" />
-    <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+    <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
+    <Property Id="INSTALLDEVFILES" Value="0" />
 
     <Property Id="WIN10FOUND" Secure="yes">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
@@ -171,6 +172,7 @@
                 <RegistryValue Type="string" Name="FullVersion" Value="$(var.BaseVersion).$(var.BuildVersion)" KeyPath="no"/>
               </RegistryKey>
               <File Id="DokanDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+              <File Id="DokannpDLL" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="DokanfuseDLL" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="dokanctlEXE" Source="..\x64\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
               <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
@@ -322,7 +324,7 @@
       </Directory>
     </Directory>
 
-    <Feature Id="DokanDriverFeature" Title="Dokan driver" Level="1">
+    <Feature Id="DokanDriverFeature" Title="Dokan Core" Description="Dokan driver, Dokan library and FUSE library" Level="1" Display="expand" Absent="disallow">
       <ComponentRef Id="ProgramFilesComponent"/>
       <ComponentRef Id="Win7_x64"/>
       <ComponentRef Id="Win8_x64"/>
@@ -336,26 +338,48 @@
         <ComponentRef Id="X86CygwinFiles" />
       <?endif?>
     </Feature>
-    <Feature Id="DokanLibBFeature" Title="Dokan headers and libs" Level="1">
-      <ComponentRef Id="IncludeDokanFilesComponent"/>
-      <ComponentRef Id="IncludeFuseFilesComponent"/>
-      <ComponentRef Id="LibFilesComponent"/>
-      <ComponentRef Id="LibX86FilesComponent"/>
-      <ComponentRef Id="SampleMirrorFilesComponent"/>
-      <ComponentRef Id="SampleMirrorFilesComponentX86"/>
-      <?if $(var.BuildCygwin)=true ?>
-        <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
-        <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
-      <?endif?>
+    <Feature Id="DokanDevFeature" Title="Development" Description="Dokan development files" Level="2" Display="expand">
+      <Condition Level="1">INSTALLDEVFILES = 1</Condition>
+      <Feature Id="DokanLibBFeature" Title="Headers and Libs" Description="Headers and libraries required for native User-Mode File System development" Level="2" Display="expand">
+        <Condition Level="1">INSTALLDEVFILES = 1</Condition>
+        <ComponentRef Id="IncludeDokanFilesComponent"/>
+        <ComponentRef Id="IncludeFuseFilesComponent"/>
+        <ComponentRef Id="LibFilesComponent"/>
+        <ComponentRef Id="LibX86FilesComponent"/>
+        <ComponentRef Id="SampleMirrorFilesComponent"/>
+        <ComponentRef Id="SampleMirrorFilesComponentX86"/>
+        <?if $(var.BuildCygwin)=true ?>
+          <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
+          <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
+        <?endif?>
+      </Feature>
+      <Feature Id="DokanPDBFeature" Title="Symbols" Description="Dokan Core PDB debug files" Level="2" Display="expand">
+        <Condition Level="1">INSTALLDEVFILES = 1</Condition>
+        <ComponentRef Id="Win7_x64pdb"/>
+        <ComponentRef Id="Win8_x64pdb"/>
+        <ComponentRef Id="Win81_x64pdb"/>
+        <ComponentRef Id="Win10_x64pdb"/>
+        <ComponentRef Id="SysPDBFiles"/>
+        <ComponentRef Id="SysX86PDBFiles"/>
+      </Feature>
     </Feature>
-    <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
-      <ComponentRef Id="Win7_x64pdb"/>
-      <ComponentRef Id="Win8_x64pdb"/>
-      <ComponentRef Id="Win81_x64pdb"/>
-      <ComponentRef Id="Win10_x64pdb"/>
-      <ComponentRef Id="SysPDBFiles"/>
-      <ComponentRef Id="SysX86PDBFiles"/>
-    </Feature>
+
+    <!-- Define proper UI in case MSI is run without bootstrapper -->
+    <UI Id="FeatureTree">
+      <UIRef Id="WixUI_FeatureTree" />
+      <Publish
+          Dialog="WelcomeDlg"
+          Control="Next"
+          Event="NewDialog"
+          Value="CustomizeDlg"
+          Order="10">NOT Installed</Publish>
+      <Publish
+          Dialog="CustomizeDlg"
+          Control="Back"
+          Event="NewDialog"
+          Value="WelcomeDlg"
+          Order="10">NOT Installed</Publish>
+    </UI>
   </Product>
 
   <Fragment>

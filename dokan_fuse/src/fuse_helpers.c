@@ -182,16 +182,22 @@ err:
 
 int fuse_daemonize(int foreground)
 {
-	/** No daemons on Windows */
-#ifdef __CYGWIN__
 	if (!foreground) {
+#ifdef __CYGWIN__
 		int res = daemon(0, 0);
 		if (res == -1) {
 			perror("fuse: failed to daemonize program\n");
 			return -1;
 		}
-	}
+#else
+		/** No daemons on Windows but we detach from current console **/
+		if (FreeConsole() == 0) {
+			DWORD currentError = GetLastError();
+			fprintf(stderr, "fuse: daemonize failed = %lu\n", currentError);
+			return -1;
+		}
 #endif
+	}
 	return 0;
 }
 

@@ -247,9 +247,10 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
     if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
       if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
         // No UNC, always return success
-        if (*BufferSize != 0)
-          RemoteName[0] = '\0';
-        *BufferSize = 0;
+		if (*BufferSize != 0) {
+			RemoteName[0] = L'\0';
+			*BufferSize = sizeof(WCHAR);
+		}
         return WN_SUCCESS;
       }
 

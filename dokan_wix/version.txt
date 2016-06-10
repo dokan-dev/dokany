@@ -1,4 +1,32 @@
 ---------------------------------
+v1.0.0.103 (RC3)
+Build date: 20160511
+---------------------------------
+Changes:
+Add real dokan network provider
+Add oplock implementation
+Register dokannp dll from Dokan Library install instead of sys32.
+Add AllocationUnitSize and SectorSize in DOKAN_OPTIONS
+Add logo Dokan VSIX
+Add IOCTL_EVENT_MOUNTPOINT_LIST to list all mount points
+Add parameters on DokanGetMountPointList to only retrieve instances with UNC
+Add MirrorDokanGetDiskFreeSpace as examples in mirror
+Update redistributable link to VS Update 2
+Use LookasideLists for DokanCCB and DokanFCB
+Handle FileFsLabelInformation (Rename label device name)
+Remove SHChangeNotify during DLL_PROCESS_DETACH that could create segv
+Low and high param inversions for Un/LockFile
+Add missing redist x86 in x64 installer
+Fuse handles GetFileSecurity callbacks for directories.
+Default QueryVolumeInformation file system name
+User WinFSTest as test suits and fix mirror
+Fuse: use _WIN32 in FUSE wrapper instead of WIN32
+BSOD: network drive fileObject has no Vpb
+Add auto the current and parent folder in FindFiles request when missing
+null-terminate string in unmount
+capitalization of windows.h-include & CMakeLists 
+fuse mount that was calling destroy ops
+---------------------------------
 v1.0.0.102 (RC2)
 Build date: 20160309
 ---------------------------------
