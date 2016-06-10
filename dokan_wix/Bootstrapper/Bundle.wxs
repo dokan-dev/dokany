@@ -4,6 +4,7 @@
      xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
      xmlns:dep='http://schemas.microsoft.com/wix/DependencyExtension'
      xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
+     xmlns:netfx='http://schemas.microsoft.com/wix/NetFxExtension'
 >
     <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
             IconSourceFile="..\dokan.ico"
@@ -25,6 +26,8 @@
           ThemeFile="Resources\RtfTheme.xml"
           LocalizationFile="Resources\1033\RtfTheme.wxl"/>
         <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
+        <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
+
     </BootstrapperApplicationRef>
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
@@ -57,6 +60,7 @@
     <util:RegistrySearch Id="vcredist_2015_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_versionnumber" Result="value" Win64="yes"/>
 
     <Chain>
+      <PackageGroupRef Id="NetFx40Web"/>
 
       <ExePackage Id="vcredist_2015_x86.exe"
                   Name="vc_redist.x86.exe"
