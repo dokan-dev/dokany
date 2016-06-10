@@ -44,8 +44,7 @@
     <Property Id="ARPNOREPAIR" Value="1" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPPRODUCTICON" Value="DokanIcon" />
-    <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
-    <Property Id="INSTALLDEVFILES" Value="0" />
+    <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
 
     <Property Id="WIN10FOUND" Secure="yes">
       <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
@@ -71,7 +70,7 @@
                       Win64="yes" >
       </RegistrySearch>
     </Property>
-
+    
     <Property Id="VCREDISTINSTALLEDX64" Secure="yes">
       <RegistrySearch Id="VCRedist_RegSearch_x64"
                       Root="HKLM"
@@ -96,13 +95,30 @@
       </DirectorySearch>
     </Property>
 
+    <Property Id="DOKANREBOOTPENDING" Secure="yes">
+      <RegistrySearch Id="RegDokanRebootSearch"
+                      Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)"
+					            Name="DeleteFlag"
+                      Type="raw"
+                      Win64="yes" >
+      </RegistrySearch>
+    </Property>
+
+    <PropertyRef Id="NETFRAMEWORK40FULL"/>
+
     <!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
+    <Condition Message='This setup requires Microsoft .NET Framework 4.0 or newer to be installed for this installation to continue.'>
+      <![CDATA[Installed OR NETFRAMEWORK40FULL]]>
+    </Condition>
+
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23506")]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23506")]]></Condition>
 
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
+
+    <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
 
     <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
 
@@ -144,6 +160,9 @@
 
     <InstallExecuteSequence>
 
+      <Custom Action='CheckForRebootPending' Before='LaunchConditions'>
+        <![CDATA[DOKANREBOOTPENDING = "#1"]]>
+      </Custom>
 
       <Custom Action='CheckForUCRT' Before='LaunchConditions'>
         <![CDATA[Not REMOVE="ALL" AND Not PREVIOUSFOUND AND UCRTINSTALLED = ""]]>
@@ -324,7 +343,7 @@
       </Directory>
     </Directory>
 
-    <Feature Id="DokanDriverFeature" Title="Dokan Core" Description="Dokan driver, Dokan library and FUSE library" Level="1" Display="expand" Absent="disallow">
+    <Feature Id="DokanDriverFeature" Title="Dokan driver" Level="1">
       <ComponentRef Id="ProgramFilesComponent"/>
       <ComponentRef Id="Win7_x64"/>
       <ComponentRef Id="Win8_x64"/>
@@ -338,48 +357,26 @@
         <ComponentRef Id="X86CygwinFiles" />
       <?endif?>
     </Feature>
-    <Feature Id="DokanDevFeature" Title="Development" Description="Dokan development files" Level="2" Display="expand">
-      <Condition Level="1">INSTALLDEVFILES = 1</Condition>
-      <Feature Id="DokanLibBFeature" Title="Headers and Libs" Description="Headers and libraries required for native User-Mode File System development" Level="2" Display="expand">
-        <Condition Level="1">INSTALLDEVFILES = 1</Condition>
-        <ComponentRef Id="IncludeDokanFilesComponent"/>
-        <ComponentRef Id="IncludeFuseFilesComponent"/>
-        <ComponentRef Id="LibFilesComponent"/>
-        <ComponentRef Id="LibX86FilesComponent"/>
-        <ComponentRef Id="SampleMirrorFilesComponent"/>
-        <ComponentRef Id="SampleMirrorFilesComponentX86"/>
-        <?if $(var.BuildCygwin)=true ?>
-          <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
-          <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
-        <?endif?>
-      </Feature>
-      <Feature Id="DokanPDBFeature" Title="Symbols" Description="Dokan Core PDB debug files" Level="2" Display="expand">
-        <Condition Level="1">INSTALLDEVFILES = 1</Condition>
-        <ComponentRef Id="Win7_x64pdb"/>
-        <ComponentRef Id="Win8_x64pdb"/>
-        <ComponentRef Id="Win81_x64pdb"/>
-        <ComponentRef Id="Win10_x64pdb"/>
-        <ComponentRef Id="SysPDBFiles"/>
-        <ComponentRef Id="SysX86PDBFiles"/>
-      </Feature>
+    <Feature Id="DokanLibBFeature" Title="Dokan headers and libs" Level="1">
+      <ComponentRef Id="IncludeDokanFilesComponent"/>
+      <ComponentRef Id="IncludeFuseFilesComponent"/>
+      <ComponentRef Id="LibFilesComponent"/>
+      <ComponentRef Id="LibX86FilesComponent"/>
+      <ComponentRef Id="SampleMirrorFilesComponent"/>
+      <ComponentRef Id="SampleMirrorFilesComponentX86"/>
+      <?if $(var.BuildCygwin)=true ?>
+        <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
+        <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
+      <?endif?>
     </Feature>
-
-    <!-- Define proper UI in case MSI is run without bootstrapper -->
-    <UI Id="FeatureTree">
-      <UIRef Id="WixUI_FeatureTree" />
-      <Publish
-          Dialog="WelcomeDlg"
-          Control="Next"
-          Event="NewDialog"
-          Value="CustomizeDlg"
-          Order="10">NOT Installed</Publish>
-      <Publish
-          Dialog="CustomizeDlg"
-          Control="Back"
-          Event="NewDialog"
-          Value="WelcomeDlg"
-          Order="10">NOT Installed</Publish>
-    </UI>
+    <Feature Id="DokanPDBFeature" Title="Dokan PDB debug" Level="3">
+      <ComponentRef Id="Win7_x64pdb"/>
+      <ComponentRef Id="Win8_x64pdb"/>
+      <ComponentRef Id="Win81_x64pdb"/>
+      <ComponentRef Id="Win10_x64pdb"/>
+      <ComponentRef Id="SysPDBFiles"/>
+      <ComponentRef Id="SysX86PDBFiles"/>
+    </Feature>
   </Product>
 
   <Fragment>
