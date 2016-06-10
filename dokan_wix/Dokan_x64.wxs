@@ -96,13 +96,30 @@
       </DirectorySearch>
     </Property>
 
+    <Property Id="DOKANREBOOTPENDING" Secure="yes">
+      <RegistrySearch Id="RegDokanRebootSearch"
+                      Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)"
+					            Name="DeleteFlag"
+                      Type="raw"
+                      Win64="yes" >
+      </RegistrySearch>
+    </Property>
+
+    <PropertyRef Id="NETFRAMEWORK40FULL"/>
+
     <!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
+    <Condition Message='This setup requires Microsoft .NET Framework 4.0 or newer to be installed for this installation to continue.'>
+      <![CDATA[Installed OR NETFRAMEWORK40FULL]]>
+    </Condition>
+
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT >= 601]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23506")]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23506")]]></Condition>
 
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
+
+    <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
 
     <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
 
@@ -143,6 +160,10 @@
                 />
 
     <InstallExecuteSequence>
+
+      <Custom Action='CheckForRebootPending' Before='LaunchConditions'>
+        <![CDATA[DOKANREBOOTPENDING = "#1"]]>
+      </Custom>
 
 
       <Custom Action='CheckForUCRT' Before='LaunchConditions'>
