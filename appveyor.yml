@@ -5,16 +5,8 @@
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     global:
-      CYG_INSTALLER: setup-x86.exe
-      CYG_MIRROR: http://cygwin.mirror.constant.com
-      CYG_ROOT: C:\cygwin
       CYG_CACHE: C:\cygwin\var\cache\setup
-      CYG_BASH: C:\cygwin\bin\bash
-      CYG64_INSTALLER: setup-x86_64.exe
-      CYG64_ROOT: C:\cygwin64
-      CYG64_BASH: C:\cygwin64\bin\bash
       CYG64_CACHE: C:\cygwin64\var\cache\setup
-      MSYS2_LOG_FILE: C:/Users/appveyor/msys2output.log
 
   os: Visual Studio 2015
   version: 1.0.0-{build}
@@ -29,23 +21,38 @@
   - '%CYG_CACHE%'
   - '%CYG64_CACHE%'
 
-  init:
-    - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
-
   install:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
           Start-FileDownload "https://cygwin.com/setup-x86_64.exe" -FileName "setup-x86_64.exe"
+          
+          function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
+            Write-Host "Update Cygwin: " $cygwinexe -NoNewline
+            cmd /c start /wait $cygwinexe -qnNdO -R $installFolder -s http://cygwin.mirror.constant.com -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++ -P make -P cmake
+            Write-Host " - OK" -ForegroundColor Green
+          }
+          
+          updateCygwin "setup-x86.exe" C:/cygwin $env:CYG_CACHE
+          updateCygwin "setup-x86_64.exe" C:/cygwin64 $env:CYG64_CACHE
         }
-
-    - 'IF "%CONFIGURATION%" == "All" ( %CYG_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
-      && %CYG_BASH% -lc "cygcheck -dc cygwin" ) '
-    - 'IF "%CONFIGURATION%" == "All" ( %CYG64_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG64_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG64_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
-      && %CYG64_BASH% -lc "cygcheck -dc cygwin" ) '
-    - 'IF "%CONFIGURATION%" == "All" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
-      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm ) '
-      # C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc mingw-w64-i686-cmake mingw-w64-x86_64-cmake make --noconfirm
+        
+    - ps: |
+        if ($env:CONFIGURATION -eq "All") {
+          function bash($command) {
+            Write-Host $command -NoNewline
+            cmd /c start /wait C:\msys64\usr\bin\bash.exe --login -c $command
+            Write-Host " - OK" -ForegroundColor Green
+          }
+          
+          # install latest pacman
+          bash "pacman -Sy --noconfirm pacman pacman-mirrors"
+          # update core packages
+          bash "pacman -Syu --noconfirm"
+          
+          bash "pacman --sync --noconfirm mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+        }
+        
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           & Bcdedit.exe -set TESTSIGNING ON;
@@ -53,6 +60,10 @@
           Restart-Computer -Force;
           Start-Sleep -s 10;
         }
+
+  before_build:
+  # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
+  - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
   build_script:
   - ps: |
@@ -120,6 +131,10 @@
         "/p:Platform=${Platform}")
         
         & $buildCmd $buildArgs
+        
+        if($LASTEXITCODE -ne 0) {
+          throw "Build failed"
+        }
         
         Write-Host Upload Artifcat...
         Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName "DokanSetup.exe"
