@@ -160,17 +160,33 @@
         $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
         Start-Sleep -s 5
         
-        git clone https://github.com/Liryna/winfstest.git
+        New-Item C:\TMP -type directory
+        
+        git clone -q https://github.com/Liryna/fstools.git
+        $buildArgs = @(
+        ".\fstools\winfstest.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
+        "/p:Platform=$env:PLATFORM")
+        & $buildCmd $buildArgs
+        
+        git clone -q https://github.com/Liryna/winfstest.git
         $buildArgs = @(
         ".\winfstest\winfstest.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Debug",
         "/p:Platform=$env:PLATFORM")
-        
-        New-Item C:\TMP -type directory
         & $buildCmd $buildArgs
+        
+        Write-Host "Start FSX Test" -ForegroundColor Green
+        & .\fstools\src\fsx\fsx.exe -RW -N 5000 M:\test
+        Write-Host "FSX Test finished" -ForegroundColor Green
+        
+        Write-Host "Start WinFSTest" -ForegroundColor Green
         & .\winfstest\TestSuite\run-winfstest.bat . M:\
+        Write-Host "WinFSTest finished" -ForegroundColor Green
 
         Start-Sleep -s 5
         Stop-Process $app.Id
