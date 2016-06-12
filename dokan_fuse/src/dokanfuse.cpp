@@ -1,4 +1,3 @@
-#include <windows.h>
 #include "utils.h"
 #include "fusemain.h"
 #include "ScopeGuard.h"

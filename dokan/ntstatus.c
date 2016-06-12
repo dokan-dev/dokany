@@ -25,7 +25,7 @@ NTSTATUS DOKANAPI DokanNtStatusFromWin32(DWORD Error) {
   switch (Error) {
 #include "ntstatus.i"
   default:
-    DbgPrint(L"DokanNtStatusFromWin32 - Unknown Win32 error code %d\n", Error);
+    DbgPrintW(L"DokanNtStatusFromWin32 - Unknown Win32 error code %d\n", Error);
     return STATUS_ACCESS_DENIED;
   }
 }
