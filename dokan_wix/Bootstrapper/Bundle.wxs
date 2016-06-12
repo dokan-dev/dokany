@@ -28,7 +28,7 @@
         <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
         <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
 
-    </BootstrapperApplicationRef>
+      </BootstrapperApplicationRef>
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
     <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
@@ -61,7 +61,7 @@
 
     <Chain>
       <PackageGroupRef Id="NetFx40Web"/>
-
+      
       <ExePackage Id="vcredist_2015_x86.exe"
                   Name="vc_redist.x86.exe"
                   InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
@@ -70,14 +70,14 @@
                   Protocol="netfx4"
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
-                  DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23506"
+                  DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23918"
                   PerMachine="yes"
                   Vital="yes"
                   Cache="no"
                   SuppressSignatureVerification="yes"
                   SourceFile="Redist\VCRedist_2015\vc_redist.x86.exe"
-                  DownloadUrl="https://download.microsoft.com/download/2/6/8/268f7be7-8d2a-42d6-a823-5c6941a3d70a/vc_redist.x86.exe"
-                  />
+                  DownloadUrl="https:=//download.microsoft.com/download/0/5/0/0504B211-6090-48B1-8DEE-3FF879C29968/vc_redist.x86.exe"
+      />
 
       <ExePackage Id="vcredist_2015_x64.exe"
                   Name="vc_redist.x64.exe"
@@ -88,13 +88,13 @@
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
                   InstallCondition="VersionNT64"
-                  DetectCondition="vcredist_2015_x64_installed AND vcredist_2015_x64_version AND vcredist_2015_x64_versionnumber &gt;= v14.0.23506"
+                  DetectCondition="vcredist_2015_x64_installed AND vcredist_2015_x64_version AND vcredist_2015_x64_versionnumber &gt;= v14.0.23918"
                   PerMachine="yes"
                   Vital="yes"
                   Cache="yes"
                   SuppressSignatureVerification="yes"
                   SourceFile="Redist\VCRedist_2015\vc_redist.x64.exe"
-                  DownloadUrl="https://download.microsoft.com/download/2/6/8/268f7be7-8d2a-42d6-a823-5c6941a3d70a/vc_redist.x86.exe"
+                  DownloadUrl="https://download.microsoft.com/download/0/5/0/0504B211-6090-48B1-8DEE-3FF879C29968/vc_redist.x64.exe"
                   />
 
       <MsuPackage Id="Win71_KB2999226_x86"
