@@ -100,7 +100,7 @@ struct fuse_opt {
  * Key option.	In case of a match, the processing function will be
  * called with the specified key.
  */
-#define FUSE_OPT_KEY(templ, key) { templ, (unsigned int)(-1), key }
+#define FUSE_OPT_KEY(templ, key) { templ, (unsigned long)(-1), key }
 
 /**
  * Last option.	 An array of 'struct fuse_opt' must end with a NULL

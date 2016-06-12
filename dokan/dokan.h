@@ -22,7 +22,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef DOKAN_H_
 #define DOKAN_H_
 
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 
 #include "fileinfo.h"
 #include "public.h"
@@ -355,6 +358,9 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
 void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+
+// Translate Win32 Error code to the NtStatus code's corresponding
+NTSTATUS DOKANAPI DokanNtStatusFromWin32(DWORD Error);
 
 #ifdef __cplusplus
 }

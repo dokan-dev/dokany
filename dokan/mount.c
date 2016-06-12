@@ -23,7 +23,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <Dbt.h>
 #include <Shlobj.h>
 #include <stdio.h>
-#include <windows.h>
 
 typedef struct _REPARSE_DATA_BUFFER {
   ULONG ReparseTag;

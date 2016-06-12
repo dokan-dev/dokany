@@ -25,11 +25,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include <Shlwapi.h>
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
 
 #include "../dokan/dokan.h"
 #include "../dokan/dokanc.h"

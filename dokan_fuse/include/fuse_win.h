@@ -9,7 +9,9 @@
 #include <sys/types.h>
 
 #ifdef _MSC_VER
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
 #endif
 
 /** Only use the latest version on Windows */
