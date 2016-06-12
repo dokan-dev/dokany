@@ -20,7 +20,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
-#include <ntstatus.h>
 
 VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                                    // Dokan Device Driver(which is doing

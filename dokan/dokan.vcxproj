@@ -175,6 +175,7 @@
     <ClCompile Include="flush.c" />
     <ClCompile Include="lock.c" />
     <ClCompile Include="mount.c" />
+    <ClCompile Include="ntstatus.c" />
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
     <ClCompile Include="setfile.c" />
@@ -193,6 +194,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="dokan.def" />
+    <None Include="ntstatus.i" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dokan.rc" />
