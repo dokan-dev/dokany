@@ -46,11 +46,12 @@ You can obtain source files from https://dokan-dev.github.io
 ## Environment
 Dokan works on
  * Windows 10
- * Windows 8.1
  * Windows Server 2012 R2
- * Windows 8
+ * Windows 8.1
  * Windows Server 2012
- * Windows 7
+ * Windows 8
+ * Windows Server 2008 R2 SP1
+ * Windows 7 SP1
 
 ## How it works
 Dokan library contains a user mode DLL (dokan1.dll) and a kernel mode
