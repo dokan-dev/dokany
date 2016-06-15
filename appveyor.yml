@@ -29,7 +29,7 @@
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: " $cygwinexe -NoNewline
-            cmd /c start /wait $cygwinexe -qnNdO -R $installFolder -s http://cygwin.mirror.constant.com -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++ -P make -P cmake
+            cmd /c start /wait $cygwinexe -qnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++-5.3.0-5 -P make -P cmake
             Write-Host " - OK" -ForegroundColor Green
           }
           
@@ -108,19 +108,41 @@
       } elseif ($env:CONFIGURATION -eq "All") {
 
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
-        
-        & .\build.bat
-        
+              
         Write-Host Install cert and sign...
         .\cert\dokan-import.ps1
-        .\cert\dokan-sign.ps1
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
         $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
-        Write-Host Binaries signed !	
+        Write-Host Dokan cert installed !
         
         cd dokan_wix
-        (gc version.xml) -replace 'no', 'yes' | sc version.xml
+        
+        $Platform = "Any CPU"
+        $buildArgs = @(
+        "SetAssemblyVersion.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
+        "/p:Platform=${Platform}")
+        & $buildCmd $buildArgs
+        
+        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
+        
+        cd ..
+        & .\build.bat
+        .\cert\dokan-sign.ps1
+
+        cd dokan_wix
+        (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
+        (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
+        $xmlversion = [xml](Get-Content ".\version.xml")
+        $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
+        $mm_version = $current_build_version.Split("=")[1] -replace '"','';
+        $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
+        $mm_version += $env:APPVEYOR_BUILD_NUMBER;
+        $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
+        (gc version.xml) -replace $current_build_version, ('BuildVersion="' + $mm_version + '"') | sc version.xml
         
         $Platform = "Mixed Platforms"
         $buildArgs = @(
@@ -137,7 +159,7 @@
         }
         
         Write-Host Upload Artifcat...
-        Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName "DokanSetup.exe"
+        Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName ("DokanSetup-" + $installer_version + ".exe")
         Write-Host Artifcat uploaded!
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {

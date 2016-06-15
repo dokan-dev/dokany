@@ -9,7 +9,7 @@
 <?define BundleUpgradeCode="{A30D29CD-FA58-4542-8D41-7EDD1FB1EE5A}" ?>
 <?define BaseVersion="1.0.0" ?>
 <?define MajorVersion="1" ?>
-<?define BuildVersion="103" ?>
+<?define BuildVersion="3000" ?>
 <?define CompanyName="Dokany Project" ?>
 <?define ShortCompanyName="Dokany Project" ?>
 <?define UpdateURL="https://dokan-dev.github.io/" ?>
