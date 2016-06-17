@@ -118,6 +118,15 @@
         
         cd dokan_wix
         
+        $xmlversion = [xml](Get-Content ".\version.xml")
+        $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
+        $mm_version = $current_build_version.Split("=")[1] -replace '"','';
+        $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
+        $mm_version += $env:APPVEYOR_BUILD_NUMBER;
+        $version = Get-Content .\version.txt
+        $version -replace 'v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ('v' + $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file ".\version.txt"
+        $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
+        
         $Platform = "Any CPU"
         $buildArgs = @(
         "SetAssemblyVersion.sln",
@@ -136,13 +145,6 @@
         cd dokan_wix
         (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
         (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
-        $xmlversion = [xml](Get-Content ".\version.xml")
-        $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
-        $mm_version = $current_build_version.Split("=")[1] -replace '"','';
-        $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
-        $mm_version += $env:APPVEYOR_BUILD_NUMBER;
-        $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
-        (gc version.xml) -replace $current_build_version, ('BuildVersion="' + $mm_version + '"') | sc version.xml
         
         $Platform = "Mixed Platforms"
         $buildArgs = @(
