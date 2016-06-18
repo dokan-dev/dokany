@@ -21,6 +21,71 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 
+VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
+                          PDOKAN_IO_SECURITY_CONTEXT ioSecurityContext) {
+  PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjName = NULL;
+  PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjType = NULL;
+
+  ioSecurityContext->AccessState.SecurityEvaluated =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .SecurityEvaluated;
+  ioSecurityContext->AccessState.GenerateAudit =
+      EventContext->Operation.Create.SecurityContext.AccessState.GenerateAudit;
+  ioSecurityContext->AccessState.GenerateOnClose =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .GenerateOnClose;
+  ioSecurityContext->AccessState.AuditPrivileges =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .AuditPrivileges;
+  ioSecurityContext->AccessState.Flags =
+      EventContext->Operation.Create.SecurityContext.AccessState.Flags;
+  ioSecurityContext->AccessState.RemainingDesiredAccess =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .RemainingDesiredAccess;
+  ioSecurityContext->AccessState.PreviouslyGrantedAccess =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .PreviouslyGrantedAccess;
+  ioSecurityContext->AccessState.OriginalDesiredAccess =
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .OriginalDesiredAccess;
+
+  if (EventContext->Operation.Create.SecurityContext.AccessState
+          .SecurityDescriptorOffset > 0) {
+    ioSecurityContext->AccessState.SecurityDescriptor = (PSECURITY_DESCRIPTOR)(
+        (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
+        EventContext->Operation.Create.SecurityContext.AccessState
+            .SecurityDescriptorOffset);
+  } else {
+    ioSecurityContext->AccessState.SecurityDescriptor = NULL;
+  }
+
+  intermediateObjName = (PDOKAN_UNICODE_STRING_INTERMEDIATE)(
+      (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .UnicodeStringObjectNameOffset);
+  intermediateObjType = (PDOKAN_UNICODE_STRING_INTERMEDIATE)(
+      (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
+      EventContext->Operation.Create.SecurityContext.AccessState
+          .UnicodeStringObjectTypeOffset);
+
+  ioSecurityContext->AccessState.ObjectName.Length =
+      intermediateObjName->Length;
+  ioSecurityContext->AccessState.ObjectName.MaximumLength =
+      intermediateObjName->MaximumLength;
+  ioSecurityContext->AccessState.ObjectName.Buffer =
+      &intermediateObjName->Buffer[0];
+
+  ioSecurityContext->AccessState.ObjectType.Length =
+      intermediateObjType->Length;
+  ioSecurityContext->AccessState.ObjectType.MaximumLength =
+      intermediateObjType->MaximumLength;
+  ioSecurityContext->AccessState.ObjectType.Buffer =
+      &intermediateObjType->Buffer[0];
+
+  ioSecurityContext->DesiredAccess =
+      EventContext->Operation.Create.SecurityContext.DesiredAccess;
+}
+
 VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                                    // Dokan Device Driver(which is doing
                                    // EVENT_WAIT).
@@ -36,8 +101,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   DWORD options;
   DOKAN_IO_SECURITY_CONTEXT ioSecurityContext;
   WCHAR *fileName;
-  PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjName = NULL;
-  PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjType = NULL;
 
   fileName = (WCHAR *)((char *)&EventContext->Operation.Create +
                        EventContext->Operation.Create.FileNameOffset);
@@ -125,65 +188,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
 
   if (DokanInstance->DokanOperations->ZwCreateFile) {
 
-    ioSecurityContext.AccessState.SecurityEvaluated =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .SecurityEvaluated;
-    ioSecurityContext.AccessState.GenerateAudit =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .GenerateAudit;
-    ioSecurityContext.AccessState.GenerateOnClose =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .GenerateOnClose;
-    ioSecurityContext.AccessState.AuditPrivileges =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .AuditPrivileges;
-    ioSecurityContext.AccessState.Flags =
-        EventContext->Operation.Create.SecurityContext.AccessState.Flags;
-    ioSecurityContext.AccessState.RemainingDesiredAccess =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .RemainingDesiredAccess;
-    ioSecurityContext.AccessState.PreviouslyGrantedAccess =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .PreviouslyGrantedAccess;
-    ioSecurityContext.AccessState.OriginalDesiredAccess =
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .OriginalDesiredAccess;
-
-    if (EventContext->Operation.Create.SecurityContext.AccessState
-            .SecurityDescriptorOffset > 0) {
-      ioSecurityContext.AccessState.SecurityDescriptor = (PSECURITY_DESCRIPTOR)(
-          (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
-          EventContext->Operation.Create.SecurityContext.AccessState
-              .SecurityDescriptorOffset);
-    } else {
-      ioSecurityContext.AccessState.SecurityDescriptor = NULL;
-    }
-
-    intermediateObjName = (PDOKAN_UNICODE_STRING_INTERMEDIATE)(
-        (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .UnicodeStringObjectNameOffset);
-    intermediateObjType = (PDOKAN_UNICODE_STRING_INTERMEDIATE)(
-        (char *)&EventContext->Operation.Create.SecurityContext.AccessState +
-        EventContext->Operation.Create.SecurityContext.AccessState
-            .UnicodeStringObjectTypeOffset);
-
-    ioSecurityContext.AccessState.ObjectName.Length =
-        intermediateObjName->Length;
-    ioSecurityContext.AccessState.ObjectName.MaximumLength =
-        intermediateObjName->MaximumLength;
-    ioSecurityContext.AccessState.ObjectName.Buffer =
-        &intermediateObjName->Buffer[0];
-
-    ioSecurityContext.AccessState.ObjectType.Length =
-        intermediateObjType->Length;
-    ioSecurityContext.AccessState.ObjectType.MaximumLength =
-        intermediateObjType->MaximumLength;
-    ioSecurityContext.AccessState.ObjectType.Buffer =
-        &intermediateObjType->Buffer[0];
-
-    ioSecurityContext.DesiredAccess =
-        EventContext->Operation.Create.SecurityContext.DesiredAccess;
+    SetIOSecurityContext(EventContext, &ioSecurityContext);
 
     // Call SetLastError() to reset the error code to a known state
     // so we can check whether or not the user-mode driver set
@@ -229,6 +234,43 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
 
     if (status == STATUS_OBJECT_NAME_COLLISION) {
       eventInfo.Operation.Create.Information = FILE_EXISTS;
+    }
+
+    if (STATUS_ACCESS_DENIED == status &&
+        (EventContext->Operation.Create.SecurityContext.DesiredAccess &
+         DELETE)) {
+      DbgPrint("Delete failed, ask parent folder if we have the right\n");
+      // strip the last section of the file path
+      WCHAR *lastP = NULL;
+      for (WCHAR *p = fileName; *p; p++) {
+        if ((*p == L'\\' || *p == L'/') && p[1])
+          lastP = p;
+      }
+      if (lastP) {
+        *lastP = 0;
+      }
+
+      SetIOSecurityContext(EventContext, &ioSecurityContext);
+      ACCESS_MASK newDesiredAccess =
+          (MAXIMUM_ALLOWED & ioSecurityContext.DesiredAccess)
+              ? (FILE_DELETE_CHILD | FILE_LIST_DIRECTORY)
+              : (((DELETE & ioSecurityContext.DesiredAccess) ? FILE_DELETE_CHILD
+                                                             : 0) |
+                 ((FILE_READ_ATTRIBUTES & ioSecurityContext.DesiredAccess)
+                      ? FILE_LIST_DIRECTORY
+                      : 0));
+
+      status = DokanInstance->DokanOperations->ZwCreateFile(
+          fileName, &ioSecurityContext, newDesiredAccess,
+          EventContext->Operation.Create.FileAttributes,
+          EventContext->Operation.Create.ShareAccess, disposition,
+          options | FILE_OPEN_FOR_BACKUP_INTENT, &fileInfo);
+
+      if (status == STATUS_SUCCESS) {
+        DbgPrint("Parent give us the right to delete\n");
+        eventInfo.Status = STATUS_SUCCESS;
+        eventInfo.Operation.Create.Information = FILE_OPENED;
+      }
     }
 
   } else {

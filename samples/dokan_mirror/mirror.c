@@ -403,28 +403,27 @@ static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
     DbgPrint(L"Cleanup: %s\n\n", filePath);
     CloseHandle((HANDLE)DokanFileInfo->Context);
     DokanFileInfo->Context = 0;
-
-    if (DokanFileInfo->DeleteOnClose) {
-      DbgPrint(L"\tDeleteOnClose\n");
-      if (DokanFileInfo->IsDirectory) {
-        DbgPrint(L"  DeleteDirectory ");
-        if (!RemoveDirectory(filePath)) {
-          DbgPrint(L"error code = %d\n\n", GetLastError());
-        } else {
-          DbgPrint(L"success\n\n");
-        }
-      } else {
-        DbgPrint(L"  DeleteFile ");
-        if (DeleteFile(filePath) == 0) {
-          DbgPrint(L" error code = %d\n\n", GetLastError());
-        } else {
-          DbgPrint(L"success\n\n");
-        }
-      }
-    }
-
   } else {
     DbgPrint(L"Cleanup: %s\n\tinvalid handle\n\n", filePath);
+  }
+
+  if (DokanFileInfo->DeleteOnClose) {
+    DbgPrint(L"\tDeleteOnClose\n");
+    if (DokanFileInfo->IsDirectory) {
+      DbgPrint(L"  DeleteDirectory ");
+      if (!RemoveDirectory(filePath)) {
+        DbgPrint(L"error code = %d\n\n", GetLastError());
+      } else {
+        DbgPrint(L"success\n\n");
+      }
+    } else {
+      DbgPrint(L"  DeleteFile ");
+      if (DeleteFile(filePath) == 0) {
+        DbgPrint(L" error code = %d\n\n", GetLastError());
+      } else {
+        DbgPrint(L"success\n\n");
+      }
+    }
   }
 }
 

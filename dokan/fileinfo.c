@@ -408,7 +408,7 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   remainingLength = eventInfo->BufferLength;
 
-  DbgPrint("\tresult =  %lu\n", status);
+  DbgPrint("\tresult =  %lx\n", status);
 
   if (status != STATUS_SUCCESS) {
     eventInfo->Status = STATUS_INVALID_PARAMETER;
@@ -516,7 +516,7 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
         EventContext->Operation.File.BufferLength - remainingLength;
   }
 
-  DbgPrint("\tDispatchQueryInformation result =  %lu\n", status);
+  DbgPrint("\tDispatchQueryInformation result =  %lx\n", status);
 
   // information for FileSystem
   if (openInfo != NULL)
