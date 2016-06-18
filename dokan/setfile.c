@@ -102,6 +102,17 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
     return STATUS_SUCCESS;
   }
 
+  if (DokanOperations->GetFileInformation) {
+    BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
+    ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
+    NTSTATUS result = DokanOperations->GetFileInformation(
+        EventContext->Operation.SetFile.FileName, &byHandleFileInfo, FileInfo);
+
+    if (result == STATUS_SUCCESS &&
+        (byHandleFileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0)
+      return STATUS_CANNOT_DELETE;
+  }
+
   if (FileInfo->IsDirectory) {
     return DokanOperations->DeleteDirectory(
         EventContext->Operation.SetFile.FileName, FileInfo);
