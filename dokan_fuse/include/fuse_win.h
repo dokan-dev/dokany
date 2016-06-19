@@ -32,7 +32,6 @@ extern "C" {
 #endif
 int ntstatus_error_to_errno(int win_res);
 int errno_to_ntstatus_error(int err);
-NTSTATUS lasterror_to_ntstatus(DWORD last_err);
 
 //This stuff is useful only on Windows in MSVC
 #ifdef _MSC_VER
