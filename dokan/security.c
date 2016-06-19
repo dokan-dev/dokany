@@ -38,6 +38,9 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
                              &fileInfo, &openInfo);
 
+  DbgPrint("###GetFileSecurity %04d\n",
+           openInfo != NULL ? openInfo->EventId : -1);
+
   if (DokanInstance->DokanOperations->GetFileSecurity) {
     status = DokanInstance->DokanOperations->GetFileSecurity(
         EventContext->Operation.Security.FileName,
@@ -78,6 +81,8 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
                              &fileInfo, &openInfo);
+
+  DbgPrint("###SetSecurity %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
   securityDescriptor =
       (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;
