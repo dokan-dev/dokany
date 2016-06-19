@@ -408,6 +408,8 @@ static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
   }
 
   if (DokanFileInfo->DeleteOnClose) {
+    // Should already be deleted by CloseHandle
+    // if open with FILE_FLAG_DELETE_ON_CLOSE
     DbgPrint(L"\tDeleteOnClose\n");
     if (DokanFileInfo->IsDirectory) {
       DbgPrint(L"  DeleteDirectory ");
