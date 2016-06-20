@@ -26,12 +26,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 
 NTSTATUS
-DokanFillInternalInfo(PFILE_INTERNAL_INFORMATION InternalInfo,
-                      PBY_HANDLE_FILE_INFORMATION FileInfo,
-                      PULONG RemainingLength);
-
-
-NTSTATUS
 DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
                        PBY_HANDLE_FILE_INFORMATION FileInfo,
                        PULONG RemainingLength) {
@@ -103,6 +97,22 @@ DokanFillFilePositionInfo(PFILE_POSITION_INFORMATION PosInfo,
 }
 
 NTSTATUS
+DokanFillInternalInfo(PFILE_INTERNAL_INFORMATION InternalInfo,
+                      PBY_HANDLE_FILE_INFORMATION FileInfo,
+                      PULONG RemainingLength) {
+  if (*RemainingLength < sizeof(FILE_INTERNAL_INFORMATION)) {
+    return STATUS_BUFFER_OVERFLOW;
+  }
+
+  InternalInfo->IndexNumber.HighPart = FileInfo->nFileIndexHigh;
+  InternalInfo->IndexNumber.LowPart = FileInfo->nFileIndexLow;
+
+  *RemainingLength -= sizeof(FILE_INTERNAL_INFORMATION);
+
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
                      PBY_HANDLE_FILE_INFORMATION FileInfo,
                      PULONG RemainingLength, PEVENT_CONTEXT EventContext,
@@ -122,7 +132,7 @@ DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
 
   // FileInternalInformation
   DokanFillInternalInfo(&AllInfo->InternalInformation, FileInfo,
-                            RemainingLength);
+                        RemainingLength);
 
   // FilePositionInformation
   DokanFillFilePositionInfo(&AllInfo->PositionInformation, FileInfo,
@@ -254,25 +264,8 @@ DokanFillNetworkPhysicalNameInfo(
 }
 
 NTSTATUS
-DokanFillInternalInfo(PFILE_INTERNAL_INFORMATION InternalInfo,
-                      PBY_HANDLE_FILE_INFORMATION FileInfo,
-                      PULONG RemainingLength) {
-  if (*RemainingLength < sizeof(FILE_INTERNAL_INFORMATION)) {
-    return STATUS_BUFFER_OVERFLOW;
-  }
-
-  InternalInfo->IndexNumber.HighPart = FileInfo->nFileIndexHigh;
-  InternalInfo->IndexNumber.LowPart = FileInfo->nFileIndexLow;
-
-  *RemainingLength -= sizeof(FILE_INTERNAL_INFORMATION);
-
-  return STATUS_SUCCESS;
-}
-
-NTSTATUS
 DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
-                      PBY_HANDLE_FILE_INFORMATION FileInfo,
-                      PULONG RemainingLength) {
+                PBY_HANDLE_FILE_INFORMATION FileInfo, PULONG RemainingLength) {
   if (*RemainingLength < sizeof(FILE_ID_INFORMATION)) {
     return STATUS_BUFFER_OVERFLOW;
   }
@@ -281,9 +274,9 @@ DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
 
   ZeroMemory(IdInfo->FileId.Identifier, sizeof(IdInfo->FileId.Identifier));
 
-  ((DWORD*)(IdInfo->FileId.Identifier))[0] = FileInfo->nFileIndexLow;
-  ((DWORD*)(IdInfo->FileId.Identifier))[1] = FileInfo->nFileIndexHigh;
-  
+  ((DWORD *)(IdInfo->FileId.Identifier))[0] = FileInfo->nFileIndexLow;
+  ((DWORD *)(IdInfo->FileId.Identifier))[1] = FileInfo->nFileIndexHigh;
+
   *RemainingLength -= sizeof(FILE_ID_INFORMATION);
 
   return STATUS_SUCCESS;
@@ -455,9 +448,8 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
     case FileIdInformation:
       DbgPrint("\tFileIdInformation\n");
-      status =
-          DokanFillIdInfo((PFILE_ID_INFORMATION)eventInfo->Buffer,
-                                &byHandleFileInfo, &remainingLength);
+      status = DokanFillIdInfo((PFILE_ID_INFORMATION)eventInfo->Buffer,
+                               &byHandleFileInfo, &remainingLength);
       break;
 
     case FileInternalInformation:
