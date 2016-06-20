@@ -103,7 +103,7 @@ Return Value:
     fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
     eventContext->Context = ccb->UserContext;
-    eventContext->FileFlags |= fcb->Flags;
+    eventContext->FileFlags |= ccb->Flags;
     // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
     // copy the filename to EventContext from ccb

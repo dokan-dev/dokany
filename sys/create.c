@@ -365,7 +365,7 @@ Return Value:
   PUNICODE_STRING relatedFileName = NULL;
   PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
   BOOLEAN OpenRequiringOplock = FALSE;
-  //BOOLEAN UnwindShareAccess = FALSE;
+  // BOOLEAN UnwindShareAccess = FALSE;
 
   PAGED_CODE();
 
@@ -590,10 +590,9 @@ Return Value:
     // for windows 8
     if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
       fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
+      ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
       DDbgPrint(
           "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
-    } else {
-      fcb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
     }
 
     fileObject->FsContext = &fcb->AdvancedFCBHeader;
@@ -1000,10 +999,10 @@ create is over.
       }
 
       /*
-	  if (UnwindShareAccess) {
+          if (UnwindShareAccess) {
         IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
       }
-	  */
+          */
     }
 #endif
 
