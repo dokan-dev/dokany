@@ -66,8 +66,8 @@
     <Property Id="WIN7KB3033929INSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem3" Path="[SystemFolder]" Depth="0">
         <FileSearch Id="WINTRUST_FileSearch"
-                    Name="Wintrust.dll"
-                    MinVersion="6.1.7601.18741"/>
+                    Name="wintrust.dll"
+                    MinVersion="6.1.7601.18740"/>
       </DirectorySearch>
     </Property>
 
