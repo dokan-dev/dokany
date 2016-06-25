@@ -176,14 +176,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
 
   DbgPrint("###Create %04d\n", eventId);
 
-  // to open no directory file
-  // event if this flag is not specified,
-  // there is a case to open non directory file
-  if (options & FILE_NON_DIRECTORY_FILE) {
-    // DbgPrint("FILE_NON_DIRECTORY_FILE\n");
-  }
-
-  // DbgPrint("### OpenInfo %X\n", openInfo);
   openInfo->EventId = eventId++;
 
   if (DokanInstance->DokanOperations->ZwCreateFile) {
@@ -195,12 +187,15 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     // ERROR_ALREADY_EXISTS
     SetLastError(ERROR_SUCCESS);
 
-    // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
-    status = DokanInstance->DokanOperations->ZwCreateFile(
-        fileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
-        EventContext->Operation.Create.FileAttributes,
-        EventContext->Operation.Create.ShareAccess, disposition, options,
-        &fileInfo);
+    if (options & FILE_NON_DIRECTORY_FILE && options & FILE_DIRECTORY_FILE)
+      status = STATUS_INVALID_PARAMETER;
+    else
+      // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
+      status = DokanInstance->DokanOperations->ZwCreateFile(
+          fileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
+          EventContext->Operation.Create.FileAttributes,
+          EventContext->Operation.Create.ShareAccess, disposition, options,
+          &fileInfo);
 
     lastError = GetLastError();
   } else {
@@ -274,8 +269,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     }
 
   } else {
-
-    // DbgPrint("status = %d\n", status);
 
     eventInfo.Status = STATUS_SUCCESS;
     eventInfo.Operation.Create.Information = FILE_OPENED;

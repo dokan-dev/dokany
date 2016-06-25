@@ -295,7 +295,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     }
   }
 
-  // DbgPrint("SetInfomation status = %d\n\n", status);
+  DbgPrint("\tDispatchSetInformation result =  %lx\n", status);
 
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
   free(eventInfo);

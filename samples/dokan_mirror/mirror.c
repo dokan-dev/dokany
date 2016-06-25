@@ -248,10 +248,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   fileAttr = GetFileAttributes(filePath);
 
   if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-      (fileAttr & FILE_ATTRIBUTE_DIRECTORY &&
-       DesiredAccess != DELETE)) { // Directory cannot be open for DELETE
-    fileAttributesAndFlags |= FILE_FLAG_BACKUP_SEMANTICS;
-    // AccessMode = 0;
+      (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
+      !(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
+    DokanFileInfo->IsDirectory = TRUE;
+    if (DesiredAccess & DELETE) {
+      // Needed by FindFirstFile to see if directory is empty or not
+      ShareAccess |= FILE_SHARE_READ;
+    }
   }
 
   DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
@@ -297,15 +300,15 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     DbgPrint(L"\tUNKNOWN creationDisposition!\n");
   }
 
-  if ((CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE) {
+  if (DokanFileInfo->IsDirectory) {
     // It is a create directory request
-    if (CreateDisposition == FILE_CREATE) {
+    if (creationDisposition == CREATE_NEW) {
       if (!CreateDirectory(filePath, &securityAttrib)) {
         error = GetLastError();
         DbgPrint(L"\terror code = %d\n\n", error);
         status = DokanNtStatusFromWin32(error);
       }
-    } else if (CreateDisposition == FILE_OPEN_IF) {
+    } else if (creationDisposition == OPEN_ALWAYS) {
 
       if (!CreateDirectory(filePath, &securityAttrib)) {
 
@@ -317,12 +320,11 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
     }
-
     if (status == STATUS_SUCCESS) {
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-      handle = CreateFile(filePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                          &securityAttrib, OPEN_EXISTING,
-                          FILE_FLAG_BACKUP_SEMANTICS, NULL);
+      handle = CreateFile(
+          filePath, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
+          fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -339,19 +341,17 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
     if (fileAttr != INVALID_FILE_ATTRIBUTES &&
         (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-        CreateDisposition == FILE_CREATE) {
+        CreateDisposition == FILE_CREATE)
       return STATUS_OBJECT_NAME_COLLISION; // File already exist because
                                            // GetFileAttributes found it
-    } else {
-      handle = CreateFile(
-          filePath,
-          DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-          ShareAccess,
-          &securityAttrib, // security attribute
-          creationDisposition,
-          fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
-          NULL);                  // template file handle
-    }
+    handle =
+        CreateFile(filePath,
+                   DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+                   ShareAccess,
+                   &securityAttrib, // security attribute
+                   creationDisposition,
+                   fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
+                   NULL);                  // template file handle
 
     if (handle == INVALID_HANDLE_VALUE) {
       error = GetLastError();
