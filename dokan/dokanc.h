@@ -76,6 +76,8 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
   if (buffer)
     _freea(buffer);
   va_end(argp);
+  if (g_UseStdErr)
+    fflush(stderr);
 }
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {

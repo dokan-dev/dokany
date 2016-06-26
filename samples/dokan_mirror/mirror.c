@@ -58,6 +58,8 @@ static void DbgPrint(LPCWSTR format, ...) {
     if (buffer)
       _freea(buffer);
     va_end(argp);
+    if (g_UseStdErr)
+      fflush(stderr);
   }
 }
 
