@@ -591,17 +591,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 
   if (!handle || handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle\n\n");
-
-    // If CreateDirectory returned FILE_ALREADY_EXISTS and
-    // it is called with FILE_OPEN_IF, that handle must be opened.
-    handle = CreateFile(filePath, 0, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                        FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"GetFileInfo failed(%d)\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+    return STATUS_INVALID_PARAMETER;
   }
 
   if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
@@ -778,30 +768,60 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
                PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
   WCHAR newFilePath[MAX_PATH];
-  BOOL status;
+  HANDLE handle;
+  DWORD bufferSize;
+  BOOL result;
+  size_t newFilePathLen;
+
+  PFILE_RENAME_INFORMATION renameInfo = NULL;
 
   GetFilePath(filePath, MAX_PATH, FileName);
   GetFilePath(newFilePath, MAX_PATH, NewFileName);
 
   DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
-
-  if (DokanFileInfo->Context) {
-    // should close? or rename at closing?
-    CloseHandle((HANDLE)DokanFileInfo->Context);
-    DokanFileInfo->Context = 0;
+  handle = (HANDLE)DokanFileInfo->Context;
+  if (!handle || handle == INVALID_HANDLE_VALUE) {
+    DbgPrint(L"\tinvalid handle\n\n");
+    return STATUS_INVALID_HANDLE;
   }
 
-  if (ReplaceIfExisting)
-    status = MoveFileEx(filePath, newFilePath, MOVEFILE_REPLACE_EXISTING);
-  else
-    status = MoveFile(filePath, newFilePath);
+  newFilePathLen = wcslen(newFilePath);
 
-  if (status == FALSE) {
-    DWORD error = GetLastError();
-    DbgPrint(L"\tMoveFile failed status = %d, code = %d\n", status, error);
-    return DokanNtStatusFromWin32(error);
-  } else {
+  // the FILE_RENAME_INFORMATION struct has space for one WCHAR for the name at
+  // the end, so that
+  // accounts for the null terminator
+
+  bufferSize = (DWORD)(sizeof(FILE_RENAME_INFORMATION) +
+                       newFilePathLen * sizeof(newFilePath[0]));
+
+  renameInfo = (PFILE_RENAME_INFORMATION)malloc(bufferSize);
+  ZeroMemory(renameInfo, bufferSize);
+  if (!renameInfo) {
+    return STATUS_BUFFER_OVERFLOW;
+  }
+
+  renameInfo->ReplaceIfExists =
+      ReplaceIfExisting
+          ? TRUE
+          : FALSE; // some warning about converting BOOL to BOOLEAN
+  renameInfo->RootDirectory = NULL; // hope it is never needed, shouldn't be
+  renameInfo->FileNameLength =
+      (DWORD)newFilePathLen *
+      sizeof(newFilePath[0]); // they want length in bytes
+
+  wcscpy_s(renameInfo->FileName, newFilePathLen + 1, newFilePath);
+
+  result = SetFileInformationByHandle(handle, FileRenameInfo, renameInfo,
+                                      bufferSize);
+
+  free(renameInfo);
+
+  if (result) {
     return STATUS_SUCCESS;
+  } else {
+    DWORD error = GetLastError();
+    DbgPrint(L"\tMoveFile error = %u\n", error);
+    return DokanNtStatusFromWin32(error);
   }
 }
 
@@ -830,7 +850,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
   if (!LockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
                 length.HighPart)) {
     DWORD error = GetLastError();
-    DbgPrint(L"\tfailed(%d)\n", error);
+	DbgPrint(L"\terror code = %d\n\n", error);
     return DokanNtStatusFromWin32(error);
   }
 
@@ -1042,11 +1062,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
                              BufferLength, LengthNeeded)) {
     int error = GetLastError();
     if (error == ERROR_INSUFFICIENT_BUFFER) {
-      DbgPrint(L"  GetUserObjectSecurity failed: ERROR_INSUFFICIENT_BUFFER\n");
+      DbgPrint(L"  GetUserObjectSecurity error: ERROR_INSUFFICIENT_BUFFER\n");
       CloseHandle(handle);
       return STATUS_BUFFER_OVERFLOW;
     } else {
-      DbgPrint(L"  GetUserObjectSecurity failed: %d\n", error);
+      DbgPrint(L"  GetUserObjectSecurity error: %d\n", error);
       CloseHandle(handle);
       return DokanNtStatusFromWin32(error);
     }
@@ -1077,7 +1097,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
 
   if (!SetUserObjectSecurity(handle, SecurityInformation, SecurityDescriptor)) {
     int error = GetLastError();
-    DbgPrint(L"  SetUserObjectSecurity failed: %d\n", error);
+    DbgPrint(L"  SetUserObjectSecurity error: %d\n", error);
     return DokanNtStatusFromWin32(error);
   }
   return STATUS_SUCCESS;
