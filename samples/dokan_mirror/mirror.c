@@ -583,7 +583,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
     PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
-  BOOL opened = FALSE;
 
   GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -596,11 +595,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 
   if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
     DbgPrint(L"\terror code = %d\n", GetLastError());
-
-    if (opened) {
-      opened = FALSE;
-      CloseHandle(handle);
-    }
 
     // FileName is a root directory
     // in this case, FindFirstFile can't get directory information
@@ -632,10 +626,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
   }
 
   DbgPrint(L"\n");
-
-  if (opened) {
-    CloseHandle(handle);
-  }
 
   return STATUS_SUCCESS;
 }
