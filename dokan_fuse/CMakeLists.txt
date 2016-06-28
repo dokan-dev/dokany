@@ -14,7 +14,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../sys
 )
 
-file(GLOB sources src/*.cpp src/*.c)
+file(GLOB sources src/*.cpp src/*.c src/*.rc)
 set(install_headers
     include/fuse.h
     include/fuse_common.h
