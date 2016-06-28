@@ -381,6 +381,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   return status;
 }
 
+#pragma warning(push)
+#pragma warning(disable : 4305)
+
 static void DOKAN_CALLBACK MirrorCloseFile(LPCWSTR FileName,
                                            PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
@@ -403,7 +406,7 @@ static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
 
   if (DokanFileInfo->Context) {
     DbgPrint(L"Cleanup: %s\n\n", filePath);
-    CloseHandle((HANDLE)DokanFileInfo->Context);
+    CloseHandle((HANDLE)(DokanFileInfo->Context));
     DokanFileInfo->Context = 0;
   } else {
     DbgPrint(L"Cleanup: %s\n\tinvalid handle\n\n", filePath);
@@ -763,7 +766,7 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
   BOOL result;
   size_t newFilePathLen;
 
-  PFILE_RENAME_INFORMATION renameInfo = NULL;
+  PFILE_RENAME_INFO renameInfo = NULL;
 
   GetFilePath(filePath, MAX_PATH, FileName);
   GetFilePath(newFilePath, MAX_PATH, NewFileName);
@@ -777,18 +780,18 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
 
   newFilePathLen = wcslen(newFilePath);
 
-  // the FILE_RENAME_INFORMATION struct has space for one WCHAR for the name at
+  // the PFILE_RENAME_INFO struct has space for one WCHAR for the name at
   // the end, so that
   // accounts for the null terminator
 
-  bufferSize = (DWORD)(sizeof(FILE_RENAME_INFORMATION) +
+  bufferSize = (DWORD)(sizeof(FILE_RENAME_INFO) +
                        newFilePathLen * sizeof(newFilePath[0]));
 
-  renameInfo = (PFILE_RENAME_INFORMATION)malloc(bufferSize);
-  ZeroMemory(renameInfo, bufferSize);
+  renameInfo = (PFILE_RENAME_INFO)malloc(bufferSize);
   if (!renameInfo) {
     return STATUS_BUFFER_OVERFLOW;
   }
+  ZeroMemory(renameInfo, bufferSize);
 
   renameInfo->ReplaceIfExists =
       ReplaceIfExisting
@@ -840,7 +843,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
   if (!LockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
                 length.HighPart)) {
     DWORD error = GetLastError();
-	DbgPrint(L"\terror code = %d\n\n", error);
+    DbgPrint(L"\terror code = %d\n\n", error);
     return DokanNtStatusFromWin32(error);
   }
 
@@ -1139,6 +1142,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
  *
  * BEGIN
  */
+#pragma warning(push)
+#pragma warning(disable : 4201)
 typedef struct _IO_STATUS_BLOCK {
   union {
     NTSTATUS Status;
@@ -1147,6 +1152,7 @@ typedef struct _IO_STATUS_BLOCK {
 
   ULONG_PTR Information;
 } IO_STATUS_BLOCK, *PIO_STATUS_BLOCK;
+#pragma warning(pop)
 
 NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
     _In_ HANDLE FileHandle, _Out_ PIO_STATUS_BLOCK IoStatusBlock,
@@ -1211,6 +1217,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   DbgPrint(L"Unmounted\n");
   return STATUS_SUCCESS;
 }
+
+#pragma warning(pop)
 
 BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   switch (dwCtrlType) {

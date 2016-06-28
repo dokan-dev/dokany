@@ -134,6 +134,8 @@ DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
   DokanFillInternalInfo(&AllInfo->InternalInformation, FileInfo,
                         RemainingLength);
 
+  AllInfo->EaInformation.EaSize = 0;
+
   // FilePositionInformation
   DokanFillFilePositionInfo(&AllInfo->PositionInformation, FileInfo,
                             RemainingLength);
