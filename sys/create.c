@@ -626,6 +626,7 @@ Return Value:
     if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
       status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
       if (status != STATUS_SUCCESS) {
+        ExFreePool(fileName);
         __leave;
       }
     }
