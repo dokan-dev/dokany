@@ -259,6 +259,77 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   return STATUS_SUCCESS;
 }
 
+// Creates a buffer from ExAllocatePool() containing
+// the parent dir of file/dir pointed to by fileName.
+// the buffer IS null terminated
+// in *parentDirLength returns length in bytes of string (not counting null terminator) 
+// fileName MUST be null terminated
+// if last char of fileName is \, then it is ignored but a slash
+// is appened to the returned path
+//
+//  e.g. \foo\bar.txt becomes \foo
+//       \foo\bar\ bcomes \foo\
+//
+// if there is no parent, then it return STATUS_ACCESS_DENIED
+// if ExAllocatePool() fails, then it returns STATUS_INSUFFICIENT_RESOURCES
+// otherwise returns STATUS_SUCCESS
+
+NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, 
+  __out WCHAR **parentDir, __out ULONG *parentDirLength) {
+  // first check if there is a parent
+  
+  LONG len = (LONG)wcslen(fileName);
+  
+  LONG i;
+  ULONG nSlashes = 0;
+  BOOLEAN trailingSlash;
+
+  *parentDir = NULL;
+  *parentDirLength = 0;
+  
+  if (len < 4)
+    return STATUS_ACCESS_DENIED;
+  
+  trailingSlash = fileName[len-1] == '\\';
+  
+  if (trailingSlash && len < 5)
+    return STATUS_ACCESS_DENIED;
+  
+  for (i = 0; i < len; i++) {
+    if (fileName[i] == '\\') {
+      nSlashes++;
+    }
+  }
+  
+  if (nSlashes < (ULONG)(trailingSlash ? 3 : 2))
+    return STATUS_ACCESS_DENIED;
+  
+  *parentDir = (WCHAR*)ExAllocatePool((len+1)*sizeof(WCHAR));
+  
+  if (!*parentDir)
+    return STATUS_INSUFFICIENT_RESOURCES;
+  
+  wcscpy(*parentDir, fileName);
+  
+  for (i = len-1; i >= 0; i--) {
+    if ((*parentDir)[i] == '\\') {
+      if (i == len-1 && trailingSlash) {
+        continue;
+      }
+      (*parentDir)[i] = 0;
+      break;
+    }
+  }
+  *parentDirLength = i*sizeof(WCHAR);
+  if (trailingSlash) {
+    (*parentDir)[i] = '\\';
+    (*parentDir)[i+1] = 0;
+    *parentDirLength += sizeof(WCHAR);
+  }
+  
+  return STATUS_SUCCESS;
+}
+
 LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char) {
   ULONG i = 0;
@@ -354,6 +425,8 @@ Return Value:
   PDokanFCB fcb = NULL;
   PDokanCCB ccb = NULL;
   PWCHAR fileName = NULL;
+  PWCHAR parentDir = NULL; // for SL_OPEN_TARGET_DIRECTORY
+  ULONG parentDirLength = 0;
   BOOLEAN needBackSlashAfterRelatedFile = FALSE;
   ULONG securityDescriptorSize = 0;
   ULONG alignedEventContextSize = 0;
@@ -549,6 +622,13 @@ Return Value:
       RtlCopyMemory(fileName, fileObject->FileName.Buffer,
                     fileObject->FileName.Length);
     }
+    
+    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
+      status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
+      if (status != STATUS_SUCCESS) {
+        __leave;
+      }
+    }
 
     // Fail if device is read-only and request involves a write operation
     DWORD disposition = 0;
@@ -567,7 +647,11 @@ Return Value:
       }
     }
 
-    fcb = DokanGetFCB(vcb, fileName, fileNameLength);
+    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
+      fcb = DokanGetFCB(vcb, parentDir, parentDirLength);
+    } else {
+      fcb = DokanGetFCB(vcb, fileName, fileNameLength);
+    }
     if (fcb == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
@@ -657,8 +741,8 @@ Return Value:
     eventLength = alignedEventContextSize + securityDescriptorSize;
     eventLength += alignedObjectNameSize;
     eventLength += alignedObjectTypeNameSize;
-    eventLength += fcb->FileName.Length + sizeof(WCHAR); // add WCHAR for NULL
-
+    eventLength += (parentDir ? fileNameLength : fcb->FileName.Length) + sizeof(WCHAR); // add WCHAR for NULL
+    
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
     if (eventContext == NULL) {
@@ -737,7 +821,7 @@ Return Value:
     }
     eventContext->Operation.Create.ShareAccess =
         irpSp->Parameters.Create.ShareAccess;
-    eventContext->Operation.Create.FileNameLength = fcb->FileName.Length;
+    eventContext->Operation.Create.FileNameLength = parentDir ? fileNameLength : fcb->FileName.Length;
     eventContext->Operation.Create.FileNameOffset =
         (ULONG)(((char *)eventContext + alignedEventContextSize +
                  securityDescriptorSize + alignedObjectNameSize +
@@ -806,12 +890,14 @@ Return Value:
     eventContext->FileFlags |= fcb->Flags;
 
     // copy the file name
+    
     RtlCopyMemory(((char *)&eventContext->Operation.Create +
                    eventContext->Operation.Create.FileNameOffset),
-                  fcb->FileName.Buffer, fcb->FileName.Length);
+                  parentDir ? fileName : fcb->FileName.Buffer, parentDir ? fileNameLength : fcb->FileName.Length);
     *(PWCHAR)((char *)&eventContext->Operation.Create +
               eventContext->Operation.Create.FileNameOffset +
-              fcb->FileName.Length) = 0;
+              (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
+    
 
 //
 // Oplock
@@ -1006,6 +1092,12 @@ create is over.
     }
 #endif
 
+    if (parentDir) { // SL_OPEN_TARGET_DIRECTORY
+      // fcb owns parentDir, not fileName
+      if (fileName)
+        ExFreePool(fileName);
+    }
+
     DokanCompleteIrpRequest(Irp, status, info);
 
     DDbgPrint("<== DokanCreate\n");
@@ -1035,6 +1127,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   ASSERT(fcb != NULL);
 
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
+  
 
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
