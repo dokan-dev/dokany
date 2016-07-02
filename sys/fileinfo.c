@@ -160,15 +160,15 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileStreamInformation:
       DDbgPrint("  FileStreamInformation\n");
       break;
-	case FileStandardLinkInformation:
-	  DDbgPrint("  FileStandardLinkInformation\n");
-	  break;
+    case FileStandardLinkInformation:
+      DDbgPrint("  FileStandardLinkInformation\n");
+      break;
     case FileNetworkPhysicalNameInformation:
       DDbgPrint("  FileNetworkPhysicalNameInformation\n");
       break;
-	case FileRemoteProtocolInformation:
-	  DDbgPrint("  FileRemoteProtocolInformation\n");
-	  break;
+    case FileRemoteProtocolInformation:
+      DDbgPrint("  FileRemoteProtocolInformation\n");
+      break;
     default:
       DDbgPrint("  unknown type:%d\n",
                 irpSp->Parameters.QueryFile.FileInformationClass);
@@ -447,11 +447,11 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                       targetFileObject->FileName.Length);
         renameContext->FileNameLength = targetFileObject->FileName.Length;
       }
-      
-      
+
       if (irpSp->Parameters.SetFile.FileInformationClass ==
-              FileRenameInformation) {
-        DDbgPrint("   rename: %wZ => %ls, FileCount = %u\n", fcb->FileName, renameContext->FileName, (ULONG)fcb->FileCount);
+          FileRenameInformation) {
+        DDbgPrint("   rename: %wZ => %ls, FileCount = %u\n", fcb->FileName,
+                  renameContext->FileName, (ULONG)fcb->FileCount);
       }
     }
 

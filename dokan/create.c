@@ -146,7 +146,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   // DbgPrint("Create.CreateOptions 0x%x\n", options);
 
   origOptions = options;
-    
+
   // to open directory
   // even if this flag is not specifed,
   // there is a case to open a directory
@@ -160,9 +160,9 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     // it look like it was
     // a regular request to open a directory.
     // https://msdn.microsoft.com/en-us/library/windows/hardware/ff548630(v=vs.85).aspx
-    
-    origFileName = _wcsdup(fileName); 
-    
+
+    origFileName = _wcsdup(fileName);
+
     options |= FILE_DIRECTORY_FILE;
     options &= ~FILE_NON_DIRECTORY_FILE;
 
@@ -188,10 +188,11 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   if (DokanInstance->DokanOperations->ZwCreateFile) {
 
     SetIOSecurityContext(EventContext, &ioSecurityContext);
-    
-    if ((EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) && 
-      DokanInstance->DokanOperations->Cleanup && DokanInstance->DokanOperations->CloseFile) {
-      
+
+    if ((EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) &&
+        DokanInstance->DokanOperations->Cleanup &&
+        DokanInstance->DokanOperations->CloseFile) {
+
       // Call SetLastError() to reset the error code to a known state
       // so we can check whether or not the user-mode driver set
       // ERROR_ALREADY_EXISTS
@@ -204,9 +205,9 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
         status = DokanInstance->DokanOperations->ZwCreateFile(
             origFileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
             EventContext->Operation.Create.FileAttributes,
-            EventContext->Operation.Create.ShareAccess, disposition, origOptions,
-            &fileInfo);
-            
+            EventContext->Operation.Create.ShareAccess, disposition,
+            origOptions, &fileInfo);
+
       if (status == STATUS_SUCCESS) {
         DokanInstance->DokanOperations->Cleanup(origFileName, &fileInfo);
         DokanInstance->DokanOperations->CloseFile(origFileName, &fileInfo);
@@ -214,7 +215,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
         DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
         childExisted = FALSE;
       }
-      
+
       fileInfo.IsDirectory = TRUE;
     }
 
@@ -333,7 +334,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
 
   if (origFileName)
     free(origFileName);
-  
+
   SendEventInformation(Handle, &eventInfo, sizeof(EVENT_INFORMATION),
                        DokanInstance);
   return;

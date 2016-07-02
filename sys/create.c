@@ -98,7 +98,9 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking for %ls\n", fcb->FileName, fcb->FileCount, FileName);
+    DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
+              "for %ls\n",
+              fcb->FileName, fcb->FileCount, FileName);
     if (fcb->FileName.Length == FileNameLength) {
       // FileNameLength in bytes
       for (pos = 0; pos < FileNameLength / sizeof(WCHAR); ++pos) {
@@ -262,7 +264,8 @@ DokanFreeCCB(__in PDokanCCB ccb) {
 // Creates a buffer from ExAllocatePool() containing
 // the parent dir of file/dir pointed to by fileName.
 // the buffer IS null terminated
-// in *parentDirLength returns length in bytes of string (not counting null terminator) 
+// in *parentDirLength returns length in bytes of string (not counting null
+// terminator)
 // fileName MUST be null terminated
 // if last char of fileName is \, then it is ignored but a slash
 // is appened to the returned path
@@ -274,59 +277,59 @@ DokanFreeCCB(__in PDokanCCB ccb) {
 // if ExAllocatePool() fails, then it returns STATUS_INSUFFICIENT_RESOURCES
 // otherwise returns STATUS_SUCCESS
 
-NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, 
-  __out WCHAR **parentDir, __out ULONG *parentDirLength) {
+NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
+                           __out ULONG *parentDirLength) {
   // first check if there is a parent
-  
+
   LONG len = (LONG)wcslen(fileName);
-  
+
   LONG i;
   ULONG nSlashes = 0;
   BOOLEAN trailingSlash;
 
   *parentDir = NULL;
   *parentDirLength = 0;
-  
+
   if (len < 4)
     return STATUS_ACCESS_DENIED;
-  
-  trailingSlash = fileName[len-1] == '\\';
-  
+
+  trailingSlash = fileName[len - 1] == '\\';
+
   if (trailingSlash && len < 5)
     return STATUS_ACCESS_DENIED;
-  
+
   for (i = 0; i < len; i++) {
     if (fileName[i] == '\\') {
       nSlashes++;
     }
   }
-  
+
   if (nSlashes < (ULONG)(trailingSlash ? 3 : 2))
     return STATUS_ACCESS_DENIED;
-  
-  *parentDir = (WCHAR*)ExAllocatePool((len+1)*sizeof(WCHAR));
-  
+
+  *parentDir = (WCHAR *)ExAllocatePool((len + 1) * sizeof(WCHAR));
+
   if (!*parentDir)
     return STATUS_INSUFFICIENT_RESOURCES;
-  
+
   wcscpy(*parentDir, fileName);
-  
-  for (i = len-1; i >= 0; i--) {
+
+  for (i = len - 1; i >= 0; i--) {
     if ((*parentDir)[i] == '\\') {
-      if (i == len-1 && trailingSlash) {
+      if (i == len - 1 && trailingSlash) {
         continue;
       }
       (*parentDir)[i] = 0;
       break;
     }
   }
-  *parentDirLength = i*sizeof(WCHAR);
+  *parentDirLength = i * sizeof(WCHAR);
   if (trailingSlash) {
     (*parentDir)[i] = '\\';
-    (*parentDir)[i+1] = 0;
+    (*parentDir)[i + 1] = 0;
     *parentDirLength += sizeof(WCHAR);
   }
-  
+
   return STATUS_SUCCESS;
 }
 
@@ -622,7 +625,7 @@ Return Value:
       RtlCopyMemory(fileName, fileObject->FileName.Buffer,
                     fileObject->FileName.Length);
     }
-    
+
     if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
       status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
       if (status != STATUS_SUCCESS) {
@@ -742,8 +745,9 @@ Return Value:
     eventLength = alignedEventContextSize + securityDescriptorSize;
     eventLength += alignedObjectNameSize;
     eventLength += alignedObjectTypeNameSize;
-    eventLength += (parentDir ? fileNameLength : fcb->FileName.Length) + sizeof(WCHAR); // add WCHAR for NULL
-    
+    eventLength += (parentDir ? fileNameLength : fcb->FileName.Length) +
+                   sizeof(WCHAR); // add WCHAR for NULL
+
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
     if (eventContext == NULL) {
@@ -824,7 +828,8 @@ Return Value:
     }
     eventContext->Operation.Create.ShareAccess =
         irpSp->Parameters.Create.ShareAccess;
-    eventContext->Operation.Create.FileNameLength = parentDir ? fileNameLength : fcb->FileName.Length;
+    eventContext->Operation.Create.FileNameLength =
+        parentDir ? fileNameLength : fcb->FileName.Length;
     eventContext->Operation.Create.FileNameOffset =
         (ULONG)(((char *)eventContext + alignedEventContextSize +
                  securityDescriptorSize + alignedObjectNameSize +
@@ -893,14 +898,14 @@ Return Value:
     eventContext->FileFlags |= fcb->Flags;
 
     // copy the file name
-    
+
     RtlCopyMemory(((char *)&eventContext->Operation.Create +
                    eventContext->Operation.Create.FileNameOffset),
-                  parentDir ? fileName : fcb->FileName.Buffer, parentDir ? fileNameLength : fcb->FileName.Length);
+                  parentDir ? fileName : fcb->FileName.Buffer,
+                  parentDir ? fileNameLength : fcb->FileName.Length);
     *(PWCHAR)((char *)&eventContext->Operation.Create +
               eventContext->Operation.Create.FileNameOffset +
               (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
-    
 
 //
 // Oplock
@@ -1040,7 +1045,9 @@ create is over.
       //  to service an oplock break and we need to leave now.
       //
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fileName = %wZ, fileCount = %lu\n", fcb->FileName, fcb->FileCount);
+        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fileName = "
+                  "%wZ, fileCount = %lu\n",
+                  fcb->FileName, fcb->FileCount);
         DokanFreeEventContext(eventContext);
         DokanFreeCCB(ccb);
         DokanFreeFCB(fcb);
@@ -1066,7 +1073,9 @@ create is over.
       //
       if ((status != STATUS_SUCCESS) &&
           (status != STATUS_OPLOCK_BREAK_IN_PROGRESS)) {
-        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fileName = %wZ, fileCount = %lu\n", status, fcb->FileName, fcb->FileCount);
+        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fileName = %wZ, "
+                  "fileCount = %lu\n",
+                  status, fcb->FileName, fcb->FileCount);
         DokanFreeEventContext(eventContext);
         DokanFreeCCB(ccb);
         DokanFreeFCB(fcb);
@@ -1136,7 +1145,6 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   ASSERT(fcb != NULL);
 
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
-  
 
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
