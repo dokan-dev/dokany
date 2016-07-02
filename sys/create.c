@@ -284,28 +284,20 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
   LONG len = (LONG)wcslen(fileName);
 
   LONG i;
-  ULONG nSlashes = 0;
+
   BOOLEAN trailingSlash;
 
   *parentDir = NULL;
   *parentDirLength = 0;
+  
+  if (len < 1) {
+	  return STATUS_INVALID_PARAMETER;
+  }
 
-  if (len < 4)
+  if (!wcscmp(fileName, L"\\"))
     return STATUS_ACCESS_DENIED;
 
   trailingSlash = fileName[len - 1] == '\\';
-
-  if (trailingSlash && len < 5)
-    return STATUS_ACCESS_DENIED;
-
-  for (i = 0; i < len; i++) {
-    if (fileName[i] == '\\') {
-      nSlashes++;
-    }
-  }
-
-  if (nSlashes < (ULONG)(trailingSlash ? 3 : 2))
-    return STATUS_ACCESS_DENIED;
 
   *parentDir = (WCHAR *)ExAllocatePool((len + 1) * sizeof(WCHAR));
 
@@ -323,8 +315,15 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
       break;
     }
   }
+  
+  if (i <= 0) {
+	  i = 1;
+	  (*parentDir)[0] = '\\';
+    (*parentDir)[1] = 0;
+  }
+	  
   *parentDirLength = i * sizeof(WCHAR);
-  if (trailingSlash) {
+  if (trailingSlash  && i > 1) {
     (*parentDir)[i] = '\\';
     (*parentDir)[i + 1] = 0;
     *parentDirLength += sizeof(WCHAR);
