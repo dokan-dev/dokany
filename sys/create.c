@@ -642,16 +642,13 @@ Return Value:
         __leave;
       }
     }
-    
+
     if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
       status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
       if (status != STATUS_SUCCESS) {
         ExFreePool(fileName);
         __leave;
       }
-    }
-
-    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
       fcb = DokanGetFCB(vcb, parentDir, parentDirLength);
     } else {
       fcb = DokanGetFCB(vcb, fileName, fileNameLength);
