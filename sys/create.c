@@ -626,14 +626,6 @@ Return Value:
                     fileObject->FileName.Length);
     }
 
-    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
-      status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
-      if (status != STATUS_SUCCESS) {
-        ExFreePool(fileName);
-        __leave;
-      }
-    }
-
     // Fail if device is read-only and request involves a write operation
     DWORD disposition = 0;
     if (IS_DEVICE_READ_ONLY(DeviceObject)) {
@@ -646,6 +638,14 @@ Return Value:
 
         DDbgPrint("    Media is write protected\n");
         status = STATUS_MEDIA_WRITE_PROTECTED;
+        ExFreePool(fileName);
+        __leave;
+      }
+    }
+    
+    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
+      status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
+      if (status != STATUS_SUCCESS) {
         ExFreePool(fileName);
         __leave;
       }
