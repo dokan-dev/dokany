@@ -98,7 +98,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-
+    DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking for %ls\n", fcb->FileName, fcb->FileCount, FileName);
     if (fcb->FileName.Length == FileNameLength) {
       // FileNameLength in bytes
       for (pos = 0; pos < FileNameLength / sizeof(WCHAR); ++pos) {
@@ -747,6 +747,8 @@ Return Value:
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
     if (eventContext == NULL) {
+      DokanFreeCCB(ccb);
+      DokanFreeFCB(fcb);
       DDbgPrint("    Was not able to allocate eventContext\n");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
@@ -1038,7 +1040,10 @@ create is over.
       //  to service an oplock break and we need to leave now.
       //
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fileName = %wZ, fileCount = %lu\n", fcb->FileName, fcb->FileCount);
+        DokanFreeEventContext(eventContext);
+        DokanFreeCCB(ccb);
+        DokanFreeFCB(fcb);
         __leave;
       }
     }
@@ -1061,7 +1066,10 @@ create is over.
       //
       if ((status != STATUS_SUCCESS) &&
           (status != STATUS_OPLOCK_BREAK_IN_PROGRESS)) {
-        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x\n", status);
+        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fileName = %wZ, fileCount = %lu\n", status, fcb->FileName, fcb->FileCount);
+        DokanFreeEventContext(eventContext);
+        DokanFreeCCB(ccb);
+        DokanFreeFCB(fcb);
         __leave;
       }
     }
