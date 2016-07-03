@@ -289,9 +289,9 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
 
   *parentDir = NULL;
   *parentDirLength = 0;
-  
+
   if (len < 1) {
-	  return STATUS_INVALID_PARAMETER;
+    return STATUS_INVALID_PARAMETER;
   }
 
   if (!wcscmp(fileName, L"\\"))
@@ -315,15 +315,15 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
       break;
     }
   }
-  
+
   if (i <= 0) {
-	  i = 1;
-	  (*parentDir)[0] = '\\';
+    i = 1;
+    (*parentDir)[0] = '\\';
     (*parentDir)[1] = 0;
   }
-	  
+
   *parentDirLength = i * sizeof(WCHAR);
-  if (trailingSlash  && i > 1) {
+  if (trailingSlash && i > 1) {
     (*parentDir)[i] = '\\';
     (*parentDir)[i + 1] = 0;
     *parentDirLength += sizeof(WCHAR);

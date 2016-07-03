@@ -179,7 +179,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     if (lastP) {
       *lastP = 0;
     }
-    
+
     if (!fileName[0]) {
       fileName[0] = '\\';
       fileName[1] = 0;
