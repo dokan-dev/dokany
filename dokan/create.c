@@ -179,6 +179,11 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     if (lastP) {
       *lastP = 0;
     }
+    
+    if (!fileName[0]) {
+      fileName[0] = '\\';
+      fileName[1] = 0;
+    }
   }
 
   DbgPrint("###Create %04d\n", eventId);
@@ -262,12 +267,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     }
     eventInfo.Operation.Create.Information = FILE_DOES_NOT_EXIST;
     eventInfo.Status = status;
-
-    if (status == STATUS_OBJECT_NAME_NOT_FOUND &&
-        EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
-      DbgPrint("This case should be returned as SUCCESS\n");
-      eventInfo.Status = STATUS_SUCCESS;
-    }
 
     if (status == STATUS_OBJECT_NAME_COLLISION) {
       eventInfo.Operation.Create.Information = FILE_EXISTS;
