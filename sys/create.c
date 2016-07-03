@@ -1045,9 +1045,6 @@ create is over.
         DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fileName = "
                   "%wZ, fileCount = %lu\n",
                   fcb->FileName, fcb->FileCount);
-        DokanFreeEventContext(eventContext);
-        DokanFreeCCB(ccb);
-        DokanFreeFCB(fcb);
         __leave;
       }
     }
