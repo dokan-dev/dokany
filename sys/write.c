@@ -196,8 +196,12 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
         //  to service an oplock break and we need to leave now.
         //
-        if (status == STATUS_PENDING) {
-          DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(eventContext);
+          }
           __leave;
         }
       }
@@ -248,8 +252,14 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
         //  to service an oplock break and we need to leave now.
         //
-        if (status == STATUS_PENDING) {
-          DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(requestContext);
+            Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+            DokanFreeEventContext(eventContext);
+          }
           __leave;
         }
       }
