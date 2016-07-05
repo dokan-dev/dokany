@@ -110,6 +110,19 @@ Return Value:
     eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
+                  
+
+    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
+                                DokanOplockComplete, DokanPrePostIrp);
+
+    //
+    //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+    //  to service an oplock break and we need to leave now.
+    //
+    if (status == STATUS_PENDING) {
+      DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+      __leave;
+    }
 
     // register this IRP to pending IRP list
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);

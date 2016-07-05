@@ -77,6 +77,18 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     CcUninitializeCacheMap(fileObject, NULL, NULL);
     // fileObject->Flags &= FO_CLEANUP_COMPLETE;
+    
+    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
+                                DokanOplockComplete, DokanPrePostIrp);
+
+    //
+    //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+    //  to service an oplock break and we need to leave now.
+    //
+    if (status == STATUS_PENDING) {
+      DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+      __leave;
+    }
 
     // register this IRP to waiting IRP list and make it pending status
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
