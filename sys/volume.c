@@ -260,8 +260,14 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
-  ccb = IrpEntry->FileObject->FsContext2;
   vcb = DeviceObject->DeviceExtension;
+  if (IrpEntry->FileObject == NULL || IrpEntry->FileObject->FsContext2 == NULL || vcb == NULL || vcb->Dcb == NULL) {
+	  DokanCompleteIrpRequest(irp, status, info);
+	  DDbgPrint("Premature exit due to NULL\n");
+	  DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
+	  return;
+  }
+  ccb = IrpEntry->FileObject->FsContext2;
   dcb = vcb->Dcb;
 
   // ASSERT(ccb != NULL);
