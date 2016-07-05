@@ -40,8 +40,7 @@ DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer) {
 
   DbgBreakPoint();
 
-  if (Status == EXCEPTION_EXECUTE_HANDLER ||
-      FsRtlIsNtstatusExpected(ExceptionCode)) {
+  if (FsRtlIsNtstatusExpected(ExceptionCode)) {
     //
     // If the exception is expected execute our handler
     //
