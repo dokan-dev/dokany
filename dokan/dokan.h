@@ -19,10 +19,13 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _DOKAN_H_
-#define _DOKAN_H_
+#ifndef DOKAN_H_
+#define DOKAN_H_
 
-#include <Windows.h>
+#define WIN32_NO_STATUS
+#include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 
 #include "fileinfo.h"
 #include "public.h"
@@ -59,8 +62,9 @@ extern "C" {
 #define DOKAN_OPTION_REMOVABLE				(1 << 5)	// use removable drive
 #define DOKAN_OPTION_MOUNT_MANAGER			(1 << 6)	// use mount manager
 #define DOKAN_OPTION_CURRENT_SESSION		(1 << 7)	// mount the drive on current session only
-#define DOKAN_OPTION_ASYNC_IO				(1 << 8)	// use asynchronous IO
-#define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 8)	// Dokan uses a single thread. If DOKAN_OPTION_ASYNC_IO is specified the thread waits until the async job is over before starting another.
+#define DOKAN_OPTION_FILELOCK_USER_MODE		(1 << 8)	// FileLock in User Mode
+#define DOKAN_OPTION_ASYNC_IO				(1 << 9)	// use asynchronous IO
+#define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 10)	// Dokan uses a single thread. If DOKAN_OPTION_ASYNC_IO is specified the thread waits until the async job is over before starting another.
 
 typedef struct _DOKAN_OPTIONS {
   USHORT Version;        // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
@@ -353,12 +357,15 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead);
 
-void DOKANAPI DokanMapKernelToUserCreateFileFlags(
+VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+
+// Translate Win32 Error code to the NtStatus code's corresponding
+NTSTATUS DOKANAPI DokanNtStatusFromWin32(DWORD Error);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // _DOKAN_H_
+#endif // DOKAN_H_

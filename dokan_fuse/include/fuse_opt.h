@@ -6,8 +6,8 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_OPT_H_
-#define _FUSE_OPT_H_
+#ifndef FUSE_OPT_H_
+#define FUSE_OPT_H_
 
 /** @file
  *
@@ -100,7 +100,7 @@ struct fuse_opt {
  * Key option.	In case of a match, the processing function will be
  * called with the specified key.
  */
-#define FUSE_OPT_KEY(templ, key) { templ, (unsigned int)(-1), key }
+#define FUSE_OPT_KEY(templ, key) { templ, (unsigned long)(-1), key }
 
 /**
  * Last option.	 An array of 'struct fuse_opt' must end with a NULL
@@ -264,4 +264,4 @@ int fuse_opt_match(const struct fuse_opt opts[], const char *opt);
 }
 #endif
 
-#endif /* _FUSE_OPT_H_ */
+#endif /* FUSE_OPT_H_ */

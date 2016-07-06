@@ -42,8 +42,17 @@
     </WixExtension>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="dokan.png" />
-    <Content Include="licdata.rtf" />
+    <Content Include="Resources\dokan.png" />
+    <Content Include="Resources\licdata.rtf" />
+    <Content Include="Resources\RtfTheme.xml" />
+    <Content Include="Netfx_eula40.rtf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Resources" />
+    <Folder Include="Resources\1033" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\1033\RtfTheme.wxl" />
   </ItemGroup>
   <Import Project="$(WixTargetsPath)" />
   <PropertyGroup>

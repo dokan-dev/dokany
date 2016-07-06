@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _LIST_H_
-#define _LIST_H_
+#ifndef LIST_H_
+#define LIST_H_
 
 #include <windows.h>
 
@@ -134,4 +134,4 @@ VOID PushEntryList(PSINGLE_LIST_ENTRY ListHead, PSINGLE_LIST_ENTRY Entry) {
   ListHead->Next = Entry;
 }
 
-#endif
+#endif // LIST_H_

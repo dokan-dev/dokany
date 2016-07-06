@@ -19,10 +19,13 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _PUBLIC_H_
-#define _PUBLIC_H_
+#ifndef PUBLIC_H_
+#define PUBLIC_H_
 
+#ifndef DOKAN_MAJOR_API_VERSION
 #define DOKAN_MAJOR_API_VERSION L"1"
+#endif
+
 #define DOKAN_DRIVER_VERSION 0x0000190
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
@@ -335,6 +338,7 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_REMOVABLE 4
 #define DOKAN_EVENT_MOUNT_MANAGER 8
 #define DOKAN_EVENT_CURRENT_SESSION 16
+#define DOKAN_EVENT_FILELOCK_USER_MODE 32
 
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
@@ -365,4 +369,4 @@ typedef struct _DOKAN_LINK_INFORMATION {
   WCHAR FileName[1];
 } DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
 
-#endif // _PUBLIC_H_
+#endif // PUBLIC_H_

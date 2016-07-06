@@ -1,5 +1,5 @@
-#ifndef _UTILS_H_
-#define _UTILS_H_
+#ifndef UTILS_H_
+#define UTILS_H_
 
 #include <string>
 #include <sys/stat.h>
@@ -56,4 +56,4 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 		find_data->dwFileAttributes|=FILE_ATTRIBUTE_HIDDEN;
 }
 
-#endif
+#endif // UTILS_H_

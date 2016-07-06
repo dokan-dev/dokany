@@ -349,7 +349,7 @@ Routine Description:
 
 --*/
 {
-  DDbgPrint("==> DokanStopCheckThread");
+  DDbgPrint("==> DokanStopCheckThread\n");
 
   if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
     DDbgPrint("Waiting for Timeout thread to terminate.\n");
@@ -361,7 +361,7 @@ Routine Description:
     Dcb->TimeoutThread = NULL;
   }
 
-  DDbgPrint("<== DokanStopCheckThread");
+  DDbgPrint("<== DokanStopCheckThread\n");
 }
 
 NTSTATUS

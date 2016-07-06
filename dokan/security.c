@@ -21,7 +21,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 #include "fileinfo.h"
-#include <ntstatus.h>
 
 VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
                            PDOKAN_INSTANCE DokanInstance) {
@@ -38,6 +37,9 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
                              &fileInfo, &openInfo);
+
+  DbgPrint("###GetFileSecurity %04d\n",
+           openInfo != NULL ? openInfo->EventId : -1);
 
   if (DokanInstance->DokanOperations->GetFileSecurity) {
     status = DokanInstance->DokanOperations->GetFileSecurity(
@@ -79,6 +81,8 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
                              &fileInfo, &openInfo);
+
+  DbgPrint("###SetSecurity %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
   securityDescriptor =
       (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;

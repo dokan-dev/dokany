@@ -5,16 +5,8 @@
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     global:
-      CYG_INSTALLER: setup-x86.exe
-      CYG_MIRROR: http://cygwin.mirror.constant.com
-      CYG_ROOT: C:\cygwin
       CYG_CACHE: C:\cygwin\var\cache\setup
-      CYG_BASH: C:\cygwin\bin\bash
-      CYG64_INSTALLER: setup-x86_64.exe
-      CYG64_ROOT: C:\cygwin64
-      CYG64_BASH: C:\cygwin64\bin\bash
       CYG64_CACHE: C:\cygwin64\var\cache\setup
-      MSYS2_LOG_FILE: C:/Users/appveyor/msys2output.log
 
   os: Visual Studio 2015
   version: 1.0.0-{build}
@@ -29,23 +21,38 @@
   - '%CYG_CACHE%'
   - '%CYG64_CACHE%'
 
-  init:
-    - cmd: 'IF "%PLATFORM%" == "x86" (set MSYS2_PATH=C:\\msys64\\mingw32_shell.bat) ELSE (set MSYS2_PATH=C:\\msys64\\mingw64_shell.bat)'
-
   install:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
           Start-FileDownload "https://cygwin.com/setup-x86_64.exe" -FileName "setup-x86_64.exe"
+          
+          function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
+            Write-Host "Update Cygwin: " $cygwinexe -NoNewline
+            cmd /c start /wait $cygwinexe -qnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++-5.3.0-5 -P make -P cmake
+            Write-Host " - OK" -ForegroundColor Green
+          }
+          
+          updateCygwin "setup-x86.exe" C:/cygwin $env:CYG_CACHE
+          updateCygwin "setup-x86_64.exe" C:/cygwin64 $env:CYG64_CACHE
         }
-
-    - 'IF "%CONFIGURATION%" == "All" ( %CYG_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
-      && %CYG_BASH% -lc "cygcheck -dc cygwin" ) '
-    - 'IF "%CONFIGURATION%" == "All" ( %CYG64_INSTALLER% --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --only-site --root "%CYG64_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG64_CACHE%" --packages cmake,make,gcc-core,gcc-g++,mingw-runtime,mingw-binutils,mingw-gcc-core,mingw-gcc-g++,mingw-pthreads,mingw-w32api > NUL 2>&1 
-      && %CYG64_BASH% -lc "cygcheck -dc cygwin" ) '
-    - 'IF "%CONFIGURATION%" == "All" ( C:\msys64\usr\bin\pacman --sync --refresh --refresh --needed --noconfirm msys2-runtime msys2-runtime-devel bash pacman pacman-mirrors 
-      && C:\msys64\usr\bin\pacman --noconfirm --sync pacman-mirrors && C:\msys64\usr\bin\pacman -Syu --noconfirm ) '
-      # C:\msys64\usr\bin\pacman -S mingw-w64-i686-gcc mingw-w64-x86_64-gcc mingw-w64-i686-cmake mingw-w64-x86_64-cmake make --noconfirm
+        
+    - ps: |
+        if ($env:CONFIGURATION -eq "All") {
+          function bash($command) {
+            Write-Host $command -NoNewline
+            cmd /c start /wait C:\msys64\usr\bin\bash.exe --login -c $command
+            Write-Host " - OK" -ForegroundColor Green
+          }
+          
+          # install latest pacman
+          bash "pacman -Sy --noconfirm pacman pacman-mirrors"
+          # update core packages
+          bash "pacman -Syu --noconfirm"
+          
+          bash "pacman --sync --noconfirm mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+        }
+        
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           & Bcdedit.exe -set TESTSIGNING ON;
@@ -53,6 +60,10 @@
           Restart-Computer -Force;
           Start-Sleep -s 10;
         }
+
+  before_build:
+  # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
+  - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
   build_script:
   - ps: |
@@ -96,21 +107,63 @@
       
       } elseif ($env:CONFIGURATION -eq "All") {
 
-        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10"
+        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
+              
+        Write-Host Install cert and sign...
+        .\cert\dokan-import.ps1
+        $env:CERTISSUER="DokanCA"
+        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+        Write-Host Dokan cert installed !
         
-        & .\build.bat
         cd dokan_wix
-        (gc version.xml) -replace 'no', 'yes' | sc version.xml
+        
+        $xmlversion = [xml](Get-Content ".\version.xml")
+        $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
+        $mm_version = $current_build_version.Split("=")[1] -replace '"','';
+        $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
+        $mm_version += $env:APPVEYOR_BUILD_NUMBER;
+        $version = Get-Content .\version.txt
+        $version -replace 'v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ('v' + $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file ".\version.txt"
+        $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
+        
+        $Platform = "Any CPU"
+        $buildArgs = @(
+        "SetAssemblyVersion.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
+        "/p:Platform=${Platform}")
+        & $buildCmd $buildArgs
+        
+        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
+        
+        cd ..
+        & .\build.bat
+        .\cert\dokan-sign.ps1
+
+        cd dokan_wix
+        (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
+        (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
         
         $Platform = "Mixed Platforms"
         $buildArgs = @(
         "Dokan_WiX.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Debug",
+        "/p:Configuration=Release",
         "/p:Platform=${Platform}")
         
         & $buildCmd $buildArgs
+        
+        if($LASTEXITCODE -ne 0) {
+          throw "Build failed"
+        }
+        
+        Write-Host Upload Artifcat...
+        Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName ("DokanSetup-" + $installer_version + ".exe")
+        Write-Host Artifcat uploaded!
+        
       } elseif ($env:CONFIGURATION -eq "FsTest") {
         
         $buildArgs = @(
@@ -131,17 +184,33 @@
         $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
         Start-Sleep -s 5
         
-        git clone https://github.com/Liryna/winfstest.git
+        New-Item C:\TMP -type directory
+        
+        git clone -q https://github.com/Liryna/fstools.git
+        $buildArgs = @(
+        ".\fstools\winfstest.sln",
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
+        "/p:Platform=$env:PLATFORM")
+        & $buildCmd $buildArgs
+        
+        git clone -q https://github.com/Liryna/winfstest.git
         $buildArgs = @(
         ".\winfstest\winfstest.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Debug",
         "/p:Platform=$env:PLATFORM")
-        
-        New-Item C:\TMP -type directory
         & $buildCmd $buildArgs
-        & .\winfstest\TestSuite\run-winfstest.bat M:\
+        
+        Write-Host "Start FSX Test" -ForegroundColor Green
+        & .\fstools\src\fsx\fsx.exe -RW -N 5000 M:\test
+        Write-Host "FSX Test finished" -ForegroundColor Green
+        
+        Write-Host "Start WinFSTest" -ForegroundColor Green
+        & .\winfstest\TestSuite\run-winfstest.bat . M:\
+        Write-Host "WinFSTest finished" -ForegroundColor Green
 
         Start-Sleep -s 5
         Stop-Process $app.Id

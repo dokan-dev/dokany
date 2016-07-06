@@ -25,11 +25,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include <Shlwapi.h>
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
 
 #include "../dokan/dokan.h"
 #include "../dokan/dokanc.h"
@@ -69,7 +67,7 @@ int Unmount(LPCWSTR MountPoint, BOOL ForceUnmount) {
     status = EXIT_FAILURE;
   }
 
-  fwprintf(stderr, L"Unmount status = %d\n", status);
+  fwprintf(stdout, L"Unmount status = %d\n", status);
   return status;
 }
 
@@ -192,9 +190,9 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
     if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
                                &nbRead)) {
-      fwprintf(stderr, L"  Mount points: %d\n", nbRead);
+      fwprintf(stdout, L"  Mount points: %d\n", nbRead);
       for (unsigned int p = 0; p < nbRead; ++p) {
-        fwprintf(stderr, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
+        fwprintf(stdout, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
                  p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
                  dokanControl[p].DeviceName);
       }

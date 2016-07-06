@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _DOKANC_H_
-#define _DOKANC_H_
+#ifndef DOKANC_H_
+#define DOKANC_H_
 
 #include "dokan.h"
 #include <malloc.h>
@@ -76,6 +76,8 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
   if (buffer)
     _freea(buffer);
   va_end(argp);
+  if (g_UseStdErr)
+    fflush(stderr);
 }
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
@@ -141,4 +143,4 @@ BOOL DOKANAPI DokanSetDebugMode(ULONG Mode);
 }
 #endif
 
-#endif
+#endif // DOKANC_H_

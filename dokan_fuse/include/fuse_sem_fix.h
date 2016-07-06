@@ -1,5 +1,5 @@
-#ifndef FUSE_SEM_FIX_H
-#define FUSE_SEM_FIX_H
+#ifndef FUSE_SEM_FIX_H_
+#define FUSE_SEM_FIX_H_
 
 #ifdef __CYGWIN__
 #include <semaphore.h>
@@ -24,4 +24,4 @@ int my_sem_wait (sem_t * sem);
 
 #endif
 
-#endif //FUSE_SEM_FIX_H
+#endif //FUSE_SEM_FIX_H_

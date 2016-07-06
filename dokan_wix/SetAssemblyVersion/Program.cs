@@ -15,10 +15,12 @@ namespace SetAssemblyVersion
 		const string cSearch4 = "AssemblyBuildTagAttribute(\"";
 		const string cEnd = "\")]";
 
-		/// <summary>
-		/// Actions
-		/// </summary>
-		enum EAction
+        const string productVersionRegex = @"\bv[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}.[0-9]+\b";
+
+        /// <summary>
+        /// Actions
+        /// </summary>
+        enum EAction
 		{
 			Unknown,
 			Assembly,
@@ -37,16 +39,17 @@ namespace SetAssemblyVersion
 			VersionMissingOrInvalid = -1,
 			FileTypePassedUnknown = -2,
 			FileIsMissing = -3,
-			NoValidDateTimeForSetup = -4,
+            NoValidDateTimeForSetup = -4,
 			UnknownError = -5,
 			DestinationPathNotExisting = -6,
 			SourcePathNotExisting = -7,
 			BuildPublishingPathNotExisting = -8,
 			SetupNotCopiedToBuildPath = -9,
-			SetupInBuildPathAlreadyExisting = -15,
-			SetupInSourcePathMissing = -16,
-			MissingProcessingInstruction = -17
-		}
+			SetupInBuildPathAlreadyExisting = -10,
+			SetupInSourcePathMissing = -11,
+			MissingProcessingInstruction = -12,
+            RootFolderMissing = -13,
+        }
 
 		static int Main(string[] args)
 		{
@@ -88,24 +91,54 @@ namespace SetAssemblyVersion
 
 			if (actionToDo != EAction.SetupProject)
 			{
-				FileInfo fi = new FileInfo(args[1]);
-				if (!fi.Exists)
+				if (!File.Exists(args[1]))
 					return (int)EReturnCode.FileIsMissing;
-			}
 
-			if (actionToDo == EAction.SetupProject)
+                if (args.Length < 3
+                    || (args.Length > 2 && !Directory.Exists(args[3])))
+                    return (int)EReturnCode.RootFolderMissing;
+            }
+
+            string version = string.Format("{0}.{1}.{2}.{3}", productVersion.Major, productVersion.Minor, productVersion.Build, productVersion.Revision);
+            string versionComma = string.Format("{0},{1},{2},{3}", productVersion.Major, productVersion.Minor, productVersion.Build, productVersion.Revision);
+
+            if (actionToDo == EAction.SetupProject)
 			{
 				string xmlFile = args[2].Replace("\"", "").Trim();
 				DateTime buildDate = ReadBuildDate(args[0]);
 
-				return ModifyProductParametersXml(xmlFile, productVersion, buildDate);
+				int result = ModifyProductParametersXml(xmlFile, productVersion, buildDate);
+                if ((EReturnCode)result == EReturnCode.None)
+                {
+                    var files = Directory.GetFiles(args[3], "*.rc", SearchOption.AllDirectories);
+                    Console.WriteLine("Update version in RC Files");
+
+                    foreach (var file in files)
+                    {
+                        Console.WriteLine(string.Format("RC File {0} version updated.", file));
+                        string rcfile = File.ReadAllText(file);
+                        rcfile = Regex.Replace(rcfile, @"[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}", version);
+                        rcfile = Regex.Replace(rcfile, @"[0-9]{1,2},[0-9]{1,2},[0-9]{1,2},[0-9]{1,2}", versionComma);
+
+                        File.WriteAllText(file, rcfile);
+                    }
+
+                    Console.WriteLine("Update build VS define versions");
+                    string props = File.ReadAllText(args[3] + @"\Dokan.props");
+                    string majorAPIDefineVersionString = string.Format(@"<DOKANAPIVersion>{0}</DOKANAPIVersion>", productVersion.Major, productVersion.Minor, productVersion.Build);
+                    props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]{1,2}<\/DOKANAPIVersion>", majorAPIDefineVersionString);
+                    string defineVersionString = string.Format(@"<DOKANVersion>{0}.{1}.{2}</DOKANVersion>", productVersion.Major, productVersion.Minor, productVersion.Build);
+                    props = Regex.Replace(props, @"<DOKANVersion>[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}<\/DOKANVersion>", defineVersionString);
+                    File.WriteAllText(args[3] + @"\Dokan.props", props);
+                }
+
+                return result;
 			}
 
 			try
 			{
 				string data = string.Empty;
 				string dataOrg = string.Empty;
-				string version = string.Format("{0}.{1}.{2}.{3}", productVersion.Major, productVersion.Minor, productVersion.Build, productVersion.Revision);
 
 				int bReturnVal = 0;
 				int result = 0;
@@ -252,8 +285,7 @@ namespace SetAssemblyVersion
 
 			using (StreamReader reader = new StreamReader(file))
 			{
-				const string cVersionPattern = @"\bv[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}.[0-9]+\b";
-				Regex regExVersion = new Regex(cVersionPattern, RegexOptions.IgnoreCase);
+				Regex regExVersion = new Regex(productVersionRegex, RegexOptions.IgnoreCase);
 
 				int line = 0;
 				while (reader.Peek() != 0 && line < 5) // find version in first 5 lines 
@@ -281,8 +313,7 @@ namespace SetAssemblyVersion
 
 			using (StreamReader reader = new StreamReader(file))
 			{
-				string versionPattern = @"\bv[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}.[0-9]+\b";
-				Regex regExVersion = new Regex(versionPattern, RegexOptions.IgnoreCase);
+				Regex regExVersion = new Regex(productVersionRegex, RegexOptions.IgnoreCase);
 
 				int line = 0;
 				while (reader.Peek() != 0 && line < 5)

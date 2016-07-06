@@ -24,8 +24,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 --*/
 
-#ifndef _DOKAN_H_
-#define _DOKAN_H_
+#ifndef DOKAN_H_
+#define DOKAN_H_
 
 #include <ntifs.h>
 #include <ntdddisk.h>
@@ -41,6 +41,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DEBUG_DEFAULT 0
 
 extern ULONG g_Debug;
+extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
+extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
@@ -199,6 +201,7 @@ typedef struct _DokanDiskControlBlock {
   PUNICODE_STRING SymbolicLinkName;
   PUNICODE_STRING MountPoint;
   PUNICODE_STRING UNCName;
+  LPWSTR VolumeLabel;
 
   DEVICE_TYPE DeviceType;
   DEVICE_TYPE VolumeDeviceType;
@@ -221,6 +224,7 @@ typedef struct _DokanDiskControlBlock {
   USHORT Mounted;
   USHORT UseMountManager;
   USHORT MountGlobally;
+  USHORT FileLockInUserMode;
 
   // to make a unique id for pending IRP
   ULONG SerialNumber;
@@ -283,10 +287,19 @@ typedef struct _DokanFileControlBlock {
   LONG FileCount;
 
   ULONG Flags;
+  SHARE_ACCESS ShareAccess;
 
   UNICODE_STRING FileName;
 
+  FILE_LOCK FileLock;
+
+#if (NTDDI_VERSION < NTDDI_WIN8)
+  //
+  //  The following field is used by the oplock module
+  //  to maintain current oplock information.
+  //
   OPLOCK Oplock;
+#endif
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
@@ -308,6 +321,17 @@ typedef struct _DokanContextControlBlock {
   int FileCount;
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
+
+//
+//  The following macro is used to retrieve the oplock structure within
+//  the Fcb. This structure was moved to the advanced Fcb header
+//  in Win8.
+//
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+#define DokanGetFcbOplock(F) &(F)->AdvancedFCBHeader.Oplock
+#else
+#define DokanGetFcbOplock(F) &(F)->Oplock
+#endif
 
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
@@ -417,6 +441,10 @@ DRIVER_CANCEL DokanEventCancelRoutine;
 
 DRIVER_CANCEL DokanIrpCancelRoutine;
 
+VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp);
+
+VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp);
+
 DRIVER_DISPATCH DokanRegisterPendingIrpForEvent;
 
 DRIVER_DISPATCH DokanRegisterPendingIrpForService;
@@ -492,7 +520,8 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo);
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject);
 
 VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo);
@@ -589,4 +618,4 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
-#endif // _DOKAN_H_
+#endif // DOKAN_H_

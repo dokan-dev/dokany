@@ -23,7 +23,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <Dbt.h>
 #include <Shlobj.h>
 #include <stdio.h>
-#include <windows.h>
 
 typedef struct _REPARSE_DATA_BUFFER {
   ULONG ReparseTag;
@@ -510,8 +509,9 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
       if (SendGlobalReleaseIRP(mountPoint)) {
         if (!IsMountPointDriveLetter(MountPoint)) {
           length = wcslen(mountPoint);
-          if (length < MAX_PATH) {
+          if (length+1 < MAX_PATH) {
             mountPoint[length] = L'\\';
+            mountPoint[length+1] = L'\0';
             // Required to remove reparse point (could also be done through
             // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
             DeleteVolumeMountPoint(mountPoint);

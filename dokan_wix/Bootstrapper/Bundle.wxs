@@ -4,6 +4,7 @@
      xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
      xmlns:dep='http://schemas.microsoft.com/wix/DependencyExtension'
      xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
+     xmlns:netfx='http://schemas.microsoft.com/wix/NetFxExtension'
 >
     <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
             IconSourceFile="..\dokan.ico"
@@ -16,13 +17,18 @@
             >
 
       <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
-      <bal:WixStandardBootstrapperApplication
-        LicenseFile="licdata.rtf"
-        LogoFile="dokan.png"
-        ShowVersion="yes"
-        SuppressOptionsUI="no"
-        SuppressRepair="yes"/>
-    </BootstrapperApplicationRef>
+        <bal:WixStandardBootstrapperApplication
+          LicenseFile="Resources\licdata.rtf"
+          LogoFile="Resources\dokan.png"
+          ShowVersion="yes"
+          SuppressOptionsUI="no"
+          SuppressRepair="yes"
+          ThemeFile="Resources\RtfTheme.xml"
+          LocalizationFile="Resources\1033\RtfTheme.wxl"/>
+        <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
+        <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
+
+      </BootstrapperApplicationRef>
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
     <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
@@ -53,8 +59,10 @@
     <util:RegistrySearch Id="vcredist_2015_x64_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_version" Result="exists" Win64="yes"/>
     <util:RegistrySearch Id="vcredist_2015_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_versionnumber" Result="value" Win64="yes"/>
 
+    <bal:Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
     <Chain>
-
+      <PackageGroupRef Id="NetFx40Web"/>
+      
       <ExePackage Id="vcredist_2015_x86.exe"
                   Name="vc_redist.x86.exe"
                   InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
@@ -63,15 +71,14 @@
                   Protocol="netfx4"
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
-                  InstallCondition="NOT VersionNT64"
-                  DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23506"
+                  DetectCondition="vcredist_2015_x86_installed AND vcredist_2015_x86_version AND vcredist_2015_x86_versionnumber &gt;= v14.0.23918"
                   PerMachine="yes"
                   Vital="yes"
                   Cache="no"
                   SuppressSignatureVerification="yes"
                   SourceFile="Redist\VCRedist_2015\vc_redist.x86.exe"
                   DownloadUrl="https://download.microsoft.com/download/2/6/8/268f7be7-8d2a-42d6-a823-5c6941a3d70a/vc_redist.x86.exe"
-                  />
+      />
 
       <ExePackage Id="vcredist_2015_x64.exe"
                   Name="vc_redist.x64.exe"
@@ -82,13 +89,13 @@
                   Compressed="$(var.Compressed)"
                   Permanent="yes"
                   InstallCondition="VersionNT64"
-                  DetectCondition="vcredist_2015_x64_installed AND vcredist_2015_x64_version AND vcredist_2015_x64_versionnumber &gt;= v14.0.23506"
+                  DetectCondition="vcredist_2015_x64_installed AND vcredist_2015_x64_version AND vcredist_2015_x64_versionnumber &gt;= v14.0.23918"
                   PerMachine="yes"
                   Vital="yes"
                   Cache="yes"
                   SuppressSignatureVerification="yes"
                   SourceFile="Redist\VCRedist_2015\vc_redist.x64.exe"
-                  DownloadUrl="https://download.microsoft.com/download/2/6/8/268f7be7-8d2a-42d6-a823-5c6941a3d70a/vc_redist.x86.exe"
+                  DownloadUrl="https://download.microsoft.com/download/6/3/a/63abaf83-2ca6-4460-90d7-12de8e815b1a/vc_redist.x64.exe"
                   />
 
       <MsuPackage Id="Win71_KB2999226_x86"
@@ -174,9 +181,10 @@
                   Compressed="yes"
                   Visible="no"
                   >
-        <MsiProperty Name="ADDLOCAL" Value="ALL"/>
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
         <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
         <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
       </MsiPackage>
 
       <MsiPackage SourceFile="..\bin\x64\$(var.Configuration)\Dokan_x64.msi"
@@ -184,9 +192,10 @@
                   Compressed="yes"
                   Visible="no"
                   >
-        <MsiProperty Name="ADDLOCAL" Value="ALL"/>
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
         <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
         <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
       </MsiPackage>
 
     </Chain>

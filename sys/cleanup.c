@@ -103,7 +103,7 @@ Return Value:
     fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
     eventContext->Context = ccb->UserContext;
-    eventContext->FileFlags |= fcb->Flags;
+    eventContext->FileFlags |= ccb->Flags;
     // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
     // copy the filename to EventContext from ccb
@@ -155,9 +155,17 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
+  //
+  //  Unlock all outstanding file locks.
+  //
+  (VOID) FsRtlFastUnlockAll(&fcb->FileLock, fileObject,
+                            IoGetRequestorProcess(irp), NULL);
+
   if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
+
+  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

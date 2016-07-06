@@ -19,8 +19,8 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _FILEINFO_H_
-#define _FILEINFO_H_
+#ifndef FILEINFO_H_
+#define FILEINFO_H_
 
 #define IRP_MJ_CREATE 0x00
 #define IRP_MJ_CREATE_NAMED_PIPE 0x01
@@ -295,6 +295,11 @@ typedef struct _FILE_INTERNAL_INFORMATION {
   LARGE_INTEGER IndexNumber;
 } FILE_INTERNAL_INFORMATION, *PFILE_INTERNAL_INFORMATION;
 
+typedef struct _FILE_ID_INFORMATION {
+  ULONGLONG VolumeSerialNumber;
+  FILE_ID_128 FileId;
+} FILE_ID_INFORMATION, *PFILE_ID_INFORMATION;
+
 typedef struct _FILE_EA_INFORMATION {
   ULONG EaSize;
 } FILE_EA_INFORMATION, *PFILE_EA_INFORMATION;
@@ -505,4 +510,4 @@ typedef struct _UNICODE_STRING {
   PWSTR Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
 
-#endif // _FILEINFO_H_
+#endif // FILEINFO_H_

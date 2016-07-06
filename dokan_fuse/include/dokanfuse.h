@@ -1,20 +1,21 @@
-#ifndef _DOCAN_FUSE_H_
-#define _DOCAN_FUSE_H_
+#ifndef DOKANFUSE_H_
+#define DOKANFUSE_H_
 
 #include <string>
 
 #define FUSE_THREAD_COUNT 10
 #define DOKAN_DLL L"dokan" DOKAN_MAJOR_API_VERSION L".dll"
 
-struct fuse_config 
+struct fuse_config
 {
-    unsigned int umask;
-	unsigned int fileumask, dirumask;
-	const char *fsname, *volname;
-	int help;
-    int debug;
-	int setsignals;
-    unsigned int timeoutInSec;
+  unsigned int umask;
+  unsigned int fileumask, dirumask;
+  const char *fsname, *volname;
+  int help;
+  int debug;
+  int setsignals;
+  unsigned int timeoutInSec;
+  int networkDrive;
 };
 
 struct fuse_session
@@ -60,4 +61,4 @@ struct fuse
 	}
 };
 
-#endif //_DOCAN_FUSE_H_
+#endif //DOKANFUSE_H_
