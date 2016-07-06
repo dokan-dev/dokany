@@ -49,6 +49,7 @@ VOID DokanIrpCancelRoutine(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     serialNumber = irpEntry->SerialNumber;
 
     RemoveEntryList(&irpEntry->ListEntry);
+    InitializeListHead(&irpEntry->ListEntry);
 
     // If Write is canceld before completion and buffer that saves writing
     // content is not freed, free it here
@@ -157,9 +158,9 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
   if (GetIdentifierType(DeviceObject->DeviceExtension) == VCB) {
     vcb = DeviceObject->DeviceExtension;
-    if (CheckMount && !vcb->Dcb->Mounted) {
+    if (CheckMount && IsUnmountPendingVcb(vcb)) {
       DDbgPrint(" device is not mounted\n");
-      return STATUS_DEVICE_DOES_NOT_EXIST;
+      return STATUS_NO_SUCH_DEVICE;
     }
   }
 
@@ -264,6 +265,11 @@ DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
     return STATUS_INVALID_PARAMETER;
   }
 
+  if (IsUnmountPendingVcb(vcb)) {
+      DDbgPrint("  Volume is dismounted\n");
+      return STATUS_NO_SUCH_DEVICE;
+  }
+
   // DDbgPrint("DokanRegisterPendingIrpForEvent\n");
   vcb->HasEventWait = TRUE;
 
@@ -311,6 +317,11 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
     return STATUS_INVALID_PARAMETER;
+  }
+
+  if (IsUnmountPendingVcb(vcb)) {
+      DDbgPrint("      Volume is not mounted\n");
+      return STATUS_NO_SUCH_DEVICE;
   }
 
   // DDbgPrint("      Lock IrpList.ListLock\n");
@@ -368,6 +379,15 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Clear it to prevent to be completed by CancelRoutine twice
     irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
     KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+
+    if (IsUnmountPendingVcb(vcb)) {
+        DDbgPrint("      Volume is not mounted second check\n");
+        return STATUS_NO_SUCH_DEVICE;
+    }
+
+    if (eventInfo && eventInfo->Status == STATUS_PENDING) {
+        DDbgPrint("      !!WARNING!! Do not return STATUS_PENDING DokanCompleteIrp!");
+    }
 
     switch (irpSp->MajorFunction) {
     case IRP_MJ_DIRECTORY_CONTROL:
@@ -514,11 +534,40 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     fileLockUserMode = TRUE;
   }
 
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
+
+  DOKAN_CONTROL dokanControl;
+  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH, L"\\DosDevices\\");
+  if (&eventStart.MountPoint && wcslen(eventStart.MountPoint) == 1) {
+      dokanControl.MountPoint[12] = towupper(eventStart.MountPoint[0]);
+      dokanControl.MountPoint[13] = L':';
+      dokanControl.MountPoint[14] = L'\0';
+  } else {
+      RtlStringCchCatW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH, eventStart.MountPoint);
+  }
+
+  DDbgPrint("  Checking for MountPoint %ls \n", dokanControl.MountPoint);
+  PMOUNT_ENTRY foundEntry = FindMountEntry(dokanGlobal, &dokanControl, FALSE);
+  if (foundEntry != NULL) {
+      DDbgPrint("  MountPoint exists already %ls \n", dokanControl.MountPoint);
+      driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
+      driverInfo->Status = DOKAN_START_FAILED;
+      Irp->IoStatus.Status = STATUS_SUCCESS;
+      Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
+      ExReleaseResourceLite(&dokanGlobal->Resource);
+      KeLeaveCriticalRegion();
+      return STATUS_SUCCESS;
+  }
+
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
   baseGuid.Data3 = (USHORT)(dokanGlobal->MountId >> 16) ^ baseGuid.Data3;
 
   status = RtlStringFromGUID(&baseGuid, &unicodeGuid);
   if (!NT_SUCCESS(status)) {
+     ExReleaseResourceLite(&dokanGlobal->Resource);
+     KeLeaveCriticalRegion();
     return status;
   }
   RtlZeroMemory(baseGuidString, sizeof(baseGuidString));
@@ -527,9 +576,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   RtlFreeUnicodeString(&unicodeGuid);
 
   InterlockedIncrement((LONG *)&dokanGlobal->MountId);
-
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
 
   status = DokanCreateDiskDevice(
       DeviceObject->DriverObject, dokanGlobal->MountId, eventStart.MountPoint,
@@ -588,11 +634,13 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ExReleaseResourceLite(&dokanGlobal->Resource);
   KeLeaveCriticalRegion();
 
+  IoVerifyVolume(dcb->DeviceObject, FALSE);
+
   Irp->IoStatus.Status = STATUS_SUCCESS;
   Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
-
+    
   DDbgPrint("<== DokanEventStart\n");
-
+  
   return Irp->IoStatus.Status;
 }
 
@@ -683,7 +731,7 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       //			eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength);
       if (Irp->MdlAddress)
         buffer =
-            MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
+            MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
       else
         buffer = Irp->AssociatedIrp.SystemBuffer;
 

@@ -69,6 +69,19 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
 
+  if (irpSp->MajorFunction != IRP_MJ_FILE_SYSTEM_CONTROL &&
+      irpSp->MajorFunction != IRP_MJ_SHUTDOWN &&
+      irpSp->MajorFunction != IRP_MJ_CLEANUP &&
+      irpSp->MajorFunction != IRP_MJ_CLOSE &&
+      irpSp->MajorFunction != IRP_MJ_PNP) {    
+      if (IsUnmountPending(DeviceObject)) {
+          DDbgPrint("  Volume is not mounted so return STATUS_NO_SUCH_DEVICE\n");
+          NTSTATUS status = STATUS_NO_SUCH_DEVICE;
+          DokanCompleteIrpRequest(Irp, status, 0);
+          return status;
+      }
+  }
+
   // If volume is write protected and this request
   // would modify it then return write protected status.
   if (IS_DEVICE_READ_ONLY(DeviceObject)) {
