@@ -417,6 +417,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
     return STATUS_INVALID_PARAMETER;
   }
   dcb = vcb->Dcb;
+  dcb->IsUnmounting = 1;
 
   DokanDeleteMountPoint(dcb);
 

@@ -300,6 +300,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
   PDokanVCB vcb;
+  PDokanDCB dcb;
   PEVENT_INFORMATION eventInfo;
 
   eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
@@ -313,12 +314,18 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  dcb = vcb->Dcb;
+  if (dcb->IsUnmounting || dcb->Mounted == 0) {
+	  DDbgPrint("DokanCompleteIrp STATUS_VOLUME_DISMOUNTED\n");
+	  return STATUS_VOLUME_DISMOUNTED;
+  }
+
   // DDbgPrint("      Lock IrpList.ListLock\n");
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-  KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
+  KeAcquireSpinLock(&dcb->PendingIrp.ListLock, &oldIrql);
 
   // search corresponding IRP through pending IRP list
-  listHead = &vcb->Dcb->PendingIrp.ListHead;
+  listHead = &dcb->PendingIrp.ListHead;
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
@@ -367,7 +374,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // IrpEntry is saved here for CancelRoutine
     // Clear it to prevent to be completed by CancelRoutine twice
     irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-    KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+    KeReleaseSpinLock(&dcb->PendingIrp.ListLock, oldIrql);
 
     switch (irpSp->MajorFunction) {
     case IRP_MJ_DIRECTORY_CONTROL:
@@ -418,7 +425,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     return STATUS_SUCCESS;
   }
 
-  KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+  KeReleaseSpinLock(&dcb->PendingIrp.ListLock, oldIrql);
 
   // DDbgPrint("<== AACompleteIrp [EventInfo #%X]\n", eventInfo->SerialNumber);
 
