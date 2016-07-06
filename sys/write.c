@@ -86,7 +86,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (Irp->MdlAddress) {
       DDbgPrint("  use MdlAddress\n");
       buffer =
-          MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
+          MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
     } else {
       DDbgPrint("  use UserBuffer\n");
       buffer = Irp->UserBuffer;

@@ -46,11 +46,6 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
     dcb = vcb->Dcb;
 
-    if (!dcb->Mounted) {
-      status = STATUS_VOLUME_DISMOUNTED;
-      __leave;
-    }
-
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     buffer = Irp->AssociatedIrp.SystemBuffer;
 
@@ -64,10 +59,6 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
     DDbgPrint("  FileName: %wZ\n", &fileObject->FileName);
 
-    ccb = fileObject->FsContext2;
-
-    //	ASSERT(ccb != NULL);
-
     switch (irpSp->Parameters.QueryVolume.FsInformationClass) {
     case FileFsVolumeInformation:
       DDbgPrint("  FileFsVolumeInformation\n");
@@ -75,7 +66,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         break;
       }
 
-      DDbgPrint("  Still no threads for processing available\n");
+      DDbgPrint("  Still no threads for processing available - FileFsVolumeInformation \n");
       PFILE_FS_VOLUME_INFORMATION FsVolInfo;
 
       if (irpSp->Parameters.QueryVolume.Length <
@@ -114,6 +105,36 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
     case FileFsSizeInformation:
       DDbgPrint("  FileFsSizeInformation\n");
+      if (vcb->HasEventWait) {
+          break;
+      }
+
+      DDbgPrint("  Still no threads for processing available - FileFsSizeInformation \n");
+      PFILE_FS_SIZE_INFORMATION sizeInfo;
+
+      if (irpSp->Parameters.QueryVolume.Length <
+          sizeof(FILE_FS_SIZE_INFORMATION)) {
+          status = STATUS_BUFFER_OVERFLOW;
+          __leave;
+      }
+      
+      ULONGLONG freeBytesAvailable = 512 * 1024 * 1024;
+      ULONGLONG totalBytes = 1024 * 1024 * 1024;
+      ULONGLONG freeBytes = 512 * 1024 * 1024;
+
+      sizeInfo = (PFILE_FS_SIZE_INFORMATION)buffer;
+      sizeInfo->TotalAllocationUnits.QuadPart =
+          totalBytes / DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE;
+      sizeInfo->AvailableAllocationUnits.QuadPart =
+          freeBytesAvailable / DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE;
+      sizeInfo->SectorsPerAllocationUnit =
+          DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE / DOKAN_DEFAULT_SECTOR_SIZE;
+      sizeInfo->BytesPerSector = DOKAN_DEFAULT_SECTOR_SIZE;
+
+      Irp->IoStatus.Information = sizeof(FILE_FS_SIZE_INFORMATION);
+      status = STATUS_SUCCESS;
+      __leave;
+
       break;
 
     case FileFsDeviceInformation: {
@@ -203,6 +224,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       ULONG eventLength = sizeof(EVENT_CONTEXT);
       PEVENT_CONTEXT eventContext;
 
+      ccb = fileObject->FsContext2;
       if (ccb && !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
         status = STATUS_INVALID_PARAMETER;
         __leave;
@@ -251,7 +273,6 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   ULONG info = 0;
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
-  PDokanCCB ccb;
   PDokanDCB dcb;
   PDokanVCB vcb;
 
@@ -260,14 +281,8 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
-  ccb = IrpEntry->FileObject->FsContext2;
   vcb = DeviceObject->DeviceExtension;
   dcb = vcb->Dcb;
-
-  // ASSERT(ccb != NULL);
-
-  // does not save Context!!
-  // ccb->UserContext = EventInfo->Context;
 
   // buffer which is used to copy VolumeInfo
   buffer = irp->AssociatedIrp.SystemBuffer;
@@ -354,11 +369,6 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
     }
 
     dcb = vcb->Dcb;
-
-    if (!dcb->Mounted) {
-      status = STATUS_VOLUME_DISMOUNTED;
-      __leave;
-    }
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     buffer = Irp->AssociatedIrp.SystemBuffer;

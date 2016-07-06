@@ -87,6 +87,8 @@ Return Value:
         DokanFreeCCB(ccb);
 
         DokanFreeFCB(fcb);
+
+        fileObject->FsContext2 = NULL;
       }
 
       status = STATUS_SUCCESS;

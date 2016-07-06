@@ -171,9 +171,14 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
   if (Fcb->FileCount == 0) {
 
     RemoveEntryList(&Fcb->NextFCB);
+    InitializeListHead(&Fcb->NextCCB);
 
     DDbgPrint("  Free FCB:%p\n", Fcb);
+    
     ExFreePool(Fcb->FileName.Buffer);
+    Fcb->FileName.Buffer = NULL;
+    Fcb->FileName.Length = 0;
+    Fcb->FileName.MaximumLength = 0;
 
     FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
 
@@ -213,12 +218,12 @@ PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
   ASSERT(Fcb != NULL);
 
   RtlZeroMemory(ccb, sizeof(DokanCCB));
-
+  
   ccb->Identifier.Type = CCB;
   ccb->Identifier.Size = sizeof(DokanCCB);
-
+  
   ccb->Fcb = Fcb;
-
+  DDbgPrint("   Allocated CCB \n");
   ExInitializeResourceLite(&ccb->Resource);
 
   InitializeListHead(&ccb->NextCCB);
@@ -244,11 +249,23 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   ASSERT(ccb != NULL);
 
   fcb = ccb->Fcb;
+  if (!fcb) {
+      return STATUS_SUCCESS;
+  }
 
   KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 
-  RemoveEntryList(&ccb->NextCCB);
+  DDbgPrint("   Free CCB \n");
+
+  if (IsListEmpty(&ccb->NextCCB)) {
+      DDbgPrint("  WARNING. &ccb->NextCCB is empty. \n This should never happen, so check the behavior.\n Would produce BSOD \n")
+      return STATUS_SUCCESS;
+  }
+  else {
+      RemoveEntryList(&ccb->NextCCB);
+      InitializeListHead(&ccb->NextCCB);
+  }
 
   ExReleaseResourceLite(&fcb->Resource);
   KeLeaveCriticalRegion();
@@ -485,20 +502,18 @@ Return Value:
 
     PrintIdType(vcb);
 
-    if (GetIdentifierType(vcb) == DCB) {
-      dcb = DeviceObject->DeviceExtension;
-      if (!dcb->Mounted) {
-        DDbgPrint("  IdentifierType is dcb which is not mounted\n");
-        status = STATUS_VOLUME_DISMOUNTED;
-        __leave;
-      }
-    }
-
     if (GetIdentifierType(vcb) != VCB) {
       DDbgPrint("  IdentifierType is not vcb\n");
       status = STATUS_SUCCESS;
       __leave;
     }
+
+    if (IsUnmountPendingVcb(vcb)) {
+        DDbgPrint("  IdentifierType is vcb which is not mounted\n");
+        status = STATUS_NO_SUCH_DEVICE;
+        __leave;
+    }
+
     dcb = vcb->Dcb;
 
     BOOLEAN isNetworkFileSystem =
@@ -698,6 +713,10 @@ Return Value:
       ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
       DDbgPrint(
           "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
+    }
+
+    if (irpSp->Parameters.Create.Options & FILE_OPEN_FOR_BACKUP_INTENT) {
+        DDbgPrint("FILE_OPEN_FOR_BACKUP_INTENT\n");
     }
 
     fileObject->FsContext = &fcb->AdvancedFCBHeader;
@@ -1110,6 +1129,7 @@ Return Value:
                            OPLOCK_FLAG_OPLOCK_KEY_CHECK_ONLY, NULL, NULL, NULL);
 
     if (!NT_SUCCESS(status)) {
+        DDbgPrint("   FsRtlCheckOplockEx return status = 0x%08x\n", status);
       __leave;
     }
 
@@ -1265,6 +1285,8 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     break;
   }
 
+  DokanPrintNTStatus(status);
+
   // If volume is write-protected, we subbed FILE_OPEN for FILE_OPEN_IF
   // before call to userland in DokanDispatchCreate.
   // In this case, a not found error should return write protected status.
@@ -1312,7 +1334,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
       }
     }
   } else {
-    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p\n", ccb);
+    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb, status);
     DokanFreeCCB(ccb);
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
@@ -1320,6 +1342,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     ExReleaseResourceLite(&fcb->Resource);
     KeLeaveCriticalRegion();
     DokanFreeFCB(fcb);
+    IrpEntry->FileObject->FsContext2 = NULL;
   }
 
   DokanCompleteIrpRequest(irp, status, info);
