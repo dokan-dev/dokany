@@ -168,6 +168,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Operation.Write.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.Write.FileName, fcb->FileName.Buffer,
                   fcb->FileName.Length);
+                  
+   
 
     // When eventlength is less than event notification buffer,
     // returns it to user-mode using pending event.
@@ -180,6 +182,29 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
       // EventContext is no longer needed, clear it
       Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+      
+      
+      //
+      //  We now check whether we can proceed based on the state of
+      //  the file oplocks.
+      //
+      if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
+        status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
+                                  DokanOplockComplete, DokanPrePostIrp);
+
+        //
+        //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+        //  to service an oplock break and we need to leave now.
+        //
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(eventContext);
+          }
+          __leave;
+        }
+      }
 
       // register this IRP to IRP waiting list and make it pending status
       status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
@@ -214,6 +239,30 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       requestContext->Length = requestContextLength;
       // requsts enough size to copy EventContext
       requestContext->Operation.Write.RequestLength = eventLength;
+      
+       //
+      //  We now check whether we can proceed based on the state of
+      //  the file oplocks.
+      //
+      if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
+        status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, requestContext,
+                                  DokanOplockComplete, DokanPrePostIrp);
+
+        //
+        //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+        //  to service an oplock break and we need to leave now.
+        //
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(requestContext);
+            Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+            DokanFreeEventContext(eventContext);
+          }
+          __leave;
+        }
+      }
 
       // regiters this IRP to IRP wainting list and make it pending status
       status = DokanRegisterPendingIrp(DeviceObject, Irp, requestContext, 0);

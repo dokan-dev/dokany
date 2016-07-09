@@ -131,7 +131,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
             ) {
 
       AcquiredVcb = ExAcquireResourceSharedLite(&(Fcb->Vcb->Resource), TRUE);
-      AcquiredFcb = ExAcquireResourceSharedLite(&(Fcb->Resource), TRUE);
+      AcquiredFcb = ExAcquireResourceExclusiveLite(&(Fcb->Resource), TRUE);
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
       if (!Dcb->FileLockInUserMode && FsRtlOplockIsSharedRequest(Irp)) {
