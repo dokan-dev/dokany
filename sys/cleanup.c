@@ -182,7 +182,11 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+  ExReleaseResourceLite(&fcb->Resource);
+  KeLeaveCriticalRegion();
 
   DokanCompleteIrpRequest(irp, status, 0);
 
