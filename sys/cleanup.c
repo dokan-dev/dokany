@@ -110,10 +110,9 @@ Return Value:
     eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
-                  
 
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+                              DokanOplockComplete, DokanPrePostIrp);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted

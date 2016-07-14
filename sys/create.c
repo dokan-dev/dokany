@@ -394,9 +394,9 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   //  Pass FALSE for update.  We will update it later.
   ExAcquireResourceExclusiveLite(&FcbOrDcb->Resource, TRUE);
   status = IoCheckShareAccess(DesiredAccess, ShareAccess, FileObject,
-                            &FcbOrDcb->ShareAccess, FALSE);
+                              &FcbOrDcb->ShareAccess, FALSE);
   ExReleaseResourceLite(&FcbOrDcb->Resource);
-  
+
   return status;
 }
 
@@ -449,8 +449,7 @@ Return Value:
   BOOLEAN UnwindShareAccess = FALSE;
   BOOLEAN BackoutOplock = FALSE;
   BOOLEAN EventContextConsumed = FALSE;
-  DWORD disposition =  0;
-
+  DWORD disposition = 0;
 
   PAGED_CODE();
 
@@ -467,10 +466,11 @@ Return Value:
 
     fileObject = irpSp->FileObject;
     relatedFileObject = fileObject->RelatedFileObject;
-    
+
     disposition = (irpSp->Parameters.Create.Options >> 24) & 0x000000ff;
 
-    DDbgPrint("  Create: ProcessId %lu, FileName:%wZ\n", IoGetRequestorProcessId(Irp), &fileObject->FileName);
+    DDbgPrint("  Create: ProcessId %lu, FileName:%wZ\n",
+              IoGetRequestorProcessId(Irp), &fileObject->FileName);
 
     vcb = DeviceObject->DeviceExtension;
     if (vcb == NULL) {
@@ -637,7 +637,7 @@ Return Value:
     }
 
     // Fail if device is read-only and request involves a write operation
-    
+
     if (IS_DEVICE_READ_ONLY(DeviceObject)) {
 
       if ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
@@ -666,7 +666,7 @@ Return Value:
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
-    
+
     if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
       status = STATUS_OBJECT_NAME_COLLISION;
       __leave;
@@ -928,152 +928,144 @@ Return Value:
 
     // Share access support
 
-   
-
     if (fcb->FileCount > 1) {
-            
-            //
-            //  Check if the Fcb has the proper share access.  This routine will
-            //  also
-            //  check for writable user sections if the user did not allow write
-            //  sharing.
-            //
-            
-            
-            
-            // DokanCheckShareAccess() will update the share access in the fcb if 
-            // the operation is allowed to go forward
-            
-            status = DokanCheckShareAccess(fileObject,
-                    fcb,
-                    eventContext->Operation.Create.SecurityContext.DesiredAccess,
-                    eventContext->Operation.Create.ShareAccess);
-            
-            if (!NT_SUCCESS(status)) {
 
-                    DDbgPrint("   DokanCheckShareAccess failed with 0x%x\n", status);
+      //
+      //  Check if the Fcb has the proper share access.  This routine will
+      //  also
+      //  check for writable user sections if the user did not allow write
+      //  sharing.
+      //
+
+      // DokanCheckShareAccess() will update the share access in the fcb if
+      // the operation is allowed to go forward
+
+      status = DokanCheckShareAccess(
+          fileObject, fcb,
+          eventContext->Operation.Create.SecurityContext.DesiredAccess,
+          eventContext->Operation.Create.ShareAccess);
+
+      if (!NT_SUCCESS(status)) {
+
+        DDbgPrint("   DokanCheckShareAccess failed with 0x%x\n", status);
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
 
-                    NTSTATUS OplockBreakStatus = STATUS_SUCCESS;
+        NTSTATUS OplockBreakStatus = STATUS_SUCCESS;
 
-                    //
-                    //  If we got a sharing violation try to break outstanding
-                    //  handle
-                    //  oplocks and retry the sharing check.  If the caller
-                    //  specified
-                    //  FILE_COMPLETE_IF_OPLOCKED we don't bother breaking the
-                    //  oplock;
-                    //  we just return the sharing violation.
-                    //
-                    if ((status == STATUS_SHARING_VIOLATION) &&
-                            !FlagOn(irpSp->Parameters.Create.Options,
-                                              FILE_COMPLETE_IF_OPLOCKED)) {
+        //
+        //  If we got a sharing violation try to break outstanding
+        //  handle
+        //  oplocks and retry the sharing check.  If the caller
+        //  specified
+        //  FILE_COMPLETE_IF_OPLOCKED we don't bother breaking the
+        //  oplock;
+        //  we just return the sharing violation.
+        //
+        if ((status == STATUS_SHARING_VIOLATION) &&
+            !FlagOn(irpSp->Parameters.Create.Options,
+                    FILE_COMPLETE_IF_OPLOCKED)) {
 
-                            OplockBreakStatus =
-                                    FsRtlOplockBreakH(DokanGetFcbOplock(fcb),
-                                    Irp,
-                                    0,
-                                    eventContext,
-                                    NULL /* DokanOplockComplete */, // block instead of callback
-                                    DokanPrePostIrp);
+          OplockBreakStatus = FsRtlOplockBreakH(
+              DokanGetFcbOplock(fcb), Irp, 0, eventContext,
+              NULL /* DokanOplockComplete */, // block instead of callback
+              DokanPrePostIrp);
 
-                            //
-                            //  If FsRtlOplockBreakH returned STATUS_PENDING,
-                            //  then the IRP
-                            //  has been posted and we need to stop working.
-                            //
-                            if (OplockBreakStatus == STATUS_PENDING) { // shouldn't happen now
-                                    DDbgPrint("   FsRtlOplockBreakH returned STATUS_PENDING\n");
-                                    status = STATUS_PENDING;
-                                    __leave;
-                                    //
-                                    //  If FsRtlOplockBreakH returned an error
-                                    //  we want to return that now.
-                                    //
-                            }
-                            else if (!NT_SUCCESS(OplockBreakStatus)) {
-                                    DDbgPrint("   FsRtlOplockBreakH returned 0x%x\n", OplockBreakStatus);
-                                    status = OplockBreakStatus;
-                                    __leave;
+          //
+          //  If FsRtlOplockBreakH returned STATUS_PENDING,
+          //  then the IRP
+          //  has been posted and we need to stop working.
+          //
+          if (OplockBreakStatus == STATUS_PENDING) { // shouldn't happen now
+            DDbgPrint("   FsRtlOplockBreakH returned STATUS_PENDING\n");
+            status = STATUS_PENDING;
+            __leave;
+            //
+            //  If FsRtlOplockBreakH returned an error
+            //  we want to return that now.
+            //
+          } else if (!NT_SUCCESS(OplockBreakStatus)) {
+            DDbgPrint("   FsRtlOplockBreakH returned 0x%x\n",
+                      OplockBreakStatus);
+            status = OplockBreakStatus;
+            __leave;
 
-                                    //
-                                    //  Otherwise FsRtlOplockBreakH returned
-                                    //  STATUS_SUCCESS, indicating
-                                    //  that there is no oplock to be broken.
-                                    //  The sharing violation is
-                                    //  returned in that case.
-                                    //
-                                    //  We actually now pass null for the callback to 
-                                    //  FsRtlOplockBreakH so it will block until
-                                    //  the oplock break is sent to holder of the oplock.
-                                    //  This doesn't necessarily mean that the 
-                                    //  resourc was freed (file was closed) yet,
-                                    //  but we check share access again in case it was
-                                    //  to see if we can proceed normally or if we
-                                    //  still have to reutrn a sharing violation.
-                            }
-                            else {
-                                    status = DokanCheckShareAccess(fileObject,
-                                          fcb,
-                                          eventContext->Operation.Create.SecurityContext.DesiredAccess,
-                                          eventContext->Operation.Create.ShareAccess);
-                                    DDbgPrint("    checked share access again, status = 0x%08x\n", status);
-                                    NT_ASSERT(OplockBreakStatus == STATUS_SUCCESS);
-                                    if (status != STATUS_SUCCESS)
-                                      __leave;
-                            }
+            //
+            //  Otherwise FsRtlOplockBreakH returned
+            //  STATUS_SUCCESS, indicating
+            //  that there is no oplock to be broken.
+            //  The sharing violation is
+            //  returned in that case.
+            //
+            //  We actually now pass null for the callback to
+            //  FsRtlOplockBreakH so it will block until
+            //  the oplock break is sent to holder of the oplock.
+            //  This doesn't necessarily mean that the
+            //  resourc was freed (file was closed) yet,
+            //  but we check share access again in case it was
+            //  to see if we can proceed normally or if we
+            //  still have to reutrn a sharing violation.
+          } else {
+            status = DokanCheckShareAccess(
+                fileObject, fcb,
+                eventContext->Operation.Create.SecurityContext.DesiredAccess,
+                eventContext->Operation.Create.ShareAccess);
+            DDbgPrint("    checked share access again, status = 0x%08x\n",
+                      status);
+            NT_ASSERT(OplockBreakStatus == STATUS_SUCCESS);
+            if (status != STATUS_SUCCESS)
+              __leave;
+          }
 
-                            //
-                            //  The initial sharing check failed with something
-                            //  other than sharing
-                            //  violation (which should never happen, but let's
-                            //  be future-proof),
-                            //  or we *did* get a sharing violation and the
-                            //  caller specified
-                            //  FILE_COMPLETE_IF_OPLOCKED.  Either way this
-                            //  create is over.
-                            //
-                            // We can't really handle FILE_COMPLETE_IF_OPLOCKED correctly because
-                            // we don't have a way of creating a useable file handle
-                            // without actually creating the file in user mode, which
-                            // won't work unless the oplock gets broken before the
-                            // user mode create happens.
-                            // It is believed that FILE_COMPLETE_IF_OPLOCKED is extremely
-                            // rare and may never happend during normal operation.
-                            
-                    }
-                    else {
-                      
-                          if (status == STATUS_SHARING_VIOLATION && FlagOn(irpSp->Parameters.Create.Options,
-                                              FILE_COMPLETE_IF_OPLOCKED)) {
-                            DDbgPrint("failing a create with FILE_COMPLETE_IF_OPLOCKED because of sharing violation\n");
-                          }
-                          
-                          DDbgPrint("create: sharing/oplock failed, status = 0x%08x\n", status);       
-                          __leave;                            
-                          
-                    }
+          //
+          //  The initial sharing check failed with something
+          //  other than sharing
+          //  violation (which should never happen, but let's
+          //  be future-proof),
+          //  or we *did* get a sharing violation and the
+          //  caller specified
+          //  FILE_COMPLETE_IF_OPLOCKED.  Either way this
+          //  create is over.
+          //
+          // We can't really handle FILE_COMPLETE_IF_OPLOCKED correctly because
+          // we don't have a way of creating a useable file handle
+          // without actually creating the file in user mode, which
+          // won't work unless the oplock gets broken before the
+          // user mode create happens.
+          // It is believed that FILE_COMPLETE_IF_OPLOCKED is extremely
+          // rare and may never happend during normal operation.
+
+        } else {
+
+          if (status == STATUS_SHARING_VIOLATION &&
+              FlagOn(irpSp->Parameters.Create.Options,
+                     FILE_COMPLETE_IF_OPLOCKED)) {
+            DDbgPrint("failing a create with FILE_COMPLETE_IF_OPLOCKED because "
+                      "of sharing violation\n");
+          }
+
+          DDbgPrint("create: sharing/oplock failed, status = 0x%08x\n", status);
+          __leave;
+        }
 
 #else
-                    return status;
+        return status;
 #endif
-            }
-            ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
-            IoUpdateShareAccess(fileObject, &fcb->ShareAccess);
-            ExReleaseResourceLite(&fcb->Resource);
-    
+      }
+      ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
+      IoUpdateShareAccess(fileObject, &fcb->ShareAccess);
+      ExReleaseResourceLite(&fcb->Resource);
+
     } else {
-            ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
-            IoSetShareAccess(eventContext->Operation.Create.SecurityContext.DesiredAccess,
-                    eventContext->Operation.Create.ShareAccess,
-                    fileObject,
-                    &fcb->ShareAccess);
-            ExReleaseResourceLite(&fcb->Resource);
+      ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
+      IoSetShareAccess(
+          eventContext->Operation.Create.SecurityContext.DesiredAccess,
+          eventContext->Operation.Create.ShareAccess, fileObject,
+          &fcb->ShareAccess);
+      ExReleaseResourceLite(&fcb->Resource);
     }
 
     UnwindShareAccess = TRUE;
-
 
     //  Now check that we can continue based on the oplock state of the
     //  file.  If there are no open handles yet in addition to this new one
@@ -1085,8 +1077,9 @@ Return Value:
     //  to give the caller.
     //
     if (fcb->FileCount > 1) {
-      status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                NULL /* DokanOplockComplete */, DokanPrePostIrp);
+      status =
+          FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
+                           NULL /* DokanOplockComplete */, DokanPrePostIrp);
 
       //
       //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -1121,7 +1114,7 @@ Return Value:
         DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fileName = %wZ, "
                   "fileCount = %lu\n",
                   status, fcb->FileName, fcb->FileCount);
-                  
+
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
         DDbgPrint("create: STATUS_OPLOCK_BREAK_IN_PROGRESS\n");
@@ -1129,22 +1122,23 @@ Return Value:
       // if we fail after this point, the oplock will need to be backed out
       // if the oplock was granted (status == STATUS_SUCCESS)
       if (status == STATUS_SUCCESS) {
-        BackoutOplock = TRUE;  
+        BackoutOplock = TRUE;
       }
     }
 
     // register this IRP to waiting IPR list
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
-    
+
     EventContextConsumed = TRUE;
 
   } __finally {
-    
-    DDbgPrint("  Create: FileName:%wZ, status = 0x%08x\n", &fileObject->FileName, status);
-    
-    // Getting here by __leave isn't always a failure,
-    // so we shouldn't necessarily clean up only because
-    // AbnormalTermination() returns true
+
+    DDbgPrint("  Create: FileName:%wZ, status = 0x%08x\n",
+              &fileObject->FileName, status);
+
+// Getting here by __leave isn't always a failure,
+// so we shouldn't necessarily clean up only because
+// AbnormalTermination() returns true
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     //
@@ -1153,7 +1147,7 @@ Return Value:
     //  oplock that may have been granted.
     //
     //  Also unwind any share access that was added to the fcb
-    
+
     if (!NT_SUCCESS(status)) {
       if (BackoutOplock) {
         FsRtlCheckOplockEx(DokanGetFcbOplock(fcb), Irp,
@@ -1165,18 +1159,15 @@ Return Value:
         ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
         IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
         ExReleaseResourceLite(&fcb->Resource);
-      } 
-      
+      }
     }
 #endif
 
-   
-    
     if (!NT_SUCCESS(status)) {
-      
+
       // DokanRegisterPendingIrp consumes event context
-    
-       if (!EventContextConsumed && eventContext) {
+
+      if (!EventContextConsumed && eventContext) {
         DokanFreeEventContext(eventContext);
       }
       if (ccb) {
