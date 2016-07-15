@@ -110,10 +110,9 @@ Return Value:
     eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
-                  
 
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+                              DokanOplockComplete, DokanPrePostIrp);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -182,7 +181,11 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+  ExReleaseResourceLite(&fcb->Resource);
+  KeLeaveCriticalRegion();
 
   DokanCompleteIrpRequest(irp, status, 0);
 
