@@ -1092,6 +1092,22 @@ Return Value:
         __leave;
       }
     }
+    
+    //
+    //  Let's make sure that if the caller provided an oplock key that it
+    //  gets stored in the file object.
+    //
+    
+    status = FsRtlCheckOplockEx(DokanGetFcbOplock(fcb),
+                                          Irp,
+                                          OPLOCK_FLAG_OPLOCK_KEY_CHECK_ONLY,
+                                          NULL,
+                                          NULL,
+                                          NULL );
+                                          
+    if (!NT_SUCCESS(status)) {
+      __leave;
+    }
 
     if (OpenRequiringOplock) {
       DDbgPrint("   OpenRequiringOplock\n");
