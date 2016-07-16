@@ -56,6 +56,7 @@
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           & Bcdedit.exe -set TESTSIGNING ON;
+          & verifier /standard /driver dokan1.sys
           echo "Before reboot";
           Restart-Computer -Force;
           Start-Sleep -s 10;
@@ -69,6 +70,15 @@
   - ps: |
       Write-Host Start building...
       $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
+
+      function installDokanCert() {
+        Write-Host Install cert and sign...
+        .\cert\dokan-import.ps1
+        $env:CERTISSUER="DokanCA"
+        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+        Write-Host Dokan cert installed !
+      }
 
       if ($env:CONFIGURATION -eq "Coverity") {
         
@@ -109,12 +119,7 @@
 
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
               
-        Write-Host Install cert and sign...
-        .\cert\dokan-import.ps1
-        $env:CERTISSUER="DokanCA"
-        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
-        Write-Host Dokan cert installed !
+        installDokanCert
         
         cd dokan_wix
         
@@ -166,6 +171,8 @@
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {
         
+        $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
+        
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
@@ -174,9 +181,9 @@
         
         & $buildCmd $buildArgs
 
-        $certMgr = "C:\Program Files (x86)\Windows Kits\10\bin\x64\certmgr.exe"
-        & $certMgr /add x64\Win10Debug\dokan1.cer /s /r localMachine root
-        & $certMgr /add x64\Win10Debug\dokan1.cer /s /r localMachine trustedpublisher
+        installDokanCert
+        
+        .\cert\dokan-sign.ps1
         
         cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
         & .\x64\Debug\dokanctl.exe /i d
@@ -184,7 +191,7 @@
         $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
         Start-Sleep -s 5
         
-        New-Item C:\TMP -type directory
+        New-Item C:\TMP -type directory | Out-Null
         
         git clone -q https://github.com/Liryna/fstools.git
         $buildArgs = @(
@@ -214,6 +221,8 @@
 
         Start-Sleep -s 5
         Stop-Process $app.Id
+        Start-Sleep -s 5
+        & verifier /query
       }
       Write-Host Build Finished !
 
