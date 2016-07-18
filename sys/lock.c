@@ -90,10 +90,12 @@ DokanCommonLockControl(__in PIRP Irp) {
 //         within AllocationSize!
 //
 #endif
-      // Dokan DokanOplockComplete sends the operation to user mode, which isn't what we want to do
+      // Dokan DokanOplockComplete sends the operation to user mode, which isn't
+      // what we want to do
       // so now wait for the oplock to be broken (pass in NULL for the callback)
-      Status = FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
-                                NULL /*DokanOplockComplete*/, NULL);
+      Status =
+          FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
+                           NULL /*DokanOplockComplete*/, NULL);
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
     }
@@ -181,7 +183,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-    
+
     if (dcb->FileLockInUserMode) {
 
       eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
