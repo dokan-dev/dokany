@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanCommonLockControl(__in PIRP Irp, __in PEVENT_CONTEXT EventContext) {
+DokanCommonLockControl(__in PIRP Irp) {
   NTSTATUS Status = STATUS_SUCCESS;
 
   PDokanFCB Fcb;
@@ -90,13 +90,15 @@ DokanCommonLockControl(__in PIRP Irp, __in PEVENT_CONTEXT EventContext) {
 //         within AllocationSize!
 //
 #endif
-      Status = FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, EventContext,
-                                DokanOplockComplete, NULL);
+      // Dokan DokanOplockComplete sends the operation to user mode, which isn't what we want to do
+      // so now wait for the oplock to be broken (pass in NULL for the callback)
+      Status = FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
+                                NULL /*DokanOplockComplete*/, NULL);
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
     }
 #endif
-
+    //  If we were waiting for the callback, then STATUS_PENDING would be ok too
     if (Status != STATUS_SUCCESS) {
       __leave;
     }
@@ -129,7 +131,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanFCB fcb;
   PDokanVCB vcb;
   PDokanDCB dcb;
-  PEVENT_CONTEXT eventContext;
+  PEVENT_CONTEXT eventContext = NULL;
   ULONG eventLength;
   BOOLEAN completeIrp = TRUE;
 
@@ -179,39 +181,40 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
-
-    if (eventContext == NULL) {
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-
-    eventContext->Context = ccb->UserContext;
-    DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
-
-    // copy file name to be locked
-    eventContext->Operation.Lock.FileNameLength = fcb->FileName.Length;
-    RtlCopyMemory(eventContext->Operation.Lock.FileName, fcb->FileName.Buffer,
-                  fcb->FileName.Length);
-
-    // parameters of Lock
-    eventContext->Operation.Lock.ByteOffset =
-        irpSp->Parameters.LockControl.ByteOffset;
-    if (irpSp->Parameters.LockControl.Length != NULL) {
-      eventContext->Operation.Lock.Length.QuadPart =
-          irpSp->Parameters.LockControl.Length->QuadPart;
-    } else {
-      DDbgPrint("  LockControl.Length = NULL\n");
-    }
-    eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
-
+    
     if (dcb->FileLockInUserMode) {
+
+      eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+      eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+
+      if (eventContext == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
+
+      eventContext->Context = ccb->UserContext;
+      DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+
+      // copy file name to be locked
+      eventContext->Operation.Lock.FileNameLength = fcb->FileName.Length;
+      RtlCopyMemory(eventContext->Operation.Lock.FileName, fcb->FileName.Buffer,
+                    fcb->FileName.Length);
+
+      // parameters of Lock
+      eventContext->Operation.Lock.ByteOffset =
+          irpSp->Parameters.LockControl.ByteOffset;
+      if (irpSp->Parameters.LockControl.Length != NULL) {
+        eventContext->Operation.Lock.Length.QuadPart =
+            irpSp->Parameters.LockControl.Length->QuadPart;
+      } else {
+        DDbgPrint("  LockControl.Length = NULL\n");
+      }
+      eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
+
       // register this IRP to waiting IRP list and make it pending status
       status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
     } else {
-      status = DokanCommonLockControl(Irp, eventContext);
+      status = DokanCommonLockControl(Irp);
       completeIrp = FALSE;
     }
 
