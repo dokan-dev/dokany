@@ -83,11 +83,11 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                       __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PDokanFCB fcb = NULL;
-  
+
   UNICODE_STRING fn;
-  
+
   fn.Length = (USHORT)FileNameLength;
-  fn.MaximumLength = fn.Length+sizeof(WCHAR);
+  fn.MaximumLength = fn.Length + sizeof(WCHAR);
   fn.Buffer = FileName;
 
   KeEnterCriticalRegion();
@@ -108,7 +108,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
               fcb->FileName, fcb->FileCount, FileName);
     if (fcb->FileName.Length == FileNameLength) {
       // FileNameLength in bytes
-     
+
       // we have the FCB which is already allocated and used
       if (RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
         DDbgPrint("  Found existing FCB for %ls\n", FileName);
@@ -662,9 +662,11 @@ Return Value:
         ExFreePool(fileName);
         __leave;
       }
-      fcb = DokanGetFCB(vcb, parentDir, parentDirLength, FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
+      fcb = DokanGetFCB(vcb, parentDir, parentDirLength,
+                        FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
     } else {
-      fcb = DokanGetFCB(vcb, fileName, fileNameLength, FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
+      fcb = DokanGetFCB(vcb, fileName, fileNameLength,
+                        FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
     }
     if (fcb == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
