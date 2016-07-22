@@ -44,7 +44,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     //  If this is a zero length write then return SUCCESS immediately.
     //
     
-     if (irpSp->Parameters.Write.Length == 0) {
+    if (irpSp->Parameters.Write.Length == 0) {
       DDbgPrint("  Parameters.Write.Length == 0\n");
       Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
