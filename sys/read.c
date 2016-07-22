@@ -65,6 +65,7 @@ Return Value:
     //  If this is a zero length read then return SUCCESS immediately.
     //
     if (irpSp->Parameters.Read.Length == 0) {
+      Irp->IoStatus.Information = 0;
       DDbgPrint("  Parameters.Read.Length == 0 \n");
       status = STATUS_SUCCESS;
       __leave;

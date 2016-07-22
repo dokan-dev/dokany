@@ -43,9 +43,12 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     //
     //  If this is a zero length write then return SUCCESS immediately.
     //
-    if (irpSp->Parameters.Write.Length == 0) {
-
-      DDbgPrint("  Parameters.Write.Length == 0") return STATUS_SUCCESS;
+    
+     if (irpSp->Parameters.Write.Length == 0) {
+      DDbgPrint("  Parameters.Write.Length == 0\n");
+      Irp->IoStatus.Information = 0;
+      status = STATUS_SUCCESS;
+      __leave;
     }
 
     if (fileObject == NULL) {
@@ -73,11 +76,6 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
       status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    if (irpSp->Parameters.Write.Length == 0) {
-      status = STATUS_SUCCESS;
       __leave;
     }
 
