@@ -66,6 +66,7 @@ Return Value:
     //
     if (irpSp->Parameters.Read.Length == 0) {
       DDbgPrint("  Parameters.Read.Length == 0 \n");
+      Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
       __leave;
     }
