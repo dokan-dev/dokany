@@ -117,7 +117,7 @@ typedef struct _DOKAN_OPERATIONS {
   //   In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already
   //   existing file,
   //   you have to SetLastError(ERROR_ALREADY_EXISTS)
-  //   If file is a directory, CreateFile (not OpenDirectory) may be called.
+  //   If file is a directory, CreateFile is also called.
   //   In this case, CreateFile should return STATUS_SUCCESS when that directory
   //   can be opened.
   //   You should set TRUE on DokanFileInfo->IsDirectory when file is a
@@ -200,7 +200,7 @@ typedef struct _DOKAN_OPERATIONS {
    CONST FILETIME *, // LastWriteTime
    PDOKAN_FILE_INFO);
 
-  // You should not delete the file on DeleteFile or DeleteDirectory, but
+  // You should not delete the file on DeleteFile, but
   // instead
   // you must only check whether you can delete the file or not,
   // and return STATUS_SUCCESS (when you can delete it) or appropriate error
@@ -347,8 +347,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
                                 PDOKAN_FILE_INFO DokanFileInfo);
 
 // Get the handle to Access Token
-// This method needs be called in CreateFile, OpenDirectory or CreateDirectly
-// callback.
+// This method needs be called in CreateFile callback.
 // The caller must call CloseHandle for the returned handle.
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 
