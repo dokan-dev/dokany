@@ -521,8 +521,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
   DWORD fileSizeHigh = 0;
   fileSizeLow = GetFileSize(handle, &fileSizeHigh);
   if (fileSizeLow == INVALID_FILE_SIZE) {
-    DbgPrint(L"\tcan not get a file size\n");
-    return -1;
+    DWORD error = GetLastError();
+    DbgPrint(L"\tcan not get a file size error = %d\n", error);
+    if (opened)
+      CloseHandle(handle);
+    return DokanNtStatusFromWin32(error);
   }
 
   fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
@@ -534,6 +537,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
     if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
       DWORD error = GetLastError();
       DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
+      if (opened)
+        CloseHandle(handle);
       return DokanNtStatusFromWin32(error);
     }
   } else {
@@ -541,6 +546,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
     if (DokanFileInfo->PagingIo) {
       if ((UINT64)Offset >= fileSize) {
         *NumberOfBytesWritten = 0;
+        if (opened)
+          CloseHandle(handle);
         return STATUS_SUCCESS;
       }
 
@@ -565,6 +572,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
     if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
       DWORD error = GetLastError();
       DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
+      if (opened)
+        CloseHandle(handle);
       return DokanNtStatusFromWin32(error);
     }
   }
