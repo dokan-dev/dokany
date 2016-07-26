@@ -660,6 +660,7 @@ Return Value:
       status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
       if (status != STATUS_SUCCESS) {
         ExFreePool(fileName);
+        fileName = NULL;
         __leave;
       }
       fcb = DokanGetFCB(vcb, parentDir, parentDirLength,
