@@ -212,7 +212,7 @@
         & $buildCmd $buildArgs
         
         Write-Host "Start FSX Test" -ForegroundColor Green
-        & .\fstools\src\fsx\fsx.exe -RW -N 5000 M:\test
+        & .\fstools\src\fsx\fsx.exe -N 5000 M:\test
         if($LASTEXITCODE -ne 0) {
           throw "FSX failed"
         }

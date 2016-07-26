@@ -496,7 +496,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
                                                PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
-  ULONG offset = (ULONG)Offset;
   BOOL opened = FALSE;
 
   GetFilePath(filePath, MAX_PATH, FileName);
@@ -517,25 +516,57 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
     opened = TRUE;
   }
 
-  LARGE_INTEGER distanceToMove;
-  distanceToMove.QuadPart = Offset;
+  UINT64 fileSize = 0;
+  DWORD fileSizeLow = 0;
+  DWORD fileSizeHigh = 0;
+  fileSizeLow = GetFileSize(handle, &fileSizeHigh);
+  if (fileSizeLow == INVALID_FILE_SIZE) {
+    DbgPrint(L"\tcan not get a file size\n");
+    return -1;
+  }
 
+  fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
+
+  LARGE_INTEGER distanceToMove;
   if (DokanFileInfo->WriteToEndOfFile) {
     LARGE_INTEGER z;
     z.QuadPart = 0;
     if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
       DWORD error = GetLastError();
       DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
-      if (opened)
-        CloseHandle(handle);
       return DokanNtStatusFromWin32(error);
     }
-  } else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-    DWORD error = GetLastError();
-    DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, error);
-    if (opened)
-      CloseHandle(handle);
-    return DokanNtStatusFromWin32(error);
+  } else {
+    // Paging IO cannot write after allocate file size.
+    if (DokanFileInfo->PagingIo) {
+      if ((UINT64)Offset >= fileSize) {
+        *NumberOfBytesWritten = 0;
+        return STATUS_SUCCESS;
+      }
+
+      if (((UINT64)Offset + NumberOfBytesToWrite) > fileSize) {
+        UINT64 bytes = fileSize - Offset;
+        if (bytes >> 32) {
+          NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
+        } else {
+          NumberOfBytesToWrite = (DWORD)bytes;
+        }
+      }
+    }
+
+    if ((UINT64)Offset > fileSize) {
+      // In the mirror sample helperZeroFileData is not necessary. NTFS will
+      // zero a hole.
+      // But if user's file system is different from NTFS( or other Windows's
+      // file systems ) then  users will have to zero the hole themselves.
+    }
+
+    distanceToMove.QuadPart = Offset;
+    if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+      DWORD error = GetLastError();
+      DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
+      return DokanNtStatusFromWin32(error);
+    }
   }
 
   if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten,
@@ -548,7 +579,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
     return DokanNtStatusFromWin32(error);
 
   } else {
-    DbgPrint(L"\twrite %d, offset %d\n\n", *NumberOfBytesWritten, offset);
+    DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
   }
 
   // close the file when it is reopened

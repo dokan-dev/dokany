@@ -403,9 +403,6 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
                                   __in PIRP Irp);
 
 NTSTATUS
-DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
-
-NTSTATUS
 DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS

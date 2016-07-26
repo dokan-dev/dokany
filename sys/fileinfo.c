@@ -291,6 +291,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG eventLength;
   PFILE_OBJECT targetFileObject;
   PEVENT_CONTEXT eventContext;
+  BOOLEAN isPagingIo = FALSE;
+  PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
 
   vcb = DeviceObject->DeviceExtension;
 
@@ -323,6 +325,10 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     buffer = Irp->AssociatedIrp.SystemBuffer;
 
+    if (Irp->Flags & IRP_PAGING_IO) {
+      isPagingIo = TRUE;
+    }
+
     switch (irpSp->Parameters.SetFile.FileInformationClass) {
     case FileAllocationInformation:
       DDbgPrint(
@@ -336,6 +342,27 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("  FileDispositionInformation\n");
       break;
     case FileEndOfFileInformation:
+      if ((fileObject->SectionObjectPointer != NULL) &&
+          (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
+        ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
+
+        pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
+
+        if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
+                                  &pInfoEoF->EndOfFile)) {
+          status = STATUS_USER_MAPPED_FILE;
+          __leave;
+        }
+
+        ExReleaseResourceLite(&fcb->Resource);
+
+        if (!isPagingIo) {
+          ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+          CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+          CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+          ExReleaseResourceLite(&fcb->PagingIoResource);
+        }
+      }
       DDbgPrint("  FileEndOfFileInformation %lld\n",
                 ((PFILE_END_OF_FILE_INFORMATION)buffer)->EndOfFile.QuadPart);
       break;
@@ -459,9 +486,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Operation.SetFile.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.SetFile.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
-                  
+
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+                              DokanOplockComplete, DokanPrePostIrp);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
