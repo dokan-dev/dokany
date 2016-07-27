@@ -290,10 +290,11 @@ typedef struct _DOKAN_OPERATIONS {
    PDOKAN_FILE_INFO);
 
   NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)
-  (LPCWSTR, // FileName
-   PSECURITY_INFORMATION,
-   PSECURITY_DESCRIPTOR, // SecurityDescriptor
-   ULONG,                // SecurityDescriptor length
+  (LPCWSTR,               // FileName
+   PSECURITY_INFORMATION, // A pointer to SECURITY_INFORMATION value being
+                          // requested
+   PSECURITY_DESCRIPTOR,  // A pointer to SECURITY_DESCRIPTOR buffer
+   ULONG,                 // length of Security descriptor buffer
    PDOKAN_FILE_INFO);
 
   // Supported since 0.8.0. You must specify the version at
