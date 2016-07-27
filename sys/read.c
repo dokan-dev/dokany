@@ -84,7 +84,7 @@ Return Value:
       DDbgPrint("  Reads by File System Recognizers\n");
 
       currentAddress =
-          MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
+          MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
       if (currentAddress == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
         __leave;
@@ -286,7 +286,7 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   // buffer which is used to copy Read info
   if (irp->MdlAddress) {
     // DDbgPrint("   use MDL Address\n");
-    buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority);
+    buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
   } else {
     // DDbgPrint("   use UserBuffer\n");
     buffer = irp->UserBuffer;

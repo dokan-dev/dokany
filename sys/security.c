@@ -150,7 +150,7 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   irpSp = IrpEntry->IrpSp;
 
   if (irp->MdlAddress) {
-    buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority);
+    buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
   }
 
   bufferLength = irpSp->Parameters.QuerySecurity.Length;

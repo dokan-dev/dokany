@@ -362,29 +362,31 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   }
   RtlZeroMemory(buffer, sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
 
-  device = CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
-                                       MAX_PATH),         // lpFileName
-                      GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
-                      FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
-                      NULL,          // lpSecurityAttributes
-                      OPEN_EXISTING, // dwCreationDistribution
-                      0,             // dwFlagsAndAttributes
-                      NULL           // hTemplateFile
-                      );
-
-  if (device == INVALID_HANDLE_VALUE) {
-    DbgPrint(
-        "Dokan Error: CreateFile failed %ws: %d\n",
-        GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
-        GetLastError());
-    free(buffer);
-    result = (DWORD)-1;
-    _endthreadex(result);
-    return result;
-  }
+  
 
   status = TRUE;
   while (status) {
+
+      device = CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
+          MAX_PATH),         // lpFileName
+          GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+          FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
+          NULL,          // lpSecurityAttributes
+          OPEN_EXISTING, // dwCreationDistribution
+          0,             // dwFlagsAndAttributes
+          NULL           // hTemplateFile
+      );
+
+      if (device == INVALID_HANDLE_VALUE) {
+          DbgPrint(
+              "Dokan Error: CreateFile failed %ws: %d\n",
+              GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+              GetLastError());
+          free(buffer);
+          result = (DWORD)-1;
+          _endthreadex(result);
+          return result;
+      }
 
     status = DeviceIoControl(
         device,           // Handle to device

@@ -75,7 +75,17 @@ extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 #ifdef ExAllocatePool
 #undef ExAllocatePool
 #endif
+#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
+#define ExAllocatePool(size) ExAllocatePoolWithTag(NonPagedPoolNx, size, TAG)
+#else
 #define ExAllocatePool(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
+#endif
+
+#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
+#define MmGetSystemAddressForMdlNormalSafe(mdl) MmGetSystemAddressForMdlSafe(mdl,NormalPagePriority|MdlMappingNoExecute)
+#else
+#define MmGetSystemAddressForMdlNormalSafe(mdl) MmGetSystemAddressForMdlSafe(mdl,NormalPagePriority)
+#endif
 
 #define DRIVER_CONTEXT_EVENT 2
 #define DRIVER_CONTEXT_IRP_ENTRY 3
@@ -87,6 +97,7 @@ extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 #define DOKAN_KEEPALIVE_TIMEOUT (1000 * 15) // in millisecond
 
 #if _WIN32_WINNT > 0x501
+
 #define DDbgPrint(...)                                                         \
   if (g_Debug) {                                                               \
     KdPrintEx(                                                                 \
@@ -117,6 +128,18 @@ extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
   ExAllocateFromNPagedLookasideList(&DokanIrpEntryLookasideList)
 #define DokanFreeIrpEntry(IrpEntry)                                            \
   ExFreeToNPagedLookasideList(&DokanIrpEntryLookasideList, IrpEntry)
+
+//
+//  Undocumented definition of ExtensionFlags
+//
+
+#ifndef DOE_UNLOAD_PENDING
+#define DOE_UNLOAD_PENDING      0x00000001
+#define DOE_DELETE_PENDING      0x00000002
+#define DOE_REMOVE_PENDING      0x00000004
+#define DOE_REMOVE_PROCESSED    0x00000008
+#define DOE_START_PENDING       0x00000010
+#endif
 
 //
 // FSD_IDENTIFIER_TYPE
@@ -176,7 +199,12 @@ typedef struct _DOKAN_GLOBAL {
   // the list of waiting IRP for mount service
   IRP_LIST PendingService;
   IRP_LIST NotifyService;
+
+  PKTHREAD DeviceDeleteThread;
+
   LIST_ENTRY MountPointList;
+  LIST_ENTRY DeviceDeleteList;
+  KEVENT KillDeleteDeviceEvent;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 // make sure Identifier is the top of struct
@@ -221,7 +249,6 @@ typedef struct _DokanDiskControlBlock {
 
   // When UseAltStream is 1, use Alternate stream
   USHORT UseAltStream;
-  USHORT Mounted;
   USHORT UseMountManager;
   USHORT MountGlobally;
   USHORT FileLockInUserMode;
@@ -230,13 +257,16 @@ typedef struct _DokanDiskControlBlock {
   ULONG SerialNumber;
 
   ULONG MountId;
-
+  ULONG Flags;
   LARGE_INTEGER TickCount;
-
+  
   CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
 
   ULONG IrpTimeout;
+
+  IO_REMOVE_LOCK RemoveLock;
+
 } DokanDCB, *PDokanDCB;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \
@@ -263,10 +293,17 @@ typedef struct _DokanVolumeControlBlock {
   LONG FcbFreed;
   LONG CcbAllocated;
   LONG CcbFreed;
-
+  ULONG Flags;
   BOOLEAN HasEventWait;
 
 } DokanVCB, *PDokanVCB;
+
+// Flags for volume
+#define VCB_MOUNTED             0x00000004
+#define VCB_DISMOUNT_PENDING    0x00000008
+
+// Flags for device
+#define DCB_DELETE_PENDING      0x00000001
 
 typedef struct _DokanFileControlBlock {
   FSD_IDENTIFIER Identifier;
@@ -317,7 +354,7 @@ typedef struct _DokanContextControlBlock {
   ULONG SearchPatternLength;
 
   ULONG Flags;
-
+  
   int FileCount;
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
@@ -346,6 +383,13 @@ typedef struct _IRP_ENTRY {
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
 } IRP_ENTRY, *PIRP_ENTRY;
+
+typedef struct _DEVICE_ENTRY {
+    LIST_ENTRY ListEntry;
+    PDEVICE_OBJECT DiskDeviceObject;
+    PDEVICE_OBJECT VolumeDeviceObject;
+    ULONG Counter;
+} DEVICE_ENTRY, *PDEVICE_ENTRY;
 
 typedef struct _DRIVER_EVENT_CONTEXT {
   LIST_ENTRY ListEntry;
@@ -460,7 +504,7 @@ NTSTATUS
 DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
-DokanEventRelease(__in PDEVICE_OBJECT DeviceObject);
+DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
 DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
@@ -592,9 +636,18 @@ VOID DokanUpdateTimeout(__out PLARGE_INTEGER KickCount, __in ULONG Timeout);
 
 VOID DokanUnmount(__in PDokanDCB Dcb);
 
+BOOLEAN IsUnmountPending(__in PDEVICE_OBJECT DeviceObject);
+
+BOOLEAN IsMounted(__in PDEVICE_OBJECT DeviceObject);
+
+BOOLEAN IsDeletePending(__in PDEVICE_OBJECT DeviceObject);
+
+BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
+
 PMOUNT_ENTRY
 FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
-               __out PDOKAN_CONTROL DokanControl);
+               __in PDOKAN_CONTROL DokanControl,
+               __in BOOLEAN lockGlobal);
 
 VOID PrintIdType(__in VOID *Id);
 
@@ -614,5 +667,26 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
+
+#define SetLongFlag(_F,_SF)   DokanSetFlag(&(_F), (ULONG)(_SF))
+#define ClearLongFlag(_F,_SF) DokanClearFlag(&(_F), (ULONG)(_SF))
+
+__inline
+VOID
+DokanSetFlag(PULONG Flags, ULONG FlagBit)
+{
+    ULONG _ret = InterlockedOr(Flags, FlagBit);
+    ASSERT(*Flags == (_ret | FlagBit));
+}
+
+__inline
+VOID
+DokanClearFlag(PULONG Flags, ULONG FlagBit)
+{
+    ULONG _ret = InterlockedAnd(Flags, ~FlagBit);
+    ASSERT(*Flags == (_ret & (~FlagBit)));
+}
+
+#define IsFlagOn(a,b) ((BOOLEAN)(FlagOn(a,b) == b))
 
 #endif // DOKAN_H_
