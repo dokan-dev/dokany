@@ -95,7 +95,6 @@ VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
   if (Dcb->TickCount.QuadPart < tickCount.QuadPart) {
 
     vcb = Dcb->Vcb;
-    
 
     ExReleaseResourceLite(&Dcb->Resource);
 

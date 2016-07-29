@@ -77,9 +77,9 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     CcUninitializeCacheMap(fileObject, NULL, NULL);
     // fileObject->Flags &= FO_CLEANUP_COMPLETE;
-    
+
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+                              DokanOplockComplete, DokanPrePostIrp);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted

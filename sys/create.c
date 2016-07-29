@@ -174,7 +174,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     InitializeListHead(&Fcb->NextCCB);
 
     DDbgPrint("  Free FCB:%p\n", Fcb);
-    
+
     ExFreePool(Fcb->FileName.Buffer);
     Fcb->FileName.Buffer = NULL;
     Fcb->FileName.Length = 0;
@@ -218,10 +218,10 @@ PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
   ASSERT(Fcb != NULL);
 
   RtlZeroMemory(ccb, sizeof(DokanCCB));
-  
+
   ccb->Identifier.Type = CCB;
   ccb->Identifier.Size = sizeof(DokanCCB);
-  
+
   ccb->Fcb = Fcb;
   DDbgPrint("   Allocated CCB \n");
   ExInitializeResourceLite(&ccb->Resource);
@@ -250,7 +250,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
 
   fcb = ccb->Fcb;
   if (!fcb) {
-      return STATUS_SUCCESS;
+    return STATUS_SUCCESS;
   }
 
   KeEnterCriticalRegion();
@@ -259,12 +259,12 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   DDbgPrint("   Free CCB \n");
 
   if (IsListEmpty(&ccb->NextCCB)) {
-      DDbgPrint("  WARNING. &ccb->NextCCB is empty. \n This should never happen, so check the behavior.\n Would produce BSOD \n")
-      return STATUS_SUCCESS;
-  }
-  else {
-      RemoveEntryList(&ccb->NextCCB);
-      InitializeListHead(&ccb->NextCCB);
+    DDbgPrint("  WARNING. &ccb->NextCCB is empty. \n This should never happen, "
+              "so check the behavior.\n Would produce BSOD "
+              "\n") return STATUS_SUCCESS;
+  } else {
+    RemoveEntryList(&ccb->NextCCB);
+    InitializeListHead(&ccb->NextCCB);
   }
 
   ExReleaseResourceLite(&fcb->Resource);
@@ -509,9 +509,9 @@ Return Value:
     }
 
     if (IsUnmountPendingVcb(vcb)) {
-        DDbgPrint("  IdentifierType is vcb which is not mounted\n");
-        status = STATUS_NO_SUCH_DEVICE;
-        __leave;
+      DDbgPrint("  IdentifierType is vcb which is not mounted\n");
+      status = STATUS_NO_SUCH_DEVICE;
+      __leave;
     }
 
     dcb = vcb->Dcb;
@@ -716,7 +716,7 @@ Return Value:
     }
 
     if (irpSp->Parameters.Create.Options & FILE_OPEN_FOR_BACKUP_INTENT) {
-        DDbgPrint("FILE_OPEN_FOR_BACKUP_INTENT\n");
+      DDbgPrint("FILE_OPEN_FOR_BACKUP_INTENT\n");
     }
 
     fileObject->FsContext = &fcb->AdvancedFCBHeader;
@@ -1129,7 +1129,7 @@ Return Value:
                            OPLOCK_FLAG_OPLOCK_KEY_CHECK_ONLY, NULL, NULL, NULL);
 
     if (!NT_SUCCESS(status)) {
-        DDbgPrint("   FsRtlCheckOplockEx return status = 0x%08x\n", status);
+      DDbgPrint("   FsRtlCheckOplockEx return status = 0x%08x\n", status);
       __leave;
     }
 
@@ -1334,7 +1334,8 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
       }
     }
   } else {
-    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb, status);
+    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb,
+              status);
     DokanFreeCCB(ccb);
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);

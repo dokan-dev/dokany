@@ -83,8 +83,7 @@ Return Value:
     if (fileObject == NULL && Irp->MdlAddress != NULL) {
       DDbgPrint("  Reads by File System Recognizers\n");
 
-      currentAddress =
-          MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
+      currentAddress = MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
       if (currentAddress == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
         __leave;

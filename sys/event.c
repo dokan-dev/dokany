@@ -266,8 +266,8 @@ DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
   }
 
   if (IsUnmountPendingVcb(vcb)) {
-      DDbgPrint("  Volume is dismounted\n");
-      return STATUS_NO_SUCH_DEVICE;
+    DDbgPrint("  Volume is dismounted\n");
+    return STATUS_NO_SUCH_DEVICE;
   }
 
   // DDbgPrint("DokanRegisterPendingIrpForEvent\n");
@@ -320,8 +320,8 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   if (IsUnmountPendingVcb(vcb)) {
-      DDbgPrint("      Volume is not mounted\n");
-      return STATUS_NO_SUCH_DEVICE;
+    DDbgPrint("      Volume is not mounted\n");
+    return STATUS_NO_SUCH_DEVICE;
   }
 
   // DDbgPrint("      Lock IrpList.ListLock\n");
@@ -381,12 +381,13 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
 
     if (IsUnmountPendingVcb(vcb)) {
-        DDbgPrint("      Volume is not mounted second check\n");
-        return STATUS_NO_SUCH_DEVICE;
+      DDbgPrint("      Volume is not mounted second check\n");
+      return STATUS_NO_SUCH_DEVICE;
     }
 
     if (eventInfo && eventInfo->Status == STATUS_PENDING) {
-        DDbgPrint("      !!WARNING!! Do not return STATUS_PENDING DokanCompleteIrp!");
+      DDbgPrint(
+          "      !!WARNING!! Do not return STATUS_PENDING DokanCompleteIrp!");
     }
 
     switch (irpSp->MajorFunction) {
@@ -539,26 +540,28 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   DOKAN_CONTROL dokanControl;
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
-  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH, L"\\DosDevices\\");
+  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
+                    L"\\DosDevices\\");
   if (&eventStart.MountPoint && wcslen(eventStart.MountPoint) == 1) {
-      dokanControl.MountPoint[12] = towupper(eventStart.MountPoint[0]);
-      dokanControl.MountPoint[13] = L':';
-      dokanControl.MountPoint[14] = L'\0';
+    dokanControl.MountPoint[12] = towupper(eventStart.MountPoint[0]);
+    dokanControl.MountPoint[13] = L':';
+    dokanControl.MountPoint[14] = L'\0';
   } else {
-      RtlStringCchCatW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH, eventStart.MountPoint);
+    RtlStringCchCatW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
+                     eventStart.MountPoint);
   }
 
   DDbgPrint("  Checking for MountPoint %ls \n", dokanControl.MountPoint);
   PMOUNT_ENTRY foundEntry = FindMountEntry(dokanGlobal, &dokanControl, FALSE);
   if (foundEntry != NULL) {
-      DDbgPrint("  MountPoint exists already %ls \n", dokanControl.MountPoint);
-      driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
-      driverInfo->Status = DOKAN_START_FAILED;
-      Irp->IoStatus.Status = STATUS_SUCCESS;
-      Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
-      ExReleaseResourceLite(&dokanGlobal->Resource);
-      KeLeaveCriticalRegion();
-      return STATUS_SUCCESS;
+    DDbgPrint("  MountPoint exists already %ls \n", dokanControl.MountPoint);
+    driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
+    driverInfo->Status = DOKAN_START_FAILED;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
+    ExReleaseResourceLite(&dokanGlobal->Resource);
+    KeLeaveCriticalRegion();
+    return STATUS_SUCCESS;
   }
 
   baseGuid.Data2 = (USHORT)(dokanGlobal->MountId & 0xFFFF) ^ baseGuid.Data2;
@@ -566,8 +569,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   status = RtlStringFromGUID(&baseGuid, &unicodeGuid);
   if (!NT_SUCCESS(status)) {
-     ExReleaseResourceLite(&dokanGlobal->Resource);
-     KeLeaveCriticalRegion();
+    ExReleaseResourceLite(&dokanGlobal->Resource);
+    KeLeaveCriticalRegion();
     return status;
   }
   RtlZeroMemory(baseGuidString, sizeof(baseGuidString));
@@ -638,9 +641,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   Irp->IoStatus.Status = STATUS_SUCCESS;
   Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
-    
+
   DDbgPrint("<== DokanEventStart\n");
-  
+
   return Irp->IoStatus.Status;
 }
 
@@ -730,8 +733,7 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       // DDbgPrint("  EventLength %d, BufLength %d\n", eventContext->Length,
       //			eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength);
       if (Irp->MdlAddress)
-        buffer =
-            MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
+        buffer = MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
       else
         buffer = Irp->AssociatedIrp.SystemBuffer;
 

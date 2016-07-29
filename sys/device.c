@@ -50,6 +50,7 @@ VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
     baseCodeStr = "MOUNTMGRCONTROLTYPE";
     break;
   }
+  UNREFERENCED_PARAMETER(functionCode);
   DDbgPrint("   BaseCode: 0x%x(%s) FunctionCode 0x%x(%d)\n", baseCode,
             baseCodeStr, functionCode, functionCode);
 }
@@ -132,20 +133,20 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   inputLength = irpSp->Parameters.DeviceIoControl.InputBufferLength;
 
   if (GetIdentifierType(dcb) != DCB) {
-      PrintIdType(dcb);
-      DDbgPrint("   Device is not dcb so go out here\n");
-      return STATUS_INVALID_PARAMETER;
+    PrintIdType(dcb);
+    DDbgPrint("   Device is not dcb so go out here\n");
+    return STATUS_INVALID_PARAMETER;
   }
 
   if (IsDeletePending(DeviceObject)) {
-      DDbgPrint("   Device object is pending for delete valid anymore\n");
-      return STATUS_DEVICE_REMOVED;
+    DDbgPrint("   Device object is pending for delete valid anymore\n");
+    return STATUS_DEVICE_REMOVED;
   }
 
   vcb = dcb->Vcb;
   if (IsUnmountPendingVcb(vcb)) {
-      DDbgPrint("   Volume is unmounted so ignore dcb requests\n");
-      return STATUS_NO_SUCH_DEVICE;
+    DDbgPrint("   Volume is unmounted so ignore dcb requests\n");
+    return STATUS_NO_SUCH_DEVICE;
   }
 
   DDbgPrint("   DiskDeviceControl Device name %wZ \n", dcb->DiskDeviceName);
@@ -353,46 +354,46 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
     ASSERT(query != NULL);
     if (query->QueryType == PropertyExistsQuery) {
-        if (query->PropertyId == StorageDeviceUniqueIdProperty) {
-            PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage;
-            DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
-            if (outputLength < sizeof(STORAGE_DEVICE_UNIQUE_IDENTIFIER)) {
-                status = STATUS_BUFFER_TOO_SMALL;
-                Irp->IoStatus.Information = 0;
-                break;
-            }
-            storage = Irp->AssociatedIrp.SystemBuffer;
-
-            status = STATUS_SUCCESS;
-        } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
-            DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
-            status = STATUS_NOT_IMPLEMENTED;
-        } else {
-            DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
-            status = STATUS_NOT_IMPLEMENTED;
+      if (query->PropertyId == StorageDeviceUniqueIdProperty) {
+        PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage;
+        DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
+        if (outputLength < sizeof(STORAGE_DEVICE_UNIQUE_IDENTIFIER)) {
+          status = STATUS_BUFFER_TOO_SMALL;
+          Irp->IoStatus.Information = 0;
+          break;
         }
+        storage = Irp->AssociatedIrp.SystemBuffer;
+
+        status = STATUS_SUCCESS;
+      } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
+        DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
+        status = STATUS_NOT_IMPLEMENTED;
+      } else {
+        DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
+        status = STATUS_NOT_IMPLEMENTED;
+      }
     } else if (query->QueryType == PropertyStandardQuery) {
-        if (query->PropertyId == StorageDeviceProperty) {
-            PSTORAGE_DEVICE_DESCRIPTOR storage;
-            DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
-            if (outputLength < sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
-                status = STATUS_BUFFER_TOO_SMALL;
-                Irp->IoStatus.Information = 0;
-                break;
-            }
-            storage = Irp->AssociatedIrp.SystemBuffer;
-
-            status = STATUS_SUCCESS;
-        } else if (query->PropertyId == StorageAdapterProperty) {
-            DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
-            status = STATUS_NOT_IMPLEMENTED;
-        } else {
-            DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
-            status = STATUS_ACCESS_DENIED;
+      if (query->PropertyId == StorageDeviceProperty) {
+        PSTORAGE_DEVICE_DESCRIPTOR storage;
+        DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
+        if (outputLength < sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
+          status = STATUS_BUFFER_TOO_SMALL;
+          Irp->IoStatus.Information = 0;
+          break;
         }
-    } else {
-        DDbgPrint("    Unknown query type %d\n", query->QueryType);
+        storage = Irp->AssociatedIrp.SystemBuffer;
+
+        status = STATUS_SUCCESS;
+      } else if (query->PropertyId == StorageAdapterProperty) {
+        DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
+        status = STATUS_NOT_IMPLEMENTED;
+      } else {
+        DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
         status = STATUS_ACCESS_DENIED;
+      }
+    } else {
+      DDbgPrint("    Unknown query type %d\n", query->QueryType);
+      status = STATUS_ACCESS_DENIED;
     }
     break;
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
@@ -502,53 +503,54 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_MOUNTDEV_LINK_CREATED: {
     PMOUNTDEV_NAME mountdevName = Irp->AssociatedIrp.SystemBuffer;
     DDbgPrint("   IOCTL_MOUNTDEV_LINK_CREATED\n");
-    
-    status = STATUS_SUCCESS;
-    if (!IsUnmountPending(DeviceObject) && mountdevName != NULL && mountdevName->NameLength > 0) {
-        WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
-        RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
-        RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
-            mountdevName->NameLength);
-        DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
 
-        if (wcsncmp(symbolicLinkNameBuf, L"\\DosDevices\\", 12) == 0) {
-            if (dcb->MountPoint != NULL && dcb->MountPoint->Length == 0) {
-                ExFreePool(dcb->MountPoint);
-                dcb->MountPoint = NULL;
-            }
-            if (dcb->MountPoint == NULL) {
-                DDbgPrint("   Not current MountPoint. MountDev set as MountPoint\n");
-                dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
-                if (dcb->DiskDeviceName != NULL) {
-                    DOKAN_CONTROL dokanControl;
-                    PMOUNT_ENTRY mountEntry;
-                    RtlZeroMemory(&dokanControl, sizeof(dokanControl));
-                    RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
-                        dcb->DiskDeviceName->Length);
-                    if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
-                        RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
-                            dcb->UNCName->Length);
-                    }
-                    mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
-                    if (mountEntry != NULL) {
-                        RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
-                            MAXIMUM_FILENAME_LENGTH, symbolicLinkNameBuf);
-                    } else {
-                        DDbgPrint("   Cannot found associated MountEntry.\n");
-                    }
-                } else {
-                    DDbgPrint(
-                        "   DiskDeviceName is null. Is device currently unmounted?\n");
-                }
-            } else {
-                DDbgPrint("   Mount Point already assigned to the device. New mount "
-                    "point ignored.\n");
-            }
-        } else {
-            DDbgPrint("   Mount Point is not DosDevices, ignored.\n");
+    status = STATUS_SUCCESS;
+    if (!IsUnmountPending(DeviceObject) && mountdevName != NULL &&
+        mountdevName->NameLength > 0) {
+      WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
+      RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
+      RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
+                    mountdevName->NameLength);
+      DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
+
+      if (wcsncmp(symbolicLinkNameBuf, L"\\DosDevices\\", 12) == 0) {
+        if (dcb->MountPoint != NULL && dcb->MountPoint->Length == 0) {
+          ExFreePool(dcb->MountPoint);
+          dcb->MountPoint = NULL;
         }
+        if (dcb->MountPoint == NULL) {
+          DDbgPrint("   Not current MountPoint. MountDev set as MountPoint\n");
+          dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
+          if (dcb->DiskDeviceName != NULL) {
+            DOKAN_CONTROL dokanControl;
+            PMOUNT_ENTRY mountEntry;
+            RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+            RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
+                          dcb->DiskDeviceName->Length);
+            if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
+              RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
+                            dcb->UNCName->Length);
+            }
+            mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
+            if (mountEntry != NULL) {
+              RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
+                                MAXIMUM_FILENAME_LENGTH, symbolicLinkNameBuf);
+            } else {
+              DDbgPrint("   Cannot found associated MountEntry.\n");
+            }
+          } else {
+            DDbgPrint(
+                "   DiskDeviceName is null. Is device currently unmounted?\n");
+          }
+        } else {
+          DDbgPrint("   Mount Point already assigned to the device. New mount "
+                    "point ignored.\n");
+        }
+      } else {
+        DDbgPrint("   Mount Point is not DosDevices, ignored.\n");
+      }
     } else {
-        DDbgPrint("   MountDev Name is undefined or unmounting in progress.\n");
+      DDbgPrint("   MountDev Name is undefined or unmounting in progress.\n");
     }
   } break;
   case IOCTL_MOUNTDEV_LINK_DELETED: {
@@ -820,32 +822,32 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 NTSTATUS
 DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
-    PDokanDCB dcb;
-    NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  PDokanDCB dcb;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-    dcb = DeviceObject->DeviceExtension;
+  dcb = DeviceObject->DeviceExtension;
 
-    if (GetIdentifierType(dcb) != DCB) {
-        PrintIdType(dcb);
-        DDbgPrint("   Device is not dcb so go out here\n");
-        return STATUS_INVALID_PARAMETER;
-    }
+  if (GetIdentifierType(dcb) != DCB) {
+    PrintIdType(dcb);
+    DDbgPrint("   Device is not dcb so go out here\n");
+    return STATUS_INVALID_PARAMETER;
+  }
 
-    status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
-    if (!NT_SUCCESS(status)) {
-        DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
+  status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
 
-    if (IsDeletePending(DeviceObject)) {
-        DDbgPrint("Device is deleted, so go out here \n");
-        return STATUS_NO_SUCH_DEVICE;
-    }
-    status = DiskDeviceControl(DeviceObject, Irp);
+  if (IsDeletePending(DeviceObject)) {
+    DDbgPrint("Device is deleted, so go out here \n");
+    return STATUS_NO_SUCH_DEVICE;
+  }
+  status = DiskDeviceControl(DeviceObject, Irp);
 
-    IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
+  IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
 
-    return status;
+  return status;
 }
 
 NTSTATUS
@@ -894,9 +896,10 @@ Return Value:
       DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     }
 
-    if (DeviceObject->DriverObject == NULL || DeviceObject->ReferenceCount < 0) {
-        status = STATUS_DEVICE_DOES_NOT_EXIST;
-        __leave;
+    if (DeviceObject->DriverObject == NULL ||
+        DeviceObject->ReferenceCount < 0) {
+      status = STATUS_DEVICE_DOES_NOT_EXIST;
+      __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
@@ -978,13 +981,13 @@ Return Value:
 
   } __finally {
 
-      if (status != STATUS_PENDING) {
-          if (IsDeletePending(DeviceObject)) {
-              DDbgPrint("  DeviceObject is invalid, so prevent BSOD")
-              status = STATUS_DEVICE_REMOVED;
-          }
-          DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
+    if (status != STATUS_PENDING) {
+      if (IsDeletePending(DeviceObject)) {
+		  DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
+		  status = STATUS_DEVICE_REMOVED;
       }
+      DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
+    }
 
     if (controlCode != IOCTL_EVENT_WAIT && controlCode != IOCTL_EVENT_INFO &&
         controlCode != IOCTL_KEEPALIVE) {

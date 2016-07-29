@@ -66,7 +66,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         break;
       }
 
-      DDbgPrint("  Still no threads for processing available - FileFsVolumeInformation \n");
+      DDbgPrint("  Still no threads for processing available - "
+                "FileFsVolumeInformation \n");
       PFILE_FS_VOLUME_INFORMATION FsVolInfo;
 
       if (irpSp->Parameters.QueryVolume.Length <
@@ -79,12 +80,13 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       FsVolInfo->VolumeCreationTime.QuadPart = 0;
       FsVolInfo->VolumeSerialNumber = 0x19831116;
 
-      FsVolInfo->VolumeLabelLength = (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
+      FsVolInfo->VolumeLabelLength =
+          (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
       /* We don't support ObjectId */
       FsVolInfo->SupportsObjects = FALSE;
 
-      RequiredLength = sizeof(FILE_FS_VOLUME_INFORMATION) + FsVolInfo->VolumeLabelLength -
-                       sizeof(WCHAR);
+      RequiredLength = sizeof(FILE_FS_VOLUME_INFORMATION) +
+                       FsVolInfo->VolumeLabelLength - sizeof(WCHAR);
 
       if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
         Irp->IoStatus.Information = sizeof(FILE_FS_VOLUME_INFORMATION);
@@ -92,7 +94,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         __leave;
       }
 
-      RtlCopyMemory(FsVolInfo->VolumeLabel, VOLUME_LABEL, FsVolInfo->VolumeLabelLength);
+      RtlCopyMemory(FsVolInfo->VolumeLabel, VOLUME_LABEL,
+                    FsVolInfo->VolumeLabelLength);
 
       Irp->IoStatus.Information = RequiredLength;
       status = STATUS_SUCCESS;
@@ -106,21 +109,21 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
     case FileFsSizeInformation:
       DDbgPrint("  FileFsSizeInformation\n");
       if (vcb->HasEventWait) {
-          break;
+        break;
       }
 
-      DDbgPrint("  Still no threads for processing available - FileFsSizeInformation \n");
+      DDbgPrint("  Still no threads for processing available - "
+                "FileFsSizeInformation \n");
       PFILE_FS_SIZE_INFORMATION sizeInfo;
 
       if (irpSp->Parameters.QueryVolume.Length <
           sizeof(FILE_FS_SIZE_INFORMATION)) {
-          status = STATUS_BUFFER_OVERFLOW;
-          __leave;
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
       }
-      
+
       ULONGLONG freeBytesAvailable = 512 * 1024 * 1024;
       ULONGLONG totalBytes = 1024 * 1024 * 1024;
-      ULONGLONG freeBytes = 512 * 1024 * 1024;
 
       sizeInfo = (PFILE_FS_SIZE_INFORMATION)buffer;
       sizeInfo->TotalAllocationUnits.QuadPart =
@@ -178,8 +181,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       FsAttrInfo->MaximumComponentNameLength = 256;
       FsAttrInfo->FileSystemNameLength = 8;
 
-      RequiredLength =
-          sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + FsAttrInfo->FileSystemNameLength - sizeof(WCHAR);
+      RequiredLength = sizeof(FILE_FS_ATTRIBUTE_INFORMATION) +
+                       FsAttrInfo->FileSystemNameLength - sizeof(WCHAR);
 
       if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
         Irp->IoStatus.Information = sizeof(FILE_FS_ATTRIBUTE_INFORMATION);
@@ -187,7 +190,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         __leave;
       }
 
-      RtlCopyMemory(FsAttrInfo->FileSystemName, L"NTFS", FsAttrInfo->FileSystemNameLength);
+      RtlCopyMemory(FsAttrInfo->FileSystemName, L"NTFS",
+                    FsAttrInfo->FileSystemNameLength);
       Irp->IoStatus.Information = RequiredLength;
       status = STATUS_SUCCESS;
       __leave;

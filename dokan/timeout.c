@@ -69,26 +69,25 @@ UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
   ULONG ReturnedLength;
   WCHAR rawDeviceName[MAX_PATH];
 
-  
   while (TRUE) {
 
-      device = CreateFile(
-          GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
-          GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
-          FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
-          NULL,                               // lpSecurityAttributes
-          OPEN_EXISTING,                      // dwCreationDistribution
-          0,                                  // dwFlagsAndAttributes
-          NULL                                // hTemplateFile
-      );
+    device = CreateFile(
+        GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+        GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+        FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
+        NULL,                               // lpSecurityAttributes
+        OPEN_EXISTING,                      // dwCreationDistribution
+        0,                                  // dwFlagsAndAttributes
+        NULL                                // hTemplateFile
+        );
 
-      if (device == INVALID_HANDLE_VALUE) {
-          DbgPrint(
-              "Dokan Error: DokanKeepAlive CreateFile failed %ws: %d\n",
-              GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
-              GetLastError());
-          break;
-      }
+    if (device == INVALID_HANDLE_VALUE) {
+      DbgPrint(
+          "Dokan Error: DokanKeepAlive CreateFile failed %ws: %d\n",
+          GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+          GetLastError());
+      break;
+    }
 
     BOOL status = DeviceIoControl(device,          // Handle to device
                                   IOCTL_KEEPALIVE, // IO Control code
@@ -99,11 +98,11 @@ UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
                                   &ReturnedLength, // Bytes placed in buffer.
                                   NULL             // synchronous call
                                   );
-    
+
     CloseHandle(device);
 
     if (!status) {
-        break;
+      break;
     }
 
     Sleep(DOKAN_KEEPALIVE_TIME);

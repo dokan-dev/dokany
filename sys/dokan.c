@@ -134,11 +134,11 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
 BOOLEAN
 DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
 #if _WIN32_WINNT > 0x601
-    NTSTATUS Status = ExInitializeLookasideListEx(
-        pCache, NULL, NULL, NonPagedPoolNx, 0, cbElement, TAG, 0);
+  NTSTATUS Status = ExInitializeLookasideListEx(
+      pCache, NULL, NULL, NonPagedPoolNx, 0, cbElement, TAG, 0);
 #else
-    NTSTATUS Status = ExInitializeLookasideListEx(
-        pCache, NULL, NULL, NonPagedPool, 0, cbElement, TAG, 0);
+  NTSTATUS Status = ExInitializeLookasideListEx(
+      pCache, NULL, NULL, NonPagedPool, 0, cbElement, TAG, 0);
 #endif
 
   if (!NT_SUCCESS(Status)) {
@@ -243,11 +243,12 @@ Return Value:
 
   DriverObject->FastIoDispatch = fastIoDispatch;
 #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
-  ExInitializeNPagedLookasideList(&DokanIrpEntryLookasideList, NULL, NULL, POOL_NX_ALLOCATION,
-                                  sizeof(IRP_ENTRY), TAG, 0);
+  ExInitializeNPagedLookasideList(&DokanIrpEntryLookasideList, NULL, NULL,
+                                  POOL_NX_ALLOCATION, sizeof(IRP_ENTRY), TAG,
+                                  0);
 #else
   ExInitializeNPagedLookasideList(&DokanIrpEntryLookasideList, NULL, NULL, 0,
-      sizeof(IRP_ENTRY), TAG, 0);
+                                  sizeof(IRP_ENTRY), TAG, 0);
 #endif
 
 #if _WIN32_WINNT < 0x0501
@@ -519,7 +520,7 @@ DokanCheckCCB(__in PDokanDCB Dcb, __in_opt PDokanCCB Ccb) {
     DDbgPrint("   MountId is different\n");
     return FALSE;
   }
-  
+
   vcb = Dcb->Vcb;
   if (!vcb || IsUnmountPendingVcb(vcb)) {
     DDbgPrint("  Not mounted\n");

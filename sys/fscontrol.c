@@ -541,14 +541,15 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   }
 
   if (IsDeletePending(dcb->DeviceObject)) {
-      DDbgPrint(" This is a remount try of the device");
-      return STATUS_DEVICE_REMOVED;
+    DDbgPrint(" This is a remount try of the device");
+    return STATUS_DEVICE_REMOVED;
   }
 
   BOOLEAN isNetworkFileSystem =
       (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
-  DDbgPrint(" Mounting volume using MountPoint %wZ device %wZ \n", dcb->MountPoint, dcb->DiskDeviceName);
+  DDbgPrint(" Mounting volume using MountPoint %wZ device %wZ \n",
+            dcb->MountPoint, dcb->DiskDeviceName);
 
   if (!isNetworkFileSystem) {
     status = IoCreateDevice(DriverObject,               // DriverObject
@@ -610,11 +611,11 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   SetLongFlag(volDeviceObject->Flags, DO_DIRECT_IO);
   ClearLongFlag(volDeviceObject->Flags, DO_DEVICE_INITIALIZING);
   SetLongFlag(vcb->Flags, VCB_MOUNTED);
-  
+
   ObReferenceObject(volDeviceObject);
 
   DDbgPrint("  ExAcquireResourceExclusiveLite dcb resource \n")
-  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+      ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
 
   // set the device on dokanControl
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
@@ -628,10 +629,9 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   if (mountEntry != NULL) {
     mountEntry->MountControl.DeviceObject = volDeviceObject;
   } else {
-      ExReleaseResourceLite(&dcb->Resource);
-      DDbgPrint("MountEntry not found. This way the dokanControl does not have "
-          "the DeviceObject \n")
-          return STATUS_DEVICE_REMOVED;
+    ExReleaseResourceLite(&dcb->Resource);
+    DDbgPrint("MountEntry not found. This way the dokanControl does not have "
+              "the DeviceObject \n") return STATUS_DEVICE_REMOVED;
   }
 
   ExReleaseResourceLite(&dcb->Resource);

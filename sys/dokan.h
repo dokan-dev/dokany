@@ -82,9 +82,11 @@ extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 #endif
 
 #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
-#define MmGetSystemAddressForMdlNormalSafe(mdl) MmGetSystemAddressForMdlSafe(mdl,NormalPagePriority|MdlMappingNoExecute)
+#define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
+  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority | MdlMappingNoExecute)
 #else
-#define MmGetSystemAddressForMdlNormalSafe(mdl) MmGetSystemAddressForMdlSafe(mdl,NormalPagePriority)
+#define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
+  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority)
 #endif
 
 #define DRIVER_CONTEXT_EVENT 2
@@ -134,11 +136,11 @@ extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 //
 
 #ifndef DOE_UNLOAD_PENDING
-#define DOE_UNLOAD_PENDING      0x00000001
-#define DOE_DELETE_PENDING      0x00000002
-#define DOE_REMOVE_PENDING      0x00000004
-#define DOE_REMOVE_PROCESSED    0x00000008
-#define DOE_START_PENDING       0x00000010
+#define DOE_UNLOAD_PENDING 0x00000001
+#define DOE_DELETE_PENDING 0x00000002
+#define DOE_REMOVE_PENDING 0x00000004
+#define DOE_REMOVE_PROCESSED 0x00000008
+#define DOE_START_PENDING 0x00000010
 #endif
 
 //
@@ -259,7 +261,7 @@ typedef struct _DokanDiskControlBlock {
   ULONG MountId;
   ULONG Flags;
   LARGE_INTEGER TickCount;
-  
+
   CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
 
@@ -299,11 +301,11 @@ typedef struct _DokanVolumeControlBlock {
 } DokanVCB, *PDokanVCB;
 
 // Flags for volume
-#define VCB_MOUNTED             0x00000004
-#define VCB_DISMOUNT_PENDING    0x00000008
+#define VCB_MOUNTED 0x00000004
+#define VCB_DISMOUNT_PENDING 0x00000008
 
 // Flags for device
-#define DCB_DELETE_PENDING      0x00000001
+#define DCB_DELETE_PENDING 0x00000001
 
 typedef struct _DokanFileControlBlock {
   FSD_IDENTIFIER Identifier;
@@ -354,7 +356,7 @@ typedef struct _DokanContextControlBlock {
   ULONG SearchPatternLength;
 
   ULONG Flags;
-  
+
   int FileCount;
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
@@ -385,10 +387,10 @@ typedef struct _IRP_ENTRY {
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
-    LIST_ENTRY ListEntry;
-    PDEVICE_OBJECT DiskDeviceObject;
-    PDEVICE_OBJECT VolumeDeviceObject;
-    ULONG Counter;
+  LIST_ENTRY ListEntry;
+  PDEVICE_OBJECT DiskDeviceObject;
+  PDEVICE_OBJECT VolumeDeviceObject;
+  ULONG Counter;
 } DEVICE_ENTRY, *PDEVICE_ENTRY;
 
 typedef struct _DRIVER_EVENT_CONTEXT {
@@ -645,8 +647,7 @@ BOOLEAN IsDeletePending(__in PDEVICE_OBJECT DeviceObject);
 BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
 
 PMOUNT_ENTRY
-FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
-               __in PDOKAN_CONTROL DokanControl,
+FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
                __in BOOLEAN lockGlobal);
 
 VOID PrintIdType(__in VOID *Id);
@@ -668,25 +669,21 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
-#define SetLongFlag(_F,_SF)   DokanSetFlag(&(_F), (ULONG)(_SF))
-#define ClearLongFlag(_F,_SF) DokanClearFlag(&(_F), (ULONG)(_SF))
+#define SetLongFlag(_F, _SF) DokanSetFlag(&(_F), (ULONG)(_SF))
+#define ClearLongFlag(_F, _SF) DokanClearFlag(&(_F), (ULONG)(_SF))
 
-__inline
-VOID
-DokanSetFlag(PULONG Flags, ULONG FlagBit)
-{
-    ULONG _ret = InterlockedOr(Flags, FlagBit);
-    ASSERT(*Flags == (_ret | FlagBit));
+__inline VOID DokanSetFlag(PULONG Flags, ULONG FlagBit) {
+  ULONG _ret = InterlockedOr((PLONG)Flags, FlagBit);
+  UNREFERENCED_PARAMETER(_ret);
+  ASSERT(*Flags == (_ret | FlagBit));
 }
 
-__inline
-VOID
-DokanClearFlag(PULONG Flags, ULONG FlagBit)
-{
-    ULONG _ret = InterlockedAnd(Flags, ~FlagBit);
-    ASSERT(*Flags == (_ret & (~FlagBit)));
+__inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
+  ULONG _ret = InterlockedAnd((PLONG)Flags, ~FlagBit);
+  UNREFERENCED_PARAMETER(_ret);
+  ASSERT(*Flags == (_ret & (~FlagBit)));
 }
 
-#define IsFlagOn(a,b) ((BOOLEAN)(FlagOn(a,b) == b))
+#define IsFlagOn(a, b) ((BOOLEAN)(FlagOn(a, b) == b))
 
 #endif // DOKAN_H_
