@@ -73,6 +73,10 @@ QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDEVICE_RELATIONS DeviceRelations;
   PDokanVCB vcb;
 
+  // QueryDeviceRelations is currently not used
+  // because it does not return proper informations and verifier complained
+  // We keep it for futur support of pnp
+
   vcb = DeviceObject->DeviceExtension;
 
   switch (type) {

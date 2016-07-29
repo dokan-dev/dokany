@@ -542,7 +542,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
                     L"\\DosDevices\\");
-  if (&eventStart.MountPoint && wcslen(eventStart.MountPoint) == 1) {
+  if (wcslen(eventStart.MountPoint) == 1) {
     dokanControl.MountPoint[12] = towupper(eventStart.MountPoint[0]);
     dokanControl.MountPoint[13] = L':';
     dokanControl.MountPoint[14] = L'\0';

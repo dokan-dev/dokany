@@ -841,6 +841,7 @@ DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   if (IsDeletePending(DeviceObject)) {
     DDbgPrint("Device is deleted, so go out here \n");
+	IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
     return STATUS_NO_SUCH_DEVICE;
   }
   status = DiskDeviceControl(DeviceObject, Irp);

@@ -405,6 +405,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
       if (lastError == ERROR_NO_SYSTEM_RESOURCES) {
         DbgPrint("Processing will continue\n");
         status = TRUE;
+        CloseHandle(device);
         Sleep(200);
         continue;
       }
@@ -472,7 +473,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
   }
 
   if (device != INVALID_HANDLE_VALUE)
-	CloseHandle(device);
+    CloseHandle(device);
   free(buffer);
   _endthreadex(result);
 
