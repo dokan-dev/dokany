@@ -82,7 +82,7 @@
 
       if ($env:CONFIGURATION -eq "Coverity") {
         
-        if ("$env:APPVEYOR_PULL_REQUEST_TITLE" -or !($env:APPVEYOR_REPO_BRANCH -eq 'master')) {
+        if ("$env:APPVEYOR_PULL_REQUEST_TITLE") {
           return;
         }
         
