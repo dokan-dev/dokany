@@ -10,7 +10,7 @@ if NOT exist SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe (
 SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
 
 cd ..
-.\build.bat
+call .\build.bat
 Powershell.exe -executionpolicy remotesigned -File sign.ps1
 cd dokan_wix
 
