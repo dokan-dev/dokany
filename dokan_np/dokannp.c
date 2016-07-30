@@ -32,7 +32,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <strsafe.h>
 #include <windows.h>
 #include <winnetwk.h>
-#include <winsvc.h>
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
   const WCHAR *outputString;
