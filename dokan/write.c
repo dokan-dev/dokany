@@ -20,7 +20,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
-#include "fileinfo.h"
 
 VOID SendWriteRequest(HANDLE Handle, PEVENT_INFORMATION EventInfo,
                       ULONG EventLength, PVOID Buffer, ULONG BufferLength) {

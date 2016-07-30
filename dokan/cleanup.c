@@ -20,7 +20,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
-#include "fileinfo.h"
 
 VOID DispatchCleanup(HANDLE Handle, PEVENT_CONTEXT EventContext,
                      PDOKAN_INSTANCE DokanInstance) {

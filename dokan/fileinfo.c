@@ -23,7 +23,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include <ntstatus.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 NTSTATUS
 DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
@@ -427,8 +426,6 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   if (DokanInstance->DokanOperations->GetFileInformation) {
     status = DokanInstance->DokanOperations->GetFileInformation(
         EventContext->Operation.File.FileName, &byHandleFileInfo, &fileInfo);
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
   }
 
   remainingLength = eventInfo->BufferLength;

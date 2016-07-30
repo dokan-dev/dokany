@@ -57,7 +57,7 @@ NTSTATUS
 DokanSetBasicInformation(PEVENT_CONTEXT EventContext, PDOKAN_FILE_INFO FileInfo,
                          PDOKAN_OPERATIONS DokanOperations) {
   FILETIME creation, lastAccess, lastWrite;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status;
 
   PFILE_BASIC_INFORMATION basicInfo = (PFILE_BASIC_INFORMATION)(
       (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);

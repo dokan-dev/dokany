@@ -23,14 +23,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "list.h"
 #include <conio.h>
-#include <locale.h>
-#include <ntstatus.h>
 #include <process.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <tchar.h>
-#include <winioctl.h>
 
 #define DokanMapKernelBit(dest, src, userBit, kernelBit)                       \
   if (((src) & (kernelBit)) == (kernelBit))                                    \
