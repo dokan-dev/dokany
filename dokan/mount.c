@@ -431,6 +431,25 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
+BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
+  HANDLE hToken = NULL;
+  if (OpenProcessToken(GetCurrentProcess(),
+                       TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+    TOKEN_PRIVILEGES tp = {0};
+    if (LookupPrivilegeValue(NULL, lpszSystemName, &tp.Privileges[0].Luid)) {
+      tp.PrivilegeCount = 1;
+      tp.Privileges[0].Attributes = (bEnable ? SE_PRIVILEGE_ENABLED : 0);
+
+      if (AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
+                                (PTOKEN_PRIVILEGES)NULL, NULL)) {
+        return GetLastError() == ERROR_SUCCESS;
+      }
+    }
+    CloseHandle(hToken);
+  }
+  return FALSE;
+}
+
 void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   DWORD receipients;
   DWORD device_event;
@@ -444,6 +463,10 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   }
 
   receipients = BSM_APPLICATIONS;
+  if (EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
+    receipients |= BSM_ALLDESKTOPS;
+  }
+
   device_event = bRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
 
   ZeroMemory(&params, sizeof(params));
@@ -509,9 +532,9 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
       if (SendGlobalReleaseIRP(mountPoint)) {
         if (!IsMountPointDriveLetter(MountPoint)) {
           length = wcslen(mountPoint);
-          if (length+1 < MAX_PATH) {
+          if (length + 1 < MAX_PATH) {
             mountPoint[length] = L'\\';
-            mountPoint[length+1] = L'\0';
+            mountPoint[length + 1] = L'\0';
             // Required to remove reparse point (could also be done through
             // FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
             DeleteVolumeMountPoint(mountPoint);
