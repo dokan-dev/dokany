@@ -273,6 +273,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     }
 
     if (STATUS_ACCESS_DENIED == status &&
+        DokanInstance->DokanOperations->ZwCreateFile &&
         (EventContext->Operation.Create.SecurityContext.DesiredAccess &
          DELETE)) {
       DbgPrint("Delete failed, ask parent folder if we have the right\n");
