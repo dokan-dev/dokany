@@ -420,6 +420,7 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
       if (context->MountId != DokanInstance->MountId) {
         DbgPrint("Dokan Error: Invalid MountId (expected:%d, acctual:%d)\n",
                  DokanInstance->MountId, context->MountId);
+        CloseHandle(device);
         continue;
       }
 
@@ -470,10 +471,11 @@ UINT WINAPI DokanLoop(PDOKAN_INSTANCE DokanInstance) {
     } else {
       DbgPrint("ReturnedLength %d\n", returnedLength);
     }
+
+    CloseHandle(device);
   }
 
-  if (device != INVALID_HANDLE_VALUE)
-    CloseHandle(device);
+  CloseHandle(device);
   free(buffer);
   _endthreadex(result);
 
