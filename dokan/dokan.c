@@ -822,7 +822,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
       PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
       PDOKAN_INSTANCE instance =
           CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
-      DokanRemoveMountPoint(instance->MountPoint);
+      DokanRemoveMountPointEx(instance->MountPoint, FALSE);
       free(instance);
     }
 

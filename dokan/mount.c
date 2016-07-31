@@ -450,7 +450,7 @@ BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
   return FALSE;
 }
 
-void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
+void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved, BOOL safe) {
   DWORD receipients;
   DWORD device_event;
   DEV_BROADCAST_VOLUME params;
@@ -463,7 +463,8 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   }
 
   receipients = BSM_APPLICATIONS;
-  if (EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
+  // Unsafe to call Advapi32.dll during DLL_PROCESS_DETACH
+  if (safe && EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
     receipients |= BSM_ALLDESKTOPS;
   }
 
@@ -484,14 +485,12 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
              GetLastError());
   }
 
-  // Cannot SHChangeNotify during DLL_PROCESS_DETACH cannot
-  // ole32.dll is probably already unload
-  if (bRemoved)
-    return;
-
-  drive[0] = towupper(cLetter);
-  wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
-  SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
+  // Unsafe to call ole32.dll during DLL_PROCESS_DETACH
+  if (safe) {
+    drive[0] = towupper(cLetter);
+    wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
+    SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
+  }
 }
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
@@ -507,13 +506,13 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
       return CreateMountPoint(MountPoint, DeviceName);
     } else {
       // Notify applications / explorer
-      DokanBroadcastLink(MountPoint[0], FALSE);
+      DokanBroadcastLink(MountPoint[0], FALSE, TRUE);
     }
   }
   return TRUE;
 }
 
-BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
+BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe) {
   if (MountPoint != NULL) {
     size_t length = wcslen(MountPoint);
     if (length > 0) {
@@ -541,11 +540,15 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
           }
         } else {
           // Notify applications / explorer
-          DokanBroadcastLink(MountPoint[0], TRUE);
+          DokanBroadcastLink(MountPoint[0], TRUE, Safe);
           return TRUE;
         }
       }
     }
   }
   return FALSE;
+}
+
+BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
+  return DokanRemoveMountPointEx(MountPoint, TRUE);
 }
