@@ -299,6 +299,9 @@ typedef struct _EVENT_CONTEXT {
 #define WRITE_MAX_SIZE                                                         \
   (EVENT_CONTEXT_MAX_SIZE - sizeof(EVENT_CONTEXT) - 256 * sizeof(WCHAR))
 
+#define DOKAN_EVENT_INFO_MIN_BUFFER_SIZE 8
+#define DOKAN_EVENT_INFO_DEFAULT_BUFFER_SIZE (1024 * 4)
+
 typedef struct _EVENT_INFORMATION {
   ULONG SerialNumber;
   NTSTATUS Status;
@@ -329,9 +332,14 @@ typedef struct _EVENT_INFORMATION {
   } Operation;
   ULONG64 Context;
   ULONG BufferLength;
-  UCHAR Buffer[8];
+  UCHAR Buffer[DOKAN_EVENT_INFO_MIN_BUFFER_SIZE];
 
 } EVENT_INFORMATION, *PEVENT_INFORMATION;
+
+// By default we pool EVENT_INFORMATION objects with a 4k buffer (1 page) as most read/writes are this size
+// or smaller
+#define DOKAN_EVENT_INFO_DEFAULT_SIZE (offsetof(EVENT_INFORMATION, Buffer) + DOKAN_EVENT_INFO_DEFAULT_BUFFER_SIZE)
+#define DOKAN_EVENT_INFO_ALLOC_SIZE(bufSize) (offsetof(EVENT_INFORMATION, Buffer) + max(DOKAN_EVENT_INFO_MIN_BUFFER_SIZE, (bufSize)))
 
 #define DOKAN_EVENT_ALTERNATIVE_STREAM_ON 1
 #define DOKAN_EVENT_WRITE_PROTECT 2

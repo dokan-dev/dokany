@@ -22,40 +22,34 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+void DispatchClose(DOKAN_IO_EVENT *EventInfo) {
 
-  UNREFERENCED_PARAMETER(Handle);
+  PDOKAN_INSTANCE dokan = EventInfo->DokanInstance;
+  DOKAN_CLOSE_FILE_EVENT *closeFileEvent = &EventInfo->EventInfo.CloseFile;
 
-  CheckFileName(EventContext->Operation.Close.FileName);
+  CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Close.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(EventInfo, 0);
 
-  eventInfo->Status = STATUS_SUCCESS; // return success at any case
+  EventInfo->EventResult->Status = STATUS_SUCCESS; // return success at any case
+  
+  DbgPrint("###Close file handle = 0x%p, eventID = %04d\n",
+	  EventInfo->DokanOpenInfo,
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
 
-  DbgPrint("###Close %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  if (dokan->DokanOperations->CloseFile) {
 
-  if (DokanInstance->DokanOperations->CloseFile) {
-    // ignore return value
-    DokanInstance->DokanOperations->CloseFile(
-        EventContext->Operation.Close.FileName, &fileInfo);
+	  closeFileEvent->DokanFileInfo = &EventInfo->DokanFileInfo;
+	  closeFileEvent->FileName = EventInfo->KernelInfo.EventContext.Operation.Close.FileName;
+
+	  dokan->DokanOperations->CloseFile(closeFileEvent);
+  }
+
+  if(EventInfo->DokanOpenInfo) {
+
+	  PushFileOpenInfo(EventInfo->DokanOpenInfo);
+	  EventInfo->DokanOpenInfo = NULL;
   }
 
   // do not send it to the driver
-  // SendEventInformation(Handle, eventInfo, length);
-
-  if (openInfo != NULL) {
-    EnterCriticalSection(&DokanInstance->CriticalSection);
-    openInfo->OpenCount--;
-    LeaveCriticalSection(&DokanInstance->CriticalSection);
-  }
-  ReleaseDokanOpenInfo(eventInfo, DokanInstance);
-  free(eventInfo);
-
-  return;
 }

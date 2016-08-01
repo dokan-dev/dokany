@@ -108,8 +108,7 @@ public:
 	{
 		impl_fuse_context *ctx;
 		std::string dirname;
-		PDOKAN_FILE_INFO DokanFileInfo;
-		PFillFindData delegate;
+		PDOKAN_FIND_FILES_EVENT eventInfo;
 		std::vector<std::string> getdir_data; //Used only in walk_directory_getdir()
 	};
 	static int walk_directory(void *buf, const char *name,
@@ -117,8 +116,7 @@ public:
 	static int walk_directory_getdir(fuse_dirh_t hndl, const char *name, int type,ino_t ino);
 
 	///////////////////////////////////Delegates//////////////////////////////
-	int find_files(LPCWSTR file_name, PFillFindData fill_find_data,
-		PDOKAN_FILE_INFO dokan_file_info);
+	int find_files(PDOKAN_FIND_FILES_EVENT EventInfo);
 
 	int open_directory(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
 
@@ -180,9 +178,9 @@ public:
 		LPWSTR file_system_name_buffer, DWORD file_system_name_size, 
 		PDOKAN_FILE_INFO dokan_file_info, LPDWORD volume_flags);
 
-	int mounted(PDOKAN_FILE_INFO DokanFileInfo);
+	int mounted(DOKAN_MOUNTED_INFO *EventInfo);
 
-	int unmounted(PDOKAN_FILE_INFO DokanFileInfo);
+	int unmounted(DOKAN_UNMOUNTED_INFO *EventInfo);
 };
 
 

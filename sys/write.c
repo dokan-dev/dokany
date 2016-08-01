@@ -257,7 +257,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   irp->IoStatus.Information = EventInfo->BufferLength;
 
   if (NT_SUCCESS(status) && EventInfo->BufferLength != 0 &&
-      fileObject->Flags & FO_SYNCHRONOUS_IO && !(irp->Flags & IRP_PAGING_IO)) {
+      (fileObject->Flags & FO_SYNCHRONOUS_IO) && !(irp->Flags & IRP_PAGING_IO)) {
     // update current byte offset only when synchronous IO and not paging IO
     fileObject->CurrentByteOffset.QuadPart =
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart;

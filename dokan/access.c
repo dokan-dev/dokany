@@ -22,55 +22,51 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
+HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
+  
+  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)FileInfo;
   BOOL status;
   ULONG returnedLength;
-  PDOKAN_INSTANCE instance;
-  PDOKAN_OPEN_INFO openInfo;
-  PEVENT_CONTEXT eventContext;
   PEVENT_INFORMATION eventInfo;
   HANDLE handle = INVALID_HANDLE_VALUE;
   ULONG eventInfoSize;
   WCHAR rawDeviceName[MAX_PATH];
 
-  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
-  if (openInfo == NULL) {
+  if (ioEvent->DokanOpenInfo == NULL) {
     return INVALID_HANDLE_VALUE;
   }
 
-  eventContext = openInfo->EventContext;
-  if (eventContext == NULL) {
+  if (ioEvent->DokanInstance == NULL) {
     return INVALID_HANDLE_VALUE;
   }
 
-  instance = openInfo->DokanInstance;
-  if (instance == NULL) {
-    return INVALID_HANDLE_VALUE;
-  }
-
-  if (eventContext->MajorFunction != IRP_MJ_CREATE) {
+  if (ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_CREATE) {
     return INVALID_HANDLE_VALUE;
   }
 
   eventInfoSize = sizeof(EVENT_INFORMATION);
   eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+
   if (eventInfo == NULL) {
     return INVALID_HANDLE_VALUE;
   }
 
   RtlZeroMemory(eventInfo, eventInfoSize);
 
-  eventInfo->SerialNumber = eventContext->SerialNumber;
+  eventInfo->SerialNumber = ioEvent->KernelInfo.EventContext.SerialNumber;
 
   status = SendToDevice(
-      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+      GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
       IOCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
       eventInfoSize, &returnedLength);
+
   if (status) {
     handle = eventInfo->Operation.AccessToken.Handle;
   } else {
     DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
   }
+
   free(eventInfo);
+
   return handle;
 }

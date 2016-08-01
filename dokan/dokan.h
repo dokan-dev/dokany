@@ -66,10 +66,11 @@ extern "C" {
 #define DOKAN_OPTION_ASYNC_IO				(1 << 9)	// use asynchronous IO
 #define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 10)	// Dokan uses a single thread. If DOKAN_OPTION_ASYNC_IO is specified the thread waits until the async job is over before starting another.
 
+typedef void *DOKAN_HANDLE, **PDOKAN_HANDLE;
+
 typedef struct _DOKAN_OPTIONS {
   USHORT Version;        // Supported Dokan Version, ex. "530" (Dokan ver 0.5.3)
-  USHORT ThreadCount;    // number of threads to be
-                         // used internally by Dokan library
+  USHORT ThreadCount;    // Unused
   ULONG Options;         // combination of DOKAN_OPTIONS_*
   ULONG64 GlobalContext; // FileSystem can store anything here
   LPCWSTR MountPoint; //  mount point "M:\" (drive letter) or "C:\mount\dokan"
@@ -81,34 +82,191 @@ typedef struct _DOKAN_OPTIONS {
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 typedef struct _DOKAN_FILE_INFO {
-  ULONG64 Context;             // FileSystem can store anything here
-  ULONG64 DokanContext;        // Used internally, never modify
-  PDOKAN_OPTIONS DokanOptions; // A pointer to DOKAN_OPTIONS
-                               // which was passed to DokanMain.
-  ULONG ProcessId;     // process id for the thread that originally requested a
-                       // given I/O operation
-  UCHAR IsDirectory;   // requesting a directory file
-  UCHAR DeleteOnClose; // Delete on when "cleanup" is called
-  UCHAR PagingIo;      // Read or write is paging IO.
-  UCHAR SynchronousIo; // Read or write is synchronous IO.
-  UCHAR Nocache;
-  UCHAR WriteToEndOfFile; //  If true, write to the current end of file instead
-                          //  of Offset parameter.
+  ULONG64						Context;						// FileSystem can store anything here
+  PVOID							DokanContext;					// For internal use only
+  PDOKAN_OPTIONS				DokanOptions;					// A pointer to DOKAN_OPTIONS
+																// which was passed to DokanMain.
+  BOOL							IsDirectory;					// requesting a directory file
+  ULONG							ProcessId;						// process id for the thread that originally requested a
+																// given I/O operation
+  UCHAR							DeleteOnClose;					// Delete on when "cleanup" is called
+  UCHAR							PagingIo;						// Read or write is paging IO.
+  UCHAR							SynchronousIo;					// Read or write is synchronous IO.
+  UCHAR							Nocache;
+  UCHAR							WriteToEndOfFile;				//  If true, write to the current end of file instead
+																//  of Offset parameter.
 
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
+
+typedef struct _DOKAN_MOUNTED_INFO {
+  PDOKAN_OPTIONS				DokanOptions;					// A pointer to DOKAN_OPTIONS
+  PTP_POOL						ThreadPool;						// The thread pool associated with the Dokan context
+} DOKAN_MOUNTED_INFO, *PDOKAN_MOUNTED_INFO;
+
+typedef struct _DOKAN_UNMOUNTED_INFO {
+	PDOKAN_OPTIONS				DokanOptions;					// A pointer to DOKAN_OPTIONS
+} DOKAN_UNMOUNTED_INFO, *PDOKAN_UNMOUNTED_INFO;
+
+// Forward declarations
+struct _DOKAN_FIND_FILES_EVENT;
+typedef struct _DOKAN_FIND_FILES_EVENT DOKAN_FIND_FILES_EVENT, *PDOKAN_FIND_FILES_EVENT;
+
+struct _DOKAN_FIND_FILES_PATTERN_EVENT;
+typedef struct _DOKAN_FIND_FILES_PATTERN_EVENT DOKAN_FIND_FILES_PATTERN_EVENT, *PDOKAN_FIND_FILES_PATTERN_EVENT;
+
+struct _DOKAN_FIND_STREAMS_EVENT;
+typedef struct _DOKAN_FIND_STREAMS_EVENT DOKAN_FIND_STREAMS_EVENT, *PDOKAN_FIND_STREAMS_EVENT;
 
 // FillFindData
 //   is used to add an entry in FindFiles
 //   returns 1 if buffer is full, otherwise 0
 //   (currently it never returns 1)
-typedef int(WINAPI *PFillFindData)(PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
+typedef int (WINAPI *PFillFindData)(PDOKAN_FIND_FILES_EVENT, PWIN32_FIND_DATAW);
+
+// FillFindDataWithPattern
+//   is used to add an entry in FindFilesWithPattern
+//   returns 1 if buffer is full, otherwise 0
+//   (currently it never returns 1)
+typedef int (WINAPI *PFillFindDataWithPattern)(PDOKAN_FIND_FILES_PATTERN_EVENT, PWIN32_FIND_DATAW);
 
 // FillFindStreamData
 //   is used to add an entry in FindStreams
 //   returns 1 if buffer is full, otherwise 0
-//   (currently it never returns 1)
-typedef int(WINAPI *PFillFindStreamData)(PWIN32_FIND_STREAM_DATA,
-                                         PDOKAN_FILE_INFO);
+typedef int (WINAPI *PFillFindStreamData)(PDOKAN_FIND_STREAMS_EVENT, PWIN32_FIND_STREAM_DATA);
+
+typedef struct _DOKAN_CREATE_FILE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LPCWSTR							OriginalFileName;
+	DOKAN_IO_SECURITY_CONTEXT		SecurityContext; // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
+
+	ACCESS_MASK						DesiredAccess;
+	ULONG							FileAttributes;
+	ULONG							ShareAccess;
+	ULONG							CreateDisposition;
+	ULONG							CreateOptions;
+} DOKAN_CREATE_FILE_EVENT, *PDOKAN_CREATE_FILE_EVENT;
+
+typedef struct _DOKAN_CLEANUP_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+} DOKAN_CLEANUP_EVENT, *PDOKAN_CLEANUP_EVENT;
+
+typedef DOKAN_CLEANUP_EVENT DOKAN_CLOSE_FILE_EVENT, *PDOKAN_CLOSE_FILE_EVENT;
+typedef DOKAN_CLEANUP_EVENT DOKAN_FLUSH_BUFFERS_EVENT, *PDOKAN_FLUSH_BUFFERS_EVENT;
+typedef DOKAN_CLEANUP_EVENT DOKAN_CAN_DELETE_FILE_EVENT, *PDOKAN_CAN_DELETE_FILE_EVENT;
+
+typedef struct _DOKAN_READ_FILE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LPVOID							Buffer;
+	LONGLONG						Offset;
+	DWORD							NumberOfBytesToRead;
+	DWORD							NumberOfBytesRead;
+} DOKAN_READ_FILE_EVENT, *PDOKAN_READ_FILE_EVENT;
+
+typedef struct _DOKAN_WRITE_FILE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LPCVOID							Buffer;
+	LONGLONG						Offset;
+	DWORD							NumberOfBytesToWrite;
+	DWORD							NumberOfBytesWritten;
+} DOKAN_WRITE_FILE_EVENT, *PDOKAN_WRITE_FILE_EVENT;
+
+typedef struct _DOKAN_GET_FILE_INFO_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	BY_HANDLE_FILE_INFORMATION		FileHandleInfo;
+} DOKAN_GET_FILE_INFO_EVENT, *PDOKAN_GET_FILE_INFO_EVENT;
+
+typedef struct _DOKAN_FIND_FILES_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							PathName;
+	PFillFindData					FillFindData;     // call this function with PWIN32_FIND_DATAW
+} DOKAN_FIND_FILES_EVENT, *PDOKAN_FIND_FILES_EVENT;
+
+typedef struct _DOKAN_FIND_FILES_PATTERN_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							PathName;
+	LPCWSTR							SearchPattern;
+	PFillFindDataWithPattern		FillFindData;     // call this function with PWIN32_FIND_DATAW
+} DOKAN_FIND_FILES_PATTERN_EVENT, *PDOKAN_FIND_FILES_PATTERN_EVENT;
+
+typedef struct _DOKAN_SET_FILE_BASIC_INFO_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	FILE_BASIC_INFORMATION			*Info;
+} DOKAN_SET_FILE_BASIC_INFO_EVENT, *PDOKAN_SET_FILE_BASIC_INFO_EVENT;
+
+typedef struct _DOKAN_MOVE_FILE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LPCWSTR							NewFileName;
+	BOOL							ReplaceIfExists;
+} DOKAN_MOVE_FILE_EVENT, *PDOKAN_MOVE_FILE_EVENT;
+
+typedef struct _DOKAN_SET_EOF_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LONGLONG						Length;
+} DOKAN_SET_EOF_EVENT, *PDOKAN_SET_EOF_EVENT;
+
+typedef DOKAN_SET_EOF_EVENT DOKAN_SET_ALLOCATION_SIZE_EVENT, *PDOKAN_SET_ALLOCATION_SIZE_EVENT;
+
+typedef struct _DOKAN_LOCK_FILE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPCWSTR							FileName;
+	LONGLONG						ByteOffset;
+	LONGLONG						Length;
+	ULONG							Key;
+} DOKAN_LOCK_FILE_EVENT, *PDOKAN_LOCK_FILE_EVENT;
+
+typedef DOKAN_LOCK_FILE_EVENT DOKAN_UNLOCK_FILE_EVENT, *PDOKAN_UNLOCK_FILE_EVENT;
+
+// see FILE_FS_FULL_SIZE_INFORMATION for more information
+// https://msdn.microsoft.com/en-us/library/windows/hardware/ff540267(v=vs.85).aspx
+typedef struct _DOKAN_GET_DISK_FREE_SPACE_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	ULONGLONG						FreeBytesAvailable;
+	ULONGLONG						TotalNumberOfBytes;
+	ULONGLONG						TotalNumberOfFreeBytes;
+} DOKAN_GET_DISK_FREE_SPACE_EVENT, *PDOKAN_GET_DISK_FREE_SPACE_EVENT;
+
+typedef struct _DOKAN_GET_VOLUME_INFO_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	PFILE_FS_VOLUME_INFORMATION		VolumeInfo;
+	DWORD							MaxLabelLengthInChars;
+} DOKAN_GET_VOLUME_INFO_EVENT, *PDOKAN_GET_VOLUME_INFO_EVENT;
+
+typedef struct _DOKAN_GET_VOLUME_ATTRIBUTES_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	PFILE_FS_ATTRIBUTE_INFORMATION	Attributes;
+	DWORD							MaxFileSystemNameLengthInChars;
+} DOKAN_GET_VOLUME_ATTRIBUTES_EVENT, *PDOKAN_GET_VOLUME_ATTRIBUTES_EVENT;
+
+typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPWSTR							FileName;
+	PSECURITY_INFORMATION			SecurityInformation; // A pointer to SECURITY_INFORMATION value being requested
+	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
+	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
+	ULONG							LengthNeeded;
+} DOKAN_GET_FILE_SECURITY_EVENT, *PDOKAN_GET_FILE_SECURITY_EVENT;
+
+typedef struct _DOKAN_SET_FILE_SECURITY_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPWSTR							FileName;
+	PSECURITY_INFORMATION			SecurityInformation;
+	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
+	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
+} DOKAN_SET_FILE_SECURITY_EVENT, *PDOKAN_SET_FILE_SECURITY_EVENT;
+
+typedef struct _DOKAN_FIND_STREAMS_EVENT {
+	PDOKAN_FILE_INFO				DokanFileInfo;
+	LPWSTR							FileName;
+	PFillFindStreamData				FillFindStreamData; // call this function with PWIN32_FIND_STREAM_DATA
+} DOKAN_FIND_STREAMS_EVENT, *PDOKAN_FIND_STREAMS_EVENT;
 
 typedef struct _DOKAN_OPERATIONS {
 
@@ -127,80 +285,35 @@ typedef struct _DOKAN_OPERATIONS {
   //   See ZwCreateFile()
   //   https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx
   //   for more information about the parameters of this callback.
-  NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)
-  (LPCWSTR,                    // FileName
-   PDOKAN_IO_SECURITY_CONTEXT, // SecurityContext, see
-                               // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
-   ACCESS_MASK,                // DesiredAccess
-   ULONG,                      // FileAttributes
-   ULONG,                      // ShareAccess
-   ULONG,                      // CreateDisposition
-   ULONG,                      // CreateOptions
-   PDOKAN_FILE_INFO);
-
+NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(_In_ DOKAN_CREATE_FILE_EVENT *EventInfo);
+  
   // When FileInfo->DeleteOnClose is true, you must delete the file in Cleanup.
   // Refer to comment at DeleteFile definition below in this file for
   // explanation.
-  void(DOKAN_CALLBACK *Cleanup)(LPCWSTR, // FileName
-                                PDOKAN_FILE_INFO);
+  void(DOKAN_CALLBACK *Cleanup)(_In_ DOKAN_CLEANUP_EVENT *EventInfo);
 
-  void(DOKAN_CALLBACK *CloseFile)(LPCWSTR, // FileName
-                                  PDOKAN_FILE_INFO);
+  void(DOKAN_CALLBACK *CloseFile)(_In_ DOKAN_CLOSE_FILE_EVENT *EventInfo);
 
   // ReadFile and WriteFile can be called from multiple threads in
   // the same time with the same DOKAN_FILE_INFO.Context if a OVERLAPPED is
   // requested.
-  NTSTATUS(DOKAN_CALLBACK *ReadFile)
-  (LPCWSTR,  // FileName
-   LPVOID,   // Buffer
-   DWORD,    // NumberOfBytesToRead
-   LPDWORD,  // NumberOfBytesRead
-   LONGLONG, // Offset
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *ReadFile)(_In_ DOKAN_READ_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *WriteFile)
-  (LPCWSTR,  // FileName
-   LPCVOID,  // Buffer
-   DWORD,    // NumberOfBytesToWrite
-   LPDWORD,  // NumberOfBytesWritten
-   LONGLONG, // Offset
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *WriteFile)(_In_ DOKAN_WRITE_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)
-  (LPCWSTR, // FileName
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)(_In_ DOKAN_FLUSH_BUFFERS_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)
-  (LPCWSTR,                      // FileName
-   LPBY_HANDLE_FILE_INFORMATION, // Buffer
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)(_In_ DOKAN_GET_FILE_INFO_EVENT *EventInfo);
 
   // FindFilesWithPattern is checking first. If it is not implemented or
   // returns STATUS_NOT_IMPLEMENTED, then FindFiles is called, if implemented.
-  NTSTATUS(DOKAN_CALLBACK *FindFiles)
-  (LPCWSTR,           // PathName
-   PFillFindData,     // call this function with PWIN32_FIND_DATAW
-   PDOKAN_FILE_INFO); //  (see PFillFindData definition)
+  NTSTATUS(DOKAN_CALLBACK *FindFiles)(_In_ DOKAN_FIND_FILES_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)
-  (LPCWSTR,       // PathName
-   LPCWSTR,       // SearchPattern
-   PFillFindData, // call this function with PWIN32_FIND_DATAW
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)(_In_ DOKAN_FIND_FILES_PATTERN_EVENT *EventInfo);
 
   // SetFileAttributes and SetFileTime are called only if both of them
   // are implemented.
-  NTSTATUS(DOKAN_CALLBACK *SetFileAttributes)
-  (LPCWSTR, // FileName
-   DWORD,   // FileAttributes
-   PDOKAN_FILE_INFO);
-
-  NTSTATUS(DOKAN_CALLBACK *SetFileTime)
-  (LPCWSTR,          // FileName
-   CONST FILETIME *, // CreationTime
-   CONST FILETIME *, // LastAccessTime
-   CONST FILETIME *, // LastWriteTime
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *SetFileBasicInformation)(_In_ DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo);
 
   // You should not delete the file on DeleteFile or DeleteDirectory, but
   // instead
@@ -212,53 +325,25 @@ typedef struct _DOKAN_OPERATIONS {
   // When you return STATUS_SUCCESS, you get a Cleanup call afterwards with
   // FileInfo->DeleteOnClose set to TRUE and only then you have to actually
   // delete the file being closed.
-  NTSTATUS(DOKAN_CALLBACK *DeleteFile)
-  (LPCWSTR, // FileName
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *CanDeleteFile)(_In_ DOKAN_CAN_DELETE_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *DeleteDirectory)
-  (LPCWSTR, // FileName
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *MoveFileW)(_In_ DOKAN_MOVE_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *MoveFile)
-  (LPCWSTR, // ExistingFileName
-   LPCWSTR, // NewFileName
-   BOOL,    // ReplaceExisiting
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)(_In_ DOKAN_SET_EOF_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)
-  (LPCWSTR,  // FileName
-   LONGLONG, // Length
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)(_In_ DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)
-  (LPCWSTR,  // FileName
-   LONGLONG, // Length
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *LockFile)(_In_ DOKAN_LOCK_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *LockFile)
-  (LPCWSTR,  // FileName
-   LONGLONG, // ByteOffset
-   LONGLONG, // Length
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *UnlockFile)(_In_ DOKAN_UNLOCK_FILE_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *UnlockFile)
-  (LPCWSTR,  // FileName
-   LONGLONG, // ByteOffset
-   LONGLONG, // Length
-   PDOKAN_FILE_INFO);
-
-  // Neither GetDiskFreeSpace nor GetVolumeInformation
+  // Neither GetVolumeFreeSpace nor GetVolumeInformation
   // save the DokanFileContext->Context.
   // Before these methods are called, CreateFile may not be called.
   // (ditto CloseFile and Cleanup)
 
   // see Win32 API GetDiskFreeSpaceEx
-  NTSTATUS(DOKAN_CALLBACK *GetDiskFreeSpace)
-  (PULONGLONG, // FreeBytesAvailable
-   PULONGLONG, // TotalNumberOfBytes
-   PULONGLONG, // TotalNumberOfFreeBytes
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *GetVolumeFreeSpace)(_In_ DOKAN_GET_DISK_FREE_SPACE_EVENT *EventInfo);
 
   // Note:
   // FILE_READ_ONLY_VOLUME is automatically added to the
@@ -266,44 +351,23 @@ typedef struct _DOKAN_OPERATIONS {
   // specified in DOKAN_OPTIONS when the volume was mounted.
 
   // see Win32 API GetVolumeInformation
-  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformation)
-  (LPWSTR,  // VolumeNameBuffer
-   DWORD,   // VolumeNameSize in num of chars
-   LPDWORD, // VolumeSerialNumber
-   LPDWORD, // MaximumComponentLength in num of chars
-   LPDWORD, // FileSystemFlags
-   LPWSTR,  // FileSystemNameBuffer
-   DWORD,   // FileSystemNameSize in num of chars
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformationW)(_In_ DOKAN_GET_VOLUME_INFO_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *Mounted)(PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *GetVolumeAttributes)(_In_ DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *Unmounted)(PDOKAN_FILE_INFO);
+  void(DOKAN_CALLBACK *Mounted)(DOKAN_MOUNTED_INFO *EventInfo);
+
+  void(DOKAN_CALLBACK *Unmounted)(DOKAN_UNMOUNTED_INFO *EventInfo);
 
   // Suported since 0.6.0. You must specify the version at
   // DOKAN_OPTIONS.Version.
-  NTSTATUS(DOKAN_CALLBACK *GetFileSecurity)
-  (LPCWSTR,               // FileName
-   PSECURITY_INFORMATION, // A pointer to SECURITY_INFORMATION value being
-                          // requested
-   PSECURITY_DESCRIPTOR, // A pointer to SECURITY_DESCRIPTOR buffer to be filled
-   ULONG,                // length of Security descriptor buffer
-   PULONG,               // LengthNeeded
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *GetFileSecurityW)(_In_ DOKAN_GET_FILE_SECURITY_EVENT *EventInfo);
 
-  NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)
-  (LPCWSTR, // FileName
-   PSECURITY_INFORMATION,
-   PSECURITY_DESCRIPTOR, // SecurityDescriptor
-   ULONG,                // SecurityDescriptor length
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *SetFileSecurityW)(_In_ DOKAN_SET_FILE_SECURITY_EVENT *EventInfo);
 
   // Supported since 0.8.0. You must specify the version at
   // DOKAN_OPTIONS.Version.
-  NTSTATUS(DOKAN_CALLBACK *FindStreams)
-  (LPCWSTR,             // FileName
-   PFillFindStreamData, // call this function with PWIN32_FIND_STREAM_DATA
-   PDOKAN_FILE_INFO);   //  (see PFillFindStreamData definition)
+  NTSTATUS(DOKAN_CALLBACK *FindStreams)(_In_ DOKAN_FIND_STREAMS_EVENT *EventInfo);
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
@@ -325,8 +389,25 @@ typedef struct _DOKAN_CONTROL {
 #define DOKAN_MOUNT_POINT_ERROR -6 /* Mount point is invalid */
 #define DOKAN_VERSION_ERROR -7     /* Requested an incompatible version */
 
+#define DOKAN_SUCCEEDED(x) ((x) == DOKAN_SUCCESS)
+#define DOKAN_FAILED(x) ((x) != DOKAN_SUCCESS)
+
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations);
+
+int DOKANAPI DokanCreateFileSystem(
+	_In_ PDOKAN_OPTIONS DokanOptions,
+	_In_ PDOKAN_OPERATIONS DokanOperations,
+	_Out_ DOKAN_HANDLE *DokanInstance);
+
+BOOL DOKANAPI DokanIsFileSystemRunning(_In_ DOKAN_HANDLE DokanInstance);
+
+// See WaitForSingleObject() for a description of return values
+DWORD DOKANAPI DokanWaitForFileSystemClosed(
+	DOKAN_HANDLE DokanInstance,
+	DWORD dwMilliseconds);
+
+void DOKANAPI DokanCloseHandle(DOKAN_HANDLE DokanInstance);
 
 BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 
@@ -352,7 +433,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
 // This method needs be called in CreateFile, OpenDirectory or CreateDirectly
 // callback.
 // The caller must call CloseHandle for the returned handle.
-HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
+HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT DokanFileInfo);
 
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead);
@@ -363,6 +444,28 @@ VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
 
 // Translate Win32 Error code to the NtStatus code's corresponding
 NTSTATUS DOKANAPI DokanNtStatusFromWin32(DWORD Error);
+
+// Async IO completion functions
+void DOKANAPI EndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchRead(DOKAN_READ_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchFindFilesWithPattern(DOKAN_FIND_FILES_PATTERN_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchGetVolumeInfo(DOKAN_GET_VOLUME_INFO_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchGetVolumeFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchUnlockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchFlush(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus);
+void DOKANAPI EndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus);
 
 #ifdef __cplusplus
 }
