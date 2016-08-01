@@ -703,6 +703,61 @@ MirrorFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo) {
   return STATUS_SUCCESS;
 }
 
+NTSTATUS
+MirrorCanDeleteDirectory(LPWSTR filePath) {
+
+	HANDLE hFind;
+	WIN32_FIND_DATAW findData;
+	size_t fileLen;
+
+	DbgPrint(L"CanDeleteDirectory %s\n", filePath);
+
+	fileLen = wcslen(filePath);
+
+	if(filePath[fileLen - 1] != L'\\') {
+
+		filePath[fileLen++] = L'\\';
+	}
+
+	filePath[fileLen] = L'*';
+	filePath[fileLen + 1] = L'\0';
+
+	hFind = FindFirstFile(filePath, &findData);
+
+	if(hFind == INVALID_HANDLE_VALUE) {
+
+		DWORD error = GetLastError();
+		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
+
+		return DokanNtStatusFromWin32(error);
+	}
+
+	do {
+
+		if(wcscmp(findData.cFileName, L"..") != 0 &&
+			wcscmp(findData.cFileName, L".") != 0) {
+
+			FindClose(hFind);
+			DbgPrint(L"\tDirectory is not empty: %s\n", findData.cFileName);
+
+			return STATUS_DIRECTORY_NOT_EMPTY;
+		}
+
+	} while(FindNextFile(hFind, &findData) != 0);
+
+	DWORD error = GetLastError();
+
+	if(error != ERROR_NO_MORE_FILES) {
+
+		DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
+		return DokanNtStatusFromWin32(error);
+	}
+
+	FindClose(hFind);
+
+	return STATUS_SUCCESS;
+}
+
 static NTSTATUS DOKAN_CALLBACK
 MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
 
@@ -710,14 +765,18 @@ MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
   // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
-  DbgPrint(L"DeleteFile %s\n", filePath);
+  DbgPrint(L"CanDeleteFile %s\n", filePath);
+
+  if(EventInfo->DokanFileInfo->IsDirectory) {
+
+	  return MirrorCanDeleteDirectory(filePath);
+  }
 
   DWORD dwAttrib = GetFileAttributes(filePath);
 
-  if(dwAttrib != INVALID_FILE_ATTRIBUTES &&
-	  (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+  if(dwAttrib == INVALID_FILE_ATTRIBUTES)
   {
-	  return STATUS_ACCESS_DENIED;
+	  return DokanNtStatusFromWin32(GetLastError());
   }
 
   return STATUS_SUCCESS;
