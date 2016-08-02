@@ -51,7 +51,7 @@ void DokanFsVolumeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if (EventInfo->KernelInfo.EventContext.Operation.Volume.BufferLength < sizeof(FILE_FS_VOLUME_INFORMATION)) {
     
-	  EndDispatchGetVolumeInfo(getVolumeInfo, STATUS_BUFFER_OVERFLOW);
+	  DokanEndDispatchGetVolumeInfo(getVolumeInfo, STATUS_BUFFER_OVERFLOW);
 
 	  return;
   }
@@ -68,11 +68,11 @@ void DokanFsVolumeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if(status != STATUS_PENDING) {
 
-	  EndDispatchGetVolumeInfo(getVolumeInfo, status);
+	  DokanEndDispatchGetVolumeInfo(getVolumeInfo, status);
   }
 }
 
-void DOKANAPI EndDispatchGetVolumeInfo(DOKAN_GET_VOLUME_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchGetVolumeInfo(DOKAN_GET_VOLUME_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -83,7 +83,7 @@ void DOKANAPI EndDispatchGetVolumeInfo(DOKAN_GET_VOLUME_INFO_EVENT *EventInfo, N
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchGetVolumeInfo() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchGetVolumeInfo() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
@@ -96,7 +96,7 @@ void DOKANAPI EndDispatchGetVolumeInfo(DOKAN_GET_VOLUME_INFO_EVENT *EventInfo, N
 
 		if(volumeInfo->VolumeLabelLength > EventInfo->MaxLabelLengthInChars) {
 
-			DbgPrint("Dokan Error: EndDispatchGetVolumeInfo() failed because VolumeLabelLength is greater than MaxLabelLengthInChars.\n");
+			DbgPrint("Dokan Error: DokanEndDispatchGetVolumeInfo() failed because VolumeLabelLength is greater than MaxLabelLengthInChars.\n");
 			ResultStatus = STATUS_BUFFER_OVERFLOW;
 		}
 		else {
@@ -123,7 +123,7 @@ void DokanFsSizeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if (EventInfo->KernelInfo.EventContext.Operation.Volume.BufferLength < sizeof(FILE_FS_SIZE_INFORMATION)) {
 
-	  EndDispatchGetVolumeFreeSpace(getFreeSpace, STATUS_BUFFER_OVERFLOW);
+	  DokanEndDispatchGetVolumeFreeSpace(getFreeSpace, STATUS_BUFFER_OVERFLOW);
 	  return;
   }
 
@@ -136,11 +136,11 @@ void DokanFsSizeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if (status != STATUS_PENDING) {
 
-	  EndDispatchGetVolumeFreeSpace(getFreeSpace, status);
+	  DokanEndDispatchGetVolumeFreeSpace(getFreeSpace, status);
   }
 }
 
-void DOKANAPI EndDispatchGetVolumeFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchGetVolumeFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -150,7 +150,7 @@ void DOKANAPI EndDispatchGetVolumeFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *Eve
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchGetVolumeInfo() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchGetVolumeInfo() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
@@ -200,7 +200,7 @@ void DOKANAPI EndDispatchGetVolumeFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *Eve
 		}
 		else {
 
-			DbgPrint("Dokan Error: EndDispatchGetVolumeFreeSpace() received an invalid FsInformationClass: 0x%x\n",
+			DbgPrint("Dokan Error: DokanEndDispatchGetVolumeFreeSpace() received an invalid FsInformationClass: 0x%x\n",
 				ioEvent->KernelInfo.EventContext.Operation.Volume.FsInformationClass);
 
 			ResultStatus = STATUS_INTERNAL_ERROR;
@@ -219,7 +219,7 @@ void DokanFsAttributeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if (EventInfo->KernelInfo.EventContext.Operation.Volume.BufferLength < sizeof(FILE_FS_ATTRIBUTE_INFORMATION)) {
 
-	  EndDispatchGetVolumeAttributes(getAttributes, STATUS_BUFFER_OVERFLOW);
+	  DokanEndDispatchGetVolumeAttributes(getAttributes, STATUS_BUFFER_OVERFLOW);
 	  return;
   }
 
@@ -235,11 +235,11 @@ void DokanFsAttributeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   if (status != STATUS_PENDING) {
     
-	  EndDispatchGetVolumeAttributes(getAttributes, status);
+	  DokanEndDispatchGetVolumeAttributes(getAttributes, status);
   }
 }
 
-void DOKANAPI EndDispatchGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -248,7 +248,7 @@ void DOKANAPI EndDispatchGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchGetVolumeAttributes() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchGetVolumeAttributes() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
@@ -269,7 +269,7 @@ void DOKANAPI EndDispatchGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *
 
 		if(freeSpaceInfo->FileSystemNameLength > EventInfo->MaxFileSystemNameLengthInChars) {
 
-			DbgPrint("Dokan Error: EndDispatchGetVolumeAttributes() failed because FileSystemNameLength is greater than MaxFileSystemNameLengthInChars.\n");
+			DbgPrint("Dokan Error: DokanEndDispatchGetVolumeAttributes() failed because FileSystemNameLength is greater than MaxFileSystemNameLengthInChars.\n");
 
 			ResultStatus = STATUS_BUFFER_OVERFLOW;
 		}
@@ -294,7 +294,7 @@ void DokanFsFullSizeInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(EventInfo->KernelInfo.EventContext.Operation.Volume.BufferLength < sizeof(FILE_FS_FULL_SIZE_INFORMATION)) {
 
-		EndDispatchGetVolumeFreeSpace(getFreeSpace, STATUS_BUFFER_OVERFLOW);
+		DokanEndDispatchGetVolumeFreeSpace(getFreeSpace, STATUS_BUFFER_OVERFLOW);
 		return;
 	}
 
@@ -307,7 +307,7 @@ void DokanFsFullSizeInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchGetVolumeFreeSpace(getFreeSpace, status);
+		DokanEndDispatchGetVolumeFreeSpace(getFreeSpace, status);
 	}
 }
 

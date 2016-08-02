@@ -55,11 +55,11 @@ void BeginDispatchQuerySecurity(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchGetFileSecurity(getFileSecurity, status);
+		DokanEndDispatchGetFileSecurity(getFileSecurity, status);
 	}
 }
 
-void DOKANAPI EndDispatchGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -67,7 +67,7 @@ void DOKANAPI EndDispatchGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInf
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchGetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchGetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
@@ -120,11 +120,11 @@ void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchSetFileSecurity(setFileSecurity, status);
+		DokanEndDispatchSetFileSecurity(setFileSecurity, status);
 	}
 }
 
-void DOKANAPI EndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -132,7 +132,7 @@ void DOKANAPI EndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInf
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchSetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchSetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 

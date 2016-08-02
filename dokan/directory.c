@@ -680,7 +680,7 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
 
 		  if(status != STATUS_PENDING) {
 
-			  EndDispatchFindFiles(findFiles, status);
+			  DokanEndDispatchFindFiles(findFiles, status);
 		  }
 	  }
 	  else if(dokan->DokanOperations->FindFilesWithPattern) {
@@ -696,7 +696,7 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
 
 		  if(status != STATUS_PENDING) {
 
-			  EndDispatchFindFilesWithPattern(findFilesPattern, status);
+			  DokanEndDispatchFindFilesWithPattern(findFilesPattern, status);
 		  }
 	  }
 	  else {
@@ -849,12 +849,12 @@ BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, // matching pattern
   return !Expression[ei] && !Name[ni] ? TRUE : FALSE;
 }
 
-void DOKANAPI EndDispatchFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndFindFilesCommon((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }
 
-void DOKANAPI EndDispatchFindFilesWithPattern(DOKAN_FIND_FILES_PATTERN_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchFindFilesWithPattern(DOKAN_FIND_FILES_PATTERN_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndFindFilesCommon((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }

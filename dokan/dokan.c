@@ -1250,7 +1250,7 @@ void ProcessWriteSizeEvent(
 	if(IoResult != NO_ERROR) {
 
 		// This will push the input buffer so we don't need to manually do that
-		EndDispatchWrite(&inputIoEvent->EventInfo.WriteFile, STATUS_INTERNAL_ERROR);
+		DokanEndDispatchWrite(&inputIoEvent->EventInfo.WriteFile, STATUS_INTERNAL_ERROR);
 
 		PushIoEventBuffer(outputIoEvent);
 
@@ -1840,4 +1840,17 @@ VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
       break;
     }
   }
+}
+
+DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
+
+	PTP_POOL threadPool;
+
+	EnterCriticalSection(&g_InstanceCriticalSection);
+
+	threadPool = g_ThreadPool;
+
+	LeaveCriticalSection(&g_InstanceCriticalSection);
+
+	return threadPool;
 }

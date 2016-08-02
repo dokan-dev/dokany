@@ -50,18 +50,18 @@ void BeginDispatchFlush(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchFlush(flushBuffers, status);
+		DokanEndDispatchFlush(flushBuffers, status);
 	}
 }
 
-void DOKANAPI EndDispatchFlush(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchFlush(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchFlush() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchFlush() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 

@@ -108,12 +108,12 @@ void BeginDispatchLock(DOKAN_IO_EVENT *EventInfo) {
   }
 }
 
-void DOKANAPI EndDispatchLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndDispatchLockCommon((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }
 
-void DOKANAPI EndDispatchUnlockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchUnlockFile(DOKAN_LOCK_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndDispatchLockCommon((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }

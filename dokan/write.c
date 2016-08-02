@@ -111,7 +111,7 @@ void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
 
 	  if((status = SendWriteRequest(EventInfo)) != STATUS_SUCCESS) {
 
-		  EndDispatchWrite(writeFileEvent, status);
+		  DokanEndDispatchWrite(writeFileEvent, status);
 	  }
 
 	  return;
@@ -142,11 +142,11 @@ void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
 
   if(status != STATUS_PENDING) {
 
-	  EndDispatchWrite(writeFileEvent, status);
+	  DokanEndDispatchWrite(writeFileEvent, status);
   }
 }
 
-void DOKANAPI EndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result;
@@ -156,7 +156,7 @@ void DOKANAPI EndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS Resul
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchWrite() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchWrite() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 

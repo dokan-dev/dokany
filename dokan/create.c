@@ -102,7 +102,7 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
   DbgPrint("###Create file handle = 0x%p, eventID = %04d\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  currentEventId);
 
   // The low 24 bits of this member correspond to the CreateOptions parameter
   createFileEvent->CreateOptions = EventInfo->KernelInfo.EventContext.Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
@@ -115,7 +115,7 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
   if((createFileEvent->CreateOptions & FILE_NON_DIRECTORY_FILE) && (createFileEvent->CreateOptions & FILE_DIRECTORY_FILE)) {
 	  
-	  EndDispatchCreate(createFileEvent, STATUS_INVALID_PARAMETER);
+	  DokanEndDispatchCreate(createFileEvent, STATUS_INVALID_PARAMETER);
 
 	  return;
   }
@@ -199,11 +199,11 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
   if(status != STATUS_PENDING) {
 
-	  EndDispatchCreate(createFileEvent, status);
+	  DokanEndDispatchCreate(createFileEvent, status);
   }
 }
 
-void DOKANAPI EndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	DWORD lastError = GetLastError();
@@ -217,7 +217,7 @@ void DOKANAPI EndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS Res
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchCreate() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchCreate() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
@@ -229,7 +229,8 @@ void DOKANAPI EndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS Res
 		ioEvent->EventInfo.ZwCreateFile.OriginalFileName = NULL;
 	}
 
-	DbgPrint("Dokan Information: EndDispatchCreate() status = %lx - lastError = %d\n", ResultStatus, lastError);
+	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, lastError = %d, file handle = 0x%p\n, eventID = %04d",
+		ResultStatus, lastError, ioEvent->DokanOpenInfo, ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1);
 
 	// FILE_CREATED
 	// FILE_DOES_NOT_EXIST
@@ -247,20 +248,23 @@ void DOKANAPI EndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS Res
 
 		if(ioEvent->DokanOpenInfo) {
 
-			if(ioEvent->DokanInstance->DokanOperations->Cleanup) {
+			if(ioEvent->DokanFileInfo.Context) {
+				
+				if(ioEvent->DokanInstance->DokanOperations->Cleanup) {
 
-				cleanupEvent.DokanFileInfo = &ioEvent->DokanFileInfo;
-				cleanupEvent.FileName = EventInfo->FileName;
+					cleanupEvent.DokanFileInfo = &ioEvent->DokanFileInfo;
+					cleanupEvent.FileName = EventInfo->FileName;
 
-				ioEvent->DokanInstance->DokanOperations->Cleanup(&cleanupEvent);
-			}
+					ioEvent->DokanInstance->DokanOperations->Cleanup(&cleanupEvent);
+				}
 
-			if(ioEvent->DokanInstance->DokanOperations->CloseFile) {
+				if(ioEvent->DokanInstance->DokanOperations->CloseFile) {
 
-				closeFileEvent.DokanFileInfo = &ioEvent->DokanFileInfo;
-				closeFileEvent.FileName = EventInfo->FileName;
+					closeFileEvent.DokanFileInfo = &ioEvent->DokanFileInfo;
+					closeFileEvent.FileName = EventInfo->FileName;
 
-				ioEvent->DokanInstance->DokanOperations->CloseFile(&closeFileEvent);
+					ioEvent->DokanInstance->DokanOperations->CloseFile(&closeFileEvent);
+				}
 			}
 
 			PushFileOpenInfo(ioEvent->DokanOpenInfo);

@@ -374,16 +374,16 @@ void BeginDispatchQueryInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	  if(EventInfo->KernelInfo.EventContext.Operation.File.FileInformationClass == FileStreamInformation) {
 
-		  EndDispatchFindStreams(findStreams, status);
+		  DokanEndDispatchFindStreams(findStreams, status);
 	  }
 	  else {
 
-		  EndDispatchGetFileInformation(getFileInfo, status);
+		  DokanEndDispatchGetFileInformation(getFileInfo, status);
 	  }
   }
 }
 
-void DOKANAPI EndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	ULONG remainingLength = ioEvent->KernelInfo.EventContext.Operation.File.BufferLength;
@@ -393,7 +393,7 @@ void DOKANAPI EndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchGetFileInformation() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchGetFileInformation() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 	
@@ -534,7 +534,7 @@ void DOKANAPI EndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo
 	SendIoEventResult(ioEvent);
 }
 
-void DOKANAPI EndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 
@@ -543,7 +543,7 @@ void DOKANAPI EndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, NTSTAT
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchFindStreams() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchFindStreams() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 

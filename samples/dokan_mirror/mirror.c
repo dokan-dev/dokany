@@ -33,6 +33,47 @@ THE SOFTWARE.
 #include <winbase.h>
 #include <assert.h>
 
+#define USE_ASYNC_IO 1
+
+#if USE_ASYNC_IO
+
+TP_CALLBACK_ENVIRON g_ThreadPoolEnvironment;
+PTP_CLEANUP_GROUP g_ThreadPoolCleanupGroup = NULL;
+PTP_POOL g_ThreadPool = NULL;
+
+DOKAN_VECTOR g_OverlappedPool;
+CRITICAL_SECTION g_OverlappedPoolCS;
+
+typedef struct _MIRROR_OVERLAPPED {
+	OVERLAPPED		InternalOverlapped;
+} MIRROR_OVERLAPPED;
+
+void CALLBACK MirrorIoCallback(
+	_Inout_     PTP_CALLBACK_INSTANCE Instance,
+	_Inout_opt_ PVOID                 Context,
+	_Inout_opt_ PVOID                 Overlapped,
+	_In_        ULONG                 IoResult,
+	_In_        ULONG_PTR             NumberOfBytesTransferred,
+	_Inout_     PTP_IO                Io
+);
+
+#endif
+
+typedef struct _MIRROR_FILE_HANDLE {
+
+	HANDLE		FileHandle;
+
+#if USE_ASYNC_IO
+	PTP_IO		IoCompletion;
+#endif
+
+} MIRROR_FILE_HANDLE;
+
+#define MIRROR_HANDLE_ASSERT(mirrorHandle) assert((mirrorHandle) && (mirrorHandle)->FileHandle && (mirrorHandle)->FileHandle != INVALID_HANDLE_VALUE)
+
+DOKAN_VECTOR g_FileHandlePool;
+CRITICAL_SECTION g_FileHandlePoolCS;
+
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 
@@ -78,6 +119,88 @@ static void DbgPrint(LPCWSTR format, ...) {
     va_end(argp);
   }
 }
+
+/////////////////// MIRROR_FILE_HANDLE ///////////////////
+
+void FreeMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
+
+	if(FileHandle) {
+
+#if USE_ASYNC_IO
+		if(FileHandle->IoCompletion) {
+
+			CloseThreadpoolIo(FileHandle->IoCompletion);
+			FileHandle->IoCompletion = NULL;
+		}
+#endif
+
+		free(FileHandle);
+	}
+}
+
+void PushMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
+
+	assert(FileHandle);
+
+#if USE_ASYNC_IO
+	if(FileHandle->IoCompletion) {
+
+		CloseThreadpoolIo(FileHandle->IoCompletion);
+		FileHandle->IoCompletion = NULL;
+	}
+#endif
+
+	EnterCriticalSection(&g_FileHandlePoolCS);
+
+	DokanVector_PushBack(&g_FileHandlePool, &FileHandle);
+
+	LeaveCriticalSection(&g_FileHandlePoolCS);
+}
+
+MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
+
+	if(ActualFileHandle == NULL || ActualFileHandle == INVALID_HANDLE_VALUE) {
+
+		return NULL;
+	}
+
+	MIRROR_FILE_HANDLE *mirrorHandle = NULL;
+
+	EnterCriticalSection(&g_FileHandlePoolCS);
+
+	if(DokanVector_GetCount(&g_FileHandlePool) > 0)
+	{
+		mirrorHandle = *(MIRROR_FILE_HANDLE**)DokanVector_GetLastItem(&g_FileHandlePool);
+		DokanVector_PopBack(&g_FileHandlePool);
+	}
+
+	LeaveCriticalSection(&g_FileHandlePoolCS);
+
+	if(!mirrorHandle) {
+
+		mirrorHandle = (MIRROR_FILE_HANDLE*)malloc(sizeof(MIRROR_FILE_HANDLE));
+	}
+
+	if(mirrorHandle) {
+
+		RtlZeroMemory(mirrorHandle, sizeof(MIRROR_FILE_HANDLE));
+		mirrorHandle->FileHandle = ActualFileHandle;
+
+#if USE_ASYNC_IO
+		mirrorHandle->IoCompletion = CreateThreadpoolIo(ActualFileHandle, MirrorIoCallback, mirrorHandle, &g_ThreadPoolEnvironment);
+
+		if(!mirrorHandle->IoCompletion) {
+
+			PushMirrorFileHandle(mirrorHandle);
+			mirrorHandle = NULL;
+		}
+#endif
+	}
+
+	return mirrorHandle;
+}
+
+/////////////////// Push/Pop pattern finished ///////////////////
 
 static WCHAR RootDirectory[MAX_PATH] = L"C:";
 static WCHAR MountPoint[MAX_PATH] = L"M:\\";
@@ -308,6 +431,10 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
 
+#if USE_ASYNC_IO
+  fileAttributesAndFlags |= FILE_FLAG_OVERLAPPED;
+#endif
+
   if (creationDisposition == CREATE_NEW) {
     DbgPrint(L"\tCREATE_NEW\n");
   } else if (creationDisposition == OPEN_ALWAYS) {
@@ -323,49 +450,78 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   }
 
   if (EventInfo->DokanFileInfo->IsDirectory) {
+
     // It is a create directory request
     if (creationDisposition == CREATE_NEW) {
+
       if (!CreateDirectory(filePath, &securityAttrib)) {
+
         error = GetLastError();
         DbgPrint(L"\terror code = %d\n\n", error);
         status = DokanNtStatusFromWin32(error);
       }
-    } else if (creationDisposition == OPEN_ALWAYS) {
+    }
+	else if (creationDisposition == OPEN_ALWAYS) {
 
       if (!CreateDirectory(filePath, &securityAttrib)) {
 
         error = GetLastError();
 
         if (error != ERROR_ALREADY_EXISTS) {
+
           DbgPrint(L"\terror code = %d\n\n", error);
           status = DokanNtStatusFromWin32(error);
         }
       }
     }
+
     if (status == STATUS_SUCCESS) {
+
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
+
       handle = CreateFile(
           filePath, EventInfo->DesiredAccess, EventInfo->ShareAccess, &securityAttrib, OPEN_EXISTING,
           fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
+
         error = GetLastError();
         DbgPrint(L"\terror code = %d\n\n", error);
 
         status = DokanNtStatusFromWin32(error);
-      } else {
-		  EventInfo->DokanFileInfo->Context =
-            (ULONG64)handle; // save the file handle in Context
+      }
+	  else {
+
+		  MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
+
+		  if(!mirrorHandle) {
+
+			  DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
+
+			  SetLastError(ERROR_INTERNAL_ERROR);
+
+			  CloseHandle(handle);
+
+			  return STATUS_INTERNAL_ERROR;
+		  }
+
+		  // save the file handle in Context
+		  EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
       }
     }
-  } else {
+  }
+  else {
+
     // It is a create file request
 
-    if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-        (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-		EventInfo->CreateDisposition == FILE_CREATE)
-      return STATUS_OBJECT_NAME_COLLISION; // File already exist because
-                                           // GetFileAttributes found it
+	  if(fileAttr != INVALID_FILE_ATTRIBUTES &&
+		  (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
+		  EventInfo->CreateDisposition == FILE_CREATE) {
+
+		  return STATUS_OBJECT_NAME_COLLISION; // File already exist because
+											   // GetFileAttributes found it
+	  }
+
     handle =
         CreateFile(filePath,
                    EventInfo->DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
@@ -376,18 +532,37 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
                    NULL);                  // template file handle
 
     if (handle == INVALID_HANDLE_VALUE) {
+
       error = GetLastError();
       DbgPrint(L"\terror code = %d\n\n", error);
 
       status = DokanNtStatusFromWin32(error);
-    } else {
-		EventInfo->DokanFileInfo->Context =
-          (ULONG64)handle; // save the file handle in Context
+    }
+	else {
+
+		MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
+
+		if(!mirrorHandle) {
+
+			DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
+
+			SetLastError(ERROR_INTERNAL_ERROR);
+
+			CloseHandle(handle);
+			
+			return STATUS_INTERNAL_ERROR;
+		}
+
+		// save the file handle in Context
+		EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
 
       if (creationDisposition == OPEN_ALWAYS ||
           creationDisposition == CREATE_ALWAYS) {
+
         error = GetLastError();
+
         if (error == ERROR_ALREADY_EXISTS) {
+
           DbgPrint(L"\tOpen an already existing file\n");
           SetLastError(ERROR_ALREADY_EXISTS); // Inform the driver that we have
                                               // open a already existing file
@@ -398,6 +573,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   }
 
   DbgPrint(L"\n");
+
   return status;
 }
 
@@ -405,101 +581,125 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 #pragma warning(disable : 4305)
 
 static void DOKAN_CALLBACK MirrorCloseFile(DOKAN_CLOSE_FILE_EVENT *EventInfo) {
+
   WCHAR filePath[MAX_PATH];
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
+
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
-  if (EventInfo->DokanFileInfo->Context) {
-    DbgPrint(L"CloseFile: %s\n", filePath);
-    DbgPrint(L"\terror : not cleanuped file\n\n");
-    CloseHandle((HANDLE)EventInfo->DokanFileInfo->Context);
+  DbgPrint(L"CloseFile: %s\n", filePath);
+
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
+
+  if (mirrorHandle) {
+
+    CloseHandle(mirrorHandle->FileHandle);
+	
+	mirrorHandle->FileHandle = NULL;
 	EventInfo->DokanFileInfo->Context = 0;
-  } else {
-    DbgPrint(L"Close: %s\n\n", filePath);
+
+	if(EventInfo->DokanFileInfo->DeleteOnClose) {
+
+		// Should already be deleted by CloseHandle
+		// if open with FILE_FLAG_DELETE_ON_CLOSE
+		DbgPrint(L"\tDeleteOnClose\n");
+
+		if(EventInfo->DokanFileInfo->IsDirectory) {
+
+			DbgPrint(L"  DeleteDirectory ");
+
+			if(!RemoveDirectory(filePath)) {
+
+				DbgPrint(L"error code = %d\n\n", GetLastError());
+			}
+			else {
+				DbgPrint(L"success\n\n");
+			}
+		}
+		else {
+
+			DbgPrint(L"  DeleteFile ");
+
+			if(DeleteFile(filePath) == 0) {
+
+				DbgPrint(L" error code = %d\n\n", GetLastError());
+			}
+			else {
+
+				DbgPrint(L"success\n\n");
+			}
+		}
+	}
   }
 }
 
 static void DOKAN_CALLBACK MirrorCleanup(DOKAN_CLEANUP_EVENT *EventInfo) {
+
   WCHAR filePath[MAX_PATH];
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
-  if (EventInfo->DokanFileInfo->Context) {
-    DbgPrint(L"Cleanup: %s\n\n", filePath);
-    CloseHandle((HANDLE)(EventInfo->DokanFileInfo->Context));
-	EventInfo->DokanFileInfo->Context = 0;
-  } else {
-    DbgPrint(L"Cleanup: %s\n\tinvalid handle\n\n", filePath);
-  }
+  DbgPrint(L"Cleanup: %s\n\n", filePath);
 
-  if (EventInfo->DokanFileInfo->DeleteOnClose) {
-    // Should already be deleted by CloseHandle
-    // if open with FILE_FLAG_DELETE_ON_CLOSE
-    DbgPrint(L"\tDeleteOnClose\n");
-    if (EventInfo->DokanFileInfo->IsDirectory) {
-      DbgPrint(L"  DeleteDirectory ");
-      if (!RemoveDirectory(filePath)) {
-        DbgPrint(L"error code = %d\n\n", GetLastError());
-      } else {
-        DbgPrint(L"success\n\n");
-      }
-    } else {
-      DbgPrint(L"  DeleteFile ");
-      if (DeleteFile(filePath) == 0) {
-        DbgPrint(L" error code = %d\n\n", GetLastError());
-      } else {
-        DbgPrint(L"success\n\n");
-      }
-    }
-  }
+  /* This gets called BEFORE MirrorCloseFile(). Per the documentation:
+   *
+   * Receipt of the IRP_MJ_CLEANUP request indicates that the handle reference count on a file object has reached zero.
+   * (In other words, all handles to the file object have been closed.)
+   * Often it is sent when a user-mode application has called the Microsoft Win32 CloseHandle function
+   * (or when a kernel-mode driver has called ZwClose) on the last outstanding handle to a file object.
+   *
+   * It is important to note that when all handles to a file object have been closed, this does not necessarily
+   * mean that the file object is no longer being used. System components, such as the Cache Manager and the Memory Manager,
+   * might hold outstanding references to the file object. These components can still read to or write from a file, even
+   * after an IRP_MJ_CLEANUP request is received.
+   */
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   ULONG offset = (ULONG)EventInfo->Offset;
-  BOOL opened = FALSE;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"ReadFile : %s\n", filePath);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle, cleanuped?\n");
-    handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING, 0, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tCreateFile error : %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+  if(!mirrorHandle) {
+
+	  return STATUS_FILE_CLOSED;
   }
 
   LARGE_INTEGER distanceToMove;
+
   distanceToMove.QuadPart = EventInfo->Offset;
-  if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+
+  if (!SetFilePointerEx(mirrorHandle->FileHandle, distanceToMove, NULL, FILE_BEGIN)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\tseek error, offset = %d\n\n", offset);
-    if (opened)
-      CloseHandle(handle);
+
     return DokanNtStatusFromWin32(error);
   }
 
-  if (!ReadFile(handle, EventInfo->Buffer, EventInfo->NumberOfBytesToRead, &EventInfo->NumberOfBytesRead, NULL)) {
+  if (!ReadFile(mirrorHandle->FileHandle,
+	  EventInfo->Buffer,
+	  EventInfo->NumberOfBytesToRead,
+	  &EventInfo->NumberOfBytesRead,
+	  NULL)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n\n",
              error, EventInfo->NumberOfBytesToRead, EventInfo->NumberOfBytesRead);
-    if (opened)
-      CloseHandle(handle);
-    return DokanNtStatusFromWin32(error);
 
-  } else {
+    return DokanNtStatusFromWin32(error);
+  }
+  else {
+
     DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", EventInfo->NumberOfBytesToRead,
 		EventInfo->NumberOfBytesRead, offset);
   }
-
-  if (opened)
-    CloseHandle(handle);
 
   return STATUS_SUCCESS;
 }
@@ -507,65 +707,62 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
 static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   ULONG offset = (ULONG)EventInfo->Offset;
-  BOOL opened = FALSE;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, EventInfo->Offset,
 	  EventInfo->NumberOfBytesToWrite);
 
-  // reopen the file
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle, cleanuped?\n");
-    handle = CreateFile(filePath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
-                        OPEN_EXISTING, 0, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tCreateFile error : %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+  if(!mirrorHandle) {
+
+	  return STATUS_FILE_CLOSED;
   }
 
   LARGE_INTEGER distanceToMove;
   distanceToMove.QuadPart = EventInfo->Offset;
 
   if (EventInfo->DokanFileInfo->WriteToEndOfFile) {
+
     LARGE_INTEGER z;
     z.QuadPart = 0;
-    if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
+
+    if (!SetFilePointerEx(mirrorHandle->FileHandle, z, NULL, FILE_END)) {
+
       DWORD error = GetLastError();
+
       DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
-      if (opened)
-        CloseHandle(handle);
+
       return DokanNtStatusFromWin32(error);
     }
-  } else if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+  }
+  else if (!SetFilePointerEx(mirrorHandle->FileHandle, distanceToMove, NULL, FILE_BEGIN)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, error);
-    if (opened)
-      CloseHandle(handle);
+
     return DokanNtStatusFromWin32(error);
   }
 
-  if (!WriteFile(handle, EventInfo->Buffer, EventInfo->NumberOfBytesToWrite, &EventInfo->NumberOfBytesWritten,
-                 NULL)) {
+  if (!WriteFile(mirrorHandle->FileHandle,
+	  EventInfo->Buffer,
+	  EventInfo->NumberOfBytesToWrite,
+	  &EventInfo->NumberOfBytesWritten,
+	  NULL)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
              error, EventInfo->NumberOfBytesToWrite, EventInfo->NumberOfBytesWritten);
-    if (opened)
-      CloseHandle(handle);
-    return DokanNtStatusFromWin32(error);
 
-  } else {
+    return DokanNtStatusFromWin32(error);
+  }
+  else {
+
     DbgPrint(L"\twrite %d, offset %d\n\n", EventInfo->NumberOfBytesWritten, offset);
   }
-
-  // close the file when it is reopened
-  if (opened)
-    CloseHandle(handle);
 
   return STATUS_SUCCESS;
 }
@@ -574,22 +771,27 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorFlushFileBuffers(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"FlushFileBuffers : %s\n", filePath);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_SUCCESS;
+  if(!mirrorHandle) {
+
+	  return STATUS_FILE_CLOSED;
   }
 
-  if (FlushFileBuffers(handle)) {
+  if (FlushFileBuffers(mirrorHandle->FileHandle)) {
+
     return STATUS_SUCCESS;
-  } else {
+  }
+  else {
+
     DWORD error = GetLastError();
-    DbgPrint(L"\tflush error code = %d\n", error);
+    
+	DbgPrint(L"\tflush error code = %d\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 }
@@ -597,35 +799,42 @@ MirrorFlushFileBuffers(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo) {
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"GetFileInfo : %s\n", filePath);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_PARAMETER;
-  }
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-  if (!GetFileInformationByHandle(handle, &EventInfo->FileHandleInfo)) {
+  if (!GetFileInformationByHandle(mirrorHandle->FileHandle, &EventInfo->FileHandleInfo)) {
+
     DbgPrint(L"\terror code = %d\n", GetLastError());
 
     // FileName is a root directory
     // in this case, FindFirstFile can't get directory information
     if (wcslen(EventInfo->FileName) == 1) {
+
       DbgPrint(L"  root dir\n");
 	  EventInfo->FileHandleInfo.dwFileAttributes = GetFileAttributes(filePath);
 
-    } else {
+    }
+	else {
+
       WIN32_FIND_DATAW find;
       ZeroMemory(&find, sizeof(WIN32_FIND_DATAW));
+
       HANDLE findHandle = FindFirstFile(filePath, &find);
+
       if (findHandle == INVALID_HANDLE_VALUE) {
+
         DWORD error = GetLastError();
+
         DbgPrint(L"\tFindFirstFile error code = %d\n\n", error);
+
         return DokanNtStatusFromWin32(error);
       }
+
       EventInfo->FileHandleInfo.dwFileAttributes = find.dwFileAttributes;
       EventInfo->FileHandleInfo.ftCreationTime = find.ftCreationTime;
       EventInfo->FileHandleInfo.ftLastAccessTime = find.ftLastAccessTime;
@@ -637,7 +846,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(DOKAN_GET_FILE_INFO_EVEN
 
       FindClose(findHandle);
     }
-  } else {
+  }
+  else {
+
     DbgPrint(L"\tGetFileInformationByHandle success, file size = %d\n",
 		EventInfo->FileHandleInfo.nFileSizeLow);
   }
@@ -762,7 +973,6 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
   DbgPrint(L"CanDeleteFile %s\n", filePath);
@@ -787,7 +997,7 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
   WCHAR newFilePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   DWORD bufferSize;
   BOOL result;
   size_t newFilePathLen;
@@ -798,12 +1008,8 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
   GetFilePath(newFilePath, MAX_PATH, EventInfo->NewFileName);
 
   DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
   newFilePathLen = wcslen(newFilePath);
 
@@ -815,32 +1021,41 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
                        newFilePathLen * sizeof(newFilePath[0]));
 
   renameInfo = (PFILE_RENAME_INFO)malloc(bufferSize);
+
   if (!renameInfo) {
+
     return STATUS_BUFFER_OVERFLOW;
   }
+
   ZeroMemory(renameInfo, bufferSize);
 
   renameInfo->ReplaceIfExists =
 	  EventInfo->ReplaceIfExists
           ? TRUE
           : FALSE; // some warning about converting BOOL to BOOLEAN
+
   renameInfo->RootDirectory = NULL; // hope it is never needed, shouldn't be
+
   renameInfo->FileNameLength =
       (DWORD)newFilePathLen *
       sizeof(newFilePath[0]); // they want length in bytes
 
   wcscpy_s(renameInfo->FileName, newFilePathLen + 1, newFilePath);
 
-  result = SetFileInformationByHandle(handle, FileRenameInfo, renameInfo,
-                                      bufferSize);
+  result = SetFileInformationByHandle(mirrorHandle->FileHandle, FileRenameInfo, renameInfo, bufferSize);
 
   free(renameInfo);
 
   if (result) {
+
     return STATUS_SUCCESS;
-  } else {
+  }
+  else {
+
     DWORD error = GetLastError();
-    DbgPrint(L"\tMoveFile error = %u\n", error);
+    
+	DbgPrint(L"\tMoveFile error = %u\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 }
@@ -848,7 +1063,7 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
 static NTSTATUS DOKAN_CALLBACK MirrorLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER offset;
   LARGE_INTEGER length;
 
@@ -856,20 +1071,17 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo) 
 
   DbgPrint(L"LockFile %s\n", filePath);
 
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
   length.QuadPart = EventInfo->Length;
   offset.QuadPart = EventInfo->ByteOffset;
 
-  if (!LockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
-                length.HighPart)) {
+  if (!LockFile(mirrorHandle->FileHandle, offset.LowPart, offset.HighPart, length.LowPart, length.HighPart)) {
 
     DWORD error = GetLastError();
+
     DbgPrint(L"\terror code = %d\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
@@ -881,30 +1093,33 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo) 
 static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER offset;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetEndOfFile %s, %I64d\n", filePath, EventInfo->Length);
 
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
   offset.QuadPart = EventInfo->Length;
-  if (!SetFilePointerEx(handle, offset, NULL, FILE_BEGIN)) {
+
+  if (!SetFilePointerEx(mirrorHandle->FileHandle, offset, NULL, FILE_BEGIN)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\tSetFilePointer error: %d, offset = %I64d\n\n", error,
 		EventInfo->Length);
+
     return DokanNtStatusFromWin32(error);
   }
 
-  if (!SetEndOfFile(handle)) {
+  if (!SetEndOfFile(mirrorHandle->FileHandle)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\tSetEndOfFile error code = %d\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
@@ -914,29 +1129,24 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo
 static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER fileSize;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetAllocationSize %s, %I64d\n", filePath, EventInfo->Length);
 
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
-
-  if (GetFileSizeEx(handle, &fileSize)) {
+  if (GetFileSizeEx(mirrorHandle->FileHandle, &fileSize)) {
     
 	  if (EventInfo->Length < fileSize.QuadPart) {
 
       fileSize.QuadPart = EventInfo->Length;
 
-      if (!SetFilePointerEx(handle, fileSize, NULL, FILE_BEGIN)) {
+      if (!SetFilePointerEx(mirrorHandle->FileHandle, fileSize, NULL, FILE_BEGIN)) {
         
-		  DWORD error = GetLastError();
+		DWORD error = GetLastError();
 
         DbgPrint(L"\tSetAllocationSize: SetFilePointer eror: %d, "
                  L"offset = %I64d\n\n",
@@ -945,9 +1155,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE
         return DokanNtStatusFromWin32(error);
       }
 
-      if (!SetEndOfFile(handle)) {
+      if (!SetEndOfFile(mirrorHandle->FileHandle)) {
         
-		  DWORD error = GetLastError();
+		DWORD error = GetLastError();
+
         DbgPrint(L"\tSetEndOfFile error code = %d\n\n", error);
 
         return DokanNtStatusFromWin32(error);
@@ -955,8 +1166,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE
     }
   }
   else {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\terror code = %d\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
@@ -966,22 +1180,29 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
 
   DbgPrint(L"SetFileBasicInformation %s\n", filePath);
 
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
   assert(sizeof(FILE_BASIC_INFORMATION) == sizeof(FILE_BASIC_INFO));
 
-  if (!SetFileInformationByHandle(handle, FileBasicInfo, (LPVOID)EventInfo->Info, (DWORD)sizeof(FILE_BASIC_INFORMATION))) {
+  if (!SetFileInformationByHandle(mirrorHandle->FileHandle,
+	  FileBasicInfo,
+	  (LPVOID)EventInfo->Info,
+	  (DWORD)sizeof(FILE_BASIC_INFORMATION))) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\terror code = %d\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
   DbgPrint(L"\n");
+
   return STATUS_SUCCESS;
 }
 
@@ -989,7 +1210,7 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorUnlockFile(DOKAN_UNLOCK_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER length;
   LARGE_INTEGER offset;
 
@@ -997,110 +1218,120 @@ MirrorUnlockFile(DOKAN_UNLOCK_FILE_EVENT *EventInfo) {
 
   DbgPrint(L"UnlockFile %s\n", filePath);
 
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
   length.QuadPart = EventInfo->Length;
   offset.QuadPart = EventInfo->ByteOffset;
 
-  if (!UnlockFile(handle, offset.LowPart, offset.HighPart, length.LowPart,
-                  length.HighPart)) {
+  if (!UnlockFile(mirrorHandle->FileHandle, offset.LowPart, offset.HighPart, length.LowPart, length.HighPart)) {
+
     DWORD error = GetLastError();
+
     DbgPrint(L"\terror code = %d\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
   DbgPrint(L"\tsuccess\n\n");
+
   return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+	WCHAR filePath[MAX_PATH];
+	MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+	GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
-  DbgPrint(L"GetFileSecurity %s\n", filePath);
+	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
-  MirrorCheckFlag(*EventInfo->SecurityInformation, FILE_SHARE_READ);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, OWNER_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, GROUP_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, DACL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, SACL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, LABEL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, SCOPE_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation,
-                  PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, BACKUP_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
-  MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+	MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-  DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
-  HANDLE handle = CreateFile(
-      filePath,
-      READ_CONTROL | (((*EventInfo->SecurityInformation & SACL_SECURITY_INFORMATION) ||
-                       (*EventInfo->SecurityInformation & BACKUP_SECURITY_INFORMATION))
-                          ? ACCESS_SYSTEM_SECURITY
-                          : 0),
-      FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
-      NULL, // security attribute
-      OPEN_EXISTING,
-      FILE_FLAG_BACKUP_SEMANTICS, // |FILE_FLAG_NO_BUFFERING,
-      NULL);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, FILE_SHARE_READ);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, OWNER_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, GROUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, SCOPE_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation,
+		PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, BACKUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    int error = GetLastError();
-    return DokanNtStatusFromWin32(error);
-  }
+	DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
 
-  if (!GetUserObjectSecurity(handle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor,
-	  EventInfo->SecurityDescriptorSize, &EventInfo->LengthNeeded)) {
+	HANDLE handle = CreateFile(
+		filePath,
+		READ_CONTROL | (((*EventInfo->SecurityInformation & SACL_SECURITY_INFORMATION) ||
+		(*EventInfo->SecurityInformation & BACKUP_SECURITY_INFORMATION))
+			? ACCESS_SYSTEM_SECURITY
+			: 0),
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+		NULL, // security attribute
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS, // |FILE_FLAG_NO_BUFFERING,
+		NULL);
 
-    int error = GetLastError();
+	if(!handle || handle == INVALID_HANDLE_VALUE) {
 
-    if (error == ERROR_INSUFFICIENT_BUFFER) {
-      DbgPrint(L"  GetUserObjectSecurity error: ERROR_INSUFFICIENT_BUFFER\n");
-      CloseHandle(handle);
-      return STATUS_BUFFER_OVERFLOW;
-    }
-	else {
-      DbgPrint(L"  GetUserObjectSecurity error: %d\n", error);
-      CloseHandle(handle);
-      return DokanNtStatusFromWin32(error);
-    }
-  }
+		DbgPrint(L"\tinvalid handle\n\n");
 
-  CloseHandle(handle);
+		int error = GetLastError();
 
-  return STATUS_SUCCESS;
+		return DokanNtStatusFromWin32(error);
+	}
+
+	if(!GetUserObjectSecurity(handle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor,
+		EventInfo->SecurityDescriptorSize, &EventInfo->LengthNeeded)) {
+
+		int error = GetLastError();
+
+		if(error == ERROR_INSUFFICIENT_BUFFER) {
+				
+			DbgPrint(L"  GetUserObjectSecurity error: ERROR_INSUFFICIENT_BUFFER\n");
+				
+			CloseHandle(handle);
+				
+			return STATUS_BUFFER_OVERFLOW;
+		}
+		else {
+				
+			DbgPrint(L"  GetUserObjectSecurity error: %d\n", error);
+				
+			CloseHandle(handle);
+				
+			return DokanNtStatusFromWin32(error);
+		}
+	}
+
+	CloseHandle(handle);
+
+	return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo) {
 
-  HANDLE handle;
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   WCHAR filePath[MAX_PATH];
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetFileSecurity %s\n", filePath);
 
-  handle = (HANDLE)EventInfo->DokanFileInfo->Context;
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_HANDLE;
-  }
+  if (!SetUserObjectSecurity(mirrorHandle->FileHandle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor)) {
 
-  if (!SetUserObjectSecurity(handle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor)) {
     int error = GetLastError();
+
     DbgPrint(L"  SetUserObjectSecurity error: %d\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 
@@ -1251,6 +1482,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorMounted(DOKAN_MOUNTED_INFO *EventInfo) {
   UNREFERENCED_PARAMETER(EventInfo);
 
   DbgPrint(L"Mounted\n");
+
   return STATUS_SUCCESS;
 }
 
@@ -1258,10 +1490,70 @@ static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(DOKAN_UNMOUNTED_INFO *EventInfo) 
   UNREFERENCED_PARAMETER(EventInfo);
 
   DbgPrint(L"Unmounted\n");
+
   return STATUS_SUCCESS;
 }
 
 #pragma warning(pop)
+
+#if USE_ASYNC_IO
+
+BOOL InitializeAsyncIO() {
+
+	g_ThreadPool = DokanGetThreadPool();
+
+	if(!g_ThreadPool) {
+
+		return FALSE;
+	}
+
+	g_ThreadPoolCleanupGroup = CreateThreadpoolCleanupGroup();
+
+	if(!g_ThreadPoolCleanupGroup) {
+
+		return FALSE;
+	}
+
+	InitializeThreadpoolEnvironment(&g_ThreadPoolEnvironment);
+
+	SetThreadpoolCallbackPool(&g_ThreadPoolEnvironment, g_ThreadPool);
+	SetThreadpoolCallbackCleanupGroup(&g_ThreadPoolEnvironment, g_ThreadPoolCleanupGroup, NULL);
+
+	InitializeCriticalSection(&g_OverlappedPoolCS);
+	DokanVector_StackAlloc(&g_OverlappedPool, sizeof(MIRROR_OVERLAPPED));
+
+	return TRUE;
+}
+
+void CleanupAsyncIO() {
+
+	if(g_ThreadPoolCleanupGroup) {
+
+		CloseThreadpoolCleanupGroupMembers(g_ThreadPoolCleanupGroup, FALSE, NULL);
+		CloseThreadpoolCleanupGroup(g_ThreadPoolCleanupGroup);
+		g_ThreadPoolCleanupGroup = NULL;
+
+		DestroyThreadpoolEnvironment(&g_ThreadPoolEnvironment);
+	}
+
+	EnterCriticalSection(&g_OverlappedPoolCS);
+	DokanVector_Free(&g_OverlappedPool);
+	LeaveCriticalSection(&g_OverlappedPoolCS);
+
+	DeleteCriticalSection(&g_OverlappedPoolCS);
+}
+
+void CALLBACK MirrorIoCallback(
+	_Inout_     PTP_CALLBACK_INSTANCE Instance,
+	_Inout_opt_ PVOID                 Context,
+	_Inout_opt_ PVOID                 Overlapped,
+	_In_        ULONG                 IoResult,
+	_In_        ULONG_PTR             NumberOfBytesTransferred,
+	_Inout_     PTP_IO                Io
+) {
+}
+
+#endif
 
 BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   switch (dwCtrlType) {
@@ -1455,7 +1747,35 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations.SetFileSecurityW = MirrorSetFileSecurity;
   dokanOperations.FindStreams = MirrorFindStreams;
 
+#if USE_ASYNC_IO
+  if(!InitializeAsyncIO()) {
+
+	  fprintf(stderr, "Failed to initialize async IO.\n");
+	  return -2;
+  }
+#endif
+
+  InitializeCriticalSection(&g_FileHandlePoolCS);
+  DokanVector_StackAlloc(&g_FileHandlePool, sizeof(MIRROR_FILE_HANDLE));
+
   status = DokanMain(&dokanOptions, &dokanOperations);
+
+  EnterCriticalSection(&g_FileHandlePoolCS);
+
+  for(size_t i = 0; i < DokanVector_GetCount(&g_FileHandlePool); ++i) {
+
+	  FreeMirrorFileHandle(*(MIRROR_FILE_HANDLE**)DokanVector_GetItem(&g_FileHandlePool, i));
+  }
+
+  DokanVector_Free(&g_FileHandlePool);
+
+  LeaveCriticalSection(&g_FileHandlePoolCS);
+
+  DeleteCriticalSection(&g_FileHandlePoolCS);
+
+#if USE_ASYNC_IO
+  CleanupAsyncIO();
+#endif
 
   switch (status) {
   case DOKAN_SUCCESS:

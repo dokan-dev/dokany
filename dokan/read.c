@@ -62,11 +62,11 @@ void BeginDispatchRead(DOKAN_IO_EVENT *EventInfo) {
 
   if(status != STATUS_PENDING) {
 
-	  EndDispatchRead(readFileEvent, status);
+	  DokanEndDispatchRead(readFileEvent, status);
   }
 }
 
-void DOKANAPI EndDispatchRead(DOKAN_READ_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchRead(DOKAN_READ_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PEVENT_INFORMATION result = ioEvent->EventResult;
@@ -74,7 +74,7 @@ void DOKANAPI EndDispatchRead(DOKAN_READ_FILE_EVENT *EventInfo, NTSTATUS ResultS
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
 
-		DbgPrint("Dokan Error: EndDispatchRead() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		DbgPrint("Dokan Error: DokanEndDispatchRead() failed because STATUS_PENDING was supplied for ResultStatus.\n");
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 

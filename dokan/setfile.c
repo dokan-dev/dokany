@@ -72,11 +72,11 @@ void DokanSetAllocationInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchSetAllocationSize(allocEvent, status);
+		DokanEndDispatchSetAllocationSize(allocEvent, status);
 	}
 }
 
-void DOKANAPI EndDispatchSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndGenericSetOperation((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }
@@ -100,11 +100,11 @@ void DokanSetBasicInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchSetFileBasicInformation(setBasicInfo, status);
+		DokanEndDispatchSetFileBasicInformation(setBasicInfo, status);
 	}
 }
 
-void DOKANAPI EndDispatchSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndGenericSetOperation((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }
@@ -122,7 +122,7 @@ void DokanSetDispositionInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(!dispositionInfo->QueryDeleteFile) {
 		
-		EndDispatchCanDeleteFile(canDeleteFile, STATUS_SUCCESS);
+		DokanEndDispatchCanDeleteFile(canDeleteFile, STATUS_SUCCESS);
 		return;
 	}
 
@@ -136,11 +136,11 @@ void DokanSetDispositionInformation(DOKAN_IO_EVENT *EventInfo) {
   
 	if(status != STATUS_PENDING) {
 
-		EndDispatchCanDeleteFile(canDeleteFile, status);
+		DokanEndDispatchCanDeleteFile(canDeleteFile, status);
 	}
 }
 
-void DOKANAPI EndDispatchCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PFILE_DISPOSITION_INFORMATION dispositionInfo =
@@ -176,11 +176,11 @@ void DokanSetEndOfFileInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchSetEndOfFile(setEOF, status);
+		DokanEndDispatchSetEndOfFile(setEOF, status);
 	}
 }
 
-void DOKANAPI EndDispatchSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	EndGenericSetOperation((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
 }
@@ -207,11 +207,11 @@ void DokanSetRenameInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchMoveFile(moveFile, status);
+		DokanEndDispatchMoveFile(moveFile, status);
 	}
 }
 
-void DOKANAPI EndDispatchMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+void DOKANAPI DokanEndDispatchMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
@@ -249,7 +249,7 @@ void DokanSetValidDataLengthInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	if(status != STATUS_PENDING) {
 
-		EndDispatchSetEndOfFile(setEOF, status);
+		DokanEndDispatchSetEndOfFile(setEOF, status);
 	}
 }
 
