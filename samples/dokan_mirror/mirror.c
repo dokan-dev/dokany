@@ -44,30 +44,6 @@ THE SOFTWARE.
 
 #define USE_ASYNC_IO 1
 
-#if USE_ASYNC_IO
-
-TP_CALLBACK_ENVIRON g_ThreadPoolEnvironment;
-PTP_CLEANUP_GROUP g_ThreadPoolCleanupGroup = NULL;
-PTP_POOL g_ThreadPool = NULL;
-
-DOKAN_VECTOR g_OverlappedPool;
-CRITICAL_SECTION g_OverlappedPoolCS;
-
-typedef struct _MIRROR_OVERLAPPED {
-	OVERLAPPED		InternalOverlapped;
-} MIRROR_OVERLAPPED;
-
-void CALLBACK MirrorIoCallback(
-	_Inout_     PTP_CALLBACK_INSTANCE Instance,
-	_Inout_opt_ PVOID                 Context,
-	_Inout_opt_ PVOID                 Overlapped,
-	_In_        ULONG                 IoResult,
-	_In_        ULONG_PTR             NumberOfBytesTransferred,
-	_Inout_     PTP_IO                Io
-);
-
-#endif
-
 typedef struct _MIRROR_FILE_HANDLE {
 
 	HANDLE		FileHandle;
@@ -80,11 +56,48 @@ typedef struct _MIRROR_FILE_HANDLE {
 
 #define MIRROR_HANDLE_ASSERT(mirrorHandle) assert((mirrorHandle) && (mirrorHandle)->FileHandle && (mirrorHandle)->FileHandle != INVALID_HANDLE_VALUE)
 
+#if USE_ASYNC_IO
+
+TP_CALLBACK_ENVIRON g_ThreadPoolEnvironment;
+PTP_CLEANUP_GROUP g_ThreadPoolCleanupGroup = NULL;
+PTP_POOL g_ThreadPool = NULL;
+CRITICAL_SECTION g_ThreadPoolCS;
+
+DOKAN_VECTOR g_OverlappedPool;
+CRITICAL_SECTION g_OverlappedPoolCS;
+
+typedef enum _MIRROR_IOTYPE {
+	MIRROR_IOTYPE_UNKNOWN = 0,
+	MIRROR_IOTYPE_READ,
+	MIRROR_IOTYPE_WRITE
+} MIRROR_IO_OP_TYPE;
+
+typedef struct _MIRROR_OVERLAPPED {
+	OVERLAPPED			InternalOverlapped;
+	MIRROR_FILE_HANDLE	*FileHandle;
+	void				*Context;
+	MIRROR_IO_OP_TYPE	IoType;
+} MIRROR_OVERLAPPED;
+
+void CALLBACK MirrorIoCallback(
+	_Inout_     PTP_CALLBACK_INSTANCE Instance,
+	_Inout_opt_ PVOID                 Context,
+	_Inout_opt_ PVOID                 Overlapped,
+	_In_        ULONG                 IoResult,
+	_In_        ULONG_PTR             NumberOfBytesTransferred,
+	_Inout_     PTP_IO                Io
+);
+
+void CleanupPendingAsyncIO();
+
+#endif
+
 DOKAN_VECTOR g_FileHandlePool;
 CRITICAL_SECTION g_FileHandlePoolCS;
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
+volatile LONG g_IsUnmounted = 0;
 
 static void DbgPrint(LPCWSTR format, ...) {
 
@@ -138,7 +151,15 @@ void FreeMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
 #if USE_ASYNC_IO
 		if(FileHandle->IoCompletion) {
 
-			CloseThreadpoolIo(FileHandle->IoCompletion);
+			EnterCriticalSection(&g_ThreadPoolCS);
+			{
+				if(g_ThreadPoolCleanupGroup) {
+
+					CloseThreadpoolIo(FileHandle->IoCompletion);
+				}
+			}
+			LeaveCriticalSection(&g_ThreadPoolCS);
+
 			FileHandle->IoCompletion = NULL;
 		}
 #endif
@@ -154,21 +175,31 @@ void PushMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
 #if USE_ASYNC_IO
 	if(FileHandle->IoCompletion) {
 
-		CloseThreadpoolIo(FileHandle->IoCompletion);
+		EnterCriticalSection(&g_ThreadPoolCS);
+		{
+			if(g_ThreadPoolCleanupGroup) {
+
+				CloseThreadpoolIo(FileHandle->IoCompletion);
+			}
+		}
+		LeaveCriticalSection(&g_ThreadPoolCS);
+
 		FileHandle->IoCompletion = NULL;
 	}
 #endif
 
 	EnterCriticalSection(&g_FileHandlePoolCS);
-
-	DokanVector_PushBack(&g_FileHandlePool, &FileHandle);
-
+	{
+		DokanVector_PushBack(&g_FileHandlePool, &FileHandle);
+	}
 	LeaveCriticalSection(&g_FileHandlePoolCS);
 }
 
 MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
 
-	if(ActualFileHandle == NULL || ActualFileHandle == INVALID_HANDLE_VALUE) {
+	if(ActualFileHandle == NULL
+		|| ActualFileHandle == INVALID_HANDLE_VALUE
+		|| InterlockedAdd(&g_IsUnmounted, 0) != FALSE) {
 
 		return NULL;
 	}
@@ -176,13 +207,13 @@ MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
 	MIRROR_FILE_HANDLE *mirrorHandle = NULL;
 
 	EnterCriticalSection(&g_FileHandlePoolCS);
-
-	if(DokanVector_GetCount(&g_FileHandlePool) > 0)
 	{
-		mirrorHandle = *(MIRROR_FILE_HANDLE**)DokanVector_GetLastItem(&g_FileHandlePool);
-		DokanVector_PopBack(&g_FileHandlePool);
+		if(DokanVector_GetCount(&g_FileHandlePool) > 0)
+		{
+			mirrorHandle = *(MIRROR_FILE_HANDLE**)DokanVector_GetLastItem(&g_FileHandlePool);
+			DokanVector_PopBack(&g_FileHandlePool);
+		}
 	}
-
 	LeaveCriticalSection(&g_FileHandlePoolCS);
 
 	if(!mirrorHandle) {
@@ -196,7 +227,15 @@ MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
 		mirrorHandle->FileHandle = ActualFileHandle;
 
 #if USE_ASYNC_IO
-		mirrorHandle->IoCompletion = CreateThreadpoolIo(ActualFileHandle, MirrorIoCallback, mirrorHandle, &g_ThreadPoolEnvironment);
+
+		EnterCriticalSection(&g_ThreadPoolCS);
+		{
+			if(g_ThreadPoolCleanupGroup) {
+
+				mirrorHandle->IoCompletion = CreateThreadpoolIo(ActualFileHandle, MirrorIoCallback, mirrorHandle, &g_ThreadPoolEnvironment);
+			}
+		}
+		LeaveCriticalSection(&g_ThreadPoolCS);
 
 		if(!mirrorHandle->IoCompletion) {
 
@@ -208,6 +247,58 @@ MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
 
 	return mirrorHandle;
 }
+
+/////////////////// MIRROR_OVERLAPPED ///////////////////
+
+#if USE_ASYNC_IO
+
+void FreeMirrorOverlapped(MIRROR_OVERLAPPED *Overlapped) {
+
+	if(Overlapped) {
+
+		free(Overlapped);
+	}
+}
+
+void PushMirrorOverlapped(MIRROR_OVERLAPPED *Overlapped) {
+
+	assert(Overlapped);
+
+	EnterCriticalSection(&g_OverlappedPoolCS);
+	{
+		DokanVector_PushBack(&g_OverlappedPool, &Overlapped);
+	}
+	LeaveCriticalSection(&g_OverlappedPoolCS);
+}
+
+MIRROR_OVERLAPPED* PopMirrorOverlapped() {
+
+	MIRROR_OVERLAPPED *overlapped = NULL;
+
+	EnterCriticalSection(&g_OverlappedPoolCS);
+	{
+		if(DokanVector_GetCount(&g_OverlappedPool) > 0)
+		{
+			overlapped = *(MIRROR_OVERLAPPED**)DokanVector_GetLastItem(&g_OverlappedPool);
+			DokanVector_PopBack(&g_OverlappedPool);
+		}
+	}
+	LeaveCriticalSection(&g_OverlappedPoolCS);
+
+	if(!overlapped) {
+
+		overlapped = (MIRROR_OVERLAPPED*)malloc(sizeof(MIRROR_OVERLAPPED));
+	}
+
+	if(overlapped) {
+
+		RtlZeroMemory(overlapped, sizeof(MIRROR_OVERLAPPED));
+	}
+
+	return overlapped;
+}
+
+#endif
 
 /////////////////// Push/Pop pattern finished ///////////////////
 
@@ -669,7 +760,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
 
   WCHAR filePath[MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
-  ULONG offset = (ULONG)EventInfo->Offset;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
@@ -680,6 +770,45 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
 	  return STATUS_FILE_CLOSED;
   }
 
+#if USE_ASYNC_IO
+
+  MIRROR_OVERLAPPED *overlapped = PopMirrorOverlapped();
+
+  if(!overlapped) {
+
+	  return STATUS_MEMORY_NOT_ALLOCATED;
+  }
+
+  overlapped->InternalOverlapped.Offset = (DWORD)(EventInfo->Offset & 0xffffffff);
+  overlapped->InternalOverlapped.OffsetHigh = (DWORD)((EventInfo->Offset >> 32) & 0xffffffff);
+  overlapped->FileHandle = mirrorHandle;
+  overlapped->Context = EventInfo;
+  overlapped->IoType = MIRROR_IOTYPE_READ;
+
+  StartThreadpoolIo(mirrorHandle->IoCompletion);
+
+  if(!ReadFile(mirrorHandle->FileHandle,
+	  EventInfo->Buffer,
+	  EventInfo->NumberOfBytesToRead,
+	  &EventInfo->NumberOfBytesRead,
+	  (LPOVERLAPPED)overlapped)) {
+
+	  int lastError = GetLastError();
+
+	  if(lastError != ERROR_IO_PENDING) {
+
+		  CancelThreadpoolIo(mirrorHandle->IoCompletion);
+
+		  DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n\n",
+			  lastError, EventInfo->NumberOfBytesToRead, EventInfo->NumberOfBytesRead);
+
+		  return DokanNtStatusFromWin32(lastError);
+	  }
+  }
+
+  return STATUS_PENDING;
+
+#else
   LARGE_INTEGER distanceToMove;
 
   distanceToMove.QuadPart = EventInfo->Offset;
@@ -713,13 +842,13 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
   }
 
   return STATUS_SUCCESS;
+#endif
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
-  ULONG offset = (ULONG)EventInfo->Offset;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
@@ -731,6 +860,45 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 	  return STATUS_FILE_CLOSED;
   }
 
+#if USE_ASYNC_IO
+
+  MIRROR_OVERLAPPED *overlapped = PopMirrorOverlapped();
+
+  if(!overlapped) {
+
+	  return STATUS_MEMORY_NOT_ALLOCATED;
+  }
+
+  overlapped->InternalOverlapped.Offset = (DWORD)(EventInfo->Offset & 0xffffffff);
+  overlapped->InternalOverlapped.OffsetHigh = (DWORD)((EventInfo->Offset >> 32) & 0xffffffff);
+  overlapped->FileHandle = mirrorHandle;
+  overlapped->Context = EventInfo;
+  overlapped->IoType = MIRROR_IOTYPE_WRITE;
+
+  StartThreadpoolIo(mirrorHandle->IoCompletion);
+
+  if(!WriteFile(mirrorHandle->FileHandle,
+	  EventInfo->Buffer,
+	  EventInfo->NumberOfBytesToWrite,
+	  &EventInfo->NumberOfBytesWritten,
+	  (LPOVERLAPPED)overlapped)) {
+
+	  int lastError = GetLastError();
+
+	  if(lastError != ERROR_IO_PENDING) {
+
+		  CancelThreadpoolIo(mirrorHandle->IoCompletion);
+
+		  DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
+			  lastError, EventInfo->NumberOfBytesToWrite, EventInfo->NumberOfBytesWritten);
+
+		  return DokanNtStatusFromWin32(lastError);
+	  }
+  }
+
+  return STATUS_PENDING;
+
+#else
   LARGE_INTEGER distanceToMove;
   distanceToMove.QuadPart = EventInfo->Offset;
 
@@ -776,6 +944,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
   }
 
   return STATUS_SUCCESS;
+#endif
 }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -1502,6 +1671,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(DOKAN_UNMOUNTED_INFO *EventInfo) 
 
   DbgPrint(L"Unmounted\n");
 
+  InterlockedExchange(&g_IsUnmounted, TRUE);
+
+#if USE_ASYNC_IO
+  CleanupPendingAsyncIO();
+#endif
+
   return STATUS_SUCCESS;
 }
 
@@ -1531,27 +1706,46 @@ BOOL InitializeAsyncIO() {
 	SetThreadpoolCallbackCleanupGroup(&g_ThreadPoolEnvironment, g_ThreadPoolCleanupGroup, NULL);
 
 	InitializeCriticalSection(&g_OverlappedPoolCS);
-	DokanVector_StackAlloc(&g_OverlappedPool, sizeof(MIRROR_OVERLAPPED));
+	DokanVector_StackAlloc(&g_OverlappedPool, sizeof(MIRROR_OVERLAPPED*));
+
+	InitializeCriticalSection(&g_ThreadPoolCS);
 
 	return TRUE;
 }
 
+void CleanupPendingAsyncIO() {
+
+	EnterCriticalSection(&g_ThreadPoolCS);
+	{
+		if(g_ThreadPoolCleanupGroup) {
+
+			CloseThreadpoolCleanupGroupMembers(g_ThreadPoolCleanupGroup, FALSE, NULL);
+			CloseThreadpoolCleanupGroup(g_ThreadPoolCleanupGroup);
+			g_ThreadPoolCleanupGroup = NULL;
+
+			DestroyThreadpoolEnvironment(&g_ThreadPoolEnvironment);
+		}
+	}
+	LeaveCriticalSection(&g_ThreadPoolCS);
+}
+
 void CleanupAsyncIO() {
 
-	if(g_ThreadPoolCleanupGroup) {
-
-		CloseThreadpoolCleanupGroupMembers(g_ThreadPoolCleanupGroup, FALSE, NULL);
-		CloseThreadpoolCleanupGroup(g_ThreadPoolCleanupGroup);
-		g_ThreadPoolCleanupGroup = NULL;
-
-		DestroyThreadpoolEnvironment(&g_ThreadPoolEnvironment);
-	}
+	CleanupPendingAsyncIO();
 
 	EnterCriticalSection(&g_OverlappedPoolCS);
-	DokanVector_Free(&g_OverlappedPool);
+	{
+		for(size_t i = 0; i < DokanVector_GetCount(&g_OverlappedPool); ++i) {
+
+			FreeMirrorOverlapped(*(MIRROR_OVERLAPPED**)DokanVector_GetItem(&g_OverlappedPool, i));
+		}
+
+		DokanVector_Free(&g_OverlappedPool);
+	}
 	LeaveCriticalSection(&g_OverlappedPoolCS);
 
 	DeleteCriticalSection(&g_OverlappedPoolCS);
+	DeleteCriticalSection(&g_ThreadPoolCS);
 }
 
 void CALLBACK MirrorIoCallback(
@@ -1562,6 +1756,47 @@ void CALLBACK MirrorIoCallback(
 	_In_        ULONG_PTR             NumberOfBytesTransferred,
 	_Inout_     PTP_IO                Io
 ) {
+
+	UNREFERENCED_PARAMETER(Instance);
+	UNREFERENCED_PARAMETER(Context);
+	UNREFERENCED_PARAMETER(Io);
+
+	MIRROR_OVERLAPPED *overlapped = (MIRROR_OVERLAPPED*)Overlapped;
+	DOKAN_READ_FILE_EVENT *readFile = NULL;
+	DOKAN_WRITE_FILE_EVENT *writeFile = NULL;
+
+	switch(overlapped->IoType) {
+
+	case MIRROR_IOTYPE_READ:
+
+		readFile = (DOKAN_READ_FILE_EVENT*)overlapped->Context;
+
+		assert(readFile);
+
+		readFile->NumberOfBytesRead = (DWORD)NumberOfBytesTransferred;
+		
+		DokanEndDispatchRead(readFile, DokanNtStatusFromWin32(IoResult));
+
+		break;
+
+	case MIRROR_IOTYPE_WRITE:
+
+		writeFile = (DOKAN_WRITE_FILE_EVENT*)overlapped->Context;
+
+		assert(writeFile);
+
+		writeFile->NumberOfBytesWritten = (DWORD)NumberOfBytesTransferred;
+
+		DokanEndDispatchWrite(writeFile, DokanNtStatusFromWin32(IoResult));
+
+		break;
+
+	default:
+		DbgPrint(L"Unrecognized async IO operation: %d\n", overlapped->IoType);
+		break;
+	}
+
+	PushMirrorOverlapped(overlapped);
 }
 
 #endif
@@ -1776,14 +2011,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   status = DokanMain(&dokanOptions, &dokanOperations);
 
   EnterCriticalSection(&g_FileHandlePoolCS);
+  {
+	  for(size_t i = 0; i < DokanVector_GetCount(&g_FileHandlePool); ++i) {
 
-  for(size_t i = 0; i < DokanVector_GetCount(&g_FileHandlePool); ++i) {
+		  FreeMirrorFileHandle(*(MIRROR_FILE_HANDLE**)DokanVector_GetItem(&g_FileHandlePool, i));
+	  }
 
-	  FreeMirrorFileHandle(*(MIRROR_FILE_HANDLE**)DokanVector_GetItem(&g_FileHandlePool, i));
+	  DokanVector_Free(&g_FileHandlePool);
   }
-
-  DokanVector_Free(&g_FileHandlePool);
-
   LeaveCriticalSection(&g_FileHandlePoolCS);
 
   DeleteCriticalSection(&g_FileHandlePoolCS);

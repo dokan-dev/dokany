@@ -101,26 +101,26 @@ int InitializeThreadPool(HMODULE hModule) {
 	UNREFERENCED_PARAMETER(hModule);
 
 	EnterCriticalSection(&g_InstanceCriticalSection);
+	{
+		if(g_ThreadPool) {
 
-	if(g_ThreadPool) {
+			DokanDbgPrint("Dokan Error: Thread pool has already been created.\n");
+			LeaveCriticalSection(&g_InstanceCriticalSection);
+			return DOKAN_DRIVER_INSTALL_ERROR;
+		}
 
-		DokanDbgPrint("Dokan Error: Thread pool has already been created.\n");
-		LeaveCriticalSection(&g_InstanceCriticalSection);
-		return DOKAN_DRIVER_INSTALL_ERROR;
+		// It seems this is only needed if LoadLibrary() and FreeLibrary() are used and it should be called by the exe
+		// SetThreadpoolCallbackLibrary(&g_ThreadPoolCallbackEnvironment, hModule);
+
+		g_ThreadPool = CreateThreadpool(NULL);
+
+		if(!g_ThreadPool) {
+
+			DokanDbgPrint("Dokan Error: Failed to create thread pool.\n");
+			LeaveCriticalSection(&g_InstanceCriticalSection);
+			return DOKAN_DRIVER_INSTALL_ERROR;
+		}
 	}
-
-	// It seems this is only needed if LoadLibrary() and FreeLibrary() are used and it should be called by the exe
-	// SetThreadpoolCallbackLibrary(&g_ThreadPoolCallbackEnvironment, hModule);
-
-	g_ThreadPool = CreateThreadpool(NULL);
-
-	if(!g_ThreadPool) {
-
-		DokanDbgPrint("Dokan Error: Failed to create thread pool.\n");
-		LeaveCriticalSection(&g_InstanceCriticalSection);
-		return DOKAN_DRIVER_INSTALL_ERROR;
-	}
-
 	LeaveCriticalSection(&g_InstanceCriticalSection);
 
 	return DOKAN_SUCCESS;
@@ -129,14 +129,15 @@ int InitializeThreadPool(HMODULE hModule) {
 void CleanupThreadpool() {
 
 	EnterCriticalSection(&g_InstanceCriticalSection);
-	
-	// TODO: Iterate all instances and deallocate their cleanup groups
+	{
+		// TODO: Iterate all instances and deallocate their cleanup groups
 
-	if(g_ThreadPool) {
-		CloseThreadpool(g_ThreadPool);
-		g_ThreadPool = NULL;
+		if(g_ThreadPool) {
+
+			CloseThreadpool(g_ThreadPool);
+			g_ThreadPool = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_InstanceCriticalSection);
 }
 
@@ -147,13 +148,13 @@ DOKAN_IO_EVENT* PopIoEventBuffer() {
 	DOKAN_IO_EVENT *ioEvent = NULL;
 
 	EnterCriticalSection(&g_EventBufferCriticalSection);
-	
-	if(DokanVector_GetCount(g_EventBufferPool) > 0)
 	{
-		ioEvent = *(DOKAN_IO_EVENT**)DokanVector_GetLastItem(g_EventBufferPool);
-		DokanVector_PopBack(g_EventBufferPool);
+		if(DokanVector_GetCount(g_EventBufferPool) > 0)
+		{
+			ioEvent = *(DOKAN_IO_EVENT**)DokanVector_GetLastItem(g_EventBufferPool);
+			DokanVector_PopBack(g_EventBufferPool);
+		}
 	}
-
 	LeaveCriticalSection(&g_EventBufferCriticalSection);
 
 	if(!ioEvent) {
@@ -189,13 +190,13 @@ void PushIoEventBuffer(DOKAN_IO_EVENT *IOEvent) {
 	}
 
 	EnterCriticalSection(&g_EventBufferCriticalSection);
+	{
+		if(DokanVector_GetCount(g_EventBufferPool) < DOKAN_IO_EVENT_POOL_SIZE) {
 
-	if(DokanVector_GetCount(g_EventBufferPool) < DOKAN_IO_EVENT_POOL_SIZE) {
-		
-		DokanVector_PushBack(g_EventBufferPool, &IOEvent);
-		IOEvent = NULL;
+			DokanVector_PushBack(g_EventBufferPool, &IOEvent);
+			IOEvent = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_EventBufferCriticalSection);
 
 	if(IOEvent) {
@@ -230,13 +231,13 @@ DOKAN_OVERLAPPED* PopOverlapped() {
 	DOKAN_OVERLAPPED *overlapped = NULL;
 
 	EnterCriticalSection(&g_OverlappedCriticalSection);
-
-	if(DokanVector_GetCount(g_OverlappedPool) > 0)
 	{
-		overlapped = *(DOKAN_OVERLAPPED**)DokanVector_GetLastItem(g_OverlappedPool);
-		DokanVector_PopBack(g_OverlappedPool);
+		if(DokanVector_GetCount(g_OverlappedPool) > 0)
+		{
+			overlapped = *(DOKAN_OVERLAPPED**)DokanVector_GetLastItem(g_OverlappedPool);
+			DokanVector_PopBack(g_OverlappedPool);
+		}
 	}
-
 	LeaveCriticalSection(&g_OverlappedCriticalSection);
 
 	if(!overlapped) {
@@ -277,13 +278,13 @@ void PushOverlapped(DOKAN_OVERLAPPED *Overlapped) {
 	assert(Overlapped);
 
 	EnterCriticalSection(&g_OverlappedCriticalSection);
+	{
+		if(DokanVector_GetCount(g_OverlappedPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
 
-	if(DokanVector_GetCount(g_OverlappedPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
-
-		DokanVector_PushBack(g_OverlappedPool, &Overlapped);
-		Overlapped = NULL;
+			DokanVector_PushBack(g_OverlappedPool, &Overlapped);
+			Overlapped = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_OverlappedCriticalSection);
 
 	if(Overlapped) {
@@ -299,13 +300,13 @@ EVENT_INFORMATION* PopEventResult() {
 	EVENT_INFORMATION *eventResult = NULL;
 
 	EnterCriticalSection(&g_EventResultCriticalSection);
-
-	if(DokanVector_GetCount(g_EventResultPool) > 0)
 	{
-		eventResult = *(EVENT_INFORMATION**)DokanVector_GetLastItem(g_EventResultPool);
-		DokanVector_PopBack(g_EventResultPool);
-	}
+		if(DokanVector_GetCount(g_EventResultPool) > 0) {
 
+			eventResult = *(EVENT_INFORMATION**)DokanVector_GetLastItem(g_EventResultPool);
+			DokanVector_PopBack(g_EventResultPool);
+		}
+	}
 	LeaveCriticalSection(&g_EventResultCriticalSection);
 
 	if(!eventResult) {
@@ -335,13 +336,13 @@ void PushEventResult(EVENT_INFORMATION *EventResult) {
 	assert(EventResult);
 
 	EnterCriticalSection(&g_EventResultCriticalSection);
+	{
+		if(DokanVector_GetCount(g_EventResultPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
 
-	if(DokanVector_GetCount(g_EventResultPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
-
-		DokanVector_PushBack(g_EventResultPool, &EventResult);
-		EventResult = NULL;
+			DokanVector_PushBack(g_EventResultPool, &EventResult);
+			EventResult = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_EventResultCriticalSection);
 
 	if(EventResult) {
@@ -357,13 +358,13 @@ DOKAN_OPEN_INFO* PopFileOpenInfo() {
 	DOKAN_OPEN_INFO *fileInfo = NULL;
 
 	EnterCriticalSection(&g_FileInfoCriticalSection);
-
-	if(DokanVector_GetCount(g_FileInfoPool) > 0)
 	{
-		fileInfo = *(DOKAN_OPEN_INFO**)DokanVector_GetLastItem(g_FileInfoPool);
-		DokanVector_PopBack(g_FileInfoPool);
+		if(DokanVector_GetCount(g_FileInfoPool) > 0)
+		{
+			fileInfo = *(DOKAN_OPEN_INFO**)DokanVector_GetLastItem(g_FileInfoPool);
+			DokanVector_PopBack(g_FileInfoPool);
+		}
 	}
-
 	LeaveCriticalSection(&g_FileInfoCriticalSection);
 
 	if(!fileInfo) {
@@ -394,19 +395,19 @@ void CleanupFileOpenInfo(DOKAN_OPEN_INFO *FileInfo) {
 	DOKAN_VECTOR *dirList = NULL;
 
 	EnterCriticalSection(&FileInfo->CriticalSection);
+	{
+		if(FileInfo->DirListSearchPattern) {
 
-	if(FileInfo->DirListSearchPattern) {
+			free(FileInfo->DirListSearchPattern);
+			FileInfo->DirListSearchPattern = NULL;
+		}
 
-		free(FileInfo->DirListSearchPattern);
-		FileInfo->DirListSearchPattern = NULL;
+		if(FileInfo->DirList) {
+
+			dirList = FileInfo->DirList;
+			FileInfo->DirList = NULL;
+		}
 	}
-
-	if(FileInfo->DirList) {
-
-		dirList = FileInfo->DirList;
-		FileInfo->DirList = NULL;
-	}
-
 	LeaveCriticalSection(&FileInfo->CriticalSection);
 
 	if(dirList) {
@@ -433,13 +434,13 @@ void PushFileOpenInfo(DOKAN_OPEN_INFO *FileInfo) {
 	CleanupFileOpenInfo(FileInfo);
 
 	EnterCriticalSection(&g_FileInfoCriticalSection);
+	{
+		if(DokanVector_GetCount(g_FileInfoPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
 
-	if(DokanVector_GetCount(g_FileInfoPool) < DOKAN_OVERLAPPED_POOL_SIZE) {
-
-		DokanVector_PushBack(g_FileInfoPool, &FileInfo);
-		FileInfo = NULL;
+			DokanVector_PushBack(g_FileInfoPool, &FileInfo);
+			FileInfo = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_FileInfoCriticalSection);
 
 	if(FileInfo) {
@@ -455,13 +456,13 @@ DOKAN_VECTOR* PopDirectoryList() {
 	DOKAN_VECTOR *directoryList = NULL;
 
 	EnterCriticalSection(&g_DirectoryListCriticalSection);
-
-	if(DokanVector_GetCount(g_DirectoryListPool) > 0)
 	{
-		directoryList = *(DOKAN_VECTOR**)DokanVector_GetLastItem(g_DirectoryListPool);
-		DokanVector_PopBack(g_DirectoryListPool);
+		if(DokanVector_GetCount(g_DirectoryListPool) > 0)
+		{
+			directoryList = *(DOKAN_VECTOR**)DokanVector_GetLastItem(g_DirectoryListPool);
+			DokanVector_PopBack(g_DirectoryListPool);
+		}
 	}
-
 	LeaveCriticalSection(&g_DirectoryListCriticalSection);
 
 	if(!directoryList) {
@@ -483,13 +484,13 @@ void PushDirectoryList(DOKAN_VECTOR *DirectoryList) {
 	assert(DokanVector_GetItemSize(DirectoryList) == sizeof(WIN32_FIND_DATAW));
 
 	EnterCriticalSection(&g_DirectoryListCriticalSection);
+	{
+		if(DokanVector_GetCount(g_DirectoryListPool) < DOKAN_DIRECTORY_LIST_POOL_SIZE) {
 
-	if(DokanVector_GetCount(g_DirectoryListPool) < DOKAN_DIRECTORY_LIST_POOL_SIZE) {
-
-		DokanVector_PushBack(g_DirectoryListPool, &DirectoryList);
-		DirectoryList = NULL;
+			DokanVector_PushBack(g_DirectoryListPool, &DirectoryList);
+			DirectoryList = NULL;
+		}
 	}
-
 	LeaveCriticalSection(&g_DirectoryListCriticalSection);
 
 	if(DirectoryList) {
@@ -535,47 +536,47 @@ NewDokanInstance() {
   }
 
   EnterCriticalSection(&g_InstanceCriticalSection);
+  {
+	  if(!g_ThreadPool) {
 
-  if(!g_ThreadPool) {
+		  DokanDbgPrint("Dokan Error: Cannot create Dokan instance because the thread pool hasn't been created.\n");
+		  LeaveCriticalSection(&g_InstanceCriticalSection);
 
-	  DokanDbgPrint("Dokan Error: Cannot create Dokan instance because the thread pool hasn't been created.\n");
-	  LeaveCriticalSection(&g_InstanceCriticalSection);
+		  DeleteCriticalSection(&instance->CriticalSection);
 
-	  DeleteCriticalSection(&instance->CriticalSection);
+		  CloseHandle(instance->DeviceClosedWaitHandle);
 
-	  CloseHandle(instance->DeviceClosedWaitHandle);
+		  free(instance);
 
-	  free(instance);
+		  return NULL;
+	  }
 
-	  return NULL;
+	  instance->ThreadInfo.ThreadPool = g_ThreadPool;
+	  instance->ThreadInfo.CleanupGroup = CreateThreadpoolCleanupGroup();
+
+	  if(!instance->ThreadInfo.CleanupGroup) {
+
+		  DokanDbgPrint("Dokan Error: Failed to create thread pool cleanup group.\n");
+
+		  LeaveCriticalSection(&g_InstanceCriticalSection);
+
+		  DeleteCriticalSection(&instance->CriticalSection);
+
+		  CloseHandle(instance->DeviceClosedWaitHandle);
+
+		  free(instance);
+
+		  return NULL;
+	  }
+
+	  InitializeThreadpoolEnvironment(&instance->ThreadInfo.CallbackEnvironment);
+
+	  SetThreadpoolCallbackPool(&instance->ThreadInfo.CallbackEnvironment, g_ThreadPool);
+
+	  SetThreadpoolCallbackCleanupGroup(&instance->ThreadInfo.CallbackEnvironment, instance->ThreadInfo.CleanupGroup, NULL);
+
+	  InsertTailList(&g_InstanceList, &instance->ListEntry);
   }
-
-  instance->ThreadInfo.ThreadPool = g_ThreadPool;
-  instance->ThreadInfo.CleanupGroup = CreateThreadpoolCleanupGroup();
-
-  if(!instance->ThreadInfo.CleanupGroup) {
-
-	  DokanDbgPrint("Dokan Error: Failed to create thread pool cleanup group.\n");
-
-	  LeaveCriticalSection(&g_InstanceCriticalSection);
-
-	  DeleteCriticalSection(&instance->CriticalSection);
-
-	  CloseHandle(instance->DeviceClosedWaitHandle);
-
-	  free(instance);
-
-	  return NULL;
-  }
-
-  InitializeThreadpoolEnvironment(&instance->ThreadInfo.CallbackEnvironment);
-  
-  SetThreadpoolCallbackPool(&instance->ThreadInfo.CallbackEnvironment, g_ThreadPool);
-
-  SetThreadpoolCallbackCleanupGroup(&instance->ThreadInfo.CallbackEnvironment, instance->ThreadInfo.CleanupGroup, NULL);
-
-  InsertTailList(&g_InstanceList, &instance->ListEntry);
-
   LeaveCriticalSection(&g_InstanceCriticalSection);
 
   return instance;
@@ -618,7 +619,9 @@ void DeleteDokanInstance(PDOKAN_INSTANCE Instance) {
   DeleteCriticalSection(&Instance->CriticalSection);
 
   EnterCriticalSection(&g_InstanceCriticalSection);
-  RemoveEntryList(&Instance->ListEntry);
+  {
+	  RemoveEntryList(&Instance->ListEntry);
+  }
   LeaveCriticalSection(&g_InstanceCriticalSection);
 
   CloseHandle(Instance->DeviceClosedWaitHandle);
@@ -1676,17 +1679,17 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   case DLL_PROCESS_DETACH: {
 
     EnterCriticalSection(&g_InstanceCriticalSection);
+	{
+		while(!IsListEmpty(&g_InstanceList)) {
 
-    while (!IsListEmpty(&g_InstanceList)) {
+			PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
 
-      PLIST_ENTRY entry = RemoveHeadList(&g_InstanceList);
-      
-	  PDOKAN_INSTANCE instance =
-          CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
+			PDOKAN_INSTANCE instance =
+				CONTAINING_RECORD(entry, DOKAN_INSTANCE, ListEntry);
 
-	  DokanCloseHandle((DOKAN_HANDLE)instance);
-    }
-
+			DokanCloseHandle((DOKAN_HANDLE)instance);
+		}
+	}
     LeaveCriticalSection(&g_InstanceCriticalSection);
 
 	CleanupThreadpool();
@@ -1694,15 +1697,15 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	//////////////////// IO event buffer object pool ////////////////////
 	{
 		EnterCriticalSection(&g_EventBufferCriticalSection);
+		{
+			for(size_t i = 0; i < DokanVector_GetCount(g_EventBufferPool); ++i) {
 
-		for(size_t i = 0; i < DokanVector_GetCount(g_EventBufferPool); ++i) {
+				FreeIOEventBuffer(*(DOKAN_IO_EVENT**)DokanVector_GetItem(g_EventBufferPool, i));
+			}
 
-			FreeIOEventBuffer(*(DOKAN_IO_EVENT**)DokanVector_GetItem(g_EventBufferPool, i));
+			DokanVector_Free(g_EventBufferPool);
+			g_EventBufferPool = NULL;
 		}
-
-		DokanVector_Free(g_EventBufferPool);
-		g_EventBufferPool = NULL;
-
 		LeaveCriticalSection(&g_EventBufferCriticalSection);
 
 		DeleteCriticalSection(&g_EventBufferCriticalSection);
@@ -1711,15 +1714,15 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	//////////////////// Overlapped object pool ////////////////////
 	{
 		EnterCriticalSection(&g_OverlappedCriticalSection);
+		{
+			for(size_t i = 0; i < DokanVector_GetCount(g_OverlappedPool); ++i) {
 
-		for(size_t i = 0; i < DokanVector_GetCount(g_OverlappedPool); ++i) {
+				FreeOverlapped(*(DOKAN_OVERLAPPED**)DokanVector_GetItem(g_OverlappedPool, i));
+			}
 
-			FreeOverlapped(*(DOKAN_OVERLAPPED**)DokanVector_GetItem(g_OverlappedPool, i));
+			DokanVector_Free(g_OverlappedPool);
+			g_OverlappedPool = NULL;
 		}
-
-		DokanVector_Free(g_OverlappedPool);
-		g_OverlappedPool = NULL;
-
 		LeaveCriticalSection(&g_OverlappedCriticalSection);
 
 		DeleteCriticalSection(&g_OverlappedCriticalSection);
@@ -1728,15 +1731,15 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	//////////////////// Event result object pool ////////////////////
 	{
 		EnterCriticalSection(&g_EventResultCriticalSection);
+		{
+			for(size_t i = 0; i < DokanVector_GetCount(g_EventResultPool); ++i) {
 
-		for(size_t i = 0; i < DokanVector_GetCount(g_EventResultPool); ++i) {
+				FreeEventResult(*(EVENT_INFORMATION**)DokanVector_GetItem(g_EventResultPool, i));
+			}
 
-			FreeEventResult(*(EVENT_INFORMATION**)DokanVector_GetItem(g_EventResultPool, i));
+			DokanVector_Free(g_EventResultPool);
+			g_EventResultPool = NULL;
 		}
-
-		DokanVector_Free(g_EventResultPool);
-		g_EventResultPool = NULL;
-
 		LeaveCriticalSection(&g_EventResultCriticalSection);
 
 		DeleteCriticalSection(&g_EventResultCriticalSection);
@@ -1745,15 +1748,15 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	//////////////////// File info object pool ////////////////////
 	{
 		EnterCriticalSection(&g_FileInfoCriticalSection);
+		{
+			for(size_t i = 0; i < DokanVector_GetCount(g_FileInfoPool); ++i) {
 
-		for(size_t i = 0; i < DokanVector_GetCount(g_FileInfoPool); ++i) {
+				FreeFileOpenInfo(*(DOKAN_OPEN_INFO**)DokanVector_GetItem(g_FileInfoPool, i));
+			}
 
-			FreeFileOpenInfo(*(DOKAN_OPEN_INFO**)DokanVector_GetItem(g_FileInfoPool, i));
+			DokanVector_Free(g_FileInfoPool);
+			g_FileInfoPool = NULL;
 		}
-
-		DokanVector_Free(g_FileInfoPool);
-		g_FileInfoPool = NULL;
-
 		LeaveCriticalSection(&g_FileInfoCriticalSection);
 
 		DeleteCriticalSection(&g_FileInfoCriticalSection);
@@ -1762,15 +1765,15 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	//////////////////// Directory list pool ////////////////////
 	{
 		EnterCriticalSection(&g_DirectoryListCriticalSection);
+		{
+			for(size_t i = 0; i < DokanVector_GetCount(g_DirectoryListPool); ++i) {
 
-		for(size_t i = 0; i < DokanVector_GetCount(g_DirectoryListPool); ++i) {
+				DokanVector_Free(*(DOKAN_VECTOR**)DokanVector_GetItem(g_DirectoryListPool, i));
+			}
 
-			DokanVector_Free(*(DOKAN_VECTOR**)DokanVector_GetItem(g_DirectoryListPool, i));
+			DokanVector_Free(g_DirectoryListPool);
+			g_DirectoryListPool = NULL;
 		}
-
-		DokanVector_Free(g_DirectoryListPool);
-		g_DirectoryListPool = NULL;
-
 		LeaveCriticalSection(&g_DirectoryListCriticalSection);
 
 		DeleteCriticalSection(&g_DirectoryListCriticalSection);

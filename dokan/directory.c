@@ -530,32 +530,32 @@ void EndFindFilesCommon(DOKAN_IO_EVENT *EventInfo, NTSTATUS ResultStatus) {
 		ResultStatus = WriteDirectoryResults(EventInfo, dirList);
 
 		EnterCriticalSection(&EventInfo->DokanOpenInfo->CriticalSection);
+		{
+			if(EventInfo->DokanOpenInfo->DirList != dirList) {
 
-		if(EventInfo->DokanOpenInfo->DirList != dirList) {
+				oldDirList = EventInfo->DokanOpenInfo->DirList;
+				EventInfo->DokanOpenInfo->DirList = dirList;
+			}
+			else {
 
-			oldDirList = EventInfo->DokanOpenInfo->DirList;
-			EventInfo->DokanOpenInfo->DirList = dirList;
-		}
-		else {
+				// They should never point to the same object
+				DbgPrint("Dokan Warning: EndFindFilesCommon() EventInfo->DokanOpenInfo->DirList == dirList\n");
+			}
 
-			// They should never point to the same object
-			DbgPrint("Dokan Warning: EndFindFilesCommon() EventInfo->DokanOpenInfo->DirList == dirList\n");
-		}
+			if(EventInfo->DokanOpenInfo->DirListSearchPattern) {
 
-		if(EventInfo->DokanOpenInfo->DirListSearchPattern) {
+				free(EventInfo->DokanOpenInfo->DirListSearchPattern);
+				EventInfo->DokanOpenInfo->DirListSearchPattern = NULL;
+			}
 
-			free(EventInfo->DokanOpenInfo->DirListSearchPattern);
-			EventInfo->DokanOpenInfo->DirListSearchPattern = NULL;
-		}
+			if(EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength > 0) {
 
-		if(EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength > 0) {
-
-			EventInfo->DokanOpenInfo->DirListSearchPattern =
-				_wcsdup((PWCHAR)(
+				EventInfo->DokanOpenInfo->DirListSearchPattern =
+					_wcsdup((PWCHAR)(
 					(SIZE_T)&EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternBase[0] +
-					(SIZE_T)EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternOffset));
+						(SIZE_T)EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternOffset));
+			}
 		}
-
 		LeaveCriticalSection(&EventInfo->DokanOpenInfo->CriticalSection);
 
 		if(oldDirList) {
@@ -617,34 +617,34 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
   }
 
   EnterCriticalSection(&EventInfo->DokanOpenInfo->CriticalSection);
+  {
+	  if(EventInfo->DokanOpenInfo->DirList == NULL) {
 
-  if(EventInfo->DokanOpenInfo->DirList == NULL) {
+		  forceScan = TRUE;
+	  }
+	  else if(searchPattern && EventInfo->DokanOpenInfo->DirListSearchPattern) {
 
-	  forceScan = TRUE;
+		  forceScan = wcscmp(searchPattern, EventInfo->DokanOpenInfo->DirListSearchPattern) != 0 ? TRUE : FALSE;
+	  }
+	  else if(searchPattern) {
+
+		  forceScan = wcscmp(searchPattern, L"*") != 0 ? TRUE : FALSE;
+	  }
+	  else if(EventInfo->DokanOpenInfo->DirListSearchPattern) {
+
+		  forceScan = wcscmp(EventInfo->DokanOpenInfo->DirListSearchPattern, L"*") != 0 ? TRUE : FALSE;
+	  }
+
+	  // In FastFat SL_INDEX_SPECIFIED overrides SL_RESTART_SCAN
+	  forceScan = (forceScan
+		  || (!(EventInfo->KernelInfo.EventContext.Flags & SL_INDEX_SPECIFIED)
+			  && (EventInfo->KernelInfo.EventContext.Flags & SL_RESTART_SCAN))) ? TRUE : FALSE;
+
+	  if(!forceScan) {
+
+		  status = WriteDirectoryResults(EventInfo, EventInfo->DokanOpenInfo->DirList);
+	  }
   }
-  else if(searchPattern && EventInfo->DokanOpenInfo->DirListSearchPattern) {
-
-	  forceScan = wcscmp(searchPattern, EventInfo->DokanOpenInfo->DirListSearchPattern) != 0 ? TRUE : FALSE;
-  }
-  else if(searchPattern) {
-
-	  forceScan = wcscmp(searchPattern, L"*") != 0 ? TRUE : FALSE;
-  }
-  else if(EventInfo->DokanOpenInfo->DirListSearchPattern) {
-
-	  forceScan = wcscmp(EventInfo->DokanOpenInfo->DirListSearchPattern, L"*") != 0 ? TRUE : FALSE;
-  }
-  
-  // In FastFat SL_INDEX_SPECIFIED overrides SL_RESTART_SCAN
-  forceScan = (forceScan
-	  || (!(EventInfo->KernelInfo.EventContext.Flags & SL_INDEX_SPECIFIED)
-		  && (EventInfo->KernelInfo.EventContext.Flags & SL_RESTART_SCAN))) ? TRUE : FALSE;
-
-  if(!forceScan) {
-
-	  status = WriteDirectoryResults(EventInfo, EventInfo->DokanOpenInfo->DirList);
-  }
-
   LeaveCriticalSection(&EventInfo->DokanOpenInfo->CriticalSection);
 
   if(!forceScan) {
