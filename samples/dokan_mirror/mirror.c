@@ -25,6 +25,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#define MIRROR_DEBUG_MEMORY 1
+#define MIRROR_IS_DEBUGGING_MEMORY (_DEBUG && MIRROR_DEBUG_MEMORY)
+
+#if MIRROR_IS_DEBUGGING_MEMORY
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+#endif
+
 #include "../../dokan/dokan.h"
 #include "../../dokan/fileinfo.h"
 #include <malloc.h>
@@ -597,6 +606,8 @@ static void DOKAN_CALLBACK MirrorCloseFile(DOKAN_CLOSE_FILE_EVENT *EventInfo) {
 	
 	mirrorHandle->FileHandle = NULL;
 	EventInfo->DokanFileInfo->Context = 0;
+
+	PushMirrorFileHandle(mirrorHandle);
 
 	if(EventInfo->DokanFileInfo->DeleteOnClose) {
 
@@ -1577,6 +1588,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   DOKAN_OPTIONS dokanOptions;
   DOKAN_OPERATIONS dokanOperations;
 
+#if MIRROR_IS_DEBUGGING_MEMORY
+  _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
+
   if (argc < 3) {
     fprintf(stderr, "mirror.exe\n"
                     "  /r RootDirectory (ex. /r c:\\test)\n"
@@ -1756,7 +1771,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 #endif
 
   InitializeCriticalSection(&g_FileHandlePoolCS);
-  DokanVector_StackAlloc(&g_FileHandlePool, sizeof(MIRROR_FILE_HANDLE));
+  DokanVector_StackAlloc(&g_FileHandlePool, sizeof(MIRROR_FILE_HANDLE*));
 
   status = DokanMain(&dokanOptions, &dokanOperations);
 

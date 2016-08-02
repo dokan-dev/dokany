@@ -229,7 +229,7 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 		ioEvent->EventInfo.ZwCreateFile.OriginalFileName = NULL;
 	}
 
-	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, lastError = %d, file handle = 0x%p\n, eventID = %04d",
+	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, lastError = %d, file handle = 0x%p, eventID = %04d\n",
 		ResultStatus, lastError, ioEvent->DokanOpenInfo, ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1);
 
 	// FILE_CREATED
