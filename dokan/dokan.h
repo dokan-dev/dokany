@@ -431,10 +431,6 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
-// If Safe is TRUE, will broadcast to all desktop and Shell
-// Safe should not be used during DLL_PROCESS_DETACH
-BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
-
 // DokanIsNameInExpression
 //   checks whether Name can match Expression
 //   Expression can contain wildcard characters (? and *)

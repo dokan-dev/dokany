@@ -817,7 +817,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
 
     DWORD error = GetLastError();
 
-    DbgPrint(L"\tseek error, offset = %d\n\n", offset);
+    DbgPrint(L"\tseek error, offset = %d\n\n", EventInfo->Offset);
 
     return DokanNtStatusFromWin32(error);
   }
@@ -837,8 +837,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) 
   }
   else {
 
-    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", EventInfo->NumberOfBytesToRead,
-		EventInfo->NumberOfBytesRead, offset);
+    DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n",
+		EventInfo->NumberOfBytesToRead,
+		EventInfo->NumberOfBytesRead,
+		EventInfo->Offset);
   }
 
   return STATUS_SUCCESS;
@@ -864,7 +866,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
   DWORD fileSizeLow = 0;
   DWORD fileSizeHigh = 0;
 
-  fileSizeLow = GetFileSize(handle, &fileSizeHigh);
+  fileSizeLow = GetFileSize(mirrorHandle->FileHandle, &fileSizeHigh);
 
   if (fileSizeLow == INVALID_FILE_SIZE) {
 
@@ -872,17 +874,36 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 
     DbgPrint(L"\tcan not get a file size error = %d\n", error);
 
-    if (opened) {
-
-      CloseHandle(handle);
-    }
-
     return DokanNtStatusFromWin32(error);
   }
 
   fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
 
 #if USE_ASYNC_IO
+
+  if(EventInfo->DokanFileInfo->PagingIo) {
+
+	  if((UINT64)EventInfo->Offset >= fileSize) {
+
+		  EventInfo->NumberOfBytesWritten = 0;
+
+		  return STATUS_SUCCESS;
+	  }
+
+	  if(((UINT64)EventInfo->Offset + EventInfo->NumberOfBytesToWrite) > fileSize) {
+
+		  UINT64 bytes = fileSize - EventInfo->Offset;
+
+		  if(bytes >> 32) {
+
+			  EventInfo->NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
+		  }
+		  else {
+
+			  EventInfo->NumberOfBytesToWrite = (DWORD)bytes;
+		  }
+	  }
+  }
 
   MIRROR_OVERLAPPED *overlapped = PopMirrorOverlapped();
 
@@ -939,37 +960,45 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
   }
   else {
     // Paging IO cannot write after allocate file size.
-    if (DokanFileInfo->PagingIo) {
-      if ((UINT64)Offset >= fileSize) {
-        *NumberOfBytesWritten = 0;
-        if (opened)
-          CloseHandle(handle);
-        return STATUS_SUCCESS;
+    if (EventInfo->DokanFileInfo->PagingIo) {
+
+      if ((UINT64)EventInfo->Offset >= fileSize) {
+
+		  EventInfo->NumberOfBytesWritten = 0;
+		  
+		  return STATUS_SUCCESS;
       }
 
-      if (((UINT64)Offset + NumberOfBytesToWrite) > fileSize) {
-        UINT64 bytes = fileSize - Offset;
+      if (((UINT64)EventInfo->Offset + EventInfo->NumberOfBytesToWrite) > fileSize) {
+
+        UINT64 bytes = fileSize - EventInfo->Offset;
+
         if (bytes >> 32) {
-          NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
-        } else {
-          NumberOfBytesToWrite = (DWORD)bytes;
+
+			EventInfo->NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
+        }
+		else {
+
+			EventInfo->NumberOfBytesToWrite = (DWORD)bytes;
         }
       }
     }
 
-    if ((UINT64)Offset > fileSize) {
+    if ((UINT64)EventInfo->Offset > fileSize) {
       // In the mirror sample helperZeroFileData is not necessary. NTFS will
       // zero a hole.
       // But if user's file system is different from NTFS( or other Windows's
       // file systems ) then  users will have to zero the hole themselves.
     }
 
-    distanceToMove.QuadPart = Offset;
-    if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+    distanceToMove.QuadPart = EventInfo->Offset;
+
+    if (!SetFilePointerEx(mirrorHandle->FileHandle, distanceToMove, NULL, FILE_BEGIN)) {
+
       DWORD error = GetLastError();
-      DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
-      if (opened)
-        CloseHandle(handle);
+
+      DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", EventInfo->Offset, error);
+
       return DokanNtStatusFromWin32(error);
     }
   }
@@ -989,7 +1018,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
   }
   else {
 
-    DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
+    DbgPrint(L"\twrite %d, offset %I64d\n\n", EventInfo->NumberOfBytesWritten, EventInfo->Offset);
   }
 
   return STATUS_SUCCESS;

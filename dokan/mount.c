@@ -539,7 +539,7 @@ void GenerateUnmountPoint(LPCWSTR MountPoint, WCHAR *Result, size_t ResultMaxCha
 	}
 }
 
-BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint) {
+BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
 
 	if(MountPoint != NULL) {
 		
@@ -573,14 +573,14 @@ void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance) {
 			unmountPoint[length] = L'\\';
 			unmountPoint[length + 1] = L'\0';
 
-			// Required to remove reparse point (could also be done through
-			// FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function)
+			// Required to remove reparse point (could also be done through 
+			// FSCTL_DELETE_REPARSE_POINT with DeleteMountPoint function) 
 			DeleteVolumeMountPoint(unmountPoint);
 		}
 	}
 	else {
 
-		// Notify applications / explorer
+		// Notify applications / explorer 
 		DokanBroadcastLink(Instance->MountPoint[0], TRUE, TRUE);
 	}
 
@@ -593,5 +593,4 @@ void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance) {
 
 		Instance->DokanOperations->Unmounted(&fileInfo);
 	}
-            mountPoint[length + 1] = L'\0';
-          DokanBroadcastLink(MountPoint[0], TRUE, Safe);
+}
