@@ -19,9 +19,9 @@ DOKAN_VECTOR* DOKANAPI DokanVector_Alloc(size_t ItemSize) {
 		return NULL;
 	}
 
-	DOKAN_VECTOR *vector = (DOKAN_VECTOR*)malloc(sizeof(DOKAN_VECTOR));
+	DOKAN_VECTOR *vector = (DOKAN_VECTOR*)DokanMalloc(sizeof(DOKAN_VECTOR));
 
-	vector->Items = malloc(ItemSize * DEFAULT_ITEM_COUNT);
+	vector->Items = DokanMalloc(ItemSize * DEFAULT_ITEM_COUNT);
 	vector->ItemCount = 0;
 	vector->ItemSize = ItemSize;
 	vector->MaxItems = DEFAULT_ITEM_COUNT;
@@ -40,11 +40,11 @@ DOKAN_VECTOR* DOKANAPI DokanVector_AllocWithCapacity(size_t ItemSize, size_t Max
 		return NULL;
 	}
 
-	DOKAN_VECTOR *vector = (DOKAN_VECTOR*)malloc(sizeof(DOKAN_VECTOR));
+	DOKAN_VECTOR *vector = (DOKAN_VECTOR*)DokanMalloc(sizeof(DOKAN_VECTOR));
 
 	if(MaxItems > 0) {
 		
-		vector->Items = malloc(ItemSize * MaxItems);
+		vector->Items = DokanMalloc(ItemSize * MaxItems);
 	}
 	else {
 		
@@ -73,7 +73,7 @@ BOOL DOKANAPI DokanVector_StackAlloc(DOKAN_VECTOR *Vector, size_t ItemSize) {
 		return FALSE;
 	}
 
-	Vector->Items = malloc(ItemSize * DEFAULT_ITEM_COUNT);
+	Vector->Items = DokanMalloc(ItemSize * DEFAULT_ITEM_COUNT);
 	Vector->ItemCount = 0;
 	Vector->ItemSize = ItemSize;
 	Vector->MaxItems = DEFAULT_ITEM_COUNT;
@@ -98,7 +98,7 @@ BOOL DOKANAPI DokanVector_StackAllocWithCapacity(DOKAN_VECTOR *Vector, size_t It
 
 	if(MaxItems > 0) {
 
-		Vector->Items = malloc(ItemSize * MaxItems);
+		Vector->Items = DokanMalloc(ItemSize * MaxItems);
 	}
 	else {
 
@@ -120,12 +120,12 @@ void DOKANAPI DokanVector_Free(DOKAN_VECTOR *Vector) {
 		
 		if(Vector->Items) {
 			
-			free(Vector->Items);
+			DokanFree(Vector->Items);
 		}
 
 		if(!Vector->IsStackAllocated) {
 			
-			free(Vector);
+			DokanFree(Vector);
 		}
 	}
 }
@@ -238,7 +238,7 @@ BOOL DokanVector_Grow(DOKAN_VECTOR *Vector, size_t MinimumIncrease) {
 
 	if(MinimumIncrease == 0 && Vector->MaxItems == 0) {
 		
-		Vector->Items = malloc(Vector->ItemSize * DEFAULT_ITEM_COUNT);
+		Vector->Items = DokanMalloc(Vector->ItemSize * DEFAULT_ITEM_COUNT);
 		Vector->MaxItems = DEFAULT_ITEM_COUNT;
 
 		return TRUE;
@@ -256,7 +256,7 @@ BOOL DokanVector_Grow(DOKAN_VECTOR *Vector, size_t MinimumIncrease) {
 		newSize = Vector->MaxItems + MinimumIncrease + MinimumIncrease;
 	}
 
-	void *newItems = realloc(Vector->Items, newSize * Vector->ItemSize);
+	void *newItems = DokanRealloc(Vector->Items, newSize * Vector->ItemSize);
 
 	if(newItems) {
 		

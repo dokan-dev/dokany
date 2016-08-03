@@ -78,6 +78,11 @@ CRITICAL_SECTION		g_FileInfoCriticalSection;
 DOKAN_VECTOR			*g_DirectoryListPool = NULL;
 CRITICAL_SECTION		g_DirectoryListCriticalSection;
 
+volatile PDokanMalloc	g_DokanMalloc = NULL;
+volatile PDokanFree		g_DokanFree = NULL;
+volatile PDokanRealloc	g_DokanRealloc = NULL;
+
+volatile LONG			g_DokanInitialized = 0;
 
 // TODO NEXT:
 // * Double check all DOKAN_VECTOR code.
@@ -96,9 +101,7 @@ VOID DOKANAPI DokanUseStdErr(BOOL Status) { g_UseStdErr = Status; }
 
 VOID DOKANAPI DokanDebugMode(BOOL Status) { g_DebugMode = Status; }
 
-int InitializeThreadPool(HMODULE hModule) {
-
-	UNREFERENCED_PARAMETER(hModule);
+int InitializeThreadPool() {
 
 	EnterCriticalSection(&g_InstanceCriticalSection);
 	{
@@ -130,8 +133,6 @@ void CleanupThreadpool() {
 
 	EnterCriticalSection(&g_InstanceCriticalSection);
 	{
-		// TODO: Iterate all instances and deallocate their cleanup groups
-
 		if(g_ThreadPool) {
 
 			CloseThreadpool(g_ThreadPool);
@@ -159,7 +160,7 @@ DOKAN_IO_EVENT* PopIoEventBuffer() {
 
 	if(!ioEvent) {
 
-		ioEvent = (DOKAN_IO_EVENT*)malloc(sizeof(DOKAN_IO_EVENT));
+		ioEvent = (DOKAN_IO_EVENT*)DokanMalloc(sizeof(DOKAN_IO_EVENT));
 	}
 
 	if(ioEvent) {
@@ -175,7 +176,7 @@ void FreeIOEventBuffer(DOKAN_IO_EVENT *IOEvent) {
 
 	if(IOEvent) {
 		
-		free(IOEvent);
+		DokanFree(IOEvent);
 	}
 }
 
@@ -242,7 +243,7 @@ DOKAN_OVERLAPPED* PopOverlapped() {
 
 	if(!overlapped) {
 
-		overlapped = (DOKAN_OVERLAPPED*)malloc(sizeof(DOKAN_OVERLAPPED));
+		overlapped = (DOKAN_OVERLAPPED*)DokanMalloc(sizeof(DOKAN_OVERLAPPED));
 		/*overlapped->InternalOverlapped.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
 
 		if(!overlapped->InternalOverlapped.hEvent) {
@@ -268,7 +269,7 @@ void FreeOverlapped(DOKAN_OVERLAPPED *Overlapped) {
 			CloseHandle(Overlapped->InternalOverlapped.hEvent);
 		}
 		
-		free(Overlapped);
+		DokanFree(Overlapped);
 	}
 }
 
@@ -311,7 +312,7 @@ EVENT_INFORMATION* PopEventResult() {
 
 	if(!eventResult) {
 
-		eventResult = (EVENT_INFORMATION*)malloc(DOKAN_EVENT_INFO_DEFAULT_SIZE);
+		eventResult = (EVENT_INFORMATION*)DokanMalloc(DOKAN_EVENT_INFO_DEFAULT_SIZE);
 	}
 
 	if(eventResult) {
@@ -326,7 +327,7 @@ void FreeEventResult(EVENT_INFORMATION *EventResult) {
 
 	if(EventResult) {
 
-		free(EventResult);
+		DokanFree(EventResult);
 	}
 }
 
@@ -369,7 +370,7 @@ DOKAN_OPEN_INFO* PopFileOpenInfo() {
 
 	if(!fileInfo) {
 
-		fileInfo = (DOKAN_OPEN_INFO*)malloc(sizeof(DOKAN_OPEN_INFO));
+		fileInfo = (DOKAN_OPEN_INFO*)DokanMalloc(sizeof(DOKAN_OPEN_INFO));
 
 		RtlZeroMemory(fileInfo, sizeof(DOKAN_OPEN_INFO));
 
@@ -398,7 +399,7 @@ void CleanupFileOpenInfo(DOKAN_OPEN_INFO *FileInfo) {
 	{
 		if(FileInfo->DirListSearchPattern) {
 
-			free(FileInfo->DirListSearchPattern);
+			DokanFree(FileInfo->DirListSearchPattern);
 			FileInfo->DirListSearchPattern = NULL;
 		}
 
@@ -423,7 +424,7 @@ void FreeFileOpenInfo(DOKAN_OPEN_INFO *FileInfo) {
 		CleanupFileOpenInfo(FileInfo);
 
 		DeleteCriticalSection(&FileInfo->CriticalSection);
-		free(FileInfo);
+		DokanFree(FileInfo);
 	}
 }
 
@@ -503,7 +504,8 @@ void PushDirectoryList(DOKAN_VECTOR *DirectoryList) {
 
 PDOKAN_INSTANCE
 NewDokanInstance() {
-  PDOKAN_INSTANCE instance = (PDOKAN_INSTANCE)malloc(sizeof(DOKAN_INSTANCE));
+
+  PDOKAN_INSTANCE instance = (PDOKAN_INSTANCE)DokanMalloc(sizeof(DOKAN_INSTANCE));
 
   if(instance == NULL) {
 	  return NULL;
@@ -530,7 +532,7 @@ NewDokanInstance() {
 	  
 	  DeleteCriticalSection(&instance->CriticalSection);
 
-	  free(instance);
+	  DokanFree(instance);
 	  
 	  return NULL;
   }
@@ -546,7 +548,7 @@ NewDokanInstance() {
 
 		  CloseHandle(instance->DeviceClosedWaitHandle);
 
-		  free(instance);
+		  DokanFree(instance);
 
 		  return NULL;
 	  }
@@ -564,7 +566,7 @@ NewDokanInstance() {
 
 		  CloseHandle(instance->DeviceClosedWaitHandle);
 
-		  free(instance);
+		  DokanFree(instance);
 
 		  return NULL;
 	  }
@@ -626,7 +628,7 @@ void DeleteDokanInstance(PDOKAN_INSTANCE Instance) {
 
   CloseHandle(Instance->DeviceClosedWaitHandle);
 
-  free(Instance);
+  DokanFree(Instance);
 }
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint) {
@@ -855,6 +857,11 @@ int DOKANAPI DokanCreateFileSystem(
   PDOKAN_INSTANCE instance;
   ULARGE_INTEGER timerDueTime;
   WCHAR rawDeviceName[MAX_PATH];
+
+  if(InterlockedAdd(&g_DokanInitialized, 0) <= 0) {
+
+	  RaiseException(DOKAN_EXCEPTION_NOT_INITIALIZED, 0, 0, NULL);
+  }
 
   g_DebugMode = DokanOptions->Options & DOKAN_OPTION_DEBUG;
   g_UseStdErr = DokanOptions->Options & DOKAN_OPTION_STDERR;
@@ -1212,7 +1219,10 @@ void ProcessIOEvent(
 			BeginDispatchSetSecurity(currentIoEvent);
 			break;
 		default:
-			DokanDbgPrintW(L"Dokan Warning: Unsupported IRP 0x%x.\n", currentIoEvent->KernelInfo.EventContext.MajorFunction);
+			DokanDbgPrintW(L"Dokan Warning: Unsupported IRP 0x%x, event Info = 0x%p.\n",
+				currentIoEvent->KernelInfo.EventContext.MajorFunction,
+				currentIoEvent);
+
 			PushIoEventBuffer(currentIoEvent);
 			break;
 		}
@@ -1346,8 +1356,10 @@ BOOL SendEventInformation(PEVENT_INFORMATION EventInfo,
   DWORD lastError = 0;
   DWORD eventSize = max(sizeof(EVENT_INFORMATION), DOKAN_EVENT_INFO_ALLOC_SIZE(EventInfo->BufferLength));
 
-  DbgPrint("Dokan Information: SendEventInformation() with NTSTATUS result 0x%x and context 0x%lx\n",
-	  EventInfo->Status, EventInfo->Context);
+  DbgPrint("Dokan Information: SendEventInformation() with NTSTATUS 0x%x, context 0x%lx, and result object 0x%p\n",
+	  EventInfo->Status,
+	  EventInfo->Context,
+	  EventInfo);
 
   overlapped = PopOverlapped();
 
@@ -1424,7 +1436,7 @@ void CreateDispatchCommon(DOKAN_IO_EVENT *EventInfo, ULONG SizeOfEventInfo) {
   else {
 
 	  EventInfo->EventResultSize = DOKAN_EVENT_INFO_ALLOC_SIZE(SizeOfEventInfo);
-	  EventInfo->EventResult = (PEVENT_INFORMATION)malloc(EventInfo->EventResultSize);
+	  EventInfo->EventResult = (PEVENT_INFORMATION)DokanMalloc(EventInfo->EventResultSize);
 	  EventInfo->Flags &= ~DOKAN_IO_EVENT_FLAGS_POOLED_RESULT;
 
 	  RtlZeroMemory(EventInfo->EventResult, EventInfo->EventResultSize);
@@ -1446,7 +1458,7 @@ void FreeIoEventResult(PEVENT_INFORMATION EventResult, DOKAN_IO_EVENT_FLAGS Flag
 		}
 		else {
 
-			free(EventResult);
+			DokanFree(EventResult);
 		}
 	}
 }
@@ -1469,18 +1481,25 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
 }
 
 BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
+
   if (MountPoint != NULL) {
+
     size_t length = wcslen(MountPoint);
+
     if (length > 0) {
+
       ULONG returnedLength;
       ULONG inputLength = sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
                           (MAX_PATH * sizeof(WCHAR));
-      PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint = malloc(inputLength);
+      PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint = DokanMalloc(inputLength);
 
       if (szMountPoint != NULL) {
+
         ZeroMemory(szMountPoint, inputLength);
+
         szMountPoint->MaximumLength = MAX_PATH * sizeof(WCHAR);
         szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
+
         CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
         DbgPrint("send global release for %ws\n", MountPoint);
@@ -1490,11 +1509,14 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
                           &returnedLength)) {
 
           DbgPrint("Failed to unmount: %ws\n", MountPoint);
-          free(szMountPoint);
+
+		  DokanFree(szMountPoint);
+
           return FALSE;
         }
 
-        free(szMountPoint);
+		DokanFree(szMountPoint);
+
         return TRUE;
       }
     }
@@ -1650,15 +1672,125 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 
   switch (Reason) {
   case DLL_PROCESS_ATTACH: {
+
+  } break;
+  case DLL_PROCESS_DETACH: {
+
+  } break;
+  }
+  return TRUE;
+}
+
+VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
+    ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
+    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition) {
+  if (outFileAttributesAndFlags) {
+
+    *outFileAttributesAndFlags = FileAttributes;
+
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
+
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+                      FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
+#endif
+  }
+
+  if (outCreationDisposition) {
+
+    switch (CreateDisposition) {
+    case FILE_CREATE:
+      *outCreationDisposition = CREATE_NEW;
+      break;
+    case FILE_OPEN:
+      *outCreationDisposition = OPEN_EXISTING;
+      break;
+    case FILE_OPEN_IF:
+      *outCreationDisposition = OPEN_ALWAYS;
+      break;
+    case FILE_OVERWRITE:
+      *outCreationDisposition = TRUNCATE_EXISTING;
+      break;
+    case FILE_SUPERSEDE:
+    // The documentation isn't clear on the difference between replacing a file
+    // and truncating it.
+    // For now we just map it to create/truncate
+    case FILE_OVERWRITE_IF:
+      *outCreationDisposition = CREATE_ALWAYS;
+      break;
+    default:
+      *outCreationDisposition = 0;
+      break;
+    }
+  }
+}
+
+DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
+
+	PTP_POOL threadPool;
+
+	EnterCriticalSection(&g_InstanceCriticalSection);
+
+	threadPool = g_ThreadPool;
+
+	LeaveCriticalSection(&g_InstanceCriticalSection);
+
+	return threadPool;
+}
+
+void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks) {
+
+	// this is not as safe as a critical section so to some degree we rely on
+	// the user to do the right thing
+	LONG initRefCount = InterlockedIncrement(&g_DokanInitialized);
+
+	if(initRefCount <= 0) {
+
+		RaiseException(DOKAN_EXCEPTION_INITIALIZATION_FAILED, EXCEPTION_NONCONTINUABLE, 0, NULL);
+		return;
+	}
+
+	if(initRefCount > 1) {
+
+		return;
+	}
+
+	if(memoryCallbacks) {
+#if INTPTR_MAX == INT64_MAX
+		InterlockedExchange64((volatile LONG64*)&g_DokanMalloc, (LONG64)memoryCallbacks->Malloc);
+		InterlockedExchange64((volatile LONG64*)&g_DokanFree, (LONG64)memoryCallbacks->Free);
+		InterlockedExchange64((volatile LONG64*)&g_DokanRealloc, (LONG64)memoryCallbacks->Realloc);
+#elif INTPTR_MAX == INT32_MAX
+		InterlockedExchange((volatile LONG*)&g_DokanMalloc, (LONG)memoryCallbacks->Malloc);
+		InterlockedExchange((volatile LONG*)&g_DokanFree, (LONG)memoryCallbacks->Free);
+		InterlockedExchange((volatile LONG*)&g_DokanRealloc, (LONG)memoryCallbacks->Realloc);
+#else
+#error Unsupported architecture!
+#endif
+	}
+
 #if _MSC_VER < 1300
-    InitializeCriticalSection(&g_InstanceCriticalSection);
+	InitializeCriticalSection(&g_InstanceCriticalSection);
 	InitializeCriticalSection(&g_EventBufferCriticalSection);
 	InitializeCriticalSection(&g_OverlappedCriticalSection);
 	InitializeCriticalSection(&g_EventResultCriticalSection);
 	InitializeCriticalSection(&g_FileInfoCriticalSection);
 	InitializeCriticalSection(&g_DirectoryListCriticalSection);
 #else
-    InitializeCriticalSectionAndSpinCount(&g_InstanceCriticalSection, 0x80000400);
+	InitializeCriticalSectionAndSpinCount(&g_InstanceCriticalSection, 0x80000400);
 	InitializeCriticalSectionAndSpinCount(&g_EventBufferCriticalSection, 0x80000400);
 	InitializeCriticalSectionAndSpinCount(&g_OverlappedCriticalSection, 0x80000400);
 	InitializeCriticalSectionAndSpinCount(&g_EventResultCriticalSection, 0x80000400);
@@ -1666,19 +1798,32 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 	InitializeCriticalSectionAndSpinCount(&g_DirectoryListCriticalSection, 0x80000400);
 #endif
 
-    InitializeListHead(&g_InstanceList);
-	InitializeThreadPool(Instance);
+	InitializeListHead(&g_InstanceList);
+	InitializeThreadPool();
 
 	g_EventBufferPool = DokanVector_AllocWithCapacity(sizeof(void*), DOKAN_IO_EVENT_POOL_SIZE);
 	g_OverlappedPool = DokanVector_AllocWithCapacity(sizeof(void*), DOKAN_OVERLAPPED_POOL_SIZE);
 	g_EventResultPool = DokanVector_AllocWithCapacity(sizeof(void*), DOKAN_OVERLAPPED_POOL_SIZE);
 	g_FileInfoPool = DokanVector_AllocWithCapacity(sizeof(void*), DOKAN_OVERLAPPED_POOL_SIZE);
 	g_DirectoryListPool = DokanVector_AllocWithCapacity(sizeof(void*), DOKAN_DIRECTORY_LIST_POOL_SIZE);
+}
 
-  } break;
-  case DLL_PROCESS_DETACH: {
+void DOKANAPI DokanShutdown() {
 
-    EnterCriticalSection(&g_InstanceCriticalSection);
+	LONG initRefCount = InterlockedDecrement(&g_DokanInitialized);
+
+	if(initRefCount < 0) {
+
+		RaiseException(DOKAN_EXCEPTION_SHUTDOWN_FAILED, EXCEPTION_NONCONTINUABLE, 0, NULL);
+		return;
+	}
+
+	if(initRefCount > 0) {
+
+		return;
+	}
+
+	EnterCriticalSection(&g_InstanceCriticalSection);
 	{
 		while(!IsListEmpty(&g_InstanceList)) {
 
@@ -1690,7 +1835,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 			DokanCloseHandle((DOKAN_HANDLE)instance);
 		}
 	}
-    LeaveCriticalSection(&g_InstanceCriticalSection);
+	LeaveCriticalSection(&g_InstanceCriticalSection);
 
 	CleanupThreadpool();
 
@@ -1781,79 +1926,87 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 
 	//////////////////// Object pool cleanup finished ////////////////////
 
-    DeleteCriticalSection(&g_InstanceCriticalSection);
-
-  } break;
-  }
-  return TRUE;
+	DeleteCriticalSection(&g_InstanceCriticalSection);
 }
 
-VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
-    ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
-    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition) {
-  if (outFileAttributesAndFlags) {
+void* DokanMallocImpl(size_t size, const char *fileName, int lineNumber) {
 
-    *outFileAttributesAndFlags = FileAttributes;
+	if(InterlockedAdd(&g_DokanInitialized, 0) <= 0) {
 
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
+		RaiseException(DOKAN_EXCEPTION_NOT_INITIALIZED, 0, 0, NULL);
 
-#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
-                      FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
+		return malloc(size);
+	}
+
+	PDokanMalloc dokanMalloc = NULL;
+
+#if INTPTR_MAX == INT64_MAX
+	dokanMalloc = (PDokanMalloc)InterlockedAdd64((volatile LONG64*)&g_DokanMalloc, 0);
+#elif INTPTR_MAX == INT32_MAX
+	dokanMalloc = (PDokanMalloc)InterlockedAdd((volatile LONG*)&g_DokanMalloc, 0);
+#else
+#error Unsupported architecture!
 #endif
-  }
 
-  if (outCreationDisposition) {
+	if(dokanMalloc) {
 
-    switch (CreateDisposition) {
-    case FILE_CREATE:
-      *outCreationDisposition = CREATE_NEW;
-      break;
-    case FILE_OPEN:
-      *outCreationDisposition = OPEN_EXISTING;
-      break;
-    case FILE_OPEN_IF:
-      *outCreationDisposition = OPEN_ALWAYS;
-      break;
-    case FILE_OVERWRITE:
-      *outCreationDisposition = TRUNCATE_EXISTING;
-      break;
-    case FILE_SUPERSEDE:
-    // The documentation isn't clear on the difference between replacing a file
-    // and truncating it.
-    // For now we just map it to create/truncate
-    case FILE_OVERWRITE_IF:
-      *outCreationDisposition = CREATE_ALWAYS;
-      break;
-    default:
-      *outCreationDisposition = 0;
-      break;
-    }
-  }
+		return dokanMalloc(size, fileName, lineNumber);
+	}
+
+	return malloc(size);
 }
 
-DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
+void DokanFreeImpl(void *userData) {
 
-	PTP_POOL threadPool;
+	PDokanFree dokanFree = NULL;
 
-	EnterCriticalSection(&g_InstanceCriticalSection);
+#if INTPTR_MAX == INT64_MAX
+	dokanFree = (PDokanFree)InterlockedAdd64((volatile LONG64*)&g_DokanFree, 0);
+#elif INTPTR_MAX == INT32_MAX
+	dokanFree = (PDokanFree)InterlockedAdd((volatile LONG*)&g_DokanFree, 0);
+#else
+#error Unsupported architecture!
+#endif
 
-	threadPool = g_ThreadPool;
+	if(dokanFree) {
 
-	LeaveCriticalSection(&g_InstanceCriticalSection);
+		dokanFree(userData);
+	}
+	else {
 
-	return threadPool;
+		free(userData);
+	}
+}
+
+void* DokanReallocImpl(void *userData, size_t newSize, const char *fileName, int lineNumber) {
+
+	PDokanRealloc dokanRealloc = NULL;
+
+#if INTPTR_MAX == INT64_MAX
+	dokanRealloc = (PDokanRealloc)InterlockedAdd64((volatile LONG64*)&g_DokanRealloc, 0);
+#elif INTPTR_MAX == INT32_MAX
+	dokanRealloc = (PDokanRealloc)InterlockedAdd((volatile LONG*)&g_DokanRealloc, 0);
+#else
+#error Unsupported architecture!
+#endif
+
+	if(dokanRealloc) {
+
+		return dokanRealloc(userData, newSize, fileName, lineNumber);
+	}
+
+	return realloc(userData, newSize);
+}
+
+LPWSTR DokanDupWImpl(LPCWSTR str, const char *fileName, int lineNumber) {
+
+	size_t strLength = wcslen(str);
+	LPWSTR newStr = DokanMallocImpl((strLength + 1) * sizeof(WCHAR), fileName, lineNumber);
+
+	if(newStr) {
+
+		wcscpy_s(newStr, strLength + 1, str);
+	}
+
+	return newStr;
 }

@@ -36,9 +36,10 @@ void BeginDispatchRead(DOKAN_IO_EVENT *EventInfo) {
 
   CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Read.FileName);
 
-  DbgPrint("###Read file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###Read file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   CreateDispatchCommon(EventInfo, EventInfo->KernelInfo.EventContext.Operation.Read.BufferLength);
 

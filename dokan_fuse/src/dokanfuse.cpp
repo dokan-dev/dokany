@@ -663,27 +663,64 @@ bool fuse_chan::init() {
 
   // check version
   typedef ULONG(__stdcall * DokanVersionType)();
+  typedef void(__stdcall *DokanInitType)(DOKAN_MEMORY_CALLBACKS *memoryCallbacks);
+
   DokanVersionType ResolvedDokanVersion;
+  DokanInitType ResolvedInit;
+
+  ResolvedInit = (DokanInitType)GetProcAddress(dokanDll, "DokanInit");
+  ResolvedShutdown = (DokanShutdownType)GetProcAddress(dokanDll, "DokanShutdown");
+
+  if(!ResolvedInit || !ResolvedShutdown) {
+
+	  return false;
+  }
+
+  ResolvedInit(NULL);
+
   ResolvedDokanVersion =
       (DokanVersionType)GetProcAddress(dokanDll, "DokanVersion");
-  if (!ResolvedDokanVersion || ResolvedDokanVersion() < DOKAN_VERSION)
-    return false;
+
+  if(!ResolvedDokanVersion || ResolvedDokanVersion() < DOKAN_VERSION) {
+
+	  ResolvedShutdown();
+	  ResolvedShutdown = NULL;
+
+	  return false;
+  }
 
   ResolvedDokanMain = (DokanMainType)GetProcAddress(dokanDll, "DokanMain");
+
   ResolvedDokanUnmount =
       (DokanUnmountType)GetProcAddress(dokanDll, "DokanUnmount");
+
   ResolvedDokanRemoveMountPoint = (DokanRemoveMountPointType)GetProcAddress(
       dokanDll, "DokanRemoveMountPoint");
 
-  if (!ResolvedDokanMain || !ResolvedDokanUnmount ||
-      !ResolvedDokanRemoveMountPoint)
-    return false;
+  if(!ResolvedDokanMain
+	  || !ResolvedDokanUnmount
+	  || !ResolvedDokanRemoveMountPoint) {
+
+	  ResolvedShutdown();
+	  ResolvedShutdown = NULL;
+
+	  return false;
+  }
+
   return true;
 }
 
 fuse_chan::~fuse_chan() {
-  if (dokanDll)
-    FreeLibrary(dokanDll);
+  
+	if(dokanDll) {
+
+		if(ResolvedShutdown) {
+
+			ResolvedShutdown();
+		}
+
+		FreeLibrary(dokanDll);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

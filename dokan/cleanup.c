@@ -33,9 +33,10 @@ void DispatchCleanup(DOKAN_IO_EVENT *EventInfo) {
 
   EventInfo->EventResult->Status = STATUS_SUCCESS; // return success at any case
 
-  DbgPrint("###Cleanup file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###Cleanup file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   if (dokan->DokanOperations->Cleanup) {
     

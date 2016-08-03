@@ -45,7 +45,7 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
   }
 
   eventInfoSize = sizeof(EVENT_INFORMATION);
-  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+  eventInfo = (PEVENT_INFORMATION)DokanMalloc(eventInfoSize);
 
   if (eventInfo == NULL) {
     return INVALID_HANDLE_VALUE;
@@ -66,7 +66,7 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
     DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
   }
 
-  free(eventInfo);
+  DokanFree(eventInfo);
 
   return handle;
 }

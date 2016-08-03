@@ -111,6 +111,20 @@ typedef struct _DOKAN_UNMOUNTED_INFO {
 	PDOKAN_OPTIONS				DokanOptions;					// A pointer to DOKAN_OPTIONS
 } DOKAN_UNMOUNTED_INFO, *PDOKAN_UNMOUNTED_INFO;
 
+typedef void* (WINAPI *PDokanMalloc)(size_t size, const char *fileName, int lineNumber);
+typedef void (WINAPI *PDokanFree)(void *userData);
+typedef void* (WINAPI *PDokanRealloc)(void *userData, size_t newSize, const char *fileName, int lineNumber);
+
+typedef struct _DOKAN_MEMORY_CALLBACKS {
+	PDokanMalloc	Malloc;
+	PDokanFree		Free;
+	PDokanRealloc	Realloc;
+} DOKAN_MEMORY_CALLBACKS, *PDOKAN_MEMORY_CALLBACKS;
+
+#define DOKAN_EXCEPTION_NOT_INITIALIZED			0x0f0ff0ff
+#define DOKAN_EXCEPTION_INITIALIZATION_FAILED	0x0fbadbad
+#define DOKAN_EXCEPTION_SHUTDOWN_FAILED			0x0fbadf00
+
 // Forward declarations
 struct _DOKAN_FIND_FILES_EVENT;
 typedef struct _DOKAN_FIND_FILES_EVENT DOKAN_FIND_FILES_EVENT, *PDOKAN_FIND_FILES_EVENT;
@@ -473,6 +487,10 @@ void DOKANAPI DokanEndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *Eve
 
 // Threading helpers
 DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool();
+
+// Init/shutdown
+void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks);
+void DOKANAPI DokanShutdown();
 
 #ifdef __cplusplus
 }

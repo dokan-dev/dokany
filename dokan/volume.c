@@ -315,9 +315,10 @@ void BeginDispatchQueryVolumeInformation(DOKAN_IO_EVENT *EventInfo) {
 
   CreateDispatchCommon(EventInfo, EventInfo->KernelInfo.EventContext.Operation.Volume.BufferLength);
 
-  DbgPrint("###QueryVolumeInfo file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###QueryVolumeInfo file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   switch (EventInfo->KernelInfo.EventContext.Operation.Volume.FsInformationClass) {
   case FileFsVolumeInformation:

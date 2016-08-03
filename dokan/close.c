@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 #include "fileinfo.h"
+#include <assert.h>
 
 void DispatchClose(DOKAN_IO_EVENT *EventInfo) {
 
@@ -29,13 +30,12 @@ void DispatchClose(DOKAN_IO_EVENT *EventInfo) {
 
   CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Close.FileName);
 
-  CreateDispatchCommon(EventInfo, 0);
+  assert(!EventInfo->EventResult);
 
-  EventInfo->EventResult->Status = STATUS_SUCCESS; // return success at any case
-  
-  DbgPrint("###Close file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###Close file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   if (dokan->DokanOperations->CloseFile) {
 
@@ -52,4 +52,5 @@ void DispatchClose(DOKAN_IO_EVENT *EventInfo) {
   }
 
   // do not send it to the driver
+  PushIoEventBuffer(EventInfo);
 }

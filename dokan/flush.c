@@ -28,9 +28,10 @@ void BeginDispatchFlush(DOKAN_IO_EVENT *EventInfo) {
 	DOKAN_FLUSH_BUFFERS_EVENT *flushBuffers = &EventInfo->EventInfo.FlushBuffers;
 	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-	DbgPrint("###Flush file handle = 0x%p, eventID = %04d\n",
+	DbgPrint("###Flush file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 		EventInfo->DokanOpenInfo,
-		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
 
 	assert(EventInfo->DokanOpenInfo);
 	assert((void*)flushBuffers == (void*)EventInfo);

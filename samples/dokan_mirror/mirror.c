@@ -1801,6 +1801,25 @@ void CALLBACK MirrorIoCallback(
 
 #endif
 
+#if MIRROR_IS_DEBUGGING_MEMORY
+
+void* WINAPI MirrorMalloc(size_t size, const char *fileName, int lineNumber) {
+
+	return _malloc_dbg(size, _NORMAL_BLOCK, fileName, lineNumber);
+}
+
+void WINAPI MirrorFree(void *userData) {
+
+	_free_dbg(userData, _NORMAL_BLOCK);
+}
+
+void* WINAPI MirrorRealloc(void *userData, size_t newSize, const char *fileName, int lineNumber) {
+
+	return _realloc_dbg(userData, newSize, _NORMAL_BLOCK, fileName, lineNumber);
+}
+
+#endif
+
 BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   switch (dwCtrlType) {
   case CTRL_C_EVENT:
@@ -1997,6 +2016,22 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations.SetFileSecurityW = MirrorSetFileSecurity;
   dokanOperations.FindStreams = MirrorFindStreams;
 
+#if MIRROR_IS_DEBUGGING_MEMORY
+
+  DOKAN_MEMORY_CALLBACKS memoryCallbacks;
+
+  memoryCallbacks.Malloc = MirrorMalloc;
+  memoryCallbacks.Free = MirrorFree;
+  memoryCallbacks.Realloc = MirrorRealloc;
+
+  DokanInit(&memoryCallbacks);
+
+#else
+
+  DokanInit(NULL);
+
+#endif
+
 #if USE_ASYNC_IO
   if(!InitializeAsyncIO()) {
 
@@ -2056,6 +2091,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     fprintf(stderr, "Unknown error: %d\n", status);
     break;
   }
+
+  DokanShutdown();
 
   return EXIT_SUCCESS;
 }

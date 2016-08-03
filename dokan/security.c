@@ -28,9 +28,10 @@ void BeginDispatchQuerySecurity(DOKAN_IO_EVENT *EventInfo) {
 	DOKAN_GET_FILE_SECURITY_EVENT *getFileSecurity = &EventInfo->EventInfo.GetFileSecurityW;
 	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-	DbgPrint("###GetFileSecurity file handle = 0x%p, eventID = %04d\n",
+	DbgPrint("###GetFileSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 		EventInfo->DokanOpenInfo,
-		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
 
 	assert(EventInfo->DokanOpenInfo);
 	assert((void*)getFileSecurity == (void*)EventInfo);
@@ -95,9 +96,10 @@ void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo) {
 	DOKAN_SET_FILE_SECURITY_EVENT *setFileSecurity = &EventInfo->EventInfo.SetFileSecurityW;
 	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-	DbgPrint("###SetSecurity file handle = 0x%p, eventID = %04d\n",
+	DbgPrint("###SetSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 		EventInfo->DokanOpenInfo,
-		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
 
 	assert(EventInfo->DokanOpenInfo);
 	assert((void*)setFileSecurity == (void*)EventInfo);

@@ -36,7 +36,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
     return FALSE;
   }
 
-  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+  eventInfo = (PEVENT_INFORMATION)DokanMalloc(eventInfoSize);
 
   if (eventInfo == NULL) {
     return FALSE;
@@ -50,7 +50,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
       GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
       IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
 
-  free(eventInfo);
+  DokanFree(eventInfo);
 
   return status;
 }

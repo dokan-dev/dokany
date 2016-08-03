@@ -48,9 +48,10 @@ void BeginDispatchLock(DOKAN_IO_EVENT *EventInfo) {
   DOKAN_UNLOCK_FILE_EVENT *unlockFileEvent = &EventInfo->EventInfo.UnlockFile;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-  DbgPrint("###Lock file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###Lock file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   assert(EventInfo->DokanOpenInfo);
   assert(EventInfo->ProcessingContext == NULL);

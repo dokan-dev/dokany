@@ -111,6 +111,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   WCHAR type;
   PVOID wow64OldValue;
 
+  DokanInit(NULL);
+
   DokanUseStdErr(TRUE); // Set dokan library debug output
 
   Wow64DisableWow64FsRedirection(&wow64OldValue); // Disable system32 direct
@@ -151,7 +153,11 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   case L'i':
     if (type == L'd') {
 
-      return InstallDriver(driverFullPath);
+      int result = InstallDriver(driverFullPath);
+
+	  DokanShutdown();
+
+	  return result;
 
     } else if (type == L'n') {
       if (DokanNetworkProviderInstall())
@@ -164,7 +170,11 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   case L'r':
     if (type == L'd') {
 
-      return DeleteDokanService(DOKAN_DRIVER_SERVICE);
+      int result = DeleteDokanService(DOKAN_DRIVER_SERVICE);
+
+	  DokanShutdown();
+
+	  return result;
 
     } else if (type == L'n') {
       if (DokanNetworkProviderUninstall())
@@ -204,6 +214,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   default:
     fprintf(stderr, "unknown option\n");
   }
+
+  DokanShutdown();
 
   return EXIT_SUCCESS;
 }

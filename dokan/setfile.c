@@ -257,10 +257,11 @@ void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo) {
 
   ULONG sizeOfEventInfo = 0;
 
-  DbgPrint("###SetFileInfo file handle = 0x%p, eventID = %04d, FileInformationClass = %d\n",
+  DbgPrint("###SetFileInfo file handle = 0x%p, eventID = %04d, FileInformationClass = %d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
 	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
-	  EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass);
+	  EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass,
+	  EventInfo);
 
   assert(EventInfo->ProcessingContext == NULL);
   assert(EventInfo->DokanOpenInfo);

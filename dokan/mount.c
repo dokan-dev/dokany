@@ -363,8 +363,10 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
       FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) +
       targetLength + sizeof(WCHAR) + sizeof(WCHAR);
 
-  reparseData = (PREPARSE_DATA_BUFFER)malloc(bufferLength);
+  reparseData = (PREPARSE_DATA_BUFFER)DokanMalloc(bufferLength);
+
   if (reparseData == NULL) {
+
     CloseHandle(handle);
     return FALSE;
   }
@@ -388,15 +390,20 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
                            bufferLength, NULL, 0, &resultLength, NULL);
 
   CloseHandle(handle);
-  free(reparseData);
+
+  DokanFree(reparseData);
 
   if (result) {
+
     DbgPrintW(L"CreateMountPoint %s -> %s success\n", MountPoint,
               targetDeviceName);
-  } else {
+  }
+  else {
+
     DbgPrintW(L"CreateMountPoint %s -> %s failed: %d\n", MountPoint,
               targetDeviceName, GetLastError());
   }
+
   return result;
 }
 

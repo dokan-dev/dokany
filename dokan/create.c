@@ -100,9 +100,10 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
   assert((void*)createFileEvent == (void*)EventInfo);
 
-  DbgPrint("###Create file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###Create file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  currentEventId);
+	  currentEventId,
+	  EventInfo);
 
   // The low 24 bits of this member correspond to the CreateOptions parameter
   createFileEvent->CreateOptions = EventInfo->KernelInfo.EventContext.Operation.Create.CreateOptions & FILE_VALID_OPTION_FLAGS;
@@ -126,7 +127,7 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
   assert(createFileEvent->OriginalFileName == NULL);
 
-  createFileEvent->OriginalFileName = _wcsdup(createFileEvent->FileName);
+  createFileEvent->OriginalFileName = DokanDupW(createFileEvent->FileName);
 
   if (EventInfo->KernelInfo.EventContext.Flags & SL_OPEN_TARGET_DIRECTORY) {
     // NOTE: SL_OPEN_TARGET_DIRECTORY means open the parent directory of the
@@ -225,7 +226,7 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 
 	if(ioEvent->EventInfo.ZwCreateFile.OriginalFileName) {
 
-		free((void*)ioEvent->EventInfo.ZwCreateFile.OriginalFileName);
+		DokanFree((void*)ioEvent->EventInfo.ZwCreateFile.OriginalFileName);
 		ioEvent->EventInfo.ZwCreateFile.OriginalFileName = NULL;
 	}
 

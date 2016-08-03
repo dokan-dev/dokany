@@ -43,7 +43,7 @@ NTSTATUS SendWriteRequest(DOKAN_IO_EVENT *EventInfo) {
 	  return STATUS_INTERNAL_ERROR;
   }
 
-  writeEvent = (DOKAN_IO_EVENT*)malloc(DOKAN_IO_EVENT_ALLOC_SIZE(EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength));
+  writeEvent = (DOKAN_IO_EVENT*)DokanMalloc(DOKAN_IO_EVENT_ALLOC_SIZE(EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength));
 
   if(!writeEvent) {
 
@@ -84,7 +84,7 @@ NTSTATUS SendWriteRequest(DOKAN_IO_EVENT *EventInfo) {
 
 		  PushOverlapped(overlapped);
 
-		  free(writeEvent);
+		  DokanFree(writeEvent);
 
 		  return DokanNtStatusFromWin32(lastError);
 	  }
@@ -119,9 +119,10 @@ void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
 
   CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Write.FileName);
 
-  DbgPrint("###WriteFile file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###WriteFile file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   if (dokan->DokanOperations->WriteFile) {
 

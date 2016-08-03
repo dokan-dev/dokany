@@ -278,6 +278,16 @@ void PushDirectoryList(DOKAN_VECTOR *DirectoryList);
 
 void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance);
 
+void* DokanMallocImpl(size_t size, const char *fileName, int lineNumber);
+void DokanFreeImpl(void *userData);
+void* DokanReallocImpl(void *userData, size_t newSize, const char *fileName, int lineNumber);
+LPWSTR DokanDupWImpl(LPCWSTR str, const char *fileName, int lineNumber);
+
+#define DokanMalloc(size) DokanMallocImpl((size), __FILE__, __LINE__)
+#define DokanFree(userData) DokanFreeImpl(userData)
+#define DokanRealloc(userData, newSize) DokanReallocImpl((userData), (newSize), __FILE__, __LINE__)
+#define DokanDupW(str) DokanDupWImpl((str), __FILE__, __LINE__)
+
 #ifdef __cplusplus
 }
 #endif

@@ -544,14 +544,14 @@ void EndFindFilesCommon(DOKAN_IO_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 			if(EventInfo->DokanOpenInfo->DirListSearchPattern) {
 
-				free(EventInfo->DokanOpenInfo->DirListSearchPattern);
+				DokanFree(EventInfo->DokanOpenInfo->DirListSearchPattern);
 				EventInfo->DokanOpenInfo->DirListSearchPattern = NULL;
 			}
 
 			if(EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength > 0) {
 
 				EventInfo->DokanOpenInfo->DirListSearchPattern =
-					_wcsdup((PWCHAR)(
+					DokanDupW((PWCHAR)(
 					(SIZE_T)&EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternBase[0] +
 						(SIZE_T)EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternOffset));
 			}
@@ -581,9 +581,10 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
   ULONG fileInfoClass = EventInfo->KernelInfo.EventContext.Operation.Directory.FileInformationClass;
   BOOL forceScan = FALSE;
 
-  DbgPrint("###FindFiles file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###FindFiles file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   assert(EventInfo->ProcessingContext == NULL);
 

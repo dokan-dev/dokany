@@ -330,9 +330,10 @@ void BeginDispatchQueryInformation(DOKAN_IO_EVENT *EventInfo) {
   DOKAN_FIND_STREAMS_EVENT *findStreams = &EventInfo->EventInfo.FindStreams;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
 
-  DbgPrint("###GetFileInfo file handle = 0x%p, eventID = %04d\n",
+  DbgPrint("###GetFileInfo file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
 	  EventInfo->DokanOpenInfo,
-	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1);
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
   assert((void*)getFileInfo == (void*)EventInfo && (void*)findStreams == (void*)EventInfo);
   assert(EventInfo->ProcessingContext == NULL);
