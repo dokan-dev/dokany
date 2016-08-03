@@ -20,7 +20,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
-#include "fileinfo.h"
 #include <assert.h>
 
 void BeginDispatchFlush(DOKAN_IO_EVENT *EventInfo) {

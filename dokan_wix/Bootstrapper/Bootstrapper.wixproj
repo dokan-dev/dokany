@@ -44,8 +44,8 @@
   <ItemGroup>
     <Content Include="Resources\dokan.png" />
     <Content Include="Resources\licdata.rtf" />
+    <Content Include="Resources\Netfx_eula40.rtf" />
     <Content Include="Resources\RtfTheme.xml" />
-    <Content Include="Netfx_eula40.rtf" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources" />

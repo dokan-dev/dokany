@@ -438,7 +438,26 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   return result;
 }
 
-void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
+BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
+  HANDLE hToken = NULL;
+  if (OpenProcessToken(GetCurrentProcess(),
+                       TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+    TOKEN_PRIVILEGES tp = {0};
+    if (LookupPrivilegeValue(NULL, lpszSystemName, &tp.Privileges[0].Luid)) {
+      tp.PrivilegeCount = 1;
+      tp.Privileges[0].Attributes = (bEnable ? SE_PRIVILEGE_ENABLED : 0);
+
+      if (AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
+                                (PTOKEN_PRIVILEGES)NULL, NULL)) {
+        return GetLastError() == ERROR_SUCCESS;
+      }
+    }
+    CloseHandle(hToken);
+  }
+  return FALSE;
+}
+
+void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved, BOOL safe) {
   DWORD receipients;
   DWORD device_event;
   DEV_BROADCAST_VOLUME params;
@@ -451,6 +470,11 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   }
 
   receipients = BSM_APPLICATIONS;
+  // Unsafe to call Advapi32.dll during DLL_PROCESS_DETACH
+  if (safe && EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
+    receipients |= BSM_ALLDESKTOPS;
+  }
+
   device_event = bRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
 
   ZeroMemory(&params, sizeof(params));
@@ -468,14 +492,12 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
              GetLastError());
   }
 
-  // Cannot SHChangeNotify during DLL_PROCESS_DETACH cannot
-  // ole32.dll is probably already unload
-  if (bRemoved)
-    return;
-
-  drive[0] = towupper(cLetter);
-  wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
-  SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
+  // Unsafe to call ole32.dll during DLL_PROCESS_DETACH
+  if (safe) {
+    drive[0] = towupper(cLetter);
+    wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
+    SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
+  }
 }
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
@@ -491,7 +513,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
       return CreateMountPoint(MountPoint, DeviceName);
     } else {
       // Notify applications / explorer
-      DokanBroadcastLink(MountPoint[0], FALSE);
+      DokanBroadcastLink(MountPoint[0], FALSE, TRUE);
     }
   }
   return TRUE;
@@ -517,7 +539,7 @@ void GenerateUnmountPoint(LPCWSTR MountPoint, WCHAR *Result, size_t ResultMaxCha
 	}
 }
 
-BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint) {
+BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint) {
 
 	if(MountPoint != NULL) {
 		
@@ -559,7 +581,7 @@ void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance) {
 	else {
 
 		// Notify applications / explorer
-		DokanBroadcastLink(Instance->MountPoint[0], TRUE);
+		DokanBroadcastLink(Instance->MountPoint[0], TRUE, TRUE);
 	}
 
 	if(Instance->DokanOperations->Unmounted) {
@@ -571,4 +593,5 @@ void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance) {
 
 		Instance->DokanOperations->Unmounted(&fileInfo);
 	}
-}
+            mountPoint[length + 1] = L'\0';
+          DokanBroadcastLink(MountPoint[0], TRUE, Safe);

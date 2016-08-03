@@ -50,6 +50,7 @@ VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
     baseCodeStr = "MOUNTMGRCONTROLTYPE";
     break;
   }
+  UNREFERENCED_PARAMETER(functionCode);
   DDbgPrint("   BaseCode: 0x%x(%s) FunctionCode 0x%x(%d)\n", baseCode,
             baseCodeStr, functionCode, functionCode);
 }
@@ -120,13 +121,35 @@ NTSTATUS
 DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PDokanDCB dcb;
+  PDokanVCB vcb;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG outputLength = 0;
+  ULONG inputLength = 0;
 
   DDbgPrint("   => DokanDiskDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dcb = DeviceObject->DeviceExtension;
   outputLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
+  inputLength = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+
+  if (GetIdentifierType(dcb) != DCB) {
+    PrintIdType(dcb);
+    DDbgPrint("   Device is not dcb so go out here\n");
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  if (IsDeletePending(DeviceObject)) {
+    DDbgPrint("   Device object is pending for delete valid anymore\n");
+    return STATUS_DEVICE_REMOVED;
+  }
+
+  vcb = dcb->Vcb;
+  if (IsUnmountPendingVcb(vcb)) {
+    DDbgPrint("   Volume is unmounted so ignore dcb requests\n");
+    return STATUS_NO_SUCH_DEVICE;
+  }
+
+  DDbgPrint("   DiskDeviceControl Device name %wZ \n", dcb->DiskDeviceName);
 
   switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_DISK_GET_DRIVE_GEOMETRY: {
@@ -482,7 +505,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("   IOCTL_MOUNTDEV_LINK_CREATED\n");
 
     status = STATUS_SUCCESS;
-    if (mountdevName != NULL && mountdevName->NameLength > 0) {
+    if (!IsUnmountPending(DeviceObject) && mountdevName != NULL &&
+        mountdevName->NameLength > 0) {
       WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
       RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
       RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
@@ -507,7 +531,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
               RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
                             dcb->UNCName->Length);
             }
-            mountEntry = FindMountEntry(dcb->Global, &dokanControl);
+            mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
             if (mountEntry != NULL) {
               RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
                                 MAXIMUM_FILENAME_LENGTH, symbolicLinkNameBuf);
@@ -526,7 +550,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   Mount Point is not DosDevices, ignored.\n");
       }
     } else {
-      DDbgPrint("   MountDev Name is undefined.\n");
+      DDbgPrint("   MountDev Name is undefined or unmounting in progress.\n");
     }
   } break;
   case IOCTL_MOUNTDEV_LINK_DELETED: {
@@ -535,7 +559,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = STATUS_SUCCESS;
     if (dcb->UseMountManager) {
       if (mountdevName != NULL && mountdevName->NameLength > 0) {
-        PDokanVCB vcb = dcb->Vcb;
         WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
         RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
         RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
@@ -549,7 +572,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
               RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
                                mountdevName->NameLength) ==
                   mountdevName->NameLength) {
-            status = DokanEventRelease(vcb->DeviceObject);
+            status = DokanEventRelease(vcb->DeviceObject, Irp);
           } else {
             DDbgPrint("   Deleted Mount Point doesn't match device excepted "
                       "mount point.\n");
@@ -558,7 +581,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         // Or, if no requested mount point, we assume the first deleted one
         // release devices
         else {
-          status = DokanEventRelease(vcb->DeviceObject);
+          status = DokanEventRelease(vcb->DeviceObject, Irp);
         }
       } else {
         DDbgPrint("   MountDev Name is undefined.\n");
@@ -761,7 +784,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     Irp->IoStatus.Information = sizeof(GET_MEDIA_TYPES);
   } break;
   case IOCTL_STORAGE_GET_DEVICE_NUMBER: {
-    PDokanVCB vcb;
     PSTORAGE_DEVICE_NUMBER deviceNumber;
 
     DDbgPrint("  IOCTL_STORAGE_GET_DEVICE_NUMBER\n");
@@ -775,7 +797,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     deviceNumber = (PSTORAGE_DEVICE_NUMBER)Irp->AssociatedIrp.SystemBuffer;
     ASSERT(deviceNumber != NULL);
 
-    vcb = dcb->Vcb;
     deviceNumber->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
     if (vcb) {
       deviceNumber->DeviceType = vcb->DeviceObject->DeviceType;
@@ -795,6 +816,38 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     break;
   }
   DDbgPrint("   <= DokanDiskDeviceControl\n");
+  return status;
+}
+
+NTSTATUS
+DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+
+  PDokanDCB dcb;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+
+  dcb = DeviceObject->DeviceExtension;
+
+  if (GetIdentifierType(dcb) != DCB) {
+    PrintIdType(dcb);
+    DDbgPrint("   Device is not dcb so go out here\n");
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  if (IsDeletePending(DeviceObject)) {
+    DDbgPrint("Device is deleted, so go out here \n");
+	IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
+    return STATUS_NO_SUCH_DEVICE;
+  }
+  status = DiskDeviceControl(DeviceObject, Irp);
+
+  IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
+
   return status;
 }
 
@@ -844,13 +897,19 @@ Return Value:
       DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     }
 
+    if (DeviceObject->DriverObject == NULL ||
+        DeviceObject->ReferenceCount < 0) {
+      status = STATUS_DEVICE_DOES_NOT_EXIST;
+      __leave;
+    }
+
     vcb = DeviceObject->DeviceExtension;
     PrintIdType(vcb);
     if (GetIdentifierType(vcb) == DGL) {
       status = GlobalDeviceControl(DeviceObject, Irp);
       __leave;
     } else if (GetIdentifierType(vcb) == DCB) {
-      status = DiskDeviceControl(DeviceObject, Irp);
+      status = DiskDeviceControlWithLock(DeviceObject, Irp);
       __leave;
     } else if (GetIdentifierType(vcb) != VCB) {
       status = STATUS_INVALID_PARAMETER;
@@ -871,7 +930,7 @@ Return Value:
 
     case IOCTL_EVENT_RELEASE:
       DDbgPrint("  IOCTL_EVENT_RELEASE\n");
-      status = DokanEventRelease(DeviceObject);
+      status = DokanEventRelease(DeviceObject, Irp);
       break;
 
     case IOCTL_EVENT_WRITE:
@@ -881,7 +940,7 @@ Return Value:
 
     case IOCTL_KEEPALIVE:
       DDbgPrint("  IOCTL_KEEPALIVE\n");
-      if (dcb->Mounted) {
+      if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
         DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
         ExReleaseResourceLite(&dcb->Resource);
@@ -911,7 +970,7 @@ Return Value:
       if (baseCode == IOCTL_STORAGE_BASE || baseCode == IOCTL_DISK_BASE ||
           baseCode == FILE_DEVICE_NETWORK_FILE_SYSTEM ||
           baseCode == MOUNTDEVCONTROLTYPE) {
-        status = DiskDeviceControl(dcb->DeviceObject, Irp);
+        status = DiskDeviceControlWithLock(dcb->DeviceObject, Irp);
       }
 
       if (status == STATUS_NOT_IMPLEMENTED) {
@@ -924,6 +983,10 @@ Return Value:
   } __finally {
 
     if (status != STATUS_PENDING) {
+      if (IsDeletePending(DeviceObject)) {
+		  DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
+		  status = STATUS_DEVICE_REMOVED;
+      }
       DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
     }
 

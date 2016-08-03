@@ -26,6 +26,8 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
 
+  UNREFERENCED_PARAMETER(DeviceObject);
+
   __try {
     DDbgPrint("==> DokanPnp\n");
 
@@ -46,7 +48,7 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     case IRP_MN_QUERY_DEVICE_RELATIONS:
       DDbgPrint("  IRP_MN_QUERY_DEVICE_RELATIONS\n");
-      status = QueryDeviceRelations(DeviceObject, Irp);
+      status = STATUS_NOT_IMPLEMENTED;
       break;
     default:
       DDbgPrint("   other minnor function %d\n", irpSp->MinorFunction);
@@ -70,6 +72,10 @@ QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DEVICE_RELATION_TYPE type = irpSp->Parameters.QueryDeviceRelations.Type;
   PDEVICE_RELATIONS DeviceRelations;
   PDokanVCB vcb;
+
+  // QueryDeviceRelations is currently not used
+  // because it does not return proper informations and verifier complained
+  // We keep it for futur support of pnp
 
   vcb = DeviceObject->DeviceExtension;
 

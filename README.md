@@ -8,6 +8,8 @@
 [![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/dokan-dev/dokany.svg)](http://isitmaintained.com/project/dokan-dev/dokany "Average time to resolve an issue")
 [![Percentage of issues still open](http://isitmaintained.com/badge/open/dokan-dev/dokany.svg)](http://isitmaintained.com/project/dokan-dev/dokany "Percentage of issues still open")
 
+![Dokan Demo](http://dokan-dev.github.io/images/screencast.gif)
+
 ## What is Dokan
 When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system
 driver. Developing a device driver that works in kernel mode on
@@ -71,12 +73,12 @@ requests it received. The results of the callback routines will be
 sent back to the user program.
 
 For example, when Windows Explorer requests to open a directory, the
-OpenDirectory request will be sent to Dokan file system driver and the
-driver will invoke the OpenDirectory callback provided by the file system
-application. The results of this routine are sent back to Windows Explorer
-as the response to the OpenDirectory request. Therefore, the Dokan file
-system driver acts as a proxy between user programs and file system
-applications. The advantage of this approach is that it allows
+CreateFile with Direction option request will be sent to Dokan file system
+driver and the driver will invoke the CreateFile callback provided by
+the file system application. The results of this routine are sent back
+to Windows Explorer as the response to the CreateFile request. Therefore,
+the Dokan file system driver acts as a proxy between user programs and
+file system applications. The advantage of this approach is that it allows
 programmers to develop file systems in user mode which is safe and
 easy to debug.
  

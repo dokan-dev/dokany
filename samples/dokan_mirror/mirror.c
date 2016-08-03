@@ -860,6 +860,28 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 	  return STATUS_FILE_CLOSED;
   }
 
+  UINT64 fileSize = 0;
+  DWORD fileSizeLow = 0;
+  DWORD fileSizeHigh = 0;
+
+  fileSizeLow = GetFileSize(handle, &fileSizeHigh);
+
+  if (fileSizeLow == INVALID_FILE_SIZE) {
+
+    DWORD error = GetLastError();
+
+    DbgPrint(L"\tcan not get a file size error = %d\n", error);
+
+    if (opened) {
+
+      CloseHandle(handle);
+    }
+
+    return DokanNtStatusFromWin32(error);
+  }
+
+  fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
+
 #if USE_ASYNC_IO
 
   MIRROR_OVERLAPPED *overlapped = PopMirrorOverlapped();
@@ -900,7 +922,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 
 #else
   LARGE_INTEGER distanceToMove;
-  distanceToMove.QuadPart = EventInfo->Offset;
 
   if (EventInfo->DokanFileInfo->WriteToEndOfFile) {
 
@@ -916,13 +937,41 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
       return DokanNtStatusFromWin32(error);
     }
   }
-  else if (!SetFilePointerEx(mirrorHandle->FileHandle, distanceToMove, NULL, FILE_BEGIN)) {
+  else {
+    // Paging IO cannot write after allocate file size.
+    if (DokanFileInfo->PagingIo) {
+      if ((UINT64)Offset >= fileSize) {
+        *NumberOfBytesWritten = 0;
+        if (opened)
+          CloseHandle(handle);
+        return STATUS_SUCCESS;
+      }
 
-    DWORD error = GetLastError();
+      if (((UINT64)Offset + NumberOfBytesToWrite) > fileSize) {
+        UINT64 bytes = fileSize - Offset;
+        if (bytes >> 32) {
+          NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
+        } else {
+          NumberOfBytesToWrite = (DWORD)bytes;
+        }
+      }
+    }
 
-    DbgPrint(L"\tseek error, offset = %d, error = %d\n", offset, error);
+    if ((UINT64)Offset > fileSize) {
+      // In the mirror sample helperZeroFileData is not necessary. NTFS will
+      // zero a hole.
+      // But if user's file system is different from NTFS( or other Windows's
+      // file systems ) then  users will have to zero the hole themselves.
+    }
 
-    return DokanNtStatusFromWin32(error);
+    distanceToMove.QuadPart = Offset;
+    if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+      DWORD error = GetLastError();
+      DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
+      if (opened)
+        CloseHandle(handle);
+      return DokanNtStatusFromWin32(error);
+    }
   }
 
   if (!WriteFile(mirrorHandle->FileHandle,
@@ -940,7 +989,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
   }
   else {
 
-    DbgPrint(L"\twrite %d, offset %d\n\n", EventInfo->NumberOfBytesWritten, offset);
+    DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
   }
 
   return STATUS_SUCCESS;

@@ -309,7 +309,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   // buffer pointer which points DirecotryInfo
   if (irp->MdlAddress) {
     // DDbgPrint("   use MDL Address\n");
-    buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority);
+    buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
   } else {
     // DDbgPrint("   use UserBuffer\n");
     buffer = irp->UserBuffer;

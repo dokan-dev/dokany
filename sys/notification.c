@@ -178,7 +178,7 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
     irp = irpEntry->Irp;
     DokanFreeIrpEntry(irpEntry);
-    DokanCompleteIrpRequest(irp, STATUS_SUCCESS, 0);
+    DokanCompleteIrpRequest(irp, STATUS_CANCELLED, 0);
   }
 }
 
@@ -388,16 +388,18 @@ VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
       Dcb->EventNotificationThread) {
     DDbgPrint("Waiting for Notify thread to terminate.\n");
     ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
-    KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
-                          FALSE, NULL);
-    DDbgPrint("Notify thread successfully terminated.\n");
-    ObDereferenceObject(Dcb->EventNotificationThread);
-    Dcb->EventNotificationThread = NULL;
+    if (Dcb->EventNotificationThread) {
+      KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
+                            FALSE, NULL);
+      DDbgPrint("Notify thread successfully terminated.\n");
+      ObDereferenceObject(Dcb->EventNotificationThread);
+      Dcb->EventNotificationThread = NULL;
+    }
   }
   DDbgPrint("<== DokanStopEventNotificationThread\n");
 }
 
-NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
+NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanDCB dcb;
   PDokanVCB vcb;
   PDokanFCB fcb;
@@ -418,11 +420,39 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   }
   dcb = vcb->Dcb;
 
+  if (IsDeletePending(dcb->DeviceObject)) {
+    DDbgPrint("    DokanEventRelease already running for this device\n");
+    return STATUS_SUCCESS;
+  }
+
+  if (IsUnmountPendingVcb(vcb)) {
+    DDbgPrint("    DokanEventRelease already running for this volume\n");
+    return STATUS_SUCCESS;
+  }
+
+  status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
+    return STATUS_DEVICE_REMOVED;
+  }
+
+  // as first delete the mountpoint
+  // in case of MountManager some request because of delete
+  // must be handled properly
   DokanDeleteMountPoint(dcb);
 
-  // ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-  dcb->Mounted = 0;
-  // ExReleaseResourceLite(&dcb->Resource);
+  // then mark the device for unmount pending
+  SetLongFlag(vcb->Flags, VCB_DISMOUNT_PENDING);
+  SetLongFlag(dcb->Flags, DCB_DELETE_PENDING);
+
+  DDbgPrint("     Starting unmount for device %wZ\n", dcb->DiskDeviceName);
+
+  ReleasePendingIrp(&dcb->PendingIrp);
+  ReleasePendingIrp(&dcb->PendingEvent);
+  DokanStopCheckThread(dcb);
+  DokanStopEventNotificationThread(dcb);
+
+  ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
   // search CCB list to complete not completed Directory Notification
 
@@ -454,10 +484,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject) {
   ExReleaseResourceLite(&vcb->Resource);
   KeLeaveCriticalRegion();
 
-  ReleasePendingIrp(&dcb->PendingIrp);
-  ReleasePendingIrp(&dcb->PendingEvent);
-  DokanStopCheckThread(dcb);
-  DokanStopEventNotificationThread(dcb);
+  IoReleaseRemoveLockAndWait(&dcb->RemoveLock, Irp);
 
   DokanDeleteDeviceObject(dcb);
 
@@ -506,12 +533,21 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }
-  mountEntry = FindMountEntry(dokanGlobal, &dokanControl);
+  mountEntry = FindMountEntry(dokanGlobal, &dokanControl, TRUE);
   if (mountEntry == NULL) {
     DDbgPrint("Cannot found device associated to mount point %ws\n",
               dokanControl.MountPoint);
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  return DokanEventRelease(mountEntry->MountControl.DeviceObject);
+  if (IsDeletePending(mountEntry->MountControl.DeviceObject)) {
+    DDbgPrint("Device is deleted\n") return STATUS_DEVICE_REMOVED;
+  }
+
+  if (!IsMounted(mountEntry->MountControl.DeviceObject)) {
+    DDbgPrint("Device is still not mounted, so an unmount not possible at this "
+              "point\n") return STATUS_DEVICE_BUSY;
+  }
+
+  return DokanEventRelease(mountEntry->MountControl.DeviceObject, Irp);
 }

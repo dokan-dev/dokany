@@ -295,7 +295,7 @@ typedef struct _DOKAN_OPERATIONS {
   //   In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already
   //   existing file,
   //   you have to SetLastError(ERROR_ALREADY_EXISTS)
-  //   If file is a directory, CreateFile (not OpenDirectory) may be called.
+  //   If file is a directory, CreateFile is also called.
   //   In this case, CreateFile should return STATUS_SUCCESS when that directory
   //   can be opened.
   //   You should set TRUE on DokanFileInfo->IsDirectory when file is a
@@ -333,7 +333,7 @@ NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(_In_ DOKAN_CREATE_FILE_EVENT *EventInfo);
   // are implemented.
   NTSTATUS(DOKAN_CALLBACK *SetFileBasicInformation)(_In_ DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo);
 
-  // You should not delete the file on DeleteFile or DeleteDirectory, but
+  // You should not delete the file on DeleteFile, but
   // instead
   // you must only check whether you can delete the file or not,
   // and return STATUS_SUCCESS (when you can delete it) or appropriate error
@@ -431,6 +431,10 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
+// If Safe is TRUE, will broadcast to all desktop and Shell
+// Safe should not be used during DLL_PROCESS_DETACH
+BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
+
 // DokanIsNameInExpression
 //   checks whether Name can match Expression
 //   Expression can contain wildcard characters (? and *)
@@ -448,8 +452,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
                                 PDOKAN_FILE_INFO DokanFileInfo);
 
 // Get the handle to Access Token
-// This method needs be called in CreateFile, OpenDirectory or CreateDirectly
-// callback.
+// This method needs be called in CreateFile callback.
 // The caller must call CloseHandle for the returned handle.
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT DokanFileInfo);
 

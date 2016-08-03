@@ -23,7 +23,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include <ntstatus.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <assert.h>
 
 #define DOKAN_STREAM_BUFFER_FULL			1

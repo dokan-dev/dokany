@@ -111,6 +111,22 @@ Return Value:
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
+    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
+                              DokanOplockComplete, DokanPrePostIrp);
+
+    //
+    //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+    //  to service an oplock break and we need to leave now.
+    //
+    if (status != STATUS_SUCCESS) {
+      if (status == STATUS_PENDING) {
+        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+      } else {
+        DokanFreeEventContext(eventContext);
+      }
+      __leave;
+    }
+
     // register this IRP to pending IRP list
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
@@ -165,7 +181,11 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+  ExReleaseResourceLite(&fcb->Resource);
+  KeLeaveCriticalRegion();
 
   DokanCompleteIrpRequest(irp, status, 0);
 
