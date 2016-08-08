@@ -1447,10 +1447,14 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileBasicInformation(DOKAN_SET_FILE_BASI
   MIRROR_HANDLE_ASSERT(mirrorHandle);
   assert(sizeof(FILE_BASIC_INFORMATION) == sizeof(FILE_BASIC_INFO));
 
+  // Due to potential byte alignment issues we need to make a copy of the input data
+  FILE_BASIC_INFO basicInfo;
+  memcpy_s(&basicInfo, sizeof(basicInfo), EventInfo->Info, sizeof(FILE_BASIC_INFORMATION));
+
   if (!SetFileInformationByHandle(mirrorHandle->FileHandle,
 	  FileBasicInfo,
-	  (LPVOID)EventInfo->Info,
-	  (DWORD)sizeof(FILE_BASIC_INFORMATION))) {
+	  &basicInfo,
+	  (DWORD)sizeof(basicInfo))) {
 
     DWORD error = GetLastError();
 
