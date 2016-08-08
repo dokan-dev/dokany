@@ -2029,14 +2029,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
     fwprintf(stderr, L"Mount manager cannot be used on network drive.\n");
 
-    return -1;
+    return EXIT_FAILURE;
   }
 
   if (!(dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) &&
       wcscmp(MountPoint, L"") == 0) {
 
     fwprintf(stderr, L"Mount Point required.\n");
-    return -1;
+    return EXIT_FAILURE;
   }
 
   if ((dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) &&
@@ -2044,7 +2044,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
     fwprintf(stderr,
              L"Mount Manager always mount the drive for all user sessions.\n");
-    return -1;
+    return EXIT_FAILURE;
   }
 
   if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {

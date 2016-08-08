@@ -351,6 +351,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
                                   &pInfoEoF->EndOfFile)) {
           status = STATUS_USER_MAPPED_FILE;
+          ExReleaseResourceLite(&fcb->Resource);
           __leave;
         }
 
