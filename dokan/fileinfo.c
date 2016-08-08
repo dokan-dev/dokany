@@ -547,8 +547,6 @@ void DOKANAPI DokanEndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, N
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
-	assert(ioEvent->EventResult->BufferLength == 0);
-
 	ioEvent->EventResult->Status = ResultStatus;
 
 	DbgPrint("\tDispatchQueryInformation result =  %lx\n", ResultStatus);
