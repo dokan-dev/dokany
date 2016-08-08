@@ -1354,7 +1354,7 @@ BOOL SendEventInformation(PEVENT_INFORMATION EventInfo,
   
   DOKAN_OVERLAPPED *overlapped = NULL;
   DWORD lastError = 0;
-  DWORD eventSize = max(sizeof(EVENT_INFORMATION), DOKAN_EVENT_INFO_ALLOC_SIZE(EventInfo->BufferLength));
+  DWORD eventSize = (DWORD)max(sizeof(EVENT_INFORMATION), DOKAN_EVENT_INFO_ALLOC_SIZE(EventInfo->BufferLength));
 
   DbgPrint("Dokan Information: SendEventInformation() with NTSTATUS 0x%x, context 0x%lx, and result object 0x%p\n",
 	  EventInfo->Status,
@@ -1752,6 +1752,9 @@ DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
 }
 
 void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks) {
+
+	// ensure 64-bit alignment
+	assert(offsetof(EVENT_INFORMATION, Buffer) % 8 == 0);
 
 	// this is not as safe as a critical section so to some degree we rely on
 	// the user to do the right thing

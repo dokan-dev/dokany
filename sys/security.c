@@ -158,13 +158,13 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   if (EventInfo->Status == STATUS_SUCCESS &&
       EventInfo->BufferLength <= bufferLength && buffer != NULL) {
     RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
     status = STATUS_SUCCESS;
 
   } else if (EventInfo->Status == STATUS_BUFFER_OVERFLOW ||
              (EventInfo->Status == STATUS_SUCCESS &&
               bufferLength < EventInfo->BufferLength)) {
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
     status = STATUS_BUFFER_OVERFLOW;
 
   } else {

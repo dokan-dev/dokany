@@ -290,7 +290,7 @@ DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
 int WINAPI DokanFillFindStreamData(PDOKAN_FIND_STREAMS_EVENT EventInfo, PWIN32_FIND_STREAM_DATA FindStreamData) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
-	ULONG offset = ioEvent->EventResult->BufferLength;
+	ULONG offset = (ULONG)ioEvent->EventResult->BufferLength;
 	ULONG resultBufferSize = IoEventResultBufferSize(ioEvent);
 	
 	ULONG streamNameLength =

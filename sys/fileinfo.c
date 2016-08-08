@@ -260,7 +260,7 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
     RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
     // written bytes
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
     status = EventInfo->Status;
 
     if (NT_SUCCESS(status) &&
@@ -402,8 +402,12 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // calcurate the size of EVENT_CONTEXT
     // it is sum of file name length and size of FileInformation
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length +
-                  irpSp->Parameters.SetFile.Length;
+	ULONG bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName) + fcb->FileName.Length + sizeof(WCHAR);
+
+	// the set file information must be ptr aligned
+	bufferOffset = (ULONG)ALIGN_UP(bufferOffset, ULONG_PTR);
+
+	eventLength = max(sizeof(EVENT_CONTEXT), bufferOffset + irpSp->Parameters.SetFile.Length);
 
     targetFileObject = irpSp->Parameters.SetFile.FileObject;
 
@@ -429,9 +433,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         irpSp->Parameters.SetFile.Length;
 
     // the offset from begining of structure to fill FileInfo
-    eventContext->Operation.SetFile.BufferOffset =
-        FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
-        fcb->FileName.Length + sizeof(WCHAR); // the last null char
+	eventContext->Operation.SetFile.BufferOffset = bufferOffset;
 
     // copy FileInformation
     RtlCopyMemory(
@@ -548,7 +550,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     ccb->UserContext = EventInfo->Context;
 
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
 
     infoClass = irpSp->Parameters.SetFile.FileInformationClass;
 

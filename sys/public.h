@@ -331,7 +331,11 @@ typedef struct _EVENT_INFORMATION {
     } AccessToken;
   } Operation;
   ULONG64 Context;
-  ULONG BufferLength;
+
+  // This must be 64-bit to maintain 8 byte alignment for Buffer on x64
+  ULONG64 BufferLength;
+
+  // This must have 8 byte alignment for x64
   UCHAR Buffer[DOKAN_EVENT_INFO_MIN_BUFFER_SIZE];
 
 } EVENT_INFORMATION, *PEVENT_INFORMATION;

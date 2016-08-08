@@ -358,7 +358,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
 
     status = EventInfo->Status;
 
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
   }
 
   if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
