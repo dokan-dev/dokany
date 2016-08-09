@@ -257,7 +257,7 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
     ASSERT(buffer != NULL);
 
     RtlZeroMemory(buffer, bufferLen);
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     // written bytes
     info = (ULONG)EventInfo->BufferLength;
@@ -594,7 +594,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         oldFileName.MaximumLength = (USHORT)fcb->FileName.Length;
 
         // copy new file name
-        buffer = ExAllocatePool(EventInfo->BufferLength + sizeof(WCHAR));
+        buffer = ExAllocatePool((SIZE_T)(EventInfo->BufferLength + sizeof(WCHAR)));
 
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
@@ -609,9 +609,9 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         ASSERT(fcb->FileName.Buffer != NULL);
 
         RtlZeroMemory(fcb->FileName.Buffer,
-                      EventInfo->BufferLength + sizeof(WCHAR));
+			(SIZE_T)(EventInfo->BufferLength + sizeof(WCHAR)));
         RtlCopyMemory(fcb->FileName.Buffer, EventInfo->Buffer,
-                      EventInfo->BufferLength);
+			(SIZE_T)EventInfo->BufferLength);
 
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;

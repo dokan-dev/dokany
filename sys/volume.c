@@ -339,7 +339,7 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
     }
 
     RtlZeroMemory(buffer, bufferLen);
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     // the written length
     info = (ULONG)EventInfo->BufferLength;

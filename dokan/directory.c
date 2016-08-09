@@ -338,7 +338,10 @@ LONG MatchFiles(DOKAN_IO_EVENT *EventInfo, DOKAN_VECTOR *dirList) {
 
 				ULONG entrySize = DokanFillDirectoryInformation(
 					EventInfo->KernelInfo.EventContext.Operation.Directory.FileInformationClass,
-					currentBuffer, &lengthRemaining, &find->FindData, index + 1,
+					currentBuffer,
+					&lengthRemaining,
+					&find->FindData,
+					index + 1,
 					EventInfo->DokanInstance);
 
 				// buffer is full

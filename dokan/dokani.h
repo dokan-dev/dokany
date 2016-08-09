@@ -31,6 +31,28 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokanc.h"
 #include "list.h"
 
+// In appveyor FUSE gets compiled using GCC in Cygwin which doesn't recognize
+// the following definitions
+#ifndef _MSC_VER 
+
+#ifndef _Inout_
+#define _Inout_
+#endif
+
+#ifndef _Inout_opt_
+#define _Inout_opt_
+#endif
+
+#ifndef _In_
+#define _In_
+#endif
+
+#ifndef _Out_
+#define _Out_
+#endif
+
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

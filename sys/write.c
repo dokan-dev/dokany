@@ -341,7 +341,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   status = EventInfo->Status;
 
   irp->IoStatus.Status = status;
-  irp->IoStatus.Information = EventInfo->BufferLength;
+  irp->IoStatus.Information = (ULONG_PTR)EventInfo->BufferLength;
 
   if (NT_SUCCESS(status) && EventInfo->BufferLength != 0 &&
       (fileObject->Flags & FO_SYNCHRONOUS_IO) && !(irp->Flags & IRP_PAGING_IO)) {

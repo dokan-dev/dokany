@@ -305,7 +305,7 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
 
   } else {
     RtlZeroMemory(buffer, bufferLen);
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     // read length which is actually read
     readLength = (ULONG)EventInfo->BufferLength;

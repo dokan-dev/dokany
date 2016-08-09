@@ -337,7 +337,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     RtlZeroMemory(buffer, bufferLen);
 
     // DDbgPrint("   copy DirectoryInfo\n");
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     DDbgPrint("    eventInfo->Directory.Index = %lu\n",
               EventInfo->Operation.Directory.Index);
