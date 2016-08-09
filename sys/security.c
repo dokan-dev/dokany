@@ -121,7 +121,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlCopyMemory(eventContext->Operation.Security.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags, NULL);
 
   } __finally {
 
@@ -194,6 +194,7 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
 
 NTSTATUS
 DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+
   PIO_STACK_LOCATION irpSp;
   PDokanVCB vcb;
   PDokanDCB dcb;
@@ -207,38 +208,50 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG securityDescLength;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
+  IRP_ENTRY_CONTEXT irpContext;
+  ULONG bufferOffset;
 
   __try {
+
     DDbgPrint("==> DokanSetSecurity\n");
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
 
     if (fileObject == NULL) {
+
       DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
+
     if (GetIdentifierType(vcb) != VCB) {
+
       DbgPrint("    DeviceExtension != VCB\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
+
     dcb = vcb->Dcb;
 
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DokanPrintFileName(fileObject);
 
     ccb = fileObject->FsContext2;
+
     if (ccb == NULL) {
+
       DDbgPrint("    ccb == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
+
     fcb = ccb->Fcb;
+
     if (fcb == NULL) {
+
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
@@ -246,18 +259,27 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     securityInfo = &irpSp->Parameters.SetSecurity.SecurityInformation;
 
     if (*securityInfo & OWNER_SECURITY_INFORMATION) {
+
       DDbgPrint("    OWNER_SECURITY_INFORMATION\n");
     }
+
     if (*securityInfo & GROUP_SECURITY_INFORMATION) {
+
       DDbgPrint("    GROUP_SECURITY_INFORMATION\n");
     }
+
     if (*securityInfo & DACL_SECURITY_INFORMATION) {
+
       DDbgPrint("    DACL_SECURITY_INFORMATION\n");
     }
+
     if (*securityInfo & SACL_SECURITY_INFORMATION) {
+
       DDbgPrint("    SACL_SECURITY_INFORMATION\n");
     }
+
     if (*securityInfo & LABEL_SECURITY_INFORMATION) {
+
       DDbgPrint("    LABEL_SECURITY_INFORMATION\n");
     }
 
@@ -266,38 +288,68 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Assumes the parameter is self relative SD.
     securityDescLength = RtlLengthSecurityDescriptor(securityDescriptor);
 
-    eventLength =
-        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length;
+	bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName) + fcb->FileName.Length + sizeof(WCHAR);
+
+	// the set security information must be ptr aligned
+	bufferOffset = (ULONG)ALIGN_UP(bufferOffset, ULONG_PTR);
+
+    eventLength = max(sizeof(EVENT_CONTEXT), bufferOffset + securityDescLength);
 
     if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
+
       // TODO: Handle this case like DispatchWrite.
       DDbgPrint("    SecurityDescriptor is too big: %d (limit %d)\n",
                 eventLength, EVENT_CONTEXT_MAX_SIZE);
+
       status = STATUS_INSUFFICIENT_RESOURCES;
+
       __leave;
     }
 
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
     if (eventContext == NULL) {
+
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
+
+	RtlZeroMemory(&irpContext, sizeof(irpContext));
+
+	status = DokanCreateProcessAccessToken(
+		&irpContext.Security.UserModeAccessToken,
+		&irpContext.Security.Process);
+
+	if(!NT_SUCCESS(status)) {
+
+		DokanFreeEventContext(eventContext);
+		__leave;
+	}
+
     eventContext->Context = ccb->UserContext;
+	eventContext->Operation.SetSecurity.AccessToken = irpContext.Security.UserModeAccessToken;
     eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
     eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
-    eventContext->Operation.SetSecurity.BufferOffset =
-        FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-        fcb->FileName.Length + sizeof(WCHAR);
-    RtlCopyMemory((PCHAR)eventContext +
-                      eventContext->Operation.SetSecurity.BufferOffset,
-                  securityDescriptor, securityDescLength);
+    eventContext->Operation.SetSecurity.BufferOffset = bufferOffset;
+
+    RtlCopyMemory((PCHAR)eventContext + eventContext->Operation.SetSecurity.BufferOffset,
+                  securityDescriptor,
+                  securityDescLength);
 
     eventContext->Operation.SetSecurity.FileNameLength = fcb->FileName.Length;
-    RtlCopyMemory(eventContext->Operation.SetSecurity.FileName,
-                  fcb->FileName.Buffer, fcb->FileName.Length);
 
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    RtlCopyMemory(eventContext->Operation.SetSecurity.FileName,
+                  fcb->FileName.Buffer,
+                  fcb->FileName.Length);
+
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpContext);
+
+	if(status != STATUS_PENDING) {
+
+		DokanCleanupProcessAccessToken(
+			irpContext.Security.UserModeAccessToken,
+			irpContext.Security.Process);
+	}
 
   } __finally {
 
@@ -318,6 +370,13 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 
+  if(IrpEntry->ContextInfo.Security.UserModeAccessToken) {
+
+	  DokanCleanupProcessAccessToken(
+		  IrpEntry->ContextInfo.Security.UserModeAccessToken,
+		  IrpEntry->ContextInfo.Security.Process);
+  }
+
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
@@ -325,13 +384,109 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   ASSERT(fileObject != NULL);
 
   ccb = fileObject->FsContext2;
+
   if (ccb != NULL) {
+
     ccb->UserContext = EventInfo->Context;
-  } else {
+  }
+  else {
+
     DDbgPrint("  ccb == NULL\n");
   }
 
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteSetSecurity\n");
+}
+
+NTSTATUS DokanCreateProcessAccessToken(
+	__out HANDLE *AccessToken,
+	__out PEPROCESS *Process) {
+
+	SECURITY_SUBJECT_CONTEXT securitySubjectContext;
+	SECURITY_QUALITY_OF_SERVICE securityQualityOfService;
+	SECURITY_CLIENT_CONTEXT securityClientContext;
+	NTSTATUS status = STATUS_SUCCESS;
+
+	if(!AccessToken || !Process) {
+
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	// Duplicate the subject context access token into an impersonation token
+	securityQualityOfService.Length = sizeof(securityQualityOfService);
+	securityQualityOfService.ImpersonationLevel = SecurityIdentification;
+	securityQualityOfService.ContextTrackingMode = SECURITY_STATIC_TRACKING;
+	securityQualityOfService.EffectiveOnly = FALSE;
+
+	SeCaptureSubjectContext(&securitySubjectContext);
+
+	SeLockSubjectContext(&securitySubjectContext);
+
+	status = SeCreateClientSecurityFromSubjectContext(
+		&securitySubjectContext,
+		&securityQualityOfService,
+		FALSE,
+		&securityClientContext);
+
+	SeUnlockSubjectContext(&securitySubjectContext);
+
+	SeReleaseSubjectContext(&securitySubjectContext);
+
+	if(!NT_SUCCESS(status)) {
+
+		DDbgPrint("    Failed to create client security from subject context.\n");
+		
+		return status;
+	}
+
+	// Get a user-mode handle to the impersonation token
+	status = ObOpenObjectByPointer(securityClientContext.ClientToken,
+		0, 0, TOKEN_QUERY, *SeTokenObjectType, UserMode, AccessToken);
+
+	SeDeleteClientSecurity(&securityClientContext);
+
+	if(!NT_SUCCESS(status)) {
+
+		DDbgPrint("    Failed to create user mode impersonation token.\n");
+		
+		return status;
+	}
+
+	// Get a pointer to the current process so that we can close the impersonation token later
+	*Process = PsGetCurrentProcess();
+
+	ObReferenceObject(*Process);
+
+	return STATUS_SUCCESS;
+}
+
+VOID DokanCleanupProcessAccessToken(
+	__in HANDLE AccessToken,
+	__in PEPROCESS Process) {
+
+	DDbgPrint("    Closing access token\n");
+
+	KAPC_STATE apcState;
+	NTSTATUS status = STATUS_SUCCESS;
+	BOOLEAN attach = Process && Process != PsGetCurrentProcess();
+
+	if(attach) {
+
+		KeStackAttachProcess(Process, &apcState);
+	}
+
+	status = ObCloseHandle(AccessToken, UserMode);
+
+	if(attach) {
+
+		KeUnstackDetachProcess(&apcState);
+	}
+
+	ObDereferenceObject(Process);
+
+	if(!NT_SUCCESS(status)) {
+
+		DDbgPrint("    Failed to close user mode access token.\n");
+	}
 }

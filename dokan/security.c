@@ -111,7 +111,8 @@ void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo) {
 	if(EventInfo->DokanInstance->DokanOperations->SetFileSecurityW) {
 
 		setFileSecurity->DokanFileInfo = &EventInfo->DokanFileInfo;
-		setFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.Security.FileName;
+		setFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.FileName;
+		setFileSecurity->AccessToken = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.AccessToken;
 		setFileSecurity->SecurityInformation = &EventInfo->KernelInfo.EventContext.Operation.SetSecurity.SecurityInformation;
 		setFileSecurity->SecurityDescriptor = (PCHAR)&EventInfo->KernelInfo.EventContext + EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferOffset;
 		setFileSecurity->SecurityDescriptorSize = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferLength;

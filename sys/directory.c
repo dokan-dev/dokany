@@ -251,7 +251,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    ccb->SearchPattern %ws\n", ccb->SearchPattern);
   }
 
-  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags, NULL);
 
   return status;
 }

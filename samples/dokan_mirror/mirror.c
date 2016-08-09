@@ -1231,20 +1231,29 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
 
   WCHAR filePath[MAX_PATH];
+  MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
+  BY_HANDLE_FILE_INFORMATION fileInfo;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
   DbgPrint(L"CanDeleteFile %s\n", filePath);
 
+  MIRROR_HANDLE_ASSERT(mirrorHandle);
+
+  ZeroMemory(&fileInfo, sizeof(fileInfo));
+
+  if(!GetFileInformationByHandle(mirrorHandle->FileHandle, &fileInfo))
+  {
+	  return DokanNtStatusFromWin32(GetLastError());
+  }
+
+  if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == FILE_ATTRIBUTE_READONLY) {
+
+	  return STATUS_ACCESS_DENIED;
+  }
+
   if(EventInfo->DokanFileInfo->IsDirectory) {
 
 	  return MirrorCanDeleteDirectory(filePath);
-  }
-
-  DWORD dwAttrib = GetFileAttributes(filePath);
-
-  if(dwAttrib == INVALID_FILE_ATTRIBUTES)
-  {
-	  return DokanNtStatusFromWin32(GetLastError());
   }
 
   return STATUS_SUCCESS;

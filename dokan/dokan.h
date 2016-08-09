@@ -156,6 +156,7 @@ typedef struct _DOKAN_CREATE_FILE_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
 	LPCWSTR							FileName;
 	LPCWSTR							OriginalFileName;
+	HANDLE							AccessToken;
 	DOKAN_IO_SECURITY_CONTEXT		SecurityContext; // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
 
 	ACCESS_MASK						DesiredAccess;
@@ -275,6 +276,7 @@ typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
 typedef struct _DOKAN_SET_FILE_SECURITY_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
 	LPWSTR							FileName;
+	HANDLE							AccessToken;
 	PSECURITY_INFORMATION			SecurityInformation;
 	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
 	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer

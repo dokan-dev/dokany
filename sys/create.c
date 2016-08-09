@@ -471,8 +471,12 @@ Return Value:
   BOOLEAN BackoutOplock = FALSE;
   BOOLEAN EventContextConsumed = FALSE;
   DWORD disposition = 0;
+  IRP_ENTRY_CONTEXT irpContext;
 
   PAGED_CODE();
+
+  // must be done up here outside of the __try block
+  RtlZeroMemory(&irpContext, sizeof(irpContext));
 
   __try {
     DDbgPrint("==> DokanCreate\n");
@@ -937,9 +941,21 @@ Return Value:
                    eventContext->Operation.Create.FileNameOffset),
                   parentDir ? fileName : fcb->FileName.Buffer,
                   parentDir ? fileNameLength : fcb->FileName.Length);
+
     *(PWCHAR)((char *)&eventContext->Operation.Create +
               eventContext->Operation.Create.FileNameOffset +
               (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
+
+	status = DokanCreateProcessAccessToken(
+		&irpContext.Security.UserModeAccessToken,
+		&irpContext.Security.Process);
+
+	if(!NT_SUCCESS(status)) {
+
+		__leave;
+	}
+
+	eventContext->Operation.Create.AccessToken = irpContext.Security.UserModeAccessToken;
 
 //
 // Oplock
@@ -1167,7 +1183,7 @@ Return Value:
     }
 
     // register this IRP to waiting IPR list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpContext);
 
     EventContextConsumed = TRUE;
 
@@ -1205,23 +1221,38 @@ Return Value:
 
     if (!NT_SUCCESS(status)) {
 
+      if(irpContext.Security.UserModeAccessToken) {
+
+        DokanCleanupProcessAccessToken(
+			irpContext.Security.UserModeAccessToken,
+			irpContext.Security.Process);
+	  }
+
       // DokanRegisterPendingIrp consumes event context
 
       if (!EventContextConsumed && eventContext) {
+
         DokanFreeEventContext(eventContext);
       }
+
       if (ccb) {
+
         DokanFreeCCB(ccb);
       }
+
       if (fcb) {
+
         DokanFreeFCB(fcb);
       }
     }
 
     if (parentDir) { // SL_OPEN_TARGET_DIRECTORY
+
       // fcb owns parentDir, not fileName
-      if (fileName)
-        ExFreePool(fileName);
+		if(fileName) {
+
+			ExFreePool(fileName);
+		}
     }
 
     DokanCompleteIrpRequest(Irp, status, info);
@@ -1245,6 +1276,13 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   irpSp = IrpEntry->IrpSp;
 
   DDbgPrint("==> DokanCompleteCreate\n");
+
+  if(IrpEntry->ContextInfo.Security.UserModeAccessToken) {
+
+	  DokanCleanupProcessAccessToken(
+		  IrpEntry->ContextInfo.Security.UserModeAccessToken,
+		  IrpEntry->ContextInfo.Security.Process);
+  }
 
   ccb = IrpEntry->FileObject->FsContext2;
   ASSERT(ccb != NULL);

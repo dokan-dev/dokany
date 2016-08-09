@@ -113,9 +113,11 @@ None.
   //  Check on the return value in the Irp.
   //
   if (Irp->IoStatus.Status == STATUS_SUCCESS) {
-    DokanRegisterPendingIrp(irpSp->DeviceObject, Irp, (PEVENT_CONTEXT)Context,
-                            0);
-  } else {
+
+    DokanRegisterPendingIrp(irpSp->DeviceObject, Irp, (PEVENT_CONTEXT)Context, 0, NULL);
+  }
+  else {
+
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status, 0);
   }
 
@@ -146,9 +148,14 @@ None.
 }
 
 NTSTATUS
-RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                       __in ULONG SerialNumber, __in PIRP_LIST IrpList,
-                       __in ULONG Flags, __in ULONG CheckMount) {
+RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject,
+                       __in PIRP Irp,
+                       __in ULONG SerialNumber,
+                       __in PIRP_LIST IrpList,
+                       __in ULONG Flags,
+                       __in ULONG CheckMount,
+                       __in IRP_ENTRY_CONTEXT *IrpContext) {
+
   PIRP_ENTRY irpEntry;
   PIO_STACK_LOCATION irpSp;
   KIRQL oldIrql;
@@ -157,8 +164,11 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   DDbgPrint("==> DokanRegisterPendingIrpMain\n");
 
   if (GetIdentifierType(DeviceObject->DeviceExtension) == VCB) {
+
     vcb = DeviceObject->DeviceExtension;
+
     if (CheckMount && IsUnmountPendingVcb(vcb)) {
+
       DDbgPrint(" device is not mounted\n");
       return STATUS_NO_SUCH_DEVICE;
     }
@@ -170,6 +180,7 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   irpEntry = DokanAllocateIrpEntry();
 
   if (NULL == irpEntry) {
+
     DDbgPrint("  can't allocate IRP_ENTRY\n");
     return STATUS_INSUFFICIENT_RESOURCES;
   }
@@ -185,12 +196,20 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   irpEntry->IrpList = IrpList;
   irpEntry->Flags = Flags;
 
+  if(IrpContext) {
+
+	  irpEntry->ContextInfo = *IrpContext;
+  }
+
   // Update the irp timeout for the entry
   if (vcb) {
+
     ExAcquireResourceExclusiveLite(&vcb->Dcb->Resource, TRUE);
     DokanUpdateTimeout(&irpEntry->TickCount, vcb->Dcb->IrpTimeout);
     ExReleaseResourceLite(&vcb->Dcb->Resource);
-  } else {
+  }
+  else {
+
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
 
@@ -201,6 +220,7 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   IoSetCancelRoutine(Irp, DokanIrpCancelRoutine);
 
   if (Irp->Cancel) {
+
     if (IoSetCancelRoutine(Irp, NULL) != NULL) {
       // DDbgPrint("  Release IrpList.ListLock %d\n", __LINE__);
       KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
@@ -230,28 +250,39 @@ RegisterPendingIrpMain(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 }
 
 NTSTATUS
-DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                        __in PEVENT_CONTEXT EventContext, __in ULONG Flags) {
+DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject,
+                        __in PIRP Irp,
+                        __in PEVENT_CONTEXT EventContext,
+                        __in ULONG Flags,
+                        __in IRP_ENTRY_CONTEXT *IrpContext) {
+
   PDokanVCB vcb = DeviceObject->DeviceExtension;
   NTSTATUS status;
 
   DDbgPrint("==> DokanRegisterPendingIrp\n");
 
   if (GetIdentifierType(vcb) != VCB) {
+
     DDbgPrint("  IdentifierType is not VCB\n");
+	DokanFreeEventContext(EventContext);
+
     return STATUS_INVALID_PARAMETER;
   }
 
   status = RegisterPendingIrpMain(DeviceObject, Irp, EventContext->SerialNumber,
-                                  &vcb->Dcb->PendingIrp, Flags, TRUE);
+                                  &vcb->Dcb->PendingIrp, Flags, TRUE, IrpContext);
 
   if (status == STATUS_PENDING) {
+
     DokanEventNotification(&vcb->Dcb->NotifyEvent, EventContext);
-  } else {
+  }
+  else {
+
     DokanFreeEventContext(EventContext);
   }
 
   DDbgPrint("<== DokanRegisterPendingIrp\n");
+
   return status;
 }
 
@@ -277,7 +308,8 @@ DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
                                 0, // SerialNumber
                                 &vcb->Dcb->PendingEvent,
                                 0, // Flags
-                                TRUE);
+                                TRUE,
+                                NULL);
 }
 
 NTSTATUS
@@ -295,7 +327,8 @@ DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
                                 0, // SerialNumber
                                 &dokanGlobal->PendingService,
                                 0, // Flags
-                                FALSE);
+                                FALSE,
+                                NULL);
 }
 
 // When user-mode file system application returns EventInformation,

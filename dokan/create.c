@@ -113,6 +113,7 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
   createFileEvent->CreateDisposition = (EventInfo->KernelInfo.EventContext.Operation.Create.CreateOptions >> 24) & 0x000000ff;
   createFileEvent->FileAttributes = EventInfo->KernelInfo.EventContext.Operation.Create.FileAttributes;
   createFileEvent->ShareAccess = EventInfo->KernelInfo.EventContext.Operation.Create.ShareAccess;
+  createFileEvent->AccessToken = EventInfo->KernelInfo.EventContext.Operation.Create.AccessToken;
 
   if((createFileEvent->CreateOptions & FILE_NON_DIRECTORY_FILE) && (createFileEvent->CreateOptions & FILE_DIRECTORY_FILE)) {
 	  

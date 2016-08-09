@@ -204,7 +204,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   fcb->FileName.Length);
 
     // register this IRP to pending IPR list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
 
@@ -293,6 +293,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
   BOOLEAN isPagingIo = FALSE;
   PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
+  ULONG bufferOffset;
 
   vcb = DeviceObject->DeviceExtension;
 
@@ -402,7 +403,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // calcurate the size of EVENT_CONTEXT
     // it is sum of file name length and size of FileInformation
-	ULONG bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName) + fcb->FileName.Length + sizeof(WCHAR);
+	bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName) + fcb->FileName.Length + sizeof(WCHAR);
 
 	// the set file information must be ptr aligned
 	bufferOffset = (ULONG)ALIGN_UP(bufferOffset, ULONG_PTR);
@@ -507,7 +508,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     // register this IRP to waiting IRP list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
 

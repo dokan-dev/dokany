@@ -246,7 +246,7 @@ Return Value:
     }
 
     // register this IRP to pending IPR list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
   } __finally {
 
     DokanCompleteIrpRequest(Irp, status, readLength);

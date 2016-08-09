@@ -372,18 +372,26 @@ typedef struct _DokanContextControlBlock {
 #define DokanGetFcbOplock(F) &(F)->Oplock
 #endif
 
+typedef union _IRP_ENTRY_CONTEXT {
+	struct {
+		PEPROCESS Process;
+		HANDLE UserModeAccessToken;
+	} Security;
+} IRP_ENTRY_CONTEXT, *PIRP_ENTRY_CONTEXT;
+
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
 typedef struct _IRP_ENTRY {
   LIST_ENTRY ListEntry;
-  ULONG SerialNumber;
   PIRP Irp;
   PIO_STACK_LOCATION IrpSp;
   PFILE_OBJECT FileObject;
-  BOOLEAN CancelRoutineFreeMemory;
-  ULONG Flags;
-  LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
+  LARGE_INTEGER TickCount;
+  ULONG SerialNumber;
+  ULONG Flags;
+  IRP_ENTRY_CONTEXT ContextInfo;
+  BOOLEAN CancelRoutineFreeMemory;
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
@@ -532,8 +540,11 @@ AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
 VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext);
 
 NTSTATUS
-DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                        __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
+DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject,
+                        __in PIRP Irp,
+                        __in PEVENT_CONTEXT EventContext,
+                        __in ULONG Flags,
+                        __in IRP_ENTRY_CONTEXT *IrpContext);
 
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
@@ -576,6 +587,12 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
                               __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
+
+NTSTATUS DokanCreateProcessAccessToken(__out HANDLE *AccessToken,
+                                       __out PEPROCESS *Process);
+
+VOID DokanCleanupProcessAccessToken(__in HANDLE AccessToken,
+	                                __in PEPROCESS Process);
 
 BOOLEAN
 DokanNoOpAcquire(__in PVOID Fcb, __in BOOLEAN Wait);

@@ -130,7 +130,7 @@ Return Value:
     // Close can not be pending status
     // don't register this IRP
     // status = DokanRegisterPendingIrp(DeviceObject, Irp,
-    // eventContext->SerialNumber, 0);
+    // eventContext->SerialNumber, 0, NULL);
 
     // inform it to user-mode
     DokanEventNotification(&vcb->Dcb->NotifyEvent, eventContext);

@@ -255,7 +255,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       eventContext->Operation.Volume.BufferLength =
           irpSp->Parameters.QueryVolume.Length;
 
-      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
     }
 
   } __finally {

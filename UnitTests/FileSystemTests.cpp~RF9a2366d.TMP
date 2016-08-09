@@ -13,7 +13,7 @@ using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 const wchar_t* GetErrorCodeStr(const DWORD errCode);
 
-#define USE_MIRROR 1
+#define USE_MIRROR 0
 
 namespace UnitTests
 {		
@@ -302,17 +302,13 @@ namespace UnitTests
 
 			if(!GetFileInformationByHandle(handle, &fileInfo))
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
 			}
 
-			if((fileInfo.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY)) != 0)
+			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) == 0)
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"FILE_ATTRIBUTE_NORMAL should be set for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -338,8 +334,6 @@ namespace UnitTests
 
 			if(!GetFileInformationByHandle(handle, &fileInfo))
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -347,8 +341,6 @@ namespace UnitTests
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == 0)
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_READONLY for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -381,8 +373,6 @@ namespace UnitTests
 
 			if(!GetFileInformationByHandle(handle, &fileInfo))
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -390,8 +380,6 @@ namespace UnitTests
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0)
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_SYSTEM for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -431,8 +419,6 @@ namespace UnitTests
 
 			if(!GetFileInformationByHandle(handle, &fileInfo))
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
@@ -440,8 +426,6 @@ namespace UnitTests
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0)
 			{
-				CloseHandle(handle);
-
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_HIDDEN for file \'%s\'.", testFile.c_str()));
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
