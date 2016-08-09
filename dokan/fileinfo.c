@@ -25,14 +25,15 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <assert.h>
 
-#define DOKAN_STREAM_BUFFER_FULL			1
-#define DOKAN_STREAM_BUFFER_CONTINUE		0
+#define DOKAN_STREAM_ENTRY_ALIGNMENT		8
 
 NTSTATUS
 DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
                        PBY_HANDLE_FILE_INFORMATION FileInfo,
                        PULONG RemainingLength) {
+
   if (*RemainingLength < sizeof(FILE_BASIC_INFORMATION)) {
+
     return STATUS_BUFFER_OVERFLOW;
   }
 
@@ -287,37 +288,50 @@ DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
   return STATUS_SUCCESS;
 }
 
-int WINAPI DokanFillFindStreamData(PDOKAN_FIND_STREAMS_EVENT EventInfo, PWIN32_FIND_STREAM_DATA FindStreamData) {
+DOKAN_STREAM_FIND_RESULT WINAPI DokanFillFindStreamData(
+	PDOKAN_FIND_STREAMS_EVENT EventInfo,
+	PWIN32_FIND_STREAM_DATA FindStreamData) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
 	ULONG offset = (ULONG)ioEvent->EventResult->BufferLength;
-	ULONG resultBufferSize = IoEventResultBufferSize(ioEvent);
+	ULONG resultBufferSize = ioEvent->KernelInfo.EventContext.Operation.File.BufferLength;
 	
 	ULONG streamNameLength =
 		(ULONG)wcslen(FindStreamData->cStreamName) * sizeof(WCHAR);
 
-	ULONG entrySize = sizeof(FILE_STREAM_INFORMATION) + streamNameLength;
+	// Must be aligned on a 8-byte boundary.
+	ULONG entrySize = QuadAlign(sizeof(FILE_STREAM_INFORMATION) + streamNameLength);
 
-	if(offset + entrySize > resultBufferSize) {
+	assert(entrySize % DOKAN_STREAM_ENTRY_ALIGNMENT == 0);
+
+	PFILE_STREAM_INFORMATION streamInfo = (PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[offset];
+
+	if(offset + entrySize + streamInfo->NextEntryOffset > resultBufferSize) {
 
 		return DOKAN_STREAM_BUFFER_FULL;
 	}
 
-	PFILE_STREAM_INFORMATION streamInfo = (PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[offset];
+	// If this isn't the first entry move to the next
+	// memory location
+	if(streamInfo->NextEntryOffset != 0) {
+
+		offset += streamInfo->NextEntryOffset;
+		streamInfo = (PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[offset];
+	}
+
+	assert(streamInfo->NextEntryOffset == 0);
 
 	// Fill the new entry
 	streamInfo->StreamNameLength = streamNameLength;
 	
-	memcpy(streamInfo->StreamName, FindStreamData->cStreamName, streamNameLength);
+	memcpy_s(streamInfo->StreamName, streamNameLength, FindStreamData->cStreamName, streamNameLength);
 
 	streamInfo->StreamSize = FindStreamData->StreamSize;
 	streamInfo->StreamAllocationSize = FindStreamData->StreamSize;
-	streamInfo->NextEntryOffset = 0;
+	streamInfo->NextEntryOffset = entrySize;
 	
 	ALIGN_ALLOCATION_SIZE(&streamInfo->StreamAllocationSize, ioEvent->DokanInstance->DokanOptions);
 
-	// Must be align on a 8-byte boundary.
-	offset += QuadAlign(entrySize);
 	ioEvent->EventResult->BufferLength = offset;
 
 	return DOKAN_STREAM_BUFFER_CONTINUE;
@@ -345,7 +359,12 @@ void BeginDispatchQueryInformation(DOKAN_IO_EVENT *EventInfo) {
 
 	  DbgPrint("FileStreamInformation\n");
 
-	  if(EventInfo->DokanInstance->DokanOperations->FindStreams) {
+	  // https://msdn.microsoft.com/en-us/library/windows/hardware/ff540364(v=vs.85).aspx
+	  if(EventInfo->KernelInfo.EventContext.Operation.File.BufferLength < sizeof(FILE_STREAM_INFORMATION)) {
+
+		  status = STATUS_BUFFER_TOO_SMALL;
+	  }
+	  else if(EventInfo->DokanInstance->DokanOperations->FindStreams) {
 
 		  findStreams->DokanFileInfo = &EventInfo->DokanFileInfo;
 		  findStreams->FileName = EventInfo->KernelInfo.EventContext.Operation.File.FileName;
@@ -537,8 +556,26 @@ void DOKANAPI DokanEndDispatchGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *Even
 void DOKANAPI DokanEndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+	ULONG resultBufferSize = IoEventResultBufferSize(ioEvent);
+	PFILE_STREAM_INFORMATION streamInfo =
+		(PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[ioEvent->EventResult->BufferLength];
 
 	DbgPrint("\tresult =  %lx\n", ResultStatus);
+
+	// Entries must be 8 byte aligned
+	assert(streamInfo->NextEntryOffset % DOKAN_STREAM_ENTRY_ALIGNMENT == 0);
+
+	// Ensure that the last entry doesn't point to another entry.
+	ioEvent->EventResult->BufferLength += streamInfo->NextEntryOffset;
+	streamInfo->NextEntryOffset = 0;
+
+	assert(ioEvent->EventResult->BufferLength <= resultBufferSize);
+
+	if(ioEvent->EventResult->BufferLength > resultBufferSize) {
+
+		ioEvent->EventResult->BufferLength = 0;
+		ResultStatus = STATUS_BUFFER_OVERFLOW;
+	}
 
 	// STATUS_PENDING should not be passed to this function
 	if(ResultStatus == STATUS_PENDING) {
@@ -549,7 +586,7 @@ void DOKANAPI DokanEndDispatchFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo, N
 
 	ioEvent->EventResult->Status = ResultStatus;
 
-	DbgPrint("\tDispatchQueryInformation result =  %lx\n", ResultStatus);
+	DbgPrint("\tDokanEndDispatchFindStreams result =  0x%x\n", ResultStatus);
 
 	SendIoEventResult(ioEvent);
 }

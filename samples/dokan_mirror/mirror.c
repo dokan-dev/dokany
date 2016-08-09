@@ -1637,7 +1637,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIB
 	EventInfo->Attributes->FileSystemAttributes =
 		FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
 		FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
-		FILE_PERSISTENT_ACLS;
+		FILE_PERSISTENT_ACLS | FILE_NAMED_STREAMS;
 
 	EventInfo->Attributes->MaximumComponentNameLength = 256;
 
@@ -1710,6 +1710,7 @@ MirrorFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo) {
   WCHAR filePath[MAX_PATH];
   HANDLE hFind;
   WIN32_FIND_STREAM_DATA findData;
+  DOKAN_STREAM_FIND_RESULT findResult = DOKAN_STREAM_BUFFER_CONTINUE;
   DWORD error;
   int count = 0;
 
@@ -1720,24 +1721,38 @@ MirrorFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo) {
   hFind = FindFirstStreamW(filePath, FindStreamInfoStandard, &findData, 0);
 
   if (hFind == INVALID_HANDLE_VALUE) {
+
     error = GetLastError();
     DbgPrint(L"\tinvalid file handle. Error is %u\n\n", error);
     return DokanNtStatusFromWin32(error);
   }
 
-  EventInfo->FillFindStreamData(EventInfo, &findData);
-  count++;
+  if((findResult = EventInfo->FillFindStreamData(EventInfo, &findData)) == DOKAN_STREAM_BUFFER_CONTINUE) {
 
-  while (FindNextStreamW(hFind, &findData) != 0) {
-	  EventInfo->FillFindStreamData(EventInfo, &findData);
-    count++;
+	  count++;
+
+	  while(FindNextStreamW(hFind, &findData) != 0
+		  && (findResult = EventInfo->FillFindStreamData(EventInfo, &findData)) == DOKAN_STREAM_BUFFER_CONTINUE) {
+
+		  count++;
+	  }
   }
 
   error = GetLastError();
   FindClose(hFind);
 
+  if(findResult == DOKAN_STREAM_BUFFER_FULL) {
+
+	  DbgPrint(L"\tFindStreams returned %d entries in %s with STATUS_BUFFER_OVERFLOW\n\n", count, filePath);
+
+	  // https://msdn.microsoft.com/en-us/library/windows/hardware/ff540364(v=vs.85).aspx
+	  return STATUS_BUFFER_OVERFLOW;
+  }
+
   if (error != ERROR_HANDLE_EOF) {
+
     DbgPrint(L"\tFindNextStreamW error. Error is %u\n\n", error);
+
     return DokanNtStatusFromWin32(error);
   }
 

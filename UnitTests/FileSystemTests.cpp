@@ -5,6 +5,8 @@
 #include <Shlwapi.h>
 #include <string>
 #include <cassert>
+#include <vector>
+#include <memory>
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
@@ -20,6 +22,9 @@ namespace UnitTests
 	TEST_CLASS(FileSystemTests)
 	{
 	private:
+
+		inline bool IsValidHandle(HANDLE handle) { return handle && handle != INVALID_HANDLE_VALUE; }
+
 		std::wstring GetTempPathStr()
 		{
 			WCHAR path[MAX_PATH];
@@ -99,7 +104,7 @@ namespace UnitTests
 		std::wstring FormatString(const wchar_t *str, ...)
 		{
 			size_t size = 256;
-			wchar_t *buf = (wchar_t*)malloc(size * sizeof(wchar_t));
+			wchar_t *buf = static_cast<wchar_t*>(malloc(size * sizeof(wchar_t)));
 			int written = 0;
 
 			va_list args;
@@ -108,7 +113,7 @@ namespace UnitTests
 			while((written = _vsnwprintf_s(buf, size - 1, size - 1, str, args)) == -1)
 			{
 				size *= 2;
-				buf = (wchar_t*)realloc(buf, size * sizeof(wchar_t));
+				buf = static_cast<wchar_t*>(realloc(buf, size * sizeof(wchar_t)));
 
 				if(!buf)
 				{
@@ -205,7 +210,7 @@ namespace UnitTests
 
 			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -223,11 +228,11 @@ namespace UnitTests
 			}
 
 			FILE_BASIC_INFO basicInfo;
-			basicInfo.ChangeTime = *(LARGE_INTEGER*)&fileInfo.ftLastWriteTime;
-			basicInfo.CreationTime = *(LARGE_INTEGER*)&fileInfo.ftCreationTime;
+			basicInfo.ChangeTime = *reinterpret_cast<LARGE_INTEGER*>(&fileInfo.ftLastWriteTime);
+			basicInfo.CreationTime = *reinterpret_cast<LARGE_INTEGER*>(&fileInfo.ftCreationTime);
 			basicInfo.FileAttributes = fileInfo.dwFileAttributes;
-			basicInfo.LastAccessTime = *(LARGE_INTEGER*)&fileInfo.ftLastAccessTime;
-			basicInfo.LastWriteTime = *(LARGE_INTEGER*)&fileInfo.ftLastWriteTime;
+			basicInfo.LastAccessTime = *reinterpret_cast<LARGE_INTEGER*>(&fileInfo.ftLastAccessTime);
+			basicInfo.LastWriteTime = *reinterpret_cast<LARGE_INTEGER*>(&fileInfo.ftLastWriteTime);
 
 			basicInfo.CreationTime.QuadPart -= 500;
 
@@ -290,7 +295,7 @@ namespace UnitTests
 
 			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -327,7 +332,7 @@ namespace UnitTests
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -370,7 +375,7 @@ namespace UnitTests
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_SYSTEM, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -420,7 +425,7 @@ namespace UnitTests
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -463,7 +468,7 @@ namespace UnitTests
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
 
-			if(!handle)
+			if(!IsValidHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
@@ -497,6 +502,505 @@ namespace UnitTests
 
 				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
 			}
+
+			DeleteTestDirectory();
+		}
+
+		// This is test 10 in winfstest
+		/*TEST_METHOD(TestFileSecurity)
+		{
+
+		}*/
+
+		// This is stream test 02 in winfstest
+		TEST_METHOD(TestFileStreams02)
+		{
+			std::wstring testDir = CreateTestDirectory();
+			std::wstring testFile = CombinePath(testDir, L"TestFileStreams02.txt");
+			std::wstring errMsg;
+
+			DWORD fileDesiredAccess =
+				FILE_READ_ATTRIBUTES
+				| READ_CONTROL
+				| FILE_WRITE_DATA
+				| FILE_WRITE_ATTRIBUTES
+				| FILE_WRITE_EA
+				| FILE_APPEND_DATA
+				| SYNCHRONIZE
+				| STANDARD_RIGHTS_READ
+				| STANDARD_RIGHTS_WRITE
+				| STANDARD_RIGHTS_EXECUTE;
+
+			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			WIN32_FIND_STREAM_DATA findStreamData;
+			std::vector<WIN32_FIND_STREAM_DATA> streams;
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				streams.push_back(findStreamData);
+
+			} while(FindNextStreamW(handle, &findStreamData));
+
+			if(!FindClose(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(streams.size() != 1)
+			{
+				errMsg = FormatString(
+					L"Invalid number of streams (%u) for file \'%s\' - expected 1 stream.",
+					static_cast<DWORD>(streams.size()),
+					testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(wcscmp(streams[0].cStreamName, L"::$DATA") != 0)
+			{
+				errMsg = FormatString(
+					L"Expected stream \'::$DATA\' and instead got stream \'%s\' for file \'%s\'.",
+					streams[0].cStreamName,
+					testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if((handle && handle != INVALID_HANDLE_VALUE) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				if(handle)
+				{
+					FindClose(handle);
+				}
+
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			std::wstring fooStreamName = testFile + L":foo";
+			std::wstring barStreamName = testFile + L":bar";
+
+			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", barStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			streams.clear();
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				streams.push_back(findStreamData);
+
+			} while(FindNextStreamW(handle, &findStreamData));
+
+			if(!FindClose(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(streams.size() != 3)
+			{
+				errMsg = FormatString(
+					L"Invalid number of streams (%u) for file \'%s\' - expected 3 streams.",
+					static_cast<DWORD>(streams.size()),
+					testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			bool foundDataStream = false;
+			bool foundFooStream = false;
+			bool foundBarStream = false;
+
+			for(size_t i = 0; i < streams.size(); ++i)
+			{
+				if(wcscmp(streams[i].cStreamName, L"::$DATA") == 0)
+				{
+					foundDataStream = true;
+				}
+				else if(wcscmp(streams[i].cStreamName, L":foo:$DATA") == 0)
+				{
+					foundFooStream = true;
+				}
+				else if(wcscmp(streams[i].cStreamName, L":bar:$DATA") == 0)
+				{
+					foundBarStream = true;
+				}
+				else
+				{
+					errMsg = FormatString(
+						L"Unexpected stream \'%s\' for file \'%s\'.",
+						streams[i].cStreamName,
+						testFile.c_str());
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!foundDataStream || !foundFooStream || !foundBarStream)
+			{
+				errMsg = FormatString(L"Didn't find expected streams for file \'%s\'.", testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if((handle && handle != INVALID_HANDLE_VALUE) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				if(handle)
+				{
+					FindClose(handle);
+				}
+
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CreateDirectoryW(testFile.c_str(), NULL))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", barStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			streams.clear();
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				streams.push_back(findStreamData);
+
+			} while(FindNextStreamW(handle, &findStreamData));
+
+			if(!FindClose(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(streams.size() != 2)
+			{
+				errMsg = FormatString(
+					L"Invalid number of streams (%u) for file \'%s\' - expected 2 streams.",
+					static_cast<DWORD>(streams.size()),
+					testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			//foundDataStream = false;
+			foundFooStream = false;
+			foundBarStream = false;
+
+			for(size_t i = 0; i < streams.size(); ++i)
+			{
+				if(wcscmp(streams[i].cStreamName, L":foo:$DATA") == 0)
+				{
+					foundFooStream = true;
+				}
+				else if(wcscmp(streams[i].cStreamName, L":bar:$DATA") == 0)
+				{
+					foundBarStream = true;
+				}
+				else
+				{
+					errMsg = FormatString(
+						L"Unexpected stream \'%s\' for file \'%s\'.",
+						streams[i].cStreamName,
+						testFile.c_str());
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!foundFooStream || !foundBarStream)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Didn't find expected streams for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!RemoveDirectoryW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to remove directory \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			wchar_t temp[16];
+
+			const int FILE_ARRAY_SIZE = 100;
+			const std::wstring fileArryaBaseName = testFile + L":strm";
+
+			for(int createIndex = 0; createIndex < FILE_ARRAY_SIZE; ++createIndex)
+			{
+				_itow_s(createIndex, temp, 10);
+
+				std::wstring fileName = fileArryaBaseName + temp;
+
+				handle = CreateFileW(fileName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
+				if(!IsValidHandle(handle))
+				{
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fileName.c_str()));
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+				else if(!CloseHandle(handle))
+				{
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fileName.c_str()));
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			streams.clear();
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				streams.push_back(findStreamData);
+
+			} while(FindNextStreamW(handle, &findStreamData));
+
+			if(!FindClose(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(streams.size() != FILE_ARRAY_SIZE + 1)
+			{
+				errMsg = FormatString(
+					L"Invalid number of streams (%u) for file \'%s\' - expected %u streams.",
+					static_cast<DWORD>(streams.size()),
+					testFile.c_str(),
+					static_cast<DWORD>(FILE_ARRAY_SIZE + 1));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			foundDataStream = false;
+
+			std::unique_ptr<bool[]> streamsFound = std::make_unique<bool[]>(FILE_ARRAY_SIZE);
+			ZeroMemory(streamsFound.get(), sizeof(bool) * FILE_ARRAY_SIZE);
+
+			const size_t trimStreamBegin = wcslen(L":strm");
+
+			for(size_t i = 0; i < streams.size(); ++i)
+			{
+				if(wcscmp(streams[i].cStreamName, L"::$DATA") == 0)
+				{
+					foundDataStream = true;
+				}
+				else
+				{
+					if(wcslen(streams[i].cStreamName) <= trimStreamBegin)
+					{
+						errMsg = FormatString(L"Invalid stream name \'%s\'.", streams[i].cStreamName);
+
+						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					}
+
+					wchar_t *indexStrPtr = &streams[i].cStreamName[trimStreamBegin];
+					wchar_t *indexStrEndPtr = wcschr(indexStrPtr, L':');
+
+					if(!indexStrEndPtr)
+					{
+						errMsg = FormatString(L"Invalid stream name \'%s\'.", streams[i].cStreamName);
+
+						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					}
+
+					std::wstring indexStr(indexStrPtr, static_cast<size_t>(indexStrEndPtr - indexStrPtr));
+
+					int streamIndex = _wtoi(indexStr.c_str());
+
+					if((streamIndex == 0 && errno == ERANGE) || streamIndex >= FILE_ARRAY_SIZE)
+					{
+						errMsg = FormatString(L"Unexpected stream name \'%s\'.", streams[i].cStreamName);
+
+						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					}
+
+					streamsFound[streamIndex] = true;
+				}
+			}
+
+			if(!foundDataStream)
+			{
+				errMsg = FormatString(L"Couldn't find stream \'::$DATA\' for file \'%s\'.", testFile.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			for(size_t i = 0; i < FILE_ARRAY_SIZE; ++i)
+			{
+				if(!streamsFound[i])
+				{
+					errMsg = FormatString(L"Couldn't find stream \'%u\' for file \'%s\'.",
+						static_cast<DWORD>(i),
+						testFile.c_str());
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
+
+			if((handle && handle != INVALID_HANDLE_VALUE) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				if(handle)
+				{
+					FindClose(handle);
+				}
+
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			DeleteTestDirectory();
 		}
 	};
 }

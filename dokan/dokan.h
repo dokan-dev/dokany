@@ -147,10 +147,16 @@ typedef int (WINAPI *PFillFindData)(PDOKAN_FIND_FILES_EVENT, PWIN32_FIND_DATAW);
 //   (currently it never returns 1)
 typedef int (WINAPI *PFillFindDataWithPattern)(PDOKAN_FIND_FILES_PATTERN_EVENT, PWIN32_FIND_DATAW);
 
+typedef enum _DOKAN_STREAM_FIND_RESULT {
+
+	DOKAN_STREAM_BUFFER_CONTINUE = 0,
+	DOKAN_STREAM_BUFFER_FULL = 1
+} DOKAN_STREAM_FIND_RESULT, *PDOKAN_STREAM_FIND_RESULT;
+
 // FillFindStreamData
 //   is used to add an entry in FindStreams
 //   returns 1 if buffer is full, otherwise 0
-typedef int (WINAPI *PFillFindStreamData)(PDOKAN_FIND_STREAMS_EVENT, PWIN32_FIND_STREAM_DATA);
+typedef DOKAN_STREAM_FIND_RESULT (WINAPI *PFillFindStreamData)(PDOKAN_FIND_STREAMS_EVENT, PWIN32_FIND_STREAM_DATA);
 
 typedef struct _DOKAN_CREATE_FILE_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
