@@ -13,9 +13,14 @@ using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 #define FILESYSTEM_ROOT L"M:\\"
 #define FILESYSTEM_TESTDIR L"M:\\MirrorUnitTests"
 
+#define FILESYSTEM_ROOT_A "M:\\"
+#define FILESYSTEM_TESTDIR_A "M:\\MirrorUnitTests"
+
 const wchar_t* GetErrorCodeStr(const DWORD errCode);
 
-#define USE_MIRROR 1
+#define USE_MIRROR 0
+
+int fsx_main(int argc, char **argv);
 
 namespace UnitTests
 {		
@@ -30,6 +35,15 @@ namespace UnitTests
 			WCHAR path[MAX_PATH];
 
 			GetTempPathW(MAX_PATH, path);
+
+			return path;
+		}
+
+		std::string GetTempPathStrA()
+		{
+			char path[MAX_PATH];
+
+			GetTempPathA(MAX_PATH, path);
 
 			return path;
 		}
@@ -61,6 +75,33 @@ namespace UnitTests
 			return left + right;
 		}
 
+		std::string CombinePath(const std::string &left, const std::string &right)
+		{
+			if(left.length() == 0)
+			{
+				return right;
+			}
+
+			if(right.length() == 0)
+			{
+				return left;
+			}
+
+			const bool leftHasDelimeter = left[left.length() - 1] == '\\' || left[left.length() - 1] == '/';
+			const bool rightHasDelimeter = right[right.length() - 1] == '\\' || right[right.length() - 1] == '/';
+
+			if(leftHasDelimeter && rightHasDelimeter)
+			{
+				return left.substr(0, left.length() - 1) + right;
+			}
+			else if(!leftHasDelimeter && !rightHasDelimeter)
+			{
+				return left + "\\" + right;
+			}
+
+			return left + right;
+		}
+
 		std::wstring CreateTestDirectory()
 		{
 #if USE_MIRROR
@@ -75,7 +116,28 @@ namespace UnitTests
 				{
 					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CreateDirectoryW for directory \'%s\'.", testDir.c_str()));
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			return testDir;
+		}
+
+		std::string CreateTestDirectoryA()
+		{
+#if USE_MIRROR
+			std::string testDir = FILESYSTEM_TESTDIR_A;
+#else
+			std::string testDir = CombinePath(GetTempPathStrA(), "MirrorUnitTests");
+#endif
+
+			if(!PathFileExistsA(testDir.c_str()))
+			{
+				if(!CreateDirectoryA(testDir.c_str(), NULL))
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CreateDirectoryW for directory \'%s\'.", testDir.c_str()));
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -96,7 +158,7 @@ namespace UnitTests
 				{
 					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to RemoveDirectoryW for directory \'%s\'.", testDir.c_str()));
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 		}
@@ -129,6 +191,40 @@ namespace UnitTests
 			buf[written] = 0;
 
 			std::wstring temp = buf;
+
+			free(buf);
+
+			return temp;
+		}
+
+		std::string FormatString(const char *str, ...)
+		{
+			size_t size = 256;
+			char *buf = static_cast<char*>(malloc(size));
+			int written = 0;
+
+			va_list args;
+			va_start(args, str);
+
+			while((written = _vsnprintf_s(buf, size - 1, size - 1, str, args)) == -1)
+			{
+				size *= 2;
+				buf = static_cast<char*>(realloc(buf, size));
+
+				if(!buf)
+				{
+					written = 0;
+					break;
+				}
+			}
+
+			va_end(args);
+
+			assert(static_cast<size_t>(written) <= size - 2);
+
+			buf[written] = 0;
+
+			std::string temp = buf;
 
 			free(buf);
 
@@ -214,7 +310,7 @@ namespace UnitTests
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			BY_HANDLE_FILE_INFORMATION fileInfo;
@@ -224,7 +320,7 @@ namespace UnitTests
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			FILE_BASIC_INFO basicInfo;
@@ -240,7 +336,7 @@ namespace UnitTests
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to SetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			BY_HANDLE_FILE_INFORMATION fileInfo2;
@@ -250,7 +346,7 @@ namespace UnitTests
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for modified file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			Assert::IsTrue(((LARGE_INTEGER*)&fileInfo2.ftCreationTime)->QuadPart == basicInfo.CreationTime.QuadPart,
@@ -261,14 +357,14 @@ namespace UnitTests
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
 			{
 				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			DeleteTestDirectory();
@@ -299,7 +395,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			BY_HANDLE_FILE_INFORMATION fileInfo;
@@ -311,7 +407,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if((fileInfo.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY)) != 0)
@@ -320,14 +416,14 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"FILE_ATTRIBUTE_NORMAL should be set for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
@@ -336,7 +432,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			ZeroMemory(&fileInfo, sizeof(fileInfo));
@@ -347,7 +443,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) == 0)
@@ -356,21 +452,21 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_READONLY for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 			
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!SetFileAttributesW(testFile.c_str(), FILE_ATTRIBUTE_NORMAL))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed SetFileAttributesW() to set FILE_ATTRIBUTE_NORMAL for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_SYSTEM, NULL);
@@ -379,7 +475,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			ZeroMemory(&fileInfo, sizeof(fileInfo));
@@ -390,7 +486,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0)
@@ -399,28 +495,28 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_SYSTEM for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!SetFileAttributesW(testFile.c_str(), FILE_ATTRIBUTE_NORMAL))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed SetFileAttributesW() to set FILE_ATTRIBUTE_NORMAL for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if((GetFileAttributesW(testFile.c_str()) & FILE_ATTRIBUTE_NORMAL) == 0)
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_NORMAL for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
@@ -429,7 +525,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			ZeroMemory(&fileInfo, sizeof(fileInfo));
@@ -440,7 +536,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to GetFileInformationByHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if((fileInfo.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0)
@@ -449,21 +545,21 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set FILE_ATTRIBUTE_HIDDEN for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
@@ -472,35 +568,35 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(DeleteFileW(testFile.c_str()) || GetLastError() != ERROR_ACCESS_DENIED)
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Successfully deleted file \'%s\' when it was expected to fail.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!SetFileAttributesW(testFile.c_str(), FILE_ATTRIBUTE_NORMAL))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed SetFileAttributesW() to set FILE_ATTRIBUTE_NORMAL for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			DeleteTestDirectory();
@@ -537,14 +633,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			WIN32_FIND_STREAM_DATA findStreamData;
@@ -556,7 +652,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -569,7 +665,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(streams.size() != 1)
@@ -579,7 +675,7 @@ namespace UnitTests
 					static_cast<DWORD>(streams.size()),
 					testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(wcscmp(streams[0].cStreamName, L"::$DATA") != 0)
@@ -589,14 +685,14 @@ namespace UnitTests
 					streams[0].cStreamName,
 					testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
@@ -610,7 +706,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			std::wstring fooStreamName = testFile + L":foo";
@@ -622,14 +718,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -638,14 +734,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", barStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			streams.clear();
@@ -656,7 +752,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -669,7 +765,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(streams.size() != 3)
@@ -679,7 +775,7 @@ namespace UnitTests
 					static_cast<DWORD>(streams.size()),
 					testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			bool foundDataStream = false;
@@ -707,7 +803,7 @@ namespace UnitTests
 						streams[i].cStreamName,
 						testFile.c_str());
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -715,14 +811,14 @@ namespace UnitTests
 			{
 				errMsg = FormatString(L"Didn't find expected streams for file \'%s\'.", testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
@@ -736,14 +832,14 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CreateDirectoryW(testFile.c_str(), NULL))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -752,14 +848,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -768,14 +864,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", barStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(handle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			streams.clear();
@@ -786,7 +882,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -799,7 +895,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(streams.size() != 2)
@@ -809,7 +905,7 @@ namespace UnitTests
 					static_cast<DWORD>(streams.size()),
 					testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			//foundDataStream = false;
@@ -833,7 +929,7 @@ namespace UnitTests
 						streams[i].cStreamName,
 						testFile.c_str());
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -841,14 +937,14 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Didn't find expected streams for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!RemoveDirectoryW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to remove directory \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			wchar_t temp[16];
@@ -868,13 +964,13 @@ namespace UnitTests
 				{
 					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fileName.c_str()));
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 				else if(!CloseHandle(handle))
 				{
 					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fileName.c_str()));
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -886,7 +982,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find streams for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -899,7 +995,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close streams handle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(streams.size() != FILE_ARRAY_SIZE + 1)
@@ -910,7 +1006,7 @@ namespace UnitTests
 					testFile.c_str(),
 					static_cast<DWORD>(FILE_ARRAY_SIZE + 1));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			foundDataStream = false;
@@ -932,7 +1028,7 @@ namespace UnitTests
 					{
 						errMsg = FormatString(L"Invalid stream name \'%s\'.", streams[i].cStreamName);
 
-						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+						Assert::Fail(errMsg.c_str(), LINE_INFO());
 					}
 
 					wchar_t *indexStrPtr = &streams[i].cStreamName[trimStreamBegin];
@@ -942,7 +1038,7 @@ namespace UnitTests
 					{
 						errMsg = FormatString(L"Invalid stream name \'%s\'.", streams[i].cStreamName);
 
-						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+						Assert::Fail(errMsg.c_str(), LINE_INFO());
 					}
 
 					std::wstring indexStr(indexStrPtr, static_cast<size_t>(indexStrEndPtr - indexStrPtr));
@@ -953,7 +1049,7 @@ namespace UnitTests
 					{
 						errMsg = FormatString(L"Unexpected stream name \'%s\'.", streams[i].cStreamName);
 
-						Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+						Assert::Fail(errMsg.c_str(), LINE_INFO());
 					}
 
 					streamsFound[streamIndex] = true;
@@ -964,7 +1060,7 @@ namespace UnitTests
 			{
 				errMsg = FormatString(L"Couldn't find stream \'::$DATA\' for file \'%s\'.", testFile.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			for(size_t i = 0; i < FILE_ARRAY_SIZE; ++i)
@@ -975,7 +1071,7 @@ namespace UnitTests
 						static_cast<DWORD>(i),
 						testFile.c_str());
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -983,7 +1079,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			handle = FindFirstStreamW(testFile.c_str(), FindStreamInfoStandard, &findStreamData, 0);
@@ -997,7 +1093,7 @@ namespace UnitTests
 
 				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' should have no streams.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			DeleteTestDirectory();
@@ -1023,7 +1119,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			HANDLE sharedHandle = CreateFileW(
@@ -1041,7 +1137,7 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(testFile.c_str()))
@@ -1051,7 +1147,7 @@ namespace UnitTests
 				CloseHandle(sharedHandle);
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			HANDLE sharedHandle2 = CreateFileW(
@@ -1075,7 +1171,7 @@ namespace UnitTests
 				CloseHandle(sharedHandle);
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(sharedHandle))
@@ -1084,14 +1180,14 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(origHandle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			origHandle = CreateFileW(
@@ -1112,14 +1208,14 @@ namespace UnitTests
 					CloseHandle(origHandle);
 				}
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CreateDirectoryW(testFile.c_str(), NULL))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			std::wstring fooPath = CombinePath(testFile, L"foo.txt");
@@ -1137,7 +1233,7 @@ namespace UnitTests
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooPath.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!DeleteFileW(fooPath.c_str()))
@@ -1146,7 +1242,7 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			std::wstring filter = CombinePath(testFile, L"*");
@@ -1161,7 +1257,7 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -1180,7 +1276,7 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			bool foundCurrentDir = false;
@@ -1209,7 +1305,7 @@ namespace UnitTests
 
 					CloseHandle(origHandle);
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -1220,14 +1316,14 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!CloseHandle(origHandle))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", fooPath.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			files.clear();
@@ -1240,7 +1336,7 @@ namespace UnitTests
 
 				CloseHandle(origHandle);
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			do
@@ -1257,7 +1353,7 @@ namespace UnitTests
 					static_cast<DWORD>(files.size()),
 					filter.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			foundCurrentDir = false;
@@ -1280,7 +1376,7 @@ namespace UnitTests
 						files[i].cFileName,
 						filter.c_str());
 
-					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
 			}
 
@@ -1289,14 +1385,67 @@ namespace UnitTests
 				errMsg = FormatString(L"FindFiles() did not return the expected list of files for filter \'%s\'.",
 					filter.c_str());
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			if(!RemoveDirectoryW(testFile.c_str()))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to remove directory \'%s\'.", testFile.c_str()));
 
-				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			DeleteTestDirectory();
+		}
+
+		TEST_METHOD(TestFSX)
+		{
+			std::string testDir = CreateTestDirectoryA();
+			std::string testFile = CombinePath(testDir, "testfile");
+			std::string goodFile = CombinePath(testDir, "testfile.fsxgood");
+			std::string logFile = CombinePath(testDir, "testfile.fsxlog");
+
+			std::string argN("-N");
+			std::string argNAmt("5000");
+
+			char pathToExe[MAX_PATH];
+
+			GetModuleFileNameA(NULL, pathToExe, sizeof(pathToExe));
+
+			std::vector<char*> argv;
+			
+			argv.push_back(pathToExe);
+			argv.push_back(const_cast<char*>(argN.c_str()));
+			argv.push_back(const_cast<char*>(argNAmt.c_str()));
+			argv.push_back(const_cast<char*>(testFile.c_str()));
+			argv.push_back(nullptr);
+
+			Logger::WriteMessage(L"Running FSX...");
+
+			Assert::IsTrue(fsx_main(static_cast<int>(argv.size()) - 1, &argv[0]) == 0, L"FSX failed.", LINE_INFO());
+
+			if(PathFileExistsA(testFile.c_str()))
+			{
+				if(!DeleteFileA(testFile.c_str()))
+				{
+					Assert::Fail(L"Failed to delete FSX test file.", LINE_INFO());
+				}
+			}
+
+			if(PathFileExistsA(goodFile.c_str()))
+			{
+				if(!DeleteFileA(goodFile.c_str()))
+				{
+					Assert::Fail(L"Failed to delete FSX good file.", LINE_INFO());
+				}
+			}
+
+			if(PathFileExistsA(logFile.c_str()))
+			{
+				if(!DeleteFileA(logFile.c_str()))
+				{
+					Assert::Fail(L"Failed to delete FSX log file.", LINE_INFO());
+				}
 			}
 
 			DeleteTestDirectory();
