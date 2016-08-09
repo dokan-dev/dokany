@@ -1002,5 +1002,304 @@ namespace UnitTests
 
 			DeleteTestDirectory();
 		}
+
+		// This is test 08 in winfstest
+		TEST_METHOD(TestSharedFileHandles)
+		{
+			std::wstring testDir = CreateTestDirectory();
+			std::wstring testFile = CombinePath(testDir, L"TestSharedFilehandles.txt");
+			std::wstring errMsg;
+
+			HANDLE origHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+			if(!IsValidHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			HANDLE sharedHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+			if(!IsValidHandle(sharedHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to open shared handle for file \'%s\'.", testFile.c_str()));
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set pending delete for file \'%s\'.", testFile.c_str()));
+
+				CloseHandle(sharedHandle);
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			HANDLE sharedHandle2 = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+			if(IsValidHandle(sharedHandle2) || GetLastError() != ERROR_ACCESS_DENIED)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Expected file \'%s\' with pending delete to prevent shared handle from being opened.", testFile.c_str()));
+
+				if(IsValidHandle(sharedHandle2))
+				{
+					CloseHandle(sharedHandle2);
+				}
+
+				CloseHandle(sharedHandle);
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(sharedHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close shared handle for file \'%s\'.", testFile.c_str()));
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			origHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+			if(IsValidHandle(sharedHandle2) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' exists while it was expected to be deleted on close.", testFile.c_str()));
+
+				if(IsValidHandle(origHandle))
+				{
+					CloseHandle(origHandle);
+				}
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CreateDirectoryW(testFile.c_str(), NULL))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			std::wstring fooPath = CombinePath(testFile, L"foo.txt");
+
+			origHandle = CreateFileW(
+				fooPath.c_str(),
+				GENERIC_WRITE,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+			if(!IsValidHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", fooPath.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(fooPath.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set pending delete for file \'%s\'.", fooPath.c_str()));
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			std::wstring filter = CombinePath(testFile, L"*");
+			
+			WIN32_FIND_DATAW findData;
+			std::vector<WIN32_FIND_DATAW> files;
+			HANDLE findHandle = FindFirstFileW(filter.c_str(), &findData);
+
+			if(!IsValidHandle(findHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find files for filter \'%s\'.", filter.c_str()));
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				files.push_back(findData);
+
+			} while(FindNextFileW(findHandle, &findData));
+
+			FindClose(findHandle);
+
+			if(files.size() != 3)
+			{
+				errMsg = FormatString(L"FindFiles() expected to return 3 files but instead returned %u files for filter \'%s\'.",
+					static_cast<DWORD>(files.size()),
+					filter.c_str());
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			bool foundCurrentDir = false;
+			bool foundParentDir = false;
+			bool foundFoo = false;
+
+			for(size_t i = 0; i < files.size(); ++i)
+			{
+				if(wcscmp(files[i].cFileName, L".") == 0)
+				{
+					foundCurrentDir = true;
+				}
+				else if(wcscmp(files[i].cFileName, L"..") == 0)
+				{
+					foundParentDir = true;
+				}
+				else if(wcscmp(files[i].cFileName, L"foo.txt") == 0)
+				{
+					foundFoo = true;
+				}
+				else
+				{
+					errMsg = FormatString(L"FindFiles() returned an unexpected file \'%s\' for filter \'%s\'.",
+						files[i].cFileName,
+						filter.c_str());
+
+					CloseHandle(origHandle);
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!foundCurrentDir || !foundParentDir || !foundFoo)
+			{
+				errMsg = FormatString(L"FindFiles() did not return the expected list of files for filter \'%s\'.",
+					filter.c_str());
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", fooPath.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			files.clear();
+
+			findHandle = FindFirstFileW(filter.c_str(), &findData);
+
+			if(!IsValidHandle(findHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to find files for filter \'%s\'.", filter.c_str()));
+
+				CloseHandle(origHandle);
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			do
+			{
+				files.push_back(findData);
+
+			} while(FindNextFileW(findHandle, &findData));
+
+			FindClose(findHandle);
+
+			if(files.size() != 2)
+			{
+				errMsg = FormatString(L"FindFiles() expected to return 2 files but instead returned %u files for filter \'%s\'.",
+					static_cast<DWORD>(files.size()),
+					filter.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			foundCurrentDir = false;
+			foundParentDir = false;
+			//foundFoo = false;
+
+			for(size_t i = 0; i < files.size(); ++i)
+			{
+				if(wcscmp(files[i].cFileName, L".") == 0)
+				{
+					foundCurrentDir = true;
+				}
+				else if(wcscmp(files[i].cFileName, L"..") == 0)
+				{
+					foundParentDir = true;
+				}
+				else
+				{
+					errMsg = FormatString(L"FindFiles() returned an unexpected file \'%s\' for filter \'%s\'.",
+						files[i].cFileName,
+						filter.c_str());
+
+					Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!foundCurrentDir || !foundParentDir)
+			{
+				errMsg = FormatString(L"FindFiles() did not return the expected list of files for filter \'%s\'.",
+					filter.c_str());
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!RemoveDirectoryW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to remove directory \'%s\'.", testFile.c_str()));
+
+				Assert::IsTrue(false, errMsg.c_str(), LINE_INFO());
+			}
+
+			DeleteTestDirectory();
+		}
 	};
 }
