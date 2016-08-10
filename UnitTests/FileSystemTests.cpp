@@ -3,6 +3,8 @@
 
 #include <Windows.h>
 #include <Shlwapi.h>
+#include <sddl.h>
+
 #include <string>
 #include <cassert>
 #include <vector>
@@ -18,7 +20,7 @@ using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 const wchar_t* GetErrorCodeStr(const DWORD errCode);
 
-#define USE_MIRROR 0
+#define USE_MIRROR 1
 
 int fsx_main(int argc, char **argv);
 
@@ -29,6 +31,83 @@ namespace UnitTests
 	private:
 
 		inline bool IsValidHandle(HANDLE handle) { return handle && handle != INVALID_HANDLE_VALUE; }
+
+		std::unique_ptr<BYTE[]> GetSecurityForFile(
+			const wchar_t *filePath,
+			const SECURITY_INFORMATION requestedInformation,
+			DWORD &securitySize)
+		{
+			std::wstring errMsg;
+
+			if(!GetFileSecurityW(filePath, requestedInformation, nullptr, 0, &securitySize) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to retrieve security information size for file \'%s\'.", filePath));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			std::unique_ptr<BYTE[]> securityDesc = std::make_unique<BYTE[]>(securitySize);
+
+			if(!GetFileSecurityW(filePath, DACL_SECURITY_INFORMATION, (PSECURITY_DESCRIPTOR)securityDesc.get(), securitySize, &securitySize))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to retrieve security information for file \'%s\'.", filePath));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			return securityDesc;
+		}
+
+		std::wstring SecurityDescriptorToString(const PSECURITY_DESCRIPTOR security, const SECURITY_INFORMATION requestedInformation)
+		{
+			LPWSTR buf;
+
+			if(!ConvertSecurityDescriptorToStringSecurityDescriptorW(
+				security,
+				SDDL_REVISION_1,
+				requestedInformation,
+				&buf,
+				nullptr))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(
+					L"Failed to convert a security descriptor with requested information 0x%x into its string representation.",
+					requestedInformation));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			std::wstring retStr = buf;
+
+			LocalFree(buf);
+
+			return retStr;
+		}
+
+		std::unique_ptr<BYTE[]> SecurityDescriptorFromString(const wchar_t *str,  ULONG &size)
+		{
+			PSECURITY_DESCRIPTOR temp;
+
+			if(!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+				str,
+				SDDL_REVISION_1,
+				&temp,
+				&size))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(
+					L"Failed to convert string \'%s\' into a security descriptor.",
+					str));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			std::unique_ptr<BYTE[]> securityDesc = std::make_unique<BYTE[]>(size);
+
+			memcpy_s(securityDesc.get(), size, temp, size);
+
+			LocalFree(temp);
+
+			return securityDesc;
+		}
 
 		std::wstring GetTempPathStr()
 		{
@@ -112,7 +191,7 @@ namespace UnitTests
 
 			if(!PathFileExistsW(testDir.c_str()))
 			{
-				if(!CreateDirectoryW(testDir.c_str(), NULL))
+				if(!CreateDirectoryW(testDir.c_str(), nullptr))
 				{
 					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CreateDirectoryW for directory \'%s\'.", testDir.c_str()));
 
@@ -133,7 +212,7 @@ namespace UnitTests
 
 			if(!PathFileExistsA(testDir.c_str()))
 			{
-				if(!CreateDirectoryA(testDir.c_str(), NULL))
+				if(!CreateDirectoryA(testDir.c_str(), nullptr))
 				{
 					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CreateDirectoryW for directory \'%s\'.", testDir.c_str()));
 
@@ -233,18 +312,18 @@ namespace UnitTests
 
 		std::wstring GetLastErrorStr(const DWORD lastErr)
 		{
-			LPWSTR buffer = NULL;
+			LPWSTR buffer = nullptr;
 
 			// we force english because the error messages are for developers and english is the common language
 			// developers of all countries use to communicate
 			DWORD errCode = FormatMessageW(
 				FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-				NULL,
+				nullptr,
 				lastErr,
 				MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
 				(LPWSTR)&buffer,
 				0,
-				NULL);
+				nullptr);
 
 			if(errCode == 0)
 			{
@@ -252,12 +331,12 @@ namespace UnitTests
 				{
 					errCode = FormatMessageW(
 						FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-						NULL,
+						nullptr,
 						lastErr,
 						0,
 						(LPWSTR)&buffer,
 						0,
-						NULL);
+						nullptr);
 				}
 
 				if(errCode == 0)
@@ -304,7 +383,7 @@ namespace UnitTests
 				| STANDARD_RIGHTS_WRITE
 				| STANDARD_RIGHTS_EXECUTE;
 
-			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -355,7 +434,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -389,7 +468,7 @@ namespace UnitTests
 				| STANDARD_RIGHTS_WRITE
 				| STANDARD_RIGHTS_EXECUTE;
 
-			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -421,12 +500,12 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
+			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -457,7 +536,7 @@ namespace UnitTests
 			
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -469,7 +548,7 @@ namespace UnitTests
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_SYSTEM, NULL);
+			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_SYSTEM, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -500,7 +579,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -519,7 +598,7 @@ namespace UnitTests
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
+			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -550,7 +629,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -562,7 +641,7 @@ namespace UnitTests
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
+			handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -573,7 +652,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -603,10 +682,264 @@ namespace UnitTests
 		}
 
 		// This is test 10 in winfstest
-		/*TEST_METHOD(TestFileSecurity)
+		TEST_METHOD(TestFileSecurity)
 		{
+			const wchar_t *DESCRIPTOR1 = L"D:P(A;;GA;;;WD)";
+			const wchar_t *DESCRIPTOR1_COMP = L"D:P(A;;FA;;;WD)";
 
-		}*/
+			const wchar_t *DESCRIPTOR2 = L"D:P(A;;GA;;;WD)(A;;GR;;;SY)";
+			const wchar_t *DESCRIPTOR2_COMP = L"D:P(A;;FA;;;WD)(A;;FR;;;SY)";
+
+			const wchar_t *DESCRIPTOR3 = L"D:P(D;;GR;;;WD)";
+
+			std::wstring testDir = CreateTestDirectory();
+			std::wstring testFile = CombinePath(testDir, L"TestFileSecurity.txt");
+			std::wstring errMsg;
+			DWORD securitySize;
+			std::unique_ptr<BYTE[]> securityDesc = SecurityDescriptorFromString(DESCRIPTOR1, securitySize);
+			SECURITY_ATTRIBUTES securityAttrib;
+
+			securityAttrib.nLength = sizeof(securityAttrib);
+			securityAttrib.lpSecurityDescriptor = reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get());
+			securityAttrib.bInheritHandle = FALSE;
+
+			HANDLE handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				&securityAttrib,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+			
+			securityDesc = GetSecurityForFile(testFile.c_str(), DACL_SECURITY_INFORMATION, securitySize);
+
+			Assert::IsTrue(securityDesc.operator bool(), L"Invalid security descriptor.", LINE_INFO());
+
+			std::wstring securityDescStr = SecurityDescriptorToString(
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get()),
+				DACL_SECURITY_INFORMATION);
+
+			if(securityDescStr != DESCRIPTOR1_COMP)
+			{
+				errMsg = FormatString(L"Security descriptor \'%s\' for file \'%s\' did not equal \'%s\'.",
+					securityDescStr.c_str(),
+					testFile.c_str(),
+					DESCRIPTOR1_COMP);
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = SecurityDescriptorFromString(DESCRIPTOR2, securitySize);
+
+			if(!SetFileSecurityW(
+				testFile.c_str(),
+				DACL_SECURITY_INFORMATION,
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get())))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set security descriptor \'%s\' for file \'%s\'.",
+					DESCRIPTOR2,
+					testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = GetSecurityForFile(testFile.c_str(), DACL_SECURITY_INFORMATION, securitySize);
+
+			securityDescStr = SecurityDescriptorToString(
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get()),
+				DACL_SECURITY_INFORMATION);
+
+			if(securityDescStr != DESCRIPTOR2_COMP)
+			{
+				errMsg = FormatString(L"Security descriptor \'%s\' for file \'%s\' did not equal \'%s\'.",
+					securityDescStr.c_str(),
+					testFile.c_str(),
+					DESCRIPTOR2_COMP);
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = SecurityDescriptorFromString(DESCRIPTOR1, securitySize);
+			securityAttrib.lpSecurityDescriptor = reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get());
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				&securityAttrib,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				0,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = SecurityDescriptorFromString(DESCRIPTOR3, securitySize);
+
+			if(!SetFileSecurityW(
+				testFile.c_str(),
+				DACL_SECURITY_INFORMATION,
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get())))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set security descriptor \'%s\' for file \'%s\'.",
+					DESCRIPTOR3,
+					testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				0,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(IsValidHandle(handle) || GetLastError() != ERROR_ACCESS_DENIED)
+			{
+				if(IsValidHandle(handle))
+				{
+					CloseHandle(handle);
+				}
+
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' was expected to fail opening with ERROR_ACCESS_DENIED.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = SecurityDescriptorFromString(DESCRIPTOR1, securitySize);
+			securityAttrib.lpSecurityDescriptor = reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get());
+
+			if(!CreateDirectoryW(testFile.c_str(), &securityAttrib))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = GetSecurityForFile(testFile.c_str(), DACL_SECURITY_INFORMATION, securitySize);
+
+			Assert::IsTrue(securityDesc.operator bool(), L"Invalid security descriptor.", LINE_INFO());
+
+			securityDescStr = SecurityDescriptorToString(
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get()),
+				DACL_SECURITY_INFORMATION);
+
+			if(securityDescStr != DESCRIPTOR1_COMP)
+			{
+				errMsg = FormatString(L"Security descriptor \'%s\' for directory \'%s\' did not equal \'%s\'.",
+					securityDescStr.c_str(),
+					testFile.c_str(),
+					DESCRIPTOR1_COMP);
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = SecurityDescriptorFromString(DESCRIPTOR2, securitySize);
+
+			if(!SetFileSecurityW(
+				testFile.c_str(),
+				DACL_SECURITY_INFORMATION,
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get())))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to set security descriptor \'%s\' for directory \'%s\'.",
+					DESCRIPTOR2,
+					testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			securityDesc = GetSecurityForFile(testFile.c_str(), DACL_SECURITY_INFORMATION, securitySize);
+
+			securityDescStr = SecurityDescriptorToString(
+				reinterpret_cast<PSECURITY_DESCRIPTOR>(securityDesc.get()),
+				DACL_SECURITY_INFORMATION);
+
+			if(securityDescStr != DESCRIPTOR2_COMP)
+			{
+				errMsg = FormatString(L"Security descriptor \'%s\' for directory \'%s\' did not equal \'%s\'.",
+					securityDescStr.c_str(),
+					testFile.c_str(),
+					DESCRIPTOR2_COMP);
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!RemoveDirectoryW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed remove directory \'%s\'.",
+					testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			DeleteTestDirectory();
+		}
 
 		// This is stream test 02 in winfstest
 		TEST_METHOD(TestFileStreams02)
@@ -627,7 +960,7 @@ namespace UnitTests
 				| STANDARD_RIGHTS_WRITE
 				| STANDARD_RIGHTS_EXECUTE;
 
-			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+			HANDLE handle = CreateFileW(testFile.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -638,7 +971,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", testFile.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -712,7 +1045,7 @@ namespace UnitTests
 			std::wstring fooStreamName = testFile + L":foo";
 			std::wstring barStreamName = testFile + L":bar";
 
-			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -723,12 +1056,12 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", fooStreamName.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -739,7 +1072,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", barStreamName.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -835,14 +1168,14 @@ namespace UnitTests
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			if(!CreateDirectoryW(testFile.c_str(), NULL))
+			if(!CreateDirectoryW(testFile.c_str(), nullptr))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+			handle = CreateFileW(fooStreamName.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -853,12 +1186,12 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fooStreamName.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", fooStreamName.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+			handle = CreateFileW(barStreamName.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 			if(!IsValidHandle(handle))
 			{
@@ -869,7 +1202,7 @@ namespace UnitTests
 
 			if(!CloseHandle(handle))
 			{
-				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", barStreamName.c_str()));
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", barStreamName.c_str()));
 
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
@@ -958,7 +1291,7 @@ namespace UnitTests
 
 				std::wstring fileName = fileArryaBaseName + temp;
 
-				handle = CreateFileW(fileName.c_str(), fileDesiredAccess, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+				handle = CreateFileW(fileName.c_str(), fileDesiredAccess, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 				if(!IsValidHandle(handle))
 				{
@@ -968,7 +1301,7 @@ namespace UnitTests
 				}
 				else if(!CloseHandle(handle))
 				{
-					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to CloseHandle for file \'%s\'.", fileName.c_str()));
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", fileName.c_str()));
 
 					Assert::Fail(errMsg.c_str(), LINE_INFO());
 				}
@@ -1110,10 +1443,10 @@ namespace UnitTests
 				testFile.c_str(),
 				GENERIC_WRITE,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
+				nullptr,
 				CREATE_NEW,
 				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+				nullptr);
 
 			if(!IsValidHandle(origHandle))
 			{
@@ -1126,10 +1459,10 @@ namespace UnitTests
 				testFile.c_str(),
 				GENERIC_READ,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
+				nullptr,
 				OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+				nullptr);
 
 			if(!IsValidHandle(sharedHandle))
 			{
@@ -1154,10 +1487,10 @@ namespace UnitTests
 				testFile.c_str(),
 				GENERIC_READ,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
+				nullptr,
 				OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+				nullptr);
 
 			if(IsValidHandle(sharedHandle2) || GetLastError() != ERROR_ACCESS_DENIED)
 			{
@@ -1194,10 +1527,10 @@ namespace UnitTests
 				testFile.c_str(),
 				GENERIC_READ,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
+				nullptr,
 				OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+				nullptr);
 
 			if(IsValidHandle(sharedHandle2) || GetLastError() != ERROR_FILE_NOT_FOUND)
 			{
@@ -1211,7 +1544,7 @@ namespace UnitTests
 				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
-			if(!CreateDirectoryW(testFile.c_str(), NULL))
+			if(!CreateDirectoryW(testFile.c_str(), nullptr))
 			{
 				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
 
@@ -1224,10 +1557,10 @@ namespace UnitTests
 				fooPath.c_str(),
 				GENERIC_WRITE,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
+				nullptr,
 				CREATE_NEW,
 				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+				nullptr);
 
 			if(!IsValidHandle(origHandle))
 			{
@@ -1410,7 +1743,7 @@ namespace UnitTests
 
 			char pathToExe[MAX_PATH];
 
-			GetModuleFileNameA(NULL, pathToExe, sizeof(pathToExe));
+			GetModuleFileNameA(nullptr, pathToExe, sizeof(pathToExe));
 
 			std::vector<char*> argv;
 			
