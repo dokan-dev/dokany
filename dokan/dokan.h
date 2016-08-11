@@ -54,7 +54,7 @@ extern "C" {
  */
 /** @{ */
 
-/** The current Dokan version (ver 1.0.0). \see DOKAN_OPTIONS.Version */
+/** The current Dokan version (ver 1.0.0). \ref DOKAN_OPTIONS.Version */
 #define DOKAN_VERSION 100
 /** Minimum Dokan version (ver 1.0.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 100
@@ -185,20 +185,22 @@ typedef struct _DOKAN_OPERATIONS {
   /**
   * \brief CreateFile Dokan API callback
   *
+  * CreateFile is called each time a request is made on a file.
+  *
   * In case OPEN_ALWAYS & CREATE_ALWAYS are opening successfully a already
-  * existing file, you have to SetLastError(ERROR_ALREADY_EXISTS)
-  * If file is a directory, CreateFile is also called.
+  * existing file, you have to \code SetLastError(ERROR_ALREADY_EXISTS) \endcode
+  *
+  * If the file is a directory, CreateFile is also called.
   * In this case, CreateFile should return STATUS_SUCCESS when that directory
-  * can be opened.
+  * can be opened and DOKAN_FILE_INFO.IsDirectory has to be set to TRUE.
   *
-  * You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
-  *
-  * DokanFileInfo->Context can be use to store Data (like HANDLE)
+  * DOKAN_FILE_INFO.Context can be use to store Data (like HANDLE)
   * that can be retrieved in all other request related to the Context
   *
   * See ZwCreateFile for more information about the parameters of this callback.
   * https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx
   *
+  * \see DokanMapKernelToUserCreateFileFlags
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param SecurityContext SecurityContext, see https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
@@ -502,7 +504,7 @@ typedef struct _DOKAN_OPERATIONS {
   * https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
   *
   * Neither GetDiskFreeSpace nor GetVolumeInformation
-  * save the DokanFileContext->Context.
+  * save the DOKAN_FILE_INFO.Context
   * Before these methods are called, CreateFile may not be called.
   * (ditto CloseFile and Cleanup)
   *
@@ -724,9 +726,11 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 /**
  * \brief Unmount a dokan device from a mount point
  *
- * Same as \see DokanRemoveMountPoint
+ * Same as \ref DokanRemoveMountPoint
  * If Safe is TRUE, will broadcast to all desktop and Shell
  * Safe should not be used during DLL_PROCESS_DETACH
+ *
+ * \see DokanRemoveMountPoint
  *
  * \param MountPoint Mount point to unmount ("Z", "Z:", "Z:\", "Z:\MyMountPoint").
  * \param Safe Process is not in DLL_PROCESS_DETACH state.
@@ -761,7 +765,7 @@ ULONG DOKANAPI DokanDriverVersion();
  * \brief Extends the time out of the current IO operation in driver.
  *
  * \param Timeout Extended time in milliseconds requested.
- * \param DokanFileInfo \see DOKAN_FILE_INFO of the operation to extend.
+ * \param DokanFileInfo \ref DOKAN_FILE_INFO of the operation to extend.
  * \return Extended time allowed.
  */
 BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO DokanFileInfo);
@@ -772,7 +776,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO DokanFileInfo);
  * This method needs be called in CreateFile callback.
  * The caller must call CloseHandle for the returned handle.
  *
- * \param DokanFileInfo \see DOKAN_FILE_INFO of the operation to extend.
+ * \param DokanFileInfo \ref DOKAN_FILE_INFO of the operation to extend.
  * \return HANDLE to Access Token.
  */
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
