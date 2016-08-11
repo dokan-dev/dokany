@@ -165,6 +165,8 @@ typedef int(WINAPI *PFillFindData)(PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 typedef int(WINAPI *PFillFindStreamData)(PWIN32_FIND_STREAM_DATA,
                                          PDOKAN_FILE_INFO);
 
+// clang-format off
+
 /**
  * \struct DOKAN_OPERATIONS
  * \brief Dokan API callbacks interface
@@ -208,11 +210,14 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)
-  (LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
-   ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG ShareAccess,
-   ULONG CreateDisposition, ULONG CreateOptions,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(LPCWSTR FileName,
+      PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
+      ACCESS_MASK DesiredAccess,
+      ULONG FileAttributes,
+      ULONG ShareAccess,
+      ULONG CreateDisposition,
+      ULONG CreateOptions,
+      PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Cleanup Dokan API callback
@@ -237,7 +242,7 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   */
   void(DOKAN_CALLBACK *CloseFile)(LPCWSTR FileName,
-                                  PDOKAN_FILE_INFO DokanFileInfo);
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief ReadFile Dokan API callback
@@ -254,9 +259,12 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *ReadFile)
-  (LPCWSTR FileName, LPVOID Buffer, DWORD BufferLength, LPDWORD ReadLength,
-   LONGLONG Offset, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *ReadFile)(LPCWSTR FileName,
+    LPVOID Buffer,
+    DWORD BufferLength,
+    LPDWORD ReadLength,
+    LONGLONG Offset,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief WriteFile Dokan API callback
@@ -273,10 +281,12 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *WriteFile)
-  (LPCWSTR FileName, LPCVOID Buffer, DWORD NumberOfBytesToWrite,
-   LPDWORD NumberOfBytesWritten, LONGLONG Offset,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *WriteFile)(LPCWSTR FileName,
+    LPCVOID Buffer,
+    DWORD NumberOfBytesToWrite,
+    LPDWORD NumberOfBytesWritten,
+    LONGLONG Offset,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FlushFileBuffers Dokan API callback
@@ -287,8 +297,8 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)
-  (LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)(LPCWSTR FileName,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetFileInformation Dokan API callback
@@ -300,9 +310,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)
-  (LPCWSTR FileName, LPBY_HANDLE_FILE_INFORMATION Buffer,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)(LPCWSTR FileName,
+    LPBY_HANDLE_FILE_INFORMATION Buffer,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindFiles Dokan API callback
@@ -316,9 +326,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FindFiles)
-  (LPCWSTR FileName, PFillFindData FillFindData,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindFiles)(LPCWSTR FileName,
+    PFillFindData FillFindData,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindFilesWithPattern Dokan API callback
@@ -331,9 +341,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)
-  (LPCWSTR PathName, LPCWSTR SearchPattern, PFillFindData FillFindData,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)(LPCWSTR PathName,
+    LPCWSTR SearchPattern,
+    PFillFindData FillFindData,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetFileAttributes Dokan API callback
@@ -345,8 +356,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetFileAttributes)
-  (LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetFileAttributes)(LPCWSTR FileName,
+    DWORD FileAttributes,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetFileTime Dokan API callback
@@ -360,10 +372,11 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetFileTime)
-  (LPCWSTR FileName, CONST FILETIME *CreationTime,
-   CONST FILETIME *LastAccessTime, CONST FILETIME *LastWriteTime,
-   PDOKAN_FILE_INFO);
+  NTSTATUS(DOKAN_CALLBACK *SetFileTime)(LPCWSTR FileName,
+    CONST FILETIME *CreationTime,
+    CONST FILETIME *LastAccessTime,
+    CONST FILETIME *LastWriteTime,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief DeleteFile Dokan API callback
@@ -381,8 +394,8 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *DeleteFile)
-  (LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *DeleteFile)(LPCWSTR FileName,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief DeleteDirectory Dokan API callback
@@ -401,8 +414,8 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *DeleteDirectory)
-  (LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *DeleteDirectory)(LPCWSTR FileName,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief MoveFile Dokan API callback
@@ -415,9 +428,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *MoveFile)
-  (LPCWSTR FileName, LPCWSTR NewFileName, BOOL ReplaceIfExisting,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *MoveFile)(LPCWSTR FileName,
+    LPCWSTR NewFileName,
+    BOOL ReplaceIfExisting,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetEndOfFile Dokan API callback
@@ -429,8 +443,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)
-  (LPCWSTR FileName, LONGLONG ByteOffset, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)(LPCWSTR FileName,
+    LONGLONG ByteOffset,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetAllocationSize Dokan API callback
@@ -442,8 +457,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)
-  (LPCWSTR FileName, LONGLONG AllocSize, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)(LPCWSTR FileName,
+    LONGLONG AllocSize,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief LockFile Dokan API callback
@@ -457,9 +473,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *LockFile)
-  (LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *LockFile)(LPCWSTR FileName,
+    LONGLONG ByteOffset,
+    LONGLONG Length,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief UnlockFile Dokan API callback
@@ -473,9 +490,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *UnlockFile)
-  (LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *UnlockFile)(LPCWSTR FileName,
+    LONGLONG ByteOffset,
+    LONGLONG Length,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetDiskFreeSpace Dokan API callback
@@ -494,9 +512,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *GetDiskFreeSpace)
-  (PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
-   PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetDiskFreeSpace)(PULONGLONG FreeBytesAvailable,
+    PULONGLONG TotalNumberOfBytes,
+    PULONGLONG TotalNumberOfFreeBytes,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetVolumeInformation Dokan API callback
@@ -523,11 +542,14 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformation)
-  (LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
-   LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
-   LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformation)(LPWSTR VolumeNameBuffer,
+    DWORD VolumeNameSize,
+    LPDWORD VolumeSerialNumber,
+    LPDWORD MaximumComponentLength,
+    LPDWORD FileSystemFlags,
+    LPWSTR FileSystemNameBuffer,
+    DWORD FileSystemNameSize,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Mounted Dokan API callback
@@ -570,10 +592,12 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *GetFileSecurity)
-  (LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-   PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
-   PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetFileSecurity)(LPCWSTR FileName,
+    PSECURITY_INFORMATION SecurityInformation,
+    PSECURITY_DESCRIPTOR SecurityDescriptor,
+    ULONG BufferLength,
+    PULONG LengthNeeded,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetFileSecurity Dokan API callback
@@ -593,10 +617,11 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)
-  (LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-   PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)(LPCWSTR FileName,
+    PSECURITY_INFORMATION SecurityInformation,
+    PSECURITY_DESCRIPTOR SecurityDescriptor,
+    ULONG BufferLength,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindStreams Dokan API callback
@@ -612,11 +637,13 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FindStreams)
-  (LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
-   PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindStreams)(LPCWSTR FileName,
+    PFillFindStreamData FillFindStreamData,
+    PDOKAN_FILE_INFO DokanFileInfo);
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
+
+// clang-format on
 
 typedef struct _DOKAN_CONTROL {
   ULONG Type;
