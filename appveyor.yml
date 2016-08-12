@@ -242,6 +242,10 @@
   on_success:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
+            if ("$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
+              return;
+            }
+          
             cd $env:APPVEYOR_BUILD_FOLDER\documentations
             git config --global user.email "appveyor@appveyor.org"
             git config --global user.name "appveyor"
