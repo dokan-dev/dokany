@@ -4,6 +4,8 @@
       secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
+    AccessTokenDokanDoc:
+      secure: Z8Htovf0nHmWVj+JNOF4H7ozQ5+sS3TkgUu+nyVU414AUlog4kzBhxCSJxIl5t+I
     global:
       CYG_CACHE: C:\cygwin\var\cache\setup
       CYG64_CACHE: C:\cygwin64\var\cache\setup
@@ -22,6 +24,11 @@
   - '%CYG64_CACHE%'
 
   install:
+    - ps: |
+        if ($env:CONFIGURATION -eq "All") {
+          & choco install doxygen.portable
+        }
+  
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
@@ -232,3 +239,22 @@
       }
       Write-Host Build Finished !
 
+  on_success:
+    - ps: |
+        if ($env:CONFIGURATION -eq "All") {
+            cd $env:APPVEYOR_BUILD_FOLDER\documentations
+            git config --global user.email "appveyor@appveyor.org"
+            git config --global user.name "appveyor"
+            git.exe clone -b gh-pages --single-branch  https://$($env:AccessTokenDokanDoc)@github.com/Liryna/dokany-doc.git doc
+            doxygen.exe Doxyfile
+            cd doc
+            if ($(git status --porcelain)) {
+              Write-Host "Update documentation..." -ForegroundColor Green
+              git add -A
+              git commit -m "Latest documentation on successful appveyor build $env:APPVEYOR_BUILD_VERSION auto-pushed to gh-pages"
+              git push -fq origin gh-pages
+              Write-Host "Documentation updated!" -ForegroundColor Green
+            } else {
+              Write-Host "No documentation changes detected." -ForegroundColor Green
+            }
+        }
