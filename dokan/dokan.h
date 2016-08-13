@@ -22,6 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef DOKAN_H_
 #define DOKAN_H_
 
+/** Do not include NTSTATUS. Fix  duplicate preprocessor definitions */
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
@@ -30,16 +31,15 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "public.h"
 
-#define DOKAN_DRIVER_NAME L"dokan" DOKAN_MAJOR_API_VERSION L".sys"
-#define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
-
 #ifdef _EXPORTING
-#define DOKANAPI /*__declspec(dllexport)*/                                     \
-  __stdcall      // exports defined in dokan.def
+/** Export dokan API see also dokan.def for export */
+#define DOKANAPI __stdcall    
 #else
+/** Import dokan API */
 #define DOKANAPI __declspec(dllimport) __stdcall
 #endif
 
+/** Change calling convention to standard call */
 #define DOKAN_CALLBACK __stdcall
 
 #ifdef __cplusplus
@@ -60,6 +60,10 @@ extern "C" {
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 100
 /** Maximum number of dokan instances.*/
 #define DOKAN_MAX_INSTANCES 32
+/** Driver file name including the DOKAN_MAJOR_API_VERSION */
+#define DOKAN_DRIVER_NAME L"dokan" DOKAN_MAJOR_API_VERSION L".sys"
+/** Network provider name including the DOKAN_MAJOR_API_VERSION */
+#define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
 
 /** @} */
 
@@ -647,16 +651,25 @@ typedef struct _DOKAN_OPERATIONS {
 
 // clang-format on
 
+/**
+* \struct DOKAN_CONTROL
+* \brief Dokan Control
+*/
 typedef struct _DOKAN_CONTROL {
+  /** File System Type */
   ULONG Type;
+  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
   WCHAR MountPoint[MAX_PATH];
+  /** UNC name used for network volume */
   WCHAR UNCName[64];
+  /** Disk Device Name */
   WCHAR DeviceName[64];
+  /** Volume Device Object */
   PVOID DeviceObject;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 /**
- * \defgroup DokanMain
+ * \defgroup DokanMain DokanMain
  * \brief DokanMain returns error codes
  */
 /** @{ */
@@ -781,6 +794,15 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO DokanFileInfo);
  */
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 
+/**
+ * \brief Get active Dokan mount points
+ *
+ * \param list Allocate array of DOKAN_CONTROL
+ * \param length Number of DOKAN_CONTROL instance in list
+ * \param uncOnly Get only instances that have UNC Name
+ * \param nbRead Number of instances successfully retrieved
+ * \return List retrieved or not
+ */
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead);
 
@@ -798,7 +820,7 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
  * \param outFileAttributesAndFlags New CreateFile dwFlagsAndAttributes
  * \param outCreationDisposition New CreateFile dwCreationDisposition
  */
-VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
+void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
 

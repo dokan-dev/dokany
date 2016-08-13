@@ -283,8 +283,20 @@ DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
   return STATUS_SUCCESS;
 }
 
+/**
+ * \struct DOKAN_FIND_STREAM_DATA
+ * \brief Dokan find stream list
+ *
+ * Used by FindStreams
+ */
 typedef struct _DOKAN_FIND_STREAM_DATA {
+  /**
+  * Stream data information link
+  */
   WIN32_FIND_STREAM_DATA FindStreamData;
+  /**
+  * Current list entry informations
+  */
   LIST_ENTRY ListEntry;
 } DOKAN_FIND_STREAM_DATA, *PDOKAN_FIND_STREAM_DATA;
 

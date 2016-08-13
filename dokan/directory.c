@@ -27,8 +27,20 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 typedef ULONG ULONG_PTR;
 #endif
 
+/**
+* \struct DOKAN_FIND_DATA
+* \brief Dokan find file list
+*
+* Used by FindFiles
+*/
 typedef struct _DOKAN_FIND_DATA {
+  /**
+  * File data information link
+  */
   WIN32_FIND_DATAW FindData;
+  /**
+  * Current list entry informations
+  */
   LIST_ENTRY ListEntry;
 } DOKAN_FIND_DATA, *PDOKAN_FIND_DATA;
 

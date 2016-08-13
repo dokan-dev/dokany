@@ -833,7 +833,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   return TRUE;
 }
 
-VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
+void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition) {
   if (outFileAttributesAndFlags) {
