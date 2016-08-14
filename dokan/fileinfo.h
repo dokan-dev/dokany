@@ -360,14 +360,14 @@ typedef struct _FILE_DIRECTORY_INFORMATION {
   /**
   *  File attributes, which can be any valid combination of the following:
   *
-  *    FILE_ATTRIBUTE_READONLY
-  *    FILE_ATTRIBUTE_HIDDEN
-  *    FILE_ATTRIBUTE_SYSTEM
-  *    FILE_ATTRIBUTE_DIRECTORY
-  *    FILE_ATTRIBUTE_ARCHIVE
-  *    FILE_ATTRIBUTE_NORMAL
-  *    FILE_ATTRIBUTE_TEMPORARY
-  *    FILE_ATTRIBUTE_COMPRESSED
+  *    \li \c FILE_ATTRIBUTE_READONLY
+  *    \li \c FILE_ATTRIBUTE_HIDDEN
+  *    \li \c FILE_ATTRIBUTE_SYSTEM
+  *    \li \c FILE_ATTRIBUTE_DIRECTORY
+  *    \li \c FILE_ATTRIBUTE_ARCHIVE
+  *    \li \c FILE_ATTRIBUTE_NORMAL
+  *    \li \c FILE_ATTRIBUTE_TEMPORARY
+  *    \li \c FILE_ATTRIBUTE_COMPRESSED
   */
   ULONG FileAttributes;
   /**
@@ -426,14 +426,14 @@ typedef struct _FILE_FULL_DIR_INFORMATION {
   /**
   *  File attributes, which can be any valid combination of the following:
   *
-  *    FILE_ATTRIBUTE_READONLY
-  *    FILE_ATTRIBUTE_HIDDEN
-  *    FILE_ATTRIBUTE_SYSTEM
-  *    FILE_ATTRIBUTE_DIRECTORY
-  *    FILE_ATTRIBUTE_ARCHIVE
-  *    FILE_ATTRIBUTE_NORMAL
-  *    FILE_ATTRIBUTE_TEMPORARY
-  *    FILE_ATTRIBUTE_COMPRESSED
+  *   \li \c FILE_ATTRIBUTE_READONLY
+  *   \li \c FILE_ATTRIBUTE_HIDDEN
+  *   \li \c FILE_ATTRIBUTE_SYSTEM
+  *   \li \c FILE_ATTRIBUTE_DIRECTORY
+  *   \li \c FILE_ATTRIBUTE_ARCHIVE
+  *   \li \c FILE_ATTRIBUTE_NORMAL
+  *   \li \c FILE_ATTRIBUTE_TEMPORARY
+  *   \li \c FILE_ATTRIBUTE_COMPRESSED
   */
   ULONG FileAttributes;
   /**
@@ -496,14 +496,14 @@ typedef struct _FILE_ID_FULL_DIR_INFORMATION {
   /**
   *  File attributes, which can be any valid combination of the following:
   *
-  *    FILE_ATTRIBUTE_READONLY
-  *    FILE_ATTRIBUTE_HIDDEN
-  *    FILE_ATTRIBUTE_SYSTEM
-  *    FILE_ATTRIBUTE_DIRECTORY
-  *    FILE_ATTRIBUTE_ARCHIVE
-  *    FILE_ATTRIBUTE_NORMAL
-  *    FILE_ATTRIBUTE_TEMPORARY
-  *    FILE_ATTRIBUTE_COMPRESSED
+  *   \li \c FILE_ATTRIBUTE_READONLY
+  *   \li \c FILE_ATTRIBUTE_HIDDEN
+  *   \li \c FILE_ATTRIBUTE_SYSTEM
+  *   \li \c FILE_ATTRIBUTE_DIRECTORY
+  *   \li \c FILE_ATTRIBUTE_ARCHIVE
+  *   \li \c FILE_ATTRIBUTE_NORMAL
+  *   \li \c FILE_ATTRIBUTE_TEMPORARY
+  *   \li \c FILE_ATTRIBUTE_COMPRESSED
   */
   ULONG FileAttributes;
   /**
@@ -571,14 +571,14 @@ typedef struct _FILE_BOTH_DIR_INFORMATION {
   /**
   *  File attributes, which can be any valid combination of the following:
   *
-  *    FILE_ATTRIBUTE_READONLY
-  *    FILE_ATTRIBUTE_HIDDEN
-  *    FILE_ATTRIBUTE_SYSTEM
-  *    FILE_ATTRIBUTE_DIRECTORY
-  *    FILE_ATTRIBUTE_ARCHIVE
-  *    FILE_ATTRIBUTE_NORMAL
-  *    FILE_ATTRIBUTE_TEMPORARY
-  *    FILE_ATTRIBUTE_COMPRESSED
+  *   \li \c FILE_ATTRIBUTE_READONLY
+  *   \li \c FILE_ATTRIBUTE_HIDDEN
+  *   \li \c FILE_ATTRIBUTE_SYSTEM
+  *   \li \c FILE_ATTRIBUTE_DIRECTORY
+  *   \li \c FILE_ATTRIBUTE_ARCHIVE
+  *   \li \c FILE_ATTRIBUTE_NORMAL
+  *   \li \c FILE_ATTRIBUTE_TEMPORARY
+  *   \li \c FILE_ATTRIBUTE_COMPRESSED
   */
   ULONG FileAttributes;
   /**
@@ -648,14 +648,14 @@ typedef struct _FILE_ID_BOTH_DIR_INFORMATION {
   /**
   *  File attributes, which can be any valid combination of the following:
   *
-  *    FILE_ATTRIBUTE_READONLY
-  *    FILE_ATTRIBUTE_HIDDEN
-  *    FILE_ATTRIBUTE_SYSTEM
-  *    FILE_ATTRIBUTE_DIRECTORY
-  *    FILE_ATTRIBUTE_ARCHIVE
-  *    FILE_ATTRIBUTE_NORMAL
-  *    FILE_ATTRIBUTE_TEMPORARY
-  *    FILE_ATTRIBUTE_COMPRESSED
+  *   \li \c FILE_ATTRIBUTE_READONLY
+  *   \li \c FILE_ATTRIBUTE_HIDDEN
+  *   \li \c FILE_ATTRIBUTE_SYSTEM
+  *   \li \c FILE_ATTRIBUTE_DIRECTORY
+  *   \li \c FILE_ATTRIBUTE_ARCHIVE
+  *   \li \c FILE_ATTRIBUTE_NORMAL
+  *   \li \c FILE_ATTRIBUTE_TEMPORARY
+  *   \li \c FILE_ATTRIBUTE_COMPRESSED
   */
   ULONG FileAttributes;
   /**
@@ -790,12 +790,12 @@ typedef struct _FILE_MODE_INFORMATION {
   *  Specifies the mode in which the file will be accessed following a create-file or open-file operation.
   *  This parameter is either zero or the bitwise OR of one or more of the following file option flags:
   *
-  *  FILE_WRITE_THROUGH
-  *  FILE_SEQUENTIAL_ONLY
-  *  FILE_NO_INTERMEDIATE_BUFFERING
-  *  FILE_SYNCHRONOUS_IO_ALERT
-  *  FILE_SYNCHRONOUS_IO_NONALERT
-  *  FILE_DELETE_ON_CLOSE
+  *  \li \c FILE_WRITE_THROUGH
+  *  \li \c FILE_SEQUENTIAL_ONLY
+  *  \li \c FILE_NO_INTERMEDIATE_BUFFERING
+  *  \li \c FILE_SYNCHRONOUS_IO_ALERT
+  *  \li \c FILE_SYNCHRONOUS_IO_NONALERT
+  *  \li \c FILE_DELETE_ON_CLOSE
   */
   ULONG Mode;
 } FILE_MODE_INFORMATION, *PFILE_MODE_INFORMATION;
