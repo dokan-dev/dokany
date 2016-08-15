@@ -249,7 +249,7 @@
             cd $env:APPVEYOR_BUILD_FOLDER\documentations
             git config --global user.email "appveyor@appveyor.org"
             git config --global user.name "appveyor"
-            git.exe clone -b gh-pages --single-branch  https://$($env:AccessTokenDokanDoc)@github.com/Liryna/dokany-doc.git doc
+            git.exe clone -b gh-pages --single-branch  https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc
             doxygen.exe Doxyfile
             cd doc
             if ($(git status --porcelain)) {

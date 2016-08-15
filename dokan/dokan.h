@@ -97,7 +97,7 @@ extern "C" {
 
 /**
  * \struct DOKAN_OPTIONS
- * \brief Dokan mount options used to describe dokan device behaviour.
+ * \brief Dokan mount options used to describe dokan device behavior.
  * \see DokanMain
  */
 typedef struct _DOKAN_OPTIONS {
@@ -111,7 +111,10 @@ typedef struct _DOKAN_OPTIONS {
   ULONG64 GlobalContext;
   /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS). */
   LPCWSTR MountPoint;
-  /** UNC name used for network volume. */
+  /**
+  * UNC Name for the Network Redirector
+  * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff556761(v=vs.85).aspx">Support for UNC Naming</a>
+  */
   LPCWSTR UNCName;
   /** Max timeout in milliseconds of each request before Dokan give up. */
   ULONG Timeout;
@@ -132,7 +135,7 @@ typedef struct _DOKAN_FILE_INFO {
    * internal reference that will help the implementation understand the request context of the event.
    */
   ULONG64 Context;
-  /** Used internally, never modify */
+  /** Reserved. Used internally by Dokan library. Never modify. */
   ULONG64 DokanContext;
   /** A pointer to DOKAN_OPTIONS which was passed to DokanMain. */
   PDOKAN_OPTIONS DokanOptions;
@@ -180,9 +183,9 @@ typedef int(WINAPI *PFillFindStreamData)(PWIN32_FIND_STREAM_DATA,
  * that will be called when Windows access to the filesystem.
  *
  * If an error occurs, return NTSTATUS (https://support.microsoft.com/en-us/kb/113996).
- * Win32 Error can be converted to NTSTATUS with \ref DokanNtStatusFromWin32
+ * Win32 Error can be converted to \c NTSTATUS with \ref DokanNtStatusFromWin32
  *
- * All this callbacks can be set to NULL or return \c STATUS_NOT_IMPLEMENTED
+ * All this callbacks can be set to \c NULL or return \c STATUS_NOT_IMPLEMENTED
  * if you dont want to support one of them. Be aware that returning such value to important callbacks
  * such as DOKAN_OPERATIONS.ZwCreateFile / DOKAN_OPERATIONS.ReadFile / ... would make the filesystem not working or unstable.
  */
@@ -683,8 +686,8 @@ typedef struct _DOKAN_CONTROL {
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 /**
- * \defgroup DokanMain DokanMain
- * \brief DokanMain returns error codes
+ * \defgroup DokanMainResult DokanMainResult
+ * \brief \ref DokanMain returns error codes
  */
 /** @{ */
 
@@ -726,11 +729,11 @@ typedef struct _DOKAN_CONTROL {
  * \brief Mount a new Dokan Volume.
  *
  * This function block until the device is unmount.
- * If the mount fail, it will directly return \ref DokanMain error.
+ * If the mount fail, it will directly return \ref DokanMainResult error.
  *
  * \param DokanOptions a \ref DOKAN_OPTIONS that describe the mount.
  * \param DokanOperations Instance of \ref DOKAN_OPERATIONS that will be called for each request made by the kernel.
- * \return \ref DokanMain status.
+ * \return \ref DokanMainResult status.
  */
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations);
