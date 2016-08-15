@@ -38,7 +38,7 @@ Each function should return \c STATUS_SUCCESS when the operation succeeds, other
 For example, when ZwCreateFile can't open a file (Win32 error \c ERROR_FILE_NOT_FOUND), you should return \c STATUS_OBJECT_NAME_NOT_FOUND.
 Dokan has an exported helper that can be used to convert Win32 Error to \c NTSTATUS with \ref DokanNtStatusFromWin32.
 
-There is a case with DOKAN_OPERATIONS.ZwCreateFile that should call `SetLastError(ERROR_ALREADY_EXISTS);` when the
+There is a case with DOKAN_OPERATIONS.ZwCreateFile that should return \c STATUS_OBJECT_NAME_COLLISION instead of \c STATUS_SUCCESS when the
 param CreationDisposition is \c CREATE_ALWAYS or \c OPEN_ALWAYS and the file requested successfully opened already existed. 
 
 Note: when applications make use of memory mapped

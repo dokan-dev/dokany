@@ -369,9 +369,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         error = GetLastError();
         if (error == ERROR_ALREADY_EXISTS) {
           DbgPrint(L"\tOpen an already existing file\n");
-          SetLastError(ERROR_ALREADY_EXISTS); // Inform the driver that we have
-                                              // open a already existing file
-          return STATUS_SUCCESS;
+          // Open succeed but we need to inform the driver
+          // that the file open and not created by returning STATUS_OBJECT_NAME_COLLISION
+          return STATUS_OBJECT_NAME_COLLISION;
         }
       }
     }

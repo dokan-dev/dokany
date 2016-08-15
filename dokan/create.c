@@ -86,6 +86,13 @@ VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
       EventContext->Operation.Create.SecurityContext.DesiredAccess;
 }
 
+BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
+  return status == STATUS_SUCCESS ||
+         (status == STATUS_OBJECT_NAME_COLLISION &&
+          (disposition == FILE_OPEN_IF || disposition == FILE_SUPERSEDE ||
+           disposition == FILE_OVERWRITE_IF));
+}
+
 VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                                    // Dokan Device Driver(which is doing
                                    // EVENT_WAIT).
@@ -93,7 +100,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                     PDOKAN_INSTANCE DokanInstance) {
   static int eventId = 0;
   EVENT_INFORMATION eventInfo;
-  DWORD lastError = 0;
   NTSTATUS status = STATUS_INSUFFICIENT_RESOURCES;
   DOKAN_FILE_INFO fileInfo;
   ULONG disposition;
@@ -198,22 +204,16 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
         DokanInstance->DokanOperations->Cleanup &&
         DokanInstance->DokanOperations->CloseFile) {
 
-      // Call SetLastError() to reset the error code to a known state
-      // so we can check whether or not the user-mode driver set
-      // ERROR_ALREADY_EXISTS
-      SetLastError(ERROR_SUCCESS);
-
       if (options & FILE_NON_DIRECTORY_FILE && options & FILE_DIRECTORY_FILE)
         status = STATUS_INVALID_PARAMETER;
       else
-        // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
         status = DokanInstance->DokanOperations->ZwCreateFile(
             origFileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
             EventContext->Operation.Create.FileAttributes,
             EventContext->Operation.Create.ShareAccess, disposition,
             origOptions, &fileInfo);
 
-      if (status == STATUS_SUCCESS) {
+      if (CreateSuccesStatusCheck(status, disposition)) {
         DokanInstance->DokanOperations->Cleanup(origFileName, &fileInfo);
         DokanInstance->DokanOperations->CloseFile(origFileName, &fileInfo);
       } else if (GetLastError() == ERROR_FILE_NOT_FOUND) {
@@ -224,23 +224,16 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
       fileInfo.IsDirectory = TRUE;
     }
 
-    // Call SetLastError() to reset the error code to a known state
-    // so we can check whether or not the user-mode driver set
-    // ERROR_ALREADY_EXISTS
-    SetLastError(ERROR_SUCCESS);
-
     if (options & FILE_NON_DIRECTORY_FILE && options & FILE_DIRECTORY_FILE)
       status = STATUS_INVALID_PARAMETER;
     else
-      // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
       status = DokanInstance->DokanOperations->ZwCreateFile(
           fileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
           EventContext->Operation.Create.FileAttributes,
           EventContext->Operation.Create.ShareAccess, disposition, options,
           &fileInfo);
 
-    lastError = GetLastError();
-    if (status == STATUS_SUCCESS) {
+    if (CreateSuccesStatusCheck(status, disposition)) {
       if (!childExisted) {
         eventInfo.Operation.Create.Information = FILE_DOES_NOT_EXIST;
       }
@@ -260,8 +253,8 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   // FILE_OVERWRITTEN
   // FILE_SUPERSEDED
 
-  DbgPrint("CreateFile status = %lx - lastError = %d\n", status, lastError);
-  if (status != STATUS_SUCCESS) {
+  DbgPrint("CreateFile status = %lx\n", status);
+  if (!CreateSuccesStatusCheck(status, disposition)) {
     if (EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
       DbgPrint("SL_OPEN_TARGET_DIRECTORY spcefied\n");
     }
@@ -319,10 +312,11 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
         disposition == FILE_OVERWRITE_IF) {
       eventInfo.Operation.Create.Information = FILE_CREATED;
 
-      if (lastError == ERROR_ALREADY_EXISTS) {
+      if (status == STATUS_OBJECT_NAME_COLLISION) {
         if (disposition == FILE_OPEN_IF) {
           eventInfo.Operation.Create.Information = FILE_OPENED;
-        } else if (disposition == FILE_OVERWRITE_IF) {
+        } else if (disposition == FILE_OVERWRITE_IF ||
+                   disposition == FILE_SUPERSEDE) {
           eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
         }
       }

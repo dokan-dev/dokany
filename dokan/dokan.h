@@ -196,7 +196,8 @@ typedef struct _DOKAN_OPERATIONS {
   * CreateFile is called each time a request is made on a file system object.
   *
   * In case \c OPEN_ALWAYS & \c CREATE_ALWAYS are opening successfully a already
-  * existing file, you have to \c SetLastError(ERROR_ALREADY_EXISTS)
+  * existing file, you have to return \c STATUS_OBJECT_NAME_COLLISION instead of \c STATUS_SUCCESS .
+  * This will inform Dokan that the file has been opened and not created during the request.
   *
   * If the file is a directory, CreateFile is also called.
   * In this case, CreateFile should return \c STATUS_SUCCESS when that directory
