@@ -1275,6 +1275,31 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   }
 }
 
+void ShowUsage() {
+  // clang-format off
+  fprintf(stderr, "mirror.exe\n"
+    "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+    "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
+    "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
+    "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
+    "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
+    "  /n (use network drive)\t\t\t Show device as network device.\n"
+    "  /m (use removable drive)\t\t\t Show device as removable media.\n"
+    "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
+    "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
+    "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
+    "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
+    "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
+    "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
+    "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+    "Examples:\n"
+    "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
+    "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
+    "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
+    "Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
+  // clang-format on
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
@@ -1290,21 +1315,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   }
 
   if (argc < 3) {
-    fprintf(stderr, "mirror.exe\n"
-                    "  /r RootDirectory (ex. /r c:\\test)\n"
-                    "  /l DriveLetter (ex. /l m)\n"
-                    "  /t ThreadCount (ex. /t 5)\n"
-                    "  /d (enable debug output)\n"
-                    "  /s (use stderr for output)\n"
-                    "  /n (use network drive)\n"
-                    "  /m (use removable drive)\n"
-                    "  /w (write-protect drive)\n"
-                    "  /o (use mount manager)\n"
-                    "  /c (mount for current session only)\n"
-                    "  /u UNC provider name\n"
-                    "  /a Allocation unit size (ex. /a 512)\n"
-                    "  /k Sector size (ex. /k 512)\n"
-                    "  /i (Timeout in Milliseconds ex. /i 30000)\n");
+    ShowUsage();
     free(dokanOperations);
     free(dokanOptions);
     return EXIT_FAILURE;
