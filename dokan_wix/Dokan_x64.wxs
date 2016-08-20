@@ -11,7 +11,7 @@
   <Product Id="$(var.ProductCodeX64)"
            Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) (x64)"
            Language="1033"
-           Version="$(var.BaseVersion).$(var.BuildVersion)" 
+           Version="$(var.BaseVersion).$(var.BuildVersion)"
            Manufacturer="$(var.CompanyName)"
            UpgradeCode="$(var.UpgradeCodeX64)">
 
@@ -63,11 +63,20 @@
       </DirectorySearch>
     </Property>
 
-    <Property Id="WIN7KB3033929INSTALLED" Secure="yes">
+    <Property Id="WIN7KB3033929GDRINSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem3" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="WINTRUST_FileSearch"
+        <FileSearch Id="WINTRUSTGDR_FileSearch"
                     Name="wintrust.dll"
-                    MinVersion="6.1.7601.18740"/>
+                    MinVersion="6.1.7601.18740"
+                    MaxVersion="6.1.7601.22000"/>
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="WIN7KB3033929LDRINSTALLED" Secure="yes">
+      <DirectorySearch Id="searchSystem4" Path="[SystemFolder]" Depth="0">
+        <FileSearch Id="WINTRUSTLDR_FileSearch"
+                    Name="wintrust.dll"
+                    MinVersion="6.1.7601.22947"/>
       </DirectorySearch>
     </Property>
 
@@ -122,7 +131,7 @@
 
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND ServicePackLevel >= 1)]]></Condition>
-    <Condition Message="Installation failed because Microsoft patch KB3033929 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/3033929"><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND WIN7KB3033929INSTALLED)]]></Condition>
+    <Condition Message="Installation failed because Microsoft patch KB3033929 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/3033929"><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND (WIN7KB3033929GDRINSTALLED OR WIN7KB3033929LDRINSTALLED))]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x64 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "14.0.23918")]]></Condition>
     <Condition Message="Installation failed because the VC++ 2015 x86 runtime is not installed. You can download it here: https://www.visualstudio.com/downloads/download-visual-studio-vs#d-visual-c"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "14.0.23918")]]></Condition>
 
@@ -364,8 +373,8 @@
       <ComponentRef Id="SysWOW64Files"/>
       <ComponentRef Id="X86PROGRAMFiles"/>
       <?if $(var.BuildCygwin)=true ?>
-        <ComponentRef Id="ProgramFilesCygwinComponent" />
-        <ComponentRef Id="X86CygwinFiles" />
+      <ComponentRef Id="ProgramFilesCygwinComponent" />
+      <ComponentRef Id="X86CygwinFiles" />
       <?endif?>
     </Feature>
     <Feature Id="DokanDevFeature" Title="Development" Description="Dokan development files" Level="2" Display="expand">
@@ -379,8 +388,8 @@
         <ComponentRef Id="SampleMirrorFilesComponent"/>
         <ComponentRef Id="SampleMirrorFilesComponentX86"/>
         <?if $(var.BuildCygwin)=true ?>
-          <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
-          <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
+        <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
+        <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
         <?endif?>
       </Feature>
       <Feature Id="DokanPDBFeature" Title="Symbols" Description="Dokan Core PDB debug files" Level="2" Display="expand">
@@ -423,13 +432,13 @@
     </Component>
     <Component Id="SampleFuseCygwinFilesComponentX86" Win64="yes" Guid="{D612EDF0-0B92-4AB6-B8FE-34FF993D376A}" Directory="FUSEMIRRORX86DIR">
       <File Id="fuseMirrorEXEX86" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-	  <File Id="dokanFuseMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+      <File Id="dokanFuseMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="dokanCygFuseMirrorDLLX86" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="fuseMirrorX86C" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
     </Component>
     <Component Id="SampleFuseMirrorCygwinComponent" Win64="yes" Guid="{260613A7-E1E0-4F91-A4BF-AD98974A05C3}" Directory="FUSEMIRRORDIR">
       <File Id="fuseMirrorEXE" Source="..\x64\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-	  <File Id="dokanFuseMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+      <File Id="dokanFuseMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="dokanCygFuseMirrorDLL" Source="..\x64\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
     </Component>
