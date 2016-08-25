@@ -44,9 +44,9 @@ extern ULONG g_Debug;
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 
-#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan" DOKAN_MAJOR_API_VERSION
+#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan_" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
-  L"\\DosDevices\\Global\\Dokan" DOKAN_MAJOR_API_VERSION
+  L"\\DosDevices\\Global\\Dokan_" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME                                       \
   L"\\Device\\DokanFs" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_FS_CD_DEVICE_NAME                                         \
