@@ -941,9 +941,9 @@ Return Value:
     case IOCTL_KEEPALIVE:
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
-        ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+        ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);
         DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
-        ExReleaseResourceLite(&dcb->Resource);
+        ExReleaseResourceAndLeaveCriticalRegion(&dcb->Resource);
         status = STATUS_SUCCESS;
       } else {
         DDbgPrint(" device is not mounted\n");
