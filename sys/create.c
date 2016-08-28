@@ -166,9 +166,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
   ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
   ExAcquireResourceExclusiveLite(&Fcb->Resource, TRUE);
 
-  InterlockedDecrement(&Fcb->FileCount);
-
-  if (Fcb->FileCount == 0) {
+  if (InterlockedDecrement(&Fcb->FileCount) == 0) {
 
     RemoveEntryList(&Fcb->NextFCB);
     InitializeListHead(&Fcb->NextCCB);
