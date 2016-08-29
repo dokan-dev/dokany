@@ -522,7 +522,7 @@ FuseGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
   impl_fuse_context *impl = the_impl;
 
   if (impl->debug())
-    FPRINTF(stderr, "GetFileSecurity: %x\n", *EventInfo->SecurityInformation);
+    FPRINTF(stderr, "GetFileSecurity: %x\n", EventInfo->SecurityInformation);
 
   BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
   ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
@@ -551,7 +551,7 @@ FuseGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
 
     LPTSTR pStringBuffer = NULL;
     if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-            EventInfo->SecurityDescriptor, SDDL_REVISION_1, *EventInfo->SecurityInformation,
+            EventInfo->SecurityDescriptor, SDDL_REVISION_1, EventInfo->SecurityInformation,
             &pStringBuffer, NULL)) {
       return STATUS_NOT_IMPLEMENTED;
     }

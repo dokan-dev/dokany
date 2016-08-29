@@ -1681,37 +1681,86 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   return TRUE;
 }
 
+// https://msdn.microsoft.com/en-us/library/windows/hardware/bb530716(v=vs.85).aspx
+BOOL DokanIsBackupName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
+
+	// mask for SE_BACKUP_NAME privilege
+	DWORD mask =
+		READ_CONTROL
+		| FILE_READ_ATTRIBUTES
+		| STANDARD_RIGHTS_READ;
+
+	if((EventInfo->DesiredAccess & mask) == mask
+		&& (EventInfo->SecurityContext.AccessState.Flags & TOKEN_HAS_TRAVERSE_PRIVILEGE)
+		&& (EventInfo->SecurityContext.AccessState.Flags & (TOKEN_HAS_BACKUP_PRIVILEGE | SE_BACKUP_PRIVILEGES_CHECKED))) {
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+// https://msdn.microsoft.com/en-us/library/windows/hardware/bb530716(v=vs.85).aspx
+BOOL DokanIsRestoreName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
+
+	// mask for SE_RESTORE_NAME privilege
+	DWORD mask =
+		WRITE_DAC
+		| WRITE_OWNER
+		//| ACCESS_SYSTEM_SECURITY
+		| STANDARD_RIGHTS_WRITE;
+		//| FILE_ADD_FILE
+		//| FILE_ADD_SUBDIRECTORY
+		//| DELETE;
+
+	if((EventInfo->DesiredAccess & mask) == mask
+		&& (EventInfo->SecurityContext.AccessState.Flags & (TOKEN_HAS_RESTORE_PRIVILEGE | SE_BACKUP_PRIVILEGES_CHECKED))) {
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
-    ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
-    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition) {
+	DOKAN_CREATE_FILE_EVENT *EventInfo,
+    DWORD *outFileAttributesAndFlags,
+	DWORD *outCreationDisposition) {
+
   if (outFileAttributesAndFlags) {
 
-    *outFileAttributesAndFlags = FileAttributes;
+    *outFileAttributesAndFlags = EventInfo->FileAttributes;
 
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_WRITE_THROUGH, FILE_WRITE_THROUGH);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_SEQUENTIAL_SCAN, FILE_SEQUENTIAL_ONLY);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_RANDOM_ACCESS, FILE_RANDOM_ACCESS);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_NO_BUFFERING, FILE_NO_INTERMEDIATE_BUFFERING);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_OPEN_REPARSE_POINT, FILE_OPEN_REPARSE_POINT);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_DELETE_ON_CLOSE, FILE_DELETE_ON_CLOSE);
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_BACKUP_SEMANTICS, FILE_OPEN_FOR_BACKUP_INTENT);
 
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-    DokanMapKernelBit(*outFileAttributesAndFlags, CreateOptions,
+    DokanMapKernelBit(*outFileAttributesAndFlags, EventInfo->CreateOptions,
                       FILE_FLAG_SESSION_AWARE, FILE_SESSION_AWARE);
 #endif
+
+	if(DokanIsBackupName(EventInfo)
+		|| DokanIsRestoreName(EventInfo)) {
+
+		*outFileAttributesAndFlags |= FILE_FLAG_BACKUP_SEMANTICS;
+	}
   }
 
   if (outCreationDisposition) {
 
-    switch (CreateDisposition) {
+    switch (EventInfo->CreateDisposition) {
     case FILE_CREATE:
       *outCreationDisposition = CREATE_NEW;
       break;

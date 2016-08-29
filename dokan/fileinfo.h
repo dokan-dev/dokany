@@ -510,4 +510,33 @@ typedef struct _UNICODE_STRING {
   PWSTR Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
 
+//
+// Token Flags
+//
+// Flags that may be defined in the TokenFlags field of the token object,
+// or in an ACCESS_STATE structure
+//
+
+#define TOKEN_HAS_TRAVERSE_PRIVILEGE    0x0001
+#define TOKEN_HAS_BACKUP_PRIVILEGE      0x0002
+#define TOKEN_HAS_RESTORE_PRIVILEGE     0x0004
+#define TOKEN_WRITE_RESTRICTED          0x0008
+#define TOKEN_IS_RESTRICTED             0x0010
+#define TOKEN_SESSION_NOT_REFERENCED    0x0020
+#define TOKEN_SANDBOX_INERT             0x0040
+#define TOKEN_HAS_IMPERSONATE_PRIVILEGE 0x0080
+#define SE_BACKUP_PRIVILEGES_CHECKED    0x0100
+#define TOKEN_VIRTUALIZE_ALLOWED        0x0200
+#define TOKEN_VIRTUALIZE_ENABLED        0x0400
+#define TOKEN_IS_FILTERED               0x0800
+#define TOKEN_UIACCESS                  0x1000
+#define TOKEN_NOT_LOW                   0x2000
+#define TOKEN_LOWBOX                    0x4000
+#define TOKEN_HAS_OWN_CLAIM_ATTRIBUTES  0x8000
+
+#define TOKEN_PRIVATE_NAMESPACE                     0x00010000
+#define TOKEN_DO_NOT_USE_GLOBAL_ATTRIBS_FOR_QUERY   0x00020000
+#define SPECIAL_ENCRYPTED_OPEN                      0x00040000
+#define TOKEN_NO_CHILD_PROCESS                      0x00080000
+
 #endif // FILEINFO_H_

@@ -41,6 +41,7 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <winbase.h>
 #include <assert.h>
+#include <Aclapi.h>
 
 #define USE_ASYNC_IO 1
 
@@ -51,6 +52,8 @@ typedef struct _MIRROR_FILE_HANDLE {
 #if USE_ASYNC_IO
 	PTP_IO		IoCompletion;
 #endif
+	
+	CRITICAL_SECTION Lock;
 
 } MIRROR_FILE_HANDLE;
 
@@ -98,6 +101,14 @@ CRITICAL_SECTION g_FileHandlePoolCS;
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 volatile LONG g_IsUnmounted = 0;
+
+static GENERIC_MAPPING g_GenericMapping =
+{
+	FILE_GENERIC_READ,
+	FILE_GENERIC_WRITE,
+	FILE_GENERIC_EXECUTE,
+	FILE_ALL_ACCESS
+};
 
 static void DbgPrint(LPCWSTR format, ...) {
 
@@ -164,6 +175,8 @@ void FreeMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
 		}
 #endif
 
+		DeleteCriticalSection(&FileHandle->Lock);
+
 		free(FileHandle);
 	}
 }
@@ -219,11 +232,14 @@ MIRROR_FILE_HANDLE* PopMirrorFileHandle(HANDLE ActualFileHandle) {
 	if(!mirrorHandle) {
 
 		mirrorHandle = (MIRROR_FILE_HANDLE*)malloc(sizeof(MIRROR_FILE_HANDLE));
+
+		RtlZeroMemory(mirrorHandle, sizeof(MIRROR_FILE_HANDLE));
+
+		InitializeCriticalSection(&mirrorHandle->Lock);
 	}
 
 	if(mirrorHandle) {
 
-		RtlZeroMemory(mirrorHandle, sizeof(MIRROR_FILE_HANDLE));
 		mirrorHandle->FileHandle = ActualFileHandle;
 
 #if USE_ASYNC_IO
@@ -331,7 +347,8 @@ static void PrintUserName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   PTOKEN_USER tokenUser;
   SID_NAME_USE snu;
 
-  handle = DokanOpenRequestorToken(EventInfo);
+  handle = DokanOpenRequestorToken(EventInfo->DokanFileInfo);
+
   if (handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"  DokanOpenRequestorToken failed\n");
     return;
@@ -357,67 +374,217 @@ static void PrintUserName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 }
 
 static BOOL AddSeSecurityNamePrivilege() {
+
   HANDLE token = 0;
-  DbgPrint(
-      L"## Attempting to add SE_SECURITY_NAME privilege to process token ##\n");
+
+  DbgPrint(L"## Attempting to add SE_SECURITY_NAME and SE_RESTORE_NAME privileges to process token ##\n");
+
   DWORD err;
-  LUID luid;
-  if (!LookupPrivilegeValue(0, SE_SECURITY_NAME, &luid)) {
+  LUID securityLuid;
+  LUID restoreLuid;
+  LUID backupLuid;
+
+  if (!LookupPrivilegeValue(0, SE_SECURITY_NAME, &securityLuid)) {
+
     err = GetLastError();
+
     if (err != ERROR_SUCCESS) {
-      DbgPrint(L"  failed: Unable to lookup privilege value. error = %u\n",
-               err);
+      
+		DbgPrint(L"  failed: Unable to lookup SE_SECURITY_NAME value. error = %u\n", err);
+
       return FALSE;
     }
   }
 
-  LUID_AND_ATTRIBUTES attr;
-  attr.Attributes = SE_PRIVILEGE_ENABLED;
-  attr.Luid = luid;
+  if(!LookupPrivilegeValue(0, SE_RESTORE_NAME, &restoreLuid)) {
 
-  TOKEN_PRIVILEGES priv;
-  priv.PrivilegeCount = 1;
-  priv.Privileges[0] = attr;
+	  err = GetLastError();
 
-  if (!OpenProcessToken(GetCurrentProcess(),
-                        TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+	  if(err != ERROR_SUCCESS) {
+
+		  DbgPrint(L"  failed: Unable to lookup SE_RESTORE_NAME value. error = %u\n", err);
+
+		  return FALSE;
+	  }
+  }
+
+  if(!LookupPrivilegeValue(0, SE_BACKUP_NAME, &backupLuid)) {
+
+	  err = GetLastError();
+
+	  if(err != ERROR_SUCCESS) {
+
+		  DbgPrint(L"  failed: Unable to lookup SE_BACKUP_NAME value. error = %u\n", err);
+
+		  return FALSE;
+	  }
+  }
+
+  size_t privSize = sizeof(TOKEN_PRIVILEGES) + (sizeof(LUID_AND_ATTRIBUTES) * 2);
+  PTOKEN_PRIVILEGES privs = (PTOKEN_PRIVILEGES)malloc(privSize);
+  PTOKEN_PRIVILEGES oldPrivs = (PTOKEN_PRIVILEGES)malloc(privSize);
+
+  privs->PrivilegeCount = 3;
+  privs->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+  privs->Privileges[0].Luid = securityLuid;
+  privs->Privileges[1].Attributes = SE_PRIVILEGE_ENABLED;
+  privs->Privileges[1].Luid = restoreLuid;
+  privs->Privileges[2].Attributes = SE_PRIVILEGE_ENABLED;
+  privs->Privileges[2].Luid = backupLuid;
+
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+
     err = GetLastError();
+
     if (err != ERROR_SUCCESS) {
+
       DbgPrint(L"  failed: Unable obtain process token. error = %u\n", err);
+
+	  free(privs);
+	  free(oldPrivs);
+
       return FALSE;
     }
   }
 
-  TOKEN_PRIVILEGES oldPriv;
   DWORD retSize;
-  AdjustTokenPrivileges(token, FALSE, &priv, sizeof(TOKEN_PRIVILEGES), &oldPriv,
-                        &retSize);
+
+  AdjustTokenPrivileges(token, FALSE, privs, (DWORD)privSize, oldPrivs, &retSize);
+
   err = GetLastError();
+
+  CloseHandle(token);
+
   if (err != ERROR_SUCCESS) {
+
     DbgPrint(L"  failed: Unable to adjust token privileges: %u\n", err);
-    CloseHandle(token);
+
+	free(privs);
+	free(oldPrivs);
+
     return FALSE;
   }
 
-  BOOL privAlreadyPresent = FALSE;
-  for (unsigned int i = 0; i < oldPriv.PrivilegeCount; i++) {
-    if (oldPriv.Privileges[i].Luid.HighPart == luid.HighPart &&
-        oldPriv.Privileges[i].Luid.LowPart == luid.LowPart) {
-      privAlreadyPresent = TRUE;
-      break;
+  BOOL securityPrivPresent = FALSE;
+  BOOL restorePrivPresent = FALSE;
+
+  for (unsigned int i = 0; i < oldPrivs->PrivilegeCount && (!securityPrivPresent || !restorePrivPresent); i++) {
+
+    if (oldPrivs->Privileges[i].Luid.HighPart == securityLuid.HighPart
+		&& oldPrivs->Privileges[i].Luid.LowPart == securityLuid.LowPart) {
+
+		securityPrivPresent = TRUE;
     }
+	else if(oldPrivs->Privileges[i].Luid.HighPart == restoreLuid.HighPart
+		&& oldPrivs->Privileges[i].Luid.LowPart == restoreLuid.LowPart) {
+
+		restorePrivPresent = TRUE;
+	}
   }
-  DbgPrint(privAlreadyPresent ? L"  success: privilege already present\n"
-                              : L"  success: privilege added\n");
-  if (token)
-    CloseHandle(token);
+
+  DbgPrint(securityPrivPresent ? L"  success: SE_SECURITY_NAME privilege already present\n"
+                              : L"  success: SE_SECURITY_NAME privilege added\n");
+
+  DbgPrint(restorePrivPresent ? L"  success: SE_RESTORE_NAME privilege already present\n"
+							  : L"  success: SE_RESTORE_NAME privilege added\n");
+
+  free(privs);
+  free(oldPrivs);
+
   return TRUE;
 }
 
 #define MirrorCheckFlag(val, flag)                                             \
-  if (val & flag) {                                                            \
+  if ((val & flag) == flag) {                                                  \
     DbgPrint(L"\t" L#flag L"\n");                                              \
   }
+
+static DWORD MirrorGetParentSecurity(WCHAR *FilePath, PSECURITY_DESCRIPTOR *ParentSecurity) {
+
+	int lastPathSeparator = -1;
+
+	for(int i = 0; i < MAX_PATH && FilePath[i]; ++i) {
+
+		if(FilePath[i] == '\\') {
+
+			lastPathSeparator = i;
+		}
+	}
+
+	if(lastPathSeparator == -1) {
+
+		return ERROR_PATH_NOT_FOUND;
+	}
+
+	WCHAR parentPath[MAX_PATH];
+
+	memcpy_s(parentPath, MAX_PATH * sizeof(WCHAR), FilePath, lastPathSeparator * sizeof(WCHAR));
+
+	parentPath[lastPathSeparator] = 0;
+
+	// Must LocalFree() ParentSecurity
+
+	return GetNamedSecurityInfoW(
+		parentPath,
+		SE_FILE_OBJECT,
+		BACKUP_SECURITY_INFORMATION, // give us everything
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		ParentSecurity);
+}
+
+static DWORD MirrorCreateNewSecurity(
+	DOKAN_CREATE_FILE_EVENT *EventInfo,
+	WCHAR *FilePath,
+	PSECURITY_DESCRIPTOR RequestedSecurity,
+	PSECURITY_DESCRIPTOR *NewSecurity) {
+
+	PSECURITY_DESCRIPTOR parentDescriptor = NULL;
+	int error = ERROR_SUCCESS;
+
+	if(!EventInfo || !FilePath || !RequestedSecurity || !NewSecurity) {
+
+		return ERROR_INVALID_PARAMETER;
+	}
+
+	if((error = MirrorGetParentSecurity(FilePath, &parentDescriptor)) != ERROR_SUCCESS) {
+
+		DbgPrint(L"\tFailed to get parent security descriptor for file \'%s\' and error code: %d\n", FilePath, error);
+	}
+	else {
+
+		HANDLE accessToken = DokanOpenRequestorToken(EventInfo->DokanFileInfo);
+
+		if(accessToken && accessToken != INVALID_HANDLE_VALUE) {
+
+			if(!CreatePrivateObjectSecurity(parentDescriptor,
+				EventInfo->SecurityContext.AccessState.SecurityDescriptor,
+				NewSecurity,
+				EventInfo->DokanFileInfo->IsDirectory,
+				accessToken,
+				&g_GenericMapping)) {
+
+				error = GetLastError();
+
+				DbgPrint(L"\tFailed to create file security descriptor with error code: %d\n", error);
+			}
+
+			CloseHandle(accessToken);
+		}
+		else {
+
+			error = GetLastError();
+
+			DbgPrint(L"\tFailed to retrieve file access token with error code: %d\n", error);
+		}
+
+		LocalFree(parentDescriptor);
+	}
+
+	return error;
+}
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
@@ -430,17 +597,9 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   DWORD fileAttributesAndFlags;
   DWORD error = 0;
   SECURITY_ATTRIBUTES securityAttrib;
-
-  securityAttrib.nLength = sizeof(securityAttrib);
-  securityAttrib.lpSecurityDescriptor =
-	  EventInfo->SecurityContext.AccessState.SecurityDescriptor;
-  securityAttrib.bInheritHandle = FALSE;
-
   
   DokanMapKernelToUserCreateFileFlags(
-	  EventInfo->FileAttributes,
-	  EventInfo->CreateOptions,
-	  EventInfo->CreateDisposition,
+	  EventInfo,
 	  &fileAttributesAndFlags,
       &creationDisposition);
 
@@ -463,7 +622,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   MirrorCheckFlag(EventInfo->ShareAccess, FILE_SHARE_WRITE);
   MirrorCheckFlag(EventInfo->ShareAccess, FILE_SHARE_DELETE);
 
-  DbgPrint(L"\tAccessMode = 0x%x\n", EventInfo->DesiredAccess);
+  DbgPrint(L"\n\tAccessMode = 0x%x\n", EventInfo->DesiredAccess);
 
   MirrorCheckFlag(EventInfo->DesiredAccess, GENERIC_READ);
   MirrorCheckFlag(EventInfo->DesiredAccess, GENERIC_WRITE);
@@ -485,6 +644,13 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   MirrorCheckFlag(EventInfo->DesiredAccess, STANDARD_RIGHTS_READ);
   MirrorCheckFlag(EventInfo->DesiredAccess, STANDARD_RIGHTS_WRITE);
   MirrorCheckFlag(EventInfo->DesiredAccess, STANDARD_RIGHTS_EXECUTE);
+  MirrorCheckFlag(EventInfo->DesiredAccess, ACCESS_SYSTEM_SECURITY);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_TRAVERSE);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_ADD_FILE);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_ADD_SUBDIRECTORY);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_GENERIC_WRITE);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_GENERIC_READ);
+  MirrorCheckFlag(EventInfo->DesiredAccess, FILE_GENERIC_EXECUTE);
 
   // When filePath is a directory, needs to change the flag so that the file can
   // be opened.
@@ -502,7 +668,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
     }
   }
 
-  DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
+  DbgPrint(L"\n\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
@@ -531,23 +697,62 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
 
+  DbgPrint(L"\n\tAccessState.Flags = 0x%x\n", EventInfo->SecurityContext.AccessState.Flags);
+
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_HAS_TRAVERSE_PRIVILEGE);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_HAS_BACKUP_PRIVILEGE);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_HAS_RESTORE_PRIVILEGE);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_WRITE_RESTRICTED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_IS_RESTRICTED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_SESSION_NOT_REFERENCED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_SANDBOX_INERT);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_HAS_IMPERSONATE_PRIVILEGE);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, SE_BACKUP_PRIVILEGES_CHECKED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_VIRTUALIZE_ALLOWED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_VIRTUALIZE_ENABLED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_IS_FILTERED);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_UIACCESS);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_NOT_LOW);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_LOWBOX);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_HAS_OWN_CLAIM_ATTRIBUTES);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_PRIVATE_NAMESPACE);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_DO_NOT_USE_GLOBAL_ATTRIBS_FOR_QUERY);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, SPECIAL_ENCRYPTED_OPEN);
+  MirrorCheckFlag(EventInfo->SecurityContext.AccessState.Flags, TOKEN_NO_CHILD_PROCESS);
+
 #if USE_ASYNC_IO
   fileAttributesAndFlags |= FILE_FLAG_OVERLAPPED;
 #endif
 
   if (creationDisposition == CREATE_NEW) {
-    DbgPrint(L"\tCREATE_NEW\n");
+    DbgPrint(L"\n\tCreation Disposition: CREATE_NEW\n");
   } else if (creationDisposition == OPEN_ALWAYS) {
-    DbgPrint(L"\tOPEN_ALWAYS\n");
+    DbgPrint(L"\n\tCreation Disposition: OPEN_ALWAYS\n");
   } else if (creationDisposition == CREATE_ALWAYS) {
-    DbgPrint(L"\tCREATE_ALWAYS\n");
+    DbgPrint(L"\n\tCreation Disposition: CREATE_ALWAYS\n");
   } else if (creationDisposition == OPEN_EXISTING) {
-    DbgPrint(L"\tOPEN_EXISTING\n");
+    DbgPrint(L"\n\tCreation Disposition: OPEN_EXISTING\n");
   } else if (creationDisposition == TRUNCATE_EXISTING) {
-    DbgPrint(L"\tTRUNCATE_EXISTING\n");
+    DbgPrint(L"\n\tCreation Disposition: TRUNCATE_EXISTING\n");
   } else {
-    DbgPrint(L"\tUNKNOWN creationDisposition!\n");
+    DbgPrint(L"\n\tCreation Disposition: UNKNOWN creationDisposition!\n");
   }
+
+  PSECURITY_DESCRIPTOR fileSecurity = NULL;
+
+  if(wcscmp(EventInfo->FileName, L"\\") != 0
+	  && wcscmp(EventInfo->FileName, L"/") != 0
+	  && creationDisposition != OPEN_EXISTING
+	  && creationDisposition != TRUNCATE_EXISTING) {
+
+	  // We only need security information if there's a possibility a new file could be created
+
+	  MirrorCreateNewSecurity(EventInfo, filePath, EventInfo->SecurityContext.AccessState.SecurityDescriptor, &fileSecurity);
+  }
+
+  securityAttrib.nLength = sizeof(securityAttrib);
+  securityAttrib.lpSecurityDescriptor = fileSecurity;
+  securityAttrib.bInheritHandle = FALSE;
 
   if (EventInfo->DokanFileInfo->IsDirectory) {
 
@@ -580,8 +785,13 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
 
       handle = CreateFile(
-          filePath, EventInfo->DesiredAccess, EventInfo->ShareAccess, &securityAttrib, OPEN_EXISTING,
-          fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+          filePath,
+		  EventInfo->DesiredAccess,
+		  EventInfo->ShareAccess,
+		  &securityAttrib,
+		  OPEN_EXISTING,
+          fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS,
+		  NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
 
@@ -602,7 +812,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
 			  CloseHandle(handle);
 
-			  return STATUS_INTERNAL_ERROR;
+			  status = STATUS_INTERNAL_ERROR;
 		  }
 
 		  // save the file handle in Context
@@ -612,67 +822,72 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   }
   else {
 
-    // It is a create file request
+	  // It is a create file request
 
 	  if(fileAttr != INVALID_FILE_ATTRIBUTES &&
 		  (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
 		  EventInfo->CreateDisposition == FILE_CREATE) {
 
-		  return STATUS_OBJECT_NAME_COLLISION; // File already exist because
+		  status = STATUS_OBJECT_NAME_COLLISION; // File already exist because
 											   // GetFileAttributes found it
 	  }
+	  else {
 
-    handle =
-        CreateFile(filePath,
-                   EventInfo->DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-                   EventInfo->ShareAccess,
-                   &securityAttrib, // security attribute
-                   creationDisposition,
-                   fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
-                   NULL);                  // template file handle
+		  handle =
+			  CreateFile(filePath,
+				  EventInfo->DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+				  EventInfo->ShareAccess,
+				  &securityAttrib, // security attribute
+				  creationDisposition,
+				  fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
+				  NULL);                  // template file handle
 
-    if (handle == INVALID_HANDLE_VALUE) {
+		  error = GetLastError();
 
-      error = GetLastError();
-      DbgPrint(L"\terror code = %d\n\n", error);
+		  if(handle == INVALID_HANDLE_VALUE) {
 
-      status = DokanNtStatusFromWin32(error);
-    }
-	else {
+			  DbgPrint(L"\terror code = %d\n\n", error);
 
-		MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
+			  status = DokanNtStatusFromWin32(error);
+		  }
+		  else {
 
-		if(!mirrorHandle) {
+			  MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
 
-			DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
+			  if(!mirrorHandle) {
 
-			SetLastError(ERROR_INTERNAL_ERROR);
+				  DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
 
-			CloseHandle(handle);
-			
-			return STATUS_INTERNAL_ERROR;
-		}
+				  SetLastError(ERROR_INTERNAL_ERROR);
 
-		// save the file handle in Context
-		EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
+				  CloseHandle(handle);
 
-      if (creationDisposition == OPEN_ALWAYS ||
-          creationDisposition == CREATE_ALWAYS) {
+				  status = STATUS_INTERNAL_ERROR;
+			  }
+			  else {
 
-        error = GetLastError();
+				  // save the file handle in Context
+				  EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
 
-        if (error == ERROR_ALREADY_EXISTS) {
+				  if(creationDisposition == OPEN_ALWAYS ||
+					  creationDisposition == CREATE_ALWAYS) {
 
-          DbgPrint(L"\tOpen an already existing file\n");
-          SetLastError(ERROR_ALREADY_EXISTS); // Inform the driver that we have
-                                              // open a already existing file
-          return STATUS_SUCCESS;
-        }
-      }
-    }
+					  DbgPrint(L"\tOpen an already existing file\n");
+					  SetLastError(ERROR_ALREADY_EXISTS); // Inform the driver that we have
+														  // open a already existing file
+					  status = STATUS_SUCCESS;
+				  }
+			  }
+		  }
+	  }
   }
 
   DbgPrint(L"\n");
+
+  if(fileSecurity) {
+
+	  DestroyPrivateObjectSecurity(&fileSecurity);
+  }
 
   return status;
 }
@@ -1516,28 +1731,28 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVE
 
 	MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-	MirrorCheckFlag(*EventInfo->SecurityInformation, FILE_SHARE_READ);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, OWNER_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, GROUP_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, SACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, LABEL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, SCOPE_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation,
-		PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, BACKUP_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, FILE_SHARE_READ);
+	MirrorCheckFlag(EventInfo->SecurityInformation, OWNER_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, GROUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, LABEL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, SCOPE_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
 
-	DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
+	MirrorCheckFlag(EventInfo->SecurityInformation, BACKUP_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+	MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+
+	/*DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
 
 	HANDLE handle = CreateFile(
 		filePath,
-		READ_CONTROL | (((*EventInfo->SecurityInformation & SACL_SECURITY_INFORMATION) ||
-		(*EventInfo->SecurityInformation & BACKUP_SECURITY_INFORMATION))
+		READ_CONTROL | (((EventInfo->SecurityInformation & SACL_SECURITY_INFORMATION) ||
+		(EventInfo->SecurityInformation & BACKUP_SECURITY_INFORMATION))
 			? ACCESS_SYSTEM_SECURITY
 			: 0),
 		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
@@ -1578,7 +1793,70 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVE
 		}
 	}
 
-	CloseHandle(handle);
+	CloseHandle(handle);*/
+
+	PSECURITY_DESCRIPTOR tempSecurityDesc = NULL;
+	int error = 0;
+
+	// GetSecurityInfo() is not thread safe so we use a critical section here to synchronize
+	EnterCriticalSection(&mirrorHandle->Lock);
+	{
+		error = GetSecurityInfo(mirrorHandle->FileHandle, SE_FILE_OBJECT, EventInfo->SecurityInformation, NULL, NULL, NULL, NULL, &tempSecurityDesc);
+	}
+	LeaveCriticalSection(&mirrorHandle->Lock);
+
+	if(error != ERROR_SUCCESS) {
+
+		DbgPrint(L"  GetSecurityInfo error: %d\n", error);
+
+		return DokanNtStatusFromWin32(error);
+	}
+
+	assert(tempSecurityDesc);
+
+	SECURITY_DESCRIPTOR_CONTROL control = 0;
+	DWORD revision;
+
+	if(!GetSecurityDescriptorControl(tempSecurityDesc, &control, &revision)) {
+
+		DbgPrint(L"  GetSecurityDescriptorControl error: %d\n", GetLastError());
+	}
+
+	if(!(control & SE_SELF_RELATIVE)) {
+
+		if(!MakeSelfRelativeSD(tempSecurityDesc, EventInfo->SecurityDescriptor, &EventInfo->LengthNeeded)) {
+
+			error = GetLastError();
+
+			DbgPrint(L"  MakeSelfRelativeSD error: %d\n", error);
+
+			LocalFree(tempSecurityDesc);
+
+			if(error == ERROR_INSUFFICIENT_BUFFER) {
+
+				return STATUS_BUFFER_OVERFLOW;
+			}
+
+			return DokanNtStatusFromWin32(error);
+		}
+	}
+	else {
+
+		EventInfo->LengthNeeded = GetSecurityDescriptorLength(tempSecurityDesc);
+
+		assert(EventInfo->LengthNeeded > 0);
+
+		if(EventInfo->LengthNeeded > EventInfo->SecurityDescriptorSize) {
+
+			LocalFree(tempSecurityDesc);
+
+			return STATUS_BUFFER_OVERFLOW;
+		}
+
+		memcpy_s(EventInfo->SecurityDescriptor, EventInfo->SecurityDescriptorSize, tempSecurityDesc, EventInfo->LengthNeeded);
+	}
+
+	LocalFree(tempSecurityDesc);
 
 	return STATUS_SUCCESS;
 }
@@ -1587,6 +1865,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVE
 
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   WCHAR filePath[MAX_PATH];
+  int error = 0;
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
 
@@ -1594,13 +1873,40 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVE
 
   MIRROR_HANDLE_ASSERT(mirrorHandle);
 
-  if (!SetUserObjectSecurity(mirrorHandle->FileHandle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor)) {
+  // SecurityDescriptor must be 4-byte aligned
+  assert(((size_t)EventInfo->SecurityDescriptor & 3) == 0);
 
-    int error = GetLastError();
+  MirrorCheckFlag(EventInfo->SecurityInformation, OWNER_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, GROUP_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, DACL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, SACL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, LABEL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, SCOPE_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, BACKUP_SECURITY_INFORMATION);
 
-    DbgPrint(L"  SetUserObjectSecurity error: %d\n", error);
+  MirrorCheckFlag(EventInfo->SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+  MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
 
-    return DokanNtStatusFromWin32(error);
+  BOOL setSecurity = FALSE;
+
+  EnterCriticalSection(&mirrorHandle->Lock);
+  {
+	  // For some reason this appears to be only variant of SetSecurity that works without returning an ERROR_ACCESS_DENIED
+	  setSecurity = SetUserObjectSecurity(mirrorHandle->FileHandle, &EventInfo->SecurityInformation, EventInfo->SecurityDescriptor);
+  }
+  LeaveCriticalSection(&mirrorHandle->Lock);
+
+  if(!setSecurity) {
+
+	  error = GetLastError();
+
+	  DbgPrint(L"  SetUserObjectSecurity error: %d\n", error);
+
+	  return DokanNtStatusFromWin32(error);
   }
 
   return STATUS_SUCCESS;

@@ -210,8 +210,10 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG securityDescLength;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
-  IRP_ENTRY_CONTEXT irpContext;
+  IRP_ENTRY_CONTEXT irpEntryContext;
   ULONG bufferOffset;
+
+  RtlZeroMemory(&irpEntryContext, sizeof(irpEntryContext));
 
   __try {
 
@@ -316,20 +318,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       __leave;
     }
 
-	RtlZeroMemory(&irpContext, sizeof(irpContext));
-
-	status = DokanCreateProcessAccessToken(
-		&irpContext.Security.UserModeAccessToken,
-		&irpContext.Security.Process);
-
-	if(!NT_SUCCESS(status)) {
-
-		DokanFreeEventContext(eventContext);
-		__leave;
-	}
-
     eventContext->Context = ccb->UserContext;
-	eventContext->Operation.SetSecurity.AccessToken = irpContext.Security.UserModeAccessToken;
     eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
     eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
     eventContext->Operation.SetSecurity.BufferOffset = bufferOffset;
@@ -344,14 +333,10 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   fcb->FileName.Buffer,
                   fcb->FileName.Length);
 
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpContext);
+	//SeCaptureSubjectContext(&irpEntryContext.Security.SecuritySubjectContext);
 
-	if(status != STATUS_PENDING) {
-
-		DokanCleanupProcessAccessToken(
-			irpContext.Security.UserModeAccessToken,
-			irpContext.Security.Process);
-	}
+    //status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpEntryContext);
+	status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
 
@@ -372,13 +357,8 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 
-  if(IrpEntry->ContextInfo.Security.UserModeAccessToken) {
-
-	  DokanCleanupProcessAccessToken(
-		  IrpEntry->ContextInfo.Security.UserModeAccessToken,
-		  IrpEntry->ContextInfo.Security.Process);
-  }
-
+  //SeReleaseSubjectContext(&IrpEntry->ContextInfo.Security.SecuritySubjectContext);
+  
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
@@ -399,96 +379,4 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteSetSecurity\n");
-}
-
-NTSTATUS DokanCreateProcessAccessToken(
-	__out HANDLE *AccessToken,
-	__out PEPROCESS *Process) {
-
-	SECURITY_SUBJECT_CONTEXT securitySubjectContext;
-	SECURITY_QUALITY_OF_SERVICE securityQualityOfService;
-	SECURITY_CLIENT_CONTEXT securityClientContext;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	if(!AccessToken || !Process) {
-
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	// Duplicate the subject context access token into an impersonation token
-	securityQualityOfService.Length = sizeof(securityQualityOfService);
-	securityQualityOfService.ImpersonationLevel = SecurityIdentification;
-	securityQualityOfService.ContextTrackingMode = SECURITY_STATIC_TRACKING;
-	securityQualityOfService.EffectiveOnly = FALSE;
-
-	SeCaptureSubjectContext(&securitySubjectContext);
-
-	SeLockSubjectContext(&securitySubjectContext);
-
-	status = SeCreateClientSecurityFromSubjectContext(
-		&securitySubjectContext,
-		&securityQualityOfService,
-		FALSE,
-		&securityClientContext);
-
-	SeUnlockSubjectContext(&securitySubjectContext);
-
-	SeReleaseSubjectContext(&securitySubjectContext);
-
-	if(!NT_SUCCESS(status)) {
-
-		DDbgPrint("    Failed to create client security from subject context.\n");
-		
-		return status;
-	}
-
-	// Get a user-mode handle to the impersonation token
-	status = ObOpenObjectByPointer(securityClientContext.ClientToken,
-		0, 0, TOKEN_QUERY, *SeTokenObjectType, UserMode, AccessToken);
-
-	SeDeleteClientSecurity(&securityClientContext);
-
-	if(!NT_SUCCESS(status)) {
-
-		DDbgPrint("    Failed to create user mode impersonation token.\n");
-		
-		return status;
-	}
-
-	// Get a pointer to the current process so that we can close the impersonation token later
-	*Process = PsGetCurrentProcess();
-
-	ObReferenceObject(*Process);
-
-	return STATUS_SUCCESS;
-}
-
-VOID DokanCleanupProcessAccessToken(
-	__in HANDLE AccessToken,
-	__in PEPROCESS Process) {
-
-	DDbgPrint("    Closing access token\n");
-
-	KAPC_STATE apcState;
-	NTSTATUS status = STATUS_SUCCESS;
-	BOOLEAN attach = Process && Process != PsGetCurrentProcess();
-
-	if(attach) {
-
-		KeStackAttachProcess(Process, &apcState);
-	}
-
-	status = ObCloseHandle(AccessToken, UserMode);
-
-	if(attach) {
-
-		KeUnstackDetachProcess(&apcState);
-	}
-
-	ObDereferenceObject(Process);
-
-	if(!NT_SUCCESS(status)) {
-
-		DDbgPrint("    Failed to close user mode access token.\n");
-	}
 }

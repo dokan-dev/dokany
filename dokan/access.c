@@ -22,9 +22,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
+HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
   
-  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)FileInfo;
+  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)FileInfo->DokanContext;
   BOOL status;
   ULONG returnedLength;
   PEVENT_INFORMATION eventInfo;
@@ -32,15 +32,20 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
   ULONG eventInfoSize;
   WCHAR rawDeviceName[MAX_PATH];
 
-  if (ioEvent->DokanOpenInfo == NULL) {
+  if (ioEvent->DokanOpenInfo == NULL
+	  || ioEvent->DokanInstance == NULL
+	  || ioEvent->DokanFileInfo.DokanContext != (PVOID)ioEvent) {
+
+    SetLastError(ERROR_INVALID_PARAMETER);
+
     return INVALID_HANDLE_VALUE;
   }
 
-  if (ioEvent->DokanInstance == NULL) {
-    return INVALID_HANDLE_VALUE;
-  }
+  if (ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_CREATE
+	  && ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_SET_SECURITY) {
 
-  if (ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_CREATE) {
+	SetLastError(ERROR_INVALID_PARAMETER);
+
     return INVALID_HANDLE_VALUE;
   }
 
@@ -48,6 +53,9 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
   eventInfo = (PEVENT_INFORMATION)DokanMalloc(eventInfoSize);
 
   if (eventInfo == NULL) {
+
+	SetLastError(ERROR_OUTOFMEMORY);
+
     return INVALID_HANDLE_VALUE;
   }
 
@@ -61,8 +69,11 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT FileInfo) {
       eventInfoSize, &returnedLength);
 
   if (status) {
+
     handle = eventInfo->Operation.AccessToken.Handle;
-  } else {
+  }
+  else {
+
     DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
   }
 

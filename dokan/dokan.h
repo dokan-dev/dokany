@@ -162,7 +162,6 @@ typedef struct _DOKAN_CREATE_FILE_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
 	LPCWSTR							FileName;
 	LPCWSTR							OriginalFileName;
-	HANDLE							AccessToken;
 	DOKAN_IO_SECURITY_CONTEXT		SecurityContext; // https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
 
 	ACCESS_MASK						DesiredAccess;
@@ -273,8 +272,8 @@ typedef struct _DOKAN_GET_VOLUME_ATTRIBUTES_EVENT {
 typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
 	LPWSTR							FileName;
-	PSECURITY_INFORMATION			SecurityInformation; // A pointer to SECURITY_INFORMATION value being requested
 	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
+	SECURITY_INFORMATION			SecurityInformation; // The types of security information being requested
 	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
 	ULONG							LengthNeeded;
 } DOKAN_GET_FILE_SECURITY_EVENT, *PDOKAN_GET_FILE_SECURITY_EVENT;
@@ -282,9 +281,8 @@ typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
 typedef struct _DOKAN_SET_FILE_SECURITY_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
 	LPWSTR							FileName;
-	HANDLE							AccessToken;
-	PSECURITY_INFORMATION			SecurityInformation;
 	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
+	SECURITY_INFORMATION			SecurityInformation;
 	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
 } DOKAN_SET_FILE_SECURITY_EVENT, *PDOKAN_SET_FILE_SECURITY_EVENT;
 
@@ -458,14 +456,15 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, // timeout in millisecond
 // Get the handle to Access Token
 // This method needs be called in CreateFile callback.
 // The caller must call CloseHandle for the returned handle.
-HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_CREATE_FILE_EVENT DokanFileInfo);
+HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead);
 
 VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
-    ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
-    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+	DOKAN_CREATE_FILE_EVENT *EventInfo,
+    DWORD *outFileAttributesAndFlags,
+	DWORD *outCreationDisposition);
 
 // Translate Win32 Error code to the NtStatus code's corresponding
 NTSTATUS DOKANAPI DokanNtStatusFromWin32(DWORD Error);

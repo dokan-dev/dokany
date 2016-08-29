@@ -373,10 +373,7 @@ typedef struct _DokanContextControlBlock {
 #endif
 
 typedef union _IRP_ENTRY_CONTEXT {
-	struct {
-		PEPROCESS Process;
-		HANDLE UserModeAccessToken;
-	} Security;
+	SIZE_T Reserved; // remove this if future fields are added here
 } IRP_ENTRY_CONTEXT, *PIRP_ENTRY_CONTEXT;
 
 // IRP list which has pending status
@@ -587,12 +584,6 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
                               __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
-
-NTSTATUS DokanCreateProcessAccessToken(__out HANDLE *AccessToken,
-                                       __out PEPROCESS *Process);
-
-VOID DokanCleanupProcessAccessToken(__in HANDLE AccessToken,
-	                                __in PEPROCESS Process);
 
 BOOLEAN
 DokanNoOpAcquire(__in PVOID Fcb, __in BOOLEAN Wait);

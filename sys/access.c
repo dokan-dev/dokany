@@ -23,19 +23,21 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 NTSTATUS
 DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+
   KIRQL oldIrql = 0;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
-  PIRP_ENTRY irpEntry;
+  PIRP_ENTRY irpEntry = NULL;
   PDokanVCB vcb;
   PEVENT_INFORMATION eventInfo;
-  PACCESS_TOKEN accessToken;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  HANDLE handle;
   PIO_STACK_LOCATION irpSp = NULL;
   BOOLEAN hasLock = FALSE;
   ULONG outBufferLen;
   ULONG inBufferLen;
-  PACCESS_STATE accessState = NULL;
+  PSECURITY_SUBJECT_CONTEXT subjectContext = NULL;
+  SECURITY_SUBJECT_CONTEXT tmpSubjectContext;
+  SECURITY_QUALITY_OF_SERVICE securityQualityOfService;
+  SECURITY_CLIENT_CONTEXT securityClientContext;
 
   DDbgPrint("==> DokanGetAccessToken\n");
   vcb = DeviceObject->DeviceExtension;
@@ -57,16 +59,21 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
+
     outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
     inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+
     if (outBufferLen != sizeof(EVENT_INFORMATION) ||
         inBufferLen != sizeof(EVENT_INFORMATION)) {
+
       DDbgPrint("  wrong input or output buffer length\n");
       status = STATUS_INVALID_PARAMETER;
+
       __leave;
     }
 
     ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+
     KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
     hasLock = TRUE;
 
@@ -81,40 +88,86 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
 
       if (irpEntry->SerialNumber != eventInfo->SerialNumber) {
+
         continue;
       }
 
-      // this irp must be IRP_MJ_CREATE
-      if (irpEntry->IrpSp->Parameters.Create.SecurityContext) {
-        accessState =
-            irpEntry->IrpSp->Parameters.Create.SecurityContext->AccessState;
-      }
+      // this irp must be IRP_MJ_CREATE or IRP_MJ_SET_SECURITY
+	  
+	  if(irpEntry->IrpSp->MajorFunction == IRP_MJ_CREATE) {
+
+		  if(irpEntry->IrpSp->Parameters.Create.SecurityContext) {
+
+			  subjectContext = &irpEntry->IrpSp->Parameters.Create.SecurityContext->AccessState->SubjectSecurityContext;
+		  }
+	  }
+	  else if(irpEntry->IrpSp->MajorFunction == IRP_MJ_SET_SECURITY) {
+
+		  //subjectContext = &irpEntry->ContextInfo.Security.SecuritySubjectContext;
+		  //SeCaptureSubjectContext(&tmpSubjectContext);
+		  subjectContext = &tmpSubjectContext;
+	  }
+      
       break;
     }
+
     KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
     hasLock = FALSE;
 
-    if (accessState == NULL) {
+    if (!irpEntry || !subjectContext) {
+
       DDbgPrint("  can't find pending Irp: %d\n", eventInfo->SerialNumber);
       __leave;
     }
 
-    accessToken =
-        SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
-    if (accessToken == NULL) {
-      DDbgPrint("  accessToken == NULL\n");
-      __leave;
-    }
-    // NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
+	if(irpEntry && irpEntry->IrpSp->MajorFunction != IRP_MJ_CREATE) {
+
+		SeCaptureSubjectContext(subjectContext);
+	}
+
+	securityQualityOfService.Length = sizeof(securityQualityOfService);
+	securityQualityOfService.ImpersonationLevel = SecurityIdentification;
+	securityQualityOfService.ContextTrackingMode = SECURITY_STATIC_TRACKING;
+	securityQualityOfService.EffectiveOnly = FALSE;
+
+	SeLockSubjectContext(subjectContext);
+
+	status = SeCreateClientSecurityFromSubjectContext(subjectContext, &securityQualityOfService, FALSE, &securityClientContext);
+
+	SeUnlockSubjectContext(subjectContext);
+
+	if(irpEntry && irpEntry->IrpSp->MajorFunction != IRP_MJ_CREATE) {
+
+		SeReleaseSubjectContext(subjectContext);
+	}
+
+	if(!NT_SUCCESS(status)) {
+
+		DDbgPrint("  SeCreateClientSecurityFromSubjectContext failed: 0x%x\n", status);
+		__leave;
+	}
+
+	ASSERT(TokenImpersonation == SeTokenType(securityClientContext.ClientToken));
+
+    // NOTE: Accessing *SeTokenObjectType while acquiring a spin lock causes
     // BSOD on Windows XP.
-    status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
-                                   *SeTokenObjectType, KernelMode, &handle);
+    status = ObOpenObjectByPointer(
+		securityClientContext.ClientToken,
+		0,
+		NULL,
+		TOKEN_READ | TOKEN_DUPLICATE,
+		*SeTokenObjectType,
+		UserMode,
+		&eventInfo->Operation.AccessToken.Handle);
+
+	SeDeleteClientSecurity(&securityClientContext);
+
     if (!NT_SUCCESS(status)) {
+
       DDbgPrint("  ObOpenObjectByPointer failed: 0x%x\n", status);
       __leave;
     }
 
-    eventInfo->Operation.AccessToken.Handle = handle;
     Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
     status = STATUS_SUCCESS;
 

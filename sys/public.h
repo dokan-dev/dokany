@@ -164,7 +164,6 @@ typedef struct _DOKAN_IO_SECURITY_CONTEXT {
 } DOKAN_IO_SECURITY_CONTEXT, *PDOKAN_IO_SECURITY_CONTEXT;
 
 typedef struct _CREATE_CONTEXT {
-  HANDLE AccessToken;
   DOKAN_IO_SECURITY_CONTEXT_INTERMEDIATE SecurityContext;
   ULONG FileAttributes;
   ULONG CreateOptions;
@@ -262,7 +261,6 @@ typedef struct _SECURITY_CONTEXT {
 } SECURITY_CONTEXT, *PSECURITY_CONTEXT;
 
 typedef struct _SET_SECURITY_CONTEXT {
-  HANDLE AccessToken;
   SECURITY_INFORMATION SecurityInformation;
   ULONG BufferLength;
   ULONG BufferOffset;

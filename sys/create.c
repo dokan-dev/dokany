@@ -465,18 +465,13 @@ Return Value:
       PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE));
   PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateUnicodeStr = NULL;
   PUNICODE_STRING relatedFileName = NULL;
-  PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
   BOOLEAN OpenRequiringOplock = FALSE;
   BOOLEAN UnwindShareAccess = FALSE;
   BOOLEAN BackoutOplock = FALSE;
   BOOLEAN EventContextConsumed = FALSE;
   DWORD disposition = 0;
-  IRP_ENTRY_CONTEXT irpContext;
 
   PAGED_CODE();
-
-  // must be done up here outside of the __try block
-  RtlZeroMemory(&irpContext, sizeof(irpContext));
 
   __try {
     DDbgPrint("==> DokanCreate\n");
@@ -733,30 +728,14 @@ Return Value:
 
     if (irpSp->Parameters.Create.SecurityContext->AccessState) {
 
-      if (irpSp->Parameters.Create.SecurityContext->AccessState
-              ->SecurityDescriptor) {
-        // (CreateOptions & FILE_DIRECTORY_FILE) == FILE_DIRECTORY_FILE
-        if (SeAssignSecurity(
-                NULL, // we don't keep track of parents, this will have to be
-                      // handled in user mode
-                irpSp->Parameters.Create.SecurityContext->AccessState
-                    ->SecurityDescriptor,
-                &newFileSecurityDescriptor,
-                (irpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE) ||
-                    (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY),
-                &irpSp->Parameters.Create.SecurityContext->AccessState
-                     ->SubjectSecurityContext,
-                IoGetFileObjectGenericMapping(), PagedPool) == STATUS_SUCCESS) {
+      if (irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor) {
 
           securityDescriptorSize = PointerAlignSize(
-              RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
-        } else {
-          newFileSecurityDescriptor = NULL;
-        }
+			  RtlLengthSecurityDescriptor(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor));
       }
 
-      if (irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName
-              .Length > 0) {
+      if (irpSp->Parameters.Create.SecurityContext->AccessState->ObjectName.Length > 0) {
+
         // add 1 WCHAR for NULL
         alignedObjectNameSize =
             PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
@@ -764,12 +743,13 @@ Return Value:
                                  ->AccessState->ObjectName.Length +
                              sizeof(WCHAR));
       }
+
       // else alignedObjectNameSize =
       // PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) SEE
       // DECLARATION
 
-      if (irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName
-              .Length > 0) {
+      if (irpSp->Parameters.Create.SecurityContext->AccessState->ObjectTypeName.Length > 0) {
+
         // add 1 WCHAR for NULL
         alignedObjectTypeNameSize =
             PointerAlignSize(sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) +
@@ -874,13 +854,12 @@ Return Value:
                  alignedObjectTypeNameSize) -
                 (char *)&eventContext->Operation.Create);
 
-    if (newFileSecurityDescriptor != NULL) {
+    if (securityDescriptorSize > 0) {
+
       // Copy security descriptor
       RtlCopyMemory((char *)eventContext + alignedEventContextSize,
-                    newFileSecurityDescriptor,
-                    RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
-      SeDeassignSecurity(&newFileSecurityDescriptor);
-      newFileSecurityDescriptor = NULL;
+		  irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor,
+		  RtlLengthSecurityDescriptor(irpSp->Parameters.Create.SecurityContext->AccessState->SecurityDescriptor));
     }
 
     if (irpSp->Parameters.Create.SecurityContext->AccessState) {
@@ -945,17 +924,6 @@ Return Value:
     *(PWCHAR)((char *)&eventContext->Operation.Create +
               eventContext->Operation.Create.FileNameOffset +
               (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
-
-	status = DokanCreateProcessAccessToken(
-		&irpContext.Security.UserModeAccessToken,
-		&irpContext.Security.Process);
-
-	if(!NT_SUCCESS(status)) {
-
-		__leave;
-	}
-
-	eventContext->Operation.Create.AccessToken = irpContext.Security.UserModeAccessToken;
 
 //
 // Oplock
@@ -1183,7 +1151,7 @@ Return Value:
     }
 
     // register this IRP to waiting IPR list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpContext);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
     EventContextConsumed = TRUE;
 
@@ -1220,13 +1188,6 @@ Return Value:
 #endif
 
     if (!NT_SUCCESS(status)) {
-
-      if(irpContext.Security.UserModeAccessToken) {
-
-        DokanCleanupProcessAccessToken(
-			irpContext.Security.UserModeAccessToken,
-			irpContext.Security.Process);
-	  }
 
       // DokanRegisterPendingIrp consumes event context
 
@@ -1276,13 +1237,6 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   irpSp = IrpEntry->IrpSp;
 
   DDbgPrint("==> DokanCompleteCreate\n");
-
-  if(IrpEntry->ContextInfo.Security.UserModeAccessToken) {
-
-	  DokanCleanupProcessAccessToken(
-		  IrpEntry->ContextInfo.Security.UserModeAccessToken,
-		  IrpEntry->ContextInfo.Security.Process);
-  }
 
   ccb = IrpEntry->FileObject->FsContext2;
   ASSERT(ccb != NULL);

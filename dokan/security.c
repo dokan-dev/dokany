@@ -44,8 +44,8 @@ void BeginDispatchQuerySecurity(DOKAN_IO_EVENT *EventInfo) {
 
 		getFileSecurity->DokanFileInfo = &EventInfo->DokanFileInfo;
 		getFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.Security.FileName;
-		getFileSecurity->SecurityInformation = &EventInfo->KernelInfo.EventContext.Operation.Security.SecurityInformation;
 		getFileSecurity->SecurityDescriptor = (PSECURITY_DESCRIPTOR)&EventInfo->EventResult->Buffer[0];
+		getFileSecurity->SecurityInformation = EventInfo->KernelInfo.EventContext.Operation.Security.SecurityInformation;
 		getFileSecurity->SecurityDescriptorSize = IoEventResultBufferSize(EventInfo);
 
 		assert(getFileSecurity->LengthNeeded == 0);
@@ -112,9 +112,8 @@ void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo) {
 
 		setFileSecurity->DokanFileInfo = &EventInfo->DokanFileInfo;
 		setFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.FileName;
-		setFileSecurity->AccessToken = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.AccessToken;
-		setFileSecurity->SecurityInformation = &EventInfo->KernelInfo.EventContext.Operation.SetSecurity.SecurityInformation;
 		setFileSecurity->SecurityDescriptor = (PCHAR)&EventInfo->KernelInfo.EventContext + EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferOffset;
+		setFileSecurity->SecurityInformation = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.SecurityInformation;
 		setFileSecurity->SecurityDescriptorSize = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferLength;
 
 		status = EventInfo->DokanInstance->DokanOperations->SetFileSecurityW(setFileSecurity);
