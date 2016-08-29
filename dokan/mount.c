@@ -24,27 +24,55 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <Shlobj.h>
 #include <stdio.h>
 
+/**
+ * \struct REPARSE_DATA_BUFFER
+ * \brief Contains reparse point data for a Microsoft reparse point.
+ *
+ * Used to create a dokan mount point in CreateMountPoint function.
+ */
 typedef struct _REPARSE_DATA_BUFFER {
+  /**
+  * Reparse point tag. Must be a Microsoft reparse point tag.
+  */
   ULONG ReparseTag;
+  /**
+  * Size, in bytes, of the reparse data in the DataBuffer member.
+  */
   USHORT ReparseDataLength;
+  /**
+  * Length, in bytes, of the unparsed portion of the file name pointed
+  * to by the FileName member of the associated file object.
+  */
   USHORT Reserved;
   union {
     struct {
+      /** Offset, in bytes, of the substitute name string in the PathBuffer array. */
       USHORT SubstituteNameOffset;
+      /** Length, in bytes, of the substitute name string. */
       USHORT SubstituteNameLength;
+      /** Offset, in bytes, of the print name string in the PathBuffer array. */
       USHORT PrintNameOffset;
+      /** Length, in bytes, of the print name string. */
       USHORT PrintNameLength;
+      /** Used to indicate if the given symbolic link is an absolute or relative symbolic link. */
       ULONG Flags;
+      /** First character of the path string. This is followed in memory by the remainder of the string. */
       WCHAR PathBuffer[1];
     } SymbolicLinkReparseBuffer;
     struct {
+      /** Offset, in bytes, of the substitute name string in the PathBuffer array. */
       USHORT SubstituteNameOffset;
+      /** Length, in bytes, of the substitute name string. */
       USHORT SubstituteNameLength;
+      /** Offset, in bytes, of the print name string in the PathBuffer array. */
       USHORT PrintNameOffset;
+      /** Length, in bytes, of the print name string. */
       USHORT PrintNameLength;
+      /** First character of the path string. */
       WCHAR PathBuffer[1];
     } MountPointReparseBuffer;
     struct {
+      /** Microsoft-defined data for the reparse point. */
       UCHAR DataBuffer[1];
     } GenericReparseBuffer;
   } DUMMYUNIONNAME;

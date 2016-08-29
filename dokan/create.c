@@ -204,10 +204,18 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
   }
 }
 
+BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
+
+	return status == STATUS_SUCCESS
+		|| (status == STATUS_OBJECT_NAME_COLLISION
+			&& (disposition == FILE_OPEN_IF
+				|| disposition == FILE_SUPERSEDE
+				|| disposition == FILE_OVERWRITE_IF));
+}
+
 void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
 	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
-	DWORD lastError = GetLastError();
 	DOKAN_CLEANUP_EVENT cleanupEvent;
 	DOKAN_CLOSE_FILE_EVENT closeFileEvent;
 
@@ -230,8 +238,8 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 		ioEvent->EventInfo.ZwCreateFile.OriginalFileName = NULL;
 	}
 
-	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, lastError = %d, file handle = 0x%p, eventID = %04d\n",
-		ResultStatus, lastError, ioEvent->DokanOpenInfo, ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1);
+	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, file handle = 0x%p, eventID = %04d\n",
+		ResultStatus, ioEvent->DokanOpenInfo, ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1);
 
 	// FILE_CREATED
 	// FILE_DOES_NOT_EXIST
@@ -240,7 +248,7 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 	// FILE_OVERWRITTEN
 	// FILE_SUPERSEDED
 
-	if(ResultStatus != STATUS_SUCCESS) {
+	if(!CreateSuccesStatusCheck(ResultStatus, EventInfo->CreateDisposition)) {
 
 		if(ioEvent->KernelInfo.EventContext.Flags & SL_OPEN_TARGET_DIRECTORY) {
 
@@ -297,13 +305,14 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 
 			ioEvent->EventResult->Operation.Create.Information = FILE_CREATED;
 
-			if(lastError == ERROR_ALREADY_EXISTS) {
+			if(ResultStatus == STATUS_OBJECT_NAME_COLLISION) {
 
 				if(EventInfo->CreateDisposition == FILE_OPEN_IF) {
 
 					ioEvent->EventResult->Operation.Create.Information = FILE_OPENED;
 				}
-				else if(EventInfo->CreateDisposition == FILE_OVERWRITE_IF) {
+				else if(EventInfo->CreateDisposition == FILE_OVERWRITE_IF
+					|| EventInfo->CreateDisposition == FILE_SUPERSEDE) {
 
 					ioEvent->EventResult->Operation.Create.Information = FILE_OVERWRITTEN;
 				}

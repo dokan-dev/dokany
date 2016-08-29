@@ -824,9 +824,9 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
 	  // It is a create file request
 
-	  if(fileAttr != INVALID_FILE_ATTRIBUTES &&
-		  (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-		  EventInfo->CreateDisposition == FILE_CREATE) {
+	  if(fileAttr != INVALID_FILE_ATTRIBUTES
+		  && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)
+		  && EventInfo->CreateDisposition == FILE_CREATE) {
 
 		  status = STATUS_OBJECT_NAME_COLLISION; // File already exist because
 											   // GetFileAttributes found it
@@ -869,13 +869,17 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 				  // save the file handle in Context
 				  EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
 
-				  if(creationDisposition == OPEN_ALWAYS ||
-					  creationDisposition == CREATE_ALWAYS) {
+				  if(creationDisposition == OPEN_ALWAYS
+					  || creationDisposition == CREATE_ALWAYS) {
 
-					  DbgPrint(L"\tOpen an already existing file\n");
-					  SetLastError(ERROR_ALREADY_EXISTS); // Inform the driver that we have
-														  // open a already existing file
-					  status = STATUS_SUCCESS;
+					  if(error == ERROR_ALREADY_EXISTS) {
+						  
+						  DbgPrint(L"\tOpen an already existing file\n");
+
+						  // Open succeed but we need to inform the driver
+						  // that the file open and not created by returning STATUS_OBJECT_NAME_COLLISION
+						  status = STATUS_OBJECT_NAME_COLLISION;
+					  }
 				  }
 			  }
 		  }
@@ -1747,54 +1751,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVE
 	MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
 	MirrorCheckFlag(EventInfo->SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
 
-	/*DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
-
-	HANDLE handle = CreateFile(
-		filePath,
-		READ_CONTROL | (((EventInfo->SecurityInformation & SACL_SECURITY_INFORMATION) ||
-		(EventInfo->SecurityInformation & BACKUP_SECURITY_INFORMATION))
-			? ACCESS_SYSTEM_SECURITY
-			: 0),
-		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
-		NULL, // security attribute
-		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS, // |FILE_FLAG_NO_BUFFERING,
-		NULL);
-
-	if(!handle || handle == INVALID_HANDLE_VALUE) {
-
-		DbgPrint(L"\tinvalid handle\n\n");
-
-		int error = GetLastError();
-
-		return DokanNtStatusFromWin32(error);
-	}
-
-	if(!GetUserObjectSecurity(handle, EventInfo->SecurityInformation, EventInfo->SecurityDescriptor,
-		EventInfo->SecurityDescriptorSize, &EventInfo->LengthNeeded)) {
-
-		int error = GetLastError();
-
-		if(error == ERROR_INSUFFICIENT_BUFFER) {
-				
-			DbgPrint(L"  GetUserObjectSecurity error: ERROR_INSUFFICIENT_BUFFER\n");
-				
-			CloseHandle(handle);
-				
-			return STATUS_BUFFER_OVERFLOW;
-		}
-		else {
-				
-			DbgPrint(L"  GetUserObjectSecurity error: %d\n", error);
-				
-			CloseHandle(handle);
-				
-			return DokanNtStatusFromWin32(error);
-		}
-	}
-
-	CloseHandle(handle);*/
-
 	PSECURITY_DESCRIPTOR tempSecurityDesc = NULL;
 	int error = 0;
 
@@ -2244,6 +2200,31 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   }
 }
 
+void ShowUsage() {
+  // clang-format off
+  fprintf(stderr, "mirror.exe\n"
+    "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+    "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
+    "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
+    "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
+    "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
+    "  /n (use network drive)\t\t\t Show device as network device.\n"
+    "  /m (use removable drive)\t\t\t Show device as removable media.\n"
+    "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
+    "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
+    "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
+    "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
+    "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
+    "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
+    "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+    "Examples:\n"
+    "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
+    "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
+    "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
+    "Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
+  // clang-format on
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   int status;
@@ -2256,21 +2237,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 #endif
 
   if (argc < 3) {
-    fprintf(stderr, "mirror.exe\n"
-                    "  /r RootDirectory (ex. /r c:\\test)\n"
-                    "  /l DriveLetter (ex. /l m)\n"
-                    "  /t ThreadCount (ex. /t 5)\n"
-                    "  /d (enable debug output)\n"
-                    "  /s (use stderr for output)\n"
-                    "  /n (use network drive)\n"
-                    "  /m (use removable drive)\n"
-                    "  /w (write-protect drive)\n"
-                    "  /o (use mount manager)\n"
-                    "  /c (mount for current session only)\n"
-                    "  /u UNC provider name\n"
-                    "  /a Allocation unit size (ex. /a 512)\n"
-                    "  /k Sector size (ex. /k 512)\n"
-                    "  /i (Timeout in Milliseconds ex. /i 30000)\n");
+    ShowUsage();
     
     return EXIT_FAILURE;
   }

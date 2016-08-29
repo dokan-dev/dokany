@@ -65,22 +65,44 @@ typedef struct _DOKAN_INSTANCE_THREADINFO {
 	TP_CALLBACK_ENVIRON CallbackEnvironment;
 } DOKAN_INSTANCE_THREADINFO;
 
+/**
+ * \struct DOKAN_INSTANCE
+ * \brief Dokan mount instance informations
+ *
+ * This struct is build from the information provided by the user at DokanMain call.
+ * \see DokanMain
+ * \see DOKAN_OPTIONS
+ * \see DOKAN_OPERATIONS
+ */
 typedef struct _DOKAN_INSTANCE {
-  // to ensure that unmount dispatch is called at once
+  /** to ensure that unmount dispatch is called at once */
   CRITICAL_SECTION		CriticalSection;
 
-  // store CurrentDeviceName
-  // (when there are many mounts, each mount uses different DeviceName)
+  /**
+  * Current DeviceName.
+  * When there are many mounts, each mount uses different DeviceName.
+  */
   WCHAR							DeviceName[64];
+
+  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
   WCHAR							MountPoint[MAX_PATH];
+
+  /** UNC name used for network volume */
   WCHAR							UNCName[64];
 
+  /** Device number */
   ULONG							DeviceNumber;
+
+  /** Mount ID */
   ULONG							MountId;
 
+  /** DOKAN_OPTIONS linked to the mount */
   PDOKAN_OPTIONS				DokanOptions;
+
+  /** DOKAN_OPERATIONS linked to the mount */
   PDOKAN_OPERATIONS				DokanOperations;
 
+  /** Current list entry informations */
   LIST_ENTRY					ListEntry;
   
   HANDLE						GlobalDevice;
@@ -90,6 +112,12 @@ typedef struct _DOKAN_INSTANCE {
 
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
+/**
+ * \struct DOKAN_OPEN_INFO
+ * \brief Dokan open file informations
+ *
+ * This is created in CreateFile and will be freed in CloseFile.
+ */
 typedef struct _DOKAN_OPEN_INFO {
   CRITICAL_SECTION		CriticalSection;
   PDOKAN_INSTANCE		DokanInstance;

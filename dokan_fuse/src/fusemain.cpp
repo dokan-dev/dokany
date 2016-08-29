@@ -1096,7 +1096,7 @@ int impl_file_lock::unlock_file(impl_file_handle *file, long long start,
 ////// File handle
 ///////////////////////////////////////////////////////////////////////////////////////
 impl_file_handle::impl_file_handle(bool is_dir, DWORD shared_mode)
-    : is_dir_(is_dir), fh_(-1), next_file(NULL), shared_mode_(shared_mode) {}
+    : is_dir_(is_dir), fh_(-1), next_file(NULL), file_lock(NULL), shared_mode_(shared_mode) {}
 
 impl_file_handle::~impl_file_handle() { file_lock->remove_file(this); }
 
