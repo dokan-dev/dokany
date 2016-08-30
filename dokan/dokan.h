@@ -105,11 +105,8 @@ extern "C" {
 /** Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it */
 #define DOKAN_OPTION_FILELOCK_USER_MODE		(1 << 8)	// FileLock in User Mode
 
-/** Enable asynchronous IO */
-#define DOKAN_OPTION_ASYNC_IO				(1 << 9)
-
-/** Dokan uses a single thread. If DOKAN_OPTION_ASYNC_IO is specified the thread waits until the async job is over before starting another. */
-#define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 10)
+/** Dokan uses a single thread. */
+#define DOKAN_OPTION_FORCE_SINGLE_THREADED	(1 << 9)
 
 /** @} */
 

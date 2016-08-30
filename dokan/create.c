@@ -230,16 +230,11 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 		ResultStatus = STATUS_INTERNAL_ERROR;
 	}
 
-	ioEvent->EventResult->Status = ResultStatus;
-
 	if(ioEvent->EventInfo.ZwCreateFile.OriginalFileName) {
 
 		DokanFree((void*)ioEvent->EventInfo.ZwCreateFile.OriginalFileName);
 		ioEvent->EventInfo.ZwCreateFile.OriginalFileName = NULL;
 	}
-
-	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, file handle = 0x%p, eventID = %04d\n",
-		ResultStatus, ioEvent->DokanOpenInfo, ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1);
 
 	// FILE_CREATED
 	// FILE_DOES_NOT_EXIST
@@ -281,7 +276,6 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 		}
 
 		ioEvent->EventResult->Operation.Create.Information = FILE_DOES_NOT_EXIST;
-		ioEvent->EventResult->Status = ResultStatus;
 
 		if(ResultStatus == STATUS_OBJECT_NAME_COLLISION) {
 
@@ -301,7 +295,8 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 
 		if(EventInfo->CreateDisposition == FILE_CREATE
 			|| EventInfo->CreateDisposition == FILE_OPEN_IF
-			|| EventInfo->CreateDisposition == FILE_OVERWRITE_IF) {
+			|| EventInfo->CreateDisposition == FILE_OVERWRITE_IF
+			|| EventInfo->CreateDisposition == FILE_SUPERSEDE) {
 
 			ioEvent->EventResult->Operation.Create.Information = FILE_CREATED;
 
@@ -311,10 +306,13 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 
 					ioEvent->EventResult->Operation.Create.Information = FILE_OPENED;
 				}
-				else if(EventInfo->CreateDisposition == FILE_OVERWRITE_IF
-					|| EventInfo->CreateDisposition == FILE_SUPERSEDE) {
+				else if(EventInfo->CreateDisposition == FILE_OVERWRITE_IF) {
 
 					ioEvent->EventResult->Operation.Create.Information = FILE_OVERWRITTEN;
+				}
+				else if(EventInfo->CreateDisposition == FILE_SUPERSEDE) {
+
+					ioEvent->EventResult->Operation.Create.Information = FILE_SUPERSEDED;
 				}
 			}
 		}
@@ -323,7 +321,17 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 
 			ioEvent->EventResult->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
 		}
+
+		ResultStatus = STATUS_SUCCESS;
 	}
+
+	ioEvent->EventResult->Status = ResultStatus;
+
+	DbgPrint("Dokan Information: DokanEndDispatchCreate() status = %lx, file handle = 0x%p, eventID = %04d, result = 0x%x\n",
+		ResultStatus,
+		ioEvent->DokanOpenInfo,
+		ioEvent->DokanOpenInfo ? ioEvent->DokanOpenInfo->EventId : -1,
+		ioEvent->EventResult->Operation.Create.Information);
 
 	SendIoEventResult(ioEvent);
 }

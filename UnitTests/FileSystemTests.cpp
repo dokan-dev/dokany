@@ -1433,10 +1433,10 @@ namespace UnitTests
 		}
 
 		// This is test 08 in winfstest
-		TEST_METHOD(TestSharedFileHandles)
+		TEST_METHOD(TestFindFilesDeletePending)
 		{
 			std::wstring testDir = CreateTestDirectory();
-			std::wstring testFile = CombinePath(testDir, L"TestSharedFilehandles.txt");
+			std::wstring testFile = CombinePath(testDir, L"TestSharedFileHandles.txt");
 			std::wstring errMsg;
 
 			HANDLE origHandle = CreateFileW(
@@ -1779,6 +1779,885 @@ namespace UnitTests
 				{
 					Assert::Fail(L"Failed to delete FSX log file.", LINE_INFO());
 				}
+			}
+
+			DeleteTestDirectory();
+		}
+
+		// This is test 00 in winfstest
+		TEST_METHOD(TestCreateFile)
+		{
+			std::wstring testDir = CreateTestDirectory();
+			std::wstring testFile = CombinePath(testDir, L"TestCreateFile.txt");
+			std::wstring errMsg;
+
+			//////////////////// Set 1 ////////////////////
+
+			HANDLE handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(IsValidHandle(handle) || GetLastError() != ERROR_FILE_EXISTS)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"File \'%s\' was expected to fail opening with ERROR_FILE_EXISTS.", testFile.c_str()));
+
+				if(IsValidHandle(handle))
+				{
+					CloseHandle(handle);
+				}
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(DeleteFileW(testFile.c_str()) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"DeleteFileW for file \'%s\' was expecting ERROR_FILE_NOT_FOUND.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 2 ////////////////////
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			DWORD lastError = GetLastError();
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(lastError != ERROR_ALREADY_EXISTS)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_ALREADY_EXISTS for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 3 ////////////////////
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				OPEN_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				OPEN_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				OPEN_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			lastError = GetLastError();
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(lastError != ERROR_ALREADY_EXISTS)
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_ALREADY_EXISTS for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 4 ////////////////////
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(IsValidHandle(handle) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_FILE_NOT_FOUND for file \'%s\'.", testFile.c_str()));
+
+				if(IsValidHandle(handle))
+				{
+					CloseHandle(handle);
+				}
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 5 ////////////////////
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				TRUNCATE_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(IsValidHandle(handle) || GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_FILE_NOT_FOUND for file \'%s\'.", testFile.c_str()));
+
+				if(IsValidHandle(handle))
+				{
+					CloseHandle(handle);
+				}
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			handle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				TRUNCATE_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(handle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!CloseHandle(handle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed DeleteFileW for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 6 ////////////////////
+
+			std::wstring missing = CombinePath(testDir, L"TestCreateFile\\Bar");
+			
+			handle = CreateFileW(
+				missing.c_str(),
+				GENERIC_WRITE,
+				0,
+				nullptr,
+				CREATE_NEW,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			lastError = GetLastError();
+
+			if(IsValidHandle(handle) || lastError != ERROR_PATH_NOT_FOUND)
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Expected ERROR_PATH_NOT_FOUND for file \'%s\' instead got %d.",
+					missing.c_str(), lastError));
+
+				if(IsValidHandle(handle))
+				{
+					CloseHandle(handle);
+				}
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			DeleteTestDirectory();
+		}
+
+		// This is test 09 in winfstest
+		TEST_METHOD(TestCreateFileWithSharing)
+		{
+			std::wstring testDir = CreateTestDirectory();
+			std::wstring testFile = CombinePath(testDir, L"TestCreateFileWithSharing");
+			std::wstring errMsg;
+			DWORD lastError = 0;
+
+			//////////////////// Set 1 ////////////////////
+
+			HANDLE origHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_WRITE,
+				FILE_SHARE_READ,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(origHandle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			{
+				HANDLE sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_READ,
+					FILE_SHARE_WRITE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				if(!IsValidHandle(origHandle))
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				if(!CloseHandle(sharedHandle))
+				{
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_DELETE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_WRITE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 2 ////////////////////
+
+			origHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				FILE_SHARE_WRITE,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(origHandle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			{
+				HANDLE sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_WRITE,
+					FILE_SHARE_WRITE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				if(!IsValidHandle(origHandle))
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				if(!CloseHandle(sharedHandle))
+				{
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_DELETE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_WRITE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 3 ////////////////////
+
+			origHandle = CreateFileW(
+				testFile.c_str(),
+				DELETE,
+				FILE_SHARE_DELETE,
+				nullptr,
+				CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr);
+
+			if(!IsValidHandle(origHandle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			{
+				HANDLE sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_WRITE,
+					FILE_SHARE_DELETE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_WRITE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				sharedHandle = CreateFileW(
+					testFile.c_str(),
+					DELETE,
+					FILE_SHARE_DELETE,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					nullptr);
+
+				if(!IsValidHandle(origHandle))
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+
+				if(!CloseHandle(sharedHandle))
+				{
+					errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!DeleteFileW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to delete file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			//////////////////// Set 4 ////////////////////
+
+			if(!CreateDirectoryW(testFile.c_str(), nullptr))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create directory \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			origHandle = CreateFileW(
+				testFile.c_str(),
+				GENERIC_READ,
+				0,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_FLAG_BACKUP_SEMANTICS,
+				nullptr);
+
+			if(!IsValidHandle(origHandle))
+			{
+				std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Failed to create file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			{
+				HANDLE sharedHandle = CreateFileW(
+					testFile.c_str(),
+					GENERIC_READ,
+					0,
+					nullptr,
+					OPEN_EXISTING,
+					FILE_FLAG_BACKUP_SEMANTICS,
+					nullptr);
+
+				lastError = GetLastError();
+
+				if(IsValidHandle(sharedHandle) || lastError != ERROR_SHARING_VIOLATION)
+				{
+					std::wstring errMsg = CreateSystemErrorMessage(FormatString(L"Was expecting ERROR_SHARING_VIOLATION for file \'%s\' instead got %d.",
+						testFile.c_str(), lastError));
+
+					if(IsValidHandle(sharedHandle))
+					{
+						CloseHandle(sharedHandle);
+					}
+
+					CloseHandle(origHandle);
+
+					Assert::Fail(errMsg.c_str(), LINE_INFO());
+				}
+			}
+
+			if(!CloseHandle(origHandle))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to close handle for file \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
+			}
+
+			if(!RemoveDirectoryW(testFile.c_str()))
+			{
+				errMsg = CreateSystemErrorMessage(FormatString(L"Failed to remove directory \'%s\'.", testFile.c_str()));
+
+				Assert::Fail(errMsg.c_str(), LINE_INFO());
 			}
 
 			DeleteTestDirectory();

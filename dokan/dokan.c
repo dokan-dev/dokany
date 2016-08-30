@@ -1159,16 +1159,21 @@ void ProcessIOEvent(
 		return;
 	}
 
-	// reuse Overlapped and queue up another async IO operation
 	ResetOverlapped(Overlapped);
 
-	BOOL restartDeviceIOSucceeded = StartDeviceIO(Dokan, Overlapped);
+	BOOL restartDeviceIOSucceeded = FALSE;
 	DWORD lastError = ERROR_SUCCESS;
-	
-	if(!restartDeviceIOSucceeded) {
-		
-		lastError = GetLastError();
-		SetLastError(ERROR_SUCCESS);
+
+	// If not single threaded reuse Overlapped and queue up another async IO operation
+	if((Dokan->DokanOptions->Options & DOKAN_OPTION_FORCE_SINGLE_THREADED) == 0) {
+
+		restartDeviceIOSucceeded = StartDeviceIO(Dokan, Overlapped);
+
+		if(!restartDeviceIOSucceeded) {
+
+			lastError = GetLastError();
+			SetLastError(ERROR_SUCCESS);
+		}
 	}
 
 	// begin processing IO event
@@ -1231,6 +1236,20 @@ void ProcessIOEvent(
 
 		PushIoEventBuffer(currentIoEvent);
 		DbgPrint("ReturnedLength %d\n", NumberOfBytesTransferred);
+	}
+
+	// If single threaded then processing is now complete unless a larger write size was requested,
+	// which I'm choosing to ignore, so request another event
+
+	if(Dokan->DokanOptions->Options & DOKAN_OPTION_FORCE_SINGLE_THREADED) {
+
+		restartDeviceIOSucceeded = StartDeviceIO(Dokan, Overlapped);
+
+		if(!restartDeviceIOSucceeded) {
+
+			lastError = GetLastError();
+			SetLastError(ERROR_SUCCESS);
+		}
 	}
 
 	if(!restartDeviceIOSucceeded) {
