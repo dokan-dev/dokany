@@ -731,7 +731,7 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       PVOID buffer;
       // DDbgPrint("  EventWrite CopyMemory\n");
       // DDbgPrint("  EventLength %d, BufLength %d\n", eventContext->Length,
-      //			eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength);
+      //            eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength);
       if (Irp->MdlAddress)
         buffer = MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
       else

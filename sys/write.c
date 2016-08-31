@@ -29,7 +29,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   PVOID buffer;
   BOOLEAN writeToEoF = FALSE;
@@ -77,6 +77,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRO(fcb);
 
     if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
       status = STATUS_INVALID_PARAMETER;
@@ -307,6 +308,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
 

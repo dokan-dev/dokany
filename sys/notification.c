@@ -465,8 +465,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcbNext = fcbEntry->Flink;
     fcb = CONTAINING_RECORD(fcbEntry, DokanFCB, NextFCB);
-
-    ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
+    DokanFCBLockRW(fcb);
 
     ccbHead = &fcb->NextCCB;
 
@@ -478,7 +477,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                 (ULONG)ccb->UserContext, &fcb->FileName);
       FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
     }
-    ExReleaseResourceLite(&fcb->Resource);
+    DokanFCBUnlock(fcb);
   }
 
   ExReleaseResourceLite(&vcb->Resource);

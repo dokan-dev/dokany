@@ -27,7 +27,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   ULONG info = 0;
   ULONG eventLength;
@@ -72,6 +72,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRO(fcb);
 
     switch (irpSp->Parameters.QueryFile.FileInformationClass) {
     case FileBasicInformation:
@@ -207,6 +208,8 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
 
@@ -286,7 +289,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PVOID buffer;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   ULONG eventLength;
   PFILE_OBJECT targetFileObject;
@@ -319,6 +322,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRW(fcb);
 
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DokanPrintFileName(fileObject);
@@ -344,18 +348,14 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileEndOfFileInformation:
       if ((fileObject->SectionObjectPointer != NULL) &&
           (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-        ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 
         pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
 
         if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
                                   &pInfoEoF->EndOfFile)) {
           status = STATUS_USER_MAPPED_FILE;
-          ExReleaseResourceLite(&fcb->Resource);
           __leave;
         }
-
-        ExReleaseResourceLite(&fcb->Resource);
 
         if (!isPagingIo) {
           ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
@@ -508,6 +508,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
 
@@ -524,7 +526,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
   NTSTATUS status;
   ULONG info = 0;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   UNICODE_STRING oldFileName;
 
   FILE_INFORMATION_CLASS infoClass;
@@ -545,6 +547,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRW(fcb);
 
     ccb->UserContext = EventInfo->Context;
 
@@ -583,8 +586,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       if (infoClass == FileRenameInformation) {
         PVOID buffer = NULL;
 
-        ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
-
         // this is used to inform rename in the bellow switch case
         oldFileName.Buffer = fcb->FileName.Buffer;
         oldFileName.Length = (USHORT)fcb->FileName.Length;
@@ -595,7 +596,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
-          ExReleaseResourceLite(&fcb->Resource);
           ExReleaseResourceLite(&ccb->Resource);
           KeLeaveCriticalRegion();
           __leave;
@@ -613,7 +613,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;
 
-        ExReleaseResourceLite(&fcb->Resource);
       }
     }
 
@@ -680,6 +679,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     }
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(irp, status, info);
 

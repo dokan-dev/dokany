@@ -33,7 +33,7 @@ Routine Description:
 Arguments:
 
         DeviceObject - Context for the activity.
-        Irp 		 - The device control argument block.
+        Irp          - The device control argument block.
 
 Return Value:
 
@@ -48,7 +48,7 @@ Return Value:
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   ULONG readLength = 0;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   PVOID currentAddress = NULL;
   PEVENT_CONTEXT eventContext;
@@ -149,6 +149,7 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRO(fcb);
 
     if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
       DDbgPrint("   DOKAN_FILE_DIRECTORY %p\n", fcb);
@@ -248,6 +249,8 @@ Return Value:
     // register this IRP to pending IPR list and make it pending status
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, readLength);
 

@@ -58,6 +58,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRO(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
@@ -80,6 +81,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
+    DokanFCBUnlock(fcb);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
