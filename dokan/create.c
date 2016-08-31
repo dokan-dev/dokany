@@ -309,15 +309,16 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     eventInfo.Operation.Create.Information = FILE_OPENED;
 
     if (disposition == FILE_CREATE || disposition == FILE_OPEN_IF ||
-        disposition == FILE_OVERWRITE_IF) {
+        disposition == FILE_OVERWRITE_IF || disposition == FILE_SUPERSEDE) {
       eventInfo.Operation.Create.Information = FILE_CREATED;
 
       if (status == STATUS_OBJECT_NAME_COLLISION) {
         if (disposition == FILE_OPEN_IF) {
           eventInfo.Operation.Create.Information = FILE_OPENED;
-        } else if (disposition == FILE_OVERWRITE_IF ||
-                   disposition == FILE_SUPERSEDE) {
+        } else if (disposition == FILE_OVERWRITE_IF) {
           eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
+        } else if (disposition == FILE_SUPERSEDE) {
+          eventInfo.Operation.Create.Information = FILE_SUPERSEDED;
         }
       }
     }
