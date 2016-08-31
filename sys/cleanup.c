@@ -33,7 +33,7 @@ Routine Description:
 Arguments:
 
         DeviceObject - Context for the activity.
-        Irp 		 - The device control argument block.
+        Irp          - The device control argument block.
 
 Return Value:
 
@@ -85,6 +85,7 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRW(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
@@ -113,6 +114,7 @@ Return Value:
 
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
+    DokanFCBUnlock(fcb);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -166,6 +168,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
+  DokanFCBLockRW(fcb);
 
   vcb = fcb->Vcb;
 
@@ -181,11 +184,8 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
-  ExReleaseResourceLite(&fcb->Resource);
-  KeLeaveCriticalRegion();
+  DokanFCBUnlock(fcb);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

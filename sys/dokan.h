@@ -308,28 +308,43 @@ typedef struct _DokanVolumeControlBlock {
 #define DCB_DELETE_PENDING 0x00000001
 
 typedef struct _DokanFileControlBlock {
+  // Locking: Identifier is read-only, no locks needed. 
   FSD_IDENTIFIER Identifier;
 
+  // Locking: FIXME
   FSRTL_ADVANCED_FCB_HEADER AdvancedFCBHeader;
+  // Locking: FIXME
   SECTION_OBJECT_POINTERS SectionObjectPointers;
 
+  // Locking: FIXME
   FAST_MUTEX AdvancedFCBHeaderMutex;
 
+  // Locking: FIXME is this needed in future?
   ERESOURCE MainResource;
+  // Locking: Lock for paging io.
   ERESOURCE PagingIoResource;
 
+  // Locking: Vcb pointer is read-only, no locks needed. 
   PDokanVCB Vcb;
+  // Locking: DokanFCBLock{RO,RW} and usually vcb lock
   LIST_ENTRY NextFCB;
+  // Locking: Used for DokanFCBLock{RO,RW}
   ERESOURCE Resource;
+  // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
 
+  // Locking: DokanFCBLock{RO,RW}
   LONG FileCount;
 
+  // Locking: DokanFCBLock{RO,RW}
   ULONG Flags;
+  // Locking: DokanFCBLock{RO,RW}
   SHARE_ACCESS ShareAccess;
 
+  // Locking: DokanFCBLock{RO,RW} - e.g. renames change this field.
   UNICODE_STRING FileName;
 
+  // Locking: DokanFCBLock{RO,RW}
   FILE_LOCK FileLock;
 
 #if (NTDDI_VERSION < NTDDI_WIN8)
@@ -337,12 +352,20 @@ typedef struct _DokanFileControlBlock {
   //  The following field is used by the oplock module
   //  to maintain current oplock information.
   //
+  // Locking: DokanFCBLock{RO,RW}
   OPLOCK Oplock;
 #endif
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
 } DokanFCB, *PDokanFCB;
+
+#define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); } while(0)
+#define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(&fcb->Resource)
+#define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(&fcb->Resource)
+//#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
 
 typedef struct _DokanContextControlBlock {
   FSD_IDENTIFIER Identifier;
@@ -609,7 +632,7 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
 VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                              __in ULONG Action);
 
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb);
+PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName, __in ULONG FileNameLength);
 
 NTSTATUS
 DokanFreeFCB(__in PDokanFCB Fcb);

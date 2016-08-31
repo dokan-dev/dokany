@@ -160,8 +160,8 @@ Routine Description:
 
 Arguments:
 
-        DriverObject	- the system supplied driver object.
-        RegistryPath	- the system supplied registry path for this driver.
+        DriverObject    - the system supplied driver object.
+        RegistryPath    - the system supplied registry path for this driver.
 
 Return Value:
 
@@ -305,7 +305,7 @@ Routine Description:
 
 Arguments:
 
-        DriverObject	- the system supplied driver object.
+        DriverObject    - the system supplied driver object.
 
 Return Value:
 
@@ -468,6 +468,8 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
   DDbgPrint("<== DokanNotifyReportChange\n");
 }
 
+// DokanNotifyReportChange should be called with the Fcb at least share-locked.
+// due to the ro access to the FileName field.
 VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                              __in ULONG Action) {
   ASSERT(Fcb != NULL);

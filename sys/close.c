@@ -33,7 +33,7 @@ Routine Description:
 Arguments:
 
         DeviceObject - Context for the activity.
-        Irp 		 - The device control argument block.
+        Irp          - The device control argument block.
 
 Return Value:
 
@@ -84,7 +84,9 @@ Return Value:
         ASSERT(fcb != NULL);
 
         DDbgPrint("   Free CCB:%p\n", ccb);
+        DokanFCBLockRW(fcb);
         DokanFreeCCB(ccb);
+        DokanFCBUnlock(fcb);
 
         DokanFreeFCB(fcb);
 
@@ -101,6 +103,7 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    DokanFCBLockRW(fcb);
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
@@ -109,6 +112,7 @@ Return Value:
       DDbgPrint("   eventContext == NULL\n");
       DDbgPrint("   Free CCB:%p\n", ccb);
       DokanFreeCCB(ccb);
+      DokanFCBUnlock(fcb);
       DokanFreeFCB(fcb);
       status = STATUS_SUCCESS;
       __leave;
@@ -124,7 +128,7 @@ Return Value:
 
     DDbgPrint("   Free CCB:%p\n", ccb);
     DokanFreeCCB(ccb);
-
+    DokanFCBUnlock(fcb);
     DokanFreeFCB(fcb);
 
     // Close can not be pending status

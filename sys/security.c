@@ -29,7 +29,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG info = 0;
   ULONG bufferLength;
   PSECURITY_INFORMATION securityInfo;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanDCB dcb;
   PDokanVCB vcb;
   PDokanCCB ccb;
@@ -92,6 +92,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("    LABEL_SECURITY_INFORMATION\n");
     }
 
+    DokanFCBLockRO(fcb);
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     eventContext = AllocateEventContext(dcb, Irp, eventLength, ccb);
 
@@ -124,6 +125,8 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
 
@@ -198,7 +201,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanVCB vcb;
   PDokanDCB dcb;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PFILE_OBJECT fileObject;
   ULONG info = 0;
@@ -242,6 +245,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
+    DokanFCBLockRO(fcb);
 
     securityInfo = &irpSp->Parameters.SetSecurity.SecurityInformation;
 
@@ -300,6 +304,8 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
 
