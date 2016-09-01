@@ -256,7 +256,9 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   if (IsListEmpty(&ccb->NextCCB)) {
     DDbgPrint("  WARNING. &ccb->NextCCB is empty. \n This should never happen, "
               "so check the behavior.\n Would produce BSOD "
-              "\n") return STATUS_SUCCESS;
+              "\n");
+    DokanFCBUnlock(fcb);
+    return STATUS_SUCCESS;
   } else {
     RemoveEntryList(&ccb->NextCCB);
     InitializeListHead(&ccb->NextCCB);
@@ -400,6 +402,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
       MmDoesFileHaveUserWritableReferences(&FcbOrDcb->SectionObjectPointers)) {
 
     DDbgPrint("  DokanCheckShareAccess FCB has no write shared access\n");
+    DokanFCBUnlock(FcbOrDcb);
     return STATUS_SHARING_VIOLATION;
   }
 #endif
