@@ -26,7 +26,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanCCB ccb;
   PDokanVCB vcb;
   PEVENT_CONTEXT eventContext;
@@ -81,7 +81,6 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
-    DokanFCBUnlock(fcb);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -100,6 +99,8 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
 
