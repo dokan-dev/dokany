@@ -92,6 +92,7 @@ Return Value:
 
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
+      DokanFCBUnlock(fcb);
       __leave;
     }
 
