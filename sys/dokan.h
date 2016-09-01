@@ -368,19 +368,31 @@ typedef struct _DokanFileControlBlock {
 //#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
 
 typedef struct _DokanContextControlBlock {
+  // Locking: read-only no locking needed.
   FSD_IDENTIFIER Identifier;
-  ERESOURCE Resource;
+  // Use FCB locks for locking data members.
+  //ERESOURCE Resource;
+
+  // Fcb is a read-only pointer to the FCB - never NULL.
+  // Locking: read-only - no locking needed.
   PDokanFCB Fcb;
+  // Locking: Lock the *FCB* with DokanFCBLock{RO,RW}.
   LIST_ENTRY NextCCB;
+  // Context is used to store the index inside a directory in directory.c
+  // Locking: Lock the *FCB*
   ULONG64 Context;
+  // Locking: FIXME
   ULONG64 UserContext;
 
+  // Locking: Lock the *FCB*
   PWCHAR SearchPattern;
+  // Locking: like SearchPattern.
   ULONG SearchPatternLength;
 
+  // Locking: 32bit field - reads are atomic, writes with DokanFCBLockRW.
   ULONG Flags;
 
-  int FileCount;
+  // Locking: read-only - no locking needed.
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
 

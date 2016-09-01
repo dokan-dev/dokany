@@ -226,7 +226,7 @@ PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
 
   ccb->Fcb = Fcb;
   DDbgPrint("   Allocated CCB \n");
-  ExInitializeResourceLite(&ccb->Resource);
+  //ExInitializeResourceLite(&ccb->Resource);
 
   InitializeListHead(&ccb->NextCCB);
 
@@ -266,7 +266,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
 
   DokanFCBUnlock(fcb);
 
-  ExDeleteResourceLite(&ccb->Resource);
+  //ExDeleteResourceLite(&ccb->Resource);
 
   if (ccb->SearchPattern) {
     ExFreePool(ccb->SearchPattern);
@@ -711,6 +711,8 @@ Return Value:
     // for windows 8
     if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
       fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
+      // Here the CCB is freshly allocated and the FCB lock is held,
+      // thus no locking necessary.
       ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
       DDbgPrint(
           "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
@@ -1311,15 +1313,10 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     fcb->Flags |= DOKAN_FILE_DIRECTORY;
   }
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
   if (NT_SUCCESS(status)) {
+    // We hold the rw lock to the FCB which makes this ok.
     ccb->Flags |= DOKAN_FILE_OPENED;
-  }
-  ExReleaseResourceLite(&ccb->Resource);
-  KeLeaveCriticalRegion();
 
-  if (NT_SUCCESS(status)) {
     if (info == FILE_CREATED) {
       if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
         DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,

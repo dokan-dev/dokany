@@ -542,9 +542,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     ccb = IrpEntry->FileObject->FsContext2;
     ASSERT(ccb != NULL);
 
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
-
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
     DokanFCBLockRW(fcb);
@@ -568,6 +565,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
             DDbgPrint("  Cannot delete user mapped image\n");
             status = STATUS_CANNOT_DELETE;
           } else {
+            // This is ok by the RW fcb lock.
             ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
             fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
             DDbgPrint("   FileObject->DeletePending = TRUE\n");
@@ -575,6 +573,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
           }
 
         } else {
+          // This is ok by the RW fcb lock.
           ccb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
           fcb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
           DDbgPrint("   FileObject->DeletePending = FALSE\n");
@@ -596,8 +595,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
-          ExReleaseResourceLite(&ccb->Resource);
-          KeLeaveCriticalRegion();
           __leave;
         }
 
@@ -615,9 +612,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
       }
     }
-
-    ExReleaseResourceLite(&ccb->Resource);
-    KeLeaveCriticalRegion();
 
     if (NT_SUCCESS(status)) {
       switch (irpSp->Parameters.SetFile.FileInformationClass) {

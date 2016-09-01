@@ -151,7 +151,9 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRO(fcb);
+  // We hold here a RW lock because we modify fields of CCB
+  // that are protected by the FCB lock.
+  DokanFCBLockRW(fcb);
 
   // size of EVENT_CONTEXT is sum of its length and file name length
   eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -235,7 +237,6 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
   RtlCopyMemory(eventContext->Operation.Directory.DirectoryName,
                 fcb->FileName.Buffer, fcb->FileName.Length);
-  DokanFCBUnlock(fcb);
 
   // if search pattern is specified, copy it to EventContext
   if (ccb->SearchPatternLength && ccb->SearchPattern) {
@@ -254,6 +255,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("    ccb->SearchPattern %ws\n", ccb->SearchPattern);
   }
+  DokanFCBUnlock(fcb);
 
   status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
 
@@ -324,7 +326,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   // usable buffer size
   bufferLen = irpSp->Parameters.QueryDirectory.Length;
 
-  // DDbgPrint("  !!Returning DirecotyInfo!!\n");
+  // DDbgPrint("  !!Returning DirectoryInfo!!\n");
 
   // buffer is not specified or short of length
   if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
@@ -333,7 +335,6 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
 
   } else {
 
-    PDokanCCB ccb = IrpEntry->FileObject->FsContext2;
     // ULONG     orgLen = irpSp->Parameters.QueryDirectory.Length;
 
     //
@@ -353,11 +354,14 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     DDbgPrint("    eventInfo->Status = %x (%lu)\n", EventInfo->Status,
               EventInfo->Status);
 
+    PDokanCCB ccb = IrpEntry->FileObject->FsContext2;
+    DokanFCBLockRW(ccb->Fcb);
     // update index which specified n-th directory entry is returned
     // this should be locked before writing?
     ccb->Context = EventInfo->Operation.Directory.Index;
 
     ccb->UserContext = EventInfo->Context;
+    DokanFCBUnlock(ccb->Fcb);
     // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
     // written bytes
