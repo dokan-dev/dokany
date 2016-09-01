@@ -175,6 +175,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           ExAllocatePool(ccb->SearchPatternLength + sizeof(WCHAR));
 
       if (ccb->SearchPattern == NULL) {
+        DokanFCBUnlock(fcb);
         return STATUS_INSUFFICIENT_RESOURCES;
       }
 
@@ -199,6 +200,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
   if (eventContext == NULL) {
+    DokanFCBUnlock(fcb);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
@@ -284,6 +286,7 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DokanFCBLockRO(fcb);
 
   if (!(fcb->Flags & DOKAN_FILE_DIRECTORY)) {
+    DokanFCBUnlock(fcb);
     return STATUS_INVALID_PARAMETER;
   }
 
