@@ -20,6 +20,8 @@ REM build light installer
 powershell -Command "(gc version.xml) -replace 'Compressed=\"yes\"', 'Compressed=\"no\"' | sc version.xml"
 msbuild Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger
 copy Bootstrapper\bin\Release\DokanSetup.exe .
+copy bin\x64\Release\Dokan_x64.msi .
+copy bin\x86\Release\Dokan_x86.msi .
 msbuild Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:rebuild /fileLogger
 copy Bootstrapper\bin\Debug\DokanSetup.exe DokanSetupDbg.exe
 
