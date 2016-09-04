@@ -470,9 +470,13 @@ BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
 
       if (AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
                                 (PTOKEN_PRIVILEGES)NULL, NULL)) {
+        CloseHandle(hToken);
         return GetLastError() == ERROR_SUCCESS;
       }
     }
+  }
+
+  if (hToken) {
     CloseHandle(hToken);
   }
   return FALSE;
