@@ -246,10 +246,10 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
     if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
       if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
         // No UNC, always return success
-		if (*BufferSize != 0) {
-			RemoteName[0] = L'\0';
-			*BufferSize = sizeof(WCHAR);
-		}
+        if (*BufferSize == 0)
+          return WN_MORE_DATA;
+        RemoteName[0] = L'\0';
+        *BufferSize = sizeof(WCHAR);
         return WN_SUCCESS;
       }
 
@@ -938,7 +938,8 @@ DWORD APIENTRY NPGetResourceInformation(__in LPNETRESOURCE NetResource,
 
   DbgPrintW(L"NPGetResourceInformation: lpRemoteName: %ls, strings %p/%p\n",
             pNetResource->lpRemoteName, pStrings, (PBYTE)Buffer + *BufferSize);
-  DbgPrintW(L"NPGetResourceInformation: *System: %ls\n", (System != NULL) ? *System : L"NULL");
+  DbgPrintW(L"NPGetResourceInformation: *System: %ls\n",
+            (System != NULL) ? *System : L"NULL");
 
   return WN_SUCCESS;
 }
