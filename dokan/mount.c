@@ -289,6 +289,11 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
     pBuf[length--] = '\0';
   wcscat_s(pBuf, sizeof(pBuf) / sizeof(WCHAR), DOKAN_BINARY_NAME);
 
+  if (GetFileAttributes(pBuf) == INVALID_FILE_ATTRIBUTES) {
+    DokanDbgPrintW(L"Error the file '%s' does not exist.\n", pBuf);
+    return FALSE;
+  }
+
   RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
                  0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
                  &position);
