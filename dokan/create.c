@@ -216,7 +216,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
       if (CreateSuccesStatusCheck(status, disposition)) {
         DokanInstance->DokanOperations->Cleanup(origFileName, &fileInfo);
         DokanInstance->DokanOperations->CloseFile(origFileName, &fileInfo);
-      } else if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+      } else if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
         DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
         childExisted = FALSE;
       }
