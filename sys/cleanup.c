@@ -175,6 +175,16 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
+  if (FlagOn(fcb->Flags, DOKAN_DELETE_ON_CLOSE)) {
+    if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
+                              FILE_ACTION_REMOVED);
+    } else {
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+                              FILE_ACTION_REMOVED);
+    }
+  }
+
   //
   //  Unlock all outstanding file locks.
   //
