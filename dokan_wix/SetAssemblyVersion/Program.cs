@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Text;
 using System.IO;
@@ -15,7 +15,7 @@ namespace SetAssemblyVersion
 		const string cSearch4 = "AssemblyBuildTagAttribute(\"";
 		const string cEnd = "\")]";
 
-        const string productVersionRegex = @"\bv[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}.[0-9]+\b";
+        const string productVersionRegex = @"\bv[0-9]+.[0-9]+.[0-9]+.[0-9]+\b";
 
         /// <summary>
         /// Actions
@@ -117,8 +117,8 @@ namespace SetAssemblyVersion
                     {
                         Console.WriteLine(string.Format("RC File {0} version updated.", file));
                         string rcfile = File.ReadAllText(file);
-                        rcfile = Regex.Replace(rcfile, @"[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}", version);
-                        rcfile = Regex.Replace(rcfile, @"[0-9]{1,2},[0-9]{1,2},[0-9]{1,2},[0-9]{1,2}", versionComma);
+                        rcfile = Regex.Replace(rcfile, @"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", version);
+                        rcfile = Regex.Replace(rcfile, @"[0-9]+,[0-9]+,[0-9]+,[0-9]+", versionComma);
 
                         File.WriteAllText(file, rcfile);
                     }
@@ -126,9 +126,9 @@ namespace SetAssemblyVersion
                     Console.WriteLine("Update build VS define versions");
                     string props = File.ReadAllText(args[3] + @"\Dokan.props");
                     string majorAPIDefineVersionString = string.Format(@"<DOKANAPIVersion>{0}</DOKANAPIVersion>", productVersion.Major, productVersion.Minor, productVersion.Build);
-                    props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]{1,2}<\/DOKANAPIVersion>", majorAPIDefineVersionString);
+                    props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]+<\/DOKANAPIVersion>", majorAPIDefineVersionString);
                     string defineVersionString = string.Format(@"<DOKANVersion>{0}.{1}.{2}</DOKANVersion>", productVersion.Major, productVersion.Minor, productVersion.Build);
-                    props = Regex.Replace(props, @"<DOKANVersion>[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,3}<\/DOKANVersion>", defineVersionString);
+                    props = Regex.Replace(props, @"<DOKANVersion>[0-9]+.[0-9]+.[0-9]+<\/DOKANVersion>", defineVersionString);
                     File.WriteAllText(args[3] + @"\Dokan.props", props);
                 }
 
