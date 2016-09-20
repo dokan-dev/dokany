@@ -139,7 +139,7 @@ static size_t convert_char(get_conver_t get_func, put_convert_t put_func,
   size_t total = 0;
 
   while (il) {
-    ICONV_CHAR out_c;
+    ICONV_CHAR out_c = 0;
     size_t readed = get_func(ib, il, &out_c);
     if (unlikely(readed < 0))
       return -1;

@@ -6,6 +6,22 @@
 #define FUSE_THREAD_COUNT 10
 #define DOKAN_DLL L"dokan" DOKAN_MAJOR_API_VERSION L".dll"
 
+// Cygwin64 is LP64 while Windows 64bit is LLP64.
+// This why we define macros in the style of inttypes.h for printing DWORDs and ULONGs which are fixed to 32 bit.
+#ifdef __LP64__
+// DWORD and ULONG are unsigned int
+# define PRIxDWORD "%x"
+# define PRIuDWORD "%u"
+# define PRIxULONG "%x"
+# define PRIuULONG "%u"
+#else
+// DWORD and ULONG are unsigned long int
+# define PRIxDWORD "%lx"
+# define PRIuDWORD "%lu"
+# define PRIxULONG "%lx"
+# define PRIuULONG "%lu"
+#endif
+
 struct fuse_config
 {
   unsigned int umask;

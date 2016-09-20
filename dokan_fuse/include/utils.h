@@ -1,27 +1,31 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#ifdef __cplusplus
 #include <string>
+#endif
 #include <sys/stat.h>
 #include "fuse.h"
 
-/*#ifdef _MSC_VER
-#define DLLLOCAL
-#else
-#define DLLLOCAL __attribute__ ((visibility("hidden")))
-#endif*/
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 void utf8_to_wchar_buf_old(const char *src, wchar_t *res, int maxlen);
 void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen);
+
+FILETIME unixTimeToFiletime(time_t t);
+time_t filetimeToUnixTime(const FILETIME *ft);
+bool is_filetime_set(const FILETIME *ft);
+
+#ifdef __cplusplus
+}
+
+
 std::string wchar_to_utf8_cstr(const wchar_t *str);
 
 std::string unixify(const std::string &str);
 std::string extract_file_name(const std::string &str);
 std::string extract_dir_name(const std::string &str);
-
-FILETIME unixTimeToFiletime(time_t t);
-time_t filetimeToUnixTime(const FILETIME *ft);
-bool is_filetime_set(const FILETIME *ft);
 
 template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const std::string &name, 
 										  T * find_data)
@@ -56,4 +60,5 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 		find_data->dwFileAttributes|=FILE_ATTRIBUTE_HIDDEN;
 }
 
+#endif // __cplusplus
 #endif // UTILS_H_

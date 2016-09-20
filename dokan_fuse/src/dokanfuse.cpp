@@ -4,7 +4,6 @@
 #include <sddl.h>
 #include "utils.h"
 #include "fusemain.h"
-#include "ScopeGuard.h"
 #include "dokanfuse.h"
 #include "../../dokan/dokani.h"
 #include <stdio.h>
@@ -133,7 +132,7 @@ CONST_END(cDisposition)
 void DebugConstant(const char *name, ULONG value, Constant *c) {
   while (c->name != NULL && c->value != value)
     ++c;
-  fprintf(stderr, "%s: %s (%lx)\n", name, c->name ? c->name : "unknown!",
+  fprintf(stderr, "%s: %s (" PRIxULONG ")\n", name, c->name ? c->name : "unknown!",
           value);
 }
 
@@ -177,9 +176,9 @@ FuseCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     DebugConstantBit("\tDesiredAccess", DesiredAccess, cAccessMode);
     DebugConstantBit("\tShareAccess", ShareAccess, cShareMode);
     DebugConstant("\tDisposition", CreateDisposition, cDisposition);
-    FPRINTF(stderr, "\tAttributes: %u (0x%x)\n", FileAttributes,
+    FPRINTF(stderr, "\tAttributes: " PRIuULONG " (0x" PRIxULONG ")\n", FileAttributes,
              FileAttributes);
-    FPRINTF(stderr, "\tOptions: %u (0x%x)\n", CreateOptions, CreateOptions);
+    FPRINTF(stderr, "\tOptions: " PRIuULONG " (0x" PRIxULONG ")\n", CreateOptions, CreateOptions);
     fflush(stderr);
   }
 
@@ -233,7 +232,7 @@ static NTSTATUS DOKAN_CALLBACK FuseWriteFile(LPCWSTR FileName, LPCVOID Buffer,
                                              PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
-    FPRINTF(stderr, "WriteFile: %ls, offset %lld, length %lu\n", FileName,
+    FPRINTF(stderr, "WriteFile: %ls, offset %lld, length " PRIuDWORD "\n", FileName,
              Offset, NumberOfBytesToWrite);
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
@@ -439,7 +438,7 @@ FuseGetFileSecurity(LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
                     PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
-    FPRINTF(stderr, "GetFileSecurity: %x\n", *SecurityInformation);
+    FPRINTF(stderr, "GetFileSecurity: " PRIxDWORD "\n", *SecurityInformation);
 
   BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
   ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));

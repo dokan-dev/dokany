@@ -264,16 +264,16 @@
                   <File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
                 </Component>
               </Directory>
+              <Component Id="IncludeFuseCompatFilesComponent" Win64="no" Guid="{7129AF7C-D5E2-4D3B-B29B-9CBE045F655B}">
+                <File Id="fuse_include_H" Source="..\dokan_fuse\include\old\fuse.h" Name="fuse.h" KeyPath="yes"/>
+              </Component>
               <Directory Id="FUSEINCLUDEDIR" Name="fuse">
                 <Component Id="IncludeFuseFilesComponent" Win64="no" Guid="{113F4C52-C272-4346-B65F-E827B8150815}">
-                  <File Id="dokanfuseH" Source="..\dokan_fuse\include\dokanfuse.h" Name="dokanfuse.h" KeyPath="yes"/>
-                  <File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="no"/>
+                  <File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="yes"/>
                   <File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
                   <File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>
                   <File Id="fuse_sem_fixH" Source="..\dokan_fuse\include\fuse_sem_fix.h" Name="fuse_sem_fix.h" KeyPath="no"/>
                   <File Id="fuse_winH" Source="..\dokan_fuse\include\fuse_win.h" Name="fuse_win.h" KeyPath="no"/>
-                  <File Id="fusemainH" Source="..\dokan_fuse\include\fusemain.h" Name="fusemain.h" KeyPath="no"/>
-                  <File Id="ScopeGuardH" Source="..\dokan_fuse\include\ScopeGuard.h" Name="ScopeGuard.h" KeyPath="no"/>
                   <File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no"/>
                 </Component>
               </Directory>
@@ -328,6 +328,7 @@
       <Feature Id="DokanLibBFeature" Title="Headers and Libs" Description="Headers and libraries required for native User-Mode File System development" Level="2" Display="expand">
         <Condition Level="1">INSTALLDEVFILES = 1</Condition>
         <ComponentRef Id="IncludeDokanFilesComponent"/>
+        <ComponentRef Id="IncludeFuseCompatFilesComponent"/>
         <ComponentRef Id="IncludeFuseFilesComponent"/>
         <ComponentRef Id="LibFilesComponent"/>
         <ComponentRef Id="SampleMirrorFilesComponent"/>
