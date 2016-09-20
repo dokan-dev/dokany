@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Driver - `SL_OPEN_TARGET_DIRECTORY` is now handle directly by the driver
 - A website with the [documentation](https://dokan-dev.github.io/dokany-doc/html/).
 - Support PagingIO
+- FUSE - Use FUSE-compatible dir-hierarchy
 
 ### Changed
 - Installer - Update redistributable link to VS Update 2
@@ -56,6 +57,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Mirror - Update show usage
 - Driver - Use LookasideLists for DokanCCB and DokanFCB
 - FUSE - Improve and fix debug logs
+- FUSE - Add cmake-install target
+- FUSE - Make utils.h usable under C
 
 ### Fixed
 - Driver - Support hibernation mode 
