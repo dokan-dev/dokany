@@ -199,7 +199,7 @@ class impl_file_lock
 	int lock_file(impl_file_handle *file, long long start, long long len, bool mark=true);
 	int unlock_file(impl_file_handle *file, long long start, long long len);
 public:
-	impl_file_lock(impl_file_locks* _locks, const std::string& name): locks(_locks), name_(name), first(NULL) { InitializeCriticalSection(&lock); }
+	impl_file_lock(impl_file_locks* _locks, const std::string& name): name_(name), locks(_locks), first(NULL) { InitializeCriticalSection(&lock); }
 	~impl_file_lock() { DeleteCriticalSection(&lock); };
 	void remove_file(impl_file_handle *file);
 	const std::string& get_name() const {return name_;}
