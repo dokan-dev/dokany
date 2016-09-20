@@ -86,7 +86,7 @@ namespace SetAssemblyVersion
                 var regExVersion = new Regex(ProductVersionRegex, RegexOptions.IgnoreCase);
 
                 var line = 0;
-                while (reader.Peek() != 0 && line < 6) // find version in first 5 lines 
+                while (reader.Peek() != 0 && line < 10) // find version in first 5 lines 
                 {
                     line++;
                     var data = reader.ReadLine();
