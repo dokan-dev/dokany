@@ -37,12 +37,12 @@ namespace SetAssemblyVersion
             var versionComma =
                 $"{productVersion.Major},{productVersion.Minor},{productVersion.Build},{productVersion.Revision}";
 
-                var xmlFile = args[2].Replace("\"", "").Trim();
+                var xmlFile = args[1].Replace("\"", "").Trim();
 
                 var result = ModifyProductParametersXml(xmlFile, productVersion);
                 if ((EReturnCode) result == EReturnCode.None)
                 {
-                    var files = Directory.GetFiles(args[3], "*.rc", SearchOption.AllDirectories);
+                    var files = Directory.GetFiles(args[2], "*.rc", SearchOption.AllDirectories);
                     Console.WriteLine("Update version in RC Files");
 
                     foreach (var file in files)
@@ -56,7 +56,7 @@ namespace SetAssemblyVersion
                     }
 
                     Console.WriteLine("Update build VS define versions");
-                    var props = File.ReadAllText(args[3] + @"\Dokan.props");
+                    var props = File.ReadAllText(args[2] + @"\Dokan.props");
                     var majorApiDefineVersionString = $@"<DOKANAPIVersion>{productVersion.Major}</DOKANAPIVersion>";
                     props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]+<\/DOKANAPIVersion>",
                         majorApiDefineVersionString);
@@ -64,7 +64,7 @@ namespace SetAssemblyVersion
                         $@"<DOKANVersion>{productVersion.Major}.{productVersion.Minor}.{productVersion.Build}</DOKANVersion>";
                     props = Regex.Replace(props, @"<DOKANVersion>[0-9]+.[0-9]+.[0-9]+<\/DOKANVersion>",
                         defineVersionString);
-                    File.WriteAllText(args[3] + @"\Dokan.props", props);
+                    File.WriteAllText(args[2] + @"\Dokan.props", props);
                 }
 
                 return result;
