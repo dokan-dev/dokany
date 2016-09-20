@@ -7,7 +7,7 @@ REM set version info, edit version.txt before running the batch
 if NOT exist SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe (
 	msbuild SetAssemblyVersion.sln /p:Configuration=Release /p:Platform="Any CPU" /t:rebuild 
 )
-SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
+SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
 
 cd ..
 call .\build.bat

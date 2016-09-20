@@ -148,7 +148,7 @@
         "/p:Platform=${Platform}")
         & $buildCmd $buildArgs
         
-        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
+        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
         
         cd ..
         & .\build.bat
