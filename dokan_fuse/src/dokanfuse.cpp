@@ -4,7 +4,6 @@
 #include <sddl.h>
 #include "utils.h"
 #include "fusemain.h"
-#include "ScopeGuard.h"
 #include "dokanfuse.h"
 #include "../../dokan/dokani.h"
 #include <stdio.h>
