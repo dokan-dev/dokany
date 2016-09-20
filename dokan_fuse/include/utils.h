@@ -5,11 +5,6 @@
 #include <sys/stat.h>
 #include "fuse.h"
 
-/*#ifdef _MSC_VER
-#define DLLLOCAL
-#else
-#define DLLLOCAL __attribute__ ((visibility("hidden")))
-#endif*/
 
 void utf8_to_wchar_buf_old(const char *src, wchar_t *res, int maxlen);
 void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen);
