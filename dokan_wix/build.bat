@@ -12,6 +12,12 @@ SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..
 cd ..
 call .\build.bat
 Powershell.exe -executionpolicy remotesigned -File sign.ps1
+
+MakeCab /f dokanx64.ddf
+MakeCab /f dokanx86.ddf
+
+set /p DUMMY=Please submit drivers to sysdev portal. Hit ENTER when it is done...
+
 cd dokan_wix
 
 IF EXIST C:\cygwin ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )

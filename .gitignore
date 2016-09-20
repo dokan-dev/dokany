@@ -36,3 +36,7 @@ ReleasePS
 /dokan_fuse/libdokanfuse1.dll
 /dokan.VC.db
 /documentations/doc
+/dokan_wix/*.msi
+/dokan_wix/disk1
+/dokan_wix/setup.inf
+/dokan_wix/setup.rpt

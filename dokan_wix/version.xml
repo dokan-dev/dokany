@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include>
 <?define ProductName="Dokan Library" ?>
-<?define ProductCodeX64="{65A3A964-3DC3-0100-0000-160729112819}" ?>
+<?define ProductCodeX64="{65A3A964-3DC3-0100-0000-160920154832}" ?>
 <?define UpgradeCodeX64="{2EF80C64-08A6-4FE1-BE92-13FD293C831B}" ?>
-<?define ProductCodeX86="{65A3A986-3DC3-0100-0000-160729112819}" ?>
+<?define ProductCodeX86="{65A3A986-3DC3-0100-0000-160920154832}" ?>
 <?define UpgradeCodeX86="{2EF80C86-08A6-4FE1-BE92-13FD293C831B}" ?>
 <?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
 <?define BundleUpgradeCode="{A30D29CD-FA58-4542-8D41-7EDD1FB1EE5A}" ?>
 <?define BaseVersion="1.0.0" ?>
 <?define MajorVersion="1" ?>
-<?define BuildVersion="4000" ?>
+<?define BuildVersion="5000" ?>
 <?define CompanyName="Dokany Project" ?>
 <?define ShortCompanyName="Dokany Project" ?>
 <?define UpdateURL="https://dokan-dev.github.io/" ?>
 <?define InstallerVersion="500" ?>
-<?define Compressed="no" ?>
+<?define Compressed="yes" ?>
 <?define BuildCygwin="true" ?>
 </Include>

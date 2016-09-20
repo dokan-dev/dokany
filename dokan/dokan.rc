@@ -16,8 +16,8 @@
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,4000
- PRODUCTVERSION 1,0,0,4000
+ FILEVERSION 1,0,0,5000
+ PRODUCTVERSION 1,0,0,5000
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -34,12 +34,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Dokan Project"
             VALUE "FileDescription", "Dokan Library"
-            VALUE "FileVersion", "1.0.0.4000"
+            VALUE "FileVersion", "1.0.0.5000"
             VALUE "InternalName", "dokan.dll"
             VALUE "LegalCopyright", "Copyright (C) 2016"
             VALUE "OriginalFilename", "dokan.dll"
             VALUE "ProductName", "Dokan"
-            VALUE "ProductVersion", "1.0.0.4000"
+            VALUE "ProductVersion", "1.0.0.5000"
         END
     END
     BLOCK "VarFileInfo"
