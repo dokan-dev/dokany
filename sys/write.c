@@ -36,6 +36,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   BOOLEAN isPagingIo = FALSE;
   BOOLEAN isNonCached = FALSE;
   BOOLEAN isSynchronousIo = FALSE;
+  BOOLEAN fcbLocked = FALSE;
 
   __try {
 
@@ -77,12 +78,16 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-    DokanFCBLockRO(fcb);
 
+    DokanFCBLockRO(fcb);
+    fcbLocked = TRUE;
     if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
+    // Drop lock here, consider atomic flag access in the future,
+    DokanFCBUnlock(fcb);
+    fcbLocked = FALSE;
 
     if (Irp->MdlAddress) {
       DDbgPrint("  use MdlAddress\n");
@@ -139,6 +144,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // the length of EventContext is sum of length to write and length of file
     // name
+    DokanFCBLockRO(fcb);
+    fcbLocked = TRUE;
     eventLength = sizeof(EVENT_CONTEXT) + irpSp->Parameters.Write.Length +
                   fcb->FileName.Length;
 
@@ -308,7 +315,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
-    if(fcb)
+    if(fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);

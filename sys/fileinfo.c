@@ -295,6 +295,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PFILE_OBJECT targetFileObject;
   PEVENT_CONTEXT eventContext;
   BOOLEAN isPagingIo = FALSE;
+  BOOLEAN fcbLocked = FALSE;
   PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
 
   vcb = DeviceObject->DeviceExtension;
@@ -320,10 +321,6 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ccb = (PDokanCCB)fileObject->FsContext2;
     ASSERT(ccb != NULL);
 
-    fcb = ccb->Fcb;
-    ASSERT(fcb != NULL);
-    DokanFCBLockRW(fcb);
-
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DokanPrintFileName(fileObject);
 
@@ -332,6 +329,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (Irp->Flags & IRP_PAGING_IO) {
       isPagingIo = TRUE;
     }
+
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
     switch (irpSp->Parameters.SetFile.FileInformationClass) {
     case FileAllocationInformation:
@@ -402,6 +402,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // calcurate the size of EVENT_CONTEXT
     // it is sum of file name length and size of FileInformation
+    DokanFCBLockRW(fcb);
+    fcbLocked = TRUE;
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length +
                   irpSp->Parameters.SetFile.Length;
 
@@ -508,7 +510,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
-    if(fcb)
+    if(fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
