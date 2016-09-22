@@ -85,6 +85,14 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+
+    if (fileObject->SectionObjectPointer != NULL &&
+        fileObject->SectionObjectPointer->DataSectionObject != NULL) {
+      CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+      CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+      CcUninitializeCacheMap(fileObject, NULL, NULL);
+    }
+
     DokanFCBLockRW(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -96,12 +104,6 @@ Return Value:
       __leave;
     }
 
-    if (fileObject->SectionObjectPointer != NULL &&
-        fileObject->SectionObjectPointer->DataSectionObject != NULL) {
-      CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
-      CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-      CcUninitializeCacheMap(fileObject, NULL, NULL);
-    }
     fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
     eventContext->Context = ccb->UserContext;
