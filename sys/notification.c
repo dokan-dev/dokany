@@ -71,7 +71,7 @@ VOID SetCommonEventContext(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext,
   EventContext->Flags = irpSp->Flags;
 
   if (Ccb) {
-    EventContext->FileFlags = Ccb->Flags;
+    EventContext->FileFlags = DokanCCBFlagsGet(Ccb);
   }
 
   EventContext->ProcessId = IoGetRequestorProcessId(Irp);

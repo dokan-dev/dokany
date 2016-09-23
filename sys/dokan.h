@@ -336,7 +336,7 @@ typedef struct _DokanFileControlBlock {
   // Locking: DokanFCBLock{RO,RW}
   LONG FileCount;
 
-  // Locking: DokanFCBLock{RO,RW}
+  // Locking: Use atomic flag operations - DokanFCBFlags*
   ULONG Flags;
   // Locking: DokanFCBLock{RO,RW}
   SHARE_ACCESS ShareAccess;
@@ -378,6 +378,7 @@ typedef struct _DokanContextControlBlock {
   PWCHAR SearchPattern;
   ULONG SearchPatternLength;
 
+  // Locking: Use atomic flag operations - DokanCCBFlags*
   ULONG Flags;
 
   int FileCount;
@@ -708,5 +709,16 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 }
 
 #define IsFlagOn(a, b) ((BOOLEAN)(FlagOn(a, b) == b))
+
+#define DokanFCBFlagsGet(fcb) ((fcb)->Flags)
+#define DokanFCBFlagsIsSet(fcb, bit) (((fcb)->Flags)&(bit))
+#define DokanFCBFlagsSetBit(fcb, bit) SetLongFlag((fcb)->Flags, (bit))
+#define DokanFCBFlagsClearBit(fcb, bit) ClearLongFlag((fcb)->Flags, (bit))
+
+#define DokanCCBFlagsGet DokanFCBFlagsGet
+#define DokanCCBFlagsIsSet DokanFCBFlagsIsSet
+#define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
+#define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
+
 
 #endif // DOKAN_H_

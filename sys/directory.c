@@ -157,7 +157,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
 
   initial = (BOOLEAN)(ccb->SearchPattern == NULL &&
-                      !(ccb->Flags & DOKAN_DIR_MATCH_ALL));
+                      !(DokanCCBFlagsIsSet(ccb, DOKAN_DIR_MATCH_ALL)));
 
   // this is an initial query
   if (initial) {
@@ -188,7 +188,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                     ccb->SearchPatternLength);
 
     } else {
-      ccb->Flags |= DOKAN_DIR_MATCH_ALL;
+      DokanCCBFlagsSetBit(ccb, DOKAN_DIR_MATCH_ALL);
     }
   }
 
@@ -283,13 +283,12 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRO(fcb);
 
-  if (!(fcb->Flags & DOKAN_FILE_DIRECTORY)) {
-    DokanFCBUnlock(fcb);
+  if (!DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
       vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
       irpSp->Flags & SL_WATCH_TREE ? TRUE : FALSE, FALSE,

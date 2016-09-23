@@ -79,15 +79,10 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    DokanFCBLockRO(fcb);
-    fcbLocked = TRUE;
-    if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
-    // Drop lock here, consider atomic flag access in the future,
-    DokanFCBUnlock(fcb);
-    fcbLocked = FALSE;
 
     if (Irp->MdlAddress) {
       DDbgPrint("  use MdlAddress\n");
