@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+### Changed
+- Driver - Use atomic operations for FCB and CCB flags instead of locks.
+
 ### Fixed
 - Driver - `CcPurgeCacheSection` could cause deadlock when fcb was locked in the same time.
 
