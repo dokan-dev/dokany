@@ -98,7 +98,7 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
     return STATUS_NOT_IMPLEMENTED;
 
-  if (!dispositionInfo->DeleteFile) {
+  if (dispositionInfo->DeleteFile == FileInfo->DeleteOnClose) {
     return STATUS_SUCCESS;
   }
 
@@ -112,6 +112,8 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
         (byHandleFileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0)
       return STATUS_CANNOT_DELETE;
   }
+
+  FileInfo->DeleteOnClose = (dispositionInfo->DeleteFile) ? TRUE : FALSE;
 
   if (FileInfo->IsDirectory) {
     return DokanOperations->DeleteDirectory(

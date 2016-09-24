@@ -727,13 +727,11 @@ MirrorFindFiles(LPCWSTR FileName,
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
   WCHAR filePath[MAX_PATH];
-  // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
+  HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, MAX_PATH, FileName);
-  DbgPrint(L"DeleteFile %s\n", filePath);
+  DbgPrint(L"DeleteFile %s - %d\n", filePath, DokanFileInfo->DeleteOnClose);
 
   DWORD dwAttrib = GetFileAttributes(filePath);
 
@@ -741,13 +739,17 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
       (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
     return STATUS_ACCESS_DENIED;
 
+  FILE_DISPOSITION_INFO fdi;
+  fdi.DeleteFile = DokanFileInfo->DeleteOnClose;
+  if (!SetFileInformationByHandle(handle, FileDispositionInfo, &fdi,
+                                  sizeof(FILE_DISPOSITION_INFO)))
+    return DokanNtStatusFromWin32(GetLastError());
+
   return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
   WCHAR filePath[MAX_PATH];
   // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
   HANDLE hFind;
@@ -757,7 +759,12 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   ZeroMemory(filePath, sizeof(filePath));
   GetFilePath(filePath, MAX_PATH, FileName);
 
-  DbgPrint(L"DeleteDirectory %s\n", filePath);
+  DbgPrint(L"DeleteDirectory %s - %d\n", filePath,
+           DokanFileInfo->DeleteOnClose);
+
+  if (!DokanFileInfo->DeleteOnClose)
+    //Dokan notify that the file is requested not to be deleted.
+    return STATUS_SUCCESS;
 
   fileLen = wcslen(filePath);
   if (filePath[fileLen - 1] != L'\\') {

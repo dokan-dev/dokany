@@ -33,7 +33,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #ifdef _EXPORTING
 /** Export dokan API see also dokan.def for export */
-#define DOKANAPI __stdcall    
+#define DOKANAPI __stdcall
 #else
 /** Import dokan API */
 #define DOKANAPI __declspec(dllimport) __stdcall
@@ -399,6 +399,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \brief DeleteFile Dokan API callback
   *
   * Check if it is possible to delete a file.
+  *
+  * DeleteFile will also be called with DOKAN_FILE_INFO.DeleteOnClose set to \c FALSE
+  * to notify the driver when the file is no longer requested to be deleted.
   * 
   * You should not delete the file in DeleteFile, but instead
   * you must only check whether you can delete the file or not,
@@ -422,6 +425,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \brief DeleteDirectory Dokan API callback
   * 
   * Check if it is possible to delete a directory.
+  *
+  * DeleteDirectory will also be called with DOKAN_FILE_INFO.DeleteOnClose set to \c FALSE
+  * to notify the driver when the file is no longer requested to be deleted.
   * 
   * You should not delete the Directory in DeleteDirectory, but instead
   * you must only check whether you can delete the file or not,
