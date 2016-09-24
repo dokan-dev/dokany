@@ -570,15 +570,15 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
             DDbgPrint("  Cannot delete user mapped image\n");
             status = STATUS_CANNOT_DELETE;
           } else {
-            ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
-            fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
+            DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+            DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
             DDbgPrint("   FileObject->DeletePending = TRUE\n");
             IrpEntry->FileObject->DeletePending = TRUE;
           }
 
         } else {
-          ccb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
-          fcb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
+          DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
+          DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
           DDbgPrint("   FileObject->DeletePending = FALSE\n");
           IrpEntry->FileObject->DeletePending = FALSE;
         }
@@ -636,7 +636,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         break;
       case FileDispositionInformation:
         if (IrpEntry->FileObject->DeletePending) {
-          if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+          if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
             DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                                     FILE_ACTION_REMOVED);
           } else {

@@ -244,7 +244,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
       if (ccb) {
         eventContext->Context = ccb->UserContext;
-        eventContext->FileFlags = ccb->Flags;
+        eventContext->FileFlags = DokanCCBFlagsGet(ccb);
         // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
       }
 

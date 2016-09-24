@@ -53,6 +53,7 @@ Return Value:
   PVOID currentAddress = NULL;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
+  BOOLEAN fcbLocked = FALSE;
   BOOLEAN isPagingIo = FALSE;
   BOOLEAN isSynchronousIo = FALSE;
   BOOLEAN noCache = FALSE;
@@ -149,9 +150,8 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-    DokanFCBLockRO(fcb);
 
-    if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DDbgPrint("   DOKAN_FILE_DIRECTORY %p\n", fcb);
       status = STATUS_INVALID_PARAMETER;
       __leave;
@@ -177,6 +177,8 @@ Return Value:
       ExReleaseResourceLite(&fcb->PagingIoResource);
     }
 
+    DokanFCBLockRO(fcb);
+    fcbLocked = TRUE;
     // length of EventContext is sum of file name length and itself
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
 
@@ -249,7 +251,7 @@ Return Value:
     // register this IRP to pending IPR list and make it pending status
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
   } __finally {
-    if(fcb)
+    if(fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, readLength);

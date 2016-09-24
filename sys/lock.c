@@ -49,18 +49,17 @@ DokanCommonLockControl(__in PIRP Irp) {
     DDbgPrint("    DokanOplockRequest STATUS_INVALID_PARAMETER\n");
     return STATUS_INVALID_PARAMETER;
   }
-  DokanFCBLockRW(Fcb);
 
   //
   //  If the file is not a user file open then we reject the request
   //  as an invalid parameter
   //
-  if (FlagOn(Fcb->Flags, DOKAN_FILE_DIRECTORY)) {
+  if (DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
     DDbgPrint("  DokanCommonLockControl -> STATUS_INVALID_PARAMETER\n", 0);
-    DokanFCBUnlock(Fcb);
     return STATUS_INVALID_PARAMETER;
   }
 
+  DokanFCBLockRW(Fcb);
   try {
 
 //

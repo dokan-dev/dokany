@@ -710,8 +710,8 @@ Return Value:
     // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
     // for windows 8
     if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-      fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
-      ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
+      DokanFCBFlagsSetBit(fcb,  DOKAN_DELETE_ON_CLOSE);
+      DokanCCBFlagsSetBit(ccb,  DOKAN_DELETE_ON_CLOSE);
       DDbgPrint(
           "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
     }
@@ -930,7 +930,7 @@ Return Value:
 
     // other context info
     eventContext->Context = 0;
-    eventContext->FileFlags |= fcb->Flags;
+    eventContext->FileFlags |= DokanFCBFlagsGet(fcb);
 
     // copy the file name
 
@@ -1308,20 +1308,16 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     } else {
       DDbgPrint("  DOKAN_FILE_DIRECTORY %p\n", fcb);
     }
-    fcb->Flags |= DOKAN_FILE_DIRECTORY;
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_DIRECTORY);
   }
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
   if (NT_SUCCESS(status)) {
-    ccb->Flags |= DOKAN_FILE_OPENED;
+    DokanCCBFlagsSetBit(ccb,  DOKAN_FILE_OPENED);
   }
-  ExReleaseResourceLite(&ccb->Resource);
-  KeLeaveCriticalRegion();
 
   if (NT_SUCCESS(status)) {
     if (info == FILE_CREATED) {
-      if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+      if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
         DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                                 FILE_ACTION_ADDED);
       } else {

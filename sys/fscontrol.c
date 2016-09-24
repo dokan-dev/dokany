@@ -101,8 +101,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   //  Read-Handle
   //  oplock only.
   //
-  // FIXME - should we synchronize access here on Fcb->Flags?
-  if (FlagOn(Fcb->Flags, DOKAN_FILE_DIRECTORY) &&
+  if ((DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) &&
       ((FsControlCode != FSCTL_REQUEST_OPLOCK) ||
        !FsRtlOplockIsSharedRequest(Irp))) {
 
@@ -144,7 +143,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
         //
         //  Byte-range locks are only valid on files.
         //
-        if (!FlagOn(Fcb->Flags, DOKAN_FILE_DIRECTORY)) {
+        if (!DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
 
 //
 //  Set OplockCount to nonzero if FsRtl denies access
@@ -205,7 +204,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
           FlagOn(InputBuffer->RequestedOplockLevel, OPLOCK_LEVEL_CACHE_HANDLE))
 #endif
              ) &&
-        FlagOn(Fcb->Flags, DOKAN_DELETE_ON_CLOSE)) {
+        DokanFCBFlagsIsSet(Fcb, DOKAN_DELETE_ON_CLOSE)) {
 
       DDbgPrint("    DokanOplockRequest STATUS_DELETE_PENDING\n");
       return STATUS_DELETE_PENDING;
