@@ -31,8 +31,8 @@
   
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
-          Start-FileDownload "https://cygwin.com/setup-x86_64.exe" -FileName "setup-x86_64.exe"
+          wget "https://cygwin.com/setup-x86.exe" -OutFile "setup-x86.exe"
+          wget "https://cygwin.com/setup-x86_64.exe" -OutFile "setup-x86_64.exe"
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: " $cygwinexe -NoNewline
