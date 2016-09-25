@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Driver - Use atomic operations for FCB and CCB flags instead of locks.
+- Update Windows SDK to 10.0.14393
+- Library - Call now DeleteFile and DeleteDirectory with DeleteOnClose set at a delete request OR canceled.
 
 ### Fixed
 - Driver - `CcPurgeCacheSection` could cause deadlock when fcb was locked in the same time.
