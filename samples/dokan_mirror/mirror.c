@@ -739,11 +739,13 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
       (dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
     return STATUS_ACCESS_DENIED;
 
-  FILE_DISPOSITION_INFO fdi;
-  fdi.DeleteFile = DokanFileInfo->DeleteOnClose;
-  if (!SetFileInformationByHandle(handle, FileDispositionInfo, &fdi,
-                                  sizeof(FILE_DISPOSITION_INFO)))
-    return DokanNtStatusFromWin32(GetLastError());
+  if (handle && handle != INVALID_HANDLE_VALUE) {
+    FILE_DISPOSITION_INFO fdi;
+    fdi.DeleteFile = DokanFileInfo->DeleteOnClose;
+    if (!SetFileInformationByHandle(handle, FileDispositionInfo, &fdi,
+                                    sizeof(FILE_DISPOSITION_INFO)))
+      return DokanNtStatusFromWin32(GetLastError());
+  }
 
   return STATUS_SUCCESS;
 }
