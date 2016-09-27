@@ -368,10 +368,15 @@ typedef struct _DokanFileControlBlock {
 //#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
 
 typedef struct _DokanContextControlBlock {
+  // Locking: Read only field. No locking needed.
   FSD_IDENTIFIER Identifier;
+  // Locking: Main lock for CCBs.
   ERESOURCE Resource;
+  // Locking: Read only field. No locking needed.
   PDokanFCB Fcb;
+  // Locking: Modified with the *FCB* lock held.
   LIST_ENTRY NextCCB;
+
   ULONG64 Context;
   ULONG64 UserContext;
 
@@ -381,7 +386,7 @@ typedef struct _DokanContextControlBlock {
   // Locking: Use atomic flag operations - DokanCCBFlags*
   ULONG Flags;
 
-  int FileCount;
+  // Locking: Read only field. No locking needed.
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
 
