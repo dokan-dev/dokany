@@ -33,9 +33,9 @@ namespace SetAssemblyVersion
             Console.WriteLine("");
 
             var version =
-                $"{productVersion.Major}.{productVersion.Minor}.{productVersion.Build}.{productVersion.Revision}";
+                $"{productVersion.Major}.{productVersion.Minor}.{productVersion.Build}.{productVersion.Revision.ToString("0000")}";
             var versionComma =
-                $"{productVersion.Major},{productVersion.Minor},{productVersion.Build},{productVersion.Revision}";
+                $"{productVersion.Major},{productVersion.Minor},{productVersion.Build},{productVersion.Revision.ToString("0000")}";
 
                 var xmlFile = args[1].Replace("\"", "").Trim();
 
@@ -175,7 +175,7 @@ namespace SetAssemblyVersion
                 }
                 else if (line.ToLower().Contains("buildversion"))
                 {
-                    value = productVer.Revision.ToString();
+                    value = productVer.Revision.ToString("0000");
                     // value = yearOnly;
                     line = string.Format(cLineFormat, parts[0], value);
                 }
