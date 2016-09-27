@@ -512,7 +512,7 @@ DokanCheckCCB(__in PDokanDCB Dcb, __in_opt PDokanCCB Ccb) {
     return FALSE;
   }
 
-  if (Ccb == NULL || Ccb == 0) {
+  if (Ccb == NULL) {
     PrintIdType(Dcb);
     DDbgPrint("   ccb is NULL\n");
     return FALSE;
