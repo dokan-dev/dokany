@@ -363,9 +363,9 @@ typedef struct _DokanFileControlBlock {
 #define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); } while(0)
 #define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(&fcb->Resource)
 #define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(&fcb->Resource)
-//#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
-//#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
-//#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
 
 typedef struct _DokanContextControlBlock {
   // Locking: Read only field. No locking needed.
