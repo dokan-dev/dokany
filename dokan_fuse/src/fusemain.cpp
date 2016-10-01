@@ -956,10 +956,11 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
     lock->add_file_unlocked(file.get());
   }
   file->file_lock = lock;
-  LeaveCriticalSection(&this->lock);
 
-  if (!old_lock)
+  if (!old_lock) {
+    LeaveCriticalSection(&this->lock);
     return res;
+  }
 
   // check previous files with same names
   DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -972,6 +973,7 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
     lock->add_file_unlocked(file.get());
   }
   LeaveCriticalSection(&lock->lock);
+  LeaveCriticalSection(&this->lock);
   return res;
 }
 
