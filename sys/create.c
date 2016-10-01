@@ -570,6 +570,7 @@ Return Value:
               relatedFcb->FileName.Buffer != NULL) {
             relatedFileName = &relatedFcb->FileName;
           }
+          DokanFCBUnlock(relatedFcb);
         }
       }
     }
@@ -1197,8 +1198,6 @@ Return Value:
       }
     }
 #endif
-    if(relatedFcb)
-      DokanFCBUnlock(relatedFcb);
     if(fcb)
       DokanFCBUnlock(fcb);
 
