@@ -21,3 +21,4 @@ DokanDebugMode
 DokanMapKernelToUserCreateFileFlags
 DokanGetMountPointList
 DokanNtStatusFromWin32
+DokanMapStandardToGenericAccess

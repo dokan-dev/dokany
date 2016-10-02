@@ -193,6 +193,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   DWORD fileAttributesAndFlags;
   DWORD error = 0;
   SECURITY_ATTRIBUTES securityAttrib;
+  ACCESS_MASK genericDesiredAccess;
 
   securityAttrib.nLength = sizeof(securityAttrib);
   securityAttrib.lpSecurityDescriptor =
@@ -202,6 +203,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   DokanMapKernelToUserCreateFileFlags(
       FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
       &creationDisposition);
+
+  genericDesiredAccess = DokanMapStandardToGenericAccess(DesiredAccess);
 
   GetFilePath(filePath, MAX_PATH, FileName);
 
@@ -222,7 +225,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
   MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
 
-  DbgPrint(L"\tAccessMode = 0x%x\n", DesiredAccess);
+  DbgPrint(L"\tDesiredAccess = 0x%x\n", DesiredAccess);
 
   MirrorCheckFlag(DesiredAccess, GENERIC_READ);
   MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
@@ -324,9 +327,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     }
     if (status == STATUS_SUCCESS) {
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-      handle = CreateFile(
-          filePath, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
-          fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+      handle =
+          CreateFile(filePath, genericDesiredAccess, ShareAccess,
+                     &securityAttrib, OPEN_EXISTING,
+                     fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -346,14 +350,14 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         CreateDisposition == FILE_CREATE)
       return STATUS_OBJECT_NAME_COLLISION; // File already exist because
                                            // GetFileAttributes found it
-    handle =
-        CreateFile(filePath,
-                   DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-                   ShareAccess,
-                   &securityAttrib, // security attribute
-                   creationDisposition,
-                   fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
-                   NULL);                  // template file handle
+    handle = CreateFile(
+        filePath,
+        genericDesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+        ShareAccess,
+        &securityAttrib, // security attribute
+        creationDisposition,
+        fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
+        NULL);                  // template file handle
 
     if (handle == INVALID_HANDLE_VALUE) {
       error = GetLastError();
