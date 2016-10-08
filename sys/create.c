@@ -26,7 +26,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 // We must NOT call without VCB lock
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName, __in ULONG FileNameLength) {
+PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
+                           __in ULONG FileNameLength) {
   PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
 
   if (fcb == NULL) {
@@ -529,25 +530,27 @@ Return Value:
       DDbgPrint("  Here we only go in if some antivirus software tries to "
                 "create files before startup is finished.\n");
       if (fileObject->FileName.Length > 0) {
-          DDbgPrint("  Verify if the system tries to access System Volume\n");
-          UNICODE_STRING systemVolume;
-          RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-          if (fileObject->FileName.Length >= systemVolume.Length) {
-              LPCWSTR p1, p2;
-              p1 = systemVolume.Buffer;
-              p2 = fileObject->FileName.Buffer;
-              unsigned int len = 0;
-              LONG ret = 0;
-              while (!ret && len < 26) {
-                  ret = *p1++ - *p2++;
-                  ++len;
-              }
-              if (ret == 0 && (systemVolume.Length == fileObject->FileName.Length || *p2 == L'\\')) {
-                  DDbgPrint("  It's an access to System Volume, so don't return SUCCESS. We don't have one.")
-                  status = STATUS_NO_SUCH_FILE;
-                  __leave;
-              }
+        DDbgPrint("  Verify if the system tries to access System Volume\n");
+        UNICODE_STRING systemVolume;
+        RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
+        if (fileObject->FileName.Length >= systemVolume.Length) {
+          LPCWSTR p1, p2;
+          p1 = systemVolume.Buffer;
+          p2 = fileObject->FileName.Buffer;
+          unsigned int len = 0;
+          LONG ret = 0;
+          while (!ret && len < 26) {
+            ret = *p1++ - *p2++;
+            ++len;
           }
+          if (ret == 0 && (systemVolume.Length == fileObject->FileName.Length ||
+                           *p2 == L'\\')) {
+            DDbgPrint("  It's an access to System Volume, so don't return "
+                      "SUCCESS. We don't have one.") status =
+                STATUS_NO_SUCH_FILE;
+            __leave;
+          }
+        }
       }
       status = STATUS_SUCCESS;
       __leave;
@@ -589,7 +592,23 @@ Return Value:
           DokanFCBLockRO(relatedFcb);
           if (relatedFcb->FileName.Length > 0 &&
               relatedFcb->FileName.Buffer != NULL) {
-            relatedFileName = &relatedFcb->FileName;
+            relatedFileName = ExAllocatePool(sizeof(UNICODE_STRING));
+            if (relatedFileName == NULL) {
+              DDbgPrint("    Can't allocatePool for relatedFileName\n");
+              status = STATUS_INSUFFICIENT_RESOURCES;
+              __leave;
+            }
+            relatedFileName->Buffer =
+                ExAllocatePool(relatedFcb->FileName.MaximumLength);
+            if (relatedFileName->Buffer == NULL) {
+              DDbgPrint("    Can't allocatePool for relatedFileName buffer\n");
+              ExFreePool(relatedFileName);
+              relatedFileName = NULL;
+              status = STATUS_INSUFFICIENT_RESOURCES;
+              __leave;
+            }
+            relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
+            RtlUnicodeStringCopy(relatedFileName, &relatedFcb->FileName);
           }
           DokanFCBUnlock(relatedFcb);
         }
@@ -732,8 +751,8 @@ Return Value:
     // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
     // for windows 8
     if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-      DokanFCBFlagsSetBit(fcb,  DOKAN_DELETE_ON_CLOSE);
-      DokanCCBFlagsSetBit(ccb,  DOKAN_DELETE_ON_CLOSE);
+      DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+      DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
       DDbgPrint(
           "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
     }
@@ -1219,8 +1238,13 @@ Return Value:
       }
     }
 #endif
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
+
+    if (relatedFileName) {
+      ExFreePool(relatedFileName->Buffer);
+      ExFreePool(relatedFileName);
+    }
 
     if (!NT_SUCCESS(status)) {
 
@@ -1332,7 +1356,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   }
 
   if (NT_SUCCESS(status)) {
-    DokanCCBFlagsSetBit(ccb,  DOKAN_FILE_OPENED);
+    DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
   }
 
   if (NT_SUCCESS(status)) {
@@ -1356,7 +1380,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     IrpEntry->FileObject->FsContext2 = NULL;
   }
 
-  if(fcb)
+  if (fcb)
     DokanFCBUnlock(fcb);
 
   DokanCompleteIrpRequest(irp, status, info);
