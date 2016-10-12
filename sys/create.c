@@ -596,6 +596,7 @@ Return Value:
             if (relatedFileName == NULL) {
               DDbgPrint("    Can't allocatePool for relatedFileName\n");
               status = STATUS_INSUFFICIENT_RESOURCES;
+              DokanFCBUnlock(relatedFcb);
               __leave;
             }
             relatedFileName->Buffer =
@@ -605,6 +606,7 @@ Return Value:
               ExFreePool(relatedFileName);
               relatedFileName = NULL;
               status = STATUS_INSUFFICIENT_RESOURCES;
+              DokanFCBUnlock(relatedFcb);
               __leave;
             }
             relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
