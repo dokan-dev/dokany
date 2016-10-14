@@ -1036,10 +1036,13 @@ Return Value:
             !FlagOn(irpSp->Parameters.Create.Options,
                     FILE_COMPLETE_IF_OPLOCKED)) {
 
+          POPLOCK oplock = DokanGetFcbOplock(fcb);
+          DokanFCBUnlock(fcb);
           OplockBreakStatus = FsRtlOplockBreakH(
-              DokanGetFcbOplock(fcb), Irp, 0, eventContext,
+              oplock, Irp, 0, eventContext,
               NULL /* DokanOplockComplete */, // block instead of callback
               DokanPrePostIrp);
+          DokanFCBLockRW(fcb);
 
           //
           //  If FsRtlOplockBreakH returned STATUS_PENDING,
