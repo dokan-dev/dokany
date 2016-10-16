@@ -458,33 +458,46 @@ FuseGetFileSecurity(LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
     // We handle directories for the Explorer's
     // context menu. (New Folder, ...)
 
-    // SDDL used by dokan driver
+    // Authenticated users rights
+    PSECURITY_DESCRIPTOR SecurityDescriptorTmp = nullptr;
+    ULONG Size = 0;
     if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-            "D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)",
-            SDDL_REVISION_1, &SecurityDescriptor, &BufferLength)) {
+            "D:PAI(A;OICI;FA;;;AU)", SDDL_REVISION_1, &SecurityDescriptorTmp,
+            &Size)) {
       return STATUS_NOT_IMPLEMENTED;
     }
 
-    LPTSTR pStringBuffer = NULL;
+    LPTSTR pStringBuffer = nullptr;
     if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-            SecurityDescriptor, SDDL_REVISION_1, *SecurityInformation,
-            &pStringBuffer, NULL)) {
+            SecurityDescriptorTmp, SDDL_REVISION_1, *SecurityInformation,
+            &pStringBuffer, nullptr)) {
       return STATUS_NOT_IMPLEMENTED;
     }
 
+    LocalFree(SecurityDescriptorTmp);
+    SecurityDescriptorTmp = nullptr;
+    Size = 0;
     if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-            pStringBuffer, SDDL_REVISION_1, &SecurityDescriptor,
-            &BufferLength)) {
+            pStringBuffer, SDDL_REVISION_1, &SecurityDescriptorTmp, &Size)) {
       return STATUS_NOT_IMPLEMENTED;
     }
 
-    if (pStringBuffer != NULL)
+    if (Size > BufferLength) {
+      *LengthNeeded = Size;
+      return STATUS_BUFFER_OVERFLOW;
+    }
+
+    memcpy(SecurityDescriptor, SecurityDescriptorTmp, Size);
+    *LengthNeeded = Size;
+
+    if (pStringBuffer != nullptr)
       LocalFree(pStringBuffer);
+    if (SecurityDescriptorTmp != nullptr)
+      LocalFree(SecurityDescriptorTmp);
 
     return STATUS_SUCCESS;
-  } else {
-    return STATUS_NOT_IMPLEMENTED;
   }
+  return STATUS_NOT_IMPLEMENTED;
 }
 
 int fuse_interrupted(void) {
