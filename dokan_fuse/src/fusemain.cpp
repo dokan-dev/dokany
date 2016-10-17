@@ -74,9 +74,9 @@ impl_fuse_context::impl_fuse_context(const struct fuse_operations *ops,
                                      unsigned int filemask,
                                      unsigned int dirmask, const char *fsname,
                                      const char *volname)
-    : ops_(*ops), debug_(debug), filemask_(filemask), dirmask_(dirmask),
-      fsname_(fsname), volname_(volname),
-      user_data_(user_data) // Use current user data
+    : ops_(*ops), user_data_(user_data), debug_(debug), filemask_(filemask),
+      dirmask_(dirmask), fsname_(fsname),
+      volname_(volname) // Use current user data
 {
   // Reset connection info
   memset(&conn_info_, 0, sizeof(fuse_conn_info));
@@ -256,8 +256,9 @@ int impl_fuse_context::check_and_resolve(std::string *name) {
 
   struct FUSE_STAT stat = {0};
   CHECKED(ops_.getattr(name->c_str(), &stat));
-  if (S_ISLNK(stat.st_mode))
+  if (S_ISLNK(stat.st_mode)) {
     CHECKED(resolve_symlink(*name, name));
+  }
 
   return 0;
 }
@@ -957,10 +958,11 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
     lock->add_file_unlocked(file.get());
   }
   file->file_lock = lock;
-  LeaveCriticalSection(&this->lock);
 
-  if (!old_lock)
+  if (!old_lock) {
+    LeaveCriticalSection(&this->lock);
     return res;
+  }
 
   // check previous files with same names
   DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -973,6 +975,7 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
     lock->add_file_unlocked(file.get());
   }
   LeaveCriticalSection(&lock->lock);
+  LeaveCriticalSection(&this->lock);
   return res;
 }
 

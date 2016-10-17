@@ -4,7 +4,6 @@
 #include <sddl.h>
 #include "utils.h"
 #include "fusemain.h"
-#include "ScopeGuard.h"
 #include "dokanfuse.h"
 #include "../../dokan/dokani.h"
 #include <stdio.h>
@@ -139,7 +138,7 @@ CONST_END(cDisposition)
 void DebugConstant(const char *name, ULONG value, Constant *c) {
   while (c->name != NULL && c->value != value)
     ++c;
-  fprintf(stderr, "%s: %s (%lx)\n", name, c->name ? c->name : "unknown!",
+  fprintf(stderr, "%s: %s (" PRIxULONG ")\n", name, c->name ? c->name : "unknown!",
           value);
 }
 
@@ -181,9 +180,10 @@ FuseCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
     DebugConstantBit("\tDesiredAccess", EventInfo->DesiredAccess, cAccessMode);
     DebugConstantBit("\tShareAccess", EventInfo->ShareAccess, cShareMode);
     DebugConstant("\tDisposition", EventInfo->CreateDisposition, cDisposition);
-    FPRINTF(stderr, "\tAttributes: %u (0x%x)\n", EventInfo->FileAttributes,
+    FPRINTF(stderr, "\tAttributes: " PRIuULONG " (0x" PRIxULONG ")\n", EventInfo->FileAttributes,
 		EventInfo->FileAttributes);
-    FPRINTF(stderr, "\tOptions: %u (0x%x)\n", EventInfo->CreateOptions, EventInfo->CreateOptions);
+    FPRINTF(stderr, "\tOptions: " PRIuULONG " (0x" PRIxULONG ")\n", EventInfo->CreateOptions, EventInfo->CreateOptions);
+
     fflush(stderr);
   }
 
@@ -236,9 +236,10 @@ static NTSTATUS DOKAN_CALLBACK FuseReadFile(DOKAN_READ_FILE_EVENT *EventInfo) {
 static NTSTATUS DOKAN_CALLBACK FuseWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo) {
 
   impl_fuse_context *impl = the_impl;
-  if (impl->debug())
-    FPRINTF(stderr, "WriteFile: %ls, offset %lld, length %lu\n", EventInfo->FileName,
+  if (impl->debug()) {
+    FPRINTF(stderr, "WriteFile: %ls, offset %lld, length " PRIuDWORD "\n", EventInfo->FileName,
 		EventInfo->Offset, EventInfo->NumberOfBytesToWrite);
+  }
 
   impl_chain_guard guard(impl, EventInfo->DokanFileInfo->ProcessId);
 
@@ -521,8 +522,9 @@ FuseGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
 
   impl_fuse_context *impl = the_impl;
 
-  if (impl->debug())
-    FPRINTF(stderr, "GetFileSecurity: %x\n", EventInfo->SecurityInformation);
+  if (impl->debug()) {
+    FPRINTF(stderr, "GetFileSecurity: " PRIxDWORD "\n", EventInfo->SecurityInformation);
+  }
 
   BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
   ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
@@ -542,33 +544,35 @@ FuseGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
     // We handle directories for the Explorer's
     // context menu. (New Folder, ...)
 
-    // SDDL used by dokan driver
+
     if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-            "D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)",
+            "D:PAI(A;OICI;FA;;;AU)",
             SDDL_REVISION_1, &EventInfo->SecurityDescriptor, &EventInfo->SecurityDescriptorSize)) {
+
       return STATUS_NOT_IMPLEMENTED;
     }
 
-    LPTSTR pStringBuffer = NULL;
+	LPTSTR pStringBuffer = nullptr;
+
     if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
             EventInfo->SecurityDescriptor, SDDL_REVISION_1, EventInfo->SecurityInformation,
-            &pStringBuffer, NULL)) {
+            &pStringBuffer, nullptr)) {
+
       return STATUS_NOT_IMPLEMENTED;
     }
 
     if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
             pStringBuffer, SDDL_REVISION_1, &EventInfo->SecurityDescriptor,
             &EventInfo->SecurityDescriptorSize)) {
+
       return STATUS_NOT_IMPLEMENTED;
     }
 
-    if (pStringBuffer != NULL)
-      LocalFree(pStringBuffer);
+    LocalFree(pStringBuffer);
 
     return STATUS_SUCCESS;
-  } else {
-    return STATUS_NOT_IMPLEMENTED;
   }
+  return STATUS_NOT_IMPLEMENTED;
 }
 
 int fuse_interrupted(void) {

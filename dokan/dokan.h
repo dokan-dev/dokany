@@ -417,6 +417,7 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx">See ZwCreateFile for more information about the parameters of this callback (MSDN).</a>
   * \see DokanMapKernelToUserCreateFileFlags
+  * \see DokanMapStandardToGenericAccess
   */
 NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(_In_ DOKAN_CREATE_FILE_EVENT *EventInfo);
   
@@ -528,6 +529,9 @@ NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(_In_ DOKAN_CREATE_FILE_EVENT *EventInfo);
   * \brief DeleteFile Dokan API callback
   *
   * Check if it is possible to delete a file.
+  *
+  * DeleteFile will also be called with DOKAN_FILE_INFO.DeleteOnClose set to \c FALSE
+  * to notify the driver when the file is no longer requested to be deleted.
   * 
   * You should not delete the file in DeleteFile, but instead
   * you must only check whether you can delete the file or not,
@@ -883,6 +887,15 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
 	DOKAN_CREATE_FILE_EVENT *EventInfo,
     DWORD *outFileAttributesAndFlags,
 	DWORD *outCreationDisposition);
+
+/**
+* \brief Convert IRP_MJ_CREATE DesiredAccess to generic rights.
+*
+* \param DesiredAccess Standard rights to convert
+* \return New DesiredAccess with generic rights.
+* \see <a href="https://msdn.microsoft.com/windows/hardware/drivers/ifs/access-mask">Access Mask (MSDN)</a>
+*/
+ACCESS_MASK DOKANAPI DokanMapStandardToGenericAccess(ACCESS_MASK DesiredAccess);
 
 /**
  * \brief Convert WIN32 error to NTSTATUS

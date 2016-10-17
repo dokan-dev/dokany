@@ -1700,6 +1700,43 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   return TRUE;
 }
 
+// We are using DesiredAccess directly from the IRP_MJ_CREATE.
+// This DesiredAccess has been converted from generic rights (user CreateFile request) to standard rights.
+// https://msdn.microsoft.com/windows/hardware/drivers/ifs/access-mask
+// TODO Merge it with DokanMapKernelToUserCreateFileFlags for Dokan 1.1.0 (break API)
+ACCESS_MASK DOKANAPI
+DokanMapStandardToGenericAccess(ACCESS_MASK DesiredAccess) {
+  BOOL genericRead = FALSE, genericWrite = FALSE, genericExecute = FALSE,
+       genericAll = FALSE;
+  if ((DesiredAccess & FILE_GENERIC_READ) == FILE_GENERIC_READ) {
+    DesiredAccess |= GENERIC_READ;
+    genericRead = TRUE;
+  }
+  if ((DesiredAccess & FILE_GENERIC_WRITE) == FILE_GENERIC_WRITE) {
+    DesiredAccess |= GENERIC_WRITE;
+    genericWrite = TRUE;
+  }
+  if ((DesiredAccess & FILE_GENERIC_EXECUTE) == FILE_GENERIC_EXECUTE) {
+    DesiredAccess |= GENERIC_EXECUTE;
+    genericExecute = TRUE;
+  }
+  if ((DesiredAccess & FILE_ALL_ACCESS) == FILE_ALL_ACCESS) {
+    DesiredAccess |= GENERIC_ALL;
+    genericAll = TRUE;
+  }
+
+  if (genericRead)
+    DesiredAccess &= ~FILE_GENERIC_READ;
+  if (genericWrite)
+    DesiredAccess &= ~FILE_GENERIC_WRITE;
+  if (genericExecute)
+    DesiredAccess &= ~FILE_GENERIC_EXECUTE;
+  if (genericAll)
+    DesiredAccess &= ~FILE_ALL_ACCESS;
+
+  return DesiredAccess;
+}
+
 // https://msdn.microsoft.com/en-us/library/windows/hardware/bb530716(v=vs.85).aspx
 BOOL DokanIsBackupName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 

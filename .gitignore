@@ -24,6 +24,7 @@ ReleasePS
 /dokan_wix/Bootstrapper/Redist
 /*.opendb
 /dokan_wix/msbuild.log
+/dokan_fuse/build/
 /dokan_fuse/CMakeFiles
 /dokan_fuse/CMakeCache.txt
 /dokan_fuse/cygdokanfuse1.dll
@@ -35,3 +36,7 @@ ReleasePS
 /dokan_fuse/libdokanfuse1.dll
 /dokan.VC.db
 /documentations/doc
+/dokan_wix/*.msi
+/dokan_wix/disk1
+/dokan_wix/setup.inf
+/dokan_wix/setup.rpt

@@ -308,28 +308,43 @@ typedef struct _DokanVolumeControlBlock {
 #define DCB_DELETE_PENDING 0x00000001
 
 typedef struct _DokanFileControlBlock {
+  // Locking: Identifier is read-only, no locks needed. 
   FSD_IDENTIFIER Identifier;
 
+  // Locking: FIXME
   FSRTL_ADVANCED_FCB_HEADER AdvancedFCBHeader;
+  // Locking: FIXME
   SECTION_OBJECT_POINTERS SectionObjectPointers;
 
+  // Locking: FIXME
   FAST_MUTEX AdvancedFCBHeaderMutex;
 
+  // Locking: FIXME is this needed in future?
   ERESOURCE MainResource;
+  // Locking: Lock for paging io.
   ERESOURCE PagingIoResource;
 
+  // Locking: Vcb pointer is read-only, no locks needed. 
   PDokanVCB Vcb;
+  // Locking: DokanFCBLock{RO,RW} and usually vcb lock
   LIST_ENTRY NextFCB;
+  // Locking: Used for DokanFCBLock{RO,RW}
   ERESOURCE Resource;
+  // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
 
+  // Locking: DokanFCBLock{RO,RW}
   LONG FileCount;
 
+  // Locking: Use atomic flag operations - DokanFCBFlags*
   ULONG Flags;
+  // Locking: DokanFCBLock{RO,RW}
   SHARE_ACCESS ShareAccess;
 
+  // Locking: DokanFCBLock{RO,RW} - e.g. renames change this field.
   UNICODE_STRING FileName;
 
+  // Locking: DokanFCBLock{RO,RW}
   FILE_LOCK FileLock;
 
 #if (NTDDI_VERSION < NTDDI_WIN8)
@@ -337,6 +352,7 @@ typedef struct _DokanFileControlBlock {
   //  The following field is used by the oplock module
   //  to maintain current oplock information.
   //
+  // Locking: DokanFCBLock{RO,RW}
   OPLOCK Oplock;
 #endif
 
@@ -344,20 +360,33 @@ typedef struct _DokanFileControlBlock {
   // uint32 OpenHandleCount;
 } DokanFCB, *PDokanFCB;
 
+#define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); } while(0)
+#define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(&fcb->Resource)
+#define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(&fcb->Resource)
+//#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
+//#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s\n", __FUNCTION__); KeEnterCriticalRegion(); ExReleaseResourceLite(&fcb->Resource); KeLeaveCriticalRegion(); } while(0)
+
 typedef struct _DokanContextControlBlock {
+  // Locking: Read only field. No locking needed.
   FSD_IDENTIFIER Identifier;
+  // Locking: Main lock for CCBs.
   ERESOURCE Resource;
+  // Locking: Read only field. No locking needed.
   PDokanFCB Fcb;
+  // Locking: Modified with the *FCB* lock held.
   LIST_ENTRY NextCCB;
+
   ULONG64 Context;
   ULONG64 UserContext;
 
   PWCHAR SearchPattern;
   ULONG SearchPatternLength;
 
+  // Locking: Use atomic flag operations - DokanCCBFlags*
   ULONG Flags;
 
-  int FileCount;
+  // Locking: Read only field. No locking needed.
   ULONG MountId;
 } DokanCCB, *PDokanCCB;
 
@@ -617,7 +646,7 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
 VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                              __in ULONG Action);
 
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb);
+PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName, __in ULONG FileNameLength);
 
 NTSTATUS
 DokanFreeFCB(__in PDokanFCB Fcb);
@@ -693,5 +722,16 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 }
 
 #define IsFlagOn(a, b) ((BOOLEAN)(FlagOn(a, b) == b))
+
+#define DokanFCBFlagsGet(fcb) ((fcb)->Flags)
+#define DokanFCBFlagsIsSet(fcb, bit) (((fcb)->Flags)&(bit))
+#define DokanFCBFlagsSetBit(fcb, bit) SetLongFlag((fcb)->Flags, (bit))
+#define DokanFCBFlagsClearBit(fcb, bit) ClearLongFlag((fcb)->Flags, (bit))
+
+#define DokanCCBFlagsGet DokanFCBFlagsGet
+#define DokanCCBFlagsIsSet DokanFCBFlagsIsSet
+#define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
+#define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
+
 
 #endif // DOKAN_H_

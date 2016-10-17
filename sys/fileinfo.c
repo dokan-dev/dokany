@@ -27,7 +27,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   ULONG info = 0;
   ULONG eventLength;
@@ -72,6 +72,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRO(fcb);
 
     switch (irpSp->Parameters.QueryFile.FileInformationClass) {
     case FileBasicInformation:
@@ -207,6 +208,8 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
 
@@ -286,12 +289,13 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PVOID buffer;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   ULONG eventLength;
   PFILE_OBJECT targetFileObject;
   PEVENT_CONTEXT eventContext;
   BOOLEAN isPagingIo = FALSE;
+  BOOLEAN fcbLocked = FALSE;
   PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
   ULONG bufferOffset;
 
@@ -318,9 +322,6 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ccb = (PDokanCCB)fileObject->FsContext2;
     ASSERT(ccb != NULL);
 
-    fcb = ccb->Fcb;
-    ASSERT(fcb != NULL);
-
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
     DokanPrintFileName(fileObject);
 
@@ -329,6 +330,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (Irp->Flags & IRP_PAGING_IO) {
       isPagingIo = TRUE;
     }
+
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
     switch (irpSp->Parameters.SetFile.FileInformationClass) {
     case FileAllocationInformation:
@@ -345,18 +349,14 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileEndOfFileInformation:
       if ((fileObject->SectionObjectPointer != NULL) &&
           (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-        ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 
         pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
 
         if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
                                   &pInfoEoF->EndOfFile)) {
           status = STATUS_USER_MAPPED_FILE;
-          ExReleaseResourceLite(&fcb->Resource);
           __leave;
         }
-
-        ExReleaseResourceLite(&fcb->Resource);
 
         if (!isPagingIo) {
           ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
@@ -403,6 +403,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // calcurate the size of EVENT_CONTEXT
     // it is sum of file name length and size of FileInformation
+    DokanFCBLockRW(fcb);
+    fcbLocked = TRUE;
+
 	bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName) + fcb->FileName.Length + sizeof(WCHAR);
 
 	// the set file information must be ptr aligned
@@ -511,6 +514,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
+    if(fcbLocked) {
+      DokanFCBUnlock(fcb);
+    }
 
     DokanCompleteIrpRequest(Irp, status, 0);
 
@@ -527,7 +533,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
   NTSTATUS status;
   ULONG info = 0;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   UNICODE_STRING oldFileName;
 
   FILE_INFORMATION_CLASS infoClass;
@@ -548,6 +554,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRW(fcb);
 
     ccb->UserContext = EventInfo->Context;
 
@@ -568,15 +575,15 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
             DDbgPrint("  Cannot delete user mapped image\n");
             status = STATUS_CANNOT_DELETE;
           } else {
-            ccb->Flags |= DOKAN_DELETE_ON_CLOSE;
-            fcb->Flags |= DOKAN_DELETE_ON_CLOSE;
+            DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+            DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
             DDbgPrint("   FileObject->DeletePending = TRUE\n");
             IrpEntry->FileObject->DeletePending = TRUE;
           }
 
         } else {
-          ccb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
-          fcb->Flags &= ~DOKAN_DELETE_ON_CLOSE;
+          DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
+          DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
           DDbgPrint("   FileObject->DeletePending = FALSE\n");
           IrpEntry->FileObject->DeletePending = FALSE;
         }
@@ -585,8 +592,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       // if rename is executed, reassign the file name
       if (infoClass == FileRenameInformation) {
         PVOID buffer = NULL;
-
-        ExAcquireResourceExclusiveLite(&fcb->Resource, TRUE);
 
         // this is used to inform rename in the bellow switch case
         oldFileName.Buffer = fcb->FileName.Buffer;
@@ -598,7 +603,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
-          ExReleaseResourceLite(&fcb->Resource);
           ExReleaseResourceLite(&ccb->Resource);
           KeLeaveCriticalRegion();
           __leave;
@@ -616,7 +620,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;
 
-        ExReleaseResourceLite(&fcb->Resource);
       }
     }
 
@@ -638,7 +641,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         break;
       case FileDispositionInformation:
         if (IrpEntry->FileObject->DeletePending) {
-          if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+          if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
             DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                                     FILE_ACTION_REMOVED);
           } else {
@@ -683,6 +686,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     }
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(irp, status, info);
 

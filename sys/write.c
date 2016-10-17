@@ -29,13 +29,14 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   PVOID buffer;
   BOOLEAN writeToEoF = FALSE;
   BOOLEAN isPagingIo = FALSE;
   BOOLEAN isNonCached = FALSE;
   BOOLEAN isSynchronousIo = FALSE;
+  BOOLEAN fcbLocked = FALSE;
 
   __try {
 
@@ -78,7 +79,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
+    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
@@ -138,6 +139,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // the length of EventContext is sum of length to write and length of file
     // name
+    DokanFCBLockRO(fcb);
+    fcbLocked = TRUE;
     eventLength = sizeof(EVENT_CONTEXT) + irpSp->Parameters.Write.Length +
                   fcb->FileName.Length;
 
@@ -307,6 +310,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
+    if(fcbLocked)
+      DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
 

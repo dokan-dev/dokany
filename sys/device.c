@@ -591,8 +591,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
   } break;
   // case IOCTL_MOUNTDEV_UNIQUE_ID_CHANGE_NOTIFY:
-  //	DDbgPrint("   IOCTL_MOUNTDEV_UNIQUE_ID_CHANGE_NOTIFY\n");
-  //	break;
+  //    DDbgPrint("   IOCTL_MOUNTDEV_UNIQUE_ID_CHANGE_NOTIFY\n");
+  //    break;
   case IOCTL_MOUNTDEV_QUERY_STABLE_GUID:
     DDbgPrint("   IOCTL_MOUNTDEV_QUERY_STABLE_GUID\n");
     break;
@@ -841,7 +841,7 @@ DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   if (IsDeletePending(DeviceObject)) {
     DDbgPrint("Device is deleted, so go out here \n");
-	IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
+    IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
     return STATUS_NO_SUCH_DEVICE;
   }
   status = DiskDeviceControl(DeviceObject, Irp);
@@ -863,7 +863,7 @@ Routine Description:
 Arguments:
 
         DeviceObject - Context for the activity.
-        Irp 		 - The device control argument block.
+        Irp          - The device control argument block.
 
 Return Value:
 
@@ -941,9 +941,9 @@ Return Value:
     case IOCTL_KEEPALIVE:
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
-        ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+        ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);
         DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
-        ExReleaseResourceLite(&dcb->Resource);
+        ExReleaseResourceAndLeaveCriticalRegion(&dcb->Resource);
         status = STATUS_SUCCESS;
       } else {
         DDbgPrint(" device is not mounted\n");
@@ -984,8 +984,8 @@ Return Value:
 
     if (status != STATUS_PENDING) {
       if (IsDeletePending(DeviceObject)) {
-		  DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
-		  status = STATUS_DEVICE_REMOVED;
+          DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
+          status = STATUS_DEVICE_REMOVED;
       }
       DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
     }

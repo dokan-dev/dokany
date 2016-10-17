@@ -3,7 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [Unreleased] - 1.0.1.0000
+
+### Changed
+- Driver - Use atomic operations for FCB and CCB flags instead of locks.
+- Update Windows SDK to 10.0.14393
+- Library - Call now DeleteFile and DeleteDirectory with DeleteOnClose set at a delete request OR canceled.
+
+### Fixed
+- Driver - `CcPurgeCacheSection` could cause deadlock when fcb was locked in the same time.
+
+## [1.0.0.5000] - 2016-09-20
 ### Added
 - MAJOR version to binary name
 - Resource information to library with full dokan version
@@ -36,6 +46,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Driver - `SL_OPEN_TARGET_DIRECTORY` is now handle directly by the driver
 - A website with the [documentation](https://dokan-dev.github.io/dokany-doc/html/).
 - Support PagingIO
+- FUSE - Use FUSE-compatible dir-hierarchy
 
 ### Changed
 - Installer - Update redistributable link to VS Update 2
@@ -54,6 +65,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Mirror - Update show usage
 - Driver - Use LookasideLists for DokanCCB and DokanFCB
 - FUSE - Improve and fix debug logs
+- FUSE - Add cmake-install target
+- FUSE - Make utils.h usable under C
 
 ### Fixed
 - Driver - Support hibernation mode 
@@ -76,6 +89,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Mirror - Replace main return -1 by `EXIT_FAILURE`
 - Mirror - Low and high param inversions for Un/LockFile
 - Installer - Correctly check KB3033929 is installed on Win7
+- Driver - Notify correctly when a file is removed with `FILE_FLAG_DELETE_ON_CLOSE`
 
 ### Removed
 - Dokanctl - unused /f option during unmount
@@ -184,7 +198,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v0.8.0...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.0...master
+[1.0.0.5000]: https://github.com/dokan-dev/dokany/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/dokan-dev/dokany/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/dokan-dev/dokany/compare/0.7.2...v0.7.4
 [0.7.2]: https://github.com/dokan-dev/dokany/compare/0.7.1...0.7.2

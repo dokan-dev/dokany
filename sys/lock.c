@@ -29,7 +29,6 @@ DokanCommonLockControl(__in PIRP Irp) {
   PDokanCCB Ccb;
   PFILE_OBJECT fileObject;
 
-  BOOLEAN AcquiredFcb = FALSE;
   PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 
   DDbgPrint("==> DokanCommonLockControl\n");
@@ -55,16 +54,12 @@ DokanCommonLockControl(__in PIRP Irp) {
   //  If the file is not a user file open then we reject the request
   //  as an invalid parameter
   //
-  if (FlagOn(Fcb->Flags, DOKAN_FILE_DIRECTORY)) {
+  if (DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
     DDbgPrint("  DokanCommonLockControl -> STATUS_INVALID_PARAMETER\n", 0);
     return STATUS_INVALID_PARAMETER;
   }
 
-  //
-  //  Acquire exclusive access to the Fcb
-  //
-  AcquiredFcb = ExAcquireResourceSharedLite(&Fcb->Resource, TRUE);
-
+  DokanFCBLockRW(Fcb);
   try {
 
 //
@@ -111,12 +106,7 @@ DokanCommonLockControl(__in PIRP Irp) {
     //
     Status = FsRtlProcessFileLock(&Fcb->FileLock, Irp, NULL);
   } finally {
-    //
-    //  Release the Fcb, and return to our caller
-    //
-    if (AcquiredFcb) {
-      ExReleaseResourceLite(&Fcb->Resource);
-    }
+    DokanFCBUnlock(Fcb);
   }
 
   DDbgPrint("<== DokanCommonLockControl\n");
@@ -130,7 +120,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanFCB fcb = NULL;
   PDokanVCB vcb;
   PDokanDCB dcb;
   PEVENT_CONTEXT eventContext = NULL;
@@ -183,6 +173,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    DokanFCBLockRW(fcb);
 
     if (dcb->FileLockInUserMode) {
 
@@ -221,6 +212,8 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
+    if(fcb)
+      DokanFCBUnlock(fcb);
 
     if (completeIrp) {
       DokanCompleteIrpRequest(Irp, status, 0);

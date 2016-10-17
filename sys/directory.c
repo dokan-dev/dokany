@@ -104,9 +104,6 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
   ASSERT(ccb != NULL);
 
-  fcb = ccb->Fcb;
-  ASSERT(fcb != NULL);
-
   if (irpSp->Flags & SL_INDEX_SPECIFIED) {
     DDbgPrint("  index specified %d\n",
               irpSp->Parameters.QueryDirectory.FileIndex);
@@ -152,11 +149,15 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     flags = DOKAN_MDL_ALLOCATED;
   }
 
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
+  DokanFCBLockRO(fcb);
+
   // size of EVENT_CONTEXT is sum of its length and file name length
   eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
 
   initial = (BOOLEAN)(ccb->SearchPattern == NULL &&
-                      !(ccb->Flags & DOKAN_DIR_MATCH_ALL));
+                      !(DokanCCBFlagsIsSet(ccb, DOKAN_DIR_MATCH_ALL)));
 
   // this is an initial query
   if (initial) {
@@ -174,6 +175,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           ExAllocatePool(ccb->SearchPatternLength + sizeof(WCHAR));
 
       if (ccb->SearchPattern == NULL) {
+        DokanFCBUnlock(fcb);
         return STATUS_INSUFFICIENT_RESOURCES;
       }
 
@@ -186,7 +188,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                     ccb->SearchPatternLength);
 
     } else {
-      ccb->Flags |= DOKAN_DIR_MATCH_ALL;
+      DokanCCBFlagsSetBit(ccb, DOKAN_DIR_MATCH_ALL);
     }
   }
 
@@ -198,6 +200,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
   if (eventContext == NULL) {
+    DokanFCBUnlock(fcb);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
@@ -232,6 +235,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
   RtlCopyMemory(eventContext->Operation.Directory.DirectoryName,
                 fcb->FileName.Buffer, fcb->FileName.Length);
+  DokanFCBUnlock(fcb);
 
   // if search pattern is specified, copy it to EventContext
   if (ccb->SearchPatternLength && ccb->SearchPattern) {
@@ -280,14 +284,16 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
-  if (!(fcb->Flags & DOKAN_FILE_DIRECTORY)) {
+  if (!DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
       vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
       irpSp->Flags & SL_WATCH_TREE ? TRUE : FALSE, FALSE,
       irpSp->Parameters.NotifyDirectory.CompletionFilter, Irp, NULL, NULL);
+  DokanFCBUnlock(fcb);
 
   return STATUS_PENDING;
 }
@@ -327,7 +333,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   } else {
 
     PDokanCCB ccb = IrpEntry->FileObject->FsContext2;
-    // ULONG	 orgLen = irpSp->Parameters.QueryDirectory.Length;
+    // ULONG     orgLen = irpSp->Parameters.QueryDirectory.Length;
 
     //
     // set the information recieved from user mode

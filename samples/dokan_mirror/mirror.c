@@ -621,13 +621,16 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   DWORD fileAttributesAndFlags;
   DWORD error = 0;
   SECURITY_ATTRIBUTES securityAttrib;
-  
+  ACCESS_MASK genericDesiredAccess;
+
   DokanMapKernelToUserCreateFileFlags(
 	  EventInfo,
 	  &fileAttributesAndFlags,
       &creationDisposition);
 
   GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+
+  genericDesiredAccess = DokanMapStandardToGenericAccess(EventInfo->DesiredAccess);
 
   DbgPrint(L"CreateFile : %s\n", filePath);
 
@@ -646,7 +649,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   MirrorCheckFlag(EventInfo->ShareAccess, FILE_SHARE_WRITE);
   MirrorCheckFlag(EventInfo->ShareAccess, FILE_SHARE_DELETE);
 
-  DbgPrint(L"\n\tAccessMode = 0x%x\n", EventInfo->DesiredAccess);
+  DbgPrint(L"\n\tDesiredAccess = 0x%x\n", EventInfo->DesiredAccess);
 
   MirrorCheckFlag(EventInfo->DesiredAccess, GENERIC_READ);
   MirrorCheckFlag(EventInfo->DesiredAccess, GENERIC_WRITE);
@@ -807,10 +810,9 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
     if (status == STATUS_SUCCESS) {
 
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-
-      handle = CreateFile(
+	  handle = CreateFile(
           filePath,
-		  EventInfo->DesiredAccess,
+		  genericDesiredAccess,
 		  EventInfo->ShareAccess,
 		  &securityAttrib,
 		  OPEN_EXISTING,
@@ -859,7 +861,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
 		  handle =
 			  CreateFile(filePath,
-				  EventInfo->DesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
+				  genericDesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
 				  EventInfo->ShareAccess,
 				  &securityAttrib, // security attribute
 				  creationDisposition,
@@ -1571,7 +1573,6 @@ MirrorCanDeleteDirectory(LPWSTR filePath) {
 		}
 
 	} while(FindNextFile(hFind, &findData) != 0);
-
 	DWORD error = GetLastError();
 
 	if(error != ERROR_NO_MORE_FILES) {

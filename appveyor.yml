@@ -11,7 +11,7 @@
       CYG64_CACHE: C:\cygwin64\var\cache\setup
 
   os: Visual Studio 2015
-  version: 1.0.0-{build}
+  version: 1.0.1-{build}
   configuration:
   - All
   - Coverity
@@ -31,12 +31,12 @@
   
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          Start-FileDownload "https://cygwin.com/setup-x86.exe" -FileName "setup-x86.exe"
-          Start-FileDownload "https://cygwin.com/setup-x86_64.exe" -FileName "setup-x86_64.exe"
+          wget "https://cygwin.com/setup-x86.exe" -OutFile "setup-x86.exe"
+          wget "https://cygwin.com/setup-x86_64.exe" -OutFile "setup-x86_64.exe"
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: " $cygwinexe -NoNewline
-            cmd /c start /wait $cygwinexe -qnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++-5.3.0-5 -P make -P cmake
+            cmd /c start /wait $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++-5.3.0-5 -P make -P cmake
             Write-Host " - OK" -ForegroundColor Green
           }
           
@@ -135,8 +135,7 @@
         $mm_version = $current_build_version.Split("=")[1] -replace '"','';
         $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
         $mm_version += $env:APPVEYOR_BUILD_NUMBER;
-        $version = Get-Content .\version.txt
-        $version -replace 'v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ('v' + $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file ".\version.txt"
+        (Get-Content ..\CHANGELOG.md) -replace '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ($env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file "..\CHANGELOG.md"
         $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
         
         $Platform = "Any CPU"
@@ -148,7 +147,7 @@
         "/p:Platform=${Platform}")
         & $buildCmd $buildArgs
         
-        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion version.txt /setversion version.xml ..\
+        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
         
         cd ..
         & .\build.bat
