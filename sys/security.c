@@ -160,10 +160,18 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
 
   if (EventInfo->Status == STATUS_SUCCESS &&
       EventInfo->BufferLength <= bufferLength && buffer != NULL) {
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-    info = EventInfo->BufferLength;
-    status = STATUS_SUCCESS;
-
+    if (!RtlValidRelativeSecurityDescriptor(
+           EventInfo->Buffer, 
+           EventInfo->BufferLength, 
+           irpSp->Parameters.QuerySecurity.SecurityInformation)) {
+      // No valid security descriptor to return.
+      info = 0;
+      status = STATUS_INVALID_PARAMETER;
+    } else {
+      RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+      info = EventInfo->BufferLength;
+      status = STATUS_SUCCESS;
+    }
   } else if (EventInfo->Status == STATUS_BUFFER_OVERFLOW ||
              (EventInfo->Status == STATUS_SUCCESS &&
               bufferLength < EventInfo->BufferLength)) {
