@@ -351,6 +351,8 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
 
   case FSCTL_FILESYSTEM_GET_STATISTICS:
     DDbgPrint("    FSCTL_FILESYSTEM_GET_STATISTICS\n");
+    // must return STATUS_INVALID_DEVICE_REQUEST for network share to work in win8 and above.
+    status = STATUS_INVALID_DEVICE_REQUEST;
     break;
 
   case FSCTL_GET_NTFS_VOLUME_DATA:

@@ -809,6 +809,14 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
     if (status == STATUS_SUCCESS) {
 
+      //Check first if we're trying to open a file as a directory.
+      if (fileAttr != INVALID_FILE_ATTRIBUTES
+		  && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY)
+		  && (EventInfo->CreateOptions & FILE_DIRECTORY_FILE)) {
+
+        return STATUS_NOT_A_DIRECTORY;
+      }
+
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
 	  handle = CreateFile(
           filePath,

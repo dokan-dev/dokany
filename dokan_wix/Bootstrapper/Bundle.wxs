@@ -6,49 +6,50 @@
      xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
      xmlns:netfx='http://schemas.microsoft.com/wix/NetFxExtension'
 >
-    <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
-            IconSourceFile="..\dokan.ico"
-            Version="$(var.BaseVersion).$(var.BuildVersion)"
-            Manufacturer="$(var.CompanyName)"
-            dep:ProviderKey="$(var.ProviderKey)"
-            UpgradeCode="$(var.BundleUpgradeCode)"
-            UpdateUrl="$(var.UpdateURL)"
-            DisableModify="yes"
+  <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
+          IconSourceFile="..\dokan.ico"
+          Version="$(var.BaseVersion).$(var.BuildVersion)"
+          Manufacturer="$(var.CompanyName)"
+          dep:ProviderKey="$(var.ProviderKey)"
+          UpgradeCode="$(var.BundleUpgradeCode)"
+          UpdateUrl="$(var.UpdateURL)"
+          DisableModify="yes"
             >
-      <util:FileSearchRef Id='WINTRUST_FileSearch' />
-      <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
-        <bal:WixStandardBootstrapperApplication
-          LicenseFile="Resources\licdata.rtf"
-          LogoFile="Resources\dokan.png"
-          ShowVersion="yes"
-          SuppressOptionsUI="no"
-          SuppressRepair="yes"
-          ThemeFile="Resources\RtfTheme.xml"
-          LocalizationFile="Resources\1033\RtfTheme.wxl"/>
-        <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
-        <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
+    <util:FileSearchRef Id='WINTRUST_FileSearch' />
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+      <bal:WixStandardBootstrapperApplication
+        LicenseFile="Resources\licdata.rtf"
+        LogoFile="Resources\dokan.png"
+        ShowVersion="yes"
+        SuppressOptionsUI="no"
+        SuppressRepair="yes"
+        ThemeFile="Resources\RtfTheme.xml"
+        LocalizationFile="Resources\1033\RtfTheme.wxl"/>
+      <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
+      <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
 
-      </BootstrapperApplicationRef>
+    </BootstrapperApplicationRef>
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
     <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
+    <Variable Name="DevFilesCheckbox" Type="numeric" Value="1"/>
 
     <util:FileSearch Id="SearchSystem"
                      Path="[SystemFolder]advapi32.dll"
                      Variable="ADVAPIVERSION"
-                     Result="version" 
+                     Result="version"
                      />
 
     <util:FileSearch Id="SearchSystem2"
                      Path="[SystemFolder]ucrtbase.dll"
                      Variable="UCRTVERSION"
-                     Result="version" 
+                     Result="version"
                      />
 
-      <util:FileSearch Id="SearchSystem3"
-                       Path="[WindowsFolder]System32\ucrtbase.dll"
-                       Variable="UCRTVERSION64"
-                       Result="version" 
+    <util:FileSearch Id="SearchSystem3"
+                     Path="[WindowsFolder]System32\ucrtbase.dll"
+                     Variable="UCRTVERSION64"
+                     Result="version"
                        />
 
     <util:RegistrySearch Id="vcredist_2015_x86_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2015_x86_installed" Win64="no"/>
@@ -60,9 +61,10 @@
     <util:RegistrySearch Id="vcredist_2015_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2015_x64_versionnumber" Result="value" Win64="yes"/>
 
     <bal:Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
+
     <Chain>
       <PackageGroupRef Id="NetFx40Web"/>
-      
+
       <ExePackage Id="vcredist_2015_x86.exe"
                   Name="vc_redist.x86.exe"
                   InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
@@ -175,8 +177,8 @@
                   SourceFile="Redist\KB2999226\Windows8.1-KB2999226-x64.msu"
                   DownloadUrl="https://download.microsoft.com/download/9/6/F/96FD0525-3DDF-423D-8845-5F92F4A6883E/Windows8.1-KB2999226-x64.msu"
                   />
-      
-      <MsiPackage SourceFile="..\bin\x86\$(var.Configuration)\Dokan_x86.msi" 
+
+      <MsiPackage SourceFile="..\bin\x86\$(var.Configuration)\Dokan_x86.msi"
                   InstallCondition="NOT VersionNT64"
                   Compressed="yes"
                   Visible="no"
@@ -199,7 +201,18 @@
       </MsiPackage>
 
     </Chain>
-	</Bundle>
+  </Bundle>
+  <Fragment>
+    <Property Id="WINKB2919442INSTALLED" Secure="yes">
+      <DirectorySearch Id="SearchSystemWinKB2919442" Path="[WindowsFolder]WinSxS" Depth="2">
+        <FileSearch Name="TiWorker.exe" MinVersion="6.3.9600.17030"/>
+      </DirectorySearch>
+    </Property>
+    <!-- windows 8.1 KB2999226 has a dependancy with KB2919355 -->
+    <bal:Condition Message="Installation failed because on Windows 8.1 the installation of KB2999226 and its prerequisites KB2919355 and KB2919442 is required. For more info please visit https://support.microsoft.com/en-us/kb/2919355">
+      <![CDATA[Installed OR VersionNT = v6.3 AND NOT WINKB2919442INSTALLED]]>
+    </bal:Condition>
+  </Fragment>
   <Fragment>
     <util:FileSearch Id="WINTRUST_FileSearch"
                      Path="[SystemFolder]Wintrust.dll"
