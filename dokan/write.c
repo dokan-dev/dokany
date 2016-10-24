@@ -22,76 +22,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include <assert.h>
 
-NTSTATUS SendWriteRequest(DOKAN_IO_EVENT *EventInfo) {
-  
-  DOKAN_IO_EVENT *writeEvent;
-  DOKAN_OVERLAPPED *overlapped;
-  DWORD lastError;
-
-  DbgPrint("Dokan Information: Requesting write buffer of size %u.\n", EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength);
-
-  assert(EventInfo->EventResult);
-  assert(EventInfo->EventResultSize > 0);
-
-  overlapped = PopOverlapped();
-
-  if(!overlapped) {
-
-	  DbgPrint("Failed to allocate overlapped.\n");
-
-	  return STATUS_INTERNAL_ERROR;
-  }
-
-  writeEvent = (DOKAN_IO_EVENT*)DokanMalloc(DOKAN_IO_EVENT_ALLOC_SIZE(EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength));
-
-  if(!writeEvent) {
-
-	  DbgPrint("Dokan Error: Failed to allocate memory for write operation.\n");
-	  
-	  PushOverlapped(overlapped);
-
-	  return STATUS_NO_MEMORY;
-  }
-
-  RtlZeroMemory(writeEvent, EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength);
-  writeEvent->DokanInstance = EventInfo->DokanInstance;
-
-  overlapped->InputPayload = EventInfo;
-  overlapped->OutputPayload = writeEvent;
-  overlapped->PayloadType = DOKAN_OVERLAPPED_TYPE_IOEVENT_WRITE_SIZE;
-  overlapped->Flags = EventInfo->Flags;
-
-  StartThreadpoolIo(EventInfo->DokanInstance->ThreadInfo.IoCompletion);
-
-  if(!DeviceIoControl(EventInfo->DokanInstance->Device,					// Handle to device
-	  IOCTL_EVENT_WRITE,												// IO Control code
-	  EventInfo->EventResult,											// Input Buffer to driver.
-	  EventInfo->EventResultSize,										// Length of input buffer in bytes.
-	  writeEvent->KernelInfo.EventContextBuffer,						// Output Buffer from driver.
-	  EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength,	// Length of output buffer in bytes.
-	  NULL,																// Bytes placed in buffer.
-	  (LPOVERLAPPED)overlapped											// asynchronous call
-  )) {
-
-	  lastError = GetLastError();
-
-	  if(lastError != ERROR_IO_PENDING) {
-
-		  DbgPrint("Dokan Error: Dokan device ioctl failed for wait with code %d.\n", lastError);
-
-		  CancelThreadpoolIo(EventInfo->DokanInstance->ThreadInfo.IoCompletion);
-
-		  PushOverlapped(overlapped);
-
-		  DokanFree(writeEvent);
-
-		  return DokanNtStatusFromWin32(lastError);
-	  }
-  }
-
-  return STATUS_SUCCESS;
-}
-
 void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
 
   DOKAN_WRITE_FILE_EVENT *writeFileEvent = &EventInfo->EventInfo.WriteFile;
@@ -103,18 +33,6 @@ void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
   assert(EventInfo->ProcessingContext == NULL);
 
   CreateDispatchCommon(EventInfo, 0);
-
-  // Since driver requested bigger memory,
-  // allocate enough memory and send it to driver
-  if (EventInfo->KernelInfo.EventContext.Operation.Write.RequestLength > 0) {
-
-	  if((status = SendWriteRequest(EventInfo)) != STATUS_SUCCESS) {
-
-		  DokanEndDispatchWrite(writeFileEvent, status);
-	  }
-
-	  return;
-  }
 
   CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Write.FileName);
 
@@ -161,8 +79,9 @@ void DOKANAPI DokanEndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS 
 	}
 
 	result->Status = ResultStatus;
-	result->BufferLength = EventInfo->NumberOfBytesWritten;
+	result->BufferLength = 0;
 	result->Operation.Write.CurrentByteOffset.QuadPart = EventInfo->Offset + EventInfo->NumberOfBytesWritten;
+	result->Operation.Write.BytesWritten = EventInfo->NumberOfBytesWritten;
 
 	SendIoEventResult(ioEvent);
 }

@@ -554,8 +554,6 @@ DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
 DRIVER_DISPATCH DokanEventStart;
 
-DRIVER_DISPATCH DokanEventWrite;
-
 PEVENT_CONTEXT
 AllocateEventContextRaw(__in ULONG EventContextLength);
 

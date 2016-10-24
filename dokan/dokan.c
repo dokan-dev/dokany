@@ -165,8 +165,9 @@ DOKAN_IO_EVENT* PopIoEventBuffer() {
 
 	if(ioEvent) {
 
-		RtlZeroMemory(ioEvent, sizeof(DOKAN_IO_EVENT));
+		RtlZeroMemory(ioEvent, offsetof(DOKAN_IO_EVENT, KernelInfo) + sizeof(EVENT_CONTEXT));
 		ioEvent->Flags = DOKAN_IO_EVENT_FLAGS_POOLED;
+		ioEvent->Size = sizeof(DOKAN_IO_EVENT);
 	}
 
 	return ioEvent;
@@ -1070,6 +1071,7 @@ int DOKANAPI DokanCreateFileSystem(
 LPWSTR
 GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
                  rsize_t DestinationBufferSizeInElements) {
+
   if (DeviceName && DestinationBuffer && DestinationBufferSizeInElements > 0) {
     wcscpy_s(DestinationBuffer, DestinationBufferSizeInElements, L"\\\\.");
     wcscat_s(DestinationBuffer, DestinationBufferSizeInElements, DeviceName);
@@ -1079,7 +1081,9 @@ GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
 }
 
 void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions) {
+
   long long r = size->QuadPart % DokanOptions->AllocationUnitSize;
+
   size->QuadPart =
       (size->QuadPart + (r > 0 ? DokanOptions->AllocationUnitSize - r : 0));
 }
@@ -1130,12 +1134,148 @@ void OnDeviceIoCtlFailed(PDOKAN_INSTANCE Dokan, ULONG IoResult) {
 	// disable keep alive timer
 	SetThreadpoolTimer(Dokan->ThreadInfo.KeepAliveTimer, NULL, 0, 0);
 
-	DokanDbgPrintW(L"Dokan Warning: Closing IO processing for dokan instance %s with error code 0x%x and unmounting volume.\n", Dokan->DeviceName, IoResult);
+	DokanDbgPrintW(L"Dokan Fatal: Closing IO processing for dokan instance %s with error code 0x%x and unmounting volume.\n", Dokan->DeviceName, IoResult);
 
 	DokanNotifyUnmounted(Dokan);
 
 	// set the device to a closed state
 	SetEvent(Dokan->DeviceClosedWaitHandle);
+}
+
+BOOL ResizeIoEvent(DOKAN_IO_EVENT **IoEvent, ULONG newSize) {
+
+	assert(newSize > sizeof(EVENT_CONTEXT_MAX_SIZE));
+
+	size_t newEventSize = DOKAN_IO_EVENT_ALLOC_SIZE(newSize);
+	DOKAN_IO_EVENT *newEvent = NULL;
+
+	if((*IoEvent)->Flags & DOKAN_IO_EVENT_FLAGS_POOLED) {
+
+		newEvent = (DOKAN_IO_EVENT*)DokanMalloc(newEventSize);
+
+		if(!newEvent) {
+
+			return FALSE;
+		}
+
+		memcpy_s(newEvent, newEventSize, *IoEvent, offsetof(DOKAN_IO_EVENT, KernelInfo));
+
+		newEvent->Flags &= ~DOKAN_IO_EVENT_FLAGS_POOLED;
+		newEvent->Size = (ULONG)newEventSize;
+
+		PushIoEventBuffer(*IoEvent);
+
+		*IoEvent = newEvent;
+	}
+	else {
+
+		newEvent = (DOKAN_IO_EVENT*)DokanRealloc(*IoEvent, newEventSize);
+
+		if(!newEvent) {
+
+			return FALSE;
+		}
+
+		newEvent->Size = (ULONG)newEventSize;
+
+		*IoEvent = newEvent;
+	}
+
+	return TRUE;
+}
+
+// Don't know what went wrong
+// Life will never be the same again
+// End it all
+void HandleProcessIoFatalError(
+	PDOKAN_INSTANCE Dokan,
+	DOKAN_IO_EVENT *IoEvent,
+	DOKAN_OVERLAPPED *Overlapped,
+	ULONG IoResult) {
+
+	PushIoEventBuffer(IoEvent);
+	PushOverlapped(Overlapped);
+
+	OnDeviceIoCtlFailed(Dokan, IoResult);
+}
+
+void ProcessPartialWrite(
+	PDOKAN_INSTANCE Dokan,
+	DOKAN_OVERLAPPED *Overlapped,
+	ULONG_PTR NumberOfBytesTransferred) {
+
+	DOKAN_IO_EVENT *currentIoEvent = (DOKAN_IO_EVENT*)Overlapped->OutputPayload;
+
+	assert(NumberOfBytesTransferred <= UINT_MAX);
+
+	if(NumberOfBytesTransferred < offsetof(EVENT_CONTEXT, Operation) + offsetof(WRITE_CONTEXT, RequestLength) + sizeof(ULONG)) {
+
+		DOKAN_WRITE_FILE_EVENT *writeFileEvent = &currentIoEvent->EventInfo.WriteFile;
+
+		CreateDispatchCommon(currentIoEvent, 0);
+
+		RtlZeroMemory(writeFileEvent, sizeof(DOKAN_WRITE_FILE_EVENT));
+
+		DokanEndDispatchWrite(writeFileEvent, STATUS_INTERNAL_ERROR);
+
+		ResetOverlapped(Overlapped);
+
+		if(!StartDeviceIO(Dokan, Overlapped)) {
+
+			OnDeviceIoCtlFailed(Dokan, GetLastError());
+		}
+
+		return;
+	}
+
+	if(!ResizeIoEvent(
+		&currentIoEvent,
+		currentIoEvent->KernelInfo.EventContext.Operation.Write.RequestLength)) {
+
+		DOKAN_WRITE_FILE_EVENT *writeFileEvent = &currentIoEvent->EventInfo.WriteFile;
+
+		CreateDispatchCommon(currentIoEvent, 0);
+
+		RtlZeroMemory(writeFileEvent, sizeof(DOKAN_WRITE_FILE_EVENT));
+
+		DokanEndDispatchWrite(writeFileEvent, STATUS_INSUFFICIENT_RESOURCES);
+
+		ResetOverlapped(Overlapped);
+
+		if(!StartDeviceIO(Dokan, Overlapped)) {
+
+			OnDeviceIoCtlFailed(Dokan, GetLastError());
+		}
+
+		return;
+	}
+
+	Overlapped->OutputPayload = currentIoEvent;
+
+	StartThreadpoolIo(Dokan->ThreadInfo.IoCompletion);
+
+	if(!DeviceIoControl(
+		Dokan->Device,										// Handle to device
+		IOCTL_EVENT_WAIT,									// IO Control code
+		NULL,												// Input Buffer to driver.
+		0,													// Length of input buffer in bytes.
+		currentIoEvent->KernelInfo.EventContextBuffer,		// Output Buffer from driver.
+		DOKAN_IO_EVENT_KERNEL_INFO_SIZE(currentIoEvent),	// Length of output buffer in bytes.
+		NULL,												// Bytes placed in buffer.
+		(OVERLAPPED*)Overlapped								// asynchronous call
+	)) {
+
+		DWORD lastError = GetLastError();
+
+		if(lastError != ERROR_IO_PENDING) {
+
+			DbgPrint("Dokan Error: Dokan device ioctl failed for wait with code %d.\n", lastError);
+
+			CancelThreadpoolIo(Dokan->ThreadInfo.IoCompletion);
+
+			HandleProcessIoFatalError(Dokan, currentIoEvent, Overlapped, lastError);
+		}
+	}
 }
 
 void ProcessIOEvent(
@@ -1145,16 +1285,26 @@ void ProcessIOEvent(
 	ULONG_PTR NumberOfBytesTransferred) {
 
 	DOKAN_IO_EVENT *currentIoEvent = (DOKAN_IO_EVENT*)Overlapped->OutputPayload;
-	currentIoEvent->EventSize = (ULONG)NumberOfBytesTransferred;
+	currentIoEvent->KernelInfoSize = (ULONG)NumberOfBytesTransferred;
 
 	assert(currentIoEvent->EventResult == NULL && currentIoEvent->EventResultSize == 0);
 
 	if(IoResult != NO_ERROR) {
 
-		PushIoEventBuffer(currentIoEvent);
-		PushOverlapped(Overlapped);
+		DbgPrintW(L"Dokan Warning: DeviceIoCtrl() has returned error code %u.\n", IoResult);
 
-		OnDeviceIoCtlFailed(Dokan, IoResult);
+		if(IoResult == ERROR_MORE_DATA
+			&& NumberOfBytesTransferred > offsetof(EVENT_CONTEXT, Operation)) {
+
+			switch(currentIoEvent->KernelInfo.EventContext.MajorFunction) {
+
+			case IRP_MJ_WRITE:
+				ProcessPartialWrite(Dokan, Overlapped, NumberOfBytesTransferred);
+				return;
+			}
+		}
+
+		HandleProcessIoFatalError(Dokan, currentIoEvent, Overlapped, IoResult);
 
 		return;
 	}
@@ -1264,41 +1414,6 @@ void ProcessIOEvent(
 	}
 }
 
-void ProcessWriteSizeEvent(
-	DOKAN_OVERLAPPED *Overlapped,
-	ULONG IoResult,
-	ULONG_PTR NumberOfBytesTransferred) {
-
-	DOKAN_IO_EVENT *inputIoEvent = (DOKAN_IO_EVENT*)Overlapped->InputPayload;
-	DOKAN_IO_EVENT *outputIoEvent = (DOKAN_IO_EVENT*)Overlapped->OutputPayload;
-
-	assert(inputIoEvent && outputIoEvent);
-	assert(inputIoEvent->EventResult);
-	assert(inputIoEvent->EventInfo.WriteFile.NumberOfBytesWritten == 0);
-	assert(outputIoEvent->DokanInstance);
-
-	PushOverlapped(Overlapped);
-
-	if(IoResult != NO_ERROR) {
-
-		// This will push the input buffer so we don't need to manually do that
-		DokanEndDispatchWrite(&inputIoEvent->EventInfo.WriteFile, STATUS_INTERNAL_ERROR);
-
-		PushIoEventBuffer(outputIoEvent);
-
-		return;
-	}
-
-	FreeIoEventResult(inputIoEvent->EventResult, Overlapped->Flags);
-	PushIoEventBuffer(inputIoEvent);
-
-	outputIoEvent->EventSize = (ULONG)NumberOfBytesTransferred;
-
-	SetupIOEventForProcessing(outputIoEvent);
-
-	BeginDispatchWrite(outputIoEvent);
-}
-
 // Process the result of SendEventInformation()
 void ProcessKernelResultEvent(
 	DOKAN_OVERLAPPED *Overlapped) {
@@ -1333,9 +1448,6 @@ VOID CALLBACK DokanLoop(
 	  
   case DOKAN_OVERLAPPED_TYPE_IOEVENT:
 	  ProcessIOEvent(dokan, overlapped, IoResult, NumberOfBytesTransferred);
-	  break;
-  case DOKAN_OVERLAPPED_TYPE_IOEVENT_WRITE_SIZE:
-	  ProcessWriteSizeEvent(overlapped, IoResult, NumberOfBytesTransferred);
 	  break;
   case DOKAN_OVERLAPPED_TYPE_IOEVENT_RESULT:
 	  ProcessKernelResultEvent(overlapped);
@@ -1450,13 +1562,13 @@ void CreateDispatchCommon(DOKAN_IO_EVENT *EventInfo, ULONG SizeOfEventInfo) {
 
 	  EventInfo->EventResult = PopEventResult();
 	  EventInfo->EventResultSize = DOKAN_EVENT_INFO_DEFAULT_SIZE;
-	  EventInfo->Flags |= DOKAN_IO_EVENT_FLAGS_POOLED_RESULT;
+	  EventInfo->Flags = DOKAN_IO_EVENT_FLAGS_POOLED_RESULT;
   }
   else {
 
 	  EventInfo->EventResultSize = DOKAN_EVENT_INFO_ALLOC_SIZE(SizeOfEventInfo);
 	  EventInfo->EventResult = (PEVENT_INFORMATION)DokanMalloc(EventInfo->EventResultSize);
-	  EventInfo->Flags &= ~DOKAN_IO_EVENT_FLAGS_POOLED_RESULT;
+	  EventInfo->Flags = 0;
 
 	  RtlZeroMemory(EventInfo->EventResult, EventInfo->EventResultSize);
   }

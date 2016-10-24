@@ -137,10 +137,6 @@ typedef enum _DOKAN_OVERLAPPED_TYPE {
 	// kernel driver. Results are represented as an EVENT_INFORMATION struct.
 	DOKAN_OVERLAPPED_TYPE_IOEVENT_RESULT,
 
-	// The overlapped operation contains both an input and an output because
-	// the input IO event wasn't big enough to handle the write operation
-	DOKAN_OVERLAPPED_TYPE_IOEVENT_WRITE_SIZE,
-
 } DOKAN_OVERLAPPED_TYPE;
 
 typedef enum _DOKAN_IO_EVENT_FLAGS {
@@ -204,7 +200,8 @@ typedef struct _DOKAN_IO_EVENT {
 	DOKAN_OPEN_INFO						*DokanOpenInfo;
 	PEVENT_INFORMATION					EventResult;
 	ULONG								EventResultSize;
-	ULONG								EventSize;
+	ULONG								KernelInfoSize;
+	ULONG								Size;
 	DOKAN_IO_EVENT_FLAGS				Flags;
 	DOKAN_FILE_INFO						DokanFileInfo;
 
@@ -216,6 +213,7 @@ typedef struct _DOKAN_IO_EVENT {
 
 #define IoEventResultBufferSize(ioEvent) ((ioEvent)->EventResultSize >= offsetof(EVENT_INFORMATION, Buffer) ? (ioEvent)->EventResultSize - offsetof(EVENT_INFORMATION, Buffer) : 0)
 #define DOKAN_IO_EVENT_ALLOC_SIZE(bufSize) (offsetof(DOKAN_IO_EVENT, KernelInfo) + (bufSize))
+#define DOKAN_IO_EVENT_KERNEL_INFO_SIZE(ioEvent) ((ioEvent)->Size - offsetof(DOKAN_IO_EVENT, KernelInfo))
 
 BOOL DokanStart(PDOKAN_INSTANCE Instance);
 
