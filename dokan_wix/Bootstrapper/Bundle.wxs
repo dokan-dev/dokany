@@ -32,6 +32,7 @@
 
     <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
     <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
+    <Variable Name="DevFilesCheckbox" Type="numeric" Value="1"/>
 
     <util:FileSearch Id="SearchSystem"
                      Path="[SystemFolder]advapi32.dll"
