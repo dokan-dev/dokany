@@ -7,8 +7,8 @@
     AccessTokenDokanDoc:
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
     global:
-      CYG_CACHE: C:\cygwin\var\cache\setup
-      CYG64_CACHE: C:\cygwin64\var\cache\setup
+      DOKAN_CI_CACHE: C:\dokan_ci_cache
+      CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
 
   os: Visual Studio 2015
   version: 1.0.1-{build}
@@ -20,8 +20,7 @@
   - x64
   
   cache:
-  - '%CYG_CACHE%'
-  - '%CYG64_CACHE%'
+  - '%DOKAN_CI_CACHE% -> appveyor.yml'
 
   install:
     - ps: |
@@ -41,7 +40,7 @@
           }
           
           updateCygwin ".\\setup-x86.exe" C:/cygwin $env:CYG_CACHE
-          updateCygwin ".\\setup-x86_64.exe" C:/cygwin64 $env:CYG64_CACHE
+          updateCygwin ".\\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
         
     - ps: |
