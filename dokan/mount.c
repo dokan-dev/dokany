@@ -24,6 +24,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <Shlobj.h>
 #include <stdio.h>
 
+#pragma warning(push)
+#pragma warning(disable : 4201)
 /**
  * \struct REPARSE_DATA_BUFFER
  * \brief Contains reparse point data for a Microsoft reparse point.
@@ -77,6 +79,7 @@ typedef struct _REPARSE_DATA_BUFFER {
     } GenericReparseBuffer;
   } DUMMYUNIONNAME;
 } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
+#pragma warning(pop)
 
 #define REPARSE_DATA_BUFFER_HEADER_SIZE                                        \
   FIELD_OFFSET(REPARSE_DATA_BUFFER, GenericReparseBuffer)
