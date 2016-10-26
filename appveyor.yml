@@ -9,6 +9,7 @@
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
+      MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
 
   os: Visual Studio 2015
   version: 1.0.1-{build}
@@ -46,17 +47,18 @@
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function bash($command) {
-            Write-Host $command -NoNewline
+            Write-Host $command
             & C:\msys64\usr\bin\bash.exe --login -c $command
             Write-Host " - OK" -ForegroundColor Green
           }
-          
+          New-Item -Force -Type Directory $env:MSYS2_CACHE
+          $unix_msys2_cache = & C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"
           # install latest pacman
-          bash "pacman -Sy --noconfirm pacman pacman-mirrors"
+          bash "pacman -Sy --noconfirm --cache `"$unix_msys2_cache`" pacman pacman-mirrors"
           # update core packages
-          bash "pacman -Syu --noconfirm"
-          
-          bash "pacman --sync --noconfirm mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+          bash "pacman -Syu --noconfirm --cache `"$unix_msys2_cache`""
+          # install MinGW toolchain
+          bash "pacman --sync --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
         }
         
     - ps: |
