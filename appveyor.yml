@@ -36,7 +36,7 @@
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: " $cygwinexe -NoNewline
-            & cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P mingw64-i686-gcc-g++ -P mingw64-x86_64-gcc-g++ -P gcc-g++-5.3.0-5 -P make -P cmake
+            & cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake
             Write-Host " - OK" -ForegroundColor Green
           }
           
