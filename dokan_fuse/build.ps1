@@ -7,7 +7,7 @@ $script:failed = 0
     & C:\cygwin\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
         cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
-        make install"
+        make -j `$(getconf _NPROCESSORS_ONLN) install"
     & C:\cygwin\bin\bash -lc "
         cd '$currentPath' &&
         gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c -I '$installDir/include' -D_FILE_OFFSET_BITS=64 -L $installDir/ -lcygdokanfuse1"
@@ -22,7 +22,7 @@ $script:failed = 0
     & C:\cygwin64\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
         cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
-        make install"
+        make -j `$(getconf _NPROCESSORS_ONLN) install"
     & C:\cygwin64\bin\bash -lc "
         cd '$currentPath' &&
         gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c -I '$installDir/include' -D_FILE_OFFSET_BITS=64 -L $installDir/ -lcygdokanfuse1"
@@ -38,7 +38,7 @@ $script:failed = 0
     & C:\msys64\usr\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
         cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. -G 'MSYS Makefiles' &&
-        make install"
+        make -j `$(getconf _NPROCESSORS_ONLN) install"
     }
     Remove-Item Env:\MSYSTEM
     if ($LASTEXITCODE -ne 0) {
@@ -52,7 +52,7 @@ $script:failed = 0
     & C:\msys64\usr\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
         cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. -G 'MSYS Makefiles' &&
-        make install"
+        make -j `$(getconf _NPROCESSORS_ONLN) install"
     Remove-Item Env:\MSYSTEM
     if ($LASTEXITCODE -ne 0) {
         $script:failed = $LASTEXITCODE
