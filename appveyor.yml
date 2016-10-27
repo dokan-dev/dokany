@@ -32,8 +32,15 @@
   
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          wget "https://cygwin.com/setup-x86.exe" -OutFile "setup-x86.exe"
-          wget "https://cygwin.com/setup-x86_64.exe" -OutFile "setup-x86_64.exe"
+          function downloadIfOlderThanDays($url, $path, $days) {
+            if ( !(Test-Path $path -NewerThan (Get-Date).AddDays(-$days)) ) {
+              Write-Host "$path does not exist or is older than $days, downloading from $url"
+              Invoke-WebRequest $url -OutFile $path
+            }
+          }
+
+          downloadIfOlderThanDays "https://cygwin.com/setup-x86.exe" "${env:DOKAN_CI_CACHE}\setup-x86.exe" 7
+          downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: " $cygwinexe -NoNewline
@@ -41,8 +48,8 @@
             Write-Host " - OK" -ForegroundColor Green
           }
           
-          updateCygwin ".\\setup-x86.exe" C:/cygwin $env:CYG_CACHE
-          updateCygwin ".\\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
+          updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86.exe" C:/cygwin $env:CYG_CACHE
+          updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
         
     - ps: |
