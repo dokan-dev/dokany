@@ -10,6 +10,7 @@
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
+      CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
 
   os: Visual Studio 2015
   version: 1.0.1-{build}
@@ -26,7 +27,7 @@
   install:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          & choco install doxygen.portable
+          & choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable
         }
   
     - ps: |
