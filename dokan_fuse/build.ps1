@@ -10,7 +10,7 @@ $script:failed = 0
         make install"
     & C:\cygwin\bin\bash -lc "
         cd '$currentPath' &&
-        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c -I '$installDir/include' -D_FILE_OFFSET_BITS=64 -L $installDir/ -lcygdokanfuse1"
+        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
     if ($LASTEXITCODE -ne 0) {
         $script:failed = $LASTEXITCODE
     }
@@ -25,7 +25,7 @@ $script:failed = 0
         make install"
     & C:\cygwin64\bin\bash -lc "
         cd '$currentPath' &&
-        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c -I '$installDir/include' -D_FILE_OFFSET_BITS=64 -L $installDir/ -lcygdokanfuse1"
+        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
     if ($LASTEXITCODE -ne 0) {
         $script:failed = $LASTEXITCODE
     }
