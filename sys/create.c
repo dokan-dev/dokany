@@ -546,8 +546,8 @@ Return Value:
           if (ret == 0 && (systemVolume.Length == fileObject->FileName.Length ||
                            *p2 == L'\\')) {
             DDbgPrint("  It's an access to System Volume, so don't return "
-                      "SUCCESS. We don't have one.") status =
-                STATUS_NO_SUCH_FILE;
+                      "SUCCESS. We don't have one.\n");
+            status = STATUS_NO_SUCH_FILE;
             __leave;
           }
         }
