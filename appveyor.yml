@@ -98,10 +98,10 @@
 
       if ($env:CONFIGURATION -eq "Coverity") {
         
-        if ("$env:APPVEYOR_PULL_REQUEST_TITLE") {
+        if (!"$env:CoverityProjectToken") {
+          Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
           return;
         }
-        
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
