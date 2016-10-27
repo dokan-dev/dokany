@@ -247,6 +247,7 @@
       }
       Write-Host Build Finished !
 
+  test: off
   on_success:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
