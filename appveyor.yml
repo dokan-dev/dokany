@@ -189,7 +189,7 @@
         }
         
         Write-Host Upload Artifcat...
-        Push-AppveyorArtifact C:\projects\dokany\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe -FileName ("DokanSetup-" + $installer_version + ".exe")
+        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
         Write-Host Artifcat uploaded!
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {
