@@ -31,7 +31,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntdddisk.h>
 #include <ntstrsafe.h>
 
-#include "..\dokan\dokan.h"
 #include "public.h"
 
 //
