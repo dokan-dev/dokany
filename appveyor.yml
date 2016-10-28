@@ -24,6 +24,14 @@
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
 
+# To debug build issues, add your own fork to AppVeyor and uncomment below.
+# Connection details will be printed to the console output.
+# $blockRdp makes the build block until a file is deleted from the desktop.
+#  init:
+#    ps: Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
+#  on_finish:
+#    ps: $blockRdp = $true; Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
+
   install:
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
