@@ -112,6 +112,7 @@
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -161,6 +162,7 @@
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -210,6 +212,7 @@
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <DebugInformationFormat>
       </DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -259,6 +262,7 @@
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <DebugInformationFormat>
       </DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
