@@ -115,6 +115,7 @@ Return Value:
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
+    // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
     DokanFCBUnlock(fcb);
@@ -171,12 +172,12 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRW(fcb);
 
   vcb = fcb->Vcb;
 
   status = EventInfo->Status;
 
+  DokanFCBLockRO(fcb);
   if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
@@ -186,7 +187,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
                               FILE_ACTION_REMOVED);
     }
   }
-
+  DokanFCBUnlock(fcb);
   //
   //  Unlock all outstanding file locks.
   //
@@ -198,7 +199,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   }
 
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
-  DokanFCBUnlock(fcb);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

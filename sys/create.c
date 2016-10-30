@@ -388,7 +388,6 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   NTSTATUS status;
   PAGED_CODE();
 
-  DokanFCBLockRW(FcbOrDcb);
 #if (NTDDI_VERSION >= NTDDI_VISTA)
   //
   //  Do an extra test for writeable user sections if the user did not allow
@@ -403,7 +402,6 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
       MmDoesFileHaveUserWritableReferences(&FcbOrDcb->SectionObjectPointers)) {
 
     DDbgPrint("  DokanCheckShareAccess FCB has no write shared access\n");
-    DokanFCBUnlock(FcbOrDcb);
     return STATUS_SHARING_VIOLATION;
   }
 #endif
@@ -414,7 +412,6 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   //  Pass FALSE for update.  We will update it later.
   status = IoCheckShareAccess(DesiredAccess, ShareAccess, FileObject,
                               &FcbOrDcb->ShareAccess, FALSE);
-  DokanFCBUnlock(FcbOrDcb);
 
   return status;
 }
@@ -470,6 +467,7 @@ Return Value:
   BOOLEAN BackoutOplock = FALSE;
   BOOLEAN EventContextConsumed = FALSE;
   DWORD disposition = 0;
+  BOOLEAN fcbLocked = FALSE;
 
   PAGED_CODE();
 
@@ -731,12 +729,16 @@ Return Value:
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
-    DokanFCBLockRW(fcb);
+    DDbgPrint("  Create: FileName:%wZ got fcb %p\n",
+              &fileObject->FileName, fcb);
 
     if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
       status = STATUS_OBJECT_NAME_COLLISION;
       __leave;
     }
+
+    fcbLocked = TRUE;
+    DokanFCBLockRW(fcb);
 
     if (irpSp->Flags & SL_OPEN_PAGING_FILE) {
       fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
@@ -985,6 +987,8 @@ Return Value:
               eventContext->Operation.Create.FileNameOffset +
               (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
 
+    DokanFCBUnlock(fcb);
+    fcbLocked = FALSE;
 //
 // Oplock
 //
@@ -1037,12 +1041,11 @@ Return Value:
                     FILE_COMPLETE_IF_OPLOCKED)) {
 
           POPLOCK oplock = DokanGetFcbOplock(fcb);
-          DokanFCBUnlock(fcb);
+         // This may enter a wait state!
           OplockBreakStatus = FsRtlOplockBreakH(
               oplock, Irp, 0, eventContext,
               NULL /* DokanOplockComplete */, // block instead of callback
               DokanPrePostIrp);
-          DokanFCBLockRW(fcb);
 
           //
           //  If FsRtlOplockBreakH returned STATUS_PENDING,
@@ -1145,6 +1148,7 @@ Return Value:
     //  that the Oplock check proceeds against any added access we had
     //  to give the caller.
     //
+    // This may block and enter wait state!
     if (fcb->FileCount > 1) {
       status =
           FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
@@ -1155,9 +1159,9 @@ Return Value:
       //  to service an oplock break and we need to leave now.
       //
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fileName = "
-                  "%wZ, fileCount = %lu\n",
-                  fcb->FileName, fcb->FileCount);
+        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING, fcb = "
+                  "%p, fileCount = %lu\n",
+                  fcb, fcb->FileCount);
         __leave;
       }
     }
@@ -1166,6 +1170,7 @@ Return Value:
     //  Let's make sure that if the caller provided an oplock key that it
     //  gets stored in the file object.
     //
+    // OPLOCK_FLAG_OPLOCK_KEY_CHECK_ONLY means that no blocking.
 
     status =
         FsRtlCheckOplockEx(DokanGetFcbOplock(fcb), Irp,
@@ -1194,9 +1199,9 @@ Return Value:
       //
       if ((status != STATUS_SUCCESS) &&
           (status != STATUS_OPLOCK_BREAK_IN_PROGRESS)) {
-        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fileName = %wZ, "
+        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fcb = %p, "
                   "fileCount = %lu\n",
-                  status, fcb->FileName, fcb->FileCount);
+                  status, fcb, fcb->FileCount);
 
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
@@ -1243,7 +1248,7 @@ Return Value:
       }
     }
 #endif
-    if (fcb)
+    if (fcbLocked)
       DokanFCBUnlock(fcb);
 
     if (relatedFileName) {

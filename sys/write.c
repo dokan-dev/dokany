@@ -229,6 +229,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       //  We now check whether we can proceed based on the state of
       //  the file oplocks.
       //
+      // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
       if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
         status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                                   DokanOplockComplete, DokanPrePostIrp);
@@ -285,6 +286,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       //  We now check whether we can proceed based on the state of
       //  the file oplocks.
       //
+      // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
       if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
         status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, requestContext,
                                   DokanOplockComplete, DokanPrePostIrp);

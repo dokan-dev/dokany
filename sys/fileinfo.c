@@ -490,6 +490,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlCopyMemory(eventContext->Operation.SetFile.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
+    // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
 

@@ -59,20 +59,18 @@ DokanCommonLockControl(__in PIRP Irp) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  DokanFCBLockRW(Fcb);
-  try {
-
 //
 //  We check whether we can proceed
 //  based on the state of the file oplocks.
 //
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 
-    if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
-         ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
-          (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
-        ((IRP_MN_LOCK != irpSp->MinorFunction) &&
-         FsRtlAreThereWaitingFileLocks(&Fcb->FileLock))) {
+    // Fcb's AllocationSize is constant after creation.
+  if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
+       ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
+        (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
+      ((IRP_MN_LOCK != irpSp->MinorFunction) &&
+       FsRtlAreThereWaitingFileLocks(&Fcb->FileLock))) {
 
 //
 //  Check whether we can proceed based on the state of file oplocks if doing
@@ -85,28 +83,24 @@ DokanCommonLockControl(__in PIRP Irp) {
 //         within AllocationSize!
 //
 #endif
-      // Dokan DokanOplockComplete sends the operation to user mode, which isn't
-      // what we want to do
-      // so now wait for the oplock to be broken (pass in NULL for the callback)
-      Status =
-          FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
-                           NULL /*DokanOplockComplete*/, NULL);
+    // Dokan DokanOplockComplete sends the operation to user mode, which isn't
+    // what we want to do
+    // so now wait for the oplock to be broken (pass in NULL for the callback)
+    // This may block and enter wait state.
+    Status =
+        FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
+                         NULL /*DokanOplockComplete*/, NULL);
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
-    }
+  }
 #endif
     //  If we were waiting for the callback, then STATUS_PENDING would be ok too
-    if (Status != STATUS_SUCCESS) {
-      __leave;
-    }
-
+  if (Status == STATUS_SUCCESS) {
     //
     //  Now call the FsRtl routine to do the actual processing of the
     //  Lock request
     //
     Status = FsRtlProcessFileLock(&Fcb->FileLock, Irp, NULL);
-  } finally {
-    DokanFCBUnlock(Fcb);
   }
 
   DDbgPrint("<== DokanCommonLockControl\n");
