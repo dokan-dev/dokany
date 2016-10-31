@@ -82,8 +82,9 @@
           & Bcdedit.exe -set TESTSIGNING ON;
           & verifier /standard /driver dokan1.sys
           echo "Before reboot";
+          Start-Sleep -s 2;
           Restart-Computer -Force;
-          Start-Sleep -s 10;
+          Start-Sleep -s 2;
         }
 
   before_build:
