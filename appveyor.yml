@@ -61,7 +61,7 @@
         if ($env:CONFIGURATION -eq "All") {
           function downloadIfOlderThanDays($url, $path, $days) {
             if ( !(Test-Path $path -NewerThan (Get-Date).AddDays(-$days)) ) {
-              Write-Host "$path does not exist or is older than $days, downloading from $url"
+              Write-Host "$path does not exist or is older than $days days, downloading from $url"
               Invoke-WebRequest $url -OutFile $path
             }
           }
