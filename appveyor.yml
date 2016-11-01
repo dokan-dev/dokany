@@ -212,10 +212,10 @@
         cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
         & .\x64\Debug\dokanctl.exe /i d
         & .\x64\Debug\dokanctl.exe /i n
+        New-Item C:\TMP -type directory | Out-Null
+         
         $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
         Start-Sleep -s 5
-        
-        New-Item C:\TMP -type directory | Out-Null
         
         git clone -q https://github.com/Liryna/fstools.git
         $buildArgs = @(
@@ -243,7 +243,8 @@
         Write-Host "FSX Test finished" -ForegroundColor Green
         
         Write-Host "Start WinFSTest" -ForegroundColor Green
-        & .\winfstest\TestSuite\run-winfstest.bat . M:\
+        cd M:\
+        & $env:APPVEYOR_BUILD_FOLDER\winfstest\TestSuite\run-winfstest.bat
         if($LASTEXITCODE -ne 0) {
           throw "Winfstest failed"
         }
