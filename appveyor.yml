@@ -260,6 +260,35 @@
   test: off
   on_success:
     - ps: |
+        # AppVeyor does not provide us with the SHA1 before the push
+        # Thus we have no baseline for pushes and can only run this for PRs
+        if ($env:CONFIGURATION -eq "All" -and $env:APPVEYOR_PULL_REQUEST_NUMBER) {
+          $parents = (Exec-External {& git rev-list --parents -n1 HEAD}).Split()
+          $head = $parents[0]
+          $mergeBranchHead = $parents[1]
+          $prBranchHead = $parents[2]
+
+          $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
+          Exec-External {& git clang-format --style=file --diff $mergeBranchHead} |
+            Select-String -NotMatch "^clang-format did not modify any files$" > $diffFile
+          if ((Get-Item $diffFile).length -gt 0) {
+            Write-Host "Ran git clang-format on PR, found changes, uploading as artifact"
+            Add-AppveyorMessage `
+              -Category Warning `
+              -Message "Please check your indentation." `
+              -Details ("You may want to run ``git clang-format --style file`` on each of your commits.`n" + `
+                "A diff of the suggested changes is available here:`n" + `
+                "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($diffFile))")
+            Push-AppveyorArtifact $diffFile
+          }
+          else {
+            Write-Host "Ran git clang-format on PR, no changes necessary"
+            Add-AppveyorMessage `
+              -Category Information `
+              -Message "Your indentation is fine. clang-format did not suggest any changes."
+          }
+        }
+    - ps: |
         if ($env:CONFIGURATION -eq "All") {
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
