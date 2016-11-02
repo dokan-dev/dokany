@@ -38,13 +38,20 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   RtlZeroMemory(fcb, sizeof(DokanFCB));
 
+  fcb->AdvancedFCBHeader.Resource =
+      ExAllocateFromLookasideListEx(&g_DokanEResourceLookasideList);
+  if (fcb->AdvancedFCBHeader.Resource == NULL) {
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
+    return NULL;
+  }
+
   fcb->Identifier.Type = FCB;
   fcb->Identifier.Size = sizeof(DokanFCB);
 
   fcb->Vcb = Vcb;
 
-  ExInitializeResourceLite(&fcb->MainResource);
   ExInitializeResourceLite(&fcb->PagingIoResource);
+  ExInitializeResourceLite(fcb->AdvancedFCBHeader.Resource);
 
   ExInitializeFastMutex(&fcb->AdvancedFCBHeaderMutex);
 
@@ -61,7 +68,6 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   fcb->AdvancedFCBHeader.ValidDataLength.LowPart = 0xffffffff;
   fcb->AdvancedFCBHeader.ValidDataLength.HighPart = 0x7fffffff;
 
-  fcb->AdvancedFCBHeader.Resource = &fcb->MainResource;
   fcb->AdvancedFCBHeader.PagingIoResource = &fcb->PagingIoResource;
 
   fcb->AdvancedFCBHeader.AllocationSize.QuadPart = 4096;
@@ -69,8 +75,6 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
   FsRtlInitializeOplock(DokanGetFcbOplock(fcb));
-
-  ExInitializeResourceLite(&fcb->Resource);
 
   fcb->FileName.Buffer = FileName;
   fcb->FileName.Length = (USHORT)FileNameLength;
@@ -193,8 +197,9 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
 #endif
 
     DokanFCBUnlock(Fcb);
-    ExDeleteResourceLite(&Fcb->Resource);
-    ExDeleteResourceLite(&Fcb->MainResource);
+    ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
+    ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
+                            Fcb->AdvancedFCBHeader.Resource);
     ExDeleteResourceLite(&Fcb->PagingIoResource);
 
     InterlockedIncrement(&vcb->FcbFreed);
