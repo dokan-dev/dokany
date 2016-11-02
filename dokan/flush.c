@@ -20,43 +20,52 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include <assert.h>
 
-VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  DOKAN_FILE_INFO fileInfo;
-  PEVENT_INFORMATION eventInfo;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
-  PDOKAN_OPEN_INFO openInfo;
-  NTSTATUS status;
+void BeginDispatchFlush(DOKAN_IO_EVENT *EventInfo) {
 
-  CheckFileName(EventContext->Operation.Flush.FileName);
+	DOKAN_FLUSH_BUFFERS_EVENT *flushBuffers = &EventInfo->EventInfo.FlushBuffers;
+	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+	DbgPrint("###Flush file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+		EventInfo->DokanOpenInfo,
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
 
-  DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+	assert(EventInfo->DokanOpenInfo);
+	assert((void*)flushBuffers == (void*)EventInfo);
+	assert(EventInfo->ProcessingContext == NULL);
 
-  if (DokanInstance->DokanOperations->FlushFileBuffers) {
+	CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Flush.FileName);
 
-    status = DokanInstance->DokanOperations->FlushFileBuffers(
-        EventContext->Operation.Flush.FileName, &fileInfo);
+	CreateDispatchCommon(EventInfo, 0);
 
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
-  }
+	if(EventInfo->DokanInstance->DokanOperations->FlushFileBuffers) {
 
-  if (status == STATUS_NOT_IMPLEMENTED) {
-    eventInfo->Status = STATUS_SUCCESS;
-  } else {
-    eventInfo->Status =
-        status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
-  }
+		flushBuffers->DokanFileInfo = &EventInfo->DokanFileInfo;
+		flushBuffers->FileName = EventInfo->KernelInfo.EventContext.Operation.Flush.FileName;
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
+		status = EventInfo->DokanInstance->DokanOperations->FlushFileBuffers(flushBuffers);
+	}
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+	if(status != STATUS_PENDING) {
 
-  free(eventInfo);
-  return;
+		DokanEndDispatchFlush(flushBuffers, status);
+	}
+}
+
+void DOKANAPI DokanEndDispatchFlush(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo, NTSTATUS ResultStatus) {
+
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+
+	// STATUS_PENDING should not be passed to this function
+	if(ResultStatus == STATUS_PENDING) {
+
+		DbgPrint("Dokan Error: DokanEndDispatchFlush() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		ResultStatus = STATUS_INTERNAL_ERROR;
+	}
+
+	ioEvent->EventResult->Status = ResultStatus;
+
+	SendIoEventResult(ioEvent);
 }

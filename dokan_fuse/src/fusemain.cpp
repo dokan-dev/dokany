@@ -307,7 +307,7 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
   if (attrs != 0xFFFFFFFFu)
     find_data.dwFileAttributes = attrs;
 
-  return wd->delegate(&find_data, wd->DokanFileInfo);
+  return wd->eventInfo->FillFindData(wd->eventInfo, &find_data);
 }
 
 int impl_fuse_context::walk_directory_getdir(fuse_dirh_t hndl, const char *name,
@@ -317,26 +317,28 @@ int impl_fuse_context::walk_directory_getdir(fuse_dirh_t hndl, const char *name,
   return 0; // Get more entries
 }
 
-int impl_fuse_context::find_files(LPCWSTR file_name,
-                                  PFillFindData fill_find_data,
-                                  PDOKAN_FILE_INFO dokan_file_info) {
+int impl_fuse_context::find_files(PDOKAN_FIND_FILES_EVENT EventInfo) {
+
   if ((!ops_.readdir && !ops_.getdir) || !ops_.getattr)
     return -EINVAL;
 
-  std::string fname = unixify(wchar_to_utf8_cstr(file_name));
+  std::string fname = unixify(wchar_to_utf8_cstr(EventInfo->PathName));
   CHECKED(check_and_resolve(&fname));
 
   walk_data wd;
   wd.ctx = this;
   wd.dirname = fname;
-  if (*fname.rbegin() != '/')
-    wd.dirname.append("/");
-  wd.delegate = fill_find_data;
-  wd.DokanFileInfo = dokan_file_info;
+
+  if(*fname.rbegin() != '/') {
+
+	  wd.dirname.append("/");
+  }
+
+  wd.eventInfo = EventInfo;
 
   if (ops_.readdir) {
     impl_file_handle *hndl =
-        reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
+        reinterpret_cast<impl_file_handle *>(EventInfo->DokanFileInfo->Context);
     if (hndl != NULL) {
       fuse_file_info finfo(hndl->make_finfo());
       return ops_.readdir(fname.c_str(), &wd, &walk_directory, 0, &finfo);
@@ -911,11 +913,11 @@ int impl_fuse_context::get_volume_information(LPWSTR volume_name_buffer,
   return 0;
 }
 
-int impl_fuse_context::mounted(PDOKAN_FILE_INFO DokanFileInfo) {
+int impl_fuse_context::mounted(DOKAN_MOUNTED_INFO *EventInfo) {
 	return 0;
 }
 
-int impl_fuse_context::unmounted(PDOKAN_FILE_INFO DokanFileInfo) {
+int impl_fuse_context::unmounted(DOKAN_UNMOUNTED_INFO *EventInfo) {
   if (ops_.destroy)
     ops_.destroy(user_data_); // Ignoring result
   return 0;

@@ -249,7 +249,7 @@ Return Value:
     }
 
     // register this IRP to pending IPR list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
   } __finally {
     if(fcbLocked)
       DokanFCBUnlock(fcb);
@@ -310,10 +310,10 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
 
   } else {
     RtlZeroMemory(buffer, bufferLen);
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     // read length which is actually read
-    readLength = EventInfo->BufferLength;
+    readLength = (ULONG)EventInfo->BufferLength;
     status = EventInfo->Status;
 
     if (NT_SUCCESS(status) && EventInfo->BufferLength > 0 &&

@@ -20,92 +20,68 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include <assert.h>
 
-VOID SendWriteRequest(HANDLE Handle, PEVENT_INFORMATION EventInfo,
-                      ULONG EventLength, PVOID Buffer, ULONG BufferLength) {
-  BOOL status;
-  ULONG returnedLength;
+void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo) {
 
-  DbgPrint("SendWriteRequest\n");
+  DOKAN_WRITE_FILE_EVENT *writeFileEvent = &EventInfo->EventInfo.WriteFile;
+  PDOKAN_INSTANCE dokan = EventInfo->DokanInstance;
+  NTSTATUS status;
 
-  status = DeviceIoControl(Handle,            // Handle to device
-                           IOCTL_EVENT_WRITE, // IO Control code
-                           EventInfo,         // Input Buffer to driver.
-                           EventLength,     // Length of input buffer in bytes.
-                           Buffer,          // Output Buffer from driver.
-                           BufferLength,    // Length of output buffer in bytes.
-                           &returnedLength, // Bytes placed in buffer.
-                           NULL             // synchronous call
-                           );
+  assert(EventInfo->DokanOpenInfo);
+  assert((void*)writeFileEvent == (void*)EventInfo);
+  assert(EventInfo->ProcessingContext == NULL);
 
-  if (!status) {
-    DWORD errorCode = GetLastError();
-    DbgPrint("Ioctl failed with code %d\n", errorCode);
+  CreateDispatchCommon(EventInfo, 0);
+
+  CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Write.FileName);
+
+  DbgPrint("###WriteFile file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+	  EventInfo->DokanOpenInfo,
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
+
+  if (dokan->DokanOperations->WriteFile) {
+
+	writeFileEvent->DokanFileInfo = &EventInfo->DokanFileInfo;
+	writeFileEvent->FileName = EventInfo->KernelInfo.EventContext.Operation.Write.FileName;
+	writeFileEvent->Buffer = ((PCHAR)&EventInfo->KernelInfo.EventContext) + EventInfo->KernelInfo.EventContext.Operation.Write.BufferOffset;
+	writeFileEvent->Offset = EventInfo->KernelInfo.EventContext.Operation.Write.ByteOffset.QuadPart;
+	writeFileEvent->NumberOfBytesToWrite = EventInfo->KernelInfo.EventContext.Operation.Write.BufferLength;
+
+	assert(writeFileEvent->NumberOfBytesWritten == 0);
+
+    status = dokan->DokanOperations->WriteFile(writeFileEvent);
+  }
+  else {
+    
+	status = STATUS_NOT_IMPLEMENTED;
   }
 
-  DbgPrint("SendWriteRequest got %d bytes\n", returnedLength);
+  if(status != STATUS_PENDING) {
+
+	  DokanEndDispatchWrite(writeFileEvent, status);
+  }
 }
 
-VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG writtenLength = 0;
-  NTSTATUS status;
-  DOKAN_FILE_INFO fileInfo;
-  BOOL bufferAllocated = FALSE;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+void DOKANAPI DokanEndDispatchWrite(DOKAN_WRITE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+	PEVENT_INFORMATION result;
 
-  // Since driver requested bigger memory,
-  // allocate enough memory and send it to driver
-  if (EventContext->Operation.Write.RequestLength > 0) {
-    ULONG contextLength = EventContext->Operation.Write.RequestLength;
-    PEVENT_CONTEXT contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
-    if (contextBuf == NULL) {
-      free(eventInfo);
-      return;
-    }
-    SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf,
-                     contextLength);
-    EventContext = contextBuf;
-    bufferAllocated = TRUE;
-  }
+	result = ioEvent->EventResult;
 
-  CheckFileName(EventContext->Operation.Write.FileName);
+	// STATUS_PENDING should not be passed to this function
+	if(ResultStatus == STATUS_PENDING) {
 
-  DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+		DbgPrint("Dokan Error: DokanEndDispatchWrite() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		ResultStatus = STATUS_INTERNAL_ERROR;
+	}
 
-  if (DokanInstance->DokanOperations->WriteFile) {
-    status = DokanInstance->DokanOperations->WriteFile(
-        EventContext->Operation.Write.FileName,
-        (PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
-        EventContext->Operation.Write.BufferLength, &writtenLength,
-        EventContext->Operation.Write.ByteOffset.QuadPart, &fileInfo);
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
-  }
+	result->Status = ResultStatus;
+	result->BufferLength = 0;
+	result->Operation.Write.CurrentByteOffset.QuadPart = EventInfo->Offset + EventInfo->NumberOfBytesWritten;
+	result->Operation.Write.BytesWritten = EventInfo->NumberOfBytesWritten;
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-  eventInfo->BufferLength = 0;
-
-  if (status == STATUS_SUCCESS) {
-    eventInfo->Status = status;
-    eventInfo->BufferLength = writtenLength;
-    eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
-        EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
-  } else {
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
-  }
-
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-  free(eventInfo);
-
-  if (bufferAllocated)
-    free(EventContext);
-
-  return;
+	SendIoEventResult(ioEvent);
 }

@@ -133,7 +133,7 @@ Return Value:
     }
 
     // register this IRP to pending IRP list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
 

@@ -255,7 +255,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DDbgPrint("    ccb->SearchPattern %ws\n", ccb->SearchPattern);
   }
 
-  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags, NULL);
 
   return status;
 }
@@ -343,7 +343,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     RtlZeroMemory(buffer, bufferLen);
 
     // DDbgPrint("   copy DirectoryInfo\n");
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     DDbgPrint("    eventInfo->Directory.Index = %lu\n",
               EventInfo->Operation.Directory.Index);
@@ -364,7 +364,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
 
     status = EventInfo->Status;
 
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
   }
 
   if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {

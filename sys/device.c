@@ -933,11 +933,6 @@ Return Value:
       status = DokanEventRelease(DeviceObject, Irp);
       break;
 
-    case IOCTL_EVENT_WRITE:
-      DDbgPrint("  IOCTL_EVENT_WRITE\n");
-      status = DokanEventWrite(DeviceObject, Irp);
-      break;
-
     case IOCTL_KEEPALIVE:
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {

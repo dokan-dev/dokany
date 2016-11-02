@@ -23,54 +23,61 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
+  
+  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)FileInfo->DokanContext;
   BOOL status;
   ULONG returnedLength;
-  PDOKAN_INSTANCE instance;
-  PDOKAN_OPEN_INFO openInfo;
-  PEVENT_CONTEXT eventContext;
   PEVENT_INFORMATION eventInfo;
   HANDLE handle = INVALID_HANDLE_VALUE;
   ULONG eventInfoSize;
   WCHAR rawDeviceName[MAX_PATH];
 
-  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext;
-  if (openInfo == NULL) {
+  if (ioEvent->DokanOpenInfo == NULL
+	  || ioEvent->DokanInstance == NULL
+	  || ioEvent->DokanFileInfo.DokanContext != (PVOID)ioEvent) {
+
+    SetLastError(ERROR_INVALID_PARAMETER);
+
     return INVALID_HANDLE_VALUE;
   }
 
-  eventContext = openInfo->EventContext;
-  if (eventContext == NULL) {
-    return INVALID_HANDLE_VALUE;
-  }
+  if (ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_CREATE
+	  && ioEvent->KernelInfo.EventContext.MajorFunction != IRP_MJ_SET_SECURITY) {
 
-  instance = openInfo->DokanInstance;
-  if (instance == NULL) {
-    return INVALID_HANDLE_VALUE;
-  }
+	SetLastError(ERROR_INVALID_PARAMETER);
 
-  if (eventContext->MajorFunction != IRP_MJ_CREATE) {
     return INVALID_HANDLE_VALUE;
   }
 
   eventInfoSize = sizeof(EVENT_INFORMATION);
-  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
+  eventInfo = (PEVENT_INFORMATION)DokanMalloc(eventInfoSize);
+
   if (eventInfo == NULL) {
+
+	SetLastError(ERROR_OUTOFMEMORY);
+
     return INVALID_HANDLE_VALUE;
   }
 
   RtlZeroMemory(eventInfo, eventInfoSize);
 
-  eventInfo->SerialNumber = eventContext->SerialNumber;
+  eventInfo->SerialNumber = ioEvent->KernelInfo.EventContext.SerialNumber;
 
   status = SendToDevice(
-      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+      GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
       IOCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
       eventInfoSize, &returnedLength);
+
   if (status) {
+
     handle = eventInfo->Operation.AccessToken.Handle;
-  } else {
+  }
+  else {
+
     DbgPrintW(L"IOCTL_GET_ACCESS_TOKEN failed\n");
   }
-  free(eventInfo);
+
+  DokanFree(eventInfo);
+
   return handle;
 }
