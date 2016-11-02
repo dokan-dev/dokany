@@ -110,14 +110,12 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
                                                CallbackData,
                                            __out PVOID *CompletionContext) {
   PFSRTL_ADVANCED_FCB_HEADER header;
-  PDokanFCB fcb;
 
   UNREFERENCED_PARAMETER(CompletionContext);
 
   DDbgPrint("DokanFilterCallbackAcquireForCreateSection\n");
 
   header = CallbackData->FileObject->FsContext;
-  fcb = CallbackData->FileObject->FsContext2;
 
   if (header && header->Resource) {
     KeEnterCriticalRegion();
@@ -128,8 +126,6 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
   if (CallbackData->Parameters.AcquireForSectionSynchronization.SyncType !=
       SyncTypeCreateSection) {
     return STATUS_FSFILTER_OP_COMPLETED_SUCCESSFULLY;
-  } else if (fcb && fcb->ShareAccess.Writers == 0) {
-    return STATUS_FILE_LOCKED_WITH_ONLY_READERS;
   } else {
     return STATUS_FILE_LOCKED_WITH_WRITERS;
   }
