@@ -637,14 +637,22 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
     PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
+  BOOL opened = FALSE;
 
   GetFilePath(filePath, MAX_PATH, FileName);
 
   DbgPrint(L"GetFileInfo : %s\n", filePath);
 
   if (!handle || handle == INVALID_HANDLE_VALUE) {
-    DbgPrint(L"\tinvalid handle\n\n");
-    return STATUS_INVALID_PARAMETER;
+    DbgPrint(L"\tinvalid handle, cleanuped?\n");
+    handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, 0, NULL);
+    if (handle == INVALID_HANDLE_VALUE) {
+      DWORD error = GetLastError();
+      DbgPrint(L"\tCreateFile error : %d\n\n", error);
+      return DokanNtStatusFromWin32(error);
+    }
+    opened = TRUE;
   }
 
   if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
@@ -663,6 +671,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
       if (findHandle == INVALID_HANDLE_VALUE) {
         DWORD error = GetLastError();
         DbgPrint(L"\tFindFirstFile error code = %d\n\n", error);
+        if (opened)
+          CloseHandle(handle);
         return DokanNtStatusFromWin32(error);
       }
       HandleFileInformation->dwFileAttributes = find.dwFileAttributes;
@@ -680,6 +690,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
   }
 
   DbgPrint(L"\n");
+
+  if (opened)
+    CloseHandle(handle);
 
   return STATUS_SUCCESS;
 }
