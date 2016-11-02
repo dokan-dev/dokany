@@ -99,6 +99,24 @@
         }
 
   before_build:
+  - ps: |
+      # checking for BSOD
+      $bugchecks = (Get-EventLog -LogName system | Where-Object {$_.eventID -eq '1001' -and $_.Source -eq 'BugCheck'} | Select-Object -Property *)
+      if ($bugchecks) {
+        Write-Host "It seems like we rebooted due to a bugcheck (BSOD)."
+        Format-List -InputObject $bugchecks | Out-String | Out-Host
+        $memdumpArchive = "memory_dmp_$(& git rev-parse --short HEAD)_${env:APPVEYOR_BUILD_VERSION}.7z"
+        Write-Host "Compressing MEMORY.DMP"
+        Exec-External { &7z a -t7z $memdumpArchive "$env:WINDIR\MEMORY.DMP" }
+        Push-AppveyorArtifact $memdumpArchive
+        Write-Host "MEMORY.DMP uploaded as build artifact $memdumpArchive"
+        Add-AppveyorMessage `
+          -Category Error `
+          -Message "BSOD encountered during $env:CONFIGURATION. Link to MEMORY.DMP in the description " `
+          -Details ("MEMORY.DMP is available here: " + `
+            "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($memdumpArchive))")
+        throw "Build failed due to BSOD during $env:CONFIGURATION"
+      }
   # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
   - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
@@ -201,7 +219,6 @@
         Write-Host Artifcat uploaded!
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {
-        
         $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
         
         $buildArgs = @(
