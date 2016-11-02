@@ -39,8 +39,8 @@
           & verifier /standard /driver dokan1.sys
           Write-Host "Before reboot"
           Start-Sleep -s 2
-          Restart-Computer -Force
-          Start-Sleep -s 2
+          Restart-Computer
+          Start-Sleep -s 3600 # will reboot before this is finished and proceed with next build step
         }
     - ps: |
         function Exec-External {
