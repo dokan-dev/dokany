@@ -243,8 +243,7 @@
         Write-Host "FSX Test finished" -ForegroundColor Green
         
         Write-Host "Start WinFSTest" -ForegroundColor Green
-        cd M:\
-        & $env:APPVEYOR_BUILD_FOLDER\winfstest\TestSuite\run-winfstest.bat
+        & .\winfstest\TestSuite\run-winfstest.bat . M:\
         if($LASTEXITCODE -ne 0) {
           throw "Winfstest failed"
         }
