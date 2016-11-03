@@ -214,9 +214,9 @@
         
         Exec-External {& $buildCmd $buildArgs}
         
-        Write-Host Upload Artifcat...
+        Write-Host Upload Artifact...
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
-        Write-Host Artifcat uploaded!
+        Write-Host Artifact uploaded!
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {
         $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
