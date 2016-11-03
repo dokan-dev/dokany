@@ -5,13 +5,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased] - 1.0.1.0000
 
+### Added
+- Library - DokanMapStandardToGenericAccess - Convert `IRP_MJ_CREATE` DesiredAccess to generic rights.
+
 ### Changed
 - Driver - Use atomic operations for FCB and CCB flags instead of locks.
 - Update Windows SDK to 10.0.14393
-- Library - Call now DeleteFile and DeleteDirectory with DeleteOnClose set at a delete request OR canceled.
+- Library - Call now `DeleteFile` and `DeleteDirectory` with `DeleteOnClose` set at a delete request OR canceled.
+- Driver -  Double check that the returned security descriptor is valid before returning success on QuerySecurity.
+- Installer - Enable dev tools by default.
+- Driver - Return `STATUS_FILE_LOCKED_WITH_ONLY_READERS` during `PreAcquireForSectionSynchronization` when locked only with readers.
+- Mirror - Open handle when `GetFileInformation` requested after cleanup.
+- Kernel - Remove FCB Resource and MainResource. Use FCB Header Resource instead allocated with LookasideList.
 
 ### Fixed
 - Driver - `CcPurgeCacheSection` could cause deadlock when fcb was locked in the same time.
+- Driver - Deadlock on related fcb.
+- FUSE - Race condition in Dokan FUSE.
+- Driver - BSOD issue related to filesystem mount on Windows 10 build 14936.
+- Driver - Unlock FCB during `FsRtlOplockBreakH` to let other request Lock FCB.
+- FUSE - Set correctly Authenticated Users rights (Explorer menu context).
+- Mirror - Reject when trying to open a file as a directory.
+- Driver - Return correct status for `FSCTL_FILESYSTEM_GET_STATISTICS` - Can now net share on Windows Server 2012 R2
 
 ## [1.0.0.5000] - 2016-09-20
 ### Added
