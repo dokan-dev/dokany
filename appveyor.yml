@@ -28,21 +28,40 @@
 # Connection details will be printed to the console output.
 # $blockRdp makes the build block until a file is deleted from the desktop.
 #  init:
-#    ps: Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
+#    - ps: Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
 #  on_finish:
-#    ps: $blockRdp = $true; Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
+#    - ps: $blockRdp = $true; Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
 
   install:
     - ps: |
+        if ($env:CONFIGURATION -eq "FsTest") {
+          & Bcdedit.exe -set TESTSIGNING ON
+          & verifier /standard /driver dokan1.sys
+          Write-Host "Before reboot"
+          Start-Sleep -s 2
+          Restart-Computer
+          Start-Sleep -s 3600 # will reboot before this is finished and proceed with next build step
+        }
+    - ps: |
+        function Exec-External {
+          param(
+            [Parameter(Position=0,Mandatory=1)][scriptblock] $command
+          )
+          & $command
+          if ($LASTEXITCODE -ne 0) {
+            throw ("Command returned non-zero error-code ${LASTEXITCODE}: $command")
+          }
+        }
+    - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          & choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable
+          Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
         }
   
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function downloadIfOlderThanDays($url, $path, $days) {
             if ( !(Test-Path $path -NewerThan (Get-Date).AddDays(-$days)) ) {
-              Write-Host "$path does not exist or is older than $days, downloading from $url"
+              Write-Host "$path does not exist or is older than $days days, downloading from $url"
               Invoke-WebRequest $url -OutFile $path
             }
           }
@@ -51,9 +70,10 @@
           downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
-            Write-Host "Update Cygwin: " $cygwinexe -NoNewline
-            & cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake
-            Write-Host " - OK" -ForegroundColor Green
+            Write-Host "Update Cygwin: $cygwinexe"
+            Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++}
+            Write-Host "Update Cygwin: $cygwinexe " -NoNewLine
+            Write-Host "[ OK ]" -ForegroundColor Green
           }
           
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86.exe" C:/cygwin $env:CYG_CACHE
@@ -62,13 +82,14 @@
         
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
-          function bash($command) {
-            Write-Host $command
-            & C:\msys64\usr\bin\bash.exe --login -c $command
-            Write-Host " - OK" -ForegroundColor Green
+          function bash($bash_command) {
+            Write-Host "MSYS2-Bash: $bash_command"
+            Exec-External {& C:\msys64\usr\bin\bash.exe --login -c $bash_command }
+            Write-Host "MSYS2-Bash $bash_command " -NoNewLine
+            Write-Host "[ OK ]" -ForegroundColor Green
           }
           New-Item -Force -Type Directory $env:MSYS2_CACHE
-          $unix_msys2_cache = & C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"
+          $unix_msys2_cache = (Exec-External {& C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
           # install latest pacman
           bash "pacman -Sy --noconfirm --cache `"$unix_msys2_cache`" pacman pacman-mirrors"
           # update core packages
@@ -76,18 +97,26 @@
           # install MinGW toolchain
           bash "pacman --sync --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
         }
-        
-    - ps: |
-        if ($env:CONFIGURATION -eq "FsTest") {
-          & Bcdedit.exe -set TESTSIGNING ON;
-          & verifier /standard /driver dokan1.sys
-          echo "Before reboot";
-          Start-Sleep -s 2;
-          Restart-Computer -Force;
-          Start-Sleep -s 2;
-        }
 
   before_build:
+  - ps: |
+      # checking for BSOD
+      $bugchecks = (Get-EventLog -LogName system | Where-Object {$_.eventID -eq '1001' -and $_.Source -eq 'BugCheck'} | Select-Object -Property *)
+      if ($bugchecks) {
+        Write-Host "It seems like we rebooted due to a bugcheck (BSOD)."
+        Format-List -InputObject $bugchecks | Out-String | Out-Host
+        $memdumpArchive = "memory_dmp_$(& git rev-parse --short HEAD)_${env:APPVEYOR_BUILD_VERSION}.7z"
+        Write-Host "Compressing MEMORY.DMP"
+        Exec-External { &7z a -t7z $memdumpArchive "$env:WINDIR\MEMORY.DMP" }
+        Push-AppveyorArtifact $memdumpArchive
+        Write-Host "MEMORY.DMP uploaded as build artifact $memdumpArchive"
+        Add-AppveyorMessage `
+          -Category Error `
+          -Message "BSOD encountered during $env:CONFIGURATION. Link to MEMORY.DMP in the description " `
+          -Details ("MEMORY.DMP is available here: " + `
+            "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($memdumpArchive))")
+        throw "Build failed due to BSOD during $env:CONFIGURATION"
+      }
   # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
   - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
@@ -117,28 +146,28 @@
         "/p:Configuration=Win10 Debug",
         "/p:Platform=$env:PLATFORM")
           
-        & "cov-build.exe" `
+        Exec-External {& "cov-build.exe" `
         --dir cov-int `
         --encoding=UTF-8 `
-        $buildCmd $buildArgs
+        $buildCmd $buildArgs}
 
-        nuget install -ExcludeVersion PublishCoverity
-        "Compressing Coverity results..."
-        & PublishCoverity\tools\PublishCoverity.exe compress `
+        Exec-External {nuget install -ExcludeVersion PublishCoverity}
+        Write-Host "Compressing Coverity results..."
+        Exec-External {& PublishCoverity\tools\PublishCoverity.exe compress `
         --nologo `
         -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
         -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
-        --overwrite
+        --overwrite}
         
-         "Uploading Coverity results..."  
-        & PublishCoverity\tools\PublishCoverity.exe publish `
+        Write-Host "Uploading Coverity results..."
+        Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
         --nologo `
         -t "$env:CoverityProjectToken" `
         -e "$env:CoverityNotificationEmail" `
         -r "dokan-dev/dokany" `
         -z "coverity.zip" `
         -d "Appveyor build." `
-        --codeVersion "$env:APPVEYOR_BUILD_VERSION"
+        --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
       
       } elseif ($env:CONFIGURATION -eq "All") {
 
@@ -168,7 +197,7 @@
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
         
         cd ..
-        & .\build.bat
+        Exec-External {& .\build.bat}
         .\cert\dokan-sign.ps1
 
         cd dokan_wix
@@ -183,18 +212,13 @@
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
         
-        & $buildCmd $buildArgs
+        Exec-External {& $buildCmd $buildArgs}
         
-        if($LASTEXITCODE -ne 0) {
-          throw "Build failed"
-        }
-        
-        Write-Host Upload Artifcat...
+        Write-Host Upload Artifact...
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
-        Write-Host Artifcat uploaded!
+        Write-Host Artifact uploaded!
         
       } elseif ($env:CONFIGURATION -eq "FsTest") {
-        
         $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
         
         $buildArgs = @(
@@ -210,54 +234,77 @@
         .\cert\dokan-sign.ps1
         
         cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
-        & .\x64\Debug\dokanctl.exe /i d
-        & .\x64\Debug\dokanctl.exe /i n
+        Exec-External {& .\x64\Debug\dokanctl.exe /i d}
+        Exec-External {& .\x64\Debug\dokanctl.exe /i n}
         New-Item C:\TMP -type directory | Out-Null
          
         $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
         Start-Sleep -s 5
         
-        git clone -q https://github.com/Liryna/fstools.git
+        Exec-External {git clone -q https://github.com/Liryna/fstools.git}
         $buildArgs = @(
         ".\fstools\winfstest.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=$env:PLATFORM")
-        & $buildCmd $buildArgs
+        Exec-External {& $buildCmd $buildArgs}
         
-        git clone -q https://github.com/Liryna/winfstest.git
+        Exec-External {git clone -q https://github.com/Liryna/winfstest.git}
         $buildArgs = @(
         ".\winfstest\winfstest.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Debug",
         "/p:Platform=$env:PLATFORM")
-        & $buildCmd $buildArgs
+        Exec-External {& $buildCmd $buildArgs}
         
         Write-Host "Start FSX Test" -ForegroundColor Green
-        & .\fstools\src\fsx\fsx.exe -N 5000 M:\test
-        if($LASTEXITCODE -ne 0) {
-          throw "FSX failed"
-        }
+        Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 M:\test}
         Write-Host "FSX Test finished" -ForegroundColor Green
         
         Write-Host "Start WinFSTest" -ForegroundColor Green
-        & .\winfstest\TestSuite\run-winfstest.bat . M:\
-        if($LASTEXITCODE -ne 0) {
-          throw "Winfstest failed"
-        }
+        Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . M:\}
         Write-Host "WinFSTest finished" -ForegroundColor Green
 
         Start-Sleep -s 5
         Stop-Process $app.Id
         Start-Sleep -s 5
-        & verifier /query
+        Exec-External {& verifier /query}
       }
       Write-Host Build Finished !
 
   test: off
   on_success:
+    - ps: |
+        # AppVeyor does not provide us with the SHA1 before the push
+        # Thus we have no baseline for pushes and can only run this for PRs
+        if ($env:CONFIGURATION -eq "All" -and $env:APPVEYOR_PULL_REQUEST_NUMBER) {
+          $parents = (Exec-External {& git rev-list --parents -n1 HEAD}).Split()
+          $head = $parents[0]
+          $mergeBranchHead = $parents[1]
+          $prBranchHead = $parents[2]
+
+          $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
+          Exec-External {& git clang-format --style=file --diff $mergeBranchHead} |
+            Select-String -NotMatch "^clang-format did not modify any files$" > $diffFile
+          if ((Get-Item $diffFile).length -gt 0) {
+            Write-Host "Ran git clang-format on PR, found changes, uploading as artifact"
+            Add-AppveyorMessage `
+              -Category Warning `
+              -Message "Please check your indentation." `
+              -Details ("You may want to run ``git clang-format --style file`` on each of your commits.`n" + `
+                "A diff of the suggested changes is available here:`n" + `
+                "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($diffFile))")
+            Push-AppveyorArtifact $diffFile
+          }
+          else {
+            Write-Host "Ran git clang-format on PR, no changes necessary"
+            Add-AppveyorMessage `
+              -Category Information `
+              -Message "Your indentation is fine. clang-format did not suggest any changes."
+          }
+        }
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
@@ -265,16 +312,16 @@
             }
           
             cd $env:APPVEYOR_BUILD_FOLDER\documentations
-            git config --global user.email "appveyor@appveyor.org"
-            git config --global user.name "appveyor"
-            git.exe clone -b gh-pages --single-branch  https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc
-            doxygen.exe Doxyfile
+            Exec-External {& git config --global user.email "appveyor@appveyor.org"}
+            Exec-External {& git config --global user.name "appveyor"}
+            Exec-External {& git clone -b gh-pages --single-branch https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc}
+            Exec-External {& doxygen Doxyfile}
             cd doc
             if ($(git status --porcelain)) {
               Write-Host "Update documentation..." -ForegroundColor Green
-              git add -A
-              git commit -m "Latest documentation on successful appveyor build $env:APPVEYOR_BUILD_VERSION auto-pushed to gh-pages"
-              git push -fq origin gh-pages
+              Exec-External {& git add -A}
+              Exec-External {& git commit -m "Latest documentation on successful appveyor build $env:APPVEYOR_BUILD_VERSION auto-pushed to gh-pages"}
+              Exec-External {& git push -fq origin gh-pages}
               Write-Host "Documentation updated!" -ForegroundColor Green
             } else {
               Write-Host "No documentation changes detected." -ForegroundColor Green
