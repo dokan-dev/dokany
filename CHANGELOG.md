@@ -3,8 +3,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 1.0.1.0000
+## [Unreleased] - 1.0.2.1000
 
+## [1.0.1.1000] - 2016-11-04
 ### Added
 - Library - DokanMapStandardToGenericAccess - Convert `IRP_MJ_CREATE` DesiredAccess to generic rights.
 
