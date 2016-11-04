@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [1.0.1.1000] - 2016-11-04
 ### Added
-- Library - DokanMapStandardToGenericAccess - Convert `IRP_MJ_CREATE` DesiredAccess to generic rights.
+- Library - `DokanMapStandardToGenericAccess` - Convert `IRP_MJ_CREATE` DesiredAccess to generic rights.
 
 ### Changed
 - Driver - Use atomic operations for FCB and CCB flags instead of locks.
@@ -17,11 +17,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Installer - Enable dev tools by default.
 - Driver - Return `STATUS_FILE_LOCKED_WITH_ONLY_READERS` during `PreAcquireForSectionSynchronization` when locked only with readers.
 - Mirror - Open handle when `GetFileInformation` requested after cleanup.
-- Kernel - Remove FCB Resource and MainResource. Use FCB Header Resource instead allocated with LookasideList.
+- Kernel - Remove FCB `Resource` and `MainResource`. Use FCB Header `Resource` instead allocated with LookasideList.
 
 ### Fixed
-- Driver - `CcPurgeCacheSection` could cause deadlock when fcb was locked in the same time.
-- Driver - Deadlock on related fcb.
+- Driver - `CcPurgeCacheSection` could cause deadlock when FCB was locked in the same time.
+- Driver - Deadlock on related FCB.
 - FUSE - Race condition in Dokan FUSE.
 - Driver - BSOD issue related to filesystem mount on Windows 10 build 14936.
 - Driver - Unlock FCB during `FsRtlOplockBreakH` to let other request Lock FCB.
