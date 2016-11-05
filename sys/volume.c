@@ -397,6 +397,12 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
         ExFreePool(dcb->VolumeLabel);
       dcb->VolumeLabel =
           ExAllocatePool(Info->VolumeLabelLength + sizeof(WCHAR));
+      if (dcb->VolumeLabel == NULL) {
+        DDbgPrint("  can't allocate VolumeLabel\n");
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
+
       RtlCopyMemory(dcb->VolumeLabel, Info->VolumeLabel,
                     Info->VolumeLabelLength);
       dcb->VolumeLabel[Info->VolumeLabelLength / sizeof(WCHAR)] = '\0';
