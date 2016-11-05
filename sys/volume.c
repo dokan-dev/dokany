@@ -41,7 +41,8 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB) {
-      return STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
     }
 
     dcb = vcb->Dcb;
@@ -369,7 +370,8 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB) {
-      return STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
     }
 
     dcb = vcb->Dcb;
@@ -384,8 +386,10 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       DDbgPrint("  FileFsLabelInformation\n");
 
       if (sizeof(FILE_FS_LABEL_INFORMATION) >
-          irpSp->Parameters.SetVolume.Length)
-        return STATUS_INVALID_PARAMETER;
+          irpSp->Parameters.SetVolume.Length) {
+        status = STATUS_INVALID_PARAMETER;
+        __leave;
+      }
 
       PFILE_FS_LABEL_INFORMATION Info = (PFILE_FS_LABEL_INFORMATION)buffer;
       ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
