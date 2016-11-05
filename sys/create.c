@@ -204,7 +204,6 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
 
     InterlockedIncrement(&vcb->FcbFreed);
     ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
-
   } else {
     DokanFCBUnlock(Fcb);
   }
@@ -327,7 +326,8 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
   if (!*parentDir)
     return STATUS_INSUFFICIENT_RESOURCES;
 
-  wcscpy(*parentDir, fileName);
+  RtlZeroMemory(*parentDir, len + 1);
+  RtlStringCchCopyW(*parentDir, len, fileName);
 
   for (i = len - 1; i >= 0; i--) {
     if ((*parentDir)[i] == '\\') {
@@ -695,7 +695,6 @@ Return Value:
       RtlCopyMemory((PCHAR)fileName + relatedFileName->Length +
                         (needBackSlashAfterRelatedFile ? sizeof(WCHAR) : 0),
                     fileObject->FileName.Buffer, fileObject->FileName.Length);
-
     } else {
       // if related file object is not specifed, copy the file name of file
       // object
@@ -1112,7 +1111,6 @@ Return Value:
           // user mode create happens.
           // It is believed that FILE_COMPLETE_IF_OPLOCKED is extremely
           // rare and may never happend during normal operation.
-
         } else {
 
           if (status == STATUS_SHARING_VIOLATION &&
@@ -1131,7 +1129,6 @@ Return Value:
 #endif
       }
       IoUpdateShareAccess(fileObject, &fcb->ShareAccess);
-
     } else {
       IoSetShareAccess(
           eventContext->Operation.Create.SecurityContext.DesiredAccess,
@@ -1218,7 +1215,6 @@ Return Value:
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
     EventContextConsumed = TRUE;
-
   } __finally {
 
     DDbgPrint("  Create: FileName:%wZ, status = 0x%08x\n",
