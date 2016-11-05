@@ -1,0 +1,13 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=@PKG_CONFIG_LIBDIR@
+includedir=@PKG_CONFIG_INCLUDEDIR@
+
+Name: Dokan FUSE
+Description: FUSE-API compatibility library for the Dokan user mode filesystem driver for Windows
+# Dokan FUSE provides compatibility with libfuse 2.6.x.
+# The corresponding libfuse-version is therefore reported instead of the Dokan FUSE-version
+Version: 2.6.0
+URL: https://dokan-dev.github.io
+Libs: -L${libdir} -l@PROJECT_NAME@
+Cflags: -I${includedir} -D_FILE_OFFSET_BITS=64
