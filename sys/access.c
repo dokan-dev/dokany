@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   KIRQL oldIrql = 0;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;

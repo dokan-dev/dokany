@@ -21,7 +21,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-VOID DokanIrpCancelRoutine(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
+                           _Inout_ _IRQL_uses_cancel_ PIRP Irp) {
   KIRQL oldIrql;
   PIRP_ENTRY irpEntry;
   ULONG serialNumber = 0;
@@ -257,7 +258,7 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
 NTSTATUS
 DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
-                                __in PIRP Irp) {
+                                _Inout_ PIRP Irp) {
   PDokanVCB vcb = DeviceObject->DeviceExtension;
 
   if (GetIdentifierType(vcb) != VCB) {
@@ -282,7 +283,7 @@ DokanRegisterPendingIrpForEvent(__in PDEVICE_OBJECT DeviceObject,
 
 NTSTATUS
 DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PIRP Irp) {
+                                  _Inout_ PIRP Irp) {
   PDOKAN_GLOBAL dokanGlobal;
   DDbgPrint("DokanRegisterPendingIrpForService\n");
 
@@ -301,7 +302,7 @@ DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
 // When user-mode file system application returns EventInformation,
 // search corresponding pending IRP and complete it
 NTSTATUS
-DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
@@ -449,7 +450,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
 // start event dispatching
 NTSTATUS
-DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG outBufferLen;
   ULONG inBufferLen;
   PIO_STACK_LOCATION irpSp;
@@ -649,7 +650,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
 // user assinged bigger buffer that is enough to return WriteEventContext
 NTSTATUS
-DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;

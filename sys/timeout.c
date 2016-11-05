@@ -198,7 +198,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 }
 
 NTSTATUS
-DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;

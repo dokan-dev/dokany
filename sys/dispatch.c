@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanBuildRequest(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   BOOLEAN AtIrqlPassiveLevel = FALSE;
   BOOLEAN IsTopLevelIrp = FALSE;
   NTSTATUS Status = STATUS_UNSUCCESSFUL;
