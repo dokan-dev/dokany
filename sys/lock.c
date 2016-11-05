@@ -55,7 +55,7 @@ DokanCommonLockControl(__in PIRP Irp) {
   //  as an invalid parameter
   //
   if (DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
-    DDbgPrint("  DokanCommonLockControl -> STATUS_INVALID_PARAMETER\n", 0);
+    DDbgPrint("  DokanCommonLockControl -> STATUS_INVALID_PARAMETER\n");
     return STATUS_INVALID_PARAMETER;
   }
 
