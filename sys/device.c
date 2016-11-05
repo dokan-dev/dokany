@@ -668,7 +668,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   PathNameLength = %d\n", pathReq->PathNameLength);
         DDbgPrint("   SecurityContext = %p\n", pathReq->SecurityContext);
         DDbgPrint("   FilePathName = %.*ls\n",
-                  pathReq->PathNameLength / sizeof(WCHAR),
+                  (unsigned int)(pathReq->PathNameLength / sizeof(WCHAR)),
                   pathReq->FilePathName);
 
         lpPath = pathReq->FilePathName;
@@ -697,7 +697,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         DDbgPrint("   pEaBuffer = %p\n", pathReqEx->pEaBuffer);
         DDbgPrint("   PathNameLength = %d\n", pathReqEx->PathName.Length);
         DDbgPrint("   FilePathName = %*ls\n",
-                  pathReqEx->PathName.Length / sizeof(WCHAR),
+                  (unsigned int)(pathReqEx->PathName.Length / sizeof(WCHAR)),
                   pathReqEx->PathName.Buffer);
 
         lpPath = pathReqEx->PathName.Buffer;
@@ -766,6 +766,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     mediaTypes->MediaInfoCount = 1;
 
     DISK_GEOMETRY diskGeometry;
+    RtlZeroMemory(&diskGeometry, sizeof(diskGeometry));
     DokanPopulateDiskGeometry(&diskGeometry);
     mediaInfo->DeviceSpecific.DiskInfo.MediaType = diskGeometry.MediaType;
     mediaInfo->DeviceSpecific.DiskInfo.NumberMediaSides = 1;
@@ -984,8 +985,8 @@ Return Value:
 
     if (status != STATUS_PENDING) {
       if (IsDeletePending(DeviceObject)) {
-          DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
-          status = STATUS_DEVICE_REMOVED;
+        DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
+        status = STATUS_DEVICE_REMOVED;
       }
       DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
     }
