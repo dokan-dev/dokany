@@ -339,7 +339,6 @@ Return Value:
   UNICODE_STRING symbolicLinkName;
   PDOKAN_GLOBAL dokanGlobal;
 
-  // PAGED_CODE();
   DDbgPrint("==> DokanUnload\n");
 
   dokanGlobal = deviceObject->DeviceExtension;

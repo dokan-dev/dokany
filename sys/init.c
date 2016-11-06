@@ -25,6 +25,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntddstor.h>
 #include <wdmsec.h>
 
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, DokanDeleteDeviceObject)
+#endif
+
 static VOID FreeUnicodeString(PUNICODE_STRING UnicodeString) {
   if (UnicodeString != NULL) {
     ExFreePool(UnicodeString->Buffer);

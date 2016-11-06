@@ -21,6 +21,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, DokanOplockComplete)
+#endif
+
 VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
                            _Inout_ _IRQL_uses_cancel_ PIRP Irp) {
   KIRQL oldIrql;
