@@ -1116,190 +1116,219 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in ULONG DeviceCharacteristics,
                       __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
                       __out PDokanDCB *Dcb) {
-  WCHAR diskDeviceNameBuf[MAXIMUM_FILENAME_LENGTH];
-  WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
-  WCHAR mountPointBuf[MAXIMUM_FILENAME_LENGTH];
-  PDEVICE_OBJECT diskDeviceObject;
-  PDokanDCB dcb;
+  WCHAR *diskDeviceNameBuf = NULL;
+  WCHAR *symbolicLinkNameBuf = NULL;
+  WCHAR *mountPointBuf = NULL;
+  PDEVICE_OBJECT diskDeviceObject = NULL;
+  PDokanDCB dcb = NULL;
   UNICODE_STRING diskDeviceName;
-  NTSTATUS status;
   BOOLEAN isNetworkFileSystem = (DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
-  DOKAN_CONTROL dokanControl;
+  PDOKAN_CONTROL dokanControl = NULL;
+  NTSTATUS status = STATUS_SUCCESS;
 
-  // make DeviceName and SymboliLink
-  if (isNetworkFileSystem) {
+  __try {
+
+    diskDeviceNameBuf = ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    symbolicLinkNameBuf =
+        ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    mountPointBuf = ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    dokanControl = ExAllocatePool(sizeof(*dokanControl));
+    if (diskDeviceNameBuf == NULL || symbolicLinkNameBuf == NULL ||
+        mountPointBuf == NULL || dokanControl == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
+
+    RtlZeroMemory(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    RtlZeroMemory(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    RtlZeroMemory(mountPointBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    RtlZeroMemory(dokanControl, sizeof(*dokanControl));
+
+    // make DeviceName and SymboliLink
+    if (isNetworkFileSystem) {
 #ifdef DOKAN_NET_PROVIDER
-    RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_NET_DEVICE_NAME);
-    RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_NET_SYMBOLIC_LINK_NAME);
+      RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_NET_DEVICE_NAME);
+      RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_NET_SYMBOLIC_LINK_NAME);
 #else
-    RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_NET_DEVICE_NAME);
-    RtlStringCchCatW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
-    RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_NET_SYMBOLIC_LINK_NAME);
-    RtlStringCchCatW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
+      RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_NET_DEVICE_NAME);
+      RtlStringCchCatW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
+      RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_NET_SYMBOLIC_LINK_NAME);
+      RtlStringCchCatW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
 #endif
 
-  } else {
-    RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_DISK_DEVICE_NAME);
-    RtlStringCchCatW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
-    RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
-                      DOKAN_SYMBOLIC_LINK_NAME);
-    RtlStringCchCatW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
-  }
+    } else {
+      RtlStringCchCopyW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_DISK_DEVICE_NAME);
+      RtlStringCchCatW(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
+      RtlStringCchCopyW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH,
+                        DOKAN_SYMBOLIC_LINK_NAME);
+      RtlStringCchCatW(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH, BaseGuid);
+    }
 
-  RtlInitUnicodeString(&diskDeviceName, diskDeviceNameBuf);
+    RtlInitUnicodeString(&diskDeviceName, diskDeviceNameBuf);
 
-  //
-  // Create DeviceObject for the Disk Device
-  //
-  if (!isNetworkFileSystem) {
-    status =
-        IoCreateDeviceSecure(DriverObject,          // DriverObject
-                             sizeof(DokanDCB),      // DeviceExtensionSize
-                             &diskDeviceName,       // DeviceName
-                             FILE_DEVICE_DISK,      // DeviceType
-                             DeviceCharacteristics, // DeviceCharacteristics
-                             FALSE,                 // Not Exclusive
-                             &sddl,                 // Default SDDL String
-                             NULL,                  // Device Class GUID
-                             &diskDeviceObject);    // DeviceObject
-  } else {
-    status = IoCreateDevice(DriverObject,          // DriverObject
-                            sizeof(DokanDCB),      // DeviceExtensionSize
-                            NULL,                  // DeviceName
-                            FILE_DEVICE_DISK,      // DeviceType
-                            DeviceCharacteristics, // DeviceCharacteristics
-                            FALSE,                 // Not Exclusive
-                            &diskDeviceObject);    // DeviceObject
-  }
+    //
+    // Create DeviceObject for the Disk Device
+    //
+    if (!isNetworkFileSystem) {
+      status =
+          IoCreateDeviceSecure(DriverObject,          // DriverObject
+                               sizeof(DokanDCB),      // DeviceExtensionSize
+                               &diskDeviceName,       // DeviceName
+                               FILE_DEVICE_DISK,      // DeviceType
+                               DeviceCharacteristics, // DeviceCharacteristics
+                               FALSE,                 // Not Exclusive
+                               &sddl,                 // Default SDDL String
+                               NULL,                  // Device Class GUID
+                               &diskDeviceObject);    // DeviceObject
+    } else {
+      status = IoCreateDevice(DriverObject,          // DriverObject
+                              sizeof(DokanDCB),      // DeviceExtensionSize
+                              NULL,                  // DeviceName
+                              FILE_DEVICE_DISK,      // DeviceType
+                              DeviceCharacteristics, // DeviceCharacteristics
+                              FALSE,                 // Not Exclusive
+                              &diskDeviceObject);    // DeviceObject
+    }
 
-  if (!NT_SUCCESS(status)) {
-    DDbgPrint("  %s failed: 0x%x\n",
-              isNetworkFileSystem ? "IoCreateDevice(FILE_DEVICE_UNKNOWN)"
-                                  : "IoCreateDeviceSecure(FILE_DEVICE_DISK)",
-              status);
-    return status;
-  }
+    if (!NT_SUCCESS(status)) {
+      DDbgPrint("  %s failed: 0x%x\n",
+                isNetworkFileSystem ? "IoCreateDevice(FILE_DEVICE_UNKNOWN)"
+                                    : "IoCreateDeviceSecure(FILE_DEVICE_DISK)",
+                status);
+      __leave;
+    }
 
-  //
-  // Initialize the device extension.
-  //
-  dcb = diskDeviceObject->DeviceExtension;
-  *Dcb = dcb;
-  dcb->DeviceObject = diskDeviceObject;
-  dcb->Global = DokanGlobal;
+    //
+    // Initialize the device extension.
+    //
+    dcb = diskDeviceObject->DeviceExtension;
+    *Dcb = dcb;
+    dcb->DeviceObject = diskDeviceObject;
+    dcb->Global = DokanGlobal;
 
-  dcb->Identifier.Type = DCB;
-  dcb->Identifier.Size = sizeof(DokanDCB);
+    dcb->Identifier.Type = DCB;
+    dcb->Identifier.Size = sizeof(DokanDCB);
 
-  dcb->MountId = MountId;
-  dcb->VolumeDeviceType = DeviceType;
-  dcb->DeviceType = FILE_DEVICE_DISK;
-  dcb->DeviceCharacteristics = DeviceCharacteristics;
-  KeInitializeEvent(&dcb->KillEvent, NotificationEvent, FALSE);
-  IoInitializeRemoveLock(&dcb->RemoveLock, TAG, 1, 100);
-  //
-  // Establish user-buffer access method.
-  //
-  diskDeviceObject->Flags |= DO_DIRECT_IO;
+    dcb->MountId = MountId;
+    dcb->VolumeDeviceType = DeviceType;
+    dcb->DeviceType = FILE_DEVICE_DISK;
+    dcb->DeviceCharacteristics = DeviceCharacteristics;
+    KeInitializeEvent(&dcb->KillEvent, NotificationEvent, FALSE);
+    IoInitializeRemoveLock(&dcb->RemoveLock, TAG, 1, 100);
+    //
+    // Establish user-buffer access method.
+    //
+    diskDeviceObject->Flags |= DO_DIRECT_IO;
 
-  // initialize Event and Event queue
-  DokanInitIrpList(&dcb->PendingIrp);
-  DokanInitIrpList(&dcb->PendingEvent);
-  DokanInitIrpList(&dcb->NotifyEvent);
+    // initialize Event and Event queue
+    DokanInitIrpList(&dcb->PendingIrp);
+    DokanInitIrpList(&dcb->PendingEvent);
+    DokanInitIrpList(&dcb->NotifyEvent);
 
-  KeInitializeEvent(&dcb->ReleaseEvent, NotificationEvent, FALSE);
-  ExInitializeResourceLite(&dcb->Resource);
+    KeInitializeEvent(&dcb->ReleaseEvent, NotificationEvent, FALSE);
+    ExInitializeResourceLite(&dcb->Resource);
 
-  dcb->CacheManagerNoOpCallbacks.AcquireForLazyWrite = &DokanNoOpAcquire;
-  dcb->CacheManagerNoOpCallbacks.ReleaseFromLazyWrite = &DokanNoOpRelease;
-  dcb->CacheManagerNoOpCallbacks.AcquireForReadAhead = &DokanNoOpAcquire;
-  dcb->CacheManagerNoOpCallbacks.ReleaseFromReadAhead = &DokanNoOpRelease;
+    dcb->CacheManagerNoOpCallbacks.AcquireForLazyWrite = &DokanNoOpAcquire;
+    dcb->CacheManagerNoOpCallbacks.ReleaseFromLazyWrite = &DokanNoOpRelease;
+    dcb->CacheManagerNoOpCallbacks.AcquireForReadAhead = &DokanNoOpAcquire;
+    dcb->CacheManagerNoOpCallbacks.ReleaseFromReadAhead = &DokanNoOpRelease;
 
-  dcb->MountGlobally = MountGlobally;
-  dcb->UseMountManager = UseMountManager;
-  if (wcscmp(MountPoint, L"") != 0) {
-    RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH,
-                      L"\\DosDevices\\");
-    if (wcslen(MountPoint) < 4) {
-      mountPointBuf[12] = towupper(MountPoint[0]);
-      mountPointBuf[13] = L':';
-      mountPointBuf[14] = L'\0';
-      if (isNetworkFileSystem) {
+    dcb->MountGlobally = MountGlobally;
+    dcb->UseMountManager = UseMountManager;
+    if (wcscmp(MountPoint, L"") != 0) {
+      RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH,
+                        L"\\DosDevices\\");
+      if (wcslen(MountPoint) < 4) {
+        mountPointBuf[12] = towupper(MountPoint[0]);
+        mountPointBuf[13] = L':';
+        mountPointBuf[14] = L'\0';
+        if (isNetworkFileSystem) {
+          dcb->UseMountManager = FALSE;
+        }
+      } else {
         dcb->UseMountManager = FALSE;
+        RtlStringCchCatW(mountPointBuf, MAXIMUM_FILENAME_LENGTH, MountPoint);
       }
     } else {
-      dcb->UseMountManager = FALSE;
-      RtlStringCchCatW(mountPointBuf, MAXIMUM_FILENAME_LENGTH, MountPoint);
+      RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH, L"");
     }
-  } else {
-    RtlStringCchCopyW(mountPointBuf, MAXIMUM_FILENAME_LENGTH, L"");
+
+    dcb->DiskDeviceName = DokanAllocateUnicodeString(diskDeviceNameBuf);
+    dcb->SymbolicLinkName = DokanAllocateUnicodeString(symbolicLinkNameBuf);
+    dcb->MountPoint = DokanAllocateUnicodeString(mountPointBuf);
+    if (UNCName != NULL) {
+      dcb->UNCName = DokanAllocateUnicodeString(UNCName);
+    }
+
+    if (dcb->DiskDeviceName == NULL || dcb->SymbolicLinkName == NULL ||
+        dcb->MountPoint == NULL || (dcb->UNCName == NULL && UNCName != NULL)) {
+      DDbgPrint("  Failed to allocate memory for device naming");
+      FreeDcbNames(dcb);
+      ExDeleteResourceLite(&dcb->Resource);
+      IoDeleteDevice(diskDeviceObject);
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
+    DDbgPrint("DiskDeviceName: %wZ - SymbolicLinkName: %wZ - MountPoint: %wZ\n",
+              dcb->DiskDeviceName, dcb->SymbolicLinkName, dcb->MountPoint);
+
+    DDbgPrint("  IoCreateDevice DeviceType: %d\n", DeviceType);
+
+    //
+    // Create a symbolic link for userapp to interact with the driver.
+    //
+    status = IoCreateSymbolicLink(dcb->SymbolicLinkName, dcb->DiskDeviceName);
+
+    if (!NT_SUCCESS(status)) {
+      ExDeleteResourceLite(&dcb->Resource);
+      IoDeleteDevice(diskDeviceObject);
+      FreeDcbNames(dcb);
+      DDbgPrint("  IoCreateSymbolicLink returned 0x%x\n", status);
+      __leave;
+    }
+    DDbgPrint("SymbolicLink: %wZ -> %wZ created\n", dcb->SymbolicLinkName,
+              dcb->DiskDeviceName);
+
+    // Mark devices as initialized
+    diskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    ObReferenceObject(diskDeviceObject);
+
+    // DokanRegisterDeviceInterface(DriverObject, dcb->DeviceObject, dcb);
+    // DokanRegisterMountedDeviceInterface(dcb->DeviceObject, dcb);
+
+    // Save to the global mounted list
+    RtlZeroMemory(dokanControl, sizeof(*dokanControl));
+    RtlStringCchCopyW(dokanControl->DeviceName,
+                      sizeof(dokanControl->DeviceName) / sizeof(WCHAR),
+                      diskDeviceNameBuf);
+    RtlStringCchCopyW(dokanControl->MountPoint,
+                      sizeof(dokanControl->MountPoint) / sizeof(WCHAR),
+                      mountPointBuf);
+    if (UNCName != NULL) {
+      RtlStringCchCopyW(dokanControl->UNCName,
+                        sizeof(dokanControl->UNCName) / sizeof(WCHAR), UNCName);
+    }
+    dokanControl->Type = DeviceType;
+
+    InsertMountEntry(DokanGlobal, dokanControl, FALSE);
+  } __finally {
+    if (diskDeviceNameBuf)
+      ExFreePool(diskDeviceNameBuf);
+    if (symbolicLinkNameBuf)
+      ExFreePool(symbolicLinkNameBuf);
+    if (mountPointBuf)
+      ExFreePool(mountPointBuf);
+    if (dokanControl)
+      ExFreePool(dokanControl);
   }
 
-  dcb->DiskDeviceName = DokanAllocateUnicodeString(diskDeviceNameBuf);
-  dcb->SymbolicLinkName = DokanAllocateUnicodeString(symbolicLinkNameBuf);
-  dcb->MountPoint = DokanAllocateUnicodeString(mountPointBuf);
-  if (UNCName != NULL) {
-    dcb->UNCName = DokanAllocateUnicodeString(UNCName);
-  }
-
-  if (dcb->DiskDeviceName == NULL || dcb->SymbolicLinkName == NULL ||
-      dcb->MountPoint == NULL || (dcb->UNCName == NULL && UNCName != NULL)) {
-    DDbgPrint("  Failed to allocate memory for device naming");
-    FreeDcbNames(dcb);
-    ExDeleteResourceLite(&dcb->Resource);
-    IoDeleteDevice(diskDeviceObject);
-    return STATUS_INSUFFICIENT_RESOURCES;
-  }
-  DDbgPrint("DiskDeviceName: %wZ - SymbolicLinkName: %wZ - MountPoint: %wZ\n",
-            dcb->DiskDeviceName, dcb->SymbolicLinkName, dcb->MountPoint);
-
-  DDbgPrint("  IoCreateDevice DeviceType: %d\n", DeviceType);
-
-  //
-  // Create a symbolic link for userapp to interact with the driver.
-  //
-  status = IoCreateSymbolicLink(dcb->SymbolicLinkName, dcb->DiskDeviceName);
-
-  if (!NT_SUCCESS(status)) {
-    ExDeleteResourceLite(&dcb->Resource);
-    IoDeleteDevice(diskDeviceObject);
-    FreeDcbNames(dcb);
-    DDbgPrint("  IoCreateSymbolicLink returned 0x%x\n", status);
-    return status;
-  }
-  DDbgPrint("SymbolicLink: %wZ -> %wZ created\n", dcb->SymbolicLinkName,
-            dcb->DiskDeviceName);
-
-  // Mark devices as initialized
-  diskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
-
-  ObReferenceObject(diskDeviceObject);
-
-  // DokanRegisterDeviceInterface(DriverObject, dcb->DeviceObject, dcb);
-  // DokanRegisterMountedDeviceInterface(dcb->DeviceObject, dcb);
-
-  // Save to the global mounted list
-  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
-  RtlStringCchCopyW(dokanControl.DeviceName,
-                    sizeof(dokanControl.DeviceName) / sizeof(WCHAR),
-                    diskDeviceNameBuf);
-  RtlStringCchCopyW(dokanControl.MountPoint,
-                    sizeof(dokanControl.MountPoint) / sizeof(WCHAR),
-                    mountPointBuf);
-  if (UNCName != NULL) {
-    RtlStringCchCopyW(dokanControl.UNCName,
-                      sizeof(dokanControl.UNCName) / sizeof(WCHAR), UNCName);
-  }
-  dokanControl.Type = DeviceType;
-
-  InsertMountEntry(DokanGlobal, &dokanControl, FALSE);
-
-  return STATUS_SUCCESS;
+  return status;
 }
 
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb) {
