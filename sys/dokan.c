@@ -341,6 +341,8 @@ Return Value:
 
   DDbgPrint("==> DokanUnload\n");
 
+  PAGED_CODE();
+
   dokanGlobal = deviceObject->DeviceExtension;
   if (GetIdentifierType(dokanGlobal) == DGL) {
     DDbgPrint("  Delete Global DeviceObject\n");

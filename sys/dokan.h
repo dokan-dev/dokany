@@ -628,6 +628,9 @@ NTSTATUS IsMountPointDriveLetter(__in PUNICODE_STRING mountPoint);
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
 VOID DokanPrintNTStatus(NTSTATUS Status);
 
+NTSTATUS DokanOplockRequest(__in PIRP *pIrp);
+NTSTATUS DokanCommonLockControl(__in PIRP Irp);
+
 NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb);
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
                              __in ULONG_PTR Info);

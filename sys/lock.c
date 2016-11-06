@@ -21,6 +21,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, DokanCommonLockControl)
+#endif
+
 NTSTATUS
 DokanCommonLockControl(__in PIRP Irp) {
   NTSTATUS Status = STATUS_SUCCESS;

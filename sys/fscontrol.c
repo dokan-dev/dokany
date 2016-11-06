@@ -22,6 +22,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 #include <wdmsec.h>
 
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, DokanOplockRequest)
+#endif
+
 NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   NTSTATUS Status = STATUS_SUCCESS;
   ULONG FsControlCode;
