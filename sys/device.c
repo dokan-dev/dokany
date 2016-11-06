@@ -507,8 +507,14 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = STATUS_SUCCESS;
     if (!IsUnmountPending(DeviceObject) && mountdevName != NULL &&
         mountdevName->NameLength > 0) {
-      WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
-      RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
+      WCHAR *symbolicLinkNameBuf =
+          ExAllocatePool((mountdevName->NameLength + 1) * sizeof(WCHAR));
+      if (symbolicLinkNameBuf == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        break;
+      }
+
+      RtlZeroMemory(symbolicLinkNameBuf, (mountdevName->NameLength + 1) * sizeof(WCHAR));
       RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                     mountdevName->NameLength);
       DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
@@ -522,16 +528,21 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           DDbgPrint("   Not current MountPoint. MountDev set as MountPoint\n");
           dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
           if (dcb->DiskDeviceName != NULL) {
-            DOKAN_CONTROL dokanControl;
             PMOUNT_ENTRY mountEntry;
-            RtlZeroMemory(&dokanControl, sizeof(dokanControl));
-            RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
+            PDOKAN_CONTROL dokanControl = ExAllocatePool(sizeof(DOKAN_CONTROL));
+            if (dokanControl == NULL) {
+              status = STATUS_INSUFFICIENT_RESOURCES;
+              break;
+            }
+            RtlZeroMemory(dokanControl, sizeof(*dokanControl));
+            RtlCopyMemory(dokanControl->DeviceName, dcb->DiskDeviceName->Buffer,
                           dcb->DiskDeviceName->Length);
             if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
-              RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
+              RtlCopyMemory(dokanControl->UNCName, dcb->UNCName->Buffer,
                             dcb->UNCName->Length);
             }
-            mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
+            mountEntry = FindMountEntry(dcb->Global, dokanControl, TRUE);
+            ExFreePool(dokanControl);
             if (mountEntry != NULL) {
               RtlStringCchCopyW(mountEntry->MountControl.MountPoint,
                                 MAXIMUM_FILENAME_LENGTH, symbolicLinkNameBuf);
@@ -549,6 +560,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       } else {
         DDbgPrint("   Mount Point is not DosDevices, ignored.\n");
       }
+      ExFreePool(symbolicLinkNameBuf);
     } else {
       DDbgPrint("   MountDev Name is undefined or unmounting in progress.\n");
     }
@@ -559,8 +571,14 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = STATUS_SUCCESS;
     if (dcb->UseMountManager) {
       if (mountdevName != NULL && mountdevName->NameLength > 0) {
-        WCHAR symbolicLinkNameBuf[MAXIMUM_FILENAME_LENGTH];
-        RtlZeroMemory(symbolicLinkNameBuf, sizeof(symbolicLinkNameBuf));
+        WCHAR *symbolicLinkNameBuf =
+            ExAllocatePool((mountdevName->NameLength + 1) * sizeof(WCHAR));
+        if (symbolicLinkNameBuf == NULL) {
+          status = STATUS_INSUFFICIENT_RESOURCES;
+          break;
+        }
+
+        RtlZeroMemory(symbolicLinkNameBuf, (mountdevName->NameLength + 1) * sizeof(WCHAR));
         RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                       mountdevName->NameLength);
         DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
@@ -583,6 +601,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         else {
           status = DokanEventRelease(vcb->DeviceObject, Irp);
         }
+        ExFreePool(symbolicLinkNameBuf);
       } else {
         DDbgPrint("   MountDev Name is undefined.\n");
       }
@@ -765,21 +784,26 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     mediaTypes->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
     mediaTypes->MediaInfoCount = 1;
 
-    DISK_GEOMETRY diskGeometry;
-    RtlZeroMemory(&diskGeometry, sizeof(diskGeometry));
-    DokanPopulateDiskGeometry(&diskGeometry);
-    mediaInfo->DeviceSpecific.DiskInfo.MediaType = diskGeometry.MediaType;
+    PDISK_GEOMETRY diskGeometry = ExAllocatePool(sizeof(DISK_GEOMETRY));
+    if (diskGeometry == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      break;
+    }
+    RtlZeroMemory(diskGeometry, sizeof(*diskGeometry));
+    DokanPopulateDiskGeometry(diskGeometry);
+    mediaInfo->DeviceSpecific.DiskInfo.MediaType = diskGeometry->MediaType;
     mediaInfo->DeviceSpecific.DiskInfo.NumberMediaSides = 1;
     mediaInfo->DeviceSpecific.DiskInfo.MediaCharacteristics =
         (MEDIA_CURRENTLY_MOUNTED | MEDIA_READ_WRITE);
     mediaInfo->DeviceSpecific.DiskInfo.Cylinders.QuadPart =
-        diskGeometry.Cylinders.QuadPart;
+        diskGeometry->Cylinders.QuadPart;
     mediaInfo->DeviceSpecific.DiskInfo.TracksPerCylinder =
-        diskGeometry.TracksPerCylinder;
+        diskGeometry->TracksPerCylinder;
     mediaInfo->DeviceSpecific.DiskInfo.SectorsPerTrack =
-        diskGeometry.SectorsPerTrack;
+        diskGeometry->SectorsPerTrack;
     mediaInfo->DeviceSpecific.DiskInfo.BytesPerSector =
-        diskGeometry.BytesPerSector;
+        diskGeometry->BytesPerSector;
+    ExFreePool(diskGeometry);
 
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = sizeof(GET_MEDIA_TYPES);
