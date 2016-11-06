@@ -23,6 +23,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, DokanDispatchCreate)
+#pragma alloc_text(PAGE, DokanCheckShareAccess)
 #endif
 
 // We must NOT call without VCB lock

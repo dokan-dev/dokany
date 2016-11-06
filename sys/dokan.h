@@ -308,7 +308,7 @@ typedef struct _DokanVolumeControlBlock {
 #define DCB_DELETE_PENDING 0x00000001
 
 typedef struct _DokanFileControlBlock {
-  // Locking: Identifier is read-only, no locks needed. 
+  // Locking: Identifier is read-only, no locks needed.
   FSD_IDENTIFIER Identifier;
 
   // Locking: FIXME
@@ -322,7 +322,7 @@ typedef struct _DokanFileControlBlock {
   // Locking: Lock for paging io.
   ERESOURCE PagingIoResource;
 
-  // Locking: Vcb pointer is read-only, no locks needed. 
+  // Locking: Vcb pointer is read-only, no locks needed.
   PDokanVCB Vcb;
   // Locking: DokanFCBLock{RO,RW} and usually vcb lock
   LIST_ENTRY NextFCB;
@@ -524,6 +524,10 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 DRIVER_DISPATCH DokanGetAccessToken;
 
 NTSTATUS
+DokanCheckShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
+                      _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);
+
+NTSTATUS
 DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                        __in PDOKAN_GLOBAL dokanGlobal);
 
@@ -634,7 +638,8 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
 VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                              __in ULONG Action);
 
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName, __in ULONG FileNameLength);
+PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
+                           __in ULONG FileNameLength);
 
 NTSTATUS
 DokanFreeFCB(__in PDokanFCB Fcb);
@@ -712,7 +717,7 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define IsFlagOn(a, b) ((BOOLEAN)(FlagOn(a, b) == b))
 
 #define DokanFCBFlagsGet(fcb) ((fcb)->Flags)
-#define DokanFCBFlagsIsSet(fcb, bit) (((fcb)->Flags)&(bit))
+#define DokanFCBFlagsIsSet(fcb, bit) (((fcb)->Flags) & (bit))
 #define DokanFCBFlagsSetBit(fcb, bit) SetLongFlag((fcb)->Flags, (bit))
 #define DokanFCBFlagsClearBit(fcb, bit) ClearLongFlag((fcb)->Flags, (bit))
 
@@ -720,6 +725,5 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanCCBFlagsIsSet DokanFCBFlagsIsSet
 #define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
 #define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
-
 
 #endif // DOKAN_H_
