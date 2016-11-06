@@ -774,9 +774,13 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead) {
   ULONG returnedLength = 0;
+  PDOKAN_CONTROL dokanControl =
+      malloc(DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
+  if (dokanControl == NULL) {
+    return FALSE;
+  }
 
-  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-  ZeroMemory(dokanControl, sizeof(dokanControl));
+  ZeroMemory(dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
   *nbRead = 0;
 
   if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL,
@@ -786,17 +790,20 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
         break;
       }
       if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0) {
-        if (length < ((*nbRead) + 1))
+        if (length < ((*nbRead) + 1)) {
+          free(dokanControl);
           return TRUE;
+        }
 
         CopyMemory(&list[*nbRead], &dokanControl[i], sizeof(DOKAN_CONTROL));
         (*nbRead)++;
       }
     }
-
+    free(dokanControl);
     return TRUE;
   }
 
+  free(dokanControl);
   return FALSE;
 }
 

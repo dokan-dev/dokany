@@ -192,7 +192,14 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   // No admin rights required
   case L'l': {
     ULONG nbRead = 0;
-    DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
+    PDOKAN_CONTROL dokanControl =
+        malloc(DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
+    if (dokanControl == NULL) {
+      fprintf(stderr, "Failed to allocate dokanControl\n");
+      return EXIT_FAILURE;
+    }
+
+    ZeroMemory(dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
     if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
                                &nbRead)) {
       fwprintf(stdout, L"  Mount points: %d\n", nbRead);
@@ -204,6 +211,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     } else {
       fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
     }
+    free(dokanControl);
   } break;
 
   case L'v': {

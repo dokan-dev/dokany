@@ -358,6 +358,8 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
 
   if (wcsstr(buffer, commanp) != NULL) {
     WCHAR *dokan_pos = wcsstr(buffer, commanp);
+    if (dokan_pos == NULL)
+      return FALSE;
     wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
               dokan_pos - buffer);
     wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
