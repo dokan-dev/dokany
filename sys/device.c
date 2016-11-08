@@ -514,7 +514,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         break;
       }
 
-      RtlZeroMemory(symbolicLinkNameBuf, (mountdevName->NameLength + 1) * sizeof(WCHAR));
+      RtlZeroMemory(symbolicLinkNameBuf,
+                    (mountdevName->NameLength + 1) * sizeof(WCHAR));
       RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                     mountdevName->NameLength);
       DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
@@ -531,6 +532,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
             PMOUNT_ENTRY mountEntry;
             PDOKAN_CONTROL dokanControl = ExAllocatePool(sizeof(DOKAN_CONTROL));
             if (dokanControl == NULL) {
+              ExFreePool(symbolicLinkNameBuf);
               status = STATUS_INSUFFICIENT_RESOURCES;
               break;
             }
@@ -578,7 +580,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           break;
         }
 
-        RtlZeroMemory(symbolicLinkNameBuf, (mountdevName->NameLength + 1) * sizeof(WCHAR));
+        RtlZeroMemory(symbolicLinkNameBuf,
+                      (mountdevName->NameLength + 1) * sizeof(WCHAR));
         RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                       mountdevName->NameLength);
         DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
