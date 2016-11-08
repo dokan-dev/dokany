@@ -34,6 +34,7 @@ THE SOFTWARE.
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
+BOOL g_HasSeSecurityPrivilege;
 
 static void DbgPrint(LPCWSTR format, ...) {
   if (g_DebugMode) {
@@ -1082,6 +1083,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
     PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
     PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[MAX_PATH];
+  BOOLEAN requestingSaclInfo;
 
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
@@ -1105,11 +1107,18 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
   MirrorCheckFlag(*SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
 
+  requestingSaclInfo = ((*SecurityInformation & SACL_SECURITY_INFORMATION) ||
+                        (*SecurityInformation & BACKUP_SECURITY_INFORMATION));
+
+  if (!g_HasSeSecurityPrivilege) {
+    *SecurityInformation &= ~SACL_SECURITY_INFORMATION;
+    *SecurityInformation &= ~BACKUP_SECURITY_INFORMATION;
+  }
+
   DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
   HANDLE handle = CreateFile(
       filePath,
-      READ_CONTROL | (((*SecurityInformation & SACL_SECURITY_INFORMATION) ||
-                       (*SecurityInformation & BACKUP_SECURITY_INFORMATION))
+      READ_CONTROL | ((requestingSaclInfo && g_HasSeSecurityPrivilege)
                           ? ACCESS_SYSTEM_SECURITY
                           : 0),
       FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
@@ -1463,12 +1472,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   // Add security name privilege. Required here to handle GetFileSecurity
   // properly.
-  if (!AddSeSecurityNamePrivilege()) {
+  g_HasSeSecurityPrivilege = AddSeSecurityNamePrivilege();
+  if (!g_HasSeSecurityPrivilege) {
     fwprintf(stderr, L"Failed to add security privilege to process\n");
     fwprintf(stderr,
              L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
     fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
                      L"rights to fix it\n");
+
   }
 
   if (g_DebugMode) {
