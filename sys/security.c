@@ -125,7 +125,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
@@ -161,10 +161,10 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   if (EventInfo->Status == STATUS_SUCCESS &&
       EventInfo->BufferLength <= bufferLength && buffer != NULL) {
     if (!RtlValidRelativeSecurityDescriptor(
-           EventInfo->Buffer, 
-           EventInfo->BufferLength, 
-           irpSp->Parameters.QuerySecurity.SecurityInformation)) {
+            EventInfo->Buffer, EventInfo->BufferLength,
+            irpSp->Parameters.QuerySecurity.SecurityInformation)) {
       // No valid security descriptor to return.
+      DDbgPrint(" Security Descriptor is not valid.\n");
       info = 0;
       status = STATUS_INVALID_PARAMETER;
     } else {
@@ -312,7 +312,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
