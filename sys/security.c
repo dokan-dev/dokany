@@ -278,8 +278,10 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Assumes the parameter is self relative SD.
     securityDescLength = RtlLengthSecurityDescriptor(securityDescriptor);
 
+    // PSECURITY_DESCRIPTOR has to be aligned to a 4-byte boundary for use with win32 functions.
+    // So we add 3 bytes here, to make sure we have extra room to align BufferOffset.
     eventLength =
-        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length;
+        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length + 3;
 
     if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
       // TODO: Handle this case like DispatchWrite.
@@ -298,9 +300,12 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Context = ccb->UserContext;
     eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
     eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
+
+    // Align BufferOffset by adding 3, then zeroing the last 2 bits.
     eventContext->Operation.SetSecurity.BufferOffset =
-        FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-        fcb->FileName.Length + sizeof(WCHAR);
+        (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
+         fcb->FileName.Length + sizeof(WCHAR) + 3) & ~0x03;
+
     RtlCopyMemory((PCHAR)eventContext +
                       eventContext->Operation.SetSecurity.BufferOffset,
                   securityDescriptor, securityDescLength);
