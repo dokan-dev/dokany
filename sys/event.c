@@ -498,8 +498,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
-  RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
-
   RtlCopyMemory(eventStart, Irp->AssociatedIrp.SystemBuffer,
                 sizeof(EVENT_START));
   driverInfo = Irp->AssociatedIrp.SystemBuffer;
@@ -594,8 +592,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     ExFreePool(baseGuidString);
     return status;
   }
-  RtlZeroMemory(baseGuidString, sizeof(*baseGuidString));
-  RtlStringCchCopyW(baseGuidString, sizeof(*baseGuidString) / sizeof(WCHAR),
+  RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
+  RtlStringCchCopyW(baseGuidString, 64,
                     unicodeGuid.Buffer);
   RtlFreeUnicodeString(&unicodeGuid);
 
