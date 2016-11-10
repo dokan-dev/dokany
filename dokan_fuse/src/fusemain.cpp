@@ -424,15 +424,66 @@ int impl_fuse_context::create_directory(LPCWSTR file_name,
   return ops_.mkdir(fname.c_str(), dirmask_);
 }
 
+int impl_fuse_context::readdir_filler_set_has_files(void *buf, const char *name,
+                                      const struct FUSE_STAT *stbuf,
+                                      FUSE_OFF_T off) {
+  bool *has_files = static_cast<bool *>(buf);
+  int ret = 0;
+  if (strcmp(name, ".") && strcmp(name, "..")) {
+    *has_files = true;
+    ret = 1;
+  }
+  return ret;
+}
+
+int impl_fuse_context::getdir_filler_set_has_files(fuse_dirh_t hndl, const char *name,
+                                             int type, ino_t ino) {
+    bool *has_files = reinterpret_cast<bool *>(hndl);
+    int ret = 0;
+    if (readdir_filler_set_has_files(has_files, name, nullptr, 0))
+      ret = -ECANCELED;
+    return ret;
+}
+
+
 int impl_fuse_context::delete_directory(LPCWSTR file_name,
                                         PDOKAN_FILE_INFO dokan_file_info) {
   std::string fname = unixify(wchar_to_utf8_cstr(file_name));
-
-  if (!ops_.getattr)
+  if (!ops_.getattr || !ops_.rmdir || (!ops_.readdir && !ops_.getdir))
     return -EINVAL;
 
   struct FUSE_STAT stbuf = {0};
-  return ops_.getattr(fname.c_str(), &stbuf);
+  int ret = ops_.getattr(fname.c_str(), &stbuf);
+
+  /* TODO: Should we check if the parent-dir is writable and return -EACCESS?
+   * (by using ops_.access or alternatively other means such as getattr)
+   */
+  if (ret < 0)
+    return ret;
+
+  bool has_files = false;
+  if (ops_.readdir) {
+    impl_file_handle *hndl = reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
+    fuse_file_info *p_finfo = nullptr;
+    if (hndl != nullptr) {
+      fuse_file_info finfo(hndl->make_finfo());
+      p_finfo = &finfo;
+    }
+    ret = ops_.readdir(fname.c_str(), &has_files, &readdir_filler_set_has_files, 0, p_finfo);
+  } else {
+    ret = ops_.getdir(fname.c_str(), reinterpret_cast<fuse_dirh_t>(&has_files), &getdir_filler_set_has_files);
+    /* We only propagate the return value of getdir() when has_files is set.
+     * To avoid reading the whole directory, we return an error in our callback
+     * and set has_files after we encountered the first regular directory entry.
+     * It is not exactly clear what getdir() is supposed to return in this case,
+     * but given that we return -ENOTEMPTY anyways, we do not need to care.
+     */
+  }
+  if (has_files) {
+    ret = -ENOTEMPTY;
+  }
+
+  return ret;
 }
 
 win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
