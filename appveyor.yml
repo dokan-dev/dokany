@@ -224,7 +224,7 @@
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Win10 Debug",
+        "/p:Configuration=Win8.1 Debug",
         "/p:Platform=$env:PLATFORM")
         
         & $buildCmd $buildArgs
@@ -233,7 +233,7 @@
         
         .\cert\dokan-sign.ps1
         
-        cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
+        cp .\x64\Win8.1Debug\dokan1.sys C:\Windows\System32\drivers\
         Exec-External {& .\x64\Debug\dokanctl.exe /i d}
         Exec-External {& .\x64\Debug\dokanctl.exe /i n}
         New-Item C:\TMP -type directory | Out-Null
