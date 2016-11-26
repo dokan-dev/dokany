@@ -41,7 +41,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   PIO_STACK_LOCATION IrpSp = IoGetCurrentIrpStackLocation(Irp);
 
   BOOLEAN AcquiredVcb = FALSE;
-  BOOLEAN AcquiredFcb = FALSE;
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
   PREQUEST_OPLOCK_INPUT_BUFFER InputBuffer = NULL;
@@ -135,8 +134,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
             ) {
 
       AcquiredVcb = ExAcquireResourceSharedLite(&(Fcb->Vcb->Resource), TRUE);
-      DokanFCBLockRW(Fcb);
-      AcquiredFcb = TRUE;
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
       if (!Dcb->FileLockInUserMode && FsRtlOplockIsSharedRequest(Irp)) {
@@ -178,8 +175,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
 #endif
                    ) {
 
-      DokanFCBLockRO(Fcb);
-      AcquiredFcb = TRUE;
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     } else if (FsControlCode == FSCTL_REQUEST_OPLOCK) {
       //
@@ -235,10 +230,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     //
     if (AcquiredVcb) {
       ExReleaseResourceLite(&(Fcb->Vcb->Resource));
-    }
-
-    if (AcquiredFcb) {
-      DokanFCBUnlock(Fcb);
     }
 
     DDbgPrint("    DokanOplockRequest return 0x%x\n", Status);

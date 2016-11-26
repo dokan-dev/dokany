@@ -222,6 +222,7 @@ Return Value:
     //  the file oplocks.
     //
     if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
+      // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
       status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                                 DokanOplockComplete, DokanPrePostIrp);
 
@@ -242,6 +243,7 @@ Return Value:
       // We have to check for read access according to the current
       // state of the file locks, and set FileSize from the Fcb.
       //
+      // FsRtlCheckLockForReadAccess does not block.
       if (!FsRtlCheckLockForReadAccess(&fcb->FileLock, Irp)) {
         status = STATUS_FILE_LOCK_CONFLICT;
         __leave;

@@ -329,18 +329,18 @@ typedef struct _DokanFileControlBlock {
   // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
 
-  // Locking: DokanFCBLock{RO,RW}
+  // Locking: Atomics - not behind an accessor.
   LONG FileCount;
 
   // Locking: Use atomic flag operations - DokanFCBFlags*
   ULONG Flags;
-  // Locking: DokanFCBLock{RO,RW}
+  // Locking: Functions are ok to call concurrently.
   SHARE_ACCESS ShareAccess;
 
   // Locking: DokanFCBLock{RO,RW} - e.g. renames change this field.
   UNICODE_STRING FileName;
 
-  // Locking: DokanFCBLock{RO,RW}
+  // Locking: FsRtl routines should be enough after initialization.
   FILE_LOCK FileLock;
 
 #if (NTDDI_VERSION < NTDDI_WIN8)
