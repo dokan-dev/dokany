@@ -163,7 +163,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       } else {
         // Shouldn't be something like UncleanCount counter and not FileCount
         // here?
-        OplockCount = Fcb->FileCount;
+        OplockCount = 0;//Fcb->FileCount;
       }
     } else if ((FsControlCode == FSCTL_OPLOCK_BREAK_ACKNOWLEDGE) ||
                (FsControlCode == FSCTL_OPBATCH_ACK_CLOSE_PENDING) ||
