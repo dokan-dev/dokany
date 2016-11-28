@@ -32,6 +32,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG info = 0;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
+  BOOLEAN isNormalized = FALSE;
 
   // PAGED_CODE();
 
@@ -99,31 +100,59 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileCompressionInformation:
       DDbgPrint("  FileCompressionInformation\n");
       break;
-    case FileNormalizedNameInformation: // Fake implementation by returning
-                                        // FileNameInformation result.
-                                        // TODO: implement it
-      DDbgPrint("  FileNormalizedNameInformation\n");
+    case FileNormalizedNameInformation:
+        DDbgPrint("  FileNormalizedNameInformation\n");
+        isNormalized = TRUE;
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
 
       DDbgPrint("  FileNameInformation\n");
 
+      nameInfo = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      ASSERT(nameInfo != NULL);
+
+      BOOLEAN isNetworkFileSystem = (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+      PUNICODE_STRING fileName = &fcb->FileName;
+      USHORT length = fcb->FileName.Length;
+      BOOLEAN doConcat = FALSE;
+
+      if (isNetworkFileSystem) {
+          if (wcsncmp(fcb->FileName.Buffer, L"\\", sizeof(fcb->FileName.Buffer)) == 0) {
+               DDbgPrint("  NetworkFileSystem has no root folder. So return the full device name \n");
+               fileName = vcb->Dcb->DiskDeviceName;
+               length = fileName->Length;
+          }
+          else {
+              if (isNormalized) {
+                  DDbgPrint("  FullFileName should be returned \n");
+                  fileName = vcb->Dcb->DiskDeviceName;
+                  length = fileName->Length + vcb->Dcb->DiskDeviceName->Length;
+                  doConcat = TRUE;
+              }
+          }
+      }
+
       if (irpSp->Parameters.QueryFile.Length <
-          sizeof(FILE_NAME_INFORMATION) + fcb->FileName.Length) {
+          sizeof(FILE_NAME_INFORMATION) + length) {
 
         info = irpSp->Parameters.QueryFile.Length;
         status = STATUS_BUFFER_OVERFLOW;
 
       } else {
 
-        nameInfo = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-        ASSERT(nameInfo != NULL);
+        RtlZeroMemory(Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.QueryFile.Length);
 
-        nameInfo->FileNameLength = fcb->FileName.Length;
-        RtlCopyMemory(nameInfo->FileName, fcb->FileName.Buffer,
-                      fcb->FileName.Length);
+        nameInfo->FileNameLength = fileName->Length;
+        RtlCopyMemory(&nameInfo->FileName[0], fileName->Buffer,
+                      fileName->Length);
+
+        if (doConcat) {
+            DDbgPrint("  Concat the devicename with the filename to get the fullname of the file \n");
+            RtlStringCchCatW(nameInfo->FileName, NTSTRSAFE_MAX_CCH, fcb->FileName.Buffer);
+        }
+
         info = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]) +
-               fcb->FileName.Length;
+               length;
         status = STATUS_SUCCESS;
       }
       __leave;
