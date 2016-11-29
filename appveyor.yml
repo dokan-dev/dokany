@@ -96,6 +96,8 @@
           bash "pacman -Syu --noconfirm --cache `"$unix_msys2_cache`""
           # install MinGW toolchain
           bash "pacman --sync --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+          # temporary workaround for bug https://github.com/Alexpux/MINGW-packages/issues/1991
+          bash "pacman -S --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-libxml2"
         }
 
   before_build:
