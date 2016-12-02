@@ -11,7 +11,14 @@ function Exec-External {
 $fsTestPath = "FSTMP"
 $Platforms = @("Win32", "x64")
 $DokanDriverLetter = "M"
-$Commands = @("/l $DokanDriverLetter", "/l $DokanDriverLetter /n", "/l $DokanDriverLetter /o")
+$Commands = @{
+	"/l $DokanDriverLetter" = "$($DokanDriverLetter):"
+	"/l C:\DokanMount" = "C:\DokanMount"
+	"/l $DokanDriverLetter /o" = "$($DokanDriverLetter):"
+	"/l $DokanDriverLetter /n" = "$($DokanDriverLetter):"
+	"/l $DokanDriverLetter /n /u \myfs\dokan" = "\\myfs\dokan"
+}
+
 $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
 $env:CI_BUILD_ARG = ""
@@ -62,17 +69,37 @@ if (!(Test-Path "C:\$fsTestPath")) { New-Item "C:\$fsTestPath" -type directory |
 add-type -AssemblyName System.Windows.Forms
 
 foreach ($Platform in $Platforms){
-	foreach ($Command in $Commands){
-		Write-Host Test mirror $Platform with command $Command -ForegroundColor Green
-		$app = Start-Process -passthru .\$Platform\Release\mirror.exe -ArgumentList "/r C:\$fsTestPath $Command"
-		while (!(Test-Path "$DokanDriverLetter`:\")) { Start-Sleep -m 250 }
+	$Commands.Keys | % {
+		$command = $_
+		$destination = $Commands.Item($_)
+	
+		Write-Host Test mirror $Platform with command $command with $destination as mount -ForegroundColor Green
+		if ($destination.StartsWith("C:\")) {
+			#Cleanup mount folder - Tag source folder to wait a not empty folder at mount
+			New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
+			if (!(Test-Path $destination)) { New-Item $destination -type directory | Out-Null }
+			Remove-Item -Recurse -Force "$($destination)\*"
+		}
+		
+		$app = Start-Process -passthru .\$Platform\Release\mirror.exe -ArgumentList "/r C:\$fsTestPath $command"
+		
+		$count = 20;
+		if ($destination.StartsWith("C:\")) {
+			while (!(Test-Path "$($destination)\*") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
+		} else {
+			while (!(Test-Path $destination) -and ($count -ne 0)) { Start-Sleep -m 250 ; $count -= 1 }
+		}
+		
+		if ($count -eq 0) {
+			throw ("Impossible to mount for command $command")
+		}
 
 		Write-Host "Start FSX Test" -ForegroundColor Green
-		Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$DokanDriverLetter`:\fsxtest"}
+		Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$($destination)\fsxtest"}
 		Write-Host "FSX Test finished" -ForegroundColor Green
 
 		Write-Host "Start WinFSTest" -ForegroundColor Green
-		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$DokanDriverLetter`:\"}
+		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$($destination)\"}
 		Write-Host "WinFSTest finished" -ForegroundColor Green
 
 		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
