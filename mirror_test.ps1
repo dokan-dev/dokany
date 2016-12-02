@@ -14,6 +14,7 @@ $DokanDriverLetter = "M"
 $Commands = @{
 	"/l $DokanDriverLetter" = "$($DokanDriverLetter):"
 	"/l C:\DokanMount" = "C:\DokanMount"
+	"/l $DokanDriverLetter /m" = "$($DokanDriverLetter):"
 	"/l $DokanDriverLetter /o" = "$($DokanDriverLetter):"
 	"/l $DokanDriverLetter /n" = "$($DokanDriverLetter):"
 	"/l $DokanDriverLetter /n /u \myfs\dokan" = "\\myfs\dokan"
