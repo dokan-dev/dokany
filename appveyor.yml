@@ -224,7 +224,15 @@
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Win8.1 Debug",
+        "/p:Configuration=Win8.1 Release",
+        "/p:Platform=$env:PLATFORM")
+        
+        & $buildCmd $buildArgs
+        
+        $buildArgs = @(
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
         "/p:Platform=$env:PLATFORM")
         
         & $buildCmd $buildArgs
@@ -233,43 +241,12 @@
         
         .\cert\dokan-sign.ps1
         
-        cp .\x64\Win8.1Debug\dokan1.sys C:\Windows\System32\drivers\
-        Exec-External {& .\x64\Debug\dokanctl.exe /i d}
-        Exec-External {& .\x64\Debug\dokanctl.exe /i n}
-        New-Item C:\TMP -type directory | Out-Null
-         
-        $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
-        Start-Sleep -s 5
+        cp .\x64\Win8.1Release\dokan1.sys C:\Windows\System32\drivers\
+        Exec-External {& .\x64\Release\dokanctl.exe /i d}
+        Exec-External {& .\x64\Release\dokanctl.exe /i n}
         
-        Exec-External {git clone -q https://github.com/Liryna/fstools.git}
-        $buildArgs = @(
-        ".\fstools\winfstest.sln",
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Release",
-        "/p:Platform=$env:PLATFORM")
-        Exec-External {& $buildCmd $buildArgs}
+        .\mirror_test.ps1
         
-        Exec-External {git clone -q https://github.com/Liryna/winfstest.git}
-        $buildArgs = @(
-        ".\winfstest\winfstest.sln",
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Debug",
-        "/p:Platform=$env:PLATFORM")
-        Exec-External {& $buildCmd $buildArgs}
-        
-        Write-Host "Start FSX Test" -ForegroundColor Green
-        Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 M:\test}
-        Write-Host "FSX Test finished" -ForegroundColor Green
-        
-        Write-Host "Start WinFSTest" -ForegroundColor Green
-        Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . M:\}
-        Write-Host "WinFSTest finished" -ForegroundColor Green
-
-        Start-Sleep -s 5
-        Stop-Process $app.Id
-        Start-Sleep -s 5
         Exec-External {& verifier /query}
       }
       Write-Host Build Finished !
