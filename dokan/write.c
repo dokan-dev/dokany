@@ -106,6 +106,4 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   if (bufferAllocated)
     free(EventContext);
-
-  return;
 }

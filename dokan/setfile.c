@@ -301,5 +301,4 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
   free(eventInfo);
-  return;
 }

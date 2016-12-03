@@ -90,7 +90,6 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   DokanCompleteIrpRequest(Irp, STATUS_CANCELLED, 0);
 
   DDbgPrint("<== DokanIrpCancelRoutine\n");
-  return;
 }
 
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
@@ -125,8 +124,6 @@ None.
   }
 
   DDbgPrint("<== DokanOplockComplete\n");
-
-  return;
 }
 
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
