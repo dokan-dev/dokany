@@ -245,7 +245,7 @@
         Exec-External {& .\x64\Release\dokanctl.exe /i d}
         Exec-External {& .\x64\Release\dokanctl.exe /i n}
         
-        .\mirror_test.ps1
+        .\samples\mirror_test.ps1
         
         Exec-External {& verifier /query}
       }

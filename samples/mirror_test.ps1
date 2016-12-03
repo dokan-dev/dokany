@@ -28,6 +28,7 @@ if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\
 Write-Host Build mirrors -ForegroundColor Green
 foreach ($Platform in $Platforms){
 	$buildArgs = @(
+	"..\dokan.sln",
 	"/m",
 	"/p:Configuration=Release",
 	"/p:Platform=$Platform"
@@ -82,7 +83,7 @@ foreach ($Platform in $Platforms){
 			Remove-Item -Recurse -Force "$($destination)\*"
 		}
 		
-		$app = Start-Process -passthru .\$Platform\Release\mirror.exe -ArgumentList "/r C:\$fsTestPath $command"
+		$app = Start-Process -passthru ..\$Platform\Release\mirror.exe -ArgumentList "/r C:\$fsTestPath $command"
 		
 		$count = 20;
 		if ($destination.StartsWith("C:\")) {
