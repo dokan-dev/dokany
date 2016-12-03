@@ -55,6 +55,4 @@ VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
   }
   ReleaseDokanOpenInfo(eventInfo, DokanInstance);
   free(eventInfo);
-
-  return;
 }

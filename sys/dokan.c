@@ -366,7 +366,6 @@ Return Value:
   ExDeleteLookasideListEx(&g_DokanEResourceLookasideList);
 
   DDbgPrint("<== DokanUnload\n");
-  return;
 }
 
 NTSTATUS
@@ -407,7 +406,6 @@ VOID DokanNoOpRelease(__in PVOID Fcb) {
   UNREFERENCED_PARAMETER(Fcb);
 
   DDbgPrint("<== DokanNoOpRelease\n");
-  return;
 }
 
 #define PrintStatus(val, flag)                                                 \

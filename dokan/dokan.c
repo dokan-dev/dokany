@@ -836,6 +836,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
     LeaveCriticalSection(&g_InstanceCriticalSection);
     DeleteCriticalSection(&g_InstanceCriticalSection);
   } break;
+  default: break;
   }
   return TRUE;
 }

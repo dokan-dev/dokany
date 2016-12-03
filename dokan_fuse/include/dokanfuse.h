@@ -41,7 +41,7 @@ struct fuse_session
 
 struct fuse_chan
 {
-	fuse_chan():ResolvedDokanMain(NULL), ResolvedDokanUnmount(NULL), ResolvedDokanRemoveMountPoint(NULL), dokanDll(NULL) {}
+	fuse_chan():ResolvedDokanMain(nullptr), ResolvedDokanUnmount(nullptr), ResolvedDokanRemoveMountPoint(nullptr), dokanDll(nullptr) {}
 	~fuse_chan();
 
 	//This method dynamically loads DOKAN functions

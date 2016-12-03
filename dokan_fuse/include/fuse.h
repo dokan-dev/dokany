@@ -581,7 +581,6 @@ struct fuse_context *fuse_get_context(void);
 /**
  * Check if a request has already been interrupted
  *
- * @param req request handle
  * @return 1 if the request has been interrupted, 0 otherwise
  */
 int fuse_interrupted(void);

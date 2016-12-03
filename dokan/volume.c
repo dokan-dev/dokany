@@ -365,5 +365,4 @@ VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, NULL);
   free(eventInfo);
-  return;
 }

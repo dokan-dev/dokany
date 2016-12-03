@@ -264,6 +264,10 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     status = DokanSetValidDataLengthInformation(EventContext, &fileInfo,
                                                 DokanInstance->DokanOperations);
     break;
+  default:
+    DbgPrint("  unknown FileInformationClass %d\n",
+      EventContext->Operation.SetFile.FileInformationClass);
+    break;
   }
 
   if (openInfo != NULL)

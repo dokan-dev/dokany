@@ -30,7 +30,7 @@ std::string extract_dir_name(const std::string &str);
 template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const std::string &name, 
 										  T * find_data)
 {
-	if (stbuf==NULL) return;
+	if (stbuf==nullptr) return;
 
 	if ((stbuf->st_mode&S_IFDIR)==S_IFDIR)
 		find_data->dwFileAttributes=FILE_ATTRIBUTE_DIRECTORY;
@@ -41,7 +41,7 @@ template<class T> void convertStatlikeBuf(const struct FUSE_STAT *stbuf, const s
 	find_data->nFileSizeLow=stbuf->st_size;
 #else
 	//Support 64 sizes
-	find_data->nFileSizeLow=(DWORD) stbuf->st_size;
+	find_data->nFileSizeLow=static_cast<DWORD>(stbuf->st_size);
 	find_data->nFileSizeHigh=stbuf->st_size>>32;
 #endif
 	if (stbuf->st_ctim.tv_sec!=0)

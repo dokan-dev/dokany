@@ -411,6 +411,48 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 
       status = STATUS_SUCCESS;
       break;
+    case FileFsVolumeInformation:
+      DDbgPrint("  FileFsVolumeInformation\n");
+      break;
+    case FileFsSizeInformation:
+      DDbgPrint("  FileFsSizeInformation\n");
+      break;
+    case FileFsDeviceInformation:
+      DDbgPrint("  FileFsDeviceInformation\n");
+      break;
+    case FileFsAttributeInformation:
+      DDbgPrint("  FileFsAttributeInformation\n");
+      break;
+    case FileFsControlInformation:
+      DDbgPrint("  FileFsControlInformation\n");
+      break;
+    case FileFsFullSizeInformation:
+      DDbgPrint("  FileFsFullSizeInformation\n");
+      break;
+    case FileFsObjectIdInformation:
+      DDbgPrint("  FileFsObjectIdInformation\n");
+      break;
+    case FileFsDriverPathInformation:
+      DDbgPrint("  FileFsDriverPathInformation\n");
+      break;
+    case FileFsVolumeFlagsInformation:
+      DDbgPrint("  FileFsVolumeFlagsInformation\n");
+      break;
+    case FileFsSectorSizeInformation:
+      DDbgPrint("  FileFsSectorSizeInformation\n");
+      break;
+    case FileFsDataCopyInformation:
+      DDbgPrint("  FileFsDataCopyInformation\n");
+      break;
+    case FileFsMetadataSizeInformation:
+      DDbgPrint("  FileFsMetadataSizeInformation\n");
+      break;
+    case FileFsMaximumInformation:
+      DDbgPrint("  FileFsMaximumInformation\n");
+      break;
+    default:
+      DDbgPrint("  unknown FsInformationClass %d\n", FsInformationClass);
+      break;
     }
 
   } __finally {

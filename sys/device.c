@@ -49,6 +49,7 @@ VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
   case MOUNTMGRCONTROLTYPE:
     baseCodeStr = "MOUNTMGRCONTROLTYPE";
     break;
+  default: break;
   }
   UNREFERENCED_PARAMETER(functionCode);
   DDbgPrint("   BaseCode: 0x%x(%s) FunctionCode 0x%x(%d)\n", baseCode,
@@ -217,6 +218,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case IOCTL_DISK_GET_PARTITION_INFO_EX:
       DDbgPrint("  IOCTL_DISK_GET_PARTITION_INFO_EX\n");
       Irp->IoStatus.Information = sizeof(PARTITION_INFORMATION_EX);
+      break;
+    default:
+      DDbgPrint("  unknown ioctl %d\n", ioctl);
       break;
     }
 
