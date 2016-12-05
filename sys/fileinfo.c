@@ -117,7 +117,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       BOOLEAN doConcat = FALSE;
 
       if (isNetworkFileSystem) {
-          if (wcsncmp(fcb->FileName.Buffer, L"\\", sizeof(fcb->FileName.Buffer)) == 0) {
+          if (fcb->FileName.Length == 0 || fcb->FileName.Buffer[0] != L'\\') {
                DDbgPrint("  NetworkFileSystem has no root folder. So return the full device name \n");
                fileName = vcb->Dcb->DiskDeviceName;
                length = fileName->Length;
