@@ -464,14 +464,18 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
         fcb->FileName.Length + sizeof(WCHAR); // the last null char
 
-    // copy FileInformation
-    RtlCopyMemory(
-        (PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset,
-        Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.SetFile.Length);
+    BOOLEAN isRenameOrLink = irpSp->Parameters.SetFile.FileInformationClass ==
+        FileRenameInformation ||
+        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation;
 
-    if (irpSp->Parameters.SetFile.FileInformationClass ==
-            FileRenameInformation ||
-        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation) {
+    if (!isRenameOrLink) {
+        // copy FileInformation
+        RtlCopyMemory(
+            (PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset,
+            Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.SetFile.Length);
+    }
+
+    if (isRenameOrLink) {
       // We need to hanle FileRenameInformation separetly because the structure
       // of FILE_RENAME_INFORMATION
       // has HANDLE type field, which size is different in 32 bit and 64 bit
@@ -497,14 +501,28 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         // if Parameters.SetFile.FileObject is specified, replase
         // FILE_RENAME_INFO's file name by
         // FileObject's file name. The buffer size is already adjusted.
+
         DDbgPrint("  renameContext->FileNameLength %d\n",
-                  renameContext->FileNameLength);
+            renameContext->FileNameLength);
         DDbgPrint("  renameContext->FileName %ws\n", renameContext->FileName);
         RtlZeroMemory(renameContext->FileName, renameContext->FileNameLength);
-        RtlCopyMemory(renameContext->FileName,
-                      targetFileObject->FileName.Buffer,
-                      targetFileObject->FileName.Length);
-        renameContext->FileNameLength = targetFileObject->FileName.Length;
+
+        PFILE_OBJECT parentFileObject = targetFileObject->RelatedFileObject;
+        if (parentFileObject != NULL) {
+            RtlCopyMemory(renameContext->FileName,
+                parentFileObject->FileName.Buffer,
+                parentFileObject->FileName.Length);
+
+            RtlStringCchCatW(renameContext->FileName, NTSTRSAFE_MAX_CCH, L"\\");
+            RtlStringCchCatW(renameContext->FileName, NTSTRSAFE_MAX_CCH, targetFileObject->FileName.Buffer);
+            renameContext->FileNameLength = targetFileObject->FileName.Length + 
+                parentFileObject->FileName.Length + sizeof(WCHAR);
+        } else {
+            RtlCopyMemory(renameContext->FileName,
+                targetFileObject->FileName.Buffer,
+                targetFileObject->FileName.Length);
+            renameContext->FileNameLength = targetFileObject->FileName.Length;
+        }
       }
 
       if (irpSp->Parameters.SetFile.FileInformationClass ==
