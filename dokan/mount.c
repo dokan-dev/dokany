@@ -576,7 +576,7 @@ BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe) {
           if (length + 1 < MAX_PATH) {
             mountPoint[length] = L'\\';
             mountPoint[length + 1] = L'\0';
-            DeleteMountPoint(mountPoint);
+            return DeleteMountPoint(mountPoint);
           }
         } else {
           // Notify applications / explorer
