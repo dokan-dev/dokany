@@ -90,15 +90,13 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   if (openInfo != NULL)
     openInfo->UserContext = fileInfo.Context;
+  eventInfo->Status = status;
   eventInfo->BufferLength = 0;
 
   if (status == STATUS_SUCCESS) {
-    eventInfo->Status = status;
     eventInfo->BufferLength = writtenLength;
     eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
         EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
-  } else {
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
   }
 
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
