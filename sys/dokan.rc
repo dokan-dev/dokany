@@ -36,7 +36,7 @@ BEGIN
             VALUE "FileDescription", "Dokan Driver"
             VALUE "FileVersion", "1.0.1.0000"
             VALUE "InternalName", "dokan.sys"
-            VALUE "LegalCopyright", "Copyright (C) 2016"
+            VALUE "LegalCopyright", "Copyright (C) 2017"
             VALUE "OriginalFilename", "dokan.sys"
             VALUE "ProductName", "Dokan"
             VALUE "ProductVersion", "1.0.1.0000"
