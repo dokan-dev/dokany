@@ -3,7 +3,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 1.0.2.1000
+## [Unreleased] - 1.0.3.1000
+
+## [1.0.2.1000] - 2017-01-20
+### Added
+- FUSE - Add libfuse-compatible pkg-config
+- Mirror - Add `DOKAN_OPTION_FILELOCK_USER_MODE` option with `/f`
+
+### Changed
+- FUSE - Use pkg-config for building mirror
+- Kernel - Many improvement allocation stack and heap
+- Kernel - Enable PAGED_CODE for `DokanCheckShareAccess`
+- Mirror - Return empty SACL if mirror doesn't have SeSecurityPrivilege
+- Library - Use DeleteMountPoint for removing reparse point instead of `DeleteVolumeMountPoint`
+- Library - Remove Redundant control flow jump 
+
+### Fixed
+- Driver - Less wide locking
+- Kernel - Align security descriptor to 4-byte boundary in `DokanDispatchSetSecurity`
+- Library - Fix dokan context leak when CreateFile fail 
+- Kernel - Fix BSOD. When drive is started using n option and procmon is attached the rename of files in the root folder is not possible
+- Kernel - Relative path rename
+- Library - Write Set correctly the userland NtStatus
 
 ## [1.0.1.1000] - 2016-11-04
 ### Added
