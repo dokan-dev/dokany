@@ -202,6 +202,8 @@ typedef struct _DOKAN_OPERATIONS {
   * If the file is a directory, CreateFile is also called.
   * In this case, CreateFile should return \c STATUS_SUCCESS when that directory
   * can be opened and DOKAN_FILE_INFO.IsDirectory has to be set to \c TRUE.
+  * In the other hande, if DOKAN_FILE_INFO.IsDirectory is set to \c TRUE
+  * but the path target a file, you need to return \c STATUS_NOT_A_DIRECTORY.
   *
   * DOKAN_FILE_INFO.Context can be use to store Data (like \c HANDLE)
   * that can be retrieved in all other request related to the Context
