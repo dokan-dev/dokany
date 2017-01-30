@@ -88,9 +88,11 @@ Return Value:
 
     if (fileObject->SectionObjectPointer != NULL &&
         fileObject->SectionObjectPointer->DataSectionObject != NULL) {
+      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
       CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
       CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
       CcUninitializeCacheMap(fileObject, NULL, NULL);
+      ExReleaseResourceLite(&fcb->PagingIoResource);
     }
 
     DokanFCBLockRW(fcb);
