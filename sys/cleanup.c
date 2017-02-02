@@ -86,15 +86,23 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    if (fileObject->SectionObjectPointer != NULL &&
-        fileObject->SectionObjectPointer->DataSectionObject != NULL) {
-      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
-      CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
-      CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-      CcUninitializeCacheMap(fileObject, NULL, NULL);
-      ExReleaseResourceLite(&fcb->PagingIoResource);
-    }
+    if (fileObject->SectionObjectPointer != NULL) {
 
+      if (fileObject->SectionObjectPointer->ImageSectionObject != NULL) {
+        MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
+        DDbgPrint("  MmFlushImageSection executed\n");
+      }
+
+      if (fileObject->SectionObjectPointer->DataSectionObject != NULL) {
+        ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+        CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+        CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+        CcUninitializeCacheMap(fileObject, NULL, NULL);
+        ExReleaseResourceLite(&fcb->PagingIoResource);
+        DDbgPrint("  CcUninitializeCacheMap executed\n");
+      }
+    }
+    
     DokanFCBLockRW(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
