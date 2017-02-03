@@ -208,6 +208,7 @@
             </Component>
             <Component Id="Sys32PDBFiles" Guid="{D88F93D7-C6AA-4476-ABF0-1C3273303F08}">
               <File Id="DokanPDB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              <File Id="DokanfusePDB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
               <File Id="DokannpPDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
             </Component>
             <Directory Id="DRIVERDIR" Name="driver">
