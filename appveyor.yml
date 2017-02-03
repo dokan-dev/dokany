@@ -264,8 +264,8 @@
           $prBranchHead = $parents[2]
 
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
-          Exec-External {& git clang-format --style=file --diff $mergeBranchHead} |
-            Select-String -NotMatch "^clang-format did not modify any files$" > $diffFile
+          Exec-External {& git clang-format --quiet --style=file --diff $mergeBranchHead} |
+            Select-String -NotMatch "^no modified files to format$" > $diffFile
           if ((Get-Item $diffFile).length -gt 0) {
             Write-Host "Ran git clang-format on PR, found changes, uploading as artifact"
             Add-AppveyorMessage `
