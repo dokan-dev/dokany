@@ -197,7 +197,7 @@ FuseCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   }
 
   return impl->create_file(FileName, DesiredAccess, ShareAccess,
-                           CreateDisposition, FileAttributes,
+                           CreateDisposition, FileAttributes, CreateOptions,
                            DokanFileInfo);
 }
 

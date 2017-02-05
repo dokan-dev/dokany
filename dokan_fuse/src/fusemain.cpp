@@ -439,6 +439,7 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
                                          DWORD share_mode,
                                          DWORD creation_disposition,
                                          DWORD flags_and_attributes,
+                                         ULONG CreateOptions,
                                          PDOKAN_FILE_INFO dokan_file_info) {
   std::string fname = unixify(wchar_to_utf8_cstr(file_name));
   dokan_file_info->Context = 0;
@@ -465,6 +466,8 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
       // Existing directory
       // TODO: add access control
       dokan_file_info->IsDirectory = TRUE;
+      if (CreateOptions & FILE_NON_DIRECTORY_FILE)
+        return -ENOENT;
       return do_open_dir(file_name, dokan_file_info);
     } else {
       // Existing file

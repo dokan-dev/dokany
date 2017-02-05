@@ -129,7 +129,7 @@ public:
 	int delete_directory(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
 
 	win_error create_file(LPCWSTR file_name, DWORD access_mode, DWORD share_mode,
-		DWORD creation_disposition, DWORD flags_and_attributes,
+		DWORD creation_disposition, DWORD flags_and_attributes, ULONG CreateOptions,
 		PDOKAN_FILE_INFO dokan_file_info);
 
 	int close_file(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
