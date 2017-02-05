@@ -13,7 +13,7 @@
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
 
   os: Visual Studio 2015
-  version: 1.0.1-{build}
+  version: 1.0.2-{build}
   configuration:
   - All
   - Coverity
