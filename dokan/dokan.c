@@ -132,8 +132,8 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   ZeroMemory(buffer, MAX_PATH * sizeof(WCHAR));
   result = QueryDosDevice(driveName, buffer, MAX_PATH);
   if (result > 0) {
-    DbgPrintW(L"CheckDriveLetterAvailability failed, QueryDosDevice detected "
-              L"drive \"%c\"\n",
+    DbgPrintW(L"CheckDriveLetterAvailability failed, QueryDosDevice - Driver "
+              L"letter \"%c\" is already used.\n",
               DriveLetter);
     return FALSE;
   }
@@ -141,8 +141,8 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   DWORD drives = GetLogicalDrives();
   result = (drives >> (driveLetter - L'A') & 0x00000001);
   if (result > 0) {
-    DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives detected "
-              L"drive \"%c\"\n",
+    DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives - Driver "
+              L"letter \"%c\" is already used.\n",
               DriveLetter);
     return FALSE;
   }
@@ -836,7 +836,8 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
     LeaveCriticalSection(&g_InstanceCriticalSection);
     DeleteCriticalSection(&g_InstanceCriticalSection);
   } break;
-  default: break;
+  default:
+    break;
   }
   return TRUE;
 }

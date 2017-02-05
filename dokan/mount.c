@@ -381,6 +381,7 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
   BOOL result;
   ULONG resultLength;
   WCHAR targetDeviceName[MAX_PATH];
+  WCHAR errorMsg[256];
 
   ZeroMemory(targetDeviceName, sizeof(targetDeviceName));
   wcscat_s(targetDeviceName, MAX_PATH, L"\\??");
@@ -392,7 +393,11 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
                       NULL);
 
   if (handle == INVALID_HANDLE_VALUE) {
-    DbgPrintW(L"CreateFile failed: %s (%d)\n", MountPoint, GetLastError());
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
+                  NULL);
+    DbgPrintW(L"Use %s as mount point failed: (%d) %s", MountPoint,
+              GetLastError(), errorMsg);
     return FALSE;
   }
 
@@ -432,8 +437,11 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
     DbgPrintW(L"CreateMountPoint %s -> %s success\n", MountPoint,
               targetDeviceName);
   } else {
-    DbgPrintW(L"CreateMountPoint %s -> %s failed: %d\n", MountPoint,
-              targetDeviceName, GetLastError());
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
+                  NULL);
+    DbgPrintW(L"CreateMountPoint %s -> %s failed: (%d) %s", MountPoint,
+              targetDeviceName, GetLastError(), errorMsg);
   }
   return result;
 }
@@ -443,6 +451,7 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   BOOL result;
   ULONG resultLength;
   REPARSE_GUID_DATA_BUFFER reparseData = {0};
+  WCHAR errorMsg[256];
 
   handle = CreateFile(MountPoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
                       FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
@@ -464,7 +473,11 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   if (result) {
     DbgPrintW(L"DeleteMountPoint %s success\n", MountPoint);
   } else {
-    DbgPrintW(L"DeleteMountPoint %s failed: %d\n", MountPoint, GetLastError());
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
+                  NULL);
+    DbgPrintW(L"DeleteMountPoint %s failed: (%d) %s", MountPoint,
+              GetLastError(), errorMsg);
   }
   return result;
 }
