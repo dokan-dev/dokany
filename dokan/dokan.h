@@ -158,6 +158,8 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR Nocache;
   /**  If \c TRUE, write to the current end of file instead of using the Offset parameter. */
   UCHAR WriteToEndOfFile;
+  /** EventContext for the current operation being dispatched. */
+  PEVENT_CONTEXT EventContext;
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 /**

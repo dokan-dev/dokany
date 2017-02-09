@@ -38,7 +38,7 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
     return INVALID_HANDLE_VALUE;
   }
 
-  eventContext = openInfo->EventContext;
+  eventContext = FileInfo->EventContext;
   if (eventContext == NULL) {
     return INVALID_HANDLE_VALUE;
   }

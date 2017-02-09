@@ -483,10 +483,6 @@ VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
   ULONG returnedLength;
 
   // DbgPrint("###EventInfo->Context %X\n", EventInfo->Context);
-  if (DokanInstance != NULL) {
-    ReleaseDokanOpenInfo(EventInfo, DokanInstance);
-  }
-
   // send event info to driver
   status = DeviceIoControl(Handle,           // Handle to device
                            IOCTL_EVENT_INFO, // IO Control code
@@ -537,6 +533,7 @@ DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
   eventInfo->BufferLength = 0;
   eventInfo->SerialNumber = EventContext->SerialNumber;
 
+  DokanFileInfo->EventContext = EventContext;
   DokanFileInfo->ProcessId = EventContext->ProcessId;
   DokanFileInfo->DokanOptions = DokanInstance->DokanOptions;
   if (EventContext->FileFlags & DOKAN_DELETE_ON_CLOSE) {
@@ -555,7 +552,7 @@ DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
     DokanFileInfo->Nocache = 1;
   }
 
-  *DokanOpenInfo = GetDokanOpenInfo(EventContext, DokanInstance);
+  *DokanOpenInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventContext->Context;
   if (*DokanOpenInfo == NULL) {
     DbgPrint("error openInfo is NULL\n");
     return eventInfo;
@@ -570,44 +567,20 @@ DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
   return eventInfo;
 }
 
-PDOKAN_OPEN_INFO
-GetDokanOpenInfo(PEVENT_CONTEXT EventContext, PDOKAN_INSTANCE DokanInstance) {
-  PDOKAN_OPEN_INFO openInfo;
-  EnterCriticalSection(&DokanInstance->CriticalSection);
-
-  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventContext->Context;
-  if (openInfo != NULL) {
-    openInfo->OpenCount++;
-    openInfo->EventContext = EventContext;
-    openInfo->DokanInstance = DokanInstance;
-  }
-  LeaveCriticalSection(&DokanInstance->CriticalSection);
-  return openInfo;
-}
-
-VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInformation,
+VOID ReleaseDokanOpenInfo(PDOKAN_OPEN_INFO OpenInfo,
                           PDOKAN_INSTANCE DokanInstance) {
-  PDOKAN_OPEN_INFO openInfo;
   EnterCriticalSection(&DokanInstance->CriticalSection);
-
-  openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventInformation->Context;
-  if (openInfo != NULL) {
-    openInfo->OpenCount--;
-    if (openInfo->OpenCount < 1) {
-      if (openInfo->DirListHead != NULL) {
-        ClearFindData(openInfo->DirListHead);
-        free(openInfo->DirListHead);
-        openInfo->DirListHead = NULL;
-      }
-      if (openInfo->StreamListHead != NULL) {
-        ClearFindStreamData(openInfo->StreamListHead);
-        free(openInfo->StreamListHead);
-        openInfo->StreamListHead = NULL;
-      }
-      free(openInfo);
-      EventInformation->Context = 0;
-    }
+  if (OpenInfo->DirListHead != NULL) {
+    ClearFindData(OpenInfo->DirListHead);
+    free(OpenInfo->DirListHead);
+    OpenInfo->DirListHead = NULL;
   }
+  if (OpenInfo->StreamListHead != NULL) {
+    ClearFindStreamData(OpenInfo->StreamListHead);
+    free(OpenInfo->StreamListHead);
+    OpenInfo->StreamListHead = NULL;
+  }
+  free(OpenInfo);
   LeaveCriticalSection(&DokanInstance->CriticalSection);
 }
 

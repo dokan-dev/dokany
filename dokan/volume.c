@@ -332,6 +332,7 @@ VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   eventInfo->BufferLength = 0;
   eventInfo->SerialNumber = EventContext->SerialNumber;
 
+  fileInfo.EventContext = EventContext;
   fileInfo.ProcessId = EventContext->ProcessId;
   fileInfo.DokanOptions = DokanInstance->DokanOptions;
 

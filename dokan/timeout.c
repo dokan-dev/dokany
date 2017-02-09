@@ -38,7 +38,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
     return FALSE;
   }
 
-  eventContext = openInfo->EventContext;
+  eventContext = FileInfo->EventContext;
   if (eventContext == NULL) {
     return FALSE;
   }

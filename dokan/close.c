@@ -49,10 +49,8 @@ VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
   // SendEventInformation(Handle, eventInfo, length);
 
   if (openInfo != NULL) {
-    EnterCriticalSection(&DokanInstance->CriticalSection);
-    openInfo->OpenCount--;
-    LeaveCriticalSection(&DokanInstance->CriticalSection);
+    ReleaseDokanOpenInfo(openInfo, DokanInstance);
+    eventInfo->Context = 0;
   }
-  ReleaseDokanOpenInfo(eventInfo, DokanInstance);
   free(eventInfo);
 }

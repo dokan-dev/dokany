@@ -81,10 +81,6 @@ typedef struct _DOKAN_INSTANCE {
 typedef struct _DOKAN_OPEN_INFO {
   /** DOKAN_OPTIONS linked to the mount */
   BOOL IsDirectory;
-  /** Open count on the file */
-  ULONG OpenCount;
-  /** Event context */
-  PEVENT_CONTEXT EventContext;
   /** Dokan instance linked to the open */
   PDOKAN_INSTANCE DokanInstance;
   /** User Context see DOKAN_FILE_INFO.Context */
@@ -190,10 +186,7 @@ VOID ClearFindStreamData(PLIST_ENTRY ListHead);
 
 UINT WINAPI DokanKeepAlive(PVOID Param);
 
-PDOKAN_OPEN_INFO
-GetDokanOpenInfo(PEVENT_CONTEXT EventInfomation, PDOKAN_INSTANCE DokanInstance);
-
-VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInfomation,
+VOID ReleaseDokanOpenInfo(PDOKAN_OPEN_INFO OpenInfo,
                           PDOKAN_INSTANCE DokanInstance);
 
 #ifdef __cplusplus

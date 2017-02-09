@@ -122,6 +122,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   eventInfo.BufferLength = 0;
   eventInfo.SerialNumber = EventContext->SerialNumber;
 
+  fileInfo.EventContext = EventContext;
   fileInfo.ProcessId = EventContext->ProcessId;
   fileInfo.DokanOptions = DokanInstance->DokanOptions;
 
@@ -134,8 +135,6 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
     return;
   }
   ZeroMemory(openInfo, sizeof(DOKAN_OPEN_INFO));
-  openInfo->OpenCount = 2;
-  openInfo->EventContext = EventContext;
   openInfo->DokanInstance = DokanInstance;
   fileInfo.DokanContext = (ULONG64)openInfo;
 
