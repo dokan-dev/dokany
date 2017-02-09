@@ -225,7 +225,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                       );
 
   if (device == INVALID_HANDLE_VALUE) {
-    DokanDbgPrintW(L"Dokan Error: CreatFile Failed %s: %d\n",
+    DokanDbgPrintW(L"Dokan Error: CreateFile Failed %s: %d\n",
                    DOKAN_GLOBAL_DEVICE_NAME, GetLastError());
     return DOKAN_DRIVER_INSTALL_ERROR;
   }
