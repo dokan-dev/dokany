@@ -291,7 +291,7 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
       vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
-      irpSp->Flags & SL_WATCH_TREE ? TRUE : FALSE, FALSE,
+      (irpSp->Flags & SL_WATCH_TREE) ? TRUE : FALSE, FALSE,
       irpSp->Parameters.NotifyDirectory.CompletionFilter, Irp, NULL, NULL);
   DokanFCBUnlock(fcb);
 
