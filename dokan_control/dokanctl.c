@@ -204,7 +204,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
                                &nbRead)) {
       fwprintf(stdout, L"  Mount points: %d\n", nbRead);
       for (unsigned int p = 0; p < nbRead; ++p) {
-        fwprintf(stdout, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
+        fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n",
                  p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
                  dokanControl[p].DeviceName);
       }
