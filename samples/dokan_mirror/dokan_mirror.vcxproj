@@ -161,7 +161,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>../debug</AdditionalLibraryDirectories>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
-      <AdditionalDependencies>ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ntdll.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
