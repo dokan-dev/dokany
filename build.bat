@@ -12,6 +12,7 @@ REM Enable AppVeyor build message logging if running under AppVeyor
 IF "%APPVEYOR%"=="True" set CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
 REM Build
 msbuild dokan.sln /p:Configuration=Release /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Release /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration=Release /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Release" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
@@ -23,6 +24,7 @@ msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=Win32 /t:Build !C
 msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 
 msbuild dokan.sln /p:Configuration=Debug /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Debug /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration=Debug /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
