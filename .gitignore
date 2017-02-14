@@ -42,3 +42,5 @@ ReleasePS
 /dokan_wix/setup.rpt
 /fstools
 /winfstest
+/sys/ARM/Win10Debug
+/ARM/Win10Debug
