@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -90,7 +90,6 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   DokanCompleteIrpRequest(Irp, STATUS_CANCELLED, 0);
 
   DDbgPrint("<== DokanIrpCancelRoutine\n");
-  return;
 }
 
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
@@ -125,8 +124,6 @@ None.
   }
 
   DDbgPrint("<== DokanOplockComplete\n");
-
-  return;
 }
 
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
@@ -498,8 +495,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
-  RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
-
   RtlCopyMemory(eventStart, Irp->AssociatedIrp.SystemBuffer,
                 sizeof(EVENT_START));
   driverInfo = Irp->AssociatedIrp.SystemBuffer;
@@ -594,8 +589,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     ExFreePool(baseGuidString);
     return status;
   }
-  RtlZeroMemory(baseGuidString, sizeof(*baseGuidString));
-  RtlStringCchCopyW(baseGuidString, sizeof(*baseGuidString) / sizeof(WCHAR),
+  RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
+  RtlStringCchCopyW(baseGuidString, 64,
                     unicodeGuid.Buffer);
   RtlFreeUnicodeString(&unicodeGuid);
 

@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -1117,10 +1117,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 
   DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
   HANDLE handle = CreateFile(
-      filePath,
-      READ_CONTROL | ((requestingSaclInfo && g_HasSeSecurityPrivilege)
-                          ? ACCESS_SYSTEM_SECURITY
-                          : 0),
+      filePath, READ_CONTROL | ((requestingSaclInfo && g_HasSeSecurityPrivilege)
+                                    ? ACCESS_SYSTEM_SECURITY
+                                    : 0),
       FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
       NULL, // security attribute
       OPEN_EXISTING,
@@ -1333,6 +1332,7 @@ void ShowUsage() {
     "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
     "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
     "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
+    "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
     "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
     "Examples:\n"
     "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
@@ -1408,6 +1408,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'c':
       dokanOptions->Options |= DOKAN_OPTION_CURRENT_SESSION;
       break;
+    case L'f':
+      dokanOptions->Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
+      break;
     case L'u':
       command++;
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
@@ -1479,7 +1482,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
              L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
     fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
                      L"rights to fix it\n");
-
   }
 
   if (g_DebugMode) {

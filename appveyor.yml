@@ -13,7 +13,7 @@
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
 
   os: Visual Studio 2015
-  version: 1.0.1-{build}
+  version: 1.0.2-{build}
   configuration:
   - All
   - Coverity
@@ -71,7 +71,7 @@
           
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: $cygwinexe"
-            Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++}
+            Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++ -P pkg-config}
             Write-Host "Update Cygwin: $cygwinexe " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
@@ -224,7 +224,15 @@
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Win10 Debug",
+        "/p:Configuration=Win8.1 Release",
+        "/p:Platform=$env:PLATFORM")
+        
+        & $buildCmd $buildArgs
+        
+        $buildArgs = @(
+        "/m",
+        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
+        "/p:Configuration=Release",
         "/p:Platform=$env:PLATFORM")
         
         & $buildCmd $buildArgs
@@ -233,43 +241,13 @@
         
         .\cert\dokan-sign.ps1
         
-        cp .\x64\Win10Debug\dokan1.sys C:\Windows\System32\drivers\
-        Exec-External {& .\x64\Debug\dokanctl.exe /i d}
-        Exec-External {& .\x64\Debug\dokanctl.exe /i n}
-        New-Item C:\TMP -type directory | Out-Null
-         
-        $app = Start-Process -passthru .\x64\Debug\mirror.exe -ArgumentList "/r C:\TMP /l m"
-        Start-Sleep -s 5
+        cp .\x64\Win8.1Release\dokan1.sys C:\Windows\System32\drivers\
+        Exec-External {& .\x64\Release\dokanctl.exe /i d}
+        Exec-External {& .\x64\Release\dokanctl.exe /i n}
         
-        Exec-External {git clone -q https://github.com/Liryna/fstools.git}
-        $buildArgs = @(
-        ".\fstools\winfstest.sln",
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Release",
-        "/p:Platform=$env:PLATFORM")
-        Exec-External {& $buildCmd $buildArgs}
+        cd .\samples
+        .\mirror_test.ps1
         
-        Exec-External {git clone -q https://github.com/Liryna/winfstest.git}
-        $buildArgs = @(
-        ".\winfstest\winfstest.sln",
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Debug",
-        "/p:Platform=$env:PLATFORM")
-        Exec-External {& $buildCmd $buildArgs}
-        
-        Write-Host "Start FSX Test" -ForegroundColor Green
-        Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 M:\test}
-        Write-Host "FSX Test finished" -ForegroundColor Green
-        
-        Write-Host "Start WinFSTest" -ForegroundColor Green
-        Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . M:\}
-        Write-Host "WinFSTest finished" -ForegroundColor Green
-
-        Start-Sleep -s 5
-        Stop-Process $app.Id
-        Start-Sleep -s 5
         Exec-External {& verifier /query}
       }
       Write-Host Build Finished !
@@ -286,8 +264,8 @@
           $prBranchHead = $parents[2]
 
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
-          Exec-External {& git clang-format --style=file --diff $mergeBranchHead} |
-            Select-String -NotMatch "^clang-format did not modify any files$" > $diffFile
+          Exec-External {& git clang-format --quiet --style=file --diff $mergeBranchHead} |
+            Select-String -NotMatch "^no modified files to format$" > $diffFile
           if ((Get-Item $diffFile).length -gt 0) {
             Write-Host "Ran git clang-format on PR, found changes, uploading as artifact"
             Add-AppveyorMessage `

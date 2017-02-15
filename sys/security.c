@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -125,7 +125,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);
@@ -161,10 +161,10 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   if (EventInfo->Status == STATUS_SUCCESS &&
       EventInfo->BufferLength <= bufferLength && buffer != NULL) {
     if (!RtlValidRelativeSecurityDescriptor(
-           EventInfo->Buffer, 
-           EventInfo->BufferLength, 
-           irpSp->Parameters.QuerySecurity.SecurityInformation)) {
+            EventInfo->Buffer, EventInfo->BufferLength,
+            irpSp->Parameters.QuerySecurity.SecurityInformation)) {
       // No valid security descriptor to return.
+      DDbgPrint(" Security Descriptor is not valid.\n");
       info = 0;
       status = STATUS_INVALID_PARAMETER;
     } else {
@@ -278,8 +278,10 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Assumes the parameter is self relative SD.
     securityDescLength = RtlLengthSecurityDescriptor(securityDescriptor);
 
+    // PSECURITY_DESCRIPTOR has to be aligned to a 4-byte boundary for use with win32 functions.
+    // So we add 3 bytes here, to make sure we have extra room to align BufferOffset.
     eventLength =
-        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length;
+        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length + 3;
 
     if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
       // TODO: Handle this case like DispatchWrite.
@@ -298,9 +300,12 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Context = ccb->UserContext;
     eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
     eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
+
+    // Align BufferOffset by adding 3, then zeroing the last 2 bits.
     eventContext->Operation.SetSecurity.BufferOffset =
-        FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-        fcb->FileName.Length + sizeof(WCHAR);
+        (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
+         fcb->FileName.Length + sizeof(WCHAR) + 3) & ~0x03;
+
     RtlCopyMemory((PCHAR)eventContext +
                       eventContext->Operation.SetSecurity.BufferOffset,
                   securityDescriptor, securityDescLength);
@@ -312,7 +317,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, info);

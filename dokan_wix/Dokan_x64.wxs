@@ -221,6 +221,7 @@
             </Component>
             <Component Id="SysPDBFiles" Guid="{D88F93D7-C6AA-4476-ABF0-1C3273303F08}">
               <File Id="DokanPDB" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+              <File Id="DokanfusePDB" Source="..\x64\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
               <File Id="DokannpPDB" Source="..\x64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
             </Component>
             <Directory Id="LIBDIR" Name="lib">
@@ -240,6 +241,7 @@
               </Component>
               <Component Id="SysX86PDBFiles" Guid="{3FBAD92A-2AD9-4A9B-98B0-060C8D154188}">
                 <File Id="DokanX86PDB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+                <File Id="DokanfuseX86PDB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
                 <File Id="DokannpX86PDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
               </Component>
               <Directory Id="LIBX86DIR" Name="lib">

@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -410,6 +410,48 @@ DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       DDbgPrint(" volume label changed to %ws\n", dcb->VolumeLabel);
 
       status = STATUS_SUCCESS;
+      break;
+    case FileFsVolumeInformation:
+      DDbgPrint("  FileFsVolumeInformation\n");
+      break;
+    case FileFsSizeInformation:
+      DDbgPrint("  FileFsSizeInformation\n");
+      break;
+    case FileFsDeviceInformation:
+      DDbgPrint("  FileFsDeviceInformation\n");
+      break;
+    case FileFsAttributeInformation:
+      DDbgPrint("  FileFsAttributeInformation\n");
+      break;
+    case FileFsControlInformation:
+      DDbgPrint("  FileFsControlInformation\n");
+      break;
+    case FileFsFullSizeInformation:
+      DDbgPrint("  FileFsFullSizeInformation\n");
+      break;
+    case FileFsObjectIdInformation:
+      DDbgPrint("  FileFsObjectIdInformation\n");
+      break;
+    case FileFsDriverPathInformation:
+      DDbgPrint("  FileFsDriverPathInformation\n");
+      break;
+    case FileFsVolumeFlagsInformation:
+      DDbgPrint("  FileFsVolumeFlagsInformation\n");
+      break;
+    case FileFsSectorSizeInformation:
+      DDbgPrint("  FileFsSectorSizeInformation\n");
+      break;
+    case FileFsDataCopyInformation:
+      DDbgPrint("  FileFsDataCopyInformation\n");
+      break;
+    case FileFsMetadataSizeInformation:
+      DDbgPrint("  FileFsMetadataSizeInformation\n");
+      break;
+    case FileFsMaximumInformation:
+      DDbgPrint("  FileFsMaximumInformation\n");
+      break;
+    default:
+      DDbgPrint("  unknown FsInformationClass %d\n", FsInformationClass);
       break;
     }
 

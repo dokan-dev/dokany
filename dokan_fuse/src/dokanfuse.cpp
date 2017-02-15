@@ -130,7 +130,7 @@ CONST_VAL(FILE_OVERWRITE_IF)
 CONST_END(cDisposition)
 
 void DebugConstant(const char *name, ULONG value, Constant *c) {
-  while (c->name != NULL && c->value != value)
+  while (c->name != nullptr && c->value != value)
     ++c;
   fprintf(stderr, "%s: %s (" PRIxULONG ")\n", name, c->name ? c->name : "unknown!",
           value);
@@ -160,7 +160,7 @@ void DebugConstantBit(const char *name, DWORD value, Constant *cs) {
     }
   }
   if (left || !started)
-    fprintf(stderr, "%s0x%lX", sep, (long unsigned)left);
+    fprintf(stderr, "%s0x%lX", sep, static_cast<long unsigned>(left));
   fprintf(stderr, "\n");
 }
 
@@ -197,7 +197,7 @@ FuseCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   }
 
   return impl->create_file(FileName, DesiredAccess, ShareAccess,
-                           CreateDisposition, FileAttributes,
+                           CreateDisposition, FileAttributes, CreateOptions,
                            DokanFileInfo);
 }
 
@@ -218,7 +218,7 @@ static NTSTATUS DOKAN_CALLBACK FuseReadFile(LPCWSTR FileName, LPVOID Buffer,
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
     FPRINTF(stderr, "ReadFile: %ls from %lld len %u\n", FileName,
-             (__int64)Offset, (unsigned)BufferLength);
+             static_cast<__int64>(Offset), static_cast<unsigned>(BufferLength));
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
   return errno_to_ntstatus_error(impl->read_file(
@@ -513,7 +513,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     FuseFlushFileBuffers,
     FuseGetFileInformation,
     FuseFindFiles,
-    NULL, // FindFilesWithPattern
+    nullptr, // FindFilesWithPattern
     FuseSetFileAttributes,
     FuseSetFileTime,
     FuseDeleteFile,
@@ -528,7 +528,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     FuseMounted,
     FuseUnmounted,
     FuseGetFileSecurity,
-    NULL, // SetFileSecurity
+    nullptr, // SetFileSecurity
 };
 
 int do_fuse_loop(struct fuse *fs, bool mt) {
@@ -551,8 +551,8 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
                          fs->conf.volname);
 
   // Parse Dokan options
-  PDOKAN_OPTIONS dokanOptions = (PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
-  if (dokanOptions == NULL) {
+  PDOKAN_OPTIONS dokanOptions = static_cast<PDOKAN_OPTIONS>(malloc(sizeof(DOKAN_OPTIONS)));
+  if (dokanOptions == nullptr) {
     return -1;
   }
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
@@ -594,15 +594,15 @@ bool fuse_chan::init() {
   typedef ULONG(__stdcall * DokanVersionType)();
   DokanVersionType ResolvedDokanVersion;
   ResolvedDokanVersion =
-      (DokanVersionType)GetProcAddress(dokanDll, "DokanVersion");
+      reinterpret_cast<DokanVersionType>(GetProcAddress(dokanDll, "DokanVersion"));
   if (!ResolvedDokanVersion || ResolvedDokanVersion() < DOKAN_VERSION)
     return false;
 
-  ResolvedDokanMain = (DokanMainType)GetProcAddress(dokanDll, "DokanMain");
+  ResolvedDokanMain = reinterpret_cast<DokanMainType>(GetProcAddress(dokanDll, "DokanMain"));
   ResolvedDokanUnmount =
-      (DokanUnmountType)GetProcAddress(dokanDll, "DokanUnmount");
-  ResolvedDokanRemoveMountPoint = (DokanRemoveMountPointType)GetProcAddress(
-      dokanDll, "DokanRemoveMountPoint");
+      reinterpret_cast<DokanUnmountType>(GetProcAddress(dokanDll, "DokanUnmount"));
+  ResolvedDokanRemoveMountPoint = reinterpret_cast<DokanRemoveMountPointType>(GetProcAddress(
+    dokanDll, "DokanRemoveMountPoint"));
 
   if (!ResolvedDokanMain || !ResolvedDokanUnmount ||
       !ResolvedDokanRemoveMountPoint)
@@ -660,7 +660,7 @@ static int fuse_lib_opt_proc(void *data, const char *arg, int key,
   (void)outargs;
 
   if (key == KEY_HELP) {
-    struct fuse_config *conf = (struct fuse_config *)data;
+    struct fuse_config *conf = static_cast<struct fuse_config *>(data);
     fuse_lib_help();
     conf->help = 1;
   }
@@ -677,8 +677,8 @@ int fuse_loop_mt(struct fuse *f) { return do_fuse_loop(f, true); }
 int fuse_loop(struct fuse *f) { return do_fuse_loop(f, false); }
 
 struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args) {
-  if (mountpoint == NULL || mountpoint[0] == '\0')
-    return NULL;
+  if (mountpoint == nullptr || mountpoint[0] == '\0')
+    return nullptr;
 
   std::unique_ptr<fuse_chan> chan(new fuse_chan());
   // NOTE: we used to do chan->init() here to check that Dokan DLLs can be
@@ -694,7 +694,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args) {
 }
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch) {
-  if (mountpoint == NULL || mountpoint[0] == '\0')
+  if (mountpoint == nullptr || mountpoint[0] == '\0')
     return;
 
   fuse_chan chan;
@@ -733,14 +733,14 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
   res->user_data = user_data;
 
   // prepare 'safe' options
-  fuse_operations safe_ops = {0};
+  fuse_operations safe_ops = {nullptr};
   memcpy(&safe_ops, op,
          op_size > sizeof(safe_ops) ? sizeof(safe_ops) : op_size);
   res->ops = safe_ops;
 
   // Get debug param and filesystem name
   if (fuse_opt_parse(args, &res->conf, fuse_lib_opts, fuse_lib_opt_proc) == -1)
-    return NULL;
+    return nullptr;
   // res->conf.debug=1;
 
   return res.release();
@@ -748,7 +748,7 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 
 void fuse_exit(struct fuse *f) {
   // A hack - unmount the attached filesystem, it will cause the loop to end
-  if (f == NULL || !f->ch.get() || f->ch->mountpoint.empty())
+  if (f == nullptr || !f->ch.get() || f->ch->mountpoint.empty())
     return;
   // Unmount attached FUSE filesystem
   f->ch->ResolvedDokanUnmount(f->ch->mountpoint.at(0)); // Ugly :(
@@ -761,20 +761,20 @@ struct fuse *fuse_setup(int argc, char *argv[],
                         char **mountpoint, int *multithreaded,
                         void *user_data) {
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-  struct fuse_chan *ch = NULL;
+  struct fuse_chan *ch = nullptr;
   struct fuse *fuse;
   int foreground;
   int res;
 
   res = fuse_parse_cmdline(&args, mountpoint, multithreaded, &foreground);
   if (res == -1)
-    return NULL;
+    return nullptr;
 
   ch = fuse_mount(*mountpoint, &args);
 
   fuse = fuse_new(ch, &args, op, op_size, user_data);
   fuse_opt_free_args(&args);
-  if (fuse == NULL || ch == NULL)
+  if (fuse == nullptr || ch == nullptr)
     goto err_unmount;
 
   res = fuse_daemonize(foreground);
@@ -794,7 +794,7 @@ err_unmount:
   if (fuse)
     fuse_destroy(fuse);
   free(*mountpoint);
-  return NULL;
+  return nullptr;
 }
 
 void fuse_teardown(struct fuse *fuse, char *mountpoint) {
@@ -822,7 +822,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 
   fuse = fuse_setup(argc, argv, op, op_size, &mountpoint, &multithreaded,
                     user_data);
-  if (fuse == NULL)
+  if (fuse == nullptr)
     return 1;
 
   // MT loops are only supported on MSVC

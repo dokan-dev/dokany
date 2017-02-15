@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -86,13 +86,23 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    if (fileObject->SectionObjectPointer != NULL &&
-        fileObject->SectionObjectPointer->DataSectionObject != NULL) {
-      CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
-      CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-      CcUninitializeCacheMap(fileObject, NULL, NULL);
-    }
+    if (fileObject->SectionObjectPointer != NULL) {
 
+      if (fileObject->SectionObjectPointer->ImageSectionObject != NULL) {
+        MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
+        DDbgPrint("  MmFlushImageSection executed\n");
+      }
+
+      if (fileObject->SectionObjectPointer->DataSectionObject != NULL) {
+        ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+        CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+        CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+        CcUninitializeCacheMap(fileObject, NULL, NULL);
+        ExReleaseResourceLite(&fcb->PagingIoResource);
+        DDbgPrint("  CcUninitializeCacheMap executed\n");
+      }
+    }
+    
     DokanFCBLockRW(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -115,6 +125,7 @@ Return Value:
     RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
+    // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
     DokanFCBUnlock(fcb);
@@ -171,12 +182,12 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRW(fcb);
 
   vcb = fcb->Vcb;
 
   status = EventInfo->Status;
 
+  DokanFCBLockRO(fcb);
   if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
@@ -186,7 +197,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
                               FILE_ACTION_REMOVED);
     }
   }
-
+  DokanFCBUnlock(fcb);
   //
   //  Unlock all outstanding file locks.
   //
@@ -198,7 +209,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   }
 
   IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
-  DokanFCBUnlock(fcb);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

@@ -37,7 +37,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef _MSC_VER
-__declspec(thread) impl_chain_link *cur_impl_chain_link = NULL;
+__declspec(thread) impl_chain_link *cur_impl_chain_link = nullptr;
 #else
 static __thread impl_chain_link *cur_impl_chain_link = NULL;
 #endif
@@ -45,7 +45,7 @@ static __thread impl_chain_link *cur_impl_chain_link = NULL;
 impl_chain_guard::impl_chain_guard(impl_fuse_context *ctx, int caller_pid) {
   link.call_ctx_.pid = caller_pid;
   link.call_ctx_.private_data = ctx->user_data_;
-  link.call_ctx_.fuse = (struct fuse *)(void *)ctx; // Hack, really...
+  link.call_ctx_.fuse = static_cast<struct fuse *>(static_cast<void *>(ctx)); // Hack, really...
 
   link.prev_link_ = cur_impl_chain_link;
 
@@ -61,8 +61,8 @@ impl_chain_guard::~impl_chain_guard() {
 }
 
 struct fuse_context *fuse_get_context(void) {
-  if (cur_impl_chain_link == NULL)
-    return NULL;
+  if (cur_impl_chain_link == nullptr)
+    return nullptr;
   return &cur_impl_chain_link->call_ctx_;
 }
 
@@ -99,7 +99,7 @@ int impl_fuse_context::cast_from_longlong(LONGLONG src, FUSE_OFF_T *res) {
   if (src > LONG_MAX || src < LONG_MIN)
     return -E2BIG;
 #endif
-  *res = (FUSE_OFF_T)src;
+  *res = static_cast<FUSE_OFF_T>(src);
   return 0;
 }
 
@@ -312,7 +312,7 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
 
 int impl_fuse_context::walk_directory_getdir(fuse_dirh_t hndl, const char *name,
                                              int type, ino_t ino) {
-  walk_data *wd = (walk_data *)hndl;
+  walk_data *wd = reinterpret_cast<walk_data *>(hndl);
   wd->getdir_data.push_back(name); // Add this name to list
   return 0; // Get more entries
 }
@@ -337,14 +337,14 @@ int impl_fuse_context::find_files(LPCWSTR file_name,
   if (ops_.readdir) {
     impl_file_handle *hndl =
         reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
-    if (hndl != NULL) {
+    if (hndl != nullptr) {
       fuse_file_info finfo(hndl->make_finfo());
       return ops_.readdir(fname.c_str(), &wd, &walk_directory, 0, &finfo);
     } else
-      return ops_.readdir(fname.c_str(), &wd, &walk_directory, 0, NULL);
+      return ops_.readdir(fname.c_str(), &wd, &walk_directory, 0, nullptr);
   } else {
     CHECKED(
-        ops_.getdir(fname.c_str(), (fuse_dirh_t)&wd, &walk_directory_getdir));
+        ops_.getdir(fname.c_str(), reinterpret_cast<fuse_dirh_t>(&wd), &walk_directory_getdir));
     // Convert returned data The getdir_data array will be filled during
     // getdir() call.
     // We emulate FUSE behavior and do not pass information directly to Dokan
@@ -355,7 +355,7 @@ int impl_fuse_context::find_files(LPCWSTR file_name,
     // See: cache.c file, function cache_dirfill() in SSHFS 2.2
     for (std::vector<std::string>::const_iterator f = wd.getdir_data.begin();
          f != wd.getdir_data.end(); ++f)
-      CHECKED(walk_directory(&wd, f->c_str(), 0, 0));
+      CHECKED(walk_directory(&wd, f->c_str(), nullptr, 0));
   }
 
   return 0;
@@ -382,7 +382,7 @@ int impl_fuse_context::open_directory(LPCWSTR file_name,
   if ((st.st_mode & S_IFDIR) != S_IFDIR)
     return -ENOTDIR;
 
-  dokan_file_info->Context = (ULONG64)NULL; // Do not want to attach anything
+  dokan_file_info->Context = 0; // Do not want to attach anything
   return 0; // Use readdir here?
 }
 
@@ -439,6 +439,7 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
                                          DWORD share_mode,
                                          DWORD creation_disposition,
                                          DWORD flags_and_attributes,
+                                         ULONG CreateOptions,
                                          PDOKAN_FILE_INFO dokan_file_info) {
   std::string fname = unixify(wchar_to_utf8_cstr(file_name));
   dokan_file_info->Context = 0;
@@ -465,6 +466,8 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
       // Existing directory
       // TODO: add access control
       dokan_file_info->IsDirectory = TRUE;
+      if (CreateOptions & FILE_NON_DIRECTORY_FILE)
+        return -ENOENT;
       return do_open_dir(file_name, dokan_file_info);
     } else {
       // Existing file
@@ -544,7 +547,7 @@ int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer,
     if (to_read > MAX_READ_SIZE)
       to_read = MAX_READ_SIZE;
 
-    int res = ops_.read(hndl->get_name().c_str(), (char *)buffer, to_read, off,
+    int res = ops_.read(hndl->get_name().c_str(), static_cast<char *>(buffer), to_read, off,
                         &finfo);
     if (res < 0)
       return res; // Error
@@ -553,7 +556,7 @@ int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer,
 
     total_read += res;
     off += res;
-    buffer = (char *)buffer + res;
+    buffer = static_cast<char *>(buffer) + res;
   }
   // OK!
   *read_bytes = total_read;
@@ -591,7 +594,7 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
   CHECKED(cast_from_longlong(offset, &off));
 
   fuse_file_info finfo(hndl->make_finfo());
-  int res = ops_.write(hndl->get_name().c_str(), (const char *)buffer,
+  int res = ops_.write(hndl->get_name().c_str(), static_cast<const char *>(buffer),
                        num_bytes_to_write, off, &finfo);
   if (res < 0)
     return res; // Error
@@ -818,7 +821,7 @@ int impl_fuse_context::set_file_time(PCWSTR file_name,
     impl_file_handle *hndl =
         reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
     if (!hndl)
-      return ops_.win_set_times(fname.c_str(), NULL, creation_time,
+      return ops_.win_set_times(fname.c_str(), nullptr, creation_time,
                                 last_access_time, last_write_time);
 
     if (hndl->is_dir())
@@ -877,11 +880,11 @@ int impl_fuse_context::get_disk_free_space(PULONGLONG free_bytes_available,
   struct statvfs vfs = {0};
   CHECKED(ops_.statfs("/", &vfs));
 
-  if (free_bytes_available != NULL)
+  if (free_bytes_available != nullptr)
     *free_bytes_available = uint64_t(vfs.f_bsize) * vfs.f_bavail;
-  if (number_of_free_bytes != NULL)
+  if (number_of_free_bytes != nullptr)
     *number_of_free_bytes = uint64_t(vfs.f_bsize) * vfs.f_bfree;
-  if (number_of_bytes != NULL)
+  if (number_of_bytes != nullptr)
     *number_of_bytes = uint64_t(vfs.f_bsize) * vfs.f_blocks;
 
   return 0;
@@ -944,7 +947,7 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
   file.reset(new impl_file_handle(is_dir, shared_mode));
 
   // check previous files with same names
-  impl_file_lock *lock, *old_lock = NULL;
+  impl_file_lock *lock, *old_lock = nullptr;
   EnterCriticalSection(&this->lock);
   file_locks_t::iterator i = file_locks.find(name);
   if (i != file_locks.end()) {
@@ -964,8 +967,8 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
 
   // check previous files with same names
   DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-  for (impl_file_handle *i = lock->first; i; i = i->next_file)
-    share &= i->shared_mode_;
+  for (impl_file_handle *p = lock->first; p; p = p->next_file)
+    share &= p->shared_mode_;
   if ((required_share(access_mode) | share) != share) {
     file.reset();
     res = -EACCES;
@@ -987,10 +990,10 @@ void impl_file_lock::remove_file(impl_file_handle *file) {
 
   EnterCriticalSection(&lock);
   impl_file_handle **p = &first;
-  while (*p != NULL) {
+  while (*p != nullptr) {
     if (*p == file) {
       *p = file->next_file;
-      file->next_file = NULL;
+      file->next_file = nullptr;
       continue;
     }
     p = &(*p)->next_file;
@@ -1060,8 +1063,8 @@ int impl_file_lock::lock_file(impl_file_handle *file, long long start,
       }
     } else {
       // check last
-      impl_file_handle::locks_t::reverse_iterator j = i->locks.rbegin();
-      if (j != i->locks.rend() && start - j->first < j->second)
+      impl_file_handle::locks_t::reverse_iterator p = i->locks.rbegin();
+      if (p != i->locks.rend() && start - p->first < p->second)
         locked = true;
     }
   }
@@ -1097,7 +1100,7 @@ int impl_file_lock::unlock_file(impl_file_handle *file, long long start,
 ////// File handle
 ///////////////////////////////////////////////////////////////////////////////////////
 impl_file_handle::impl_file_handle(bool is_dir, DWORD shared_mode)
-    : is_dir_(is_dir), fh_(-1), next_file(NULL), file_lock(NULL), shared_mode_(shared_mode) {}
+    : is_dir_(is_dir), fh_(-1), next_file(nullptr), file_lock(nullptr), shared_mode_(shared_mode) {}
 
 impl_file_handle::~impl_file_handle() { file_lock->remove_file(this); }
 

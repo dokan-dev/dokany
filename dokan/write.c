@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -90,15 +90,13 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   if (openInfo != NULL)
     openInfo->UserContext = fileInfo.Context;
+  eventInfo->Status = status;
   eventInfo->BufferLength = 0;
 
   if (status == STATUS_SUCCESS) {
-    eventInfo->Status = status;
     eventInfo->BufferLength = writtenLength;
     eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
         EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
-  } else {
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
   }
 
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
@@ -106,6 +104,4 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   if (bufferAllocated)
     free(EventContext);
-
-  return;
 }

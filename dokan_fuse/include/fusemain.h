@@ -57,7 +57,7 @@ class win_error
 public:
 	win_error(int _err): err(errno_to_ntstatus_error(_err)) {}
 	win_error(int _err, bool): err(_err) {}
-	operator int() { return err; }
+	operator int() const { return err; }
 private:
 	int err;
 };
@@ -99,7 +99,7 @@ public:
 
     int do_delete_file(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
 
-	int convert_flags(DWORD Flags);
+    static int convert_flags(DWORD Flags);
 
 	int resolve_symlink(const std::string &name, std::string *res);
 	int check_and_resolve(std::string *name);
@@ -129,7 +129,7 @@ public:
 	int delete_directory(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
 
 	win_error create_file(LPCWSTR file_name, DWORD access_mode, DWORD share_mode,
-		DWORD creation_disposition, DWORD flags_and_attributes,
+		DWORD creation_disposition, DWORD flags_and_attributes, ULONG CreateOptions,
 		PDOKAN_FILE_INFO dokan_file_info);
 
 	int close_file(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
@@ -199,7 +199,7 @@ class impl_file_lock
 	int lock_file(impl_file_handle *file, long long start, long long len, bool mark=true);
 	int unlock_file(impl_file_handle *file, long long start, long long len);
 public:
-	impl_file_lock(impl_file_locks* _locks, const std::string& name): name_(name), locks(_locks), first(NULL) { InitializeCriticalSection(&lock); }
+	impl_file_lock(impl_file_locks* _locks, const std::string& name): name_(name), locks(_locks), first(nullptr) { InitializeCriticalSection(&lock); }
 	~impl_file_lock() { DeleteCriticalSection(&lock); };
 	void remove_file(impl_file_handle *file);
 	const std::string& get_name() const {return name_;}

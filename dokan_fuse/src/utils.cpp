@@ -61,7 +61,7 @@ static size_t put_utf8(unsigned char *buf, ICONV_CHAR c) {
   unsigned mask;
 
   if ((c & MASK(7)) == 0) {
-    *buf = (unsigned char)c;
+    *buf = static_cast<unsigned char>(c);
     return 1;
   }
 
@@ -134,8 +134,8 @@ typedef size_t (*put_convert_t)(unsigned char *buf, ICONV_CHAR c);
 static size_t convert_char(get_conver_t get_func, put_convert_t put_func,
                            const void *src, size_t src_len, void *dest) {
   size_t il = src_len;
-  const unsigned char *ib = (const unsigned char *)src;
-  unsigned char *ob = (unsigned char *)dest;
+  const unsigned char *ib = static_cast<const unsigned char *>(src);
+  unsigned char *ob = static_cast<unsigned char *>(dest);
   size_t total = 0;
 
   while (il) {
@@ -159,17 +159,17 @@ static size_t convert_char(get_conver_t get_func, put_convert_t put_func,
 }
 
 static char *wchar_to_utf8(const wchar_t *str) {
-  if (str == NULL)
-    return NULL;
+  if (str == nullptr)
+    return nullptr;
 
   // Determine required length
   size_t ln = convert_char(get_utf16, put_utf8, str,
-                           (wcslen(str) + 1) * sizeof(wchar_t), NULL);
+                           (wcslen(str) + 1) * sizeof(wchar_t), nullptr);
   if (ln <= 0)
-    return NULL;
-  char *res = (char *)malloc(sizeof(char) * ln);
-  if (res == NULL)
-    return NULL;
+    return nullptr;
+  auto res = static_cast<char *>(malloc(sizeof(char) * ln));
+  if (res == nullptr)
+    return nullptr;
 
   // Convert to Unicode
   convert_char(get_utf16, put_utf8, str, (wcslen(str) + 1) * sizeof(wchar_t),
@@ -178,13 +178,13 @@ static char *wchar_to_utf8(const wchar_t *str) {
 }
 
 void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen) {
-  if (res == NULL || maxlen == 0)
+  if (res == nullptr || maxlen == 0)
     return;
 
   size_t ln = convert_char(get_utf8, put_utf16, src, strlen(src) + 1,
-                           NULL); /* | raise_w32_error()*/
+                           nullptr); /* | raise_w32_error()*/
   ;
-  if (ln <= 0 || ln / sizeof(wchar_t) > (size_t)maxlen) {
+  if (ln <= 0 || ln / sizeof(wchar_t) > static_cast<size_t>(maxlen)) {
     *res = L'\0';
     return;
   }
@@ -194,17 +194,17 @@ void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen) {
 }
 
 void utf8_to_wchar_buf_old(const char *src, wchar_t *res, int maxlen) {
-  if (res == NULL || maxlen == 0)
+  if (res == nullptr || maxlen == 0)
     return;
 
   int ln =
-      MultiByteToWideChar(CP_ACP, 0, src, -1, NULL, 0) /* | raise_w32_error()*/;
+      MultiByteToWideChar(CP_ACP, 0, src, -1, nullptr, 0) /* | raise_w32_error()*/;
   if (ln >= maxlen) {
     *res = L'\0';
     return;
   }
   MultiByteToWideChar(CP_ACP, 0, src, -1, res,
-                      (int)(strlen(src) + 1)) /* | raise_w32_error()*/;
+                      static_cast<int>(strlen(src) + 1)) /* | raise_w32_error()*/;
 }
 
 std::string wchar_to_utf8_cstr(const wchar_t *str) {
@@ -218,7 +218,7 @@ std::string unixify(const std::string &str) {
   // Replace slashes
   std::string res = str;
   for (size_t f = 0; f < res.size(); ++f) {
-    char ch = res[f];
+    auto ch = res[f];
     if (ch == '\\')
       res[f] = '/';
   }
@@ -235,13 +235,13 @@ FILETIME unixTimeToFiletime(time_t t) {
 
   ll = Int32x32To64(t, 10000000) + 116444736000000000LL;
   FILETIME res;
-  res.dwLowDateTime = (DWORD)ll;
-  res.dwHighDateTime = (DWORD)(ll >> 32);
+  res.dwLowDateTime = static_cast<DWORD>(ll);
+  res.dwHighDateTime = static_cast<DWORD>(ll >> 32);
   return res;
 }
 
 bool is_filetime_set(const FILETIME *ft) {
-  if (ft == 0 || (ft->dwHighDateTime == 0 && ft->dwLowDateTime == 0))
+  if (ft == nullptr || (ft->dwHighDateTime == 0 && ft->dwLowDateTime == 0))
     return false;
   return true;
 }
@@ -318,7 +318,7 @@ extern "C" int ntstatus_error_to_errno(int win_res) {
 
   if (win_res < 0)
     win_res = -win_res;
-  for (int f = 0; f < errtable_size; ++f)
+  for (auto f = 0; f < errtable_size; ++f)
     if (errtable[f].oscode == win_res)
       return errtable[f].errnocode;
   return EINVAL;
@@ -330,19 +330,19 @@ extern "C" int errno_to_ntstatus_error(int err) {
 
   if (err < 0)
     err = -err;
-  for (int f = 0; f < errtable_size; ++f)
+  for (auto f = 0; f < errtable_size; ++f)
     if (errtable[f].errnocode == err)
       return errtable[f].oscode;
   return ERROR_INVALID_FUNCTION;
 }
 
 extern "C" char **convert_args(int argc, wchar_t *argv[]) {
-  char **arr = (char **)malloc(sizeof(char *) * (argc + 1));
-  if (arr == NULL)
-    return NULL;
-  for (int f = 0; f < argc; ++f)
+  auto arr = static_cast<char **>(malloc(sizeof(char *) * (argc + 1)));
+  if (arr == nullptr)
+    return nullptr;
+  for (auto f = 0; f < argc; ++f)
     arr[f] = wchar_to_utf8(argv[f]);
-  arr[argc] = NULL;
+  arr[argc] = nullptr;
   return arr;
 }
 
@@ -355,7 +355,7 @@ extern "C" void free_converted_args(int argc, char **argv) {
 std::string extract_file_name(const std::string &str) {
   std::string extracted;
 
-  for (std::string::const_reverse_iterator f = str.rbegin(), en = str.rend();
+  for (auto f = str.rbegin(), en = str.rend();
        f != en; ++f)
     if (*f == '/') {
       extracted = str.substr(en - f - 1);
@@ -370,7 +370,7 @@ std::string extract_file_name(const std::string &str) {
 }
 
 std::string extract_dir_name(const std::string &str) {
-  for (std::string::const_reverse_iterator f = str.rbegin(), en = str.rend();
+  for (auto f = str.rbegin(), en = str.rend();
        f != en; ++f)
     if (*f == '/')
       return str.substr(0, en - f);

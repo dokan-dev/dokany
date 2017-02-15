@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -132,8 +132,8 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   ZeroMemory(buffer, MAX_PATH * sizeof(WCHAR));
   result = QueryDosDevice(driveName, buffer, MAX_PATH);
   if (result > 0) {
-    DbgPrintW(L"CheckDriveLetterAvailability failed, QueryDosDevice detected "
-              L"drive \"%c\"\n",
+    DbgPrintW(L"CheckDriveLetterAvailability failed, QueryDosDevice - Drive "
+              L"letter \"%c\" is already used.\n",
               DriveLetter);
     return FALSE;
   }
@@ -141,8 +141,8 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   DWORD drives = GetLogicalDrives();
   result = (drives >> (driveLetter - L'A') & 0x00000001);
   if (result > 0) {
-    DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives detected "
-              L"drive \"%c\"\n",
+    DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives - Drive "
+              L"letter \"%c\" is already used.\n",
               DriveLetter);
     return FALSE;
   }
@@ -225,7 +225,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                       );
 
   if (device == INVALID_HANDLE_VALUE) {
-    DokanDbgPrintW(L"Dokan Error: CreatFile Failed %s: %d\n",
+    DokanDbgPrintW(L"Dokan Error: CreateFile Failed %s: %d\n",
                    DOKAN_GLOBAL_DEVICE_NAME, GetLastError());
     return DOKAN_DRIVER_INSTALL_ERROR;
   }
@@ -836,6 +836,8 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
     LeaveCriticalSection(&g_InstanceCriticalSection);
     DeleteCriticalSection(&g_InstanceCriticalSection);
   } break;
+  default:
+    break;
   }
   return TRUE;
 }

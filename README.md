@@ -1,6 +1,7 @@
 # Dokany
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/6789/badge.svg)](https://scan.coverity.com/projects/6789)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/43afb600ca75462e94d9484c32090135)](https://www.codacy.com/app/Liryna/dokany?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=dokan-dev/dokany&amp;utm_campaign=Badge_Grade)
 |
 [![Bounty](https://img.shields.io/bountysource/team/dokan-dev/activity.svg)](https://www.bountysource.com/teams/dokan-dev/issues)
 [![PayPayl donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=dev@islog.com&lc=US&item_name=Dokany&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted "Donate!")

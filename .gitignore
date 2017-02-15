@@ -40,3 +40,5 @@ ReleasePS
 /dokan_wix/disk1
 /dokan_wix/setup.inf
 /dokan_wix/setup.rpt
+/fstools
+/winfstest

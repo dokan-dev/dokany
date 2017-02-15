@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -202,6 +202,8 @@ typedef struct _DOKAN_OPERATIONS {
   * If the file is a directory, CreateFile is also called.
   * In this case, CreateFile should return \c STATUS_SUCCESS when that directory
   * can be opened and DOKAN_FILE_INFO.IsDirectory has to be set to \c TRUE.
+  * On the other hand, if DOKAN_FILE_INFO.IsDirectory is set to \c TRUE
+  * but the path target a file, you need to return \c STATUS_NOT_A_DIRECTORY.
   *
   * DOKAN_FILE_INFO.Context can be use to store Data (like \c HANDLE)
   * that can be retrieved in all other request related to the Context

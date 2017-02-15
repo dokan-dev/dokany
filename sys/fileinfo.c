@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -32,6 +32,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG info = 0;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
+  BOOLEAN isNormalized = FALSE;
 
   // PAGED_CODE();
 
@@ -99,31 +100,59 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileCompressionInformation:
       DDbgPrint("  FileCompressionInformation\n");
       break;
-    case FileNormalizedNameInformation: // Fake implementation by returning
-                                        // FileNameInformation result.
-                                        // TODO: implement it
-      DDbgPrint("  FileNormalizedNameInformation\n");
+    case FileNormalizedNameInformation:
+        DDbgPrint("  FileNormalizedNameInformation\n");
+        isNormalized = TRUE;
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
 
       DDbgPrint("  FileNameInformation\n");
 
+      nameInfo = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      ASSERT(nameInfo != NULL);
+
+      BOOLEAN isNetworkFileSystem = (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+      PUNICODE_STRING fileName = &fcb->FileName;
+      USHORT length = fcb->FileName.Length;
+      BOOLEAN doConcat = FALSE;
+
+      if (isNetworkFileSystem) {
+          if (fcb->FileName.Length == 0 || fcb->FileName.Buffer[0] != L'\\') {
+               DDbgPrint("  NetworkFileSystem has no root folder. So return the full device name \n");
+               fileName = vcb->Dcb->DiskDeviceName;
+               length = fileName->Length;
+          }
+          else {
+              if (isNormalized) {
+                  DDbgPrint("  FullFileName should be returned \n");
+                  fileName = vcb->Dcb->DiskDeviceName;
+                  length = fileName->Length + vcb->Dcb->DiskDeviceName->Length;
+                  doConcat = TRUE;
+              }
+          }
+      }
+
       if (irpSp->Parameters.QueryFile.Length <
-          sizeof(FILE_NAME_INFORMATION) + fcb->FileName.Length) {
+          sizeof(FILE_NAME_INFORMATION) + length) {
 
         info = irpSp->Parameters.QueryFile.Length;
         status = STATUS_BUFFER_OVERFLOW;
 
       } else {
 
-        nameInfo = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-        ASSERT(nameInfo != NULL);
+        RtlZeroMemory(Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.QueryFile.Length);
 
-        nameInfo->FileNameLength = fcb->FileName.Length;
-        RtlCopyMemory(nameInfo->FileName, fcb->FileName.Buffer,
-                      fcb->FileName.Length);
+        nameInfo->FileNameLength = fileName->Length;
+        RtlCopyMemory(&nameInfo->FileName[0], fileName->Buffer,
+                      fileName->Length);
+
+        if (doConcat) {
+            DDbgPrint("  Concat the devicename with the filename to get the fullname of the file \n");
+            RtlStringCchCatW(nameInfo->FileName, NTSTRSAFE_MAX_CCH, fcb->FileName.Buffer);
+        }
+
         info = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]) +
-               fcb->FileName.Length;
+               length;
         status = STATUS_SUCCESS;
       }
       __leave;
@@ -435,14 +464,18 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
         fcb->FileName.Length + sizeof(WCHAR); // the last null char
 
-    // copy FileInformation
-    RtlCopyMemory(
-        (PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset,
-        Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.SetFile.Length);
+    BOOLEAN isRenameOrLink = irpSp->Parameters.SetFile.FileInformationClass ==
+        FileRenameInformation ||
+        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation;
 
-    if (irpSp->Parameters.SetFile.FileInformationClass ==
-            FileRenameInformation ||
-        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation) {
+    if (!isRenameOrLink) {
+        // copy FileInformation
+        RtlCopyMemory(
+            (PCHAR)eventContext + eventContext->Operation.SetFile.BufferOffset,
+            Irp->AssociatedIrp.SystemBuffer, irpSp->Parameters.SetFile.Length);
+    }
+
+    if (isRenameOrLink) {
       // We need to hanle FileRenameInformation separetly because the structure
       // of FILE_RENAME_INFORMATION
       // has HANDLE type field, which size is different in 32 bit and 64 bit
@@ -468,14 +501,28 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         // if Parameters.SetFile.FileObject is specified, replase
         // FILE_RENAME_INFO's file name by
         // FileObject's file name. The buffer size is already adjusted.
+
         DDbgPrint("  renameContext->FileNameLength %d\n",
-                  renameContext->FileNameLength);
+            renameContext->FileNameLength);
         DDbgPrint("  renameContext->FileName %ws\n", renameContext->FileName);
         RtlZeroMemory(renameContext->FileName, renameContext->FileNameLength);
-        RtlCopyMemory(renameContext->FileName,
-                      targetFileObject->FileName.Buffer,
-                      targetFileObject->FileName.Length);
-        renameContext->FileNameLength = targetFileObject->FileName.Length;
+
+        PFILE_OBJECT parentFileObject = targetFileObject->RelatedFileObject;
+        if (parentFileObject != NULL) {
+            RtlCopyMemory(renameContext->FileName,
+                parentFileObject->FileName.Buffer,
+                parentFileObject->FileName.Length);
+
+            RtlStringCchCatW(renameContext->FileName, NTSTRSAFE_MAX_CCH, L"\\");
+            RtlStringCchCatW(renameContext->FileName, NTSTRSAFE_MAX_CCH, targetFileObject->FileName.Buffer);
+            renameContext->FileNameLength = targetFileObject->FileName.Length + 
+                parentFileObject->FileName.Length + sizeof(WCHAR);
+        } else {
+            RtlCopyMemory(renameContext->FileName,
+                targetFileObject->FileName.Buffer,
+                targetFileObject->FileName.Length);
+            renameContext->FileNameLength = targetFileObject->FileName.Length;
+        }
       }
 
       if (irpSp->Parameters.SetFile.FileInformationClass ==
@@ -490,6 +537,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlCopyMemory(eventContext->Operation.SetFile.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
+    // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
     status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
                               DokanOplockComplete, DokanPrePostIrp);
 

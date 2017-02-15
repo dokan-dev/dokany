@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -204,7 +204,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
                                &nbRead)) {
       fwprintf(stdout, L"  Mount points: %d\n", nbRead);
       for (unsigned int p = 0; p < nbRead; ++p) {
-        fwprintf(stdout, L"  %d# MountPoint: %s - UNC: %s - DeviceName: %s\n",
+        fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n",
                  p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
                  dokanControl[p].DeviceName);
       }
