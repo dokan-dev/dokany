@@ -329,6 +329,11 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
     }
   }
 
+  if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
+	  DokanFreeMdl(irp);
+	  IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+  }
+
   if (NT_SUCCESS(status)) {
     DDbgPrint("  STATUS_SUCCESS\n");
   } else if (status == STATUS_INSUFFICIENT_RESOURCES) {
