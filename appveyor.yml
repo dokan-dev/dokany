@@ -90,12 +90,15 @@
           }
           New-Item -Force -Type Directory $env:MSYS2_CACHE
           $unix_msys2_cache = (Exec-External {& C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
-          # install latest pacman
-          bash "pacman -Sy --noconfirm --cache `"$unix_msys2_cache`" pacman pacman-mirrors"
-          # update core packages
-          bash "pacman -Syu --noconfirm --cache `"$unix_msys2_cache`""
+          # We run the upgrade three times, because MSYS2 cannot upgrade itself without restarting
+          # TODO: detect if restart is necessary and only run as many times as needed.
+          #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
+          # See https://github.com/msys2/msys2/wiki/MSYS2-installation#iii-updating-packages
+          for ($i = 0; $i -lt 3; $i++) {
+            bash "pacman -Syuu --noconfirm --cache `"$unix_msys2_cache`""
+          }
           # install MinGW toolchain
-          bash "pacman --sync --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
         }
 
   before_build:
