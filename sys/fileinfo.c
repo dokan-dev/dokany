@@ -310,6 +310,53 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQueryInformation\n");
 }
 
+VOID FlushAllCachedFcb(__in PDokanVCB Vcb)
+{
+    PLIST_ENTRY thisEntry, nextEntry, listHead;
+    PDokanFCB fcb = NULL;
+
+    DDbgPrint("  FlushAllCachedFcb\n");
+
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(&Vcb->Resource, TRUE);
+
+    listHead = &Vcb->NextFCB;
+
+    for (thisEntry = listHead->Flink; thisEntry != listHead;
+        thisEntry = nextEntry) {
+
+        nextEntry = thisEntry->Flink;
+
+        fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
+
+        if (fcb->SectionObjectPointers.ImageSectionObject != NULL) {
+            DDbgPrint("  MmFlushImageSection FileName: %wZ FileCount: %lu.\n",
+                &fcb->FileName, fcb->FileCount);
+            MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
+            DDbgPrint("  MmFlushImageSection done FileName: %wZ FileCount: %lu.\n", 
+                &fcb->FileName, fcb->FileCount);
+        }
+
+        if (fcb->SectionObjectPointers.DataSectionObject != NULL) {
+            DDbgPrint("  CcFlushCache FileName: %wZ FileCount: %lu.\n",
+                &fcb->FileName, fcb->FileCount);
+            ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+            CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+            CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+            ExReleaseResourceLite(&fcb->PagingIoResource);
+            DDbgPrint("  CcFlushCache done FileName: %wZ FileCount: %lu.\n",
+                &fcb->FileName, fcb->FileCount);
+        }
+
+        fcb = NULL;
+    }
+
+    ExReleaseResourceLite(&Vcb->Resource);
+    KeLeaveCriticalRegion();
+
+    DDbgPrint("  FlushAllCachedFcb finished\n");
+}
+
 NTSTATUS
 DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
@@ -415,6 +462,10 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     } break;
     case FileRenameInformation:
       DDbgPrint("  FileRenameInformation\n");
+      /* Flush any opened files before doing a rename
+       * of the parent directory or the specific file
+      */
+      FlushAllCachedFcb(fcb->Vcb);
       break;
     case FileValidDataLengthInformation:
       DDbgPrint("  FileValidDataLengthInformation\n");
@@ -662,7 +713,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;
-
+        DDbgPrint("   rename also done on fcb %wZ \n", &fcb->FileName);
       }
     }
 
@@ -707,14 +758,19 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         // this is never used
         break;
       case FileRenameInformation: {
+          DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
+          
         DokanNotifyReportChange0(fcb, &oldFileName,
-                                 FILE_NOTIFY_CHANGE_FILE_NAME,
+            DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY) ?
+            FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
                                  FILE_ACTION_RENAMED_OLD_NAME);
 
         // free old file name
         ExFreePool(oldFileName.Buffer);
 
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+        DokanNotifyReportChange(fcb,
+            DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY) ?
+            FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
                                 FILE_ACTION_RENAMED_NEW_NAME);
       } break;
       case FileValidDataLengthInformation:
