@@ -287,6 +287,13 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   irpSp = IrpEntry->IrpSp;
 
   vcb = DeviceObject->DeviceExtension;
+  if (IrpEntry->FileObject == NULL || IrpEntry->FileObject->FsContext2 == NULL || vcb == NULL || vcb->Dcb == NULL) {
+	  DokanCompleteIrpRequest(irp, status, info);
+	  DDbgPrint("Premature exit due to NULL\n");
+	  DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
+	  return;
+  }
+  ccb = IrpEntry->FileObject->FsContext2;
   dcb = vcb->Dcb;
 
   // buffer which is used to copy VolumeInfo
