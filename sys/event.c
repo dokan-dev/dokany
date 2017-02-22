@@ -779,5 +779,8 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
 
-  return STATUS_SUCCESS;
+  // if the corresponding IRP not found, the user should already canceled the operation and the IRP already destoryed.
+  DDbgPrint("  EventWrite : Cannot found corresponding IRP. User should already canceled the operation. Return STATUS_CANCELLED.");
+
+  return STATUS_CANCELLED;
 }
