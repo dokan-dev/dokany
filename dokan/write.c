@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 
 VOID SendWriteRequest(HANDLE Handle, PEVENT_INFORMATION EventInfo,
-                      ULONG EventLength, PVOID Buffer, ULONG BufferLength) {
+                      ULONG EventLength, PVOID Buffer, ULONG BufferLength, ULONG *ReturnedLengthOutPointer) {
   BOOL status;
   ULONG returnedLength;
 
@@ -43,6 +43,8 @@ VOID SendWriteRequest(HANDLE Handle, PEVENT_INFORMATION EventInfo,
     DbgPrint("Ioctl failed with code %d\n", errorCode);
   }
 
+  *ReturnedLengthOutPointer = returnedLength;
+
   DbgPrint("SendWriteRequest got %d bytes\n", returnedLength);
 }
 
@@ -55,6 +57,8 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
   DOKAN_FILE_INFO fileInfo;
   BOOL bufferAllocated = FALSE;
   ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  ULONG returnedLength = 0;
+  BOOL isRequestedBiggerMemory = FALSE;
 
   eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
                              &fileInfo, &openInfo);
@@ -62,6 +66,7 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
   // Since driver requested bigger memory,
   // allocate enough memory and send it to driver
   if (EventContext->Operation.Write.RequestLength > 0) {
+    isRequestedBiggerMemory = TRUE;
     ULONG contextLength = EventContext->Operation.Write.RequestLength;
     PEVENT_CONTEXT contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
     if (contextBuf == NULL) {
@@ -69,7 +74,7 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
       return;
     }
     SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf,
-                     contextLength);
+                     contextLength, &returnedLength);
     EventContext = contextBuf;
     bufferAllocated = TRUE;
   }
@@ -78,14 +83,22 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-  if (DokanInstance->DokanOperations->WriteFile) {
-    status = DokanInstance->DokanOperations->WriteFile(
-        EventContext->Operation.Write.FileName,
-        (PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
-        EventContext->Operation.Write.BufferLength, &writtenLength,
-        EventContext->Operation.Write.ByteOffset.QuadPart, &fileInfo);
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
+  if (returnedLength == 0 && isRequestedBiggerMemory) {
+	  DbgPrint("Unknown SendWriteRequest error : return 0 length when request bigger memory. \nUnknown SendWriteRequest error : EventContext had been destoryed. Return STATUS_ACCESS_DENIED. \n");
+	  status = STATUS_ACCESS_DENIED;
+  }
+  else {
+	  // for any case not requested bigger memory and the case requested bigger memory with returnedLength != 0
+	  if (DokanInstance->DokanOperations->WriteFile) {
+		  status = DokanInstance->DokanOperations->WriteFile(
+			  EventContext->Operation.Write.FileName,
+			  (PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
+			  EventContext->Operation.Write.BufferLength, &writtenLength,
+			  EventContext->Operation.Write.ByteOffset.QuadPart, &fileInfo);
+	  }
+	  else {
+		  status = STATUS_NOT_IMPLEMENTED;
+	  }
   }
 
   if (openInfo != NULL)
