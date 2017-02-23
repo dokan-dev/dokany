@@ -403,8 +403,11 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
       EventContext->Operation.Directory.BufferLength - lengthRemaining;
 
   // NO_MORE_FILES
-  if (index <= EventContext->Operation.Directory.FileIndex)
+  if (index <= EventContext->Operation.Directory.FileIndex) {
+    if (thisEntry != listHead)
+      return -2;
     return -1;
+  }
 
   return index;
 }
@@ -586,19 +589,24 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
     // there is no matched file
     if (index < 0) {
-      if (EventContext->Operation.Directory.FileIndex == 0) {
-        DbgPrint("  STATUS_NO_SUCH_FILE\n");
-        eventInfo->Status = STATUS_NO_SUCH_FILE;
-      } else {
-        DbgPrint("  STATUS_NO_MORE_FILES\n");
-        eventInfo->Status = STATUS_NO_MORE_FILES;
-      }
       eventInfo->BufferLength = 0;
       eventInfo->Operation.Directory.Index =
-          EventContext->Operation.Directory.FileIndex;
-
-      ClearFindData(openInfo->DirListHead);
-
+        EventContext->Operation.Directory.FileIndex;
+      if (index == -1) {
+        if (EventContext->Operation.Directory.FileIndex == 0) {
+          DbgPrint("  STATUS_NO_SUCH_FILE\n");
+          eventInfo->Status = STATUS_NO_SUCH_FILE;
+        }
+        else {
+          DbgPrint("  STATUS_NO_MORE_FILES\n");
+          eventInfo->Status = STATUS_NO_MORE_FILES;
+        }
+        ClearFindData(openInfo->DirListHead);
+      }
+      else {
+        DbgPrint("  STATUS_BUFFER_OVERFLOW\n");
+        eventInfo->Status = STATUS_BUFFER_OVERFLOW;
+      }
     } else {
       DbgPrint("index to %d\n", index);
       eventInfo->Operation.Directory.Index = index;
