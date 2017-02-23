@@ -602,8 +602,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
           eventInfo->Status = STATUS_NO_MORE_FILES;
         }
         ClearFindData(openInfo->DirListHead);
-      }
-      else {
+      } else {
         DbgPrint("  STATUS_BUFFER_OVERFLOW\n");
         eventInfo->Status = STATUS_BUFFER_OVERFLOW;
       }
