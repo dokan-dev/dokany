@@ -310,17 +310,83 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQueryInformation\n");
 }
 
-VOID FlushAllCachedFcb(__in PDokanVCB Vcb)
+BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix)
+{
+    if (prefix == NULL || prefix->Length == 0)
+    {
+        return TRUE;
+    }
+
+    if(str == NULL || prefix->Length > str->Length)
+    {
+        return FALSE;
+    }
+
+    LPCWSTR prefixToUse, stringToCompareTo;
+    prefixToUse = prefix->Buffer;
+    stringToCompareTo = str->Buffer;
+
+    while (*prefixToUse)
+    {
+        if (*prefixToUse++ != *stringToCompareTo++)
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject) {
+
+    if(fcb == NULL)
+    {
+        return;
+    }
+
+    if (fcb->SectionObjectPointers.ImageSectionObject != NULL) {
+        DDbgPrint("  MmFlushImageSection FileName: %wZ FileCount: %lu.\n",
+            &fcb->FileName, fcb->FileCount);
+        MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
+        DDbgPrint("  MmFlushImageSection done FileName: %wZ FileCount: %lu.\n",
+            &fcb->FileName, fcb->FileCount);
+    }
+
+    if (fcb->SectionObjectPointers.DataSectionObject != NULL) {
+        DDbgPrint("  CcFlushCache FileName: %wZ FileCount: %lu.\n",
+            &fcb->FileName, fcb->FileCount);
+        ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+        CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+        CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
+        if (fileObject != NULL) {
+            CcUninitializeCacheMap(fileObject, NULL, NULL);
+        }
+        ExReleaseResourceLite(&fcb->PagingIoResource);
+        DDbgPrint("  CcFlushCache done FileName: %wZ FileCount: %lu.\n",
+            &fcb->FileName, fcb->FileCount);
+    }
+}
+
+VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo, __in_opt PFILE_OBJECT fileObject)
 {
     PLIST_ENTRY thisEntry, nextEntry, listHead;
     PDokanFCB fcb = NULL;
 
+    if(fcbRelatedTo == NULL)
+    {
+        return;
+    }
+
     DDbgPrint("  FlushAllCachedFcb\n");
 
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&Vcb->Resource, TRUE);
+    if (!DokanFCBFlagsIsSet(fcbRelatedTo, DOKAN_FILE_DIRECTORY)) {
+        DDbgPrint("  FlushAllCachedFcb file passed in. Flush only this file.\n");
+        FlushFcb(fcbRelatedTo, fileObject);
+        return;
+    }
 
-    listHead = &Vcb->NextFCB;
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(&fcbRelatedTo->Vcb->Resource, TRUE);
+
+    listHead = &fcbRelatedTo->Vcb->NextFCB;
 
     for (thisEntry = listHead->Flink; thisEntry != listHead;
         thisEntry = nextEntry) {
@@ -328,30 +394,26 @@ VOID FlushAllCachedFcb(__in PDokanVCB Vcb)
         nextEntry = thisEntry->Flink;
 
         fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-
-        if (fcb->SectionObjectPointers.ImageSectionObject != NULL) {
-            DDbgPrint("  MmFlushImageSection FileName: %wZ FileCount: %lu.\n",
-                &fcb->FileName, fcb->FileCount);
-            MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
-            DDbgPrint("  MmFlushImageSection done FileName: %wZ FileCount: %lu.\n", 
-                &fcb->FileName, fcb->FileCount);
+        
+        if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+            DDbgPrint("  FlushAllCachedFcb %wZ is directory so skip it.",
+                &fcb->FileName);
+            continue;
         }
 
-        if (fcb->SectionObjectPointers.DataSectionObject != NULL) {
-            DDbgPrint("  CcFlushCache FileName: %wZ FileCount: %lu.\n",
-                &fcb->FileName, fcb->FileCount);
-            ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
-            CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
-            CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-            ExReleaseResourceLite(&fcb->PagingIoResource);
-            DDbgPrint("  CcFlushCache done FileName: %wZ FileCount: %lu.\n",
-                &fcb->FileName, fcb->FileCount);
-        }
+        DDbgPrint("  FlushAllCachedFcb check %wZ if is related to %wZ",
+            &fcb->FileName, &fcbRelatedTo->FileName);
 
+        if (StartsWith(&fcb->FileName, &fcbRelatedTo->FileName)) {
+            DDbgPrint("  FlushAllCachedFcb flush %wZ if flush is possible.", 
+                &fcb->FileName);
+            FlushFcb(fcb, NULL);
+        }
+        
         fcb = NULL;
     }
 
-    ExReleaseResourceLite(&Vcb->Resource);
+    ExReleaseResourceLite(&fcbRelatedTo->Vcb->Resource);
     KeLeaveCriticalRegion();
 
     DDbgPrint("  FlushAllCachedFcb finished\n");
@@ -465,7 +527,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       /* Flush any opened files before doing a rename
        * of the parent directory or the specific file
       */
-      FlushAllCachedFcb(fcb->Vcb);
+      FlushAllCachedFcb(fcb, fileObject);
       break;
     case FileValidDataLengthInformation:
       DDbgPrint("  FileValidDataLengthInformation\n");
