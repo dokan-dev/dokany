@@ -19,7 +19,3 @@ Feature request can skip this form. Bug report **must** complete it. `Check List
 # Logs
 Please attach in separate files: mirror output, library logs and kernel [logs](https://github.com/dokan-dev/dokany/wiki/How-to-Debug-Dokan).
 In case of BSOD, please attach minidump or dump analyze output.
-
-# Support
- - Usage: <personal/commercial> - <testing/development/production>
- - Support ability: <programming C, can create pull request / deeptesting / investigate driver issues / donate others / etc.>
