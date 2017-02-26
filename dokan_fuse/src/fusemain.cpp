@@ -73,10 +73,10 @@ impl_fuse_context::impl_fuse_context(const struct fuse_operations *ops,
                                      void *user_data, bool debug,
                                      unsigned int filemask,
                                      unsigned int dirmask, const char *fsname,
-                                     const char *volname)
+                                     const char *volname, const char *uncname)
     : ops_(*ops), user_data_(user_data), debug_(debug), filemask_(filemask),
       dirmask_(dirmask), fsname_(fsname),
-      volname_(volname) // Use current user data
+      volname_(volname), uncname_(uncname) // Use current user data
 {
   // Reset connection info
   memset(&conn_info_, 0, sizeof(fuse_conn_info));

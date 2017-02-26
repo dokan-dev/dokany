@@ -26,7 +26,7 @@ struct fuse_config
 {
   unsigned int umask;
   unsigned int fileumask, dirumask;
-  const char *fsname, *volname;
+  const char *fsname, *volname, *uncname;
   int help;
   int debug;
   int setsignals;
