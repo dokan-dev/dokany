@@ -591,13 +591,12 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     if (index < 0) {
       eventInfo->BufferLength = 0;
       eventInfo->Operation.Directory.Index =
-        EventContext->Operation.Directory.FileIndex;
+          EventContext->Operation.Directory.FileIndex;
       if (index == -1) {
         if (EventContext->Operation.Directory.FileIndex == 0) {
           DbgPrint("  STATUS_NO_SUCH_FILE\n");
           eventInfo->Status = STATUS_NO_SUCH_FILE;
-        }
-        else {
+        } else {
           DbgPrint("  STATUS_NO_MORE_FILES\n");
           eventInfo->Status = STATUS_NO_MORE_FILES;
         }
