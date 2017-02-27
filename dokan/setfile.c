@@ -157,9 +157,8 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
                           PDOKAN_OPERATIONS DokanOperations) {
   PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
       (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
-
-  WCHAR newName[MAX_PATH];
-  ZeroMemory(newName, sizeof(newName));
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  WCHAR *newName = NULL;
 
   if (renameInfo->FileName[0] != L'\\') {
     ULONG pos;
@@ -168,20 +167,32 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
       if (EventContext->Operation.SetFile.FileName[pos] == '\\')
         break;
     }
+    newName = (WCHAR *)malloc((pos + 1) * sizeof(WCHAR) +
+                              renameInfo->FileNameLength + sizeof(WCHAR));
+    if (newName == NULL)
+      return STATUS_INSUFFICIENT_RESOURCES;
+    ZeroMemory(newName, (pos + 1) * sizeof(WCHAR) + renameInfo->FileNameLength +
+                            sizeof(WCHAR));
     RtlCopyMemory(newName, EventContext->Operation.SetFile.FileName,
                   (pos + 1) * sizeof(WCHAR));
     RtlCopyMemory((PCHAR)newName + (pos + 1) * sizeof(WCHAR),
                   renameInfo->FileName, renameInfo->FileNameLength);
   } else {
+    newName = (WCHAR *)malloc(renameInfo->FileNameLength + sizeof(WCHAR));
+    if (newName == NULL)
+      return STATUS_INSUFFICIENT_RESOURCES;
+    ZeroMemory(newName, renameInfo->FileNameLength + sizeof(WCHAR));
     RtlCopyMemory(newName, renameInfo->FileName, renameInfo->FileNameLength);
   }
 
   if (!DokanOperations->MoveFile)
     return STATUS_NOT_IMPLEMENTED;
 
-  return DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
-                                   newName, renameInfo->ReplaceIfExists,
-                                   FileInfo);
+  status =
+      DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
+                                newName, renameInfo->ReplaceIfExists, FileInfo);
+  free(newName);
+  return status;
 }
 
 NTSTATUS
