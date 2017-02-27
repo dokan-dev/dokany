@@ -160,6 +160,9 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   WCHAR *newName = NULL;
 
+  if (!DokanOperations->MoveFile)
+    return STATUS_NOT_IMPLEMENTED;
+
   if (renameInfo->FileName[0] != L'\\') {
     ULONG pos;
     for (pos = EventContext->Operation.SetFile.FileNameLength / sizeof(WCHAR);
@@ -184,9 +187,6 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
     ZeroMemory(newName, renameInfo->FileNameLength + sizeof(WCHAR));
     RtlCopyMemory(newName, renameInfo->FileName, renameInfo->FileNameLength);
   }
-
-  if (!DokanOperations->MoveFile)
-    return STATUS_NOT_IMPLEMENTED;
 
   status =
       DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
