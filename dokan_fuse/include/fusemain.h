@@ -75,13 +75,13 @@ class impl_fuse_context
 
 	unsigned int filemask_;
 	unsigned int dirmask_;
-	const char *fsname_, *volname_;
+	const char *fsname_, *volname_, *uncname_;
 
 	impl_file_locks file_locks;
 public:
 	impl_fuse_context(const struct fuse_operations *ops, void *user_data, 
 		bool debug, unsigned int filemask, unsigned int dirmask,
-		const char *fsname, const char *volname);
+		const char *fsname, const char *volname, const char *uncname);
 
 	bool debug() const {return debug_;}
 

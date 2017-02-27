@@ -333,7 +333,7 @@ extern "C" int errno_to_ntstatus_error(int err) {
   for (auto f = 0; f < errtable_size; ++f)
     if (errtable[f].errnocode == err)
       return errtable[f].oscode;
-  return ERROR_INVALID_FUNCTION;
+  return STATUS_NOT_IMPLEMENTED;
 }
 
 extern "C" char **convert_args(int argc, wchar_t *argv[]) {

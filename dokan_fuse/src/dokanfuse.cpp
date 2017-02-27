@@ -548,7 +548,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
 
   impl_fuse_context impl(&fs->ops, fs->user_data, fs->conf.debug != 0,
                          fileumask, dirumask, fs->conf.fsname,
-                         fs->conf.volname);
+                         fs->conf.volname, fs->conf.uncname);
 
   // Parse Dokan options
   PDOKAN_OPTIONS dokanOptions = static_cast<PDOKAN_OPTIONS>(malloc(sizeof(DOKAN_OPTIONS)));
@@ -559,6 +559,12 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   dokanOptions->Options |=
       fs->conf.networkDrive ? DOKAN_OPTION_NETWORK : DOKAN_OPTION_REMOVABLE;
   dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
+
+  wchar_t uncName[MAX_PATH + 1];
+  if (fs->conf.networkDrive && fs->conf.uncname) {
+    mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
+    dokanOptions->UNCName = uncName;
+  }
 
   wchar_t mount[MAX_PATH + 1];
   mbstowcs(mount, fs->ch->mountpoint.c_str(), MAX_PATH);
@@ -635,6 +641,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("dirumask=%o", dirumask, 0),
     FUSE_LIB_OPT("fsname=%s", fsname, 0),
     FUSE_LIB_OPT("volname=%s", volname, 0),
+    FUSE_LIB_OPT("uncname=%s", uncname, 0),
     FUSE_LIB_OPT("setsignals=%s", setsignals, 0),
     FUSE_LIB_OPT("daemon_timeout=%d", timeoutInSec, 0),
     FUSE_LIB_OPT("-n", networkDrive, 1),
@@ -648,6 +655,7 @@ static void fuse_lib_help(void) {
       "    -o dirumask=M          set directory permissions (octal)\n"
       "    -o fsname=M            set filesystem name\n"
       "    -o volname=M           set volume name\n"
+      "    -o uncname=M           set UNC name\n"
       "    -o setsignals=M        set signal usage (1 to use)\n"
       "    -o daemon_timeout=M    set timeout in seconds\n"
       "    -n                     use network drive\n"
