@@ -402,11 +402,12 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
   EventInfo->BufferLength =
       EventContext->Operation.Directory.BufferLength - lengthRemaining;
 
-  // NO_MORE_FILES
   if (index <= EventContext->Operation.Directory.FileIndex) {
+
     if (thisEntry != listHead)
-      return -2;
-    return -1;
+      return -2; // BUFFER_OVERFLOW
+
+    return -1; // NO_MORE_FILES
   }
 
   return index;
