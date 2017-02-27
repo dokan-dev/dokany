@@ -32,6 +32,14 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <winbase.h>
 
+//#define WIN10_ENABLE_LONG_PATH
+#ifdef WIN10_ENABLE_LONG_PATH
+//dirty but should be enough
+#define DOKAN_MAX_PATH 32768
+#else
+#define DOKAN_MAX_PATH MAX_PATH
+#endif // DEBUG
+
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 BOOL g_HasSeSecurityPrivilege;
@@ -64,9 +72,9 @@ static void DbgPrint(LPCWSTR format, ...) {
   }
 }
 
-static WCHAR RootDirectory[MAX_PATH] = L"C:";
-static WCHAR MountPoint[MAX_PATH] = L"M:\\";
-static WCHAR UNCName[MAX_PATH] = L"";
+static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
+static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
+static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -186,7 +194,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
                  ACCESS_MASK DesiredAccess, ULONG FileAttributes,
                  ULONG ShareAccess, ULONG CreateDisposition,
                  ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   DWORD fileAttr;
   NTSTATUS status = STATUS_SUCCESS;
@@ -207,7 +215,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
   genericDesiredAccess = DokanMapStandardToGenericAccess(DesiredAccess);
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"CreateFile : %s\n", filePath);
 
@@ -398,8 +406,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
 static void DOKAN_CALLBACK MirrorCloseFile(LPCWSTR FileName,
                                            PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
-  GetFilePath(filePath, MAX_PATH, FileName);
+  WCHAR filePath[DOKAN_MAX_PATH];
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   if (DokanFileInfo->Context) {
     DbgPrint(L"CloseFile: %s\n", filePath);
@@ -413,8 +421,8 @@ static void DOKAN_CALLBACK MirrorCloseFile(LPCWSTR FileName,
 
 static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
                                          PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
-  GetFilePath(filePath, MAX_PATH, FileName);
+  WCHAR filePath[DOKAN_MAX_PATH];
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   if (DokanFileInfo->Context) {
     DbgPrint(L"Cleanup: %s\n\n", filePath);
@@ -451,12 +459,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
                                               LPDWORD ReadLength,
                                               LONGLONG Offset,
                                               PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
   ULONG offset = (ULONG)Offset;
   BOOL opened = FALSE;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"ReadFile : %s\n", filePath);
 
@@ -506,11 +514,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
                                                LPDWORD NumberOfBytesWritten,
                                                LONGLONG Offset,
                                                PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
   BOOL opened = FALSE;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, Offset,
            NumberOfBytesToWrite);
@@ -612,10 +620,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"FlushFileBuffers : %s\n", filePath);
 
@@ -636,11 +644,11 @@ MirrorFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
     LPCWSTR FileName, LPBY_HANDLE_FILE_INFORMATION HandleFileInformation,
     PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
   BOOL opened = FALSE;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"GetFileInfo : %s\n", filePath);
 
@@ -702,14 +710,14 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorFindFiles(LPCWSTR FileName,
                 PFillFindData FillFindData, // function pointer
                 PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   size_t fileLen;
   HANDLE hFind;
   WIN32_FIND_DATAW findData;
   DWORD error;
   int count = 0;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"FindFiles :%s\n", filePath);
 
@@ -752,10 +760,10 @@ MirrorFindFiles(LPCWSTR FileName,
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
   DbgPrint(L"DeleteFile %s - %d\n", filePath, DokanFileInfo->DeleteOnClose);
 
   DWORD dwAttrib = GetFileAttributes(filePath);
@@ -777,14 +785,14 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 
 static NTSTATUS DOKAN_CALLBACK
 MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
   HANDLE hFind;
   WIN32_FIND_DATAW findData;
   size_t fileLen;
 
   ZeroMemory(filePath, sizeof(filePath));
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"DeleteDirectory %s - %d\n", filePath,
            DokanFileInfo->DeleteOnClose);
@@ -833,8 +841,8 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorMoveFile(LPCWSTR FileName, // existing file name
                LPCWSTR NewFileName, BOOL ReplaceIfExisting,
                PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
-  WCHAR newFilePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
+  WCHAR newFilePath[DOKAN_MAX_PATH];
   HANDLE handle;
   DWORD bufferSize;
   BOOL result;
@@ -842,8 +850,8 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
 
   PFILE_RENAME_INFO renameInfo = NULL;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
-  GetFilePath(newFilePath, MAX_PATH, NewFileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+  GetFilePath(newFilePath, DOKAN_MAX_PATH, NewFileName);
 
   DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
   handle = (HANDLE)DokanFileInfo->Context;
@@ -896,12 +904,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
                                               LONGLONG ByteOffset,
                                               LONGLONG Length,
                                               PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   LARGE_INTEGER offset;
   LARGE_INTEGER length;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"LockFile %s\n", filePath);
 
@@ -927,11 +935,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(
     LPCWSTR FileName, LONGLONG ByteOffset, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   LARGE_INTEGER offset;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"SetEndOfFile %s, %I64d\n", filePath, ByteOffset);
 
@@ -960,11 +968,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(
     LPCWSTR FileName, LONGLONG AllocSize, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   LARGE_INTEGER fileSize;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"SetAllocationSize %s, %I64d\n", filePath, AllocSize);
 
@@ -1002,9 +1010,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
     LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"SetFileAttributes %s\n", filePath);
 
@@ -1022,10 +1030,10 @@ static NTSTATUS DOKAN_CALLBACK
 MirrorSetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
                   CONST FILETIME *LastAccessTime, CONST FILETIME *LastWriteTime,
                   PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"SetFileTime %s\n", filePath);
 
@@ -1049,12 +1057,12 @@ MirrorSetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
 static NTSTATUS DOKAN_CALLBACK
 MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
                  PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   LARGE_INTEGER length;
   LARGE_INTEGER offset;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"UnlockFile %s\n", filePath);
 
@@ -1082,12 +1090,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
     LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
     PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
     PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   BOOLEAN requestingSaclInfo;
 
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"GetFileSecurity %s\n", filePath);
 
@@ -1155,11 +1163,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
     PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
     PDOKAN_FILE_INFO DokanFileInfo) {
   HANDLE handle;
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
 
   UNREFERENCED_PARAMETER(SecurityDescriptorLength);
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"SetFileSecurity %s\n", filePath);
 
@@ -1246,13 +1254,13 @@ NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
 NTSTATUS DOKAN_CALLBACK
 MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
                   PDOKAN_FILE_INFO DokanFileInfo) {
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE hFind;
   WIN32_FIND_STREAM_DATA findData;
   DWORD error;
   int count = 0;
 
-  GetFilePath(filePath, MAX_PATH, FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"FindStreams :%s\n", filePath);
 
