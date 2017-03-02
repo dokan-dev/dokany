@@ -537,23 +537,12 @@ Return Value:
         DDbgPrint("  Verify if the system tries to access System Volume\n");
         UNICODE_STRING systemVolume;
         RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-        if (fileObject->FileName.Length >= systemVolume.Length) {
-          LPCWSTR p1, p2;
-          p1 = systemVolume.Buffer;
-          p2 = fileObject->FileName.Buffer;
-          unsigned int len = 0;
-          LONG ret = 0;
-          while (!ret && len < 26) {
-            ret = *p1++ - *p2++;
-            ++len;
-          }
-          if (ret == 0 && (systemVolume.Length == fileObject->FileName.Length ||
-                           *p2 == L'\\')) {
-            DDbgPrint("  It's an access to System Volume, so don't return "
-                      "SUCCESS. We don't have one.\n");
-            status = STATUS_NO_SUCH_FILE;
-            __leave;
-          }
+        BOOLEAN isSystemVolumeAccess = StartsWith(&fileObject->FileName, &systemVolume);
+        if (isSystemVolumeAccess) {
+          DDbgPrint("  It's an access to System Volume, so don't return "
+                    "SUCCESS. We don't have one.\n");
+          status = STATUS_NO_SUCH_FILE;
+          __leave;
         }
       }
       status = STATUS_SUCCESS;

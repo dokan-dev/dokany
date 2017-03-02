@@ -699,6 +699,9 @@ PointerAlignSize(ULONG sizeInBytes);
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
+VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
+BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix);
+
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");
 
