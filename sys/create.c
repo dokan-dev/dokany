@@ -537,7 +537,8 @@ Return Value:
         DDbgPrint("  Verify if the system tries to access System Volume\n");
         UNICODE_STRING systemVolume;
         RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-        BOOLEAN isSystemVolumeAccess = StartsWith(&fileObject->FileName, &systemVolume);
+        BOOLEAN isSystemVolumeAccess =
+            StartsWith(&fileObject->FileName, &systemVolume);
         if (isSystemVolumeAccess) {
           DDbgPrint("  It's an access to System Volume, so don't return "
                     "SUCCESS. We don't have one.\n");
@@ -723,8 +724,8 @@ Return Value:
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
-    DDbgPrint("  Create: FileName:%wZ got fcb %p\n",
-              &fileObject->FileName, fcb);
+    DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
+              fcb);
 
     if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
       status = STATUS_OBJECT_NAME_COLLISION;
@@ -1035,7 +1036,7 @@ Return Value:
                     FILE_COMPLETE_IF_OPLOCKED)) {
 
           POPLOCK oplock = DokanGetFcbOplock(fcb);
-         // This may enter a wait state!
+          // This may enter a wait state!
           OplockBreakStatus = FsRtlOplockBreakH(
               oplock, Irp, 0, eventContext,
               NULL /* DokanOplockComplete */, // block instead of callback
