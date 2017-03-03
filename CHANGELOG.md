@@ -235,7 +235,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.1...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.2...master
+[1.0.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.1...v1.0.2
 [1.0.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.0...v1.0.1
 [1.0.0.5000]: https://github.com/dokan-dev/dokany/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/dokan-dev/dokany/compare/v0.7.4...v0.8.0
