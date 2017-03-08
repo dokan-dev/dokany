@@ -104,12 +104,17 @@ public:
 	int resolve_symlink(const std::string &name, std::string *res);
 	int check_and_resolve(std::string *name);
 
+    typedef int(*PWalkDirectoryWithSetFuseContext)(PDOKAN_FILE_INFO DokanFileInfo, void *buf, const char *name,
+        const struct FUSE_STAT *stbuf,
+        FUSE_OFF_T off);
+
 	struct walk_data
 	{
 		impl_fuse_context *ctx;
 		std::string dirname;
 		PDOKAN_FILE_INFO DokanFileInfo;
 		PFillFindData delegate;
+        PWalkDirectoryWithSetFuseContext delegateSetFuseContext;
 		std::vector<std::string> getdir_data; //Used only in walk_directory_getdir()
 	};
 	static int walk_directory(void *buf, const char *name,
@@ -118,6 +123,7 @@ public:
 
 	///////////////////////////////////Delegates//////////////////////////////
 	int find_files(LPCWSTR file_name, PFillFindData fill_find_data,
+        PWalkDirectoryWithSetFuseContext walk_set_fuse_context,
 		PDOKAN_FILE_INFO dokan_file_info);
 
 	int open_directory(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
