@@ -432,74 +432,6 @@ static NTSTATUS DOKAN_CALLBACK FuseUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
   return errno_to_ntstatus_error(impl->unmounted(DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK
-FuseGetFileSecurity(LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-                    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
-                    PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
-  impl_fuse_context *impl = the_impl;
-  if (impl->debug())
-    FPRINTF(stderr, "GetFileSecurity: " PRIxDWORD "\n", *SecurityInformation);
-
-  BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
-  ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
-
-  int ret;
-  {
-    impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-    ret =
-        impl->get_file_information(FileName, &byHandleFileInfo, DokanFileInfo);
-  }
-
-  if (0 != ret) {
-    return errno_to_ntstatus_error(ret);
-  }
-
-  if (byHandleFileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-    // We handle directories for the Explorer's
-    // context menu. (New Folder, ...)
-
-    // Authenticated users rights
-    PSECURITY_DESCRIPTOR SecurityDescriptorTmp = nullptr;
-    ULONG Size = 0;
-    if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-            "D:PAI(A;OICI;FA;;;AU)", SDDL_REVISION_1, &SecurityDescriptorTmp,
-            &Size)) {
-      return STATUS_NOT_IMPLEMENTED;
-    }
-
-    LPTSTR pStringBuffer = nullptr;
-    if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-            SecurityDescriptorTmp, SDDL_REVISION_1, *SecurityInformation,
-            &pStringBuffer, nullptr)) {
-      return STATUS_NOT_IMPLEMENTED;
-    }
-
-    LocalFree(SecurityDescriptorTmp);
-    SecurityDescriptorTmp = nullptr;
-    Size = 0;
-    if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-            pStringBuffer, SDDL_REVISION_1, &SecurityDescriptorTmp, &Size)) {
-      return STATUS_NOT_IMPLEMENTED;
-    }
-
-    if (Size > BufferLength) {
-      *LengthNeeded = Size;
-      return STATUS_BUFFER_OVERFLOW;
-    }
-
-    memcpy(SecurityDescriptor, SecurityDescriptorTmp, Size);
-    *LengthNeeded = Size;
-
-    if (pStringBuffer != nullptr)
-      LocalFree(pStringBuffer);
-    if (SecurityDescriptorTmp != nullptr)
-      LocalFree(SecurityDescriptorTmp);
-
-    return STATUS_SUCCESS;
-  }
-  return STATUS_NOT_IMPLEMENTED;
-}
-
 int fuse_interrupted(void) {
   return 0; // TODO: fix this
 }
@@ -527,7 +459,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     GetVolumeInformation,
     FuseMounted,
     FuseUnmounted,
-    FuseGetFileSecurity,
+    nullptr, // FuseGetFileSecurity
     nullptr, // SetFileSecurity
 };
 
