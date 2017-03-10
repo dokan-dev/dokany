@@ -151,7 +151,9 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
         &EventContext->Operation.Security.SecurityInformation,
         &eventInfo->Buffer, EventContext->Operation.Security.BufferLength,
         &lengthNeeded, &fileInfo);
-  } else {
+  }
+
+  if (status == STATUS_NOT_IMPLEMENTED) {
     status = DefaultGetFileSecurity(
         EventContext->Operation.Security.FileName,
         &EventContext->Operation.Security.SecurityInformation,
