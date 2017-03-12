@@ -300,11 +300,12 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
     // stat (*stbuf) has only st_ino and st_mode -> request other info with getattr
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) // Special entries
       stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
-    else
+    else if (ctx->ops_.getattr)
       CHECKED(ctx->ops_.getattr((dirname + name).c_str(), &stat));
   //}
 
-  if (S_ISLNK(stat.st_mode)) {
+  if (S_ISLNK(stat.st_mode)
+      && ctx->ops_.getattr) {
     std::string resolved;
     CHECKED(ctx->resolve_symlink(dirname + name, &resolved));
     CHECKED(ctx->ops_.getattr(resolved.c_str(), &stat));
