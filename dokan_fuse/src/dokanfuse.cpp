@@ -33,6 +33,18 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason,
   return TRUE;
 }
 
+static int WalkDirectoryWithSetFuseContext(PDOKAN_FILE_INFO DokanFileInfo, void *buf, const char *name,
+    const struct FUSE_STAT *stbuf,
+    FUSE_OFF_T off)
+{
+    impl_fuse_context *impl = the_impl;
+    if (impl->debug())
+        FPRINTF(stderr, "WalkDirectoryWithSetFuseContext on thread %d\n",GetCurrentThreadId());
+
+    impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
+    return impl->walk_directory(buf, name, stbuf, off);
+}
+
 static NTSTATUS DOKAN_CALLBACK
 FuseFindFiles(LPCWSTR FileName,
               PFillFindData FillFindData, // function pointer
@@ -43,7 +55,7 @@ FuseFindFiles(LPCWSTR FileName,
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
   return errno_to_ntstatus_error(
-      impl->find_files(FileName, FillFindData, DokanFileInfo));
+      impl->find_files(FileName, FillFindData, &WalkDirectoryWithSetFuseContext, DokanFileInfo));
 }
 
 static void DOKAN_CALLBACK FuseCleanup(LPCWSTR FileName,

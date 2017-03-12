@@ -268,6 +268,17 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
                                       FUSE_OFF_T off) {
   walk_data *wd = static_cast<walk_data *>(buf);
   WIN32_FIND_DATAW find_data = {0};
+  
+  fuse_context* context = fuse_get_context();
+  if(context == nullptr && wd->delegateSetFuseContext != nullptr)
+  {
+    return wd->delegateSetFuseContext(wd->DokanFileInfo,buf, name,stbuf, off);
+  }
+
+  impl_fuse_context* ctx = wd->ctx;
+  PFillFindData p_fill_find_data = wd->delegate;
+  PDOKAN_FILE_INFO DokanFileInfo = wd->DokanFileInfo;
+  std::string dirname = wd->dirname;
 
   utf8_to_wchar_buf(name, find_data.cFileName, MAX_PATH);
   // fix name if wrong encoding
@@ -275,9 +286,9 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
     struct FUSE_STAT stbuf = {0};
     utf8_to_wchar_buf_old(name, find_data.cFileName, MAX_PATH);
     std::string new_name = wchar_to_utf8_cstr(find_data.cFileName);
-    if (wd->ctx->ops_.getattr && wd->ctx->ops_.rename && new_name.length() &&
-        wd->ctx->ops_.getattr(new_name.c_str(), &stbuf) == -ENOENT)
-      wd->ctx->ops_.rename(name, new_name.c_str());
+    if (ctx->ops_.getattr && ctx->ops_.rename && new_name.length() &&
+        ctx->ops_.getattr(new_name.c_str(), &stbuf) == -ENOENT)
+      ctx->ops_.rename(name, new_name.c_str());
   }
   memset(find_data.cAlternateFileName, 0, sizeof(find_data.cAlternateFileName));
 
@@ -290,24 +301,24 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) // Special entries
       stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
     else
-      CHECKED(wd->ctx->ops_.getattr((wd->dirname + name).c_str(), &stat));
+      CHECKED(ctx->ops_.getattr((dirname + name).c_str(), &stat));
   //}
 
   if (S_ISLNK(stat.st_mode)) {
     std::string resolved;
-    CHECKED(wd->ctx->resolve_symlink(wd->dirname + name, &resolved));
-    CHECKED(wd->ctx->ops_.getattr(resolved.c_str(), &stat));
+    CHECKED(ctx->resolve_symlink(dirname + name, &resolved));
+    CHECKED(ctx->ops_.getattr(resolved.c_str(), &stat));
   }
 
   convertStatlikeBuf(&stat, name, &find_data);
 
   uint32_t attrs = 0xFFFFFFFFu;
-  if (wd->ctx->ops_.win_get_attributes)
-    attrs = wd->ctx->ops_.win_get_attributes((wd->dirname + name).c_str());
+  if (ctx->ops_.win_get_attributes)
+      attrs = ctx->ops_.win_get_attributes((dirname + name).c_str());
   if (attrs != 0xFFFFFFFFu)
     find_data.dwFileAttributes = attrs;
 
-  return wd->delegate(&find_data, wd->DokanFileInfo);
+  return p_fill_find_data(&find_data, DokanFileInfo);
 }
 
 int impl_fuse_context::walk_directory_getdir(fuse_dirh_t hndl, const char *name,
@@ -319,6 +330,7 @@ int impl_fuse_context::walk_directory_getdir(fuse_dirh_t hndl, const char *name,
 
 int impl_fuse_context::find_files(LPCWSTR file_name,
                                   PFillFindData fill_find_data,
+                                  PWalkDirectoryWithSetFuseContext walk_set_fuse_context,
                                   PDOKAN_FILE_INFO dokan_file_info) {
   if ((!ops_.readdir && !ops_.getdir) || !ops_.getattr)
     return -EINVAL;
@@ -332,6 +344,7 @@ int impl_fuse_context::find_files(LPCWSTR file_name,
   if (*fname.rbegin() != '/')
     wd.dirname.append("/");
   wd.delegate = fill_find_data;
+  wd.delegateSetFuseContext = walk_set_fuse_context;
   wd.DokanFileInfo = dokan_file_info;
 
   if (ops_.readdir) {
