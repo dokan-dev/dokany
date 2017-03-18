@@ -898,16 +898,18 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   }
   DDbgPrint("SymbolicLink: %wZ -> %wZ created\n", &deviceName,
             &symbolicLinkName);
+
   dokanGlobal = deviceObject->DeviceExtension;
   dokanGlobal->DeviceObject = deviceObject;
   dokanGlobal->FsDiskDeviceObject = fsDiskDeviceObject;
   dokanGlobal->FsCdDeviceObject = fsCdDeviceObject;
+  dokanGlobal->MountId = 0;
 
-  RtlZeroMemory(dokanGlobal, sizeof(DOKAN_GLOBAL));
   DokanInitIrpList(&dokanGlobal->PendingService);
   DokanInitIrpList(&dokanGlobal->NotifyService);
   InitializeListHead(&dokanGlobal->MountPointList);
   InitializeListHead(&dokanGlobal->DeviceDeleteList);
+  ExInitializeResourceLite(&dokanGlobal->Resource);
 
   dokanGlobal->Identifier.Type = DGL;
   dokanGlobal->Identifier.Size = sizeof(DOKAN_GLOBAL);
