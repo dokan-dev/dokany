@@ -784,7 +784,8 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
   *nbRead = 0;
 
   if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL,
-                   0, dokanControl, sizeof(*dokanControl), &returnedLength)) {
+                   0, dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl),
+                   &returnedLength)) {
     for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
       if (wcscmp(dokanControl[i].DeviceName, L"") == 0) {
         break;

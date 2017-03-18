@@ -790,16 +790,18 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
   irpSp = IoGetCurrentIrpStackLocation(Irp);
 
   try {
+    Irp->IoStatus.Information = 0;
     dokanControl = (PDOKAN_CONTROL)Irp->AssociatedIrp.SystemBuffer;
     for (listEntry = dokanGlobal->MountPointList.Flink;
          listEntry != &dokanGlobal->MountPointList;
          listEntry = listEntry->Flink, ++i) {
-      Irp->IoStatus.Information = sizeof(DOKAN_CONTROL) * (i + 1);
       if (irpSp->Parameters.DeviceIoControl.OutputBufferLength <
           (sizeof(DOKAN_CONTROL) * (i + 1))) {
         status = STATUS_BUFFER_OVERFLOW;
         __leave;
       }
+
+      Irp->IoStatus.Information = sizeof(DOKAN_CONTROL) * (i + 1);
 
       mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
       RtlCopyMemory(&dokanControl[i], &mountEntry->MountControl,
