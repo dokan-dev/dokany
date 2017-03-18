@@ -356,6 +356,7 @@ Return Value:
 
     IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
     IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+    ExDeleteResourceLite(&dokanGlobal->Resource);
     IoDeleteDevice(deviceObject);
   }
 
