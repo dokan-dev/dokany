@@ -516,7 +516,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
                     deviceEntry->DiskDeviceObject->ReferenceCount);
           IoDeleteDevice(deviceEntry->DiskDeviceObject);
           if (deviceEntry->DiskDeviceObject->Vpb) {
-            DDbgPrint("  Volume->DeviceObject set to NULL")
+            DDbgPrint("  Volume->DeviceObject set to NULL\n")
                 deviceEntry->DiskDeviceObject->Vpb->DeviceObject = NULL;
           }
           deviceEntry->DiskDeviceObject = NULL;
