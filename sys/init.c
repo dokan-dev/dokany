@@ -893,6 +893,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   status = IoCreateSymbolicLink(&symbolicLinkName, &deviceName);
   if (!NT_SUCCESS(status)) {
     DDbgPrint("  IoCreateSymbolicLink returned 0x%x\n", status);
+    IoDeleteDevice(fsDiskDeviceObject);
+    IoDeleteDevice(fsCdDeviceObject);
     IoDeleteDevice(deviceObject);
     return status;
   }
