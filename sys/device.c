@@ -49,7 +49,8 @@ VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
   case MOUNTMGRCONTROLTYPE:
     baseCodeStr = "MOUNTMGRCONTROLTYPE";
     break;
-  default: break;
+  default:
+    break;
   }
   UNREFERENCED_PARAMETER(functionCode);
   DDbgPrint("   BaseCode: 0x%x(%s) FunctionCode 0x%x(%d)\n", baseCode,
@@ -529,8 +530,17 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           ExFreePool(dcb->MountPoint);
           dcb->MountPoint = NULL;
         }
-        if (dcb->MountPoint == NULL) {
-          DDbgPrint("   Not current MountPoint. MountDev set as MountPoint\n");
+
+        if (dcb->MountPoint == NULL ||
+            (dcb->MountPoint != NULL &&
+             (dcb->MountPoint->Length != mountdevName->NameLength ||
+              RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
+                               mountdevName->NameLength) !=
+                  mountdevName->NameLength))) {
+
+          DDbgPrint("   Update mount Point by %ws\n", symbolicLinkNameBuf);
+          ExFreePool(dcb->MountPoint);
+
           dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
           if (dcb->DiskDeviceName != NULL) {
             PMOUNT_ENTRY mountEntry;
@@ -560,8 +570,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                 "   DiskDeviceName is null. Is device currently unmounted?\n");
           }
         } else {
-          DDbgPrint("   Mount Point already assigned to the device. New mount "
-                    "point ignored.\n");
+          DDbgPrint("   Mount Point match, no need to update it.\n");
         }
       } else {
         DDbgPrint("   Mount Point is not DosDevices, ignored.\n");
