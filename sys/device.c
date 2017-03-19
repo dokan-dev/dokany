@@ -531,9 +531,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           dcb->MountPoint = NULL;
         }
 
-        if (dcb->MountPoint == NULL ||
-            (dcb->MountPoint != NULL &&
-             (dcb->MountPoint->Length != mountdevName->NameLength ||
+        if (!dcb->MountPoint ||
+            ((dcb->MountPoint->Length != mountdevName->NameLength ||
               RtlCompareMemory(mountdevName->Name, dcb->MountPoint->Buffer,
                                mountdevName->NameLength) !=
                   mountdevName->NameLength))) {
