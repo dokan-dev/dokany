@@ -158,6 +158,24 @@ DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
   return TRUE;
 }
 
+VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
+  WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
+  UNICODE_STRING symbolicLinkName;
+
+  KeSetEvent(&dokanGlobal->KillDeleteDeviceEvent, 0, FALSE);
+
+  RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
+  IoDeleteSymbolicLink(&symbolicLinkName);
+
+  IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
+  IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
+
+  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
+  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
+  IoDeleteDevice(dokanGlobal->DeviceObject);
+  ExDeleteResourceLite(&dokanGlobal->Resource);
+}
+
 NTSTATUS
 DriverEntry(__in PDRIVER_OBJECT DriverObject, __in PUNICODE_STRING RegistryPath)
 
@@ -229,9 +247,7 @@ Return Value:
 
   fastIoDispatch = ExAllocatePool(sizeof(FAST_IO_DISPATCH));
   if (!fastIoDispatch) {
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    IoDeleteDevice(dokanGlobal->DeviceObject);
+    CleanupGlobalDiskDevice(dokanGlobal);
     DDbgPrint("  ExAllocatePool failed");
     return STATUS_INSUFFICIENT_RESOURCES;
   }
@@ -277,34 +293,33 @@ Return Value:
       FsRtlRegisterFileSystemFilterCallbacks(DriverObject, &filterCallbacks);
 
   if (!NT_SUCCESS(status)) {
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    IoDeleteDevice(dokanGlobal->DeviceObject);
+    CleanupGlobalDiskDevice(dokanGlobal);
+    ExFreePool(DriverObject->FastIoDispatch);
     DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x\n",
               status);
     return status;
   }
 
   if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    IoDeleteDevice(dokanGlobal->DeviceObject);
+    DDbgPrint("  DokanLookasideCreate g_DokanCCBLookasideList  failed");
+    CleanupGlobalDiskDevice(dokanGlobal);
+    ExFreePool(DriverObject->FastIoDispatch);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    IoDeleteDevice(dokanGlobal->DeviceObject);
+    DDbgPrint("  DokanLookasideCreate g_DokanFCBLookasideList  failed");
+    CleanupGlobalDiskDevice(dokanGlobal);
+    ExFreePool(DriverObject->FastIoDispatch);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (!DokanLookasideCreate(&g_DokanEResourceLookasideList,
                             sizeof(ERESOURCE))) {
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    IoDeleteDevice(dokanGlobal->DeviceObject);
+    DDbgPrint("  DokanLookasideCreate g_DokanEResourceLookasideList  failed");
+    CleanupGlobalDiskDevice(dokanGlobal);
+    ExFreePool(DriverObject->FastIoDispatch);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
@@ -335,8 +350,6 @@ Return Value:
 {
 
   PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
-  WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
-  UNICODE_STRING symbolicLinkName;
   PDOKAN_GLOBAL dokanGlobal;
 
   DDbgPrint("==> DokanUnload\n");
@@ -346,18 +359,8 @@ Return Value:
   dokanGlobal = deviceObject->DeviceExtension;
   if (GetIdentifierType(dokanGlobal) == DGL) {
     DDbgPrint("  Delete Global DeviceObject\n");
-
-    KeSetEvent(&dokanGlobal->KillDeleteDeviceEvent, 0, FALSE);
-    RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
-    IoDeleteSymbolicLink(&symbolicLinkName);
-
-    IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
-    IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
-
-    IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-    IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-    ExDeleteResourceLite(&dokanGlobal->Resource);
-    IoDeleteDevice(deviceObject);
+    CleanupGlobalDiskDevice(dokanGlobal);
+    ExFreePool(DriverObject->FastIoDispatch);
   }
 
   ExDeleteNPagedLookasideList(&DokanIrpEntryLookasideList);
