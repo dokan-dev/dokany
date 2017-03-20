@@ -375,7 +375,7 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
   DDbgPrint("  FlushAllCachedFcb\n");
 
   if (!DokanFCBFlagsIsSet(fcbRelatedTo, DOKAN_FILE_DIRECTORY)) {
-    DDbgPrint("  FlushAllCachedFcb file passed in. Flush only this file.\n");
+    DDbgPrint("  FlushAllCachedFcb file passed in. Flush only this file %wZ.\n", &fcbRelatedTo->FileName);
     FlushFcb(fcbRelatedTo, fileObject);
     return;
   }
@@ -393,16 +393,16 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
 
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-      DDbgPrint("  FlushAllCachedFcb %wZ is directory so skip it.",
+      DDbgPrint("  FlushAllCachedFcb %wZ is directory so skip it.\n",
                 &fcb->FileName);
       continue;
     }
 
-    DDbgPrint("  FlushAllCachedFcb check %wZ if is related to %wZ",
+    DDbgPrint("  FlushAllCachedFcb check %wZ if is related to %wZ\n",
               &fcb->FileName, &fcbRelatedTo->FileName);
 
     if (StartsWith(&fcb->FileName, &fcbRelatedTo->FileName)) {
-      DDbgPrint("  FlushAllCachedFcb flush %wZ if flush is possible.",
+      DDbgPrint("  FlushAllCachedFcb flush %wZ if flush is possible.\n",
                 &fcb->FileName);
       FlushFcb(fcb, NULL);
     }
@@ -524,6 +524,14 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       /* Flush any opened files before doing a rename
        * of the parent directory or the specific file
       */
+      targetFileObject = irpSp->Parameters.SetFile.FileObject;
+      if (targetFileObject)
+      {
+          DDbgPrint("  FileRenameInformation targetFileObject specified so perform flush\n");
+          PDokanCCB targetCcb = (PDokanCCB)targetFileObject->FsContext2;
+          ASSERT(targetCcb != NULL);
+          FlushAllCachedFcb(targetCcb->Fcb, targetFileObject);
+      }
       FlushAllCachedFcb(fcb, fileObject);
       break;
     case FileValidDataLengthInformation:
