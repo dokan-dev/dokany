@@ -609,7 +609,7 @@ execute DokanDeviceDeleteDelayedThread
 
   ZwClose(thread);
 
-  DDbgPrint("<== DokanStartCheckThread\n");
+  DDbgPrint("<== DokanDeviceDeleteDelayedThread\n");
 
   return STATUS_SUCCESS;
 }
