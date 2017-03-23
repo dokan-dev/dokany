@@ -479,8 +479,9 @@ int impl_fuse_context::delete_directory(LPCWSTR file_name,
   if (ops_.readdir) {
     impl_file_handle *hndl = reinterpret_cast<impl_file_handle *>(dokan_file_info->Context);
     fuse_file_info *p_finfo = nullptr;
+    fuse_file_info finfo;
     if (hndl != nullptr) {
-      fuse_file_info finfo(hndl->make_finfo());
+      finfo = hndl->make_finfo();
       p_finfo = &finfo;
     }
     ret = ops_.readdir(fname.c_str(), &has_files, &readdir_filler_set_has_files, 0, p_finfo);
