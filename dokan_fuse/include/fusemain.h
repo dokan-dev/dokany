@@ -121,6 +121,11 @@ public:
 		const struct FUSE_STAT *stbuf, FUSE_OFF_T off);
 	static int walk_directory_getdir(fuse_dirh_t hndl, const char *name, int type,ino_t ino);
 
+	static int readdir_filler_set_has_files(void *buf, const char *name,
+		const struct FUSE_STAT *stbuf, FUSE_OFF_T off);
+	static int getdir_filler_set_has_files(fuse_dirh_t hndl, const char *name,
+		int type, ino_t ino);
+
 	///////////////////////////////////Delegates//////////////////////////////
 	int find_files(LPCWSTR file_name, PFillFindData fill_find_data,
         PWalkDirectoryWithSetFuseContext walk_set_fuse_context,
