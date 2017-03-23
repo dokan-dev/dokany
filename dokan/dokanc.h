@@ -124,6 +124,8 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
 
 #endif // MSVC
 
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+
 VOID DOKANAPI DokanUseStdErr(BOOL Status);
 
 VOID DOKANAPI DokanDebugMode(BOOL Status);
