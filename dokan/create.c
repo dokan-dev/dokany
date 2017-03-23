@@ -87,7 +87,7 @@ VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
 }
 
 BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
-  return status == STATUS_SUCCESS ||
+  return NT_SUCCESS(status) ||
          (status == STATUS_OBJECT_NAME_COLLISION &&
           (disposition == FILE_OPEN_IF || disposition == FILE_SUPERSEDE ||
            disposition == FILE_OVERWRITE_IF));
