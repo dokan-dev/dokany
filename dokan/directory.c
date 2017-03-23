@@ -601,11 +601,11 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
           DbgPrint("  STATUS_NO_MORE_FILES\n");
           eventInfo->Status = STATUS_NO_MORE_FILES;
         }
-        ClearFindData(openInfo->DirListHead);
       } else {
         DbgPrint("  STATUS_BUFFER_OVERFLOW\n");
         eventInfo->Status = STATUS_BUFFER_OVERFLOW;
       }
+      ClearFindData(openInfo->DirListHead);
     } else {
       DbgPrint("index to %d\n", index);
       eventInfo->Operation.Directory.Index = index;
