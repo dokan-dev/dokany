@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 1.0.4.1000
+
 ## [1.0.3.1000] - 2017-03-24
 ### Added
 - Installer - WiX: Ship PDB-files for `dokanfuse.dll`.
@@ -18,7 +20,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Update mount point if mount manager did not follow our suggestion.
 
 ### Fixed
-- Installer - Win10 x86 - Kernel -
+- Installer - Win10 x86 driver not properly signed for x86 anniversary.
 - Kernel - Fix deadlock in `DokanDispatchCleanup`.
 - Kernel - Do `MmFlushImageSection` if `ImageSectionObject` is set during cleanup.
 - Library - Don't send free'd `DOKAN_OPEN_INFO` pointer to the driver.
