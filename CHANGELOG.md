@@ -3,7 +3,37 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 1.0.3.1000
+## [1.0.3.1000] - 2017-03-24
+### Added
+- Installer - WiX: Ship PDB-files for `dokanfuse.dll`.
+- Add Windows on ARM support.
+- FUSE - Add uncname option
+- Mirror - Add optional long path max
+- Library - Add `DefaultGetFileSecurity` when `GetFileSecurity` is not handled by user mode
+
+### Changed
+- Library - Improve some mount error messages.
+- FUSE - Return error when file open as directory with FILE_NON_DIRECTORY_FILE.
+- Kernel - Clean all global disk device data in CleanupGlobalDiskDevice
+- Kernel - Update mount point if mount manager did not follow our suggestion.
+
+### Fixed
+- Installer - Win10 x86 - Kernel -
+- Kernel - Fix deadlock in `DokanDispatchCleanup`.
+- Kernel - Do `MmFlushImageSection` if `ImageSectionObject` is set during cleanup.
+- Library - Don't send free'd `DOKAN_OPEN_INFO` pointer to the driver.
+- Library - Fix printf param for unsigned int.
+- Kernel - Add `DokanFreeMdl` for read operation in `DokanCompleteRead`.
+- Kernel - Fix crash issue cause by canceling the copy operation.
+- FUSE - Replace wrong error type returned
+- Library - Change rename fixed buffer to dynamic alloc
+- Library - Rename return directly if `MoveFile` is not implemented
+- Library - Low buffer handling correction on `QueryDirectory`
+- Library - Fix wrong buffer size provided to the kernel in `DokanGetMountPointList`
+- Kernel - Fix `dokanGlobal` wrongly zeroed and clean resource in `DokanUnload`
+- Kernel - Add missing `IoDeleteDevice` when `IoCreateSymbolicLink` fail
+- FUSE - Check for non-empty directories on delete #270.
+- Library - Use `NT_SUCCESS` in `CreateFile`
 
 ## [1.0.2.1000] - 2017-01-20
 ### Added
@@ -235,7 +265,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.2...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.3...master
+[1.0.3.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.2...v1.0.3
 [1.0.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.1...v1.0.2
 [1.0.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.0...v1.0.1
 [1.0.0.5000]: https://github.com/dokan-dev/dokany/compare/v0.8.0...v1.0.0
