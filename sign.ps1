@@ -1,5 +1,5 @@
 New-Item -ItemType Directory -Force -Path Win32,x64,ARM | Out-Null
-$files = Get-ChildItem -path Win32,x64,ARM -recurse -Include *.sys,*.cat,*.dll
+$files = Get-ChildItem -path Win32,x64,ARM -recurse -Include *.sys,*.cat,*.dll,*.exe
 signtool sign /v /i "$env:CERTISSUER" /ac "$env:ADDITIONALCERT" /t http://timestamp.verisign.com/scripts/timstamp.dll $files
 signtool sign /as /fd SHA256 /v /i "$env:CERTISSUER" /ac "$env:ADDITIONALCERT" /tr http://timestamp.globalsign.com/?signature=sha2 /td SHA256 $files
 
