@@ -329,6 +329,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   PDokanCCB ccb;
+  PDokanFCB fcb;
   PFILE_OBJECT fileObject;
 
   fileObject = IrpEntry->FileObject;
@@ -341,6 +342,9 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
+
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
@@ -357,6 +361,10 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
     DDbgPrint("  Updated CurrentByteOffset %I64d\n",
               fileObject->CurrentByteOffset.QuadPart);
+
+    DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
+        FILE_ACTION_MODIFIED);
+
   }
 
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
