@@ -1192,17 +1192,53 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
     PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
+  WCHAR volumeRoot[4];
+  DWORD fsFlags = 0;
+
   wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"DOKAN");
-  *VolumeSerialNumber = 0x19831116;
-  *MaximumComponentLength = 256;
-  *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
+
+  if (VolumeSerialNumber) 
+    *VolumeSerialNumber = 0x19831116;
+  if (MaximumComponentLength)
+    *MaximumComponentLength = 255;
+  if (FileSystemFlags)
+   *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
                      FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
                      FILE_PERSISTENT_ACLS | FILE_NAMED_STREAMS;
 
-  // File system name could be anything up to 10 characters.
-  // But Windows check few feature availability based on file system name.
-  // For this, it is recommended to set NTFS or FAT here.
-  wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"NTFS");
+  volumeRoot[0] = RootDirectory[0];
+  volumeRoot[1] = ':';  
+  volumeRoot[2] = '\\';  
+  volumeRoot[3] = '\0';  
+
+  if (GetVolumeInformation(volumeRoot, NULL, 0, NULL, MaximumComponentLength, 
+        &fsFlags, FileSystemNameBuffer, FileSystemNameSize)) {
+
+    if (FileSystemFlags)
+      *FileSystemFlags &= fsFlags;
+
+    if (MaximumComponentLength) {
+      DbgPrint(L"GetVolumeInformation: max component length %u\n", 
+                 *MaximumComponentLength);
+    }
+    if (FileSystemNameBuffer) {
+      DbgPrint(L"GetVolumeInformation: file system name %s\n", 
+                 FileSystemNameBuffer);
+    }
+    if (FileSystemFlags) {
+      DbgPrint(L"GetVolumeInformation: got file system flags 0x%08x," 
+          " returning 0x%08x\n", fsFlags, *FileSystemFlags);
+    }
+  } else {
+
+    DbgPrint(L"GetVolumeInformation: unable to query underlying fs," 
+               " using defaults.  Last error = %u\n", GetLastError());
+
+    // File system name could be anything up to 10 characters.
+    // But Windows check few feature availability based on file system name.
+    // For this, it is recommended to set NTFS or FAT here.
+    wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"NTFS");
+  }
 
   return STATUS_SUCCESS;
 }
