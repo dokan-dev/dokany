@@ -39,7 +39,7 @@ static int WalkDirectoryWithSetFuseContext(PDOKAN_FILE_INFO DokanFileInfo, void 
 {
     impl_fuse_context *impl = the_impl;
     if (impl->debug())
-        FPRINTF(stderr, "WalkDirectoryWithSetFuseContext on thread %d\n",GetCurrentThreadId());
+        FPRINTF(stderr, "WalkDirectoryWithSetFuseContext on thread " PRIuDWORD "\n", GetCurrentThreadId());
 
     impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
     return impl->walk_directory(buf, name, stbuf, off);
