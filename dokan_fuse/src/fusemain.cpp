@@ -268,7 +268,7 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
                                       FUSE_OFF_T off) {
   walk_data *wd = static_cast<walk_data *>(buf);
   WIN32_FIND_DATAW find_data = {0};
-  
+
   fuse_context* context = fuse_get_context();
   if(context == nullptr && wd->delegateSetFuseContext != nullptr)
   {
@@ -294,15 +294,13 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
 
   struct FUSE_STAT stat = {0};
 
-  /* if (stbuf != NULL)
-    stat = *stbuf;
-  else { */
-    // stat (*stbuf) has only st_ino and st_mode -> request other info with getattr
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) // Special entries
-      stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
-    else if (ctx->ops_.getattr)
-      CHECKED(ctx->ops_.getattr((dirname + name).c_str(), &stat));
-  //}
+  // stat (*stbuf) has only st_ino and st_mode -> request other info with getattr
+  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {// Special entries
+    stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
+  }
+  else if (ctx->ops_.getattr) {
+    CHECKED(ctx->ops_.getattr((dirname + name).c_str(), &stat));
+  }
 
   if (S_ISLNK(stat.st_mode)
       && ctx->ops_.getattr) {
