@@ -101,6 +101,9 @@ static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
   PTOKEN_USER tokenUser;
   SID_NAME_USE snu;
 
+  if (!g_DebugMode)
+	  return;
+
   handle = DokanOpenRequestorToken(DokanFileInfo);
   if (handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"  DokanOpenRequestorToken failed\n");
