@@ -643,7 +643,7 @@ Return Value:
         status = STATUS_OBJECT_NAME_INVALID;
         __leave;
       }
-      if (relatedFileName->Length > 0 &&
+      if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
           relatedFileName->Buffer[relatedFileName->Length / sizeof(WCHAR) -
                                   1] != '\\' && fileObject->FileName.Buffer[0] != ':') {
         needBackSlashAfterRelatedFile = TRUE;
@@ -653,6 +653,7 @@ Return Value:
       // stream of the root dircetory as in "\:foo"
       // in this case we won't prepend relatedFileName to the file name
       if (relatedFileName->Length / sizeof(WCHAR) == 1 &&  
+		fileObject->FileName.Length > 0 &&
 		relatedFileName->Buffer[0] == '\\' && 
 		fileObject->FileName.Buffer[0] == ':') {
 	alternateDataStreamOfRootDir = TRUE;

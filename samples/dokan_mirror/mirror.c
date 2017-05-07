@@ -332,9 +332,9 @@ MIRROR_OVERLAPPED* PopMirrorOverlapped() {
 
 /////////////////// Push/Pop pattern finished ///////////////////
 
-static WCHAR RootDirectory[MAX_PATH] = L"C:";
-static WCHAR MountPoint[MAX_PATH] = L"M:\\";
-static WCHAR UNCName[MAX_PATH] = L"";
+static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
+static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
+static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -381,8 +381,10 @@ static void PrintUserName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   PTOKEN_USER tokenUser;
   SID_NAME_USE snu;
 
-  handle = DokanOpenRequestorToken(EventInfo->DokanFileInfo);
+  if (!g_DebugMode)
+	  return;
 
+  handle = DokanOpenRequestorToken(EventInfo->DokanFileInfo);
   if (handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"  DokanOpenRequestorToken failed\n");
     return;
@@ -537,7 +539,7 @@ static DWORD MirrorGetParentSecurity(WCHAR *FilePath, PSECURITY_DESCRIPTOR *Pare
 
 	int lastPathSeparator = -1;
 
-	for(int i = 0; i < MAX_PATH && FilePath[i]; ++i) {
+	for(int i = 0; i < DOKAN_MAX_PATH && FilePath[i]; ++i) {
 
 		if(FilePath[i] == '\\') {
 
@@ -550,9 +552,9 @@ static DWORD MirrorGetParentSecurity(WCHAR *FilePath, PSECURITY_DESCRIPTOR *Pare
 		return ERROR_PATH_NOT_FOUND;
 	}
 
-	WCHAR parentPath[MAX_PATH];
+	WCHAR parentPath[DOKAN_MAX_PATH];
 
-	memcpy_s(parentPath, MAX_PATH * sizeof(WCHAR), FilePath, lastPathSeparator * sizeof(WCHAR));
+	memcpy_s(parentPath, DOKAN_MAX_PATH * sizeof(WCHAR), FilePath, lastPathSeparator * sizeof(WCHAR));
 
 	parentPath[lastPathSeparator] = 0;
 
@@ -623,7 +625,7 @@ static DWORD MirrorCreateNewSecurity(
 static NTSTATUS DOKAN_CALLBACK
 MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   DWORD fileAttr;
   NTSTATUS status = STATUS_SUCCESS;
@@ -638,7 +640,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 	  &fileAttributesAndFlags,
       &creationDisposition);
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   genericDesiredAccess = DokanMapStandardToGenericAccess(EventInfo->DesiredAccess);
 
@@ -981,10 +983,10 @@ static void CheckDeleteOnClose(PDOKAN_FILE_INFO FileInfo, LPWSTR FilePath)
 
 static void DOKAN_CALLBACK MirrorCloseFile(DOKAN_CLOSE_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"CloseFile: %s\n", filePath);
 
@@ -1012,8 +1014,8 @@ static void DOKAN_CALLBACK MirrorCloseFile(DOKAN_CLOSE_FILE_EVENT *EventInfo) {
 
 static void DOKAN_CALLBACK MirrorCleanup(DOKAN_CLEANUP_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  WCHAR filePath[DOKAN_MAX_PATH];
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"Cleanup: %s\n\n", filePath);
 
@@ -1090,10 +1092,10 @@ static NTSTATUS MirrorReadFileSynchronous(DOKAN_READ_FILE_EVENT *EventInfo, HAND
 
 static NTSTATUS DOKAN_CALLBACK MirrorReadFile(DOKAN_READ_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"ReadFile : %s\n", filePath);
 
@@ -1262,10 +1264,10 @@ static NTSTATUS MirrorWriteFileSynchronous(DOKAN_WRITE_FILE_EVENT *EventInfo, HA
 
 static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, EventInfo->Offset,
 	  EventInfo->NumberOfBytesToWrite);
@@ -1406,10 +1408,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 static NTSTATUS DOKAN_CALLBACK
 MirrorFlushFileBuffers(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"FlushFileBuffers : %s\n", filePath);
 
@@ -1434,10 +1436,10 @@ MirrorFlushFileBuffers(DOKAN_FLUSH_BUFFERS_EVENT *EventInfo) {
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(DOKAN_GET_FILE_INFO_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"GetFileInfo : %s\n", filePath);
 
@@ -1497,14 +1499,14 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(DOKAN_GET_FILE_INFO_EVEN
 static NTSTATUS DOKAN_CALLBACK
 MirrorFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   size_t fileLen;
   HANDLE hFind;
   WIN32_FIND_DATAW findData;
   DWORD error;
   int count = 0;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->PathName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->PathName);
 
   DbgPrint(L"FindFiles :%s\n", filePath);
 
@@ -1607,11 +1609,11 @@ MirrorCanDeleteDirectory(LPWSTR filePath) {
 static NTSTATUS DOKAN_CALLBACK
 MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   BY_HANDLE_FILE_INFORMATION fileInfo;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
   DbgPrint(L"CanDeleteFile %s\n", filePath);
 
   MIRROR_HANDLE_ASSERT(mirrorHandle);
@@ -1639,8 +1641,8 @@ MirrorCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo) {
 static NTSTATUS DOKAN_CALLBACK
 MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
-  WCHAR newFilePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
+  WCHAR newFilePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   DWORD bufferSize;
   BOOL result;
@@ -1648,8 +1650,8 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
 
   PFILE_RENAME_INFO renameInfo = NULL;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
-  GetFilePath(newFilePath, MAX_PATH, EventInfo->NewFileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
+  GetFilePath(newFilePath, DOKAN_MAX_PATH, EventInfo->NewFileName);
 
   DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
 
@@ -1706,12 +1708,12 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
 
 static NTSTATUS DOKAN_CALLBACK MirrorLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER offset;
   LARGE_INTEGER length;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"LockFile %s\n", filePath);
 
@@ -1736,11 +1738,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(DOKAN_LOCK_FILE_EVENT *EventInfo) 
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER offset;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetEndOfFile %s, %I64d\n", filePath, EventInfo->Length);
 
@@ -1772,11 +1774,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(DOKAN_SET_EOF_EVENT *EventInfo
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER fileSize;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetAllocationSize %s, %I64d\n", filePath, EventInfo->Length);
 
@@ -1824,10 +1826,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(DOKAN_SET_ALLOCATION_SIZE
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetFileBasicInformation %s\n", filePath);
 
@@ -1855,12 +1857,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileBasicInformation(DOKAN_SET_FILE_BASI
 static NTSTATUS DOKAN_CALLBACK
 MirrorUnlockFile(DOKAN_UNLOCK_FILE_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
   LARGE_INTEGER length;
   LARGE_INTEGER offset;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"UnlockFile %s\n", filePath);
 
@@ -1886,10 +1888,10 @@ MirrorUnlockFile(DOKAN_UNLOCK_FILE_EVENT *EventInfo) {
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo) {
 
-	WCHAR filePath[MAX_PATH];
+	WCHAR filePath[DOKAN_MAX_PATH];
 	MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
 
-	GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+	GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
 	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
@@ -1991,10 +1993,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVE
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo) {
 
   MIRROR_FILE_HANDLE *mirrorHandle = (MIRROR_FILE_HANDLE*)EventInfo->DokanFileInfo->Context;
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   int error = 0;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"SetFileSecurity %s\n", filePath);
 
@@ -2117,8 +2119,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIB
 	WCHAR volumeRoot[4];
 	DWORD fsFlags = 0;
 	DWORD MaximumComponentLength = 0;
-	DWORD FileSystemNameBuffer = 0;
-	DWORD FileSystemNameSize = 0;
+	WCHAR FileSystemNameBuffer[255];
+	DWORD FileSystemNameSize = 255;
 	
 	EventInfo->Attributes->FileSystemAttributes =
 		FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
@@ -2132,7 +2134,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIB
 	volumeRoot[2] = '\\';
 	volumeRoot[3] = '\0';
 
-	if (GetVolumeInformation(volumeRoot, NULL, 0, NULL, MaximumComponentLength,
+	ZeroMemory(FileSystemNameBuffer, sizeof(FileSystemNameBuffer));
+	if (GetVolumeInformation(volumeRoot, NULL, 0, NULL, &MaximumComponentLength,
 		&fsFlags, FileSystemNameBuffer, FileSystemNameSize)) {
 
 		EventInfo->Attributes->MaximumComponentNameLength = MaximumComponentLength;
@@ -2223,14 +2226,14 @@ NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
 NTSTATUS DOKAN_CALLBACK
 MirrorFindStreams(DOKAN_FIND_STREAMS_EVENT *EventInfo) {
 
-  WCHAR filePath[MAX_PATH];
+  WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE hFind;
   WIN32_FIND_STREAM_DATA findData;
   DOKAN_STREAM_FIND_RESULT findResult = DOKAN_STREAM_BUFFER_CONTINUE;
   DWORD error;
   int count = 0;
 
-  GetFilePath(filePath, MAX_PATH, EventInfo->FileName);
+  GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
 
   DbgPrint(L"FindStreams :%s\n", filePath);
 
