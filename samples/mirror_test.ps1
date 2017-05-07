@@ -87,9 +87,9 @@ foreach ($Platform in $Platforms){
 		
 		$count = 20;
 		if ($destination.StartsWith("C:\")) {
-			while (!(Test-Path "$($destination)\*") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
+			while (!(Test-Path "$($destination)\*" -ErrorAction SilentlyContinue) -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
 		} else {
-			while (!(Test-Path $destination) -and ($count -ne 0)) { Start-Sleep -m 250 ; $count -= 1 }
+			while (!(Test-Path $destination -ErrorAction SilentlyContinue) -and ($count -ne 0)) { Start-Sleep -m 250 ; $count -= 1 }
 		}
 		
 		if ($count -eq 0) {
