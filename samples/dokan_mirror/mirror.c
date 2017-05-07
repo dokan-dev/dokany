@@ -1313,6 +1313,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(DOKAN_WRITE_FILE_EVENT *EventInfo
 
 		  DbgPrint(L"\tcan not get a file size error = %d\n", error);
 
+		  CloseHandle(tmpHandle);
+
 		  return DokanNtStatusFromWin32(error);
 	  }
 
