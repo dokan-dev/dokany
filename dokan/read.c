@@ -21,47 +21,71 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 
-VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                  PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG readLength = 0;
+#include <assert.h>
+
+void BeginDispatchRead(DOKAN_IO_EVENT *EventInfo) {
+
+  PDOKAN_INSTANCE dokan = EventInfo->DokanInstance;
+  DOKAN_READ_FILE_EVENT *readFileEvent = &EventInfo->EventInfo.ReadFile;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  DOKAN_FILE_INFO fileInfo;
-  ULONG sizeOfEventInfo;
 
-  sizeOfEventInfo =
-      sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Read.BufferLength;
+  assert(EventInfo->DokanOpenInfo);
+  assert((void*)readFileEvent == (void*)EventInfo);
+  assert(EventInfo->ProcessingContext == NULL);
 
-  CheckFileName(EventContext->Operation.Read.FileName);
+  CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Read.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  DbgPrint("###Read file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+	  EventInfo->DokanOpenInfo,
+	  EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+	  EventInfo);
 
-  DbgPrint("###Read %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  CreateDispatchCommon(EventInfo, EventInfo->KernelInfo.EventContext.Operation.Read.BufferLength);
 
-  if (DokanInstance->DokanOperations->ReadFile) {
-    status = DokanInstance->DokanOperations->ReadFile(
-        EventContext->Operation.Read.FileName, eventInfo->Buffer,
-        EventContext->Operation.Read.BufferLength, &readLength,
-        EventContext->Operation.Read.ByteOffset.QuadPart, &fileInfo);
+  if (dokan->DokanOperations->ReadFile) {
+
+	readFileEvent->DokanFileInfo = &EventInfo->DokanFileInfo;
+	readFileEvent->FileName = EventInfo->KernelInfo.EventContext.Operation.Read.FileName;
+	readFileEvent->Buffer = EventInfo->EventResult->Buffer;
+	readFileEvent->Offset = EventInfo->KernelInfo.EventContext.Operation.Read.ByteOffset.QuadPart;
+	
+	assert(readFileEvent->NumberOfBytesRead == 0);
+	
+	readFileEvent->NumberOfBytesToRead = EventInfo->KernelInfo.EventContext.Operation.Read.BufferLength;
+
+    status = dokan->DokanOperations->ReadFile(readFileEvent);
+  }
+  else {
+
+    status = STATUS_NOT_IMPLEMENTED;
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-  eventInfo->BufferLength = 0;
-  eventInfo->Status = status;
+  if(status != STATUS_PENDING) {
 
-  if (status == STATUS_SUCCESS) {
-    if (readLength == 0) {
-      eventInfo->Status = STATUS_END_OF_FILE;
-    } else {
-      eventInfo->BufferLength = readLength;
-      eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
-          EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
-    }
+	  DokanEndDispatchRead(readFileEvent, status);
   }
+}
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-  free(eventInfo);
+void DOKANAPI DokanEndDispatchRead(DOKAN_READ_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
+
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+	PEVENT_INFORMATION result = ioEvent->EventResult;
+
+	// STATUS_PENDING should not be passed to this function
+	if(ResultStatus == STATUS_PENDING) {
+
+		DbgPrint("Dokan Error: DokanEndDispatchRead() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		ResultStatus = STATUS_INTERNAL_ERROR;
+	}
+
+	result->Status = ResultStatus;
+	result->BufferLength = EventInfo->NumberOfBytesRead;
+	result->Operation.Read.CurrentByteOffset.QuadPart = EventInfo->Offset + EventInfo->NumberOfBytesRead;
+
+	if(ResultStatus == STATUS_SUCCESS && EventInfo->NumberOfBytesRead == 0) {
+
+		result->Status = STATUS_END_OF_FILE;
+	}
+
+	SendIoEventResult(ioEvent);
 }

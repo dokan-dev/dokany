@@ -48,8 +48,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define IOCTL_EVENT_START                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#define IOCTL_EVENT_WRITE                                                      \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, 0x806, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
 
 #define IOCTL_KEEPALIVE                                                        \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x809, METHOD_NEITHER, FILE_ANY_ACCESS)
@@ -296,42 +294,62 @@ typedef struct _EVENT_CONTEXT {
   } Operation;
 } EVENT_CONTEXT, *PEVENT_CONTEXT;
 
-#define WRITE_MAX_SIZE                                                         \
-  (EVENT_CONTEXT_MAX_SIZE - sizeof(EVENT_CONTEXT) - 256 * sizeof(WCHAR))
+#define DOKAN_EVENT_INFO_MIN_BUFFER_SIZE 8
+#define DOKAN_EVENT_INFO_DEFAULT_BUFFER_SIZE (1024 * 4)
 
 typedef struct _EVENT_INFORMATION {
+
   ULONG SerialNumber;
   NTSTATUS Status;
   ULONG Flags;
+
   union {
     struct {
       ULONG Index;
     } Directory;
+
     struct {
       ULONG Flags;
       ULONG Information;
     } Create;
+
     struct {
       LARGE_INTEGER CurrentByteOffset;
     } Read;
+
     struct {
       LARGE_INTEGER CurrentByteOffset;
+	  ULONG64 BytesWritten;
     } Write;
+
     struct {
       UCHAR DeleteOnClose;
     } Delete;
+
     struct {
       ULONG Timeout;
     } ResetTimeout;
+
     struct {
       HANDLE Handle;
     } AccessToken;
+
   } Operation;
+
   ULONG64 Context;
-  ULONG BufferLength;
-  UCHAR Buffer[8];
+
+  // This must be 64-bit to maintain 8 byte alignment for Buffer on x64
+  ULONG64 BufferLength;
+
+  // This must have 8 byte alignment for x64
+  UCHAR Buffer[DOKAN_EVENT_INFO_MIN_BUFFER_SIZE];
 
 } EVENT_INFORMATION, *PEVENT_INFORMATION;
+
+// By default we pool EVENT_INFORMATION objects with a 4k buffer (1 page) as most read/writes are this size
+// or smaller
+#define DOKAN_EVENT_INFO_DEFAULT_SIZE (offsetof(EVENT_INFORMATION, Buffer) + DOKAN_EVENT_INFO_DEFAULT_BUFFER_SIZE)
+#define DOKAN_EVENT_INFO_ALLOC_SIZE(bufSize) (offsetof(EVENT_INFORMATION, Buffer) + max(DOKAN_EVENT_INFO_MIN_BUFFER_SIZE, (bufSize)))
 
 #define DOKAN_EVENT_ALTERNATIVE_STREAM_ON 1
 #define DOKAN_EVENT_WRITE_PROTECT 2

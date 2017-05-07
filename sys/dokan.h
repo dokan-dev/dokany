@@ -397,18 +397,23 @@ typedef struct _DokanContextControlBlock {
 #define DokanGetFcbOplock(F) &(F)->Oplock
 #endif
 
+typedef union _IRP_ENTRY_CONTEXT {
+	SIZE_T Reserved; // remove this if future fields are added here
+} IRP_ENTRY_CONTEXT, *PIRP_ENTRY_CONTEXT;
+
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
 typedef struct _IRP_ENTRY {
   LIST_ENTRY ListEntry;
-  ULONG SerialNumber;
   PIRP Irp;
   PIO_STACK_LOCATION IrpSp;
   PFILE_OBJECT FileObject;
-  BOOLEAN CancelRoutineFreeMemory;
-  ULONG Flags;
-  LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
+  LARGE_INTEGER TickCount;
+  ULONG SerialNumber;
+  ULONG Flags;
+  IRP_ENTRY_CONTEXT ContextInfo;
+  BOOLEAN CancelRoutineFreeMemory;
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
@@ -549,8 +554,6 @@ DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
 DRIVER_DISPATCH DokanEventStart;
 
-DRIVER_DISPATCH DokanEventWrite;
-
 PEVENT_CONTEXT
 AllocateEventContextRaw(__in ULONG EventContextLength);
 
@@ -561,8 +564,11 @@ AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
 VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext);
 
 NTSTATUS
-DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                        __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
+DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject,
+                        __in PIRP Irp,
+                        __in PEVENT_CONTEXT EventContext,
+                        __in ULONG Flags,
+                        __in IRP_ENTRY_CONTEXT *IrpContext);
 
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);

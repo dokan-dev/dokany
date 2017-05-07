@@ -31,9 +31,39 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokanc.h"
 #include "list.h"
 
+// In appveyor FUSE gets compiled using GCC in Cygwin which doesn't recognize
+// the following definitions
+#ifndef _MSC_VER 
+
+#ifndef _Inout_
+#define _Inout_
+#endif
+
+#ifndef _Inout_opt_
+#define _Inout_opt_
+#endif
+
+#ifndef _In_
+#define _In_
+#endif
+
+#ifndef _Out_
+#define _Out_
+#endif
+
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct _DOKAN_INSTANCE_THREADINFO {
+	PTP_POOL			ThreadPool;
+	PTP_CLEANUP_GROUP	CleanupGroup;
+	PTP_TIMER			KeepAliveTimer;
+	PTP_IO				IoCompletion;
+	TP_CALLBACK_ENVIRON CallbackEnvironment;
+} DOKAN_INSTANCE_THREADINFO;
 
 /**
  * \struct DOKAN_INSTANCE
@@ -46,30 +76,40 @@ extern "C" {
  */
 typedef struct _DOKAN_INSTANCE {
   /** to ensure that unmount dispatch is called at once */
-  CRITICAL_SECTION CriticalSection;
+  CRITICAL_SECTION		CriticalSection;
 
   /**
   * Current DeviceName.
   * When there are many mounts, each mount uses different DeviceName.
   */
-  WCHAR DeviceName[64];
+  WCHAR							DeviceName[64];
+
   /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
-  WCHAR MountPoint[MAX_PATH];
+  WCHAR							MountPoint[MAX_PATH];
+
   /** UNC name used for network volume */
-  WCHAR UNCName[64];
+  WCHAR							UNCName[64];
 
   /** Device number */
-  ULONG DeviceNumber;
+  ULONG							DeviceNumber;
+
   /** Mount ID */
-  ULONG MountId;
+  ULONG							MountId;
 
   /** DOKAN_OPTIONS linked to the mount */
-  PDOKAN_OPTIONS DokanOptions;
+  PDOKAN_OPTIONS				DokanOptions;
+
   /** DOKAN_OPERATIONS linked to the mount */
-  PDOKAN_OPERATIONS DokanOperations;
+  PDOKAN_OPERATIONS				DokanOperations;
 
   /** Current list entry informations */
-  LIST_ENTRY ListEntry;
+  LIST_ENTRY					ListEntry;
+  
+  HANDLE						GlobalDevice;
+  HANDLE						Device;
+  HANDLE						DeviceClosedWaitHandle;
+  DOKAN_INSTANCE_THREADINFO		ThreadInfo;
+
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
 /**
@@ -79,23 +119,101 @@ typedef struct _DOKAN_INSTANCE {
  * This is created in CreateFile and will be freed in CloseFile.
  */
 typedef struct _DOKAN_OPEN_INFO {
-  /** DOKAN_OPTIONS linked to the mount */
-  BOOL IsDirectory;
-  /** Open count on the file */
-  ULONG OpenCount;
-  /** Event context */
-  PEVENT_CONTEXT EventContext;
-  /** Dokan instance linked to the open */
-  PDOKAN_INSTANCE DokanInstance;
-  /** User Context see DOKAN_FILE_INFO.Context */
-  ULONG64 UserContext;
-  /** Event Id */
-  ULONG EventId;
-  /** Directories list. Used by FindFiles */
-  PLIST_ENTRY DirListHead;
-  /** File streams list. Used by FindStreams */
-  PLIST_ENTRY StreamListHead;
+  CRITICAL_SECTION		CriticalSection;
+  PDOKAN_INSTANCE		DokanInstance;
+  DOKAN_VECTOR			*DirList;
+  PWCHAR				DirListSearchPattern;
+  volatile LONG64		UserContext;
+  ULONG					EventId;
+  BOOL					IsDirectory;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
+
+typedef enum _DOKAN_OVERLAPPED_TYPE {
+
+	// The overlapped operation contains a DOKAN_IO_EVENT as its payload
+	DOKAN_OVERLAPPED_TYPE_IOEVENT = 0,
+
+	// The overlapped operation payload contains a result being passed back to the
+	// kernel driver. Results are represented as an EVENT_INFORMATION struct.
+	DOKAN_OVERLAPPED_TYPE_IOEVENT_RESULT,
+
+} DOKAN_OVERLAPPED_TYPE;
+
+typedef enum _DOKAN_IO_EVENT_FLAGS {
+	
+	// There are no flags set
+	DOKAN_IO_EVENT_FLAGS_NONE = 0,
+
+	// The DOKAN_IO_EVENT object associated with the IO event
+	// was allocated from a global pool and should be returned to
+	// that pool instead of free'd
+	DOKAN_IO_EVENT_FLAGS_POOLED = 1,
+
+	// The EVENT_INFORMATION object associated with the IO event
+	// was allocated from a global pool and should be returned to
+	// that pool instead of free'd
+	DOKAN_IO_EVENT_FLAGS_POOLED_RESULT = (1 << 1),
+
+} DOKAN_IO_EVENT_FLAGS;
+
+// See DeviceIoControl() for how InputPayload and OutputLoad are used as it's not entirely intuitive
+// https://msdn.microsoft.com/en-us/library/windows/desktop/aa363216%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+typedef struct _DOKAN_OVERLAPPED {
+	OVERLAPPED				InternalOverlapped;
+	void					*InputPayload;
+	void					*OutputPayload;
+	DOKAN_OVERLAPPED_TYPE	PayloadType;
+	DOKAN_IO_EVENT_FLAGS	Flags;
+} DOKAN_OVERLAPPED;
+
+typedef struct _DOKAN_IO_EVENT {
+	union {
+		DOKAN_CREATE_FILE_EVENT				ZwCreateFile;
+		DOKAN_CLEANUP_EVENT					Cleanup;
+		DOKAN_CLOSE_FILE_EVENT				CloseFile;
+		DOKAN_READ_FILE_EVENT				ReadFile;
+		DOKAN_WRITE_FILE_EVENT				WriteFile;
+		DOKAN_FLUSH_BUFFERS_EVENT			FlushBuffers;
+		DOKAN_GET_FILE_INFO_EVENT			GetFileInfo;
+		DOKAN_FIND_FILES_EVENT				FindFiles;
+		DOKAN_FIND_FILES_PATTERN_EVENT		FindFilesWithPattern;
+		DOKAN_SET_FILE_BASIC_INFO_EVENT		SetFileBasicInformation;
+		DOKAN_CAN_DELETE_FILE_EVENT			CanDeleteFile;
+		DOKAN_MOVE_FILE_EVENT				MoveFileW;
+		DOKAN_SET_EOF_EVENT					SetEOF;
+		DOKAN_SET_ALLOCATION_SIZE_EVENT		SetAllocationSize;
+		DOKAN_LOCK_FILE_EVENT				LockFile;
+		DOKAN_UNLOCK_FILE_EVENT				UnlockFile;
+		DOKAN_GET_DISK_FREE_SPACE_EVENT		GetVolumeFreeSpace;
+		DOKAN_GET_VOLUME_INFO_EVENT			GetVolumeInfo;
+		DOKAN_GET_VOLUME_ATTRIBUTES_EVENT	GetVolumeAttributes;
+		DOKAN_GET_FILE_SECURITY_EVENT		GetFileSecurityW;
+		DOKAN_SET_FILE_SECURITY_EVENT		SetFileSecurityW;
+		DOKAN_FIND_STREAMS_EVENT			FindStreams;
+	} EventInfo;
+
+	// If the processing for the event requires extra data to be associated with it
+	// then a pointer to that data can be placed here
+	void								*ProcessingContext;
+
+	PDOKAN_INSTANCE						DokanInstance;
+	DOKAN_OPEN_INFO						*DokanOpenInfo;
+	PEVENT_INFORMATION					EventResult;
+	ULONG								EventResultSize;
+	ULONG								KernelInfoSize;
+	ULONG								Size;
+	DOKAN_IO_EVENT_FLAGS				Flags;
+	DOKAN_FILE_INFO						DokanFileInfo;
+
+	union {
+		BYTE							EventContextBuffer[EVENT_CONTEXT_MAX_SIZE];
+		EVENT_CONTEXT					EventContext;
+	} KernelInfo;
+} DOKAN_IO_EVENT, *PDOKAN_IO_EVENT;
+
+#define IoEventResultBufferSize(ioEvent) ((ioEvent)->EventResultSize >= offsetof(EVENT_INFORMATION, Buffer) ? (ioEvent)->EventResultSize - offsetof(EVENT_INFORMATION, Buffer) : 0)
+#define DOKAN_IO_EVENT_ALLOC_SIZE(bufSize) (offsetof(DOKAN_IO_EVENT, KernelInfo) + (bufSize))
+#define DOKAN_IO_EVENT_KERNEL_INFO_SIZE(ioEvent) ((ioEvent)->Size - offsetof(DOKAN_IO_EVENT, KernelInfo))
 
 BOOL DokanStart(PDOKAN_INSTANCE Instance);
 
@@ -109,59 +227,52 @@ GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
 
 void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions);
 
-UINT __stdcall DokanLoop(PVOID Param);
+VOID CALLBACK DokanLoop(
+	_Inout_     PTP_CALLBACK_INSTANCE Instance,
+	_Inout_opt_ PVOID                 Context,
+	_Inout_opt_ PVOID                 Overlapped,
+	_In_        ULONG                 IoResult,
+	_In_        ULONG_PTR             NumberOfBytesTransferred,
+	_Inout_     PTP_IO                Io
+);
 
 BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
                 PDOKAN_OPTIONS DokanOptions);
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 
-VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
-                          ULONG EventLength, PDOKAN_INSTANCE DokanInstance);
+BOOL SendEventInformation(PEVENT_INFORMATION EventInfo,
+	PDOKAN_INSTANCE DokanInstance, DOKAN_IO_EVENT_FLAGS EventFlags);
 
-PEVENT_INFORMATION
-DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
-               PDOKAN_INSTANCE DokanInstance, PDOKAN_FILE_INFO DokanFileInfo,
-               PDOKAN_OPEN_INFO *DokanOpenInfo);
+void CreateDispatchCommon(DOKAN_IO_EVENT *EventInfo, ULONG SizeOfEventInfo);
 
-VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                                  PDOKAN_INSTANCE DokanInstance);
+void FreeIoEventResult(PEVENT_INFORMATION EventResult, DOKAN_IO_EVENT_FLAGS Flags);
 
-VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                              PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                                    PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchQueryInformation(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                            PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchQueryVolumeInformation(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                  PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchRead(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchCreate(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                    PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchWrite(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchCleanup(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                     PDOKAN_INSTANCE DokanInstance);
+void DispatchClose(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance);
+void DispatchCleanup(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                  PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchFlush(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                           PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchLock(DOKAN_IO_EVENT *EventInfo);
 
-VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                         PDOKAN_INSTANCE DokanInstance);
+void BeginDispatchQuerySecurity(DOKAN_IO_EVENT *EventInfo);
+
+void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo);
 
 BOOLEAN
 InstallDriver(SC_HANDLE SchSCManager, LPCWSTR DriverName, LPCWSTR ServiceExe);
@@ -188,13 +299,41 @@ VOID ClearFindData(PLIST_ENTRY ListHead);
 
 VOID ClearFindStreamData(PLIST_ENTRY ListHead);
 
-UINT WINAPI DokanKeepAlive(PVOID Param);
+void NTAPI DokanKeepAlive(
+	_Inout_     PTP_CALLBACK_INSTANCE Instance,
+	_Inout_opt_ PVOID                 Context,
+	_Inout_     PTP_TIMER             Timer
+);
 
-PDOKAN_OPEN_INFO
-GetDokanOpenInfo(PEVENT_CONTEXT EventInfomation, PDOKAN_INSTANCE DokanInstance);
+BOOL SendIoEventResult(DOKAN_IO_EVENT *EventInfo);
 
-VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInfomation,
-                          PDOKAN_INSTANCE DokanInstance);
+DOKAN_IO_EVENT* PopIoEventBuffer();
+void PushIoEventBuffer(DOKAN_IO_EVENT *IOEvent);
+
+DOKAN_OVERLAPPED* PopOverlapped();
+void PushOverlapped(DOKAN_OVERLAPPED *overlapped);
+void ResetOverlapped(DOKAN_OVERLAPPED *overlapped);
+
+EVENT_INFORMATION* PopEventResult();
+void PushEventResult(EVENT_INFORMATION *EventResult);
+
+DOKAN_OPEN_INFO* PopFileOpenInfo();
+void PushFileOpenInfo(DOKAN_OPEN_INFO *FileInfo);
+
+DOKAN_VECTOR* PopDirectoryList();
+void PushDirectoryList(DOKAN_VECTOR *DirectoryList);
+
+void DokanNotifyUnmounted(DOKAN_INSTANCE *Instance);
+
+void* DokanMallocImpl(size_t size, const char *fileName, int lineNumber);
+void DokanFreeImpl(void *userData);
+void* DokanReallocImpl(void *userData, size_t newSize, const char *fileName, int lineNumber);
+LPWSTR DokanDupWImpl(LPCWSTR str, const char *fileName, int lineNumber);
+
+#define DokanMalloc(size) DokanMallocImpl((size), __FILE__, __LINE__)
+#define DokanFree(userData) DokanFreeImpl(userData)
+#define DokanRealloc(userData, newSize) DokanReallocImpl((userData), (newSize), __FILE__, __LINE__)
+#define DokanDupW(str) DokanDupWImpl((str), __FILE__, __LINE__)
 
 #ifdef __cplusplus
 }

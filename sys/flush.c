@@ -97,7 +97,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     // register this IRP to waiting IRP list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
     if(fcb)

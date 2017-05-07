@@ -237,7 +237,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   fcb->FileName.Length);
 
     // register this IRP to pending IPR list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
     if (fcb)
@@ -292,10 +292,10 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
     ASSERT(buffer != NULL);
 
     RtlZeroMemory(buffer, bufferLen);
-    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    RtlCopyMemory(buffer, EventInfo->Buffer, (SIZE_T)EventInfo->BufferLength);
 
     // written bytes
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
     status = EventInfo->Status;
 
     if (NT_SUCCESS(status) &&
@@ -432,6 +432,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   BOOLEAN isPagingIo = FALSE;
   BOOLEAN fcbLocked = FALSE;
   PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
+  ULONG bufferOffset;
 
   vcb = DeviceObject->DeviceExtension;
 
@@ -551,8 +552,13 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // it is sum of file name length and size of FileInformation
     DokanFCBLockRW(fcb);
     fcbLocked = TRUE;
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length +
-                  irpSp->Parameters.SetFile.Length;
+
+	bufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName) + fcb->FileName.Length + sizeof(WCHAR);
+
+	// the set file information must be ptr aligned
+	bufferOffset = (ULONG)ALIGN_UP(bufferOffset, ULONG_PTR);
+
+	eventLength = max(sizeof(EVENT_CONTEXT), bufferOffset + irpSp->Parameters.SetFile.Length);
 
     targetFileObject = irpSp->Parameters.SetFile.FileObject;
 
@@ -578,9 +584,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         irpSp->Parameters.SetFile.Length;
 
     // the offset from begining of structure to fill FileInfo
-    eventContext->Operation.SetFile.BufferOffset =
-        FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
-        fcb->FileName.Length + sizeof(WCHAR); // the last null char
+	eventContext->Operation.SetFile.BufferOffset = bufferOffset;
 
     BOOLEAN isRenameOrLink =
         irpSp->Parameters.SetFile.FileInformationClass ==
@@ -676,11 +680,12 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     // register this IRP to waiting IRP list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
-    if (fcbLocked)
+    if(fcbLocked) {
       DokanFCBUnlock(fcb);
+    }
 
     DokanCompleteIrpRequest(Irp, status, 0);
 
@@ -722,7 +727,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     ccb->UserContext = EventInfo->Context;
 
-    info = EventInfo->BufferLength;
+    info = (ULONG)EventInfo->BufferLength;
 
     infoClass = irpSp->Parameters.SetFile.FileInformationClass;
 
@@ -763,7 +768,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         oldFileName.MaximumLength = (USHORT)fcb->FileName.Length;
 
         // copy new file name
-        buffer = ExAllocatePool(EventInfo->BufferLength + sizeof(WCHAR));
+        buffer = ExAllocatePool((SIZE_T)(EventInfo->BufferLength + sizeof(WCHAR)));
 
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
@@ -777,9 +782,9 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         ASSERT(fcb->FileName.Buffer != NULL);
 
         RtlZeroMemory(fcb->FileName.Buffer,
-                      EventInfo->BufferLength + sizeof(WCHAR));
+			(SIZE_T)(EventInfo->BufferLength + sizeof(WCHAR)));
         RtlCopyMemory(fcb->FileName.Buffer, EventInfo->Buffer,
-                      EventInfo->BufferLength);
+			(SIZE_T)EventInfo->BufferLength);
 
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;

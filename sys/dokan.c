@@ -444,24 +444,35 @@ VOID DokanPrintNTStatus(NTSTATUS Status) {
   PrintStatus(Status, STATUS_INVALID_DEVICE_REQUEST);
   PrintStatus(Status, STATUS_VOLUME_DISMOUNTED);
   PrintStatus(Status, STATUS_NO_SUCH_DEVICE);
+  PrintStatus(Status, STATUS_BUFFER_TOO_SMALL);
 }
 
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
                              __in ULONG_PTR Info) {
   if (Irp == NULL) {
+
     DDbgPrint("  Irp is NULL, so no complete required\n");
     return;
   }
+
   if (Status == -1) {
+
     DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
     Status = STATUS_INVALID_PARAMETER;
   }
+
   if (Status != STATUS_PENDING) {
+
     Irp->IoStatus.Status = Status;
     Irp->IoStatus.Information = Info;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
   }
-  DokanPrintNTStatus(Status);
+
+  // early out avoiding a bazillion checks of g_Debug
+  if(g_Debug) {
+
+	  DokanPrintNTStatus(Status);
+  }
 }
 
 VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,

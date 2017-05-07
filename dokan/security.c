@@ -21,16 +21,14 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 #include <sddl.h>
+#include <assert.h>
+
 /*
  * DefaultGetFileSecurity build a sddl of the current process user
  * with authenticate user rights for context menu. (New Folder, ...)
  * TODO - Only calcul one time the user group sid
  */
-NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
-                                PSECURITY_INFORMATION SecurityInformation,
-                                PSECURITY_DESCRIPTOR SecurityDescriptor,
-                                ULONG BufferLength, PULONG LengthNeeded,
-                                PDOKAN_FILE_INFO DokanFileInfo) {
+NTSTATUS DefaultGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *getFileSecurity) {
   WCHAR buffer[1024];
   WCHAR finalBuffer[2048];
   PTOKEN_USER userToken = NULL;
@@ -38,7 +36,7 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   HANDLE tokenHandle;
   LPTSTR userSidString = NULL, groupSidString = NULL;
 
-  UNREFERENCED_PARAMETER(FileName);
+  UNREFERENCED_PARAMETER(getFileSecurity->FileName);
 
   if (OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &tokenHandle) ==
       FALSE) {
@@ -84,7 +82,7 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   CloseHandle(tokenHandle);
 
   // Authenticated users rights
-  if (DokanFileInfo->IsDirectory) {
+  if (getFileSecurity->DokanFileInfo->IsDirectory) {
     swprintf_s(finalBuffer, 2048, L"%lsD:PAI(A;OICI;FA;;;AU)", buffer);
   } else {
     swprintf_s(finalBuffer, 2048, L"%lsD:AI(A;ID;FA;;;AU)", buffer);
@@ -99,7 +97,7 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
 
   LPTSTR pStringBuffer = NULL;
   if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-          SecurityDescriptorTmp, SDDL_REVISION_1, *SecurityInformation,
+          SecurityDescriptorTmp, SDDL_REVISION_1, getFileSecurity->SecurityInformation,
           &pStringBuffer, NULL)) {
     return STATUS_NOT_IMPLEMENTED;
   }
@@ -112,13 +110,13 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
     return STATUS_NOT_IMPLEMENTED;
   }
 
-  if (Size > BufferLength) {
-    *LengthNeeded = Size;
+  if (Size > getFileSecurity->SecurityDescriptorSize) {
+    getFileSecurity->LengthNeeded = Size;
     return STATUS_BUFFER_OVERFLOW;
   }
 
-  memcpy(SecurityDescriptor, SecurityDescriptorTmp, Size);
-  *LengthNeeded = Size;
+  memcpy(getFileSecurity->SecurityDescriptor, SecurityDescriptorTmp, Size);
+  getFileSecurity->LengthNeeded = Size;
 
   LocalFree(pStringBuffer);
   LocalFree(SecurityDescriptorTmp);
@@ -126,95 +124,128 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   return STATUS_SUCCESS;
 }
 
-VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                           PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG eventInfoLength;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  ULONG lengthNeeded = 0;
+void BeginDispatchQuerySecurity(DOKAN_IO_EVENT *EventInfo) {
 
-  eventInfoLength = sizeof(EVENT_INFORMATION) - 8 +
-                    EventContext->Operation.Security.BufferLength;
-  CheckFileName(EventContext->Operation.Security.FileName);
+	DOKAN_GET_FILE_SECURITY_EVENT *getFileSecurity = &EventInfo->EventInfo.GetFileSecurityW;
+	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-  eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
-                             &fileInfo, &openInfo);
+	DbgPrint("###GetFileSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+		EventInfo->DokanOpenInfo,
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
 
-  DbgPrint("###GetFileSecurity %04d\n",
-           openInfo != NULL ? openInfo->EventId : -1);
+	assert(EventInfo->DokanOpenInfo);
+	assert((void*)getFileSecurity == (void*)EventInfo);
+	assert(EventInfo->ProcessingContext == NULL);
 
-  if (DokanInstance->DokanOperations->GetFileSecurity) {
-    status = DokanInstance->DokanOperations->GetFileSecurity(
-        EventContext->Operation.Security.FileName,
-        &EventContext->Operation.Security.SecurityInformation,
-        &eventInfo->Buffer, EventContext->Operation.Security.BufferLength,
-        &lengthNeeded, &fileInfo);
-  }
+	CheckFileName(EventInfo->KernelInfo.EventContext.Operation.Security.FileName);
 
-  if (status == STATUS_NOT_IMPLEMENTED) {
-    status = DefaultGetFileSecurity(
-        EventContext->Operation.Security.FileName,
-        &EventContext->Operation.Security.SecurityInformation,
-        &eventInfo->Buffer, EventContext->Operation.Security.BufferLength,
-        &lengthNeeded, &fileInfo);
-  }
+	CreateDispatchCommon(EventInfo, EventInfo->KernelInfo.EventContext.Operation.Security.BufferLength);
 
-  eventInfo->Status = status;
+	if(EventInfo->DokanInstance->DokanOperations->GetFileSecurityW) {
 
-  if (status != STATUS_SUCCESS && status != STATUS_BUFFER_OVERFLOW) {
-    eventInfo->BufferLength = 0;
-  } else {
-    eventInfo->BufferLength = lengthNeeded;
+		getFileSecurity->DokanFileInfo = &EventInfo->DokanFileInfo;
+		getFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.Security.FileName;
+		getFileSecurity->SecurityDescriptor = (PSECURITY_DESCRIPTOR)&EventInfo->EventResult->Buffer[0];
+		getFileSecurity->SecurityInformation = EventInfo->KernelInfo.EventContext.Operation.Security.SecurityInformation;
+		getFileSecurity->SecurityDescriptorSize = IoEventResultBufferSize(EventInfo);
 
-    if (EventContext->Operation.Security.BufferLength < lengthNeeded) {
-      // Filesystem Application should return STATUS_BUFFER_OVERFLOW in this
-      // case.
-      eventInfo->Status = STATUS_BUFFER_OVERFLOW;
-    }
-  }
+		assert(getFileSecurity->LengthNeeded == 0);
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength, DokanInstance);
-  free(eventInfo);
+		status = EventInfo->DokanInstance->DokanOperations->GetFileSecurityW(getFileSecurity);
+
+		if (status == STATUS_NOT_IMPLEMENTED) {
+			status = DefaultGetFileSecurity(getFileSecurity);
+		}
+	}
+
+	if(status != STATUS_PENDING) {
+
+		DokanEndDispatchGetFileSecurity(getFileSecurity, status);
+	}
 }
 
-VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                         PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG eventInfoLength;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  PSECURITY_DESCRIPTOR securityDescriptor;
+void DOKANAPI DokanEndDispatchGetFileSecurity(DOKAN_GET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
-  eventInfoLength = sizeof(EVENT_INFORMATION);
-  CheckFileName(EventContext->Operation.SetSecurity.FileName);
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+	PEVENT_INFORMATION result = ioEvent->EventResult;
 
-  eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
-                             &fileInfo, &openInfo);
+	// STATUS_PENDING should not be passed to this function
+	if(ResultStatus == STATUS_PENDING) {
 
-  DbgPrint("###SetSecurity %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+		DbgPrint("Dokan Error: DokanEndDispatchGetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		ResultStatus = STATUS_INTERNAL_ERROR;
+	}
 
-  securityDescriptor =
-      (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;
+	assert(result->BufferLength == 0);
 
-  if (DokanInstance->DokanOperations->SetFileSecurity) {
-    status = DokanInstance->DokanOperations->SetFileSecurity(
-        EventContext->Operation.SetSecurity.FileName,
-        &EventContext->Operation.SetSecurity.SecurityInformation,
-        securityDescriptor, EventContext->Operation.SetSecurity.BufferLength,
-        &fileInfo);
-  }
+	if(ResultStatus == STATUS_SUCCESS) {
 
-  if (status != STATUS_SUCCESS) {
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
-    eventInfo->BufferLength = 0;
-  } else {
-    eventInfo->Status = STATUS_SUCCESS;
-    eventInfo->BufferLength = 0;
-  }
+		if(EventInfo->LengthNeeded > IoEventResultBufferSize(ioEvent)) {
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength, DokanInstance);
-  free(eventInfo);
+			ResultStatus = STATUS_BUFFER_OVERFLOW;
+		}
+		else {
+
+			result->BufferLength = EventInfo->LengthNeeded;
+		}
+	}
+
+	result->Status = ResultStatus;
+
+	SendIoEventResult(ioEvent);
+}
+
+void BeginDispatchSetSecurity(DOKAN_IO_EVENT *EventInfo) {
+
+	DOKAN_SET_FILE_SECURITY_EVENT *setFileSecurity = &EventInfo->EventInfo.SetFileSecurityW;
+	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+
+	DbgPrint("###SetSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+		EventInfo->DokanOpenInfo,
+		EventInfo->DokanOpenInfo != NULL ? EventInfo->DokanOpenInfo->EventId : -1,
+		EventInfo);
+
+	assert(EventInfo->DokanOpenInfo);
+	assert((void*)setFileSecurity == (void*)EventInfo);
+	assert(EventInfo->ProcessingContext == NULL);
+
+	CheckFileName(EventInfo->KernelInfo.EventContext.Operation.SetSecurity.FileName);
+
+	CreateDispatchCommon(EventInfo, 0);
+
+	if(EventInfo->DokanInstance->DokanOperations->SetFileSecurityW) {
+
+		setFileSecurity->DokanFileInfo = &EventInfo->DokanFileInfo;
+		setFileSecurity->FileName = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.FileName;
+		setFileSecurity->SecurityDescriptor = (PCHAR)&EventInfo->KernelInfo.EventContext + EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferOffset;
+		setFileSecurity->SecurityInformation = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.SecurityInformation;
+		setFileSecurity->SecurityDescriptorSize = EventInfo->KernelInfo.EventContext.Operation.SetSecurity.BufferLength;
+
+		status = EventInfo->DokanInstance->DokanOperations->SetFileSecurityW(setFileSecurity);
+	}
+
+	if(status != STATUS_PENDING) {
+
+		DokanEndDispatchSetFileSecurity(setFileSecurity, status);
+	}
+}
+
+void DOKANAPI DokanEndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *EventInfo, NTSTATUS ResultStatus) {
+
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
+	PEVENT_INFORMATION result = ioEvent->EventResult;
+
+	// STATUS_PENDING should not be passed to this function
+	if(ResultStatus == STATUS_PENDING) {
+
+		DbgPrint("Dokan Error: DokanEndDispatchSetFileSecurity() failed because STATUS_PENDING was supplied for ResultStatus.\n");
+		ResultStatus = STATUS_INTERNAL_ERROR;
+	}
+
+	assert(result->BufferLength == 0);
+
+	result->Status = ResultStatus;
+
+	SendIoEventResult(ioEvent);
 }

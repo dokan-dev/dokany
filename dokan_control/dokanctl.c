@@ -109,6 +109,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   PVOID wow64OldValue;
   BOOL isAdmin;
 
+  DokanInit(NULL);
   isAdmin = IsUserAnAdmin();
 
   DokanUseStdErr(TRUE); // Set dokan library debug output
@@ -130,6 +131,9 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   WCHAR option = GetOption(argc, argv, 1);
   if (option == L'\0') {
+
+    DokanShutdown();
+
     return ShowUsage();
   }
 
@@ -144,7 +148,12 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   case L'i': {
     WCHAR type = towlower(argv[2][0]);
     if (type == L'd') {
-      return InstallDriver(driverFullPath);
+      int result = InstallDriver(driverFullPath);
+
+	  DokanShutdown();
+
+	  return result;
+
     } else if (type == L'n') {
       if (DokanNetworkProviderInstall())
         fprintf(stdout, "network provider install ok\n");
@@ -158,7 +167,12 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   case L'r': {
     WCHAR type = towlower(argv[2][0]);
     if (type == L'd') {
-      return DeleteDokanService(DOKAN_DRIVER_SERVICE);
+      int result = DeleteDokanService(DOKAN_DRIVER_SERVICE);
+
+	  DokanShutdown();
+
+	  return result;
+
     } else if (type == L'n') {
       if (DokanNetworkProviderUninstall())
         fprintf(stdout, "network provider remove ok\n");
@@ -186,7 +200,11 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     if (argc < 3) {
       goto DEFAULT;
     }
-    return Unmount(argv[2]);
+    int result = Unmount(argv[2]);
+
+    DokanShutdown();
+
+    return result;
   } break;
 
   // No admin rights required
@@ -224,6 +242,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   default:
     fprintf(stderr, "Unknown option - Use /? to show usage\n");
   }
+
+  DokanShutdown();
 
   return EXIT_SUCCESS;
 }

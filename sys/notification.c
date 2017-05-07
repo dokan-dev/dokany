@@ -266,51 +266,76 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
     buffer = irp->AssociatedIrp.SystemBuffer;
 
     // buffer is not specified or short of length
-    if (bufferLen == 0 || buffer == NULL || bufferLen < eventLen) {
-      DDbgPrint("EventNotice : STATUS_INSUFFICIENT_RESOURCES\n");
-      DDbgPrint("  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
+    if (bufferLen == 0 || buffer == NULL) {
+
+      DDbgPrint("EventNotice : STATUS_BUFFER_TOO_SMALL\n  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
+
       // push back
       InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
-      // marks as STATUS_INSUFFICIENT_RESOURCES
+
       irpEntry->SerialNumber = 0;
-    } else {
+	  irp->IoStatus.Information = 0;
+	  irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL;
+
+    }
+	else if(bufferLen < eventLen) {
+
+		DDbgPrint("EventNotice : STATUS_BUFFER_OVERFLOW\n  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
+
+		// push back
+		InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+
+		irpEntry->SerialNumber = min(bufferLen, (ULONG)sizeof(EVENT_CONTEXT));
+		irp->IoStatus.Information = irpEntry->SerialNumber;
+		irp->IoStatus.Status = STATUS_BUFFER_OVERFLOW;
+
+		RtlCopyMemory(buffer, &driverEventContext->EventContext, irpEntry->SerialNumber);
+	}
+	else {
+
       // let's copy EVENT_CONTEXT
       RtlCopyMemory(buffer, &driverEventContext->EventContext, eventLen);
+
       // save event length
       irpEntry->SerialNumber = eventLen;
+	  irp->IoStatus.Information = irpEntry->SerialNumber;
+	  irp->IoStatus.Status = STATUS_SUCCESS;
 
       if (driverEventContext->Completed) {
+
         KeSetEvent(driverEventContext->Completed, IO_NO_INCREMENT, FALSE);
       }
+
       ExFreePool(driverEventContext);
     }
+
     InsertTailList(&completeList, &irpEntry->ListEntry);
   }
 
   DDbgPrint("Clear Events...\n");
   KeClearEvent(&NotifyEvent->NotEmpty);
+
   DDbgPrint("Notify event cleared\n");
   KeClearEvent(&PendingIrp->NotEmpty);
+
   DDbgPrint("Pending event cleared\n");
 
   DDbgPrint("Release SpinLock...\n");
   KeReleaseSpinLock(&NotifyEvent->ListLock, notifyIrql);
+
   DDbgPrint("SpinLock notify Released\n");
   KeReleaseSpinLock(&PendingIrp->ListLock, irpIrql);
+
   DDbgPrint("SpinLock irp Released\n");
 
   while (!IsListEmpty(&completeList)) {
+
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
     irp = irpEntry->Irp;
-    if (irpEntry->SerialNumber == 0) {
-      irp->IoStatus.Information = 0;
-      irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-    } else {
-      irp->IoStatus.Information = irpEntry->SerialNumber;
-      irp->IoStatus.Status = STATUS_SUCCESS;
-    }
+
     DokanFreeIrpEntry(irpEntry);
+
     DokanCompleteIrpRequest(irp, irp->IoStatus.Status,
                             irp->IoStatus.Information);
   }

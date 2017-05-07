@@ -203,7 +203,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
 
       // register this IRP to waiting IRP list and make it pending status
-      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
     } else {
       status = DokanCommonLockControl(Irp);
       completeIrp = FALSE;

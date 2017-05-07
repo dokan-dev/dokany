@@ -55,52 +55,79 @@ extern BOOL g_UseStdErr;
 #ifdef _MSC_VER
 
 static VOID DokanDbgPrint(LPCSTR format, ...) {
+
   const char *outputString;
   char *buffer;
   size_t length;
   va_list argp;
 
   va_start(argp, format);
+
   length = _vscprintf(format, argp) + 1;
+
   buffer = (char *)_malloca(length * sizeof(char));
+
   if (buffer) {
+
     vsprintf_s(buffer, length, format, argp);
     outputString = buffer;
-  } else {
+  }
+  else {
+
     outputString = format;
   }
-  if (g_UseStdErr)
-    fputs(outputString, stderr);
-  else
-    OutputDebugStringA(outputString);
-  if (buffer)
-    _freea(buffer);
+
+  OutputDebugStringA(outputString);
+
+  if(g_UseStdErr) {
+	  
+	  fputs(outputString, stderr);
+	  fflush(stderr);
+  }
+    
+  if(buffer) {
+	  _freea(buffer);
+  }
+  
   va_end(argp);
-  if (g_UseStdErr)
-    fflush(stderr);
 }
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
+
   const WCHAR *outputString;
   WCHAR *buffer;
   size_t length;
   va_list argp;
 
   va_start(argp, format);
+
   length = _vscwprintf(format, argp) + 1;
+
   buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
+
   if (buffer) {
+
     vswprintf_s(buffer, length, format, argp);
     outputString = buffer;
-  } else {
+  }
+  else {
+
     outputString = format;
   }
-  if (g_UseStdErr)
-    fputws(outputString, stderr);
-  else
-    OutputDebugStringW(outputString);
-  if (buffer)
-    _freea(buffer);
+
+  OutputDebugStringW(outputString);
+
+  if(g_UseStdErr) {
+
+	  fputws(outputString, stderr);
+	  fflush(stderr);
+  }
+
+  if(buffer) {
+
+	  _freea(buffer);
+  }
+
   va_end(argp);
 }
 
