@@ -298,13 +298,58 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
     info = EventInfo->BufferLength;
     status = EventInfo->Status;
 
-    if (NT_SUCCESS(status) &&
-        irpSp->Parameters.QueryFile.FileInformationClass ==
+    if (NT_SUCCESS(status)) {
+      if (irpSp->Parameters.QueryFile.FileInformationClass ==
+          FileAllInformation) {
+        PFILE_ALL_INFORMATION allInfo = (PFILE_ALL_INFORMATION)buffer;
+        allInfo->PositionInformation.CurrentByteOffset =
+            IrpEntry->FileObject->CurrentByteOffset;
+      }
+
+      //Update file size to FCB
+      if (irpSp->Parameters.QueryFile.FileInformationClass ==
+              FileAllInformation ||
+          irpSp->Parameters.QueryFile.FileInformationClass ==
+              FileStandardInformation ||
+          irpSp->Parameters.QueryFile.FileInformationClass ==
+              FileNetworkOpenInformation) {
+        FSRTL_ADVANCED_FCB_HEADER *header = IrpEntry->FileObject->FsContext;
+        LONGLONG allocationSize = 0;
+        LONGLONG fileSize = 0;
+
+        ASSERT(header != NULL);
+
+        if (irpSp->Parameters.QueryFile.FileInformationClass ==
             FileAllInformation) {
 
-      PFILE_ALL_INFORMATION allInfo = (PFILE_ALL_INFORMATION)buffer;
-      allInfo->PositionInformation.CurrentByteOffset =
-          IrpEntry->FileObject->CurrentByteOffset;
+          PFILE_ALL_INFORMATION allInfo = (PFILE_ALL_INFORMATION)buffer;
+          allocationSize = allInfo->StandardInformation.AllocationSize.QuadPart;
+          fileSize = allInfo->StandardInformation.EndOfFile.QuadPart;
+
+        } else if (irpSp->Parameters.QueryFile.FileInformationClass ==
+                   FileStandardInformation) {
+
+          PFILE_STANDARD_INFORMATION standardInfo =
+              (PFILE_STANDARD_INFORMATION)buffer;
+          allocationSize = standardInfo->AllocationSize.QuadPart;
+          fileSize = standardInfo->EndOfFile.QuadPart;
+
+        } else if (irpSp->Parameters.QueryFile.FileInformationClass ==
+                   FileNetworkOpenInformation) {
+
+          PFILE_NETWORK_OPEN_INFORMATION networkInfo =
+              (PFILE_NETWORK_OPEN_INFORMATION)buffer;
+          allocationSize = networkInfo->AllocationSize.QuadPart;
+          fileSize = networkInfo->EndOfFile.QuadPart;
+
+        }
+
+        header->AllocationSize.QuadPart = allocationSize;
+        header->FileSize.QuadPart = fileSize;
+
+        DDbgPrint("  AllocationSize: %llu, EndOfFile: %llu\n", allocationSize,
+                  fileSize);
+      }
     }
   }
 
@@ -486,11 +531,13 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
         pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
 
-        if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
-                                  &pInfoEoF->EndOfFile)) {
-          status = STATUS_USER_MAPPED_FILE;
-          __leave;
-        }
+		if (pInfoEoF->EndOfFile.QuadPart < fcb->AdvancedFCBHeader.FileSize.QuadPart)
+		{
+			if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer, &pInfoEoF->EndOfFile)) {
+				status = STATUS_USER_MAPPED_FILE;
+				__leave;
+			}
+		}
 
         if (!isPagingIo) {
           ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
