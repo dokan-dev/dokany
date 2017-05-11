@@ -1230,12 +1230,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
     }
     if (FileSystemFlags) {
       DbgPrint(L"GetVolumeInformation: got file system flags 0x%08x," 
-          " returning 0x%08x\n", fsFlags, *FileSystemFlags);
+          L" returning 0x%08x\n", fsFlags, *FileSystemFlags);
     }
   } else {
 
     DbgPrint(L"GetVolumeInformation: unable to query underlying fs," 
-               " using defaults.  Last error = %u\n", GetLastError());
+               L" using defaults.  Last error = %u\n", GetLastError());
 
     // File system name could be anything up to 10 characters.
     // But Windows check few feature availability based on file system name.
