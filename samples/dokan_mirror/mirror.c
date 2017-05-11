@@ -1095,6 +1095,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
     PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   BOOLEAN requestingSaclInfo;
+  BOOL isGetUserObjectSecuritySuccessful = FALSE;
 
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
@@ -1156,7 +1157,20 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
       return DokanNtStatusFromWin32(error);
     }
   }
+  else {
+	  isGetUserObjectSecuritySuccessful = TRUE;
+  }
   CloseHandle(handle);
+
+  DWORD securityDescriptorLength = GetSecurityDescriptorLength(SecurityDescriptor);
+  DbgPrint(L"  securityDescriptorLength : %lu (by GetSecurityDescriptorLength) \n", securityDescriptorLength);
+
+  if (isGetUserObjectSecuritySuccessful) {
+	  DbgPrint(L"  isGetUserObjectSecuritySuccessful is true,  *LengthNeeded = securityDescriptorLength \n");
+	  *LengthNeeded = securityDescriptorLength;
+  }
+
+  DbgPrint(L"GetFileSecurity Successful for %s\n", filePath);
 
   return STATUS_SUCCESS;
 }
