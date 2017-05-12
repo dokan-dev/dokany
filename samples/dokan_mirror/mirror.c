@@ -1156,6 +1156,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
       return DokanNtStatusFromWin32(error);
     }
   }
+  
+  // Ensure the Security Descriptor Length is set
+  DWORD securityDescriptorLength = GetSecurityDescriptorLength(SecurityDescriptor);
+  DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = securityDescriptorLength \n");
+  *LengthNeeded = securityDescriptorLength;
+  
   CloseHandle(handle);
 
   return STATUS_SUCCESS;
