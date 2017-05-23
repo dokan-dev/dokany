@@ -8,6 +8,10 @@ function Exec-External {
   }
 }
 
+$ifstest_user = "dokan_ifstest"
+$ifstest_pass = "D0kan_1fstest"
+# TODO: read password from command-line or file to keep dev-machines secure
+
 $fsTestPath = "FSTMP"
 $Platforms = @("Win32", "x64")
 $DokanDriverLetter = "M"
@@ -19,6 +23,16 @@ $Commands = @{
 	"/l $DokanDriverLetter /n" = "$($DokanDriverLetter):"
 	"/l $DokanDriverLetter /n /u \myfs\dokan" = "\\myfs\dokan"
 }
+
+$ifstestParameters = @(
+	"-t", "FileNameLengthTest",            # reason: buffer overflow in mirror. Issue #511
+	"-t", "EndOfFileInformationTest",      # reason: IFSTest crashes 😲. Issue #546
+	"-t", "NotificationSecurityTest",      # reason: IFSTest hangs 😞. Issue #547
+	"-t", "NotificationCleanupAttribTest"  # reason: bothersome to wait for timeout. Issue #548
+	"/v",                                  # verbose output
+	"/u", $ifstest_user,
+	"/U", $ifstest_pass
+)
 
 $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
@@ -103,6 +117,10 @@ foreach ($Platform in $Platforms){
 		Write-Host "Start WinFSTest" -ForegroundColor Green
 		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$($destination)\"}
 		Write-Host "WinFSTest finished" -ForegroundColor Green
+
+		Write-Host "Start IFSTest" -ForegroundColor Green
+		Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
+		Write-Host "IFSTestTest finished" -ForegroundColor Green
 
 		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
 		$app.WaitForExit()
