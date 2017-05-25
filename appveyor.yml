@@ -22,7 +22,7 @@
 
   platform:
   - x64
-  
+
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
 
@@ -72,7 +72,7 @@
         if ($env:CONFIGURATION -eq "All") {
           Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
         }
-  
+
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function downloadIfOlderThanDays($url, $path, $days) {
@@ -84,18 +84,18 @@
 
           downloadIfOlderThanDays "https://cygwin.com/setup-x86.exe" "${env:DOKAN_CI_CACHE}\setup-x86.exe" 7
           downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
-          
+
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: $cygwinexe"
             Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++ -P pkg-config}
             Write-Host "Update Cygwin: $cygwinexe " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
-          
+
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86.exe" C:/cygwin $env:CYG_CACHE
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
-        
+
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function bash($bash_command) {
@@ -153,8 +153,9 @@
         Write-Host Dokan cert installed !
       }
 
+  - ps: |
       if ($env:CONFIGURATION -eq "Coverity") {
-        
+
         if (!"$env:CoverityProjectToken") {
           Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
           return;
@@ -164,7 +165,7 @@
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win10 Debug",
         "/p:Platform=$env:PLATFORM")
-          
+
         Exec-External {& "cov-build.exe" `
         --dir cov-int `
         --encoding=UTF-8 `
@@ -177,7 +178,7 @@
         -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
         -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
         --overwrite}
-        
+
         Write-Host "Uploading Coverity results..."
         Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
         --nologo `
@@ -187,15 +188,17 @@
         -z "coverity.zip" `
         -d "Appveyor build." `
         --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
-      
-      } elseif ($env:CONFIGURATION -eq "All") {
+      }
+
+  - ps: |
+      if ($env:CONFIGURATION -eq "All") {
 
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
-              
+
         installDokanCert
-        
+
         cd dokan_wix
-        
+
         $xmlversion = [xml](Get-Content ".\version.xml")
         $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
         $mm_version = $current_build_version.Split("=")[1] -replace '"','';
@@ -203,7 +206,7 @@
         $mm_version += $env:APPVEYOR_BUILD_NUMBER;
         (Get-Content ..\CHANGELOG.md) -replace '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ($env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file "..\CHANGELOG.md"
         $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
-        
+
         $Platform = "Any CPU"
         $buildArgs = @(
         "SetAssemblyVersion.sln",
@@ -212,9 +215,9 @@
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
         & $buildCmd $buildArgs
-        
+
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
-        
+
         cd ..
         Exec-External {& .\build.bat}
         .\cert\dokan-sign.ps1
@@ -222,7 +225,7 @@
         cd dokan_wix
         (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
         (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
-        
+
         $Platform = "Mixed Platforms"
         $buildArgs = @(
         "Dokan_WiX.sln",
@@ -230,48 +233,53 @@
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
-        
+
         Exec-External {& $buildCmd $buildArgs}
-        
+
         Write-Host Upload Artifact...
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
         Write-Host Artifact uploaded!
-        
-      } elseif ($env:CONFIGURATION -eq "FsTest") {
+      }
+
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
         $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
-        
+
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win8.1 Release",
         "/p:Platform=$env:PLATFORM")
-        
+
         & $buildCmd $buildArgs
-        
+
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=$env:PLATFORM")
-        
+
         & $buildCmd $buildArgs
 
         installDokanCert
-        
+
         .\cert\dokan-sign.ps1
-        
+
         cp .\x64\Win8.1Release\dokan1.sys C:\Windows\System32\drivers\
         Exec-External {& .\x64\Release\dokanctl.exe /i d}
         Exec-External {& .\x64\Release\dokanctl.exe /i n}
-        
+
         cd .\samples
         .\mirror_test.ps1
-        
+
         Exec-External {& verifier /query}
       }
+
+  - ps: |
       Write-Host Build Finished !
 
   test: off
+
   on_success:
     - ps: |
         # AppVeyor does not provide us with the SHA1 before the push
@@ -307,7 +315,7 @@
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
             }
-          
+
             cd $env:APPVEYOR_BUILD_FOLDER\documentations
             Exec-External {& git config --global user.email "appveyor@appveyor.org"}
             Exec-External {& git config --global user.name "appveyor"}
