@@ -1,3 +1,8 @@
+# This powershell script need CERTISSUER, ADDITIONALCERT and EV_CERTISSUER env variable set
+# CERTISSUER - Certificat issuer name
+# ADDITIONALCERT - Your certificat path
+# EV_CERTISSUER - Certificat issuer name for EV sign
+
 New-Item -ItemType Directory -Force -Path Win32,x64,ARM | Out-Null
 $files = Get-ChildItem -path Win32,x64,ARM -recurse -Include *.sys,*.cat,*.dll,*.exe
 signtool sign /v /i "$env:CERTISSUER" /ac "$env:ADDITIONALCERT" /t http://timestamp.verisign.com/scripts/timstamp.dll $files
