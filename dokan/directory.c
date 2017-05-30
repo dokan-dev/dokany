@@ -614,6 +614,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   // information for FileSystem
   openInfo->UserContext = fileInfo.Context;
+  ClearFindData(openInfo->DirListHead);
 
   // send directory information to driver
   SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
