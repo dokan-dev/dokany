@@ -141,6 +141,8 @@ BOOL DOKANAPI DokanNetworkProviderUninstall();
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode);
 
+BOOL DOKANAPI DokanMountPointsCleanUp();
+
 #ifdef __cplusplus
 }
 #endif
