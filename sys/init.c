@@ -465,7 +465,6 @@ PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG se
   PLIST_ENTRY listHead = &dokanGlobal->DeviceDeleteList;
   PLIST_ENTRY entry;
   PLIST_ENTRY nextEntry;
-  PDEVICE_ENTRY deviceEntry;
 
   if(sessionId == -1) {
     return NULL;
@@ -484,7 +483,7 @@ PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG se
   for (entry = listHead->Flink, nextEntry = entry->Flink; entry != listHead;
       entry = nextEntry, nextEntry = entry->Flink) {
 
-    deviceEntry = CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
+    PDEVICE_ENTRY deviceEntry = CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
     if (deviceEntry) {
       if(deviceEntry->SessionId == sessionId) {
         ExReleaseResourceLite(&dokanGlobal->Resource);
