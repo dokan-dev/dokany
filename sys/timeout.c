@@ -98,7 +98,7 @@ VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
 
     ExReleaseResourceLite(&Dcb->Resource);
 
-    DDbgPrint("  Timeout, umount\n");
+    DDbgPrint("  Timeout reached so perform an umount\n");
 
     if (IsUnmountPendingVcb(vcb)) {
       DDbgPrint("  Volume is not mounted\n");
