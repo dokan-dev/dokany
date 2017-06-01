@@ -1,3 +1,10 @@
+param(
+    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe")
+)
+#TODO: enable specifying own mirror-commands and own test-commands
+#TODO: move compilation of test tools to separate scripts in scripts
+#TODO: allow running from any directory by using the path this script is located in as reference
+
 function Exec-External {
   param(
 	[Parameter(Position=0,Mandatory=1)][scriptblock] $command
@@ -13,7 +20,7 @@ $ifstest_pass = "D0kan_1fstest"
 # TODO: read password from command-line or file to keep dev-machines secure
 
 $fsTestPath = "FSTMP"
-$Platforms = @("Win32", "x64")
+
 $DokanDriverLetter = "M"
 $Commands = @{
 	"/l $DokanDriverLetter" = "$($DokanDriverLetter):"
@@ -38,19 +45,6 @@ $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
 $env:CI_BUILD_ARG = ""
 if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
-
-Write-Host Build mirrors -ForegroundColor Green
-foreach ($Platform in $Platforms){
-	$buildArgs = @(
-	"..\dokan.sln",
-	"/m",
-	"/p:Configuration=Release",
-	"/p:Platform=$Platform"
-	"$env:CI_BUILD_ARG")
-
-	Exec-External { & $buildCmd $buildArgs }
-}
-Write-Host Build mirrors done. -ForegroundColor Green
  
 Write-Host Build test tools -ForegroundColor Green
 if (!(Test-Path .\fstools\src\fsx\fsx.exe))
@@ -84,12 +78,12 @@ if (!(Test-Path "C:\$fsTestPath")) { New-Item "C:\$fsTestPath" -type directory |
 
 add-type -AssemblyName System.Windows.Forms
 
-foreach ($Platform in $Platforms){
+foreach ($mirror in $Mirrors){
 	$Commands.Keys | % {
 		$command = $_
 		$destination = $Commands.Item($_)
 	
-		Write-Host Test mirror $Platform with command $command with $destination as mount -ForegroundColor Green
+		Write-Host Test mirror $mirror with args $command with $destination as mount -ForegroundColor Green
 		if ($destination.StartsWith("C:\")) {
 			#Cleanup mount folder - Tag source folder to wait a not empty folder at mount
 			New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
@@ -97,7 +91,7 @@ foreach ($Platform in $Platforms){
 			Remove-Item -Recurse -Force "$($destination)\*"
 		}
 		
-		$app = Start-Process -passthru ..\$Platform\Release\mirror.exe -ArgumentList "/r C:\$fsTestPath $command"
+		$app = Start-Process -passthru $mirror -ArgumentList "/r C:\$fsTestPath $command"
 		
 		$count = 20;
 		if ($destination.StartsWith("C:\")) {
@@ -124,7 +118,7 @@ foreach ($Platform in $Platforms){
 
 		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
 		$app.WaitForExit()
-		Write-Host Test mirror $Platform ended. -ForegroundColor Green
+		Write-Host Test mirror $mirror ended. -ForegroundColor Green
 	}
 }
 

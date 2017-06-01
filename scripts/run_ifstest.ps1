@@ -1,6 +1,6 @@
 Set-StrictMode -Version 2
 #TODO: Get Path via some MSI-CmdLet or Registry instead of hardcoding it
-if ([Environment]::OSVersion.Version.Major -eq 10) {
+if (([Version]$((Get-CimInstance Win32_OperatingSystem).Version)).Major -eq 10) {
     $hlk_path = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit"
 }
 else {
