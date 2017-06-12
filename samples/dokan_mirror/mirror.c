@@ -101,6 +101,9 @@ static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
   PTOKEN_USER tokenUser;
   SID_NAME_USE snu;
 
+  if (!g_DebugMode)
+	  return;
+
   handle = DokanOpenRequestorToken(DokanFileInfo);
   if (handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"  DokanOpenRequestorToken failed\n");
@@ -1153,6 +1156,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
       return DokanNtStatusFromWin32(error);
     }
   }
+  
+  // Ensure the Security Descriptor Length is set
+  DWORD securityDescriptorLength = GetSecurityDescriptorLength(SecurityDescriptor);
+  DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = securityDescriptorLength \n");
+  *LengthNeeded = securityDescriptorLength;
+  
   CloseHandle(handle);
 
   return STATUS_SUCCESS;
@@ -1227,12 +1236,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
     }
     if (FileSystemFlags) {
       DbgPrint(L"GetVolumeInformation: got file system flags 0x%08x," 
-          " returning 0x%08x\n", fsFlags, *FileSystemFlags);
+          L" returning 0x%08x\n", fsFlags, *FileSystemFlags);
     }
   } else {
 
     DbgPrint(L"GetVolumeInformation: unable to query underlying fs," 
-               " using defaults.  Last error = %u\n", GetLastError());
+               L" using defaults.  Last error = %u\n", GetLastError());
 
     // File system name could be anything up to 10 characters.
     // But Windows check few feature availability based on file system name.
