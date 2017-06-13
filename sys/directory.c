@@ -27,7 +27,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 NTSTATUS
 DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
-NTSTATUS
+VOID
 DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PFILE_OBJECT fileObject;
@@ -72,8 +72,6 @@ DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("<== DokanDirectoryControl\n");
   }
-
-  return status;
 }
 
 NTSTATUS

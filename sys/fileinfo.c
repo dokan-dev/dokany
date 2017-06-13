@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
+VOID
 DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PIO_STACK_LOCATION irpSp;
@@ -247,8 +247,6 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("<== DokanQueryInformation\n");
   }
-
-  return status;
 }
 
 VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
@@ -416,7 +414,7 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
   DDbgPrint("  FlushAllCachedFcb finished\n");
 }
 
-NTSTATUS
+VOID
 DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
@@ -686,8 +684,6 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("<== DokanSetInformation\n");
   }
-
-  return status;
 }
 
 VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,

@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
+VOID
 DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -61,8 +61,6 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("<== DokanPnp\n");
   }
-
-  return status;
 }
 
 NTSTATUS
