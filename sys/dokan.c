@@ -456,14 +456,7 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
     DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
     Status = STATUS_INVALID_PARAMETER;
   }
-
   if (Status != STATUS_PENDING) {
-    if (!NT_ERROR(Status)) {
-      if (Irp->UserBuffer > MmHighestUserAddress) {
-        DDbgPrint("  UserBuffer is not in the user space. This would cause BSOD!!\n");
-        Status = STATUS_INVALID_PARAMETER;
-      }
-    }
     Irp->IoStatus.Status = Status;
     Irp->IoStatus.Information = Info;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
