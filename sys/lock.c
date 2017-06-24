@@ -112,7 +112,7 @@ DokanCommonLockControl(__in PIRP Irp) {
   return Status;
 }
 
-NTSTATUS
+VOID
 DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
@@ -219,8 +219,6 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("<== DokanLock\n");
   }
-
-  return status;
 }
 
 VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,

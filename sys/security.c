@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
+VOID
 DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
@@ -203,7 +203,7 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQuerySecurity\n");
 }
 
-NTSTATUS
+VOID
 DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PDokanVCB vcb;

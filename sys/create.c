@@ -422,7 +422,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   return status;
 }
 
-NTSTATUS
+VOID
 DokanDispatchCreate(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 /*++
@@ -1283,8 +1283,6 @@ Return Value:
 
     DDbgPrint("<== DokanCreate\n");
   }
-
-  return status;
 }
 
 VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,

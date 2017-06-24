@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
+VOID
 DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
                                     __in PIRP Irp) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
@@ -353,7 +353,7 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
 }
 
-NTSTATUS
+VOID
 DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
                                   __in PIRP Irp) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
