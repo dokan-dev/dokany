@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
+VOID
 DokanDispatchCleanup(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
 /*++
@@ -137,8 +137,6 @@ Return Value:
 
     DDbgPrint("<== DokanCleanup\n");
   }
-
-  return status;
 }
 
 VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,

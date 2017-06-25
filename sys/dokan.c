@@ -372,7 +372,7 @@ Return Value:
   DDbgPrint("<== DokanUnload\n");
 }
 
-NTSTATUS
+VOID
 DokanDispatchShutdown(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   UNREFERENCED_PARAMETER(DeviceObject);
 
@@ -382,7 +382,6 @@ DokanDispatchShutdown(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DokanCompleteIrpRequest(Irp, STATUS_SUCCESS, 0);
 
   DDbgPrint("<== DokanShutdown\n");
-  return STATUS_SUCCESS;
 }
 
 BOOLEAN
@@ -456,7 +455,17 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
     DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
     Status = STATUS_INVALID_PARAMETER;
   }
+
   if (Status != STATUS_PENDING) {
+    
+    if (Irp->RequestorMode == UserMode && !NT_ERROR(Status)) {
+      DDbgPrint("  Request is usermode without error\n");
+      if (Irp->UserBuffer > MmHighestUserAddress) {
+        DDbgPrint("  UserBuffer is not in the user space. This would cause BSOD!!\n");
+        Status = STATUS_INVALID_PARAMETER;
+      }
+    }
+
     Irp->IoStatus.Status = Status;
     Irp->IoStatus.Information = Info;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);

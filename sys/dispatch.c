@@ -69,6 +69,13 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
 
+  //
+  //  Initialize the Io status field in the Irp.
+  //
+
+  Irp->IoStatus.Status = STATUS_PENDING;
+  Irp->IoStatus.Information = 0;
+
   if (irpSp->MajorFunction != IRP_MJ_FILE_SYSTEM_CONTROL &&
       irpSp->MajorFunction != IRP_MJ_SHUTDOWN &&
       irpSp->MajorFunction != IRP_MJ_CLEANUP &&
@@ -76,9 +83,8 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       irpSp->MajorFunction != IRP_MJ_PNP) {
     if (IsUnmountPending(DeviceObject)) {
       DDbgPrint("  Volume is not mounted so return STATUS_NO_SUCH_DEVICE\n");
-      NTSTATUS status = STATUS_NO_SUCH_DEVICE;
-      DokanCompleteIrpRequest(Irp, status, 0);
-      return status;
+      DokanCompleteIrpRequest(Irp, STATUS_NO_SUCH_DEVICE, 0);
+      return Irp->IoStatus.Status;
     }
   }
 
@@ -98,73 +104,91 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
       DDbgPrint("    Media is write protected\n");
       DokanCompleteIrpRequest(Irp, STATUS_MEDIA_WRITE_PROTECTED, 0);
-      return STATUS_MEDIA_WRITE_PROTECTED;
+      return Irp->IoStatus.Status;
     }
   }
 
   switch (irpSp->MajorFunction) {
 
   case IRP_MJ_CREATE:
-    return DokanDispatchCreate(DeviceObject, Irp);
+    DokanDispatchCreate(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_CLOSE:
-    return DokanDispatchClose(DeviceObject, Irp);
+    DokanDispatchClose(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_READ:
-    return DokanDispatchRead(DeviceObject, Irp);
+    DokanDispatchRead(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_WRITE:
-    return DokanDispatchWrite(DeviceObject, Irp);
+    DokanDispatchWrite(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_FLUSH_BUFFERS:
-    return DokanDispatchFlush(DeviceObject, Irp);
+    DokanDispatchFlush(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_QUERY_INFORMATION:
-    return DokanDispatchQueryInformation(DeviceObject, Irp);
+    DokanDispatchQueryInformation(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_SET_INFORMATION:
-    return DokanDispatchSetInformation(DeviceObject, Irp);
+    DokanDispatchSetInformation(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_QUERY_VOLUME_INFORMATION:
-    return DokanDispatchQueryVolumeInformation(DeviceObject, Irp);
+    DokanDispatchQueryVolumeInformation(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_SET_VOLUME_INFORMATION:
-    return DokanDispatchSetVolumeInformation(DeviceObject, Irp);
+    DokanDispatchSetVolumeInformation(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_DIRECTORY_CONTROL:
-    return DokanDispatchDirectoryControl(DeviceObject, Irp);
-
+    DokanDispatchDirectoryControl(DeviceObject, Irp);
+    break;
   case IRP_MJ_FILE_SYSTEM_CONTROL:
-    return DokanDispatchFileSystemControl(DeviceObject, Irp);
+    DokanDispatchFileSystemControl(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_DEVICE_CONTROL:
-    return DokanDispatchDeviceControl(DeviceObject, Irp);
+    DokanDispatchDeviceControl(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_LOCK_CONTROL:
-    return DokanDispatchLock(DeviceObject, Irp);
+    DokanDispatchLock(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_CLEANUP:
-    return DokanDispatchCleanup(DeviceObject, Irp);
+    DokanDispatchCleanup(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_SHUTDOWN:
-    return DokanDispatchShutdown(DeviceObject, Irp);
+    DokanDispatchShutdown(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_QUERY_SECURITY:
-    return DokanDispatchQuerySecurity(DeviceObject, Irp);
+    DokanDispatchQuerySecurity(DeviceObject, Irp);
+    break;
 
   case IRP_MJ_SET_SECURITY:
-    return DokanDispatchSetSecurity(DeviceObject, Irp);
+    DokanDispatchSetSecurity(DeviceObject, Irp);
+    break;
 
 #if (_WIN32_WINNT >= 0x0500)
   case IRP_MJ_PNP:
-    return DokanDispatchPnp(DeviceObject, Irp);
+    DokanDispatchPnp(DeviceObject, Irp);
+    break;
+
 #endif //(_WIN32_WINNT >= 0x0500)
   default:
     DDbgPrint("DokanDispatchRequest: Unexpected major function: %xh\n",
               irpSp->MajorFunction);
 
     DokanCompleteIrpRequest(Irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
-
-    return STATUS_DRIVER_INTERNAL_ERROR;
   }
+
+  return Irp->IoStatus.Status;
 }
