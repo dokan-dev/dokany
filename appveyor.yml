@@ -150,7 +150,7 @@
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win10 Debug",
-        "/p:Platform=$env:PLATFORM")
+        "/p:Platform=x64")
 
         Exec-External {& "cov-build.exe" `
         --dir cov-int `
