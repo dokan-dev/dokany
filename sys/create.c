@@ -605,6 +605,7 @@ Return Value:
               __leave;
             }
             relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
+            relatedFileName->Length = relatedFcb->FileName.Length;
             RtlUnicodeStringCopy(relatedFileName, &relatedFcb->FileName);
           }
           DokanFCBUnlock(relatedFcb);
