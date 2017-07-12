@@ -732,4 +732,7 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
 #define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
 
+ULONG DokanSerachWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
+	__in ULONG offsetPosition, __in int isIgnoreTargetWchar);
+
 #endif // DOKAN_H_

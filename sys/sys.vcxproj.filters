@@ -85,6 +85,9 @@
     <ClCompile Include="pnp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="dokan_utility.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dokan.h">

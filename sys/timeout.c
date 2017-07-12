@@ -53,8 +53,8 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   }
 
   deviceNamePos = Dcb->SymbolicLinkName->Length / sizeof(WCHAR) - 1;
-  for (; Dcb->SymbolicLinkName->Buffer[deviceNamePos] != L'\\'; --deviceNamePos)
-    ;
+  deviceNamePos = DokanSerachWcharinUnicodeStringWithUlong(Dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
+
   RtlStringCchCopyW(eventContext->Operation.Unmount.DeviceName,
                     sizeof(eventContext->Operation.Unmount.DeviceName) /
                         sizeof(WCHAR),
