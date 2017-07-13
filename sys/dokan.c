@@ -473,12 +473,10 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
   ASSERT(Fcb != NULL);
   ASSERT(FileName != NULL);
 
-  // search the last "\"
   nameOffset = (USHORT)(FileName->Length / sizeof(WCHAR) - 1);
-  for (; FileName->Buffer[nameOffset] != L'\\'; --nameOffset)
-    ;
-  nameOffset++; // the next is the begining of filename
 
+  // search the last "\" and then calculate the Offset in bytes
+  nameOffset = (USHORT)(DokanSearchWcharinUnicodeStringWithUlong(FileName, L'\\', (ULONG)nameOffset, 1));
   nameOffset *= sizeof(WCHAR); // Offset is in bytes
 
   FsRtlNotifyFullReportChange(Fcb->Vcb->NotifySync, &Fcb->Vcb->DirNotifyList,
