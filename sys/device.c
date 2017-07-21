@@ -482,7 +482,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         linkName->UseOnlyIfThereAreNoOtherLinks = FALSE;
         linkName->NameLength = dcb->MountPoint->Length;
 
-        if (sizeof(USHORT) + linkName->NameLength < outputLength) {
+        if (sizeof(USHORT) + linkName->NameLength <= outputLength) {
           RtlCopyMemory((PCHAR)linkName->Name, dcb->MountPoint->Buffer,
                         linkName->NameLength);
           Irp->IoStatus.Information =
