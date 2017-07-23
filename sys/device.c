@@ -424,7 +424,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlZeroMemory(mountdevName, outputLength);
     mountdevName->NameLength = deviceName->Length;
 
-    if (sizeof(USHORT) + mountdevName->NameLength < outputLength) {
+    if (sizeof(USHORT) + mountdevName->NameLength <= outputLength) {
       RtlCopyMemory((PCHAR)mountdevName->Name, deviceName->Buffer,
                     mountdevName->NameLength);
       Irp->IoStatus.Information = sizeof(USHORT) + mountdevName->NameLength;
@@ -450,7 +450,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     uniqueId->UniqueIdLength = dcb->DiskDeviceName->Length;
 
-    if (sizeof(USHORT) + uniqueId->UniqueIdLength < outputLength) {
+    if (sizeof(USHORT) + uniqueId->UniqueIdLength <= outputLength) {
       RtlCopyMemory((PCHAR)uniqueId->UniqueId, dcb->DiskDeviceName->Buffer,
                     uniqueId->UniqueIdLength);
       Irp->IoStatus.Information =
