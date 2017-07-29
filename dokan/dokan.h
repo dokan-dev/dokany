@@ -413,7 +413,8 @@ typedef struct _DOKAN_OPERATIONS {
   * but the path target a file, you need to return \c STATUS_NOT_A_DIRECTORY.
   *
   * DOKAN_FILE_INFO.Context can be use to store Data (like \c HANDLE)
-  * that can be retrieved in all other request related to the Context
+  * that can be retrieved in all other request related to the Context.
+  * To avoid memory leak, Context need to be released in DOKAN_OPERATIONS.Cleanup.
   *
   * \param EventInfo Information about the event.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.

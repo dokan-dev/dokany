@@ -655,8 +655,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   // Finds the last '\' and copy into DeviceName.
   // DeviceName is \Volume{D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
   deviceNamePos = dcb->SymbolicLinkName->Length / sizeof(WCHAR) - 1;
-  for (; dcb->SymbolicLinkName->Buffer[deviceNamePos] != L'\\'; --deviceNamePos)
-    ;
+  deviceNamePos = DokanSearchWcharinUnicodeStringWithUlong(dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
+
   RtlStringCchCopyW(driverInfo->DeviceName,
                     sizeof(driverInfo->DeviceName) / sizeof(WCHAR),
                     &(dcb->SymbolicLinkName->Buffer[deviceNamePos]));
