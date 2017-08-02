@@ -206,7 +206,8 @@ typedef struct _DOKAN_OPERATIONS {
   * but the path target a file, you need to return \c STATUS_NOT_A_DIRECTORY.
   *
   * DOKAN_FILE_INFO.Context can be use to store Data (like \c HANDLE)
-  * that can be retrieved in all other request related to the Context
+  * that can be retrieved in all other request related to the Context.
+  * To avoid memory leak, Context need to be released in DOKAN_OPERATIONS.Cleanup.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param SecurityContext SecurityContext, see https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx

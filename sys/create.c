@@ -459,6 +459,7 @@ Return Value:
   PWCHAR parentDir = NULL; // for SL_OPEN_TARGET_DIRECTORY
   ULONG parentDirLength = 0;
   BOOLEAN needBackSlashAfterRelatedFile = FALSE;
+  BOOLEAN alternateDataStreamOfRootDir = FALSE;
   ULONG securityDescriptorSize = 0;
   ULONG alignedEventContextSize = 0;
   ULONG alignedObjectNameSize =
@@ -604,6 +605,7 @@ Return Value:
               __leave;
             }
             relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
+            relatedFileName->Length = relatedFcb->FileName.Length;
             RtlUnicodeStringCopy(relatedFileName, &relatedFcb->FileName);
           }
           DokanFCBUnlock(relatedFcb);
@@ -643,11 +645,20 @@ Return Value:
         status = STATUS_OBJECT_NAME_INVALID;
         __leave;
       }
-      if (relatedFileName->Length > 0 &&
+      if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
           relatedFileName->Buffer[relatedFileName->Length / sizeof(WCHAR) -
-                                  1] != '\\') {
+                                  1] != '\\' && fileObject->FileName.Buffer[0] != ':') {
         needBackSlashAfterRelatedFile = TRUE;
         fileNameLength += sizeof(WCHAR);
+      }
+      // for if we're trying to open a file that's actually an alternate data
+      // stream of the root dircetory as in "\:foo"
+      // in this case we won't prepend relatedFileName to the file name
+      if (relatedFileName->Length / sizeof(WCHAR) == 1 &&  
+		fileObject->FileName.Length > 0 &&
+		relatedFileName->Buffer[0] == '\\' && 
+		fileObject->FileName.Buffer[0] == ':') {
+	alternateDataStreamOfRootDir = TRUE;
       }
     }
 
@@ -671,7 +682,7 @@ Return Value:
 
     RtlZeroMemory(fileName, fileNameLength + sizeof(WCHAR));
 
-    if (relatedFileName != NULL) {
+    if (relatedFileName != NULL && !alternateDataStreamOfRootDir) {
       DDbgPrint("  RelatedFileName:%wZ\n", relatedFileName);
 
       // copy the file name of related file object

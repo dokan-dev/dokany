@@ -11,16 +11,29 @@
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
+      WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
+      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2015; Configuration: All"
 
-  os: Visual Studio 2015
-  version: 1.0.2-{build}
+  version: 1.0.3-{build}
   configuration:
   - All
   - Coverity
   - FsTest
-  platform:
-  - x64
-  
+
+  image:
+    - Visual Studio 2015
+    - Visual Studio 2017
+# If you suspect some changes on the AppVeyor-side breaking things,
+# uncomment below. https://www.appveyor.com/updates/
+#    - Previous Visual Studio 2015
+#    - Previous Visual Studio 2017
+  matrix:
+    exclude:
+      - configuration: All
+        image: Visual Studio 2017
+      - configuration: Coverity
+        image: Visual Studio 2017
+  max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
 
@@ -34,8 +47,11 @@
 
   install:
     - ps: |
+        if ($env:CONFIGURATION -eq "FsTest" -or $env:CONFIGURATION -eq "All") {
+          .\cert\dokan-import.ps1
+        }
+    - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
-          & Bcdedit.exe -set TESTSIGNING ON
           & verifier /standard /driver dokan1.sys
           Write-Host "Before reboot"
           Start-Sleep -s 2
@@ -59,10 +75,17 @@
           }
         }
     - ps: |
+        if ($env:CONFIGURATION -eq "FsTest") {
+          Exec-External {& net user dokan_ifstest D0kan_1fstest /ADD }
+        }
+    - ps: |
+        if ($env:CONFIGURATION -eq "FsTest") {
+          Exec-External {& powershell .\scripts\install_wlk_ifstest.ps1 }
+        }
+    - ps: |
         if ($env:CONFIGURATION -eq "All") {
           Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
         }
-  
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function downloadIfOlderThanDays($url, $path, $days) {
@@ -74,18 +97,18 @@
 
           downloadIfOlderThanDays "https://cygwin.com/setup-x86.exe" "${env:DOKAN_CI_CACHE}\setup-x86.exe" 7
           downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
-          
+
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: $cygwinexe"
             Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++ -P pkg-config}
             Write-Host "Update Cygwin: $cygwinexe " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
-          
+
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86.exe" C:/cygwin $env:CYG_CACHE
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
-        
+
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function bash($bash_command) {
@@ -108,24 +131,6 @@
         }
 
   before_build:
-  - ps: |
-      # checking for BSOD
-      $bugchecks = (Get-EventLog -LogName system | Where-Object {$_.eventID -eq '1001' -and $_.Source -eq 'BugCheck'} | Select-Object -Property *)
-      if ($bugchecks) {
-        Write-Host "It seems like we rebooted due to a bugcheck (BSOD)."
-        Format-List -InputObject $bugchecks | Out-String | Out-Host
-        $memdumpArchive = "memory_dmp_$(& git rev-parse --short HEAD)_${env:APPVEYOR_BUILD_VERSION}.7z"
-        Write-Host "Compressing MEMORY.DMP"
-        Exec-External { &7z a -t7z $memdumpArchive "$env:WINDIR\MEMORY.DMP" }
-        Push-AppveyorArtifact $memdumpArchive
-        Write-Host "MEMORY.DMP uploaded as build artifact $memdumpArchive"
-        Add-AppveyorMessage `
-          -Category Error `
-          -Message "BSOD encountered during $env:CONFIGURATION. Link to MEMORY.DMP in the description " `
-          -Details ("MEMORY.DMP is available here: " + `
-            "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($memdumpArchive))")
-        throw "Build failed due to BSOD during $env:CONFIGURATION"
-      }
   # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
   - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
@@ -134,17 +139,9 @@
       Write-Host Start building...
       $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 
-      function installDokanCert() {
-        Write-Host Install cert and sign...
-        .\cert\dokan-import.ps1
-        $env:CERTISSUER="DokanCA"
-        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
-        Write-Host Dokan cert installed !
-      }
-
+  - ps: |
       if ($env:CONFIGURATION -eq "Coverity") {
-        
+
         if (!"$env:CoverityProjectToken") {
           Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
           return;
@@ -153,8 +150,8 @@
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win10 Debug",
-        "/p:Platform=$env:PLATFORM")
-          
+        "/p:Platform=x64")
+
         Exec-External {& "cov-build.exe" `
         --dir cov-int `
         --encoding=UTF-8 `
@@ -167,7 +164,7 @@
         -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
         -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
         --overwrite}
-        
+
         Write-Host "Uploading Coverity results..."
         Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
         --nologo `
@@ -177,23 +174,25 @@
         -z "coverity.zip" `
         -d "Appveyor build." `
         --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
-      
-      } elseif ($env:CONFIGURATION -eq "All") {
+      }
 
+  - ps: |
+      # Available in all configurations
+      $xmlversion = [xml](Get-Content "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\version.xml")
+      $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
+      $mm_version = $current_build_version.Split("=")[1] -replace '"','';
+      $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
+      $mm_version += $env:APPVEYOR_BUILD_NUMBER;
+      (Get-Content "${env:APPVEYOR_BUILD_FOLDER}\CHANGELOG.md") -replace '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ($env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file "${env:APPVEYOR_BUILD_FOLDER}\CHANGELOG.md"
+      $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
+  - ps: |
+      if ($env:CONFIGURATION -eq "All") {
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
-              
-        installDokanCert
-        
+        $env:CERTISSUER="DokanCA"
+        $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+
         cd dokan_wix
-        
-        $xmlversion = [xml](Get-Content ".\version.xml")
-        $current_build_version = $xmlversion.Include.define | Where { $_.StartsWith("BuildVersion=") }
-        $mm_version = $current_build_version.Split("=")[1] -replace '"','';
-        $mm_version = $mm_version.Substring(0, $mm_version.Length - $env:APPVEYOR_BUILD_NUMBER.Length - 1);
-        $mm_version += $env:APPVEYOR_BUILD_NUMBER;
-        (Get-Content ..\CHANGELOG.md) -replace '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ($env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file "..\CHANGELOG.md"
-        $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
-        
         $Platform = "Any CPU"
         $buildArgs = @(
         "SetAssemblyVersion.sln",
@@ -202,17 +201,17 @@
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
         & $buildCmd $buildArgs
-        
+
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
-        
-        cd ..
+
+        cd ${env:APPVEYOR_BUILD_FOLDER}
         Exec-External {& .\build.bat}
         .\cert\dokan-sign.ps1
 
         cd dokan_wix
         (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
         (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
-        
+
         $Platform = "Mixed Platforms"
         $buildArgs = @(
         "Dokan_WiX.sln",
@@ -220,48 +219,98 @@
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
-        
+
         Exec-External {& $buildCmd $buildArgs}
-        
+
         Write-Host Upload Artifact...
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
         Write-Host Artifact uploaded!
-        
-      } elseif ($env:CONFIGURATION -eq "FsTest") {
-        $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
-        
-        $buildArgs = @(
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Win8.1 Release",
-        "/p:Platform=$env:PLATFORM")
-        
-        & $buildCmd $buildArgs
-        
-        $buildArgs = @(
-        "/m",
-        "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Release",
-        "/p:Platform=$env:PLATFORM")
-        
-        & $buildCmd $buildArgs
+      }
 
-        installDokanCert
-        
-        .\cert\dokan-sign.ps1
-        
-        cp .\x64\Win8.1Release\dokan1.sys C:\Windows\System32\drivers\
-        Exec-External {& .\x64\Release\dokanctl.exe /i d}
-        Exec-External {& .\x64\Release\dokanctl.exe /i n}
-        
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
+        Write-Host "Getting main build job id via API..."
+        $api_build_info_url = "${env:APPVEYOR_URL}/api/projects/${env:APPVEYOR_ACCOUNT_NAME}/${env:APPVEYOR_PROJECT_SLUG}/build/${env:APPVEYOR_BUILD_VERSION}"
+        $headers = @{
+          "Content-Type" = "application/json"
+        }
+        $build_info = Invoke-RestMethod -Method Get -Uri $api_build_info_url -Headers $headers -UserAgent "Dokany CI-Script ${env:APPVEYOR_JOB_ID}"
+        $main_build_job_id = ($build_info.Build.jobs | Where-Object {$_.name -eq $env:DOKAN_MAIN_BUILD_JOB_NAME}).jobId
+        $installer_url = "${env:APPVEYOR_URL}/api/buildjobs/${main_build_job_id}/artifacts/DokanSetup-${installer_version}.exe"
+
+        Write-Host "Downloading installer artifact from main build job ${main_build_job_id}..."
+        Invoke-WebRequest $installer_url -OutFile DokanSetup.exe
+
+        Write-Host "Installing Dokan..."
+        $install_process = Start-Process -PassThru -Wait -FilePath .\DokanSetup.exe -ArgumentList @("/quiet", "/norestart", "/log", "dokan_install.log")
+        if ($install_process.ExitCode -ne 0) {
+          Write-Error "Dokan-Installation failed. Log below this line:"
+          Get-Content dokan_install*.log   # wildcard for getting both MSI and bundle log
+          throw "Dokan-Installation failed. Log above this line"
+        }
+      }
+  - ps: |
+      Write-Host Build finished!
+
+  test_script:
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
+        Write-Host Running tests...
+        $env:DokanLibrary1 = [System.Environment]::GetEnvironmentVariable("DokanLibrary1", "Machine")
+        $mirrors = @("${env:DokanLibrary1}\sample\mirror\mirror.exe", "${env:DokanLibrary1}\x86\sample\mirror\mirror.exe")
+
         cd .\samples
-        .\mirror_test.ps1
-        
+        .\mirror_test.ps1 -Mirrors $mirrors
+      }
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
+        Write-Host Test finished!
+      }
+
+  after_test:
+  - ps: |
+      # This function has already been defined above, but in case of a reboot caused by a BSOD, we cannot
+      # rely on it being defined!
+      function Exec-External {
+        param(
+          [Parameter(Position=0,Mandatory=1)][scriptblock] $command
+        )
+        & $command
+        if ($LASTEXITCODE -ne 0) {
+          throw ("Command returned non-zero error-code ${LASTEXITCODE}: $command")
+        }
+      }
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
         Exec-External {& verifier /query}
       }
-      Write-Host Build Finished !
+  - ps: |
+      # checking for BSOD
+      $bugchecks = (Get-EventLog -LogName system | Where-Object {$_.eventID -eq '1001' -and $_.Source -eq 'BugCheck'} | Select-Object -Property *)
+      if ($bugchecks) {
+        Write-Host "It seems like we rebooted due to a bugcheck (BSOD)."
+        Format-List -InputObject $bugchecks | Out-String | Out-Host
+        # events are sorted descendingly by time, so $bugchecks[0] is the latest BSOD
+        $memory_dmp = $bugchecks[0].ReplacementStrings[1]
 
-  test: off
+        Write-Host Calling KD to get more information...
+        # somehow the env-var-changes by the installer are sometimes lost after the BSOD. Hardcode the path!
+        $driver_and_pdb_path = Resolve-Path 'C:\Program Files\Dokan\Dokan Library-*\driver\'
+        & "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\kd.exe" -lines -z $memory_dmp -y "SRV*;${driver_and_pdb_path};http://msdl.microsoft.com/download/symbols" -c "!analyze -v; kp; dv /t /i /V; q"
+        $memdumpArchive = "memory_dmp_$(& git rev-parse --short HEAD)_${env:APPVEYOR_BUILD_VERSION}.7z"
+        Write-Host "Compressing $memory_dmp"
+        Exec-External { &7z a -t7z $memdumpArchive $memory_dmp }
+        Push-AppveyorArtifact $memdumpArchive
+        Write-Host "MEMORY.DMP uploaded as build artifact $memdumpArchive"
+        Add-AppveyorMessage `
+          -Category Error `
+          -Message "BSOD encountered during $env:CONFIGURATION. Link to MEMORY.DMP in the description" `
+          -Details ("MEMORY.DMP is available here: " + `
+            "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($memdumpArchive))")
+
+        throw "Build failed due to BSOD during $env:CONFIGURATION"
+      }
+
   on_success:
     - ps: |
         # AppVeyor does not provide us with the SHA1 before the push
@@ -297,7 +346,7 @@
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
             }
-          
+
             cd $env:APPVEYOR_BUILD_FOLDER\documentations
             Exec-External {& git config --global user.email "appveyor@appveyor.org"}
             Exec-External {& git config --global user.name "appveyor"}

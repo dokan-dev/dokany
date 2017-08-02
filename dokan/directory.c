@@ -235,6 +235,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
   case FileFullDirectoryInformation:
     thisEntrySize += sizeof(FILE_FULL_DIR_INFORMATION);
     break;
+  case FileIdFullDirectoryInformation:
+    thisEntrySize += sizeof(FILE_ID_FULL_DIR_INFORMATION);
+    break;
   case FileNamesInformation:
     thisEntrySize += sizeof(FILE_NAMES_INFORMATION);
     break;
@@ -265,6 +268,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
     break;
   case FileFullDirectoryInformation:
     DokanFillFullDirInfo(Buffer, FindData, Index, DokanInstance);
+    break;
+  case FileIdFullDirectoryInformation:
+    DokanFillIdFullDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileNamesInformation:
     DokanFillNamesInfo(Buffer, FindData, Index);
@@ -488,6 +494,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   // check whether this is handled FileInfoClass
   if (fileInfoClass != FileDirectoryInformation &&
+      fileInfoClass != FileIdFullDirectoryInformation &&
       fileInfoClass != FileFullDirectoryInformation &&
       fileInfoClass != FileNamesInformation &&
       fileInfoClass != FileIdBothDirectoryInformation &&

@@ -356,17 +356,15 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
   wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
   wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
 
-  if (wcsstr(buffer, commanp) != NULL) {
-    WCHAR *dokan_pos = wcsstr(buffer, commanp);
-    if (dokan_pos == NULL)
-      return FALSE;
-    wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
-              dokan_pos - buffer);
-    wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
-             dokan_pos + wcslen(commanp));
-    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
-                  (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
-  }
+  WCHAR *dokan_pos = wcsstr(buffer, commanp);
+  if (dokan_pos == NULL)
+    return TRUE;
+  wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
+            dokan_pos - buffer);
+  wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
+           dokan_pos + wcslen(commanp));
+  RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
+                (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
 
   RegCloseKey(key);
 
