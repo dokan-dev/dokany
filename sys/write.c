@@ -342,7 +342,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
-
+  
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
@@ -359,12 +359,9 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     // update current byte offset only when synchronous IO and not paging IO
     fileObject->CurrentByteOffset.QuadPart =
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+	DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
     DDbgPrint("  Updated CurrentByteOffset %I64d\n",
               fileObject->CurrentByteOffset.QuadPart);
-
-    DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
-        FILE_ACTION_MODIFIED);
-
   }
 
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
