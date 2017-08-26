@@ -36,6 +36,17 @@ $ifstestParameters = @(
 	"-t", "EndOfFileInformationTest",      # reason: IFSTest crashes 😲. Issue #546
 	"-t", "NotificationSecurityTest",      # reason: IFSTest hangs 😞. Issue #547
 	"-t", "NotificationCleanupAttribTest"  # reason: bothersome to wait for timeout. Issue #548
+	"-t", "AVChangeLogTest"                # reason: Part of journaltest
+	#Disable not supported features
+	"-g", "ChangeJournal"
+	"-g", "Virus"
+	"-g", "DefragEnhancements"
+	"-g", "Quotas"
+	"-g", "Encryption"
+	"-g", "ObjectId"
+	"-g", "Mountpoints"
+	"-g", "ReparsePoints"
+	"-g", "SparseFiles"
 	"/v",                                  # verbose output
 	"/u", $ifstest_user,
 	"/U", $ifstest_pass
