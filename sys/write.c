@@ -359,7 +359,21 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     // update current byte offset only when synchronous IO and not paging IO
     fileObject->CurrentByteOffset.QuadPart =
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+
     DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+
+	//Notify file size changed
+    if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
+                              FILE_ACTION_MODIFIED);
+
+	  //Update size with new offset
+      InterlockedExchange64(
+          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+    }
+
     DDbgPrint("  Updated CurrentByteOffset %I64d\n",
               fileObject->CurrentByteOffset.QuadPart);
   }
