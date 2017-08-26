@@ -14,7 +14,13 @@ if (!(Test-Path $ifstest_exe)) {
     throw "$ifstest_exe not found!"
 }
 
-& $ifstest_exe $args
+#IFSTest does not return error for wrong param so we need to analyse stderr
+& $ifstest_exe $args 2>&1 | tee -Variable allOutput
+$stderr = $allOutput | ?{ $_ -is [System.Management.Automation.ErrorRecord] }
+if ($stderr) {
+   Write-Error "IFSTest printed error"
+   Exit 1
+}
 
 if ($LASTEXITCODE -ne 0) {
    Write-Error "Non-zero exit-code: $LASTEXITCODE"

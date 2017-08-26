@@ -112,9 +112,13 @@ foreach ($mirror in $Mirrors){
 		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$($destination)\"}
 		Write-Host "WinFSTest finished" -ForegroundColor Green
 
-		Write-Host "Start IFSTest" -ForegroundColor Green
-		Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
-		Write-Host "IFSTestTest finished" -ForegroundColor Green
+		if ($destination.StartsWith("C:\")) {
+			Write-Host "Start IFSTest" -ForegroundColor Green
+			Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
+			Write-Host "IFSTest finished" -ForegroundColor Green
+		} else {
+			Write-Host "Skipping IFSTest, because it cannot be run against UNC-Paths" -ForegroundColor Green
+		}
 
 		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
 		$app.WaitForExit()
