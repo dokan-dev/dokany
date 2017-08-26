@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - 1.0.4.1000
+### Added
+- Library - Support `FileIdFullDirectoryInformation`
+- CI - IFSTest !
+- Kernel - Add `FILE_NOTIFY_CHANGE_LAST_WRITE` in cleanup after write
+- Kernel - Notify file size changed after a write beyond old size
+
+### Changed
+- Mirror -  Query underlying fs for filesystem flags and AND them with mirror default flags.
+			Get filesystem name and maximum component length from underlying fs.
+			Change default maximum component length from 256 to 255.
+- Library - Doc Add context release info in CreateFile
+- Build - PS Sign - Add env variables required in comments
+- Mirror - Ensure the Security Descriptor length is set in mirror
+- Library - `DokanNetworkProviderUninstall` Make a single call of wcsstr
+- Library - `DokanNetworkProviderUninstall` if `DOKAN_NP_NAME` is already removed return TRUE
+
+### Fixed
+- Installer - Exe not signed
+- Mirror - add `FILE_NAMED_STREAMS` to FileSystemFlags
+- Kernel - Issue #490 #502 #503 #554 #412
+- Library - Fix dokanctl UAC execution level
+- FUSE - Warning due to `DWORD` printed as %d
+- FUSE - Braces warning and remove commented code
+- Kernel - BSOD with verifier enabled
+- Kernel - BSOD during searching the backslash
+- Kernel - Buffer len check `IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME`
 
 ## [1.0.3.1000] - 2017-03-24
 ### Added
@@ -15,8 +41,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Library - Improve some mount error messages.
-- FUSE - Return error when file open as directory with FILE_NON_DIRECTORY_FILE.
-- Kernel - Clean all global disk device data in CleanupGlobalDiskDevice
+- FUSE - Return error when file open as directory with `FILE_NON_DIRECTORY_FILE`.
+- Kernel - Clean all global disk device data in `CleanupGlobalDiskDevice`
 - Kernel - Update mount point if mount manager did not follow our suggestion.
 
 ### Fixed
@@ -45,9 +71,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Changed
 - FUSE - Use pkg-config for building mirror
 - Kernel - Many improvement allocation stack and heap
-- Kernel - Enable PAGED_CODE for `DokanCheckShareAccess`
+- Kernel - Enable `PAGED_CODE` for `DokanCheckShareAccess`
 - Mirror - Return empty SACL if mirror doesn't have SeSecurityPrivilege
-- Library - Use DeleteMountPoint for removing reparse point instead of `DeleteVolumeMountPoint`
+- Library - Use `DeleteMountPoint` for removing reparse point instead of `DeleteVolumeMountPoint`
 - Library - Remove Redundant control flow jump 
 
 ### Fixed
