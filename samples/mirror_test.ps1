@@ -44,7 +44,7 @@ $ifstestParameters = @(
 	"-g", "Quotas"
 	"-g", "Encryption"
 	"-g", "ObjectId"
-	"-g", "Mountpoints"
+	"-g", "MountPoints"
 	"-g", "ReparsePoints"
 	"-g", "SparseFiles"
 	"/v",                                  # verbose output
