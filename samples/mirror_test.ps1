@@ -112,7 +112,7 @@ foreach ($mirror in $Mirrors){
 		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$($destination)\"}
 		Write-Host "WinFSTest finished" -ForegroundColor Green
 
-		if ($destination.StartsWith("C:\")) {
+		if ($destination -match "[a-zA-Z]:") {
 			Write-Host "Start IFSTest" -ForegroundColor Green
 			Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
 			Write-Host "IFSTest finished" -ForegroundColor Green
