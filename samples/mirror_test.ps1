@@ -101,23 +101,23 @@ foreach ($mirror in $Mirrors){
 	$Commands.Keys | % {
 		$command = $_
 		$destination = $Commands.Item($_)
+		
+		# Cleanup mirror folder
+		Remove-Item -Recurse -Force "C:\$fsTestPath\*"
+		New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
 	
 		Write-Host Test mirror $mirror with args $command with $destination as mount -ForegroundColor Green
 		if ($destination.StartsWith("C:\")) {
-			#Cleanup mount folder - Tag source folder to wait a not empty folder at mount
-			New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
+			# Cleanup mount folder - Tag source folder to wait a not empty folder at mount
 			if (!(Test-Path $destination)) { New-Item $destination -type directory | Out-Null }
 			Remove-Item -Recurse -Force "$($destination)\*"
 		}
 		
 		$app = Start-Process -passthru $mirror -ArgumentList "/r C:\$fsTestPath $command"
 		
+		# When mirror finished mounting, Test-Path will return success.
 		$count = 20;
-		if ($destination.StartsWith("C:\")) {
-			while (!(Test-Path "$($destination)\*") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
-		} else {
-			while (!(Test-Path $destination) -and ($count -ne 0)) { Start-Sleep -m 250 ; $count -= 1 }
-		}
+		while (!(Test-Path "$($destination)\tmp") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
 		
 		if ($count -eq 0) {
 			throw ("Impossible to mount for command $command")
