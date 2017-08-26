@@ -87,7 +87,7 @@ Return Value:
     ASSERT(fcb != NULL);
 
     FlushFcb(fcb, fileObject);
-    
+
     DokanFCBLockRW(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -173,6 +173,11 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   status = EventInfo->Status;
 
   DokanFCBLockRO(fcb);
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
+    DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
+                            FILE_ACTION_MODIFIED);
+  }
+
   if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,

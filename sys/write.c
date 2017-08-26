@@ -312,7 +312,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
-    if(fcbLocked)
+    if (fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
@@ -329,6 +329,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   PDokanCCB ccb;
+  PDokanFCB fcb;
   PFILE_OBJECT fileObject;
 
   fileObject = IrpEntry->FileObject;
@@ -341,6 +342,9 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
+
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
@@ -355,6 +359,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     // update current byte offset only when synchronous IO and not paging IO
     fileObject->CurrentByteOffset.QuadPart =
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
     DDbgPrint("  Updated CurrentByteOffset %I64d\n",
               fileObject->CurrentByteOffset.QuadPart);
   }
