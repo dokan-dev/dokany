@@ -20,6 +20,7 @@ $ifstest_pass = "D0kan_1fstest"
 # TODO: read password from command-line or file to keep dev-machines secure
 
 $fsTestPath = "FSTMP"
+$fsTestPath2 = "FSTMP2"
 
 $DokanDriverLetter = "M"
 $Commands = @{
@@ -36,7 +37,10 @@ $ifstestParameters = @(
 	"-t", "EndOfFileInformationTest",      # reason: IFSTest crashes 😲. Issue #546
 	"-t", "NotificationSecurityTest",      # reason: IFSTest hangs 😞. Issue #547
 	"-t", "NotificationCleanupAttribTest"  # reason: bothersome to wait for timeout. Issue #548
-	"-t", "AVChangeLogTest"                # reason: Part of journaltest
+	"-t", "SimpleRenameInformationTest"    # reason: Issue #566
+	"-t", "AVChangeLogTest"                # reason: Part of ChangeJournal
+	"-t", "MountedDirtyTest"               # reason: Need a reboot to see the result
+	"-t", "SetCompressionTest"             # reason: Compression is not enable on Mirror
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
@@ -47,7 +51,10 @@ $ifstestParameters = @(
 	"-g", "MountPoints"
 	"-g", "ReparsePoints"
 	"-g", "SparseFiles"
+	"-p",                                  # Enable pagefile testing in CreatePagingFileTest
 	"/v",                                  # verbose output
+	"/d", "\Device\Dokan_1"                # Dokan device named need for FileSystemDeviceOpenTest
+	"/r", "C:\$fsTestPath2"                # SimpleRenameInformationTest need an extra volum
 	"/u", $ifstest_user,
 	"/U", $ifstest_pass
 )
@@ -86,6 +93,7 @@ if (!(Test-Path .\winfstest\TestSuite\winfstest.exe))
 Write-Host Build test tools done. -ForegroundColor Green
 
 if (!(Test-Path "C:\$fsTestPath")) { New-Item "C:\$fsTestPath" -type directory | Out-Null }
+if (!(Test-Path "C:\$fsTestPath2")) { New-Item "C:\$fsTestPath2" -type directory | Out-Null }
 
 add-type -AssemblyName System.Windows.Forms
 
