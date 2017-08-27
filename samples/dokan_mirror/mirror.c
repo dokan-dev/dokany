@@ -281,14 +281,22 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_COMPRESSED);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DEVICE);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DIRECTORY);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_INTEGRITY_STREAM);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NO_SCRUB_DATA);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_REPARSE_POINT);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SPARSE_FILE);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_VIRTUAL);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
@@ -371,6 +379,16 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     }
   } else {
     // It is a create file request
+
+    // Cannot overwrite a hidden or system file if flag not set
+    if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+            (!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
+             (fileAttr & FILE_ATTRIBUTE_HIDDEN)) ||
+        (!(fileAttributesAndFlags & FILE_ATTRIBUTE_SYSTEM) &&
+         (fileAttr & FILE_ATTRIBUTE_SYSTEM)) &&
+            (creationDisposition == TRUNCATE_EXISTING ||
+             creationDisposition == CREATE_ALWAYS))
+      return STATUS_ACCESS_DENIED;
 
     // Truncate should always be used with write access
     // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
@@ -709,7 +727,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
              HandleFileInformation->nFileSizeLow);
   }
 
-  DbgPrint(L"\n");
+  DbgPrint(L"FILE ATTRIBUTE  = %d\n", HandleFileInformation->dwFileAttributes);
 
   if (opened)
     CloseHandle(handle);
