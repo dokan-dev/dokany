@@ -382,10 +382,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
     // Cannot overwrite a hidden or system file if flag not set
     if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-            (!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
+            ((!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
              (fileAttr & FILE_ATTRIBUTE_HIDDEN)) ||
         (!(fileAttributesAndFlags & FILE_ATTRIBUTE_SYSTEM) &&
-         (fileAttr & FILE_ATTRIBUTE_SYSTEM)) &&
+         (fileAttr & FILE_ATTRIBUTE_SYSTEM))) &&
             (creationDisposition == TRUNCATE_EXISTING ||
              creationDisposition == CREATE_ALWAYS))
       return STATUS_ACCESS_DENIED;
@@ -410,6 +410,14 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
       status = DokanNtStatusFromWin32(error);
     } else {
+
+      //Need to update FileAttributes with previous when Overwrite file
+      if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+          (creationDisposition == TRUNCATE_EXISTING ||
+           creationDisposition == CREATE_ALWAYS)) {
+        SetFileAttributes(filePath, fileAttributesAndFlags | fileAttr);
+      }
+
       DokanFileInfo->Context =
           (ULONG64)handle; // save the file handle in Context
 
@@ -420,7 +428,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
           DbgPrint(L"\tOpen an already existing file\n");
           // Open succeed but we need to inform the driver
           // that the file open and not created by returning STATUS_OBJECT_NAME_COLLISION
-          return STATUS_OBJECT_NAME_COLLISION;
+          status = STATUS_OBJECT_NAME_COLLISION;
         }
       }
     }
@@ -1043,7 +1051,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
-  DbgPrint(L"SetFileAttributes %s\n", filePath);
+  DbgPrint(L"SetFileAttributes %s 0x%x\n", filePath, FileAttributes);
 
   if (!SetFileAttributes(filePath, FileAttributes)) {
     DWORD error = GetLastError();
