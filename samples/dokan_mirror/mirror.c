@@ -271,7 +271,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         // Needed by FindFirstFile to list files in it
         // TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
         ShareAccess |= FILE_SHARE_READ;
-      } else { // FILE_NON_DIRECTORY_FILE - Cannot open a file as a Dir
+      } else { // FILE_NON_DIRECTORY_FILE - Cannot open a dir as a file
+        DbgPrint(L"\tCannot open a dir as a file\n");
         return STATUS_FILE_IS_A_DIRECTORY;
       }
     }

@@ -290,16 +290,21 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
                       ? FILE_LIST_DIRECTORY
                       : 0));
 
+      options |= FILE_OPEN_FOR_BACKUP_INTENT; //Enable open directory
+      options &= ~FILE_NON_DIRECTORY_FILE;    //Remove non dir flag
+
       status = DokanInstance->DokanOperations->ZwCreateFile(
           fileName, &ioSecurityContext, newDesiredAccess,
           EventContext->Operation.Create.FileAttributes,
-          EventContext->Operation.Create.ShareAccess, disposition,
-          options | FILE_OPEN_FOR_BACKUP_INTENT, &fileInfo);
+          EventContext->Operation.Create.ShareAccess, disposition, options,
+          &fileInfo);
 
       if (status == STATUS_SUCCESS) {
         DbgPrint("Parent give us the right to delete\n");
         eventInfo.Status = STATUS_SUCCESS;
         eventInfo.Operation.Create.Information = FILE_OPENED;
+      } else {
+        DbgPrint("Parent CreateFile failed status = %lx\n", status);
       }
     }
 
