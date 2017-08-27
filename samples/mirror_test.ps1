@@ -105,7 +105,7 @@ foreach ($mirror in $Mirrors){
 		$destination = $Commands.Item($_)
 		
 		# Cleanup mirror folder
-		Remove-Item -Recurse -Force "C:\$fsTestPath\*"
+		Remove-Item -Recurse -Force "C:\$fsTestPath\*" | Out-Null
 		New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
 	
 		Write-Host Test mirror $mirror with args $command with $destination as mount -ForegroundColor Green
