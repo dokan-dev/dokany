@@ -642,7 +642,7 @@ Return Value:
           fileObject->FileName.Buffer[0] == '\\') {
         DDbgPrint("  when RelatedFileObject is specified, the file name should "
                   "be relative path\n");
-        status = STATUS_OBJECT_NAME_INVALID;
+        status = STATUS_INVALID_PARAMETER;
         __leave;
       }
       if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
