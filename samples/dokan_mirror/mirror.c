@@ -102,7 +102,7 @@ static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
   SID_NAME_USE snu;
 
   if (!g_DebugMode)
-	  return;
+    return;
 
   handle = DokanOpenRequestorToken(DokanFileInfo);
   if (handle == INVALID_HANDLE_VALUE) {
@@ -320,6 +320,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   if (DokanFileInfo->IsDirectory) {
     // It is a create directory request
     if (creationDisposition == CREATE_NEW) {
+
+      if (fileAttributesAndFlags & FILE_ATTRIBUTE_TEMPORARY)
+        return STATUS_INVALID_PARAMETER;
+
       if (!CreateDirectory(filePath, &securityAttrib)) {
         error = GetLastError();
         DbgPrint(L"\terror code = %d\n\n", error);
@@ -1128,9 +1132,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 
   DbgPrint(L"  Opening new handle with READ_CONTROL access\n");
   HANDLE handle = CreateFile(
-      filePath, READ_CONTROL | ((requestingSaclInfo && g_HasSeSecurityPrivilege)
-                                    ? ACCESS_SYSTEM_SECURITY
-                                    : 0),
+      filePath,
+      READ_CONTROL | ((requestingSaclInfo && g_HasSeSecurityPrivilege)
+                          ? ACCESS_SYSTEM_SECURITY
+                          : 0),
       FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
       NULL, // security attribute
       OPEN_EXISTING,
@@ -1156,12 +1161,14 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
       return DokanNtStatusFromWin32(error);
     }
   }
-  
+
   // Ensure the Security Descriptor Length is set
-  DWORD securityDescriptorLength = GetSecurityDescriptorLength(SecurityDescriptor);
-  DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = securityDescriptorLength \n");
+  DWORD securityDescriptorLength =
+      GetSecurityDescriptorLength(SecurityDescriptor);
+  DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = "
+           L"securityDescriptorLength \n");
   *LengthNeeded = securityDescriptorLength;
-  
+
   CloseHandle(handle);
 
   return STATUS_SUCCESS;
@@ -1206,42 +1213,45 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
 
   wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"DOKAN");
 
-  if (VolumeSerialNumber) 
+  if (VolumeSerialNumber)
     *VolumeSerialNumber = 0x19831116;
   if (MaximumComponentLength)
     *MaximumComponentLength = 255;
   if (FileSystemFlags)
-   *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
-                     FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
-                     FILE_PERSISTENT_ACLS | FILE_NAMED_STREAMS;
+    *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
+                       FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
+                       FILE_PERSISTENT_ACLS | FILE_NAMED_STREAMS;
 
   volumeRoot[0] = RootDirectory[0];
-  volumeRoot[1] = ':';  
-  volumeRoot[2] = '\\';  
-  volumeRoot[3] = '\0';  
+  volumeRoot[1] = ':';
+  volumeRoot[2] = '\\';
+  volumeRoot[3] = '\0';
 
-  if (GetVolumeInformation(volumeRoot, NULL, 0, NULL, MaximumComponentLength, 
-        &fsFlags, FileSystemNameBuffer, FileSystemNameSize)) {
+  if (GetVolumeInformation(volumeRoot, NULL, 0, NULL, MaximumComponentLength,
+                           &fsFlags, FileSystemNameBuffer,
+                           FileSystemNameSize)) {
 
     if (FileSystemFlags)
       *FileSystemFlags &= fsFlags;
 
     if (MaximumComponentLength) {
-      DbgPrint(L"GetVolumeInformation: max component length %u\n", 
-                 *MaximumComponentLength);
+      DbgPrint(L"GetVolumeInformation: max component length %u\n",
+               *MaximumComponentLength);
     }
     if (FileSystemNameBuffer) {
-      DbgPrint(L"GetVolumeInformation: file system name %s\n", 
-                 FileSystemNameBuffer);
+      DbgPrint(L"GetVolumeInformation: file system name %s\n",
+               FileSystemNameBuffer);
     }
     if (FileSystemFlags) {
-      DbgPrint(L"GetVolumeInformation: got file system flags 0x%08x," 
-          L" returning 0x%08x\n", fsFlags, *FileSystemFlags);
+      DbgPrint(L"GetVolumeInformation: got file system flags 0x%08x,"
+               L" returning 0x%08x\n",
+               fsFlags, *FileSystemFlags);
     }
   } else {
 
-    DbgPrint(L"GetVolumeInformation: unable to query underlying fs," 
-               L" using defaults.  Last error = %u\n", GetLastError());
+    DbgPrint(L"GetVolumeInformation: unable to query underlying fs,"
+             L" using defaults.  Last error = %u\n",
+             GetLastError());
 
     // File system name could be anything up to 10 characters.
     // But Windows check few feature availability based on file system name.
