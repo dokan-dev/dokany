@@ -377,6 +377,14 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         CreateDisposition == FILE_CREATE)
       return STATUS_OBJECT_NAME_COLLISION; // File already exist because
                                            // GetFileAttributes found it
+
+	// Check first if we're trying to open a directory as a file, using FILE_NON_DIRECTORY_FILE instead of !FILE_DIRECTORY_FILE.
+	if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+		(fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
+		(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
+		return STATUS_FILE_IS_A_DIRECTORY;
+	}
+
     handle = CreateFile(
         filePath,
         genericDesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
