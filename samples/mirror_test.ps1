@@ -41,6 +41,7 @@ $ifstestParameters = @(
 	"-t", "AVChangeLogTest"                # reason: Part of ChangeJournal
 	"-t", "MountedDirtyTest"               # reason: Need a reboot to see the result
 	"-t", "SetCompressionTest"             # reason: Compression is not enable on Mirror
+	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not implemented in Mirror
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
