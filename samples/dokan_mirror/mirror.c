@@ -413,8 +413,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
       //Need to update FileAttributes with previous when Overwrite file
       if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-          (creationDisposition == TRUNCATE_EXISTING ||
-           creationDisposition == CREATE_ALWAYS)) {
+          creationDisposition == TRUNCATE_EXISTING) {
         SetFileAttributes(filePath, fileAttributesAndFlags | fileAttr);
       }
 
