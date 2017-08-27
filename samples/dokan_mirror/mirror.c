@@ -268,10 +268,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
       if (!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
         DokanFileInfo->IsDirectory = TRUE;
-        if (DesiredAccess & DELETE) {
-          // Needed by FindFirstFile to see if directory is empty or not
-          ShareAccess |= FILE_SHARE_READ;
-        }
+        // Needed by FindFirstFile to list files in it
+        // TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
+        ShareAccess |= FILE_SHARE_READ;
       } else { // FILE_NON_DIRECTORY_FILE - Cannot open a file as a Dir
         return STATUS_FILE_IS_A_DIRECTORY;
       }
@@ -730,7 +729,7 @@ MirrorFindFiles(LPCWSTR FileName,
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
-  DbgPrint(L"FindFiles :%s\n", filePath);
+  DbgPrint(L"FindFiles : %s\n", filePath);
 
   fileLen = wcslen(filePath);
   if (filePath[fileLen - 1] != L'\\') {
