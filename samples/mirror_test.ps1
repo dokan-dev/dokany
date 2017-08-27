@@ -43,6 +43,7 @@ $ifstestParameters = @(
 	"-t", "SetCompressionTest"             # reason: Compression is not enable on Mirror
 	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not implemented in Mirror
 	"-t", "OpenVolumeTest"                 # reason: We do not have FCB for \ to count open
+	"-t", "CaseSensitiveTest"              # reason: NTFS and CreateFile is not case sensitive by default
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
