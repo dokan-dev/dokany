@@ -647,18 +647,19 @@ Return Value:
       }
       if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
           relatedFileName->Buffer[relatedFileName->Length / sizeof(WCHAR) -
-                                  1] != '\\' && fileObject->FileName.Buffer[0] != ':') {
+                                  1] != '\\' &&
+          fileObject->FileName.Buffer[0] != ':') {
         needBackSlashAfterRelatedFile = TRUE;
         fileNameLength += sizeof(WCHAR);
       }
       // for if we're trying to open a file that's actually an alternate data
       // stream of the root dircetory as in "\:foo"
       // in this case we won't prepend relatedFileName to the file name
-      if (relatedFileName->Length / sizeof(WCHAR) == 1 &&  
-		fileObject->FileName.Length > 0 &&
-		relatedFileName->Buffer[0] == '\\' && 
-		fileObject->FileName.Buffer[0] == ':') {
-	alternateDataStreamOfRootDir = TRUE;
+      if (relatedFileName->Length / sizeof(WCHAR) == 1 &&
+          fileObject->FileName.Length > 0 &&
+          relatedFileName->Buffer[0] == '\\' &&
+          fileObject->FileName.Buffer[0] == ':') {
+        alternateDataStreamOfRootDir = TRUE;
       }
     }
 
@@ -738,8 +739,18 @@ Return Value:
     DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
               fcb);
 
+    // Cannot create a file already open
     if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
       status = STATUS_OBJECT_NAME_COLLISION;
+      __leave;
+    }
+
+    // Cannot create a directory temporary
+    if (FlagOn(irpSp->Parameters.Create.Options, FILE_DIRECTORY_FILE) &&
+        FlagOn(irpSp->Parameters.Create.FileAttributes,
+               FILE_ATTRIBUTE_TEMPORARY) &&
+        (FILE_CREATE == disposition || FILE_OPEN_IF == disposition)) {
+      status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
@@ -995,9 +1006,9 @@ Return Value:
 
     DokanFCBUnlock(fcb);
     fcbLocked = FALSE;
-//
-// Oplock
-//
+    //
+    // Oplock
+    //
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     OpenRequiringOplock = BooleanFlagOn(irpSp->Parameters.Create.Options,
@@ -1227,9 +1238,9 @@ Return Value:
     DDbgPrint("  Create: FileName:%wZ, status = 0x%08x\n",
               &fileObject->FileName, status);
 
-// Getting here by __leave isn't always a failure,
-// so we shouldn't necessarily clean up only because
-// AbnormalTermination() returns true
+    // Getting here by __leave isn't always a failure,
+    // so we shouldn't necessarily clean up only because
+    // AbnormalTermination() returns true
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     //

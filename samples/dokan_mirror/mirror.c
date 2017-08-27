@@ -323,29 +323,23 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
   if (DokanFileInfo->IsDirectory) {
     // It is a create directory request
-    if (creationDisposition == CREATE_NEW) {
 
-      if (fileAttributesAndFlags & FILE_ATTRIBUTE_TEMPORARY)
-        return STATUS_INVALID_PARAMETER;
-
+    if (creationDisposition == CREATE_NEW ||
+        creationDisposition == OPEN_ALWAYS) {
+      //We create folder
       if (!CreateDirectory(filePath, &securityAttrib)) {
         error = GetLastError();
-        DbgPrint(L"\terror code = %d\n\n", error);
-        status = DokanNtStatusFromWin32(error);
-      }
-    } else if (creationDisposition == OPEN_ALWAYS) {
-
-      if (!CreateDirectory(filePath, &securityAttrib)) {
-
-        error = GetLastError();
-
-        if (error != ERROR_ALREADY_EXISTS) {
+        // Fail to create folder for OPEN_ALWAYS is not an error
+        if (error != ERROR_ALREADY_EXISTS ||
+            creationDisposition == CREATE_NEW) {
           DbgPrint(L"\terror code = %d\n\n", error);
           status = DokanNtStatusFromWin32(error);
         }
       }
     }
+
     if (status == STATUS_SUCCESS) {
+
       //Check first if we're trying to open a file as a directory.
       if (fileAttr != INVALID_FILE_ATTRIBUTES &&
           !(fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
@@ -367,6 +361,12 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
       } else {
         DokanFileInfo->Context =
             (ULONG64)handle; // save the file handle in Context
+
+        // Open succeed but we need to inform the driver
+        // that the dir open and not created by returning STATUS_OBJECT_NAME_COLLISION
+        if (creationDisposition == OPEN_ALWAYS &&
+            fileAttr != INVALID_FILE_ATTRIBUTES)
+          return STATUS_OBJECT_NAME_COLLISION;
       }
     }
   } else {
@@ -378,10 +378,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
       return STATUS_OBJECT_NAME_COLLISION; // File already exist because
                                            // GetFileAttributes found it
 
-	// Truncate should always be used with write access
-	// TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
-	if (creationDisposition == TRUNCATE_EXISTING)
-		genericDesiredAccess |= GENERIC_WRITE;
+    // Truncate should always be used with write access
+    // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
+    if (creationDisposition == TRUNCATE_EXISTING)
+      genericDesiredAccess |= GENERIC_WRITE;
 
     handle = CreateFile(
         filePath,
