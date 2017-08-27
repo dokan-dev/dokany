@@ -328,6 +328,9 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
       }
     }
 
+    if (disposition == FILE_OVERWRITE)
+      eventInfo.Operation.Create.Information = FILE_OVERWRITTEN;
+
     if (fileInfo.IsDirectory)
       eventInfo.Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
   }

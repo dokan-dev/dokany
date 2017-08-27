@@ -377,6 +377,12 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         CreateDisposition == FILE_CREATE)
       return STATUS_OBJECT_NAME_COLLISION; // File already exist because
                                            // GetFileAttributes found it
+
+	// Truncate should always be used with write access
+	// TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
+	if (creationDisposition == TRUNCATE_EXISTING)
+		genericDesiredAccess |= GENERIC_WRITE;
+
     handle = CreateFile(
         filePath,
         genericDesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
