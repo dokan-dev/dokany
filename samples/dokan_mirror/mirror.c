@@ -264,13 +264,17 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   // be opened.
   fileAttr = GetFileAttributes(filePath);
 
-  if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-      (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-      !(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
-    DokanFileInfo->IsDirectory = TRUE;
-    if (DesiredAccess & DELETE) {
-      // Needed by FindFirstFile to see if directory is empty or not
-      ShareAccess |= FILE_SHARE_READ;
+  if (fileAttr != INVALID_FILE_ATTRIBUTES) {
+    if (fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+      if (!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
+        DokanFileInfo->IsDirectory = TRUE;
+        if (DesiredAccess & DELETE) {
+          // Needed by FindFirstFile to see if directory is empty or not
+          ShareAccess |= FILE_SHARE_READ;
+        }
+      } else { // FILE_NON_DIRECTORY_FILE - Cannot open a file as a Dir
+        return STATUS_FILE_IS_A_DIRECTORY;
+      }
     }
   }
 
