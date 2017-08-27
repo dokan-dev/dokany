@@ -42,6 +42,7 @@ $ifstestParameters = @(
 	"-t", "MountedDirtyTest"               # reason: Need a reboot to see the result
 	"-t", "SetCompressionTest"             # reason: Compression is not enable on Mirror
 	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not implemented in Mirror
+	"-t", "OpenVolumeTest"                 # reason: We do not have FCB for \ to count open
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
