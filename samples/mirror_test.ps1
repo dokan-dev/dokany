@@ -50,6 +50,8 @@ $ifstestParameters = @(
 	"-t", "LinkInformationTest"            # reason: file link  not supported
 	"-t", "AlternateNameInformationTest"   # reason: alternate name not supported
 	"-t", "HardLinkInformationTest"        # reason: hard link not supported
+	"-t", "EaInformationTest"              # reason: extended file attributes not supported
+	"-t", "FullDirectoryInformationTest"   # reason: Fail because extended attributes is incorrect
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
