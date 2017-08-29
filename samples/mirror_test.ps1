@@ -19,18 +19,43 @@ $ifstest_user = "dokan_ifstest"
 $ifstest_pass = "D0kan_1fstest"
 # TODO: read password from command-line or file to keep dev-machines secure
 
-$fsTestPath = "FSTMP"
-$fsTestPath2 = "FSTMP2"
+$fsTestPath = "C:\FSTMP"
+$fsTestPath2 = "C:\FSTMP2"
 
 $DokanDriverLetter = "M"
-$Commands = @{
-	"/l $DokanDriverLetter" = "$($DokanDriverLetter):"
-	"/l C:\DokanMount" = "C:\DokanMount"
-	"/l $DokanDriverLetter /m" = "$($DokanDriverLetter):"
-	"/l $DokanDriverLetter /o" = "$($DokanDriverLetter):"
-	"/l $DokanDriverLetter /n" = "$($DokanDriverLetter):"
-	"/l $DokanDriverLetter /n /u \myfs\dokan" = "\\myfs\dokan"
-}
+$Configs = @(
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "drive";
+	},
+	@{
+		"MirrorArguments" = "/l C:\DokanMount";
+		"Destination" = "C:\DokanMount";
+		"Name" = "dirJunction";
+	},
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /m";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "driveRemovable";
+	},
+
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /o";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "driveMntMgr";
+	},
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /n";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "netDrive";
+	},
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /n /u \myfs\dokan";
+		"Destination" = "\\myfs\dokan";
+		"Name" = "netUnc";
+	}
+)
 
 $ifstestParameters = @(
 	"-t", "FileNameLengthTest",            # reason: buffer overflow in mirror. Issue #511
@@ -67,7 +92,7 @@ $ifstestParameters = @(
 	"-p",                                  # Enable pagefile testing in CreatePagingFileTest
 	"/v",                                  # verbose output
 	"/d", "\Device\Dokan_1"                # Dokan device named need for FileSystemDeviceOpenTest
-	"/r", "C:\$fsTestPath2"                # SimpleRenameInformationTest need an extra volum
+	"/r", "$fsTestPath2"                   # SimpleRenameInformationTest need an extra volum
 	"/u", $ifstest_user,
 	"/U", $ifstest_pass
 )
@@ -105,28 +130,34 @@ if (!(Test-Path .\winfstest\TestSuite\winfstest.exe))
 }
 Write-Host Build test tools done. -ForegroundColor Green
 
-if (!(Test-Path "C:\$fsTestPath")) { New-Item "C:\$fsTestPath" -type directory | Out-Null }
-if (!(Test-Path "C:\$fsTestPath2")) { New-Item "C:\$fsTestPath2" -type directory | Out-Null }
+if (!(Test-Path $fsTestPath)) { New-Item $fsTestPath -type directory | Out-Null }
+if (!(Test-Path $fsTestPath2)) { New-Item $fsTestPath2 -type directory | Out-Null }
 
 add-type -AssemblyName System.Windows.Forms
 
-foreach ($mirror in $Mirrors){
-	$Commands.Keys | % {
-		$command = $_
-		$destination = $Commands.Item($_)
-		
-		# Cleanup mirror folder
-		Remove-Item -Recurse -Force "C:\$fsTestPath\*" | Out-Null
-		New-Item -Force "C:\$fsTestPath\tmp" | Out-Null
-	
-		Write-Host Test mirror $mirror with args $command with $destination as mount -ForegroundColor Green
-		if ($destination.StartsWith("C:\")) {
-			# Cleanup mount folder - Tag source folder to wait a not empty folder at mount
+$mirrorCount = 1;
+foreach ($mirror in $Mirrors) {
+	foreach ($Config in $Configs) {
+		$command = $Config.Item("MirrorArguments")
+		$destination = $Config.Item("Destination")
+		$Name  = "$mirrorCount\$($Config.Item("Name"))"
+		$MirrorDir = "$fsTestPath\$Name"
+		New-Item -Force -Type Directory $MirrorDir
+
+		# Cleanup mirror folder and second volume folder
+		Remove-Item -Recurse -Force "$MirrorDir\*" | Out-Null
+		Remove-Item -Recurse -Force "$fsTestPath2\*" | Out-Null
+		# dummy file used for checking that the mount succeeded further below
+		New-Item -Force "$MirrorDir\tmp" | Out-Null
+
+		Write-Host Test mirror $mirror with args /r $MirrorDir $command with $destination as mount -ForegroundColor Green
+		if ($destination.StartsWith("C:\")) {   # destination is a directory junction
+			# Cleanup mount folder - Ensure the target dir is empty when mounting to a directory junction
 			if (!(Test-Path $destination)) { New-Item $destination -type directory | Out-Null }
 			Remove-Item -Recurse -Force "$($destination)\*"
 		}
 		
-		$app = Start-Process -passthru $mirror -ArgumentList "/r C:\$fsTestPath $command"
+		$app = Start-Process -passthru $mirror -ArgumentList "/r $MirrorDir $command"
 		
 		# When mirror finished mounting, Test-Path will return success.
 		$count = 20;
@@ -152,9 +183,11 @@ foreach ($mirror in $Mirrors){
 			Write-Host "Skipping IFSTest, because it cannot be run against UNC-Paths" -ForegroundColor Green
 		}
 
+		#TODO: can we use dokanctl to unmount?
 		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
 		$app.WaitForExit()
 		Write-Host Test mirror $mirror ended. -ForegroundColor Green
 	}
+	$mirrorCount += 1;
 }
 
