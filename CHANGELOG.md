@@ -18,7 +18,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Build - PS Sign - Add env variables required in comments
 - Mirror - Ensure the Security Descriptor length is set in mirror
 - Library - `DokanNetworkProviderUninstall` Make a single call of wcsstr
-- Library - `DokanNetworkProviderUninstall` if `DOKAN_NP_NAME` is already removed return TRUE
+- Library - `DokanNetworkProviderUninstall` if `DOKAN_NP_NAME` is already removed return `TRUE`
+- Mirror - Return `STATUS_INVALID_PARAMETER` error when folder is asked to be created with `FILE_ATTRIBUTE_TEMPORARY`
+- Mirror - Always set `FILE_SHARE_READ` for directory to avoid sharing violation for `FindFirstFile`
+- Library - When looking parent folder if we have the right to remove a file, cleanup `FILE_NON_DIRECTORY_FILE`
+- Library - Set proper information for `FILE_OVERWRITE` (`TRUNCATE_EXISTING`) 
+- Mirror - Microsoft doc say `TRUNCATE_EXISTING` need GENERIC_WRITE so we add it
 
 ### Fixed
 - Installer - Exe not signed
@@ -30,6 +35,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - BSOD with verifier enabled
 - Kernel - BSOD during searching the backslash
 - Kernel - Buffer len check `IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME`
+- Kernel - Fix wrong error return for invalid relative file creation with leading slash
+- Mirror - Return proper error when open a directory with `FILE_NON_DIRECTORY_FILE`
+- Mirror - Cannot overwrite a hidden or system file if flag not set return `STATUS_ACCESS_DENIED`
+- Mirror - Update FileAttributes with previous when `TRUNCATE_EXISTING` file 
 
 ## [1.0.3.1000] - 2017-03-24
 ### Added
