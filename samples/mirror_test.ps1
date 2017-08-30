@@ -142,7 +142,7 @@ foreach ($mirror in $Mirrors) {
 		$destination = $Config.Item("Destination")
 		$Name  = "$mirrorCount\$($Config.Item("Name"))"
 		$MirrorDir = "$fsTestPath\$Name"
-		New-Item -Force -Type Directory $MirrorDir
+		New-Item -Force -Type Directory $MirrorDir | Out-Null
 
 		# Cleanup mirror folder and second volume folder
 		Remove-Item -Recurse -Force "$MirrorDir\*" | Out-Null
@@ -154,7 +154,7 @@ foreach ($mirror in $Mirrors) {
 		if ($destination.StartsWith("C:\")) {   # destination is a directory junction
 			# Cleanup mount folder - Ensure the target dir is empty when mounting to a directory junction
 			if (!(Test-Path $destination)) { New-Item $destination -type directory | Out-Null }
-			Remove-Item -Recurse -Force "$($destination)\*"
+			Remove-Item -Recurse -Force "$($destination)\*" | Out-Null
 		}
 		
 		$app = Start-Process -passthru $mirror -ArgumentList "/r $MirrorDir $command"
