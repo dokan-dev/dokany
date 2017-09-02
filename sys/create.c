@@ -394,6 +394,12 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   NTSTATUS status;
   PAGED_CODE();
 
+  // Cannot open a flag with delete pending without share delete
+  if ((FcbOrDcb->Identifier.Type == FCB) &&
+      !FlagOn(ShareAccess, FILE_SHARE_DELETE) &&
+      DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_DELETE_ON_CLOSE))
+    return STATUS_DELETE_PENDING;
+
 #if (NTDDI_VERSION >= NTDDI_VISTA)
   //
   //  Do an extra test for writeable user sections if the user did not allow
@@ -444,7 +450,7 @@ Return Value:
 {
   PDokanVCB vcb = NULL;
   PDokanDCB dcb = NULL;
-  PIO_STACK_LOCATION irpSp;
+  PIO_STACK_LOCATION irpSp = NULL;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject = NULL;
   ULONG info = 0;
@@ -767,15 +773,6 @@ Return Value:
       DDbgPrint("    Was not able to allocate CCB\n");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
-    }
-
-    // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
-    // for windows 8
-    if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-      DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-      DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
-      DDbgPrint(
-          "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
     }
 
     if (irpSp->Parameters.Create.Options & FILE_OPEN_FOR_BACKUP_INTENT) {
@@ -1381,6 +1378,16 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   if (NT_SUCCESS(status)) {
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
+  }
+
+  // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
+  // for windows 8
+  if (NT_SUCCESS(status) &&
+      irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
+    DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+    DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+    DDbgPrint(
+        "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
   }
 
   if (NT_SUCCESS(status)) {
