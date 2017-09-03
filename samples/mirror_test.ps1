@@ -77,6 +77,7 @@ $ifstestParameters = @(
 	"-t", "HardLinkInformationTest"        # reason: hard link not supported
 	"-t", "EaInformationTest"              # reason: extended file attributes not supported
 	"-t", "FullDirectoryInformationTest"   # reason: Fail because extended attributes is incorrect
+	"-t", "CreatePagingFileTest"           # reason: Paging files are not supported
 	#Disable not supported features
 	"-g", "ChangeJournal"
 	"-g", "Virus"
@@ -89,7 +90,6 @@ $ifstestParameters = @(
 	"-g", "SparseFiles"
 	"-g", "EaInformation"
 	"-g", "FileSystemControlGeneral"       # reason: Retrieval Pointers fsctl not supported
-	"-p",                                  # Enable pagefile testing in CreatePagingFileTest
 	"/v",                                  # verbose output
 	"/d", "\Device\Dokan_1"                # Dokan device named need for FileSystemDeviceOpenTest
 	"/r", "$fsTestPath2"                   # SimpleRenameInformationTest need an extra volum

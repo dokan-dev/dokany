@@ -764,8 +764,13 @@ Return Value:
     DokanFCBLockRW(fcb);
 
     if (irpSp->Flags & SL_OPEN_PAGING_FILE) {
-      fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
-      fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
+      status = STATUS_ACCESS_DENIED;
+      __leave;
+      // Paging file is not supported
+      /*
+       fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
+       fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
+       */
     }
 
     ccb = DokanAllocateCCB(dcb, fcb);
