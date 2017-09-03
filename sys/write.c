@@ -359,8 +359,10 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+      DokanFCBLockRO(fcb);
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
                               FILE_ACTION_MODIFIED);
+      DokanFCBUnlock(fcb);
 
       //Update size with new offset
       InterlockedExchange64(
