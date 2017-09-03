@@ -60,7 +60,6 @@ $Configs = @(
 $ifstestParameters = @(
 	"-t", "FileNameLengthTest",            # reason: buffer overflow in mirror. Issue #511
 	"-t", "EndOfFileInformationTest",      # reason: IFSTest crashes 😲. Issue #546
-	"-t", "NotificationCleanupAttribTest"  # reason: bothersome to wait for timeout. Issue #548
 	"-t", "SimpleRenameInformationTest"    # reason: Issue #566
 	"-t", "AVChangeLogTest"                # reason: Part of ChangeJournal
 	"-t", "MountedDirtyTest"               # reason: Need a reboot to see the result
