@@ -863,12 +863,12 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 
   DWORD error = GetLastError();
 
+  FindClose(hFind);
+
   if (error != ERROR_NO_MORE_FILES) {
     DbgPrint(L"\tDeleteDirectory error code = %d\n\n", error);
     return DokanNtStatusFromWin32(error);
   }
-
-  FindClose(hFind);
 
   return STATUS_SUCCESS;
 }
