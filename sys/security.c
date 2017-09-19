@@ -372,7 +372,8 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
-  PDokanCCB ccb;
+  PDokanCCB ccb = NULL;
+  PDokanFCB fcb = NULL;
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 
@@ -389,10 +390,17 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   if (ccb != NULL) {
 
     ccb->UserContext = EventInfo->Context;
-  }
-  else {
-
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
+  } else {
     DDbgPrint("  ccb == NULL\n");
+  }
+
+  if (fcb && NT_SUCCESS(EventInfo->Status)) {
+    DokanFCBLockRO(fcb);
+    DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SECURITY,
+                            FILE_ACTION_MODIFIED);
+    DokanFCBUnlock(fcb);
   }
 
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);

@@ -318,6 +318,9 @@ void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATU
 			}
 		}
 
+		if (EventInfo->CreateDisposition == FILE_OVERWRITE)
+			ioEvent->EventResult->Operation.Create.Information = FILE_OVERWRITTEN;
+
 		if(ioEvent->DokanFileInfo.IsDirectory) {
 
 			ioEvent->EventResult->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;

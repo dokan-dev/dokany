@@ -382,7 +382,7 @@ static void PrintUserName(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   SID_NAME_USE snu;
 
   if (!g_DebugMode)
-	  return;
+    return;
 
   handle = DokanOpenRequestorToken(EventInfo->DokanFileInfo);
   if (handle == INVALID_HANDLE_VALUE) {
@@ -695,29 +695,39 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   // be opened.
   fileAttr = GetFileAttributes(filePath);
 
-  if (fileAttr != INVALID_FILE_ATTRIBUTES
-	  && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)
-	  && !(EventInfo->CreateOptions & FILE_NON_DIRECTORY_FILE)) {
-
-	  EventInfo->DokanFileInfo->IsDirectory = TRUE;
-    
-	  if (EventInfo->DesiredAccess & DELETE) {
-          // Needed by FindFirstFile to see if directory is empty or not
+  if (fileAttr != INVALID_FILE_ATTRIBUTES) {
+    if (fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+      if (!(EventInfo->CreateOptions & FILE_NON_DIRECTORY_FILE)) {
+		  EventInfo->DokanFileInfo->IsDirectory = TRUE;
+        // Needed by FindFirstFile to list files in it
+        // TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
 		  EventInfo->ShareAccess |= FILE_SHARE_READ;
+      } else { // FILE_NON_DIRECTORY_FILE - Cannot open a dir as a file
+        DbgPrint(L"\tCannot open a dir as a file\n");
+        return STATUS_FILE_IS_A_DIRECTORY;
+      }
     }
   }
 
   DbgPrint(L"\n\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_COMPRESSED);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DEVICE);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DIRECTORY);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_INTEGRITY_STREAM);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NO_SCRUB_DATA);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_REPARSE_POINT);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SPARSE_FILE);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+  MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_VIRTUAL);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
   MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
@@ -795,89 +805,95 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
   if (EventInfo->DokanFileInfo->IsDirectory) {
 
-    // It is a create directory request
-    if (creationDisposition == CREATE_NEW) {
+	  // It is a create directory request
 
-      if (!CreateDirectory(filePath, &securityAttrib)) {
+	  if (creationDisposition == CREATE_NEW ||
+		  creationDisposition == OPEN_ALWAYS) {
+		  //We create folder
+		  if (!CreateDirectory(filePath, &securityAttrib)) {
+			  error = GetLastError();
+			  // Fail to create folder for OPEN_ALWAYS is not an error
+			  if (error != ERROR_ALREADY_EXISTS ||
+				  creationDisposition == CREATE_NEW) {
+				  DbgPrint(L"\terror code = %d\n\n", error);
+				  status = DokanNtStatusFromWin32(error);
+			  }
+		  }
+	  }
 
-        error = GetLastError();
-        DbgPrint(L"\terror code = %d\n\n", error);
-        status = DokanNtStatusFromWin32(error);
-      }
-    }
-	else if (creationDisposition == OPEN_ALWAYS) {
+	  if (status == STATUS_SUCCESS) {
 
-      if (!CreateDirectory(filePath, &securityAttrib)) {
+		  //Check first if we're trying to open a file as a directory.
+		  if (fileAttr != INVALID_FILE_ATTRIBUTES
+			  && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY)
+			  && (EventInfo->CreateOptions & FILE_DIRECTORY_FILE)) {
 
-        error = GetLastError();
-
-        if (error != ERROR_ALREADY_EXISTS) {
-
-          DbgPrint(L"\terror code = %d\n\n", error);
-          status = DokanNtStatusFromWin32(error);
-        }
-      }
-    }
-
-    if (status == STATUS_SUCCESS) {
-
-      //Check first if we're trying to open a file as a directory.
-      if (fileAttr != INVALID_FILE_ATTRIBUTES
-		  && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY)
-		  && (EventInfo->CreateOptions & FILE_DIRECTORY_FILE)) {
-
-        return STATUS_NOT_A_DIRECTORY;
-      }
-
-      // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-	  handle = CreateFile(
-          filePath,
-		  genericDesiredAccess,
-		  EventInfo->ShareAccess,
-		  &securityAttrib,
-		  OPEN_EXISTING,
-          fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS,
-		  NULL);
-
-      if (handle == INVALID_HANDLE_VALUE) {
-
-        error = GetLastError();
-        DbgPrint(L"\terror code = %d\n\n", error);
-
-        status = DokanNtStatusFromWin32(error);
-      }
-	  else {
-
-		  MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
-
-		  if(!mirrorHandle) {
-
-			  DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
-
-			  SetLastError(ERROR_INTERNAL_ERROR);
-
-			  CloseHandle(handle);
-
-			  status = STATUS_INTERNAL_ERROR;
+			  return STATUS_NOT_A_DIRECTORY;
 		  }
 
-		  // save the file handle in Context
-		  EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
-      }
-    }
+		  // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
+		  handle = CreateFile(
+			  filePath,
+			  genericDesiredAccess,
+			  EventInfo->ShareAccess,
+			  &securityAttrib,
+			  OPEN_EXISTING,
+			  fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS,
+			  NULL);
+
+		  if (handle == INVALID_HANDLE_VALUE) {
+
+			  error = GetLastError();
+			  DbgPrint(L"\terror code = %d\n\n", error);
+
+			  status = DokanNtStatusFromWin32(error);
+		  }
+		  else {
+
+			  MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
+
+			  if (!mirrorHandle) {
+
+				  DbgPrint(L"\tFailed to create MIRROR_FILE_HANDLE\n");
+
+				  SetLastError(ERROR_INTERNAL_ERROR);
+
+				  CloseHandle(handle);
+
+				  status = STATUS_INTERNAL_ERROR;
+			  }
+
+			  // save the file handle in Context
+			  EventInfo->DokanFileInfo->Context = (ULONG64)mirrorHandle;
+
+			  // Open succeed but we need to inform the driver
+			  // that the dir open and not created by returning STATUS_OBJECT_NAME_COLLISION
+			  if (creationDisposition == OPEN_ALWAYS &&
+				  fileAttr != INVALID_FILE_ATTRIBUTES)
+				  status = STATUS_OBJECT_NAME_COLLISION;
+		  }
+	  }
   }
   else {
 
 	  // It is a create file request
 
-	  if(fileAttr != INVALID_FILE_ATTRIBUTES
-		  && (fileAttr & FILE_ATTRIBUTE_DIRECTORY)
-		  && EventInfo->CreateDisposition == FILE_CREATE) {
-
-		  status = STATUS_OBJECT_NAME_COLLISION; // File already exist because
-											   // GetFileAttributes found it
+	  // Cannot overwrite a hidden or system file if flag not set
+	  if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+		  ((!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
+		  (fileAttr & FILE_ATTRIBUTE_HIDDEN)) ||
+			  (!(fileAttributesAndFlags & FILE_ATTRIBUTE_SYSTEM) &&
+			  (fileAttr & FILE_ATTRIBUTE_SYSTEM))) &&
+				  (EventInfo->CreateDisposition == TRUNCATE_EXISTING ||
+					  EventInfo->CreateDisposition == CREATE_ALWAYS)) {
+		  status = STATUS_ACCESS_DENIED;
 	  }
 	  else {
+
+		  // Truncate should always be used with write access
+		  // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
+		  if (creationDisposition == TRUNCATE_EXISTING)
+			  genericDesiredAccess |= GENERIC_WRITE;
 
 		  handle =
 			  CreateFile(filePath,
@@ -897,6 +913,12 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 			  status = DokanNtStatusFromWin32(error);
 		  }
 		  else {
+
+			  //Need to update FileAttributes with previous when Overwrite file
+			  if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+				  creationDisposition == TRUNCATE_EXISTING) {
+				  SetFileAttributes(filePath, fileAttributesAndFlags | fileAttr);
+			  }
 
 			  MIRROR_FILE_HANDLE *mirrorHandle = PopMirrorFileHandle(handle);
 
@@ -1493,8 +1515,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(DOKAN_GET_FILE_INFO_EVEN
 		EventInfo->FileHandleInfo.nFileSizeLow);
   }
 
-  DbgPrint(L"\n");
-
   return STATUS_SUCCESS;
 }
 
@@ -1510,7 +1530,7 @@ MirrorFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo) {
 
   GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->PathName);
 
-  DbgPrint(L"FindFiles :%s\n", filePath);
+  DbgPrint(L"FindFiles : %s\n", filePath);
 
   fileLen = wcslen(filePath);
   if (filePath[fileLen - 1] != L'\\') {
@@ -2105,7 +2125,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(DOKAN_GET_VOLUME_INFO_
 	  maxVolumeNameLengthInBytes,
 	  volumeName,
 	  bytesToWrite);
-
 
   EventInfo->VolumeInfo->VolumeSerialNumber = 0x19831116;
   EventInfo->VolumeInfo->VolumeLabelLength = (ULONG)(bytesToWrite / sizeof(WCHAR));

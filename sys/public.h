@@ -87,6 +87,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_SYNCHRONOUS_IO 64
 #define DOKAN_WRITE_TO_END_OF_FILE 128
 #define DOKAN_NOCACHE 256
+#define DOKAN_FILE_CHANGE_LAST_WRITE 512
 
 // used in DOKAN_START->DeviceType
 #define DOKAN_DISK_FILE_SYSTEM 0

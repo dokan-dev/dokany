@@ -394,6 +394,12 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   NTSTATUS status;
   PAGED_CODE();
 
+  // Cannot open a flag with delete pending without share delete
+  if ((FcbOrDcb->Identifier.Type == FCB) &&
+      !FlagOn(ShareAccess, FILE_SHARE_DELETE) &&
+      DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_DELETE_ON_CLOSE))
+    return STATUS_DELETE_PENDING;
+
 #if (NTDDI_VERSION >= NTDDI_VISTA)
   //
   //  Do an extra test for writeable user sections if the user did not allow
@@ -444,7 +450,7 @@ Return Value:
 {
   PDokanVCB vcb = NULL;
   PDokanDCB dcb = NULL;
-  PIO_STACK_LOCATION irpSp;
+  PIO_STACK_LOCATION irpSp = NULL;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject = NULL;
   ULONG info = 0;
@@ -641,23 +647,24 @@ Return Value:
           fileObject->FileName.Buffer[0] == '\\') {
         DDbgPrint("  when RelatedFileObject is specified, the file name should "
                   "be relative path\n");
-        status = STATUS_OBJECT_NAME_INVALID;
+        status = STATUS_INVALID_PARAMETER;
         __leave;
       }
       if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
           relatedFileName->Buffer[relatedFileName->Length / sizeof(WCHAR) -
-                                  1] != '\\' && fileObject->FileName.Buffer[0] != ':') {
+                                  1] != '\\' &&
+          fileObject->FileName.Buffer[0] != ':') {
         needBackSlashAfterRelatedFile = TRUE;
         fileNameLength += sizeof(WCHAR);
       }
       // for if we're trying to open a file that's actually an alternate data
       // stream of the root dircetory as in "\:foo"
       // in this case we won't prepend relatedFileName to the file name
-      if (relatedFileName->Length / sizeof(WCHAR) == 1 &&  
-		fileObject->FileName.Length > 0 &&
-		relatedFileName->Buffer[0] == '\\' && 
-		fileObject->FileName.Buffer[0] == ':') {
-	alternateDataStreamOfRootDir = TRUE;
+      if (relatedFileName->Length / sizeof(WCHAR) == 1 &&
+          fileObject->FileName.Length > 0 &&
+          relatedFileName->Buffer[0] == '\\' &&
+          fileObject->FileName.Buffer[0] == ':') {
+        alternateDataStreamOfRootDir = TRUE;
       }
     }
 
@@ -737,8 +744,18 @@ Return Value:
     DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
               fcb);
 
+    // Cannot create a file already open
     if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
       status = STATUS_OBJECT_NAME_COLLISION;
+      __leave;
+    }
+
+    // Cannot create a directory temporary
+    if (FlagOn(irpSp->Parameters.Create.Options, FILE_DIRECTORY_FILE) &&
+        FlagOn(irpSp->Parameters.Create.FileAttributes,
+               FILE_ATTRIBUTE_TEMPORARY) &&
+        (FILE_CREATE == disposition || FILE_OPEN_IF == disposition)) {
+      status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
@@ -746,8 +763,13 @@ Return Value:
     DokanFCBLockRW(fcb);
 
     if (irpSp->Flags & SL_OPEN_PAGING_FILE) {
-      fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
-      fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
+      status = STATUS_ACCESS_DENIED;
+      __leave;
+      // Paging file is not supported
+      /*
+       fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
+       fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
+       */
     }
 
     ccb = DokanAllocateCCB(dcb, fcb);
@@ -755,15 +777,6 @@ Return Value:
       DDbgPrint("    Was not able to allocate CCB\n");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
-    }
-
-    // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
-    // for windows 8
-    if (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-      DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-      DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
-      DDbgPrint(
-          "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
     }
 
     if (irpSp->Parameters.Create.Options & FILE_OPEN_FOR_BACKUP_INTENT) {
@@ -979,9 +992,9 @@ Return Value:
 
     DokanFCBUnlock(fcb);
     fcbLocked = FALSE;
-//
-// Oplock
-//
+    //
+    // Oplock
+    //
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     OpenRequiringOplock = BooleanFlagOn(irpSp->Parameters.Create.Options,
@@ -1211,9 +1224,9 @@ Return Value:
     DDbgPrint("  Create: FileName:%wZ, status = 0x%08x\n",
               &fileObject->FileName, status);
 
-// Getting here by __leave isn't always a failure,
-// so we shouldn't necessarily clean up only because
-// AbnormalTermination() returns true
+    // Getting here by __leave isn't always a failure,
+    // so we shouldn't necessarily clean up only because
+    // AbnormalTermination() returns true
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     //
@@ -1362,6 +1375,16 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   if (NT_SUCCESS(status)) {
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
+  }
+
+  // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
+  // for windows 8
+  if (NT_SUCCESS(status) &&
+      irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
+    DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+    DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+    DDbgPrint(
+        "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");
   }
 
   if (NT_SUCCESS(status)) {

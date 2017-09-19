@@ -18,7 +18,7 @@ cd dokan_wix
 MakeCab /f dokanx64.ddf
 MakeCab /f dokanx86.ddf
 
-set /p DUMMY=Please submit drivers to sysdev portal. Hit ENTER when it is done...
+set /p DUMMY=Please submit drivers to developer hardware dashboard. Hit ENTER when it is done...
 
 IF EXIST C:\cygwin ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )
 

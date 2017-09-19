@@ -255,7 +255,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
 
   } __finally {
-    if(fcbLocked)
+    if (fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
@@ -272,6 +272,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   PDokanCCB ccb;
+  PDokanFCB fcb;
   PFILE_OBJECT fileObject;
 
   fileObject = IrpEntry->FileObject;
@@ -285,6 +286,9 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
 
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
+
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
@@ -293,17 +297,32 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   irp->IoStatus.Status = status;
   irp->IoStatus.Information = (ULONG_PTR)EventInfo->Operation.Write.BytesWritten;
 
-  if (NT_SUCCESS(status)
-	  && EventInfo->Operation.Write.BytesWritten != 0
-	  && (fileObject->Flags & FO_SYNCHRONOUS_IO)
-	  && !(irp->Flags & IRP_PAGING_IO)) {
+  if (NT_SUCCESS(status) && EventInfo->Operation.Write.BytesWritten != 0) {
 
-    // update current byte offset only when synchronous IO and not paging IO
-    fileObject->CurrentByteOffset.QuadPart =
-        EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+    //Check if file size changed
+    if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+      DokanFCBLockRO(fcb);
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
+                              FILE_ACTION_MODIFIED);
+      DokanFCBUnlock(fcb);
 
-    DDbgPrint("  Updated CurrentByteOffset %I64d\n",
-              fileObject->CurrentByteOffset.QuadPart);
+      //Update size with new offset
+      InterlockedExchange64(
+          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+    }
+
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+
+    if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
+        !(irp->Flags & IRP_PAGING_IO)) {
+      // update current byte offset only when synchronous IO and not paging IO
+      fileObject->CurrentByteOffset.QuadPart =
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+      DDbgPrint("  Updated CurrentByteOffset %I64d\n",
+                fileObject->CurrentByteOffset.QuadPart);
+    }
   }
 
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
