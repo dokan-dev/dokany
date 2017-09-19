@@ -3,7 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 1.0.5.1000
+## [1.0.5.1000] - 2017-09-19
+### Added
+- Kernel - Add `FILE_NOTIFY_CHANGE_SECURITY` during SetSecurity
+
+### Changed
+- Kernel - Createfile move `DOKAN_DELETE_ON_CLOSE` set flag after create success
+- Kernel - Return acces denied for paging file open request
+
+### Fixed
+- Kernel - CreateFile return `STATUS_DELETE_PENDING` for a request without share delete during a pending delete
+- Mirror - `FindClose` is not being called if `GetLastError` returns anything other `ERROR_NO_MORE_FILES`
 
 ## [1.0.4.1000] - 2017-08-31
 ### Added
@@ -304,7 +314,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.0.4...master
+[1.0.4.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.4...v1.0.5
 [1.0.4.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.3...v1.0.4
 [1.0.3.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.2...v1.0.3
 [1.0.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.1...v1.0.2

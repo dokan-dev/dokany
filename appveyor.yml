@@ -14,7 +14,7 @@
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2015; Configuration: All"
 
-  version: 1.0.3-{build}
+  version: 1.0.5-{build}
   configuration:
   - All
   - Coverity

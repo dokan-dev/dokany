@@ -10,7 +10,7 @@ signtool sign /as /fd SHA256 /v /i "$env:CERTISSUER" /ac "$env:ADDITIONALCERT" /
 
 if (-not ([string]::IsNullOrEmpty($env:EV_CERTISSUER)))
 {
-	New-Item -ItemType Directory -Force -Path Win32\Win10Release,x64\Win10Release | Out-Null
-	$files = Get-ChildItem -path Win32\Win10Release,x64\Win10Release -recurse -Include *.sys,*.cat,*.dll
+	New-Item -ItemType Directory -Force -Path Win32\Win10Release,x64\Win10Release,Win32\Win10Debug,x64\Win10Debug | Out-Null
+	$files = Get-ChildItem -path Win32\Win10Release,x64\Win10Release,Win32\Win10Debug,x64\Win10Debug -recurse -Include *.sys,*.cat,*.dll
 	signtool sign /as /fd sha256 /tr http://timestamp.digicert.com /td sha256 /n "$env:EV_CERTISSUER" $files
 }
