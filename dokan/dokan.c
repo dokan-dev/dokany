@@ -2174,6 +2174,8 @@ void* DokanMallocImpl(size_t size, const char *fileName, int lineNumber) {
 	dokanMalloc = (PDokanMalloc)InterlockedAdd64((volatile LONG64*)&g_DokanMalloc, 0);
 #elif _M_IX86
 	dokanMalloc = (PDokanMalloc)InterlockedAdd((volatile LONG*)&g_DokanMalloc, 0);
+#elif _M_ARM
+	dokanMalloc = (PDokanMalloc)InterlockedAdd((volatile LONG*)&g_DokanMalloc, 0);
 #else
 #error Unsupported architecture!
 #endif
@@ -2193,6 +2195,8 @@ void DokanFreeImpl(void *userData) {
 #if _M_X64
 	dokanFree = (PDokanFree)InterlockedAdd64((volatile LONG64*)&g_DokanFree, 0);
 #elif _M_IX86
+	dokanFree = (PDokanFree)InterlockedAdd((volatile LONG*)&g_DokanFree, 0);
+#elif _M_ARM
 	dokanFree = (PDokanFree)InterlockedAdd((volatile LONG*)&g_DokanFree, 0);
 #else
 #error Unsupported architecture!
@@ -2215,6 +2219,8 @@ void* DokanReallocImpl(void *userData, size_t newSize, const char *fileName, int
 #if _M_X64
 	dokanRealloc = (PDokanRealloc)InterlockedAdd64((volatile LONG64*)&g_DokanRealloc, 0);
 #elif _M_IX86
+	dokanRealloc = (PDokanRealloc)InterlockedAdd((volatile LONG*)&g_DokanRealloc, 0);
+#elif _M_ARM
 	dokanRealloc = (PDokanRealloc)InterlockedAdd((volatile LONG*)&g_DokanRealloc, 0);
 #else
 #error Unsupported architecture!
