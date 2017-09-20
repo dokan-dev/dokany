@@ -257,8 +257,8 @@
   - ps: |
       if ($env:CONFIGURATION -eq "FsTest") {
         Write-Host Running tests...
-        $env:DokanLibrary1 = [System.Environment]::GetEnvironmentVariable("DokanLibrary1", "Machine")
-        $mirrors = @("${env:DokanLibrary1}\sample\mirror\mirror.exe", "${env:DokanLibrary1}\x86\sample\mirror\mirror.exe")
+        $env:DokanLibrary2 = [System.Environment]::GetEnvironmentVariable("DokanLibrary2", "Machine")
+        $mirrors = @("${env:DokanLibrary2}\sample\mirror\mirror.exe", "${env:DokanLibrary2}\x86\sample\mirror\mirror.exe")
 
         cd .\samples
         .\mirror_test.ps1 -Mirrors $mirrors
