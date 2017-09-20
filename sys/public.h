@@ -23,7 +23,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define PUBLIC_H_
 
 #ifndef DOKAN_MAJOR_API_VERSION
-#define DOKAN_MAJOR_API_VERSION L"1"
+#define DOKAN_MAJOR_API_VERSION L"2"
 #endif
 
 #define DOKAN_DRIVER_VERSION 0x0000190
