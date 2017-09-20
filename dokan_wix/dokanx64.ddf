@@ -1,4 +1,4 @@
-; *** dokan1.ddf example ***
+; *** dokan2.ddf example ***
 ;
 .OPTION EXPLICIT     ; Generate errors
 .Set CabinetFileCountThreshold=0
@@ -18,4 +18,4 @@
 .Set DestinationDir=Dokanx64
 ; Specify files to be included in cab file
 ..\x64\Win10Release\sys\dokan.inf
-..\x64\Win10Release\sys\dokan1.sys
+..\x64\Win10Release\sys\dokan2.sys

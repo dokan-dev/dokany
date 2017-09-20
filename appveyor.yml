@@ -53,7 +53,7 @@
         }
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
-          & verifier /standard /driver dokan1.sys
+          & verifier /standard /driver dokan2.sys
           Write-Host "Before reboot"
           Start-Sleep -s 2
           Restart-Computer

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.5)
-project(dokanfuse1)
+project(dokanfuse2)
 include(GNUInstallDirs)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -55,14 +55,14 @@ set(install_headers
 set(compat_headers
     include/old/fuse.h
 )
-add_library(dokanfuse1 SHARED ${sources})
+add_library(dokanfuse2 SHARED ${sources})
 
 INSTALL(FILES ${install_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/fuse/)
 INSTALL(FILES ${compat_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 if(FUSE_PKG_CONFIG)
     INSTALL(FILES ${pkg_config_file} DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 endif()
-INSTALL(TARGETS dokanfuse1
+INSTALL(TARGETS dokanfuse2
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
