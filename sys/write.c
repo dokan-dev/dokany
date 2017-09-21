@@ -297,7 +297,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   irp->IoStatus.Status = status;
   irp->IoStatus.Information = (ULONG_PTR)EventInfo->Operation.Write.BytesWritten;
 
-  if (NT_SUCCESS(status) && EventInfo->Operation.Write.BytesWritten != 0) {
+  if (NT_SUCCESS(status)) {
 
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
@@ -315,7 +315,8 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
     DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
 
-    if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
+    if (EventInfo->Operation.Write.BytesWritten != 0 &&
+        fileObject->Flags & FO_SYNCHRONOUS_IO &&
         !(irp->Flags & IRP_PAGING_IO)) {
       // update current byte offset only when synchronous IO and not paging IO
       fileObject->CurrentByteOffset.QuadPart =
