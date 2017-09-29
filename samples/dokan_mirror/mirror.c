@@ -506,14 +506,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 
   if (!handle || handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle, cleanuped?\n");
-    handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING, 0, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tCreateFile error : %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+
+	DbgPrint(L"\treturn STATUS_INVALID_HANDLE instead of try to re-open handle. \n");
+
+	return STATUS_INVALID_HANDLE;
+
   }
 
   LARGE_INTEGER distanceToMove;
@@ -562,14 +559,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
   // reopen the file
   if (!handle || handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle, cleanuped?\n");
-    handle = CreateFile(filePath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
-                        OPEN_EXISTING, 0, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tCreateFile error : %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+
+	DbgPrint(L"\treturn STATUS_INVALID_HANDLE instead of try to re-open handle. \n");
+
+	return STATUS_INVALID_HANDLE;
+
   }
 
   UINT64 fileSize = 0;
@@ -690,14 +684,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 
   if (!handle || handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle, cleanuped?\n");
-    handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING, 0, NULL);
-    if (handle == INVALID_HANDLE_VALUE) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tCreateFile error : %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-    opened = TRUE;
+
+	DbgPrint(L"\treturn STATUS_INVALID_HANDLE instead of try to re-open handle. \n");
+
+	return STATUS_INVALID_HANDLE;
+
   }
 
   if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
