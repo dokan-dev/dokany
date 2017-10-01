@@ -460,13 +460,13 @@ InsertMountEntry(PDOKAN_GLOBAL dokanGlobal, PDOKAN_CONTROL DokanControl,
   return mountEntry;
 }
 
-PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId)
-{
+PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal,
+                                             ULONG sessionId) {
   PLIST_ENTRY listHead = &dokanGlobal->DeviceDeleteList;
   PLIST_ENTRY entry;
   PLIST_ENTRY nextEntry;
 
-  if(sessionId == -1) {
+  if (sessionId == -1) {
     return NULL;
   }
 
@@ -481,18 +481,19 @@ PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG se
   }
 
   for (entry = listHead->Flink, nextEntry = entry->Flink; entry != listHead;
-      entry = nextEntry, nextEntry = entry->Flink) {
+       entry = nextEntry, nextEntry = entry->Flink) {
 
-    PDEVICE_ENTRY deviceEntry = CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
+    PDEVICE_ENTRY deviceEntry =
+        CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
     if (deviceEntry) {
-      if(deviceEntry->SessionId == sessionId) {
+      if (deviceEntry->SessionId == sessionId) {
         ExReleaseResourceLite(&dokanGlobal->Resource);
         DDbgPrint("  Device to delete found for a specific session\n");
         return deviceEntry;
       }
-   }
+    }
   }
-     
+
   ExReleaseResourceLite(&dokanGlobal->Resource);
   return NULL;
 }

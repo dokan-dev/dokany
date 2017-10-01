@@ -449,30 +449,27 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   return STATUS_SUCCESS;
 }
 
-VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal, __in ULONG sessionId)
-{
+VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal,
+                          __in ULONG sessionId) {
   DDbgPrint("==> RemoveSessionDevices");
 
-  if(sessionId == -1) {
-      return;
+  if (sessionId == -1) {
+    return;
   }
 
   PDEVICE_ENTRY foundEntry;
-  
+
   BOOLEAN isDone = FALSE;
-  do
-  {
+  do {
     foundEntry = FindDeviceForDeleteBySessionId(dokanGlobal, sessionId);
-    if(foundEntry != NULL)
-      {
-        DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
-        foundEntry->SessionId = (ULONG)-1;
-        foundEntry->MountPoint.Buffer = NULL;
-      } else {
-        isDone = TRUE;
-      }
-  }
-  while (!isDone);
+    if (foundEntry != NULL) {
+      DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
+      foundEntry->SessionId = (ULONG)-1;
+      foundEntry->MountPoint.Buffer = NULL;
+    } else {
+      isDone = TRUE;
+    }
+  } while (!isDone);
 
   DDbgPrint("<== RemoveSessionDevices");
 }

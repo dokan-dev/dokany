@@ -551,11 +551,9 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   mountEntry = FindMountEntry(dokanGlobal, &dokanControl, TRUE);
   if (mountEntry == NULL) {
     dokanControl.SessionId = (ULONG)-1;
-    if (mountEntry == NULL) {
-      DDbgPrint("Cannot found device associated to mount point %ws\n",
-          dokanControl.MountPoint);
-      return STATUS_BUFFER_TOO_SMALL;
-    }
+    DDbgPrint("Cannot found device associated to mount point %ws\n",
+              dokanControl.MountPoint);
+    return STATUS_BUFFER_TOO_SMALL;
   }
 
   if (IsDeletePending(mountEntry->MountControl.DeviceObject)) {
