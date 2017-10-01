@@ -184,6 +184,7 @@ typedef struct _DOKAN_CONTROL {
   WCHAR UNCName[64];
   WCHAR DeviceName[64];        // Disk Device Name
   PDEVICE_OBJECT DeviceObject; // Volume Device Object
+  ULONG SessionId;       // Session ID of calling process
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 typedef struct _MOUNT_ENTRY {
@@ -266,7 +267,7 @@ typedef struct _DokanDiskControlBlock {
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
 
   ULONG IrpTimeout;
-
+  ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
 
 } DokanDCB, *PDokanDCB;
@@ -306,6 +307,7 @@ typedef struct _DokanVolumeControlBlock {
 
 // Flags for device
 #define DCB_DELETE_PENDING 0x00000001
+#define DCB_MOUNTPOINT_DELETED 0x00000004
 
 typedef struct _DokanFileControlBlock {
   // Locking: Identifier is read-only, no locks needed.
@@ -415,7 +417,9 @@ typedef struct _DEVICE_ENTRY {
   LIST_ENTRY ListEntry;
   PDEVICE_OBJECT DiskDeviceObject;
   PDEVICE_OBJECT VolumeDeviceObject;
+  ULONG SessionId;
   ULONG Counter;
+  UNICODE_STRING MountPoint;
 } DEVICE_ENTRY, *PDEVICE_ENTRY;
 
 typedef struct _DRIVER_EVENT_CONTEXT {
@@ -619,7 +623,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
-                      __in PWCHAR MountPoint, __in PWCHAR UNCName,
+                      __in PWCHAR MountPoint, __in PWCHAR UNCName, 
+                      __in ULONG sessionID,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
@@ -705,6 +710,15 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
 BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix);
+
+PDEVICE_ENTRY 
+FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);
+
+BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint);
+
+ULONG GetCurrentSessionId(__in PIRP Irp);
+
+VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal, __in ULONG sessionId);
 
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");

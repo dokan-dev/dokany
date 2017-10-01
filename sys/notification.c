@@ -492,6 +492,20 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
+ULONG GetCurrentSessionId(__in PIRP Irp) {
+  ULONG sessionNumber;
+  NTSTATUS status;
+
+  status = IoGetRequestorSessionId(Irp, &sessionNumber);
+  if (!NT_SUCCESS(status))
+  {
+      DDbgPrint("   IoGetRequestorSessionId failed\n");
+      return (ULONG)-1;
+  }
+  DDbgPrint("   GetCurrentSessionId %lu\n", sessionNumber);
+  return sessionNumber;
+}
+
 NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
                                  __in PIRP Irp) {
   PDOKAN_GLOBAL dokanGlobal;
@@ -506,7 +520,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   }
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
-
+  
   if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
       sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) {
     DDbgPrint(
@@ -532,8 +546,11 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }
+
+  dokanControl.SessionId = GetCurrentSessionId(Irp);
   mountEntry = FindMountEntry(dokanGlobal, &dokanControl, TRUE);
   if (mountEntry == NULL) {
+    dokanControl.SessionId = (ULONG)-1;
     DDbgPrint("Cannot found device associated to mount point %ws\n",
               dokanControl.MountPoint);
     return STATUS_BUFFER_TOO_SMALL;

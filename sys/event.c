@@ -449,6 +449,31 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   return STATUS_SUCCESS;
 }
 
+VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal,
+                          __in ULONG sessionId) {
+  DDbgPrint("==> RemoveSessionDevices");
+
+  if (sessionId == -1) {
+    return;
+  }
+
+  PDEVICE_ENTRY foundEntry;
+
+  BOOLEAN isDone = FALSE;
+  do {
+    foundEntry = FindDeviceForDeleteBySessionId(dokanGlobal, sessionId);
+    if (foundEntry != NULL) {
+      DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
+      foundEntry->SessionId = (ULONG)-1;
+      foundEntry->MountPoint.Buffer = NULL;
+    } else {
+      isDone = TRUE;
+    }
+  } while (!isDone);
+
+  DDbgPrint("<== RemoveSessionDevices");
+}
+
 // start event dispatching
 NTSTATUS
 DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
@@ -469,6 +494,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN useMountManager = FALSE;
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
+  ULONG sessionId = (ULONG)-1;
 
   DDbgPrint("==> DokanEventStart\n");
 
@@ -540,6 +566,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   if (eventStart->Flags & DOKAN_EVENT_CURRENT_SESSION) {
     DDbgPrint("  Mounting on current session only\n");
     mountGlobally = FALSE;
+    sessionId = GetCurrentSessionId(Irp);
   }
 
   if (eventStart->Flags & DOKAN_EVENT_FILELOCK_USER_MODE) {
@@ -562,6 +589,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     RtlStringCchCatW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
                      eventStart->MountPoint);
   }
+  dokanControl.SessionId = sessionId;
 
   DDbgPrint("  Checking for MountPoint %ls \n", dokanControl.MountPoint);
   PMOUNT_ENTRY foundEntry = FindMountEntry(dokanGlobal, &dokanControl, FALSE);
@@ -598,7 +626,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   status = DokanCreateDiskDevice(
       DeviceObject->DriverObject, dokanGlobal->MountId, eventStart->MountPoint,
-      eventStart->UNCName, baseGuidString, dokanGlobal, deviceType,
+      eventStart->UNCName, sessionId, baseGuidString, 
+      dokanGlobal, deviceType,
       deviceCharacteristics, mountGlobally, useMountManager, &dcb);
 
   if (!NT_SUCCESS(status)) {

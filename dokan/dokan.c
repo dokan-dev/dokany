@@ -112,6 +112,8 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   dosDevice[4] = driveLetter;
   driveName[0] = driveLetter;
 
+  DokanMountPointsCleanUp();
+
   if (!IsValidDriveLetter(driveLetter)) {
     DbgPrintW(L"CheckDriveLetterAvailability failed, bad drive letter %c\n",
               DriveLetter);
@@ -727,6 +729,12 @@ BOOL DOKANAPI DokanSetDebugMode(ULONG Mode) {
   ULONG returnedLength;
   return SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_SET_DEBUG_MODE, &Mode,
                       sizeof(ULONG), NULL, 0, &returnedLength);
+}
+
+BOOL DOKANAPI DokanMountPointsCleanUp() {
+    ULONG returnedLength;
+    return SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_MOUNTPOINT_CLEANUP, NULL,
+        0, NULL, 0, &returnedLength);
 }
 
 BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
