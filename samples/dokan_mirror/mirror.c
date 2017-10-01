@@ -390,6 +390,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
              creationDisposition == CREATE_ALWAYS))
       return STATUS_ACCESS_DENIED;
 
+    // Cannot delete a read only file
+    if ((fileAttr != INVALID_FILE_ATTRIBUTES &&
+             (fileAttr & FILE_ATTRIBUTE_READONLY) ||
+         (fileAttributesAndFlags & FILE_ATTRIBUTE_READONLY)) &&
+        (fileAttributesAndFlags & FILE_FLAG_DELETE_ON_CLOSE))
+      return STATUS_CANNOT_DELETE;
+
     // Truncate should always be used with write access
     // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
     if (creationDisposition == TRUNCATE_EXISTING)
