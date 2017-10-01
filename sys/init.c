@@ -405,6 +405,11 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
 
   if(SessionId != -1){
       deviceEntry->MountPoint.Buffer = ExAllocatePool(MountPoint->MaximumLength);
+	  if (deviceEntry->MountPoint.Buffer == NULL) {
+		  DDbgPrint("  InsertDeviceToDelete MountPoint allocation failed\n");
+		  ExFreePool(deviceEntry);
+		  return NULL;
+	  } 
       deviceEntry->MountPoint.MaximumLength = MountPoint->MaximumLength;
       RtlUnicodeStringCopy(&deviceEntry->MountPoint, MountPoint);
   }
@@ -1171,10 +1176,9 @@ VOID DokanDeleteMountPointSysProc(__in PDokanDCB Dcb) {
   DDbgPrint("<= DokanDeleteMountPointSysProc\n");
 }
 
-BOOLEAN IsCurrentThreadSystemThread()
-{
-    PETHREAD pethread = PsGetCurrentThread();
-    return PsIsSystemThread(pethread);
+BOOLEAN IsCurrentThreadSystemThread() {
+  PETHREAD pethread = PsGetCurrentThread();
+  return PsIsSystemThread(pethread);
 }
 
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
@@ -1186,8 +1190,9 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
       DokanSendVolumeDeletePoints(Dcb->MountPoint, Dcb->DiskDeviceName);
     } else {
       if (Dcb->MountGlobally) {
-        DDbgPrint("Device mounted globally so run DokanDeleteMountPointProc in System thread.\n");
-        
+        DDbgPrint("Device mounted globally so run DokanDeleteMountPointProc in "
+                  "System thread.\n");
+
         HANDLE handle;
         PKTHREAD thread;
         OBJECT_ATTRIBUTES objectAttribs;
@@ -1208,10 +1213,11 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
           ObDereferenceObject(thread);
         }
       } else {
-        DDbgPrint("Device mounted for current session only so run DokanDeleteMountPointProc without System thread.\n");
-        if(IsCurrentThreadSystemThread)
-        {
-            DDbgPrint("Current thread is system thread. Delete of the mountpoint may fail. Device is not mounted globally.\n");
+        DDbgPrint("Device mounted for current session only so run "
+                  "DokanDeleteMountPointProc without System thread.\n");
+        if (IsCurrentThreadSystemThread()) {
+          DDbgPrint("Current thread is system thread. Delete of the mountpoint "
+                    "may fail. Device is not mounted globally.\n");
         }
         DokanDeleteMountPointSysProc(Dcb);
       }
