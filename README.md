@@ -5,8 +5,7 @@
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1234/badge)](https://bestpractices.coreinfrastructure.org/projects/1234)
 |
 [![Bounty](https://img.shields.io/bountysource/team/dokan-dev/activity.svg)](https://www.bountysource.com/teams/dokan-dev/issues)
-[![PayPayl donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=dev@islog.com&lc=US&item_name=Dokany&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted "Donate!")
-
+[![PayPal donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=dev@islog.com&lc=US&item_name=Dokany&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted "Donate!")
 
 [![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/dokan-dev/dokany.svg)](http://isitmaintained.com/project/dokan-dev/dokany "Average time to resolve an issue")
 [![Percentage of issues still open](http://isitmaintained.com/badge/open/dokan-dev/dokany.svg)](http://isitmaintained.com/project/dokan-dev/dokany "Percentage of issues still open")
@@ -19,8 +18,8 @@ you need to develop a file system driver. Developing a device driver that works
 in kernel mode on windows is extremely technical. By using Dokan, you can create
 your own file systems very easily without writing device drivers. Dokan is
 similar to FUSE (Linux file system in user space) but works on Windows. Moreover
-dokany include a [FUSE wrapper](https://github.com/dokan-dev/dokany/wiki/FUSE)
-that helps you to port your FUSE filesystems without changes
+dokany includes a [FUSE wrapper](https://github.com/dokan-dev/dokany/wiki/FUSE)
+that helps you to port your FUSE filesystems without changes.
 
 ## What is Dokany
 *Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and
@@ -28,7 +27,7 @@ updated to build with latest tools.*
 
 Because the original Dokan Legacy (< 0.6.0) project is no longer maintained.
 
-Since version 0.8.0, dokany break dokan API compatibility. See
+Since version 0.8.0, dokany breaks compatibility with the dokan API. See
 [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#choose-a-version)
 for more information.
 
@@ -110,7 +109,6 @@ For manual installation, see the
 
 ## Contribute
 You want Dokan to get better? Contribute!
-
 
 Learn the code and suggest your changes on
 [GitHub repository](https://github.com/dokan-dev).
