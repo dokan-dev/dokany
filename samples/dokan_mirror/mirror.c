@@ -1059,10 +1059,18 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
 
   DbgPrint(L"SetFileAttributes %s 0x%x\n", filePath, FileAttributes);
 
-  if (!SetFileAttributes(filePath, FileAttributes)) {
-    DWORD error = GetLastError();
-    DbgPrint(L"\terror code = %d\n\n", error);
-    return DokanNtStatusFromWin32(error);
+  if (FileAttributes != 0) {
+    if (!SetFileAttributes(filePath, FileAttributes)) {
+      DWORD error = GetLastError();
+	  DbgPrint(L"\terror code = %d\n\n", error);
+	  return DokanNtStatusFromWin32(error);
+	}
+  }
+  else {
+    // case FileAttributes == 0 :
+	// MS-FSCC 2.6 File Attributes : There is no file attribute with the value 0x00000000
+	// because a value of 0x00000000 in the FileAttributes field means that the file attributes for this file MUST NOT be changed when setting basic information for the file
+    DbgPrint(L"Set 0 to FileAttributes means MUST NOT be changed. Didn't call SetFileAttributes function. \n");
   }
 
   DbgPrint(L"\n");
