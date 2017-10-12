@@ -408,6 +408,15 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
         status = DokanNtStatusFromWin32(error);
       } else {
+        // Windows won't call setAttribute function to set Attribute if you are creating the new directory.
+        // It's just giving FILE_WRITE_ATTRIBUTES Flag and expect it works just like file creation.
+        // So, we need to handle this case here.
+        if (DokanFileInfo->IsDirectory &&
+            fileAttr != INVALID_FILE_ATTRIBUTES &&
+            (DesiredAccess & FILE_WRITE_ATTRIBUTES)) {
+        SetFileAttributes(filePath, fileAttributesAndFlags | fileAttr);
+        }
+        
         DokanFileInfo->Context =
             (ULONG64)handle; // save the file handle in Context
 
