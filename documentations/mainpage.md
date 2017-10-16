@@ -46,7 +46,7 @@ files, WriteFile or ReadFile functions may be invoked after Cleanup in
 order to complete the I/O operations. The file system application
 should also properly work in this case.
 
-### Dokan File Info Life time
+### Dokan File Info Life Time
 
 The last parameter of each DOKAN_OPERATIONS functions is a DOKAN_FILE_INFO struct.
 Each file handle from user mode is associated with a DOKAN_FILE_INFO
@@ -128,9 +128,9 @@ This file (dokannp1.dll) *must* be copied to `%WINDIR%\system32` and you can reg
 
 Without this [Network Provider](https://msdn.microsoft.com/en-us/library/windows/desktop/aa378776%28v=vs.85%29.aspx), Virtual drives mounted as network share will not be handled well by Internet Explorer and your drive could appear disconnected.
 
-If Network Redirector is setup by setting up an UNC Name, Dokan Network Provider will assign an UNC Name to the drive label automatically.
+If Network Redirector is setup by setting up a UNC Name, Dokan Network Provider will assign an UNC Name to the drive label automatically.
 
-## Testing your FileSystem
+## Testing your File System
 
 You can test you filesystem by using different tools.
 Microsoft has its own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [ IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
@@ -143,5 +143,5 @@ For C# developers, there is [DokanNet.Tests](https://github.com/dokan-dev/dokan-
 
 If there are bugs in Dokan library or file system applications which
 use the library, you will get the Windows blue screen. Therefore, it
-is strongly recommended to use a Virtual Machine when you develop file
+is strongly recommended to use a virtual machine when you develop file
 system applications.
