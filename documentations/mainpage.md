@@ -82,7 +82,7 @@ violation error since the \c HANDLE has not been closed.
 ### Find Files
 
 DOKAN_OPERATIONS.FindFiles or DOKAN_OPERATIONS.FindFilesWithPattern are called in order to respond to
-directory listing requests. One of the two functions should implemented. 
+directory listing requests. One of the two functions should be implemented. 
 
 For each directory entry, file system applications should call the function FillFindData (passed as a
 function pointer to FindFiles, FindFilesWithPattern) with the
