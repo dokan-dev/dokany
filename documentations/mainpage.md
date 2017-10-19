@@ -46,14 +46,14 @@ files, WriteFile or ReadFile functions may be invoked after Cleanup in
 order to complete the I/O operations. The file system application
 should also properly work in this case.
 
-### Dokan File Info Life time
+### Dokan File Info Life Time
 
 The last parameter of each DOKAN_OPERATIONS functions is a DOKAN_FILE_INFO struct.
 Each file handle from user mode is associated with a DOKAN_FILE_INFO
 struct. Hence, the content of the struct does not change if the same
 file handle is used. The struct is created when the file is opened by
 \c CreateFile system call and destroyed when the file is closed by
-\c CloseHandle system call. It store all file information on the current operation.
+\c CloseHandle system call. It stores all file information on the current operation.
 
 DOKAN_FILE_INFO.Context is an arbitrary value assigned by the file system
 application. File system application can freely use this variable to
@@ -112,9 +112,9 @@ DOKAN_OPTIONS.Options with \ref DOKAN_OPTION flags describe the behavior of the 
 
 ### Unmounting
 
-File system can be unmounted by calling the function \ref DokanUnmount or
+The file system can be unmounted by calling the function \ref DokanUnmount or
 \ref DokanRemoveMountPoint.  In most cases when the programs or shells using
-the file system hang, unmount operation will solve the problem by
+the file system hang, the unmount operation will solve the problem by
 bringing the system to a previous state when the file system was not
 mounted.
 
@@ -126,16 +126,16 @@ User may use command line to unmount file system like this:
 If mounting is done with \ref DOKAN_OPTION_NETWORK, you need Dokan Network Provider for it to work correctly.
 This file (dokannp1.dll) *must* be copied to `%WINDIR%\system32` and you can register the provider on your system with `dokanctl.exe /i n` command.
 
-Without this [Network Provider](https://msdn.microsoft.com/en-us/library/windows/desktop/aa378776%28v=vs.85%29.aspx), Windows Explorer will not handle well Virtual drives mounted as network share and your drive could appears disconnected.
+Without this [Network Provider](https://msdn.microsoft.com/en-us/library/windows/desktop/aa378776%28v=vs.85%29.aspx), Virtual drives mounted as network share will not be handled well by Internet Explorer and your drive could appear disconnected.
 
-If Network Redirector is setup by setting up an UNC Name, Dokan Network Provider will assign UNC Name to the drive label automatically.
+If Network Redirector is setup by setting up a UNC Name, Dokan Network Provider will assign an UNC Name to the drive label automatically.
 
-## Testing your FileSystem
+## Testing your File System
 
 You can test you filesystem by using different tools.
-Microsoft has his own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [ IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
+Microsoft has its own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [ IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
 
-There is also [WinFSTest](https://github.com/Liryna/winfstest), Dokany is automatically running it on the sample mirror at every commit with appveyor.
+There is also [WinFSTest](https://github.com/Liryna/winfstest). Dokany is automatically running it on the sample mirror at every commit with appveyor.
 
 For C# developers, there is [DokanNet.Tests](https://github.com/dokan-dev/dokan-dotnet/tree/master/DokanNet.Tests) made by viciousviper that currently only test C# Mirror sample but can easily be changed to test a C# Dokan FS.
 
@@ -143,5 +143,5 @@ For C# developers, there is [DokanNet.Tests](https://github.com/dokan-dev/dokan-
 
 If there are bugs in Dokan library or file system applications which
 use the library, you will get the Windows blue screen. Therefore, it
-is strongly recommended to use Virtual Machine when you develop file
+is strongly recommended to use a virtual machine when you develop file
 system applications.
