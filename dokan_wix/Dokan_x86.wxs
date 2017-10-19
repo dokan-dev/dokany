@@ -261,6 +261,7 @@
               <Directory Id="DOKANINCLUDEDIR" Name="dokan">
                 <Component Id="IncludeDokanFilesComponent" Win64="no" Guid="{6D001C3A-F866-40F7-9E16-492766A8A3C7}">
                   <File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes"/>
+                  <File Id="dokan_vectorH" Source="..\dokan\dokan_vector.h" Name="dokan_vector.h" KeyPath="no"/>
                   <File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no"/>
                   <File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
                 </Component>
