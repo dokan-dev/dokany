@@ -19,14 +19,14 @@ driver. Developing a device driver that works in kernel mode on
 windows is extremely technical. By using Dokan, you can create
 your own file systems very easily without writing device drivers. Dokan
 is similar to FUSE (Linux file system in user space) but works on Windows.
-Moreover dokany include a [FUSE wrapper](https://github.com/dokan-dev/dokany/wiki/FUSE) that helps you to port your FUSE filesystems without changes
+Moreover, dokany includes a [FUSE wrapper](https://github.com/dokan-dev/dokany/wiki/FUSE) that helps you to port your FUSE filesystems without changes.
 
 ## What is Dokany
 *Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and updated to build with latest tools.*
 
 Because the original Dokan Legacy (< 0.6.0) project is no longer maintained.
 
-Since version 0.8.0, dokany break dokan API compatibility.
+Since version 0.8.0, dokany broke dokan API compatibility.
 See [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#choose-a-version) for more information.
 
 **Signed x86 / x64 drivers** are provided at each release.
@@ -42,7 +42,7 @@ Dokan contains LGPL and MIT licensed programs.
 - control program (dokanctl.exe)  MIT
 - samples (mirror.c)              MIT
 
-For details, please check license files.
+For details, please check the license files.
  * **LGPL** license.lgpl.txt
  * **MIT**  license.mit.txt
 
@@ -66,7 +66,7 @@ Platform
 
 ## How it works
 Dokan library contains a user mode DLL (dokan1.dll) and a kernel mode
-file system driver (dokan1.sys). Once Dokan file system driver is
+file system driver (dokan1.sys). Once the Dokan file system driver is
 installed, you can create file systems which can be seen as normal
 file systems in Windows. The application that creates file systems
 using Dokan library is called File system application.
