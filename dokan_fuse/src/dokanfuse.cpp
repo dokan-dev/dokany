@@ -522,6 +522,10 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   if (fs->conf.debug)
     dokanOptions->Options |= DOKAN_OPTION_DEBUG | DOKAN_OPTION_STDERR;
 
+  // Read only
+  if (fs->conf.readonly)
+    dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
+
   // Load Dokan DLL
   if (!fs->ch->init()) {
     free(dokanOptions);
@@ -580,6 +584,8 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_OPT_KEY("-d", FUSE_OPT_KEY_KEEP),
     FUSE_LIB_OPT("debug", debug, 1),
     FUSE_LIB_OPT("-d", debug, 1),
+    FUSE_LIB_OPT("rdonly", readonly, 1),
+    FUSE_LIB_OPT("-r", readonly, 1),
     FUSE_LIB_OPT("umask=%o", umask, 0),
     FUSE_LIB_OPT("fileumask=%o", fileumask, 0),
     FUSE_LIB_OPT("dirumask=%o", dirumask, 0),
