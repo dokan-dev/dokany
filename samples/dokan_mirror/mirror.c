@@ -333,14 +333,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   }
 
   if (g_ImpersonateCallerUser) {
-	  userTokenHandle = DokanOpenRequestorToken(DokanFileInfo);
+    userTokenHandle = DokanOpenRequestorToken(DokanFileInfo);
 
-	  if (userTokenHandle == INVALID_HANDLE_VALUE) {
-		  DbgPrint(L"  DokanOpenRequestorToken failed\n");
-		  // Should we return some error?
-	  }
+    if (userTokenHandle == INVALID_HANDLE_VALUE) {
+      DbgPrint(L"  DokanOpenRequestorToken failed\n");
+      // Should we return some error?
+    }
   }
-
 
   if (DokanFileInfo->IsDirectory) {
     // It is a create directory request
@@ -348,13 +347,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (creationDisposition == CREATE_NEW ||
         creationDisposition == OPEN_ALWAYS) {
 
-	  if (g_ImpersonateCallerUser) {
-		  // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-		  if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-			  // handle the error if failed to impersonate
-			  DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-		  }
-	  }
+      if (g_ImpersonateCallerUser) {
+        // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
+        if (!ImpersonateLoggedOnUser(userTokenHandle)) {
+          // handle the error if failed to impersonate
+          DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
+        }
+      }
 
       //We create folder
       if (!CreateDirectory(filePath, &securityAttrib)) {
@@ -367,11 +366,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
 
-	  if (g_ImpersonateCallerUser) {
-		  // Clean Up operation for impersonate
-		  RevertToSelf();
-	  }
-
+      if (g_ImpersonateCallerUser) {
+        // Clean Up operation for impersonate
+        RevertToSelf();
+      }
     }
 
     if (status == STATUS_SUCCESS) {
@@ -383,13 +381,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         return STATUS_NOT_A_DIRECTORY;
       }
 
-	  if (g_ImpersonateCallerUser) {
-		  // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-		  if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-			  // handle the error if failed to impersonate
-			  DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-		  }
-	  }
+      if (g_ImpersonateCallerUser) {
+        // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
+        if (!ImpersonateLoggedOnUser(userTokenHandle)) {
+          // handle the error if failed to impersonate
+          DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
+        }
+      }
 
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
       handle =
@@ -397,10 +395,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
                      &securityAttrib, OPEN_EXISTING,
                      fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
-	  if (g_ImpersonateCallerUser) {
-		  // Clean Up operation for impersonate
-		  RevertToSelf();
-	  }
+      if (g_ImpersonateCallerUser) {
+        // Clean Up operation for impersonate
+        RevertToSelf();
+      }
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -423,12 +421,12 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
     // Cannot overwrite a hidden or system file if flag not set
     if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-            ((!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
-             (fileAttr & FILE_ATTRIBUTE_HIDDEN)) ||
-        (!(fileAttributesAndFlags & FILE_ATTRIBUTE_SYSTEM) &&
-         (fileAttr & FILE_ATTRIBUTE_SYSTEM))) &&
-            (creationDisposition == TRUNCATE_EXISTING ||
-             creationDisposition == CREATE_ALWAYS))
+        ((!(fileAttributesAndFlags & FILE_ATTRIBUTE_HIDDEN) &&
+          (fileAttr & FILE_ATTRIBUTE_HIDDEN)) ||
+         (!(fileAttributesAndFlags & FILE_ATTRIBUTE_SYSTEM) &&
+          (fileAttr & FILE_ATTRIBUTE_SYSTEM))) &&
+        (creationDisposition == TRUNCATE_EXISTING ||
+         creationDisposition == CREATE_ALWAYS))
       return STATUS_ACCESS_DENIED;
 
     // Cannot delete a read only file
@@ -443,13 +441,13 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (creationDisposition == TRUNCATE_EXISTING)
       genericDesiredAccess |= GENERIC_WRITE;
 
-	if (g_ImpersonateCallerUser) {
-		// if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-		if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-			// handle the error if failed to impersonate
-			DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-		}
-	}
+    if (g_ImpersonateCallerUser) {
+      // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
+      if (!ImpersonateLoggedOnUser(userTokenHandle)) {
+        // handle the error if failed to impersonate
+        DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
+      }
+    }
 
     handle = CreateFile(
         filePath,
@@ -460,10 +458,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
         NULL);                  // template file handle
 
-	if (g_ImpersonateCallerUser) {
-		// Clean Up operation for impersonate
-		RevertToSelf();
-	}
+    if (g_ImpersonateCallerUser) {
+      // Clean Up operation for impersonate
+      RevertToSelf();
+    }
 
     if (handle == INVALID_HANDLE_VALUE) {
       error = GetLastError();
@@ -1116,15 +1114,15 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
   if (FileAttributes != 0) {
     if (!SetFileAttributes(filePath, FileAttributes)) {
       DWORD error = GetLastError();
-	  DbgPrint(L"\terror code = %d\n\n", error);
-	  return DokanNtStatusFromWin32(error);
-	}
-  }
-  else {
+      DbgPrint(L"\terror code = %d\n\n", error);
+      return DokanNtStatusFromWin32(error);
+    }
+  } else {
     // case FileAttributes == 0 :
-	// MS-FSCC 2.6 File Attributes : There is no file attribute with the value 0x00000000
-	// because a value of 0x00000000 in the FileAttributes field means that the file attributes for this file MUST NOT be changed when setting basic information for the file
-    DbgPrint(L"Set 0 to FileAttributes means MUST NOT be changed. Didn't call SetFileAttributes function. \n");
+    // MS-FSCC 2.6 File Attributes : There is no file attribute with the value 0x00000000
+    // because a value of 0x00000000 in the FileAttributes field means that the file attributes for this file MUST NOT be changed when setting basic information for the file
+    DbgPrint(L"Set 0 to FileAttributes means MUST NOT be changed. Didn't call "
+             L"SetFileAttributes function. \n");
   }
 
   DbgPrint(L"\n");
@@ -1650,11 +1648,11 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   }
 
   if (g_ImpersonateCallerUser && !g_HasSeSecurityPrivilege) {
-	  fwprintf(stderr, L"Impersonate Caller User requires administrator right to work properly\n");
-	  fwprintf(stderr,
-		  L"\t=> Other users may not use the drive properly\n");
-	  fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
-		  L"rights to fix it\n");
+    fwprintf(stderr, L"Impersonate Caller User requires administrator right to "
+                     L"work properly\n");
+    fwprintf(stderr, L"\t=> Other users may not use the drive properly\n");
+    fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
+                     L"rights to fix it\n");
   }
 
   if (g_DebugMode) {
