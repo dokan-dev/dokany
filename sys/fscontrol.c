@@ -627,6 +627,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
     RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
                   dcb->UNCName->Length);
   }
+  dokanControl.SessionId = dcb->SessionId;
   mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
   if (mountEntry != NULL) {
     mountEntry->MountControl.DeviceObject = volDeviceObject;

@@ -101,12 +101,11 @@
 
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
             Write-Host "Update Cygwin: $cygwinexe"
-            Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++ -P pkg-config}
+            Exec-External {& cmd /c $cygwinexe -gqnNdO -R $installFolder -s http://mirrors.kernel.org/sourceware/cygwin/ -l $cacheFolder -P cmake -P make -P gcc-core -P gcc-g++ -P pkg-config -P cygwin32-gcc-core -P cygwin32-gcc-g++}
             Write-Host "Update Cygwin: $cygwinexe " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
 
-          updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86.exe" C:/cygwin $env:CYG_CACHE
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
 

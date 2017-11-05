@@ -4,9 +4,9 @@ $script:failed = 0
     $buildDir="dokan_fuse/build/Win32/Cygwin/"
     $installDir="Win32/Cygwin/"
     New-Item -Force -Type Directory $buildDir
-    & C:\cygwin\bin\bash -lc "
+    & C:\cygwin64\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
-        cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
+        cmake ../../../ -DCMAKE_TOOLCHAIN_FILE=../../../cmake/toolchain-i686-pc-cygwin.cmake -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
         make -j `$(getconf _NPROCESSORS_ONLN) install"
     & C:\cygwin\bin\bash -lc "
         cd '$currentPath' &&

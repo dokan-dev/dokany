@@ -130,7 +130,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   fwprintf(stdout, L"Driver path: '%s'\n", driverFullPath);
 
   WCHAR option = GetOption(argc, argv, 1);
-  if (option == L'\0') {
+  if (option == L'\0' || option == L'?') {
 
     DokanShutdown();
 

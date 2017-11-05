@@ -387,7 +387,8 @@ VOID DokanInitIrpList(__in PIRP_LIST IrpList) {
 
 PDEVICE_ENTRY
 InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
-                     PDEVICE_OBJECT VolumeDeviceObject, BOOLEAN lockGlobal) {
+                     PDEVICE_OBJECT VolumeDeviceObject, BOOLEAN lockGlobal,
+                     ULONG SessionId, PUNICODE_STRING MountPoint) {
   PDEVICE_ENTRY deviceEntry;
 
   ASSERT(DiskDeviceObject != NULL);
@@ -400,7 +401,19 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
   RtlZeroMemory(deviceEntry, sizeof(DEVICE_ENTRY));
   deviceEntry->DiskDeviceObject = DiskDeviceObject;
   deviceEntry->VolumeDeviceObject = VolumeDeviceObject;
+  deviceEntry->SessionId = SessionId;
 
+  if(SessionId != -1){
+      deviceEntry->MountPoint.Buffer = ExAllocatePool(MountPoint->MaximumLength);
+	  if (deviceEntry->MountPoint.Buffer == NULL) {
+		  DDbgPrint("  InsertDeviceToDelete MountPoint allocation failed\n");
+		  ExFreePool(deviceEntry);
+		  return NULL;
+	  } 
+      deviceEntry->MountPoint.MaximumLength = MountPoint->MaximumLength;
+      RtlUnicodeStringCopy(&deviceEntry->MountPoint, MountPoint);
+  }
+  
   InitializeListHead(&deviceEntry->ListEntry);
 
   if (lockGlobal) {
@@ -413,6 +426,17 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
     ExReleaseResourceLite(&dokanGlobal->Resource);
   }
   return deviceEntry;
+}
+
+PDEVICE_ENTRY
+InsertDcbToDelete(PDokanDCB Dcb, PDEVICE_OBJECT VolumeDeviceObject, BOOLEAN lockGlobal) {
+  if (IsFlagOn(Dcb->Flags, DCB_MOUNTPOINT_DELETED))
+  {
+      DDbgPrint("  MountPoint has been deleted so reset the sessionid\n");
+      Dcb->SessionId = (ULONG)-1;
+  }
+  return InsertDeviceToDelete(Dcb->Global, Dcb->DeviceObject, VolumeDeviceObject,
+      lockGlobal, Dcb->SessionId, Dcb->MountPoint);
 }
 
 PMOUNT_ENTRY
@@ -441,6 +465,44 @@ InsertMountEntry(PDOKAN_GLOBAL dokanGlobal, PDOKAN_CONTROL DokanControl,
   return mountEntry;
 }
 
+PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal,
+                                             ULONG sessionId) {
+  PLIST_ENTRY listHead = &dokanGlobal->DeviceDeleteList;
+  PLIST_ENTRY entry;
+  PLIST_ENTRY nextEntry;
+
+  if (sessionId == -1) {
+    return NULL;
+  }
+
+  if (!ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE)) {
+    DDbgPrint("  Not able to aquire dokanGlobal->Resource \n");
+    return NULL;
+  }
+
+  if (IsListEmpty(&dokanGlobal->DeviceDeleteList)) {
+    ExReleaseResourceLite(&dokanGlobal->Resource);
+    return NULL;
+  }
+
+  for (entry = listHead->Flink, nextEntry = entry->Flink; entry != listHead;
+       entry = nextEntry, nextEntry = entry->Flink) {
+
+    PDEVICE_ENTRY deviceEntry =
+        CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
+    if (deviceEntry) {
+      if (deviceEntry->SessionId == sessionId) {
+        ExReleaseResourceLite(&dokanGlobal->Resource);
+        DDbgPrint("  Device to delete found for a specific session\n");
+        return deviceEntry;
+      }
+    }
+  }
+
+  ExReleaseResourceLite(&dokanGlobal->Resource);
+  return NULL;
+}
+
 VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
 
   PDEVICE_ENTRY deviceEntry;
@@ -450,6 +512,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
   PLIST_ENTRY nextEntry;
   ULONG totalCount = 0;
   PDokanDCB dcb;
+  NTSTATUS status;
 
   InitializeListHead(&completeList);
 
@@ -470,12 +533,16 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
     if (deviceEntry) {
       DDbgPrint("  There is a device for delayed delete. Counter %lu \n",
                 deviceEntry->Counter);
-      InterlockedIncrement((LONG *)&deviceEntry->Counter);
 
-      BOOLEAN canDeleteDiskDevice =
-          deviceEntry->DiskDeviceObject->ReferenceCount == 0;
+      
 
-      dcb = deviceEntry->DiskDeviceObject->DeviceExtension;
+      BOOLEAN canDeleteDiskDevice = FALSE;
+      dcb = NULL;
+      if(deviceEntry->DiskDeviceObject){
+        canDeleteDiskDevice = deviceEntry->DiskDeviceObject->ReferenceCount == 0;
+        dcb = deviceEntry->DiskDeviceObject->DeviceExtension;
+        InterlockedIncrement((LONG *)&deviceEntry->Counter);
+      }
 
       // ensure that each device has the same delay in minimum
       // This way we can "ensure" that pending requests are processed
@@ -490,7 +557,11 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
             if (canDeleteDiskDevice) {
 
               DDbgPrint("  Delete Symbolic Name: %wZ\n", dcb->SymbolicLinkName);
-              IoDeleteSymbolicLink(dcb->SymbolicLinkName);
+              status = IoDeleteSymbolicLink(dcb->SymbolicLinkName);
+              if(!NT_SUCCESS(status)) {
+                  DDbgPrint("  Delete of Symbolic failed Name: %wZ\n", dcb->SymbolicLinkName);
+                  DokanPrintNTStatus(status);
+              }
 
               FreeDcbNames(dcb);
 
@@ -511,7 +582,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
           }
         }
 
-        if (canDeleteDiskDevice) {
+        if (deviceEntry->DiskDeviceObject && canDeleteDiskDevice) {
           DDbgPrint("  Delete the disk device. ReferenceCount %lu \n",
                     deviceEntry->DiskDeviceObject->ReferenceCount);
           IoDeleteDevice(deviceEntry->DiskDeviceObject);
@@ -521,12 +592,18 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
           }
           deviceEntry->DiskDeviceObject = NULL;
         }
+      }
 
-        if (deviceEntry->VolumeDeviceObject == NULL &&
-            deviceEntry->DiskDeviceObject == NULL) {
-          RemoveEntryList(&deviceEntry->ListEntry);
-          InitializeListHead(&deviceEntry->ListEntry);
-        }
+      if (deviceEntry->VolumeDeviceObject == NULL &&
+          deviceEntry->DiskDeviceObject == NULL) {
+          if (deviceEntry->SessionId == -1) {
+              RemoveEntryList(&deviceEntry->ListEntry);
+              InitializeListHead(&deviceEntry->ListEntry);
+          }
+          else
+          {
+              DDbgPrint("  Device is just there because of the sessionId \n");
+          }
       }
     }
   }
@@ -737,6 +814,7 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
   PMOUNT_ENTRY mountEntry = NULL;
   BOOLEAN useMountPoint = (DokanControl->MountPoint[0] != L'\0');
   BOOLEAN found = FALSE;
+  BOOLEAN isSessionIdMatch = FALSE;
 
   if (lockGlobal) {
     ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
@@ -747,8 +825,11 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
        listEntry = listEntry->Flink) {
     mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
     if (useMountPoint) {
-      if (wcscmp(DokanControl->MountPoint,
-                 mountEntry->MountControl.MountPoint) == 0) {
+      isSessionIdMatch = DokanControl->SessionId == mountEntry->MountControl.SessionId;
+      if ((wcscmp(DokanControl->MountPoint,
+                 mountEntry->MountControl.MountPoint) == 0) &&
+          (isSessionIdMatch  || mountEntry->MountControl.SessionId == (ULONG)-1)) {
+        DDbgPrint("Found entry with sessionId %lu\n", mountEntry->MountControl.SessionId);
         found = TRUE;
         break;
       }
@@ -771,6 +852,9 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
               mountEntry->MountControl.DeviceName);
     return mountEntry;
   } else {
+    DDbgPrint("FindMountEntry not found %ws -> %ws\n",
+        DokanControl->MountPoint,
+        DokanControl->DeviceName);
     return NULL;
   }
 }
@@ -1066,14 +1150,35 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb) {
   }
 }
 
+BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint){
+  if(MountPoint == NULL || MountPoint->Length <= 0) {
+      DDbgPrint("  Mount Point is null \n");
+      return FALSE;
+  }
+ 
+  DDbgPrint("  Delete Mount Point Symbolic Name: %wZ\n", MountPoint);
+  NTSTATUS status = IoDeleteSymbolicLink(MountPoint);
+  if (!NT_SUCCESS(status))
+  {
+      DDbgPrint("  Delete Mount Point failed Symbolic Name: %wZ\n", MountPoint);
+      DokanPrintNTStatus(status);
+      return FALSE;
+  }
+  return TRUE;
+}
+
 KSTART_ROUTINE DokanDeleteMountPointSysProc;
 VOID DokanDeleteMountPointSysProc(__in PDokanDCB Dcb) {
   DDbgPrint("=> DokanDeleteMountPointSysProc\n");
-  if (Dcb->MountPoint != NULL && Dcb->MountPoint->Length > 0) {
-    DDbgPrint("  Delete Mount Point Symbolic Name: %wZ\n", Dcb->MountPoint);
-    IoDeleteSymbolicLink(Dcb->MountPoint);
+  if(DeleteMountPointSymbolicLink(Dcb->MountPoint)) {
+      SetLongFlag(Dcb->Flags, DCB_MOUNTPOINT_DELETED);
   }
   DDbgPrint("<= DokanDeleteMountPointSysProc\n");
+}
+
+BOOLEAN IsCurrentThreadSystemThread() {
+  PETHREAD pethread = PsGetCurrentThread();
+  return PsIsSystemThread(pethread);
 }
 
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
@@ -1085,7 +1190,9 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
       DokanSendVolumeDeletePoints(Dcb->MountPoint, Dcb->DiskDeviceName);
     } else {
       if (Dcb->MountGlobally) {
-        // Run DokanDeleteMountPointProc in System thread.
+        DDbgPrint("Device mounted globally so run DokanDeleteMountPointProc in "
+                  "System thread.\n");
+
         HANDLE handle;
         PKTHREAD thread;
         OBJECT_ATTRIBUTES objectAttribs;
@@ -1106,6 +1213,12 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
           ObDereferenceObject(thread);
         }
       } else {
+        DDbgPrint("Device mounted for current session only so run "
+                  "DokanDeleteMountPointProc without System thread.\n");
+        if (IsCurrentThreadSystemThread()) {
+          DDbgPrint("Current thread is system thread. Delete of the mountpoint "
+                    "may fail. Device is not mounted globally.\n");
+        }
         DokanDeleteMountPointSysProc(Dcb);
       }
     }
@@ -1116,7 +1229,8 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
-                      __in PWCHAR MountPoint, __in PWCHAR UNCName,
+                      __in PWCHAR MountPoint, __in PWCHAR UNCName, 
+                      __in ULONG SessionId,
                       __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
@@ -1224,6 +1338,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     dcb->VolumeDeviceType = DeviceType;
     dcb->DeviceType = FILE_DEVICE_DISK;
     dcb->DeviceCharacteristics = DeviceCharacteristics;
+    dcb->SessionId = SessionId;
     KeInitializeEvent(&dcb->KillEvent, NotificationEvent, FALSE);
     IoInitializeRemoveLock(&dcb->RemoveLock, TAG, 1, 100);
     //
@@ -1321,6 +1436,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                         sizeof(dokanControl->UNCName) / sizeof(WCHAR), UNCName);
     }
     dokanControl->Type = DeviceType;
+    dokanControl->SessionId = dcb->SessionId;
 
     InsertMountEntry(DokanGlobal, dokanControl, FALSE);
   } __finally {
@@ -1345,6 +1461,8 @@ VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb) {
 
   PAGED_CODE();
 
+  DDbgPrint(" ==> DokanDeleteDeviceObject \n");
+
   ASSERT(GetIdentifierType(Dcb) == DCB);
   vcb = Dcb->Vcb;
 
@@ -1356,6 +1474,7 @@ VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb) {
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
   RtlCopyMemory(dokanControl.DeviceName, Dcb->DiskDeviceName->Buffer,
                 Dcb->DiskDeviceName->Length);
+  dokanControl.SessionId = Dcb->SessionId;
   mountEntry = FindMountEntry(Dcb->Global, &dokanControl, TRUE);
   if (mountEntry != NULL) {
     if (mountEntry->MountControl.Type == FILE_DEVICE_NETWORK_FILE_SYSTEM) {
@@ -1410,8 +1529,7 @@ VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb) {
   }
 
   DDbgPrint("  Delete Disk DeviceObject\n");
-  InsertDeviceToDelete(Dcb->Global, Dcb->DeviceObject, volumeDeviceObject,
-                       FALSE);
+  InsertDcbToDelete(Dcb, volumeDeviceObject, FALSE);
 
-  DDbgPrint(" DokanDeleteDeviceObject finished \n");
+  DDbgPrint(" <== DokanDeleteDeviceObject \n");
 }

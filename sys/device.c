@@ -75,6 +75,10 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_SERVICE_WAIT:
     status = DokanRegisterPendingIrpForService(DeviceObject, Irp);
     break;
+  case IOCTL_MOUNTPOINT_CLEANUP:
+      RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
+      status = STATUS_SUCCESS;
+      break;
   case IOCTL_SET_DEBUG_MODE:
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG)) {
       g_Debug = *(ULONG *)Irp->AssociatedIrp.SystemBuffer;
@@ -556,6 +560,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
               RtlCopyMemory(dokanControl->UNCName, dcb->UNCName->Buffer,
                             dcb->UNCName->Length);
             }
+            dokanControl->SessionId = dcb->SessionId;
             mountEntry = FindMountEntry(dcb->Global, dokanControl, TRUE);
             ExFreePool(dokanControl);
             if (mountEntry != NULL) {
