@@ -130,7 +130,12 @@ typedef enum _FILE_INFORMATION_CLASS {
   FileReplaceCompletionInformation,       // 61
   FileHardLinkFullIdInformation,          // 62
   FileIdExtdBothDirectoryInformation,     // 63
-
+  FileDispositionInformationEx,            // 64
+  FileRenameInformationEx,                 // 65
+  FileRenameInformationExBypassAccessCheck, // 66
+  FileDesiredStorageClassInformation,      // 67
+  FileStatInformation,                     // 68
+  FileMemoryPartitionInformation,          // 69
   FileMaximumInformation
 } FILE_INFORMATION_CLASS,
     *PFILE_INFORMATION_CLASS;

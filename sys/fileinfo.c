@@ -564,21 +564,25 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
       __leave;
     } break;
-    case FileRenameInformation:
-      DDbgPrint("  FileRenameInformation\n");
-      /* Flush any opened files before doing a rename
-       * of the parent directory or the specific file
-       */
-      targetFileObject = irpSp->Parameters.SetFile.FileObject;
-      if (targetFileObject) {
-        DDbgPrint("  FileRenameInformation targetFileObject specified so "
-                  "perform flush\n");
-        PDokanCCB targetCcb = (PDokanCCB)targetFileObject->FsContext2;
-        ASSERT(targetCcb != NULL);
-        FlushAllCachedFcb(targetCcb->Fcb, targetFileObject);
-      }
-      FlushAllCachedFcb(fcb, fileObject);
-      break;
+	case FileRenameInformation:
+	case FileRenameInformationEx:
+	{
+		DDbgPrint("  FileRenameInformation/FileRenameInformationEx\n");
+		/* Flush any opened files before doing a rename
+		* of the parent directory or the specific file
+		*/
+		targetFileObject = irpSp->Parameters.SetFile.FileObject;
+		if (targetFileObject) {
+			DDbgPrint("  FileRenameInformation/FileRenameInformationEx targetFileObject specified so "
+				"perform flush\n");
+			PDokanCCB targetCcb = (PDokanCCB)targetFileObject->FsContext2;
+			ASSERT(targetCcb != NULL);
+			FlushAllCachedFcb(targetCcb->Fcb, targetFileObject);
+		}
+		FlushAllCachedFcb(fcb, fileObject); 
+		break;
+	}
+	
     case FileValidDataLengthInformation:
       DDbgPrint("  FileValidDataLengthInformation\n");
       break;
@@ -630,7 +634,10 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     BOOLEAN isRenameOrLink =
         irpSp->Parameters.SetFile.FileInformationClass ==
             FileRenameInformation ||
-        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation;
+        irpSp->Parameters.SetFile.FileInformationClass == 
+			FileLinkInformation ||
+		irpSp->Parameters.SetFile.FileInformationClass ==
+		FileRenameInformationEx;
 
     if (!isRenameOrLink) {
       // copy FileInformation
@@ -691,8 +698,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         }
       }
 
-      if (irpSp->Parameters.SetFile.FileInformationClass ==
-          FileRenameInformation) {
+      if (irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformation 
+		  || irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformationEx) {
         DDbgPrint("   rename: %wZ => %ls, FileCount = %u\n", fcb->FileName,
                   renameContext->FileName, (ULONG)fcb->FileCount);
       }
@@ -806,7 +813,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       }
 
       // if rename is executed, reassign the file name
-      if (infoClass == FileRenameInformation) {
+      if (infoClass == FileRenameInformation ||
+		  infoClass == FileRenameInformationEx) {
         PVOID buffer = NULL;
 
         // this is used to inform rename in the bellow switch case
@@ -879,8 +887,11 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       case FilePositionInformation:
         // this is never used
         break;
-      case FileRenameInformation: {
-        DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
+
+	  case FileRenameInformationEx:
+      case FileRenameInformation:
+	  {
+        DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation/FileRenameInformationEx");
 
         DokanNotifyReportChange0(fcb, &oldFileName,
                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
@@ -896,7 +907,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
                                     ? FILE_NOTIFY_CHANGE_DIR_NAME
                                     : FILE_NOTIFY_CHANGE_FILE_NAME,
                                 FILE_ACTION_RENAMED_NEW_NAME);
-      } break;
+      } 
+	  break;
       case FileValidDataLengthInformation:
         DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
                                 FILE_ACTION_MODIFIED);

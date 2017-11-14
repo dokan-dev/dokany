@@ -188,6 +188,13 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
     RtlCopyMemory(newName, renameInfo->FileName, renameInfo->FileNameLength);
   }
 
+  // If file name: \??\M:\1.txt, then change to: \1.txt
+  TCHAR *pSeparator = wcschr(newName, L':');
+  if (pSeparator)
+  {
+	 wcscpy(newName, pSeparator + 1);
+  }
+
   status =
       DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
                                 newName, renameInfo->ReplaceIfExists, FileInfo);
@@ -219,8 +226,8 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
 
-  if (EventContext->Operation.SetFile.FileInformationClass ==
-      FileRenameInformation) {
+  if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation 
+	  ||  EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
     PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
         (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
     sizeOfEventInfo += renameInfo->FileNameLength;
@@ -267,6 +274,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     break;
 
   case FileRenameInformation:
+  case FileRenameInformationEx:
     status = DokanSetRenameInformation(EventContext, &fileInfo,
                                        DokanInstance->DokanOperations);
     break;
@@ -301,9 +309,11 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   } else {
     // notice new file name to driver
-    if (status == STATUS_SUCCESS &&
+    if (status == STATUS_SUCCESS && (
         EventContext->Operation.SetFile.FileInformationClass ==
-            FileRenameInformation) {
+            FileRenameInformation || 
+		EventContext->Operation.SetFile.FileInformationClass ==
+			FileRenameInformationEx)) {
       PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
           (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
       eventInfo->BufferLength = renameInfo->FileNameLength;
