@@ -7,7 +7,7 @@
 <?define UpgradeCodeX86="{2EF80C86-08A6-4FE1-BE92-13FD293C831B}" ?>
 <?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
 <?define BundleUpgradeCode="{A30D29CD-FA58-4542-8D41-7EDD1FB1EE5A}" ?>
-<?define BaseVersion="1.0.5" ?>
+<?define BaseVersion="1.1.0" ?>
 <?define MajorVersion="1" ?>
 <?define BuildVersion="1000" ?>
 <?define CompanyName="Dokany Project" ?>
