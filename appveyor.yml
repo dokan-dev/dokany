@@ -153,7 +153,6 @@
 
         Exec-External {& "cov-build.exe" `
         --dir cov-int `
-        --encoding=UTF-8 `
         $buildCmd $buildArgs}
 
         Exec-External {nuget install -ExcludeVersion PublishCoverity}
