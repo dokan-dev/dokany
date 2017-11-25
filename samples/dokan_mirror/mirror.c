@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <winbase.h>
+#include "mirror_dev.h"
 
 //#define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
@@ -344,7 +345,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (creationDisposition == CREATE_NEW ||
         creationDisposition == OPEN_ALWAYS) {
 
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
+      if (g_ImpersonateCallerUser) {
         // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
         if (!ImpersonateLoggedOnUser(userTokenHandle)) {
           // handle the error if failed to impersonate
@@ -363,7 +364,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
 
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
+      if (g_ImpersonateCallerUser) {
         // Clean Up operation for impersonate
         DWORD lastError = GetLastError();
         if (status != STATUS_SUCCESS) //Keep the handle open for CreateFile
@@ -1196,9 +1197,9 @@ MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
-  LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-  PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
-  PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
+    LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
+    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
+    PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   BOOLEAN requestingSaclInfo;
 
@@ -1217,7 +1218,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
   MirrorCheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation,
-    PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+                  PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
@@ -1266,7 +1267,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 
   // Ensure the Security Descriptor Length is set
   DWORD securityDescriptorLength =
-    GetSecurityDescriptorLength(SecurityDescriptor);
+      GetSecurityDescriptorLength(SecurityDescriptor);
   DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = "
            L"securityDescriptorLength \n");
   *LengthNeeded = securityDescriptorLength;
@@ -1277,9 +1278,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
-  LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-  PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
-  PDOKAN_FILE_INFO DokanFileInfo) {
+    LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
+    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
+    PDOKAN_FILE_INFO DokanFileInfo) {
   HANDLE handle;
   WCHAR filePath[DOKAN_MAX_PATH];
 
@@ -1304,10 +1305,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
-  LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
-  LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
-  LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
-  PDOKAN_FILE_INFO DokanFileInfo) {
+    LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
+    LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
+    LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
+    PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
   WCHAR volumeRoot[4];
@@ -1485,7 +1486,8 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 void ShowUsage() {
   // clang-format off
   fprintf(stderr, "mirror.exe\n"
-          "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+          "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror (must be a volume handle, see /P option for physical device).\n"
+          "  /P Physical device (ex. /P \\\\.\\PhysicalDrive1).\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
           "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
           "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
@@ -1501,10 +1503,14 @@ void ShowUsage() {
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
           "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+          "  /v Use vhd format for physical device mirroring instead of raw format.  This allows for interoperability with disk management on disk sizes up to 2TB\n\n"
+          "  /x Use vhdx format for physical device mirroring instead of raw format.  This allows for interoperability with disk management for disk sizes up to 64TB.  Requires Windows 8/Server 2012 or later.\n\n"
           "Examples:\n"
-          "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
-          "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
-          "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
+          "\tmirror.exe /r C:\\Users /l M:\t\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
+          "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
+          "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n"
+          "\tmirror.exe /P \\\\.\\PhysicalDrive1 /l C:\\PathToMount /v \t# Mirror PhysicalDrive1 (System disk 1) as an image file C:\\PathToMount\\MIRROR.vhd\n\n"
+          "\tmirror.exe /P \\\\.\\PhysicalDrive1 /l C:\\PathToMount /x \t# Mirror PhysicalDrive1 (System disk 1) as an image file C:\\PathToMount\\MIRROR.vhdx\n\n"
           "Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
   // clang-format on
 }
@@ -1514,6 +1520,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   ULONG command;
   PDOKAN_OPERATIONS dokanOperations =
     (PDOKAN_OPERATIONS)malloc(sizeof(DOKAN_OPERATIONS));
+  enum MirrorDevFileType mirrorDevType = MirrorDevTypeRawFile;
+  static WCHAR PhysicalDevice[DOKAN_MAX_PATH] = { 0 };
+
   if (dokanOperations == NULL) {
     return EXIT_FAILURE;
   }
@@ -1538,7 +1547,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOptions->ThreadCount = 0; // use default
 
   for (command = 1; command < argc; command++) {
-    switch (towlower(argv[command][1])) {
+    WCHAR cmdChar = argv[command][1];
+    if (cmdChar != 'P')
+    {
+      cmdChar = towlower(cmdChar);
+    }
+    switch (cmdChar) {
     case L'r':
       command++;
       wcscpy_s(RootDirectory, sizeof(RootDirectory) / sizeof(WCHAR),
@@ -1599,6 +1613,19 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       command++;
       dokanOptions->SectorSize = (ULONG)_wtol(argv[command]);
       break;
+    case L'P':
+      command++;
+      wcscpy_s(PhysicalDevice, sizeof(PhysicalDevice) / sizeof(WCHAR),
+	      argv[command]);
+      DbgPrint(L"PhysicalDevice: %ls\n", PhysicalDevice);
+      break;
+    case L'v':
+      mirrorDevType = MirrorDevTypeVHD;
+      break;
+    case L'x':
+      mirrorDevType = MirrorDevTypeVHDX;
+      break;
+
     default:
       fwprintf(stderr, L"unknown command: %s\n", argv[command]);
       free(dokanOperations);
@@ -1662,6 +1689,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
              L"rights to fix it\n");
   }
 
+  ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
+
   if (g_DebugMode) {
     dokanOptions->Options |= DOKAN_OPTION_DEBUG;
   }
@@ -1671,65 +1700,83 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
-  ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
-  dokanOperations->ZwCreateFile = MirrorCreateFile;
-  dokanOperations->Cleanup = MirrorCleanup;
-  dokanOperations->CloseFile = MirrorCloseFile;
-  dokanOperations->ReadFile = MirrorReadFile;
-  dokanOperations->WriteFile = MirrorWriteFile;
-  dokanOperations->FlushFileBuffers = MirrorFlushFileBuffers;
-  dokanOperations->GetFileInformation = MirrorGetFileInformation;
-  dokanOperations->FindFiles = MirrorFindFiles;
-  dokanOperations->FindFilesWithPattern = NULL;
-  dokanOperations->SetFileAttributes = MirrorSetFileAttributes;
-  dokanOperations->SetFileTime = MirrorSetFileTime;
-  dokanOperations->DeleteFile = MirrorDeleteFile;
-  dokanOperations->DeleteDirectory = MirrorDeleteDirectory;
-  dokanOperations->MoveFile = MirrorMoveFile;
-  dokanOperations->SetEndOfFile = MirrorSetEndOfFile;
-  dokanOperations->SetAllocationSize = MirrorSetAllocationSize;
-  dokanOperations->LockFile = MirrorLockFile;
-  dokanOperations->UnlockFile = MirrorUnlockFile;
-  dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
-  dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
-  dokanOperations->GetDiskFreeSpace = NULL; // MirrorDokanGetDiskFreeSpace;
-  dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
-  dokanOperations->Unmounted = MirrorUnmounted;
-  dokanOperations->FindStreams = MirrorFindStreams;
-  dokanOperations->Mounted = MirrorMounted;
-
-  status = DokanMain(dokanOptions, dokanOperations);
-  switch (status) {
-  case DOKAN_SUCCESS:
-    fprintf(stderr, "Success\n");
-    break;
-  case DOKAN_ERROR:
-    fprintf(stderr, "Error\n");
-    break;
-  case DOKAN_DRIVE_LETTER_ERROR:
-    fprintf(stderr, "Bad Drive letter\n");
-    break;
-  case DOKAN_DRIVER_INSTALL_ERROR:
-    fprintf(stderr, "Can't install driver\n");
-    break;
-  case DOKAN_START_ERROR:
-    fprintf(stderr, "Driver something wrong\n");
-    break;
-  case DOKAN_MOUNT_ERROR:
-    fprintf(stderr, "Can't assign a drive letter\n");
-    break;
-  case DOKAN_MOUNT_POINT_ERROR:
-    fprintf(stderr, "Mount point error\n");
-    break;
-  case DOKAN_VERSION_ERROR:
-    fprintf(stderr, "Version error\n");
-    break;
-  default:
-    fprintf(stderr, "Unknown error: %d\n", status);
-    break;
+  int rc = EXIT_SUCCESS;
+  if (PhysicalDevice != NULL)
+  {
+    rc = MirrorDevInit(mirrorDevType,
+      PhysicalDevice, dokanOptions, dokanOperations);
+    if ( rc != EXIT_SUCCESS )
+    {
+      fwprintf(stderr, L"Failed to initialize mirror device, error was %d",rc);
+    }
+  }
+  else
+  {
+    dokanOperations->ZwCreateFile = MirrorCreateFile;
+    dokanOperations->Cleanup = MirrorCleanup;
+    dokanOperations->CloseFile = MirrorCloseFile;
+    dokanOperations->ReadFile = MirrorReadFile;
+    dokanOperations->WriteFile = MirrorWriteFile;
+    dokanOperations->FlushFileBuffers = MirrorFlushFileBuffers;
+    dokanOperations->GetFileInformation = MirrorGetFileInformation;
+    dokanOperations->FindFiles = MirrorFindFiles;
+    dokanOperations->FindFilesWithPattern = NULL;
+    dokanOperations->SetFileAttributes = MirrorSetFileAttributes;
+    dokanOperations->SetFileTime = MirrorSetFileTime;
+    dokanOperations->DeleteFile = MirrorDeleteFile;
+    dokanOperations->DeleteDirectory = MirrorDeleteDirectory;
+    dokanOperations->MoveFile = MirrorMoveFile;
+    dokanOperations->SetEndOfFile = MirrorSetEndOfFile;
+    dokanOperations->SetAllocationSize = MirrorSetAllocationSize;
+    dokanOperations->LockFile = MirrorLockFile;
+    dokanOperations->UnlockFile = MirrorUnlockFile;
+    dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
+    dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
+    dokanOperations->GetDiskFreeSpace = NULL; // MirrorDokanGetDiskFreeSpace;
+    dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
+    dokanOperations->Unmounted = MirrorUnmounted;
+    dokanOperations->FindStreams = MirrorFindStreams;
+    dokanOperations->Mounted = MirrorMounted;
   }
 
+  if (rc == EXIT_SUCCESS)
+  {
+    rc = EXIT_FAILURE;
+    status = DokanMain(dokanOptions, dokanOperations);
+    switch (status) {
+    case DOKAN_SUCCESS:
+      fprintf(stderr, "Success\n");
+      rc = EXIT_SUCCESS;
+      break;
+    case DOKAN_ERROR:
+      fprintf(stderr, "Error\n");
+      break;
+    case DOKAN_DRIVE_LETTER_ERROR:
+      fprintf(stderr, "Bad Drive letter\n");
+      break;
+    case DOKAN_DRIVER_INSTALL_ERROR:
+      fprintf(stderr, "Can't install driver\n");
+      break;
+    case DOKAN_START_ERROR:
+      fprintf(stderr, "Driver something wrong\n");
+      break;
+    case DOKAN_MOUNT_ERROR:
+      fprintf(stderr, "Can't assign a drive letter\n");
+      break;
+    case DOKAN_MOUNT_POINT_ERROR:
+      fprintf(stderr, "Mount point error\n");
+      break;
+    case DOKAN_VERSION_ERROR:
+      fprintf(stderr, "Version error\n");
+      break;
+    default:
+      fprintf(stderr, "Unknown error: %d\n", status);
+      break;
+    }
+  }
+
+  MirrorDevTeardown();
   free(dokanOptions);
   free(dokanOperations);
-  return EXIT_SUCCESS;
+  return rc;
 }
