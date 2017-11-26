@@ -2,10 +2,18 @@
 REM Build release to prepare for packaging
 
 REM Make sure MSBUILD is available
-set PATH=%PATH%;%PROGRAMFILES(x86)%\MSBuild\14.0\Bin
-set VCTargetsPath=%PROGRAMFILES%
-IF %processor_architecture%==AMD64 set VCTargetsPath=%PROGRAMFILES(x86)%
-set VCTargetsPath=%VCTargetsPath%\MSBuild\Microsoft.Cpp\v4.0\V140
+FOR /f "delims=" %%A IN (
+'"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath'
+) DO SET "VS_PATH=%%A"
+
+SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\15.0\Bin
+IF NOT EXIST "%VS_PATH%" (
+	ECHO Visual C++ 2017 NOT Installed.
+	PAUSE
+	EXIT /B
+)
+
+set PATH=%PATH%;%MSBUILD_BIN_PATH%
 SET failed=0
 
 REM Enable AppVeyor build message logging if running under AppVeyor
