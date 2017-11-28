@@ -95,7 +95,6 @@
             }
           }
 
-          downloadIfOlderThanDays "https://cygwin.com/setup-x86.exe" "${env:DOKAN_CI_CACHE}\setup-x86.exe" 7
           downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
 
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
