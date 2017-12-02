@@ -266,8 +266,8 @@ void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo) {
   assert(EventInfo->ProcessingContext == NULL);
   assert(EventInfo->DokanOpenInfo);
 
-  if (EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass == FileRenameInformation) {
-
+  if (EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass == FileRenameInformation
+	  || EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
     PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
         (PCHAR)&EventInfo->KernelInfo.EventContext + EventInfo->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
 
@@ -306,6 +306,7 @@ void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo) {
     break;
 
   case FileRenameInformation:
+  case FileRenameInformationEx:
     DokanSetRenameInformation(EventInfo);
     break;
 
@@ -314,10 +315,10 @@ void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo) {
     break;
 
   default:
-	  DbgPrint("Dokan Warning: Unrecognized EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass: 0x%x\n",
-		  EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass);
+    DbgPrint("Dokan Warning: Unrecognized EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass: 0x%x\n",
+	    EventInfo->KernelInfo.EventContext.Operation.SetFile.FileInformationClass);
 
-	  EndGenericSetOperation(EventInfo, STATUS_NOT_IMPLEMENTED);
-	  break;
+    EndGenericSetOperation(EventInfo, STATUS_NOT_IMPLEMENTED);
+    break;
   }
 }

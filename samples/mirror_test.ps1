@@ -67,8 +67,8 @@ $ifstestParameters = @(
 	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not implemented in Mirror
 	"-t", "OpenVolumeTest"                 # reason: We do not have FCB for \ to count open
 	"-t", "CaseSensitiveTest"              # reason: NTFS and CreateFile is not case sensitive by default
-	"-t", "ShortFileNameTest"              # reason: shotname not supported by Mirror
-	"-t", "TunnelingTest"                  # reason: shotname not supported by Mirror
+	"-t", "ShortFileNameTest"              # reason: shortname not supported by Mirror
+	"-t", "TunnelingTest"                  # reason: shortname not supported by Mirror
 	"-t", "CompressionInformationTest"     # reason: compression not supported
 	"-t", "LinkInformationTest"            # reason: file link  not supported
 	"-t", "AlternateNameInformationTest"   # reason: alternate name not supported

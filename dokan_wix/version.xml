@@ -16,5 +16,5 @@
 <?define InstallerVersion="500" ?>
 <?define Compressed="yes" ?>
 <?define BuildCygwin="true" ?>
-<?define VCRedistVersion="14.0.23918" ?>
+<?define VCRedistVersion="14.11.25325" ?>
 </Include>

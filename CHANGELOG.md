@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Dokan API now async
 - Kernel - Write buffer process improved
 
+## [1.1.0.1000] - 2017-11-28
+### Added
+- Mirror - Add Impersonate Option for Security Enhancement.
+- FUSE - Add read-only option
+- Installer - Add VCRedistVersion variable / Now display version needed
+- Dokanctl - Add usage option /?
+- Kernel / Library - Add New FileRenameInformationEx since Windows 10 RS1
+
+### Changed
+- FUSE - cross-compile 32-bit Cygwin DLL from 64-bit
+- Library - Merge DokanMapStandardToGenericAccess with DokanMapKernelToUserCreateFileFlags
+- Move to VS 2017 / v141 / SDK 10.0.16299.0 / Installer Redist 2017
+
+### Fixed
+- Kernel - Fix current session unmount not releasing the device properly
+- Mirror - Cannot open a read only file for delete 
+- Mirror - Fix SetFileAttributes implementation by not updating when FileAttributes is 0x00
+- Installer - Wrong new logo size 
+- Kernel - Fixes #616 Only lock when not paging io 
+
 ## [1.0.5.1000] - 2017-09-19
 ### Added
 - Kernel - Add `FILE_NOTIFY_CHANGE_SECURITY` during SetSecurity

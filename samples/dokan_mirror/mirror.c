@@ -640,13 +640,11 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   // userTokenHandle is for Impersonate Caller User Option
   HANDLE userTokenHandle;
 
-  DokanMapKernelToUserCreateFileFlags(EventInfo, &fileAttributesAndFlags,
-                                      &creationDisposition);
+  DokanMapKernelToUserCreateFileFlags(EventInfo, &genericDesiredAccess,
+    &fileAttributesAndFlags,
+    &creationDisposition);
 
   GetFilePath(filePath, DOKAN_MAX_PATH, EventInfo->FileName);
-
-  genericDesiredAccess =
-      DokanMapStandardToGenericAccess(EventInfo->DesiredAccess);
 
   DbgPrint(L"CreateFile : %s\n", filePath);
 

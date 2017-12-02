@@ -58,3 +58,5 @@ ReleasePS
 /ARM64/Win10Debug/dokan.inf
 /ARM64/Win10Debug
 /dokan_wix/UpgradeLog.htm
+/.vs
+/dokan_wix/.vs

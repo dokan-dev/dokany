@@ -301,18 +301,22 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
-        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
-      DokanFCBLockRO(fcb);
+      EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+      if (!(irp->Flags & IRP_PAGING_IO)) {
+        DokanFCBLockRO(fcb);
+      }
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-                              FILE_ACTION_MODIFIED);
-      DokanFCBUnlock(fcb);
+        FILE_ACTION_MODIFIED);
+      if (!(irp->Flags & IRP_PAGING_IO)) {
+        DokanFCBUnlock(fcb);
+      }
 
       //Update size with new offset
       InterlockedExchange64(
-          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
-          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+        &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
-
+    
     DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
 
     if (EventInfo->Operation.Write.BytesWritten != 0 &&

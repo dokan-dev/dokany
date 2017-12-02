@@ -59,4 +59,3 @@ DokanEndDispatchGetFileSecurity
 DokanEndDispatchSetFileSecurity
 DokanInit
 DokanShutdown
-DokanMapStandardToGenericAccess

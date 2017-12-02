@@ -379,11 +379,21 @@ typedef struct _EVENT_START {
   ULONG IrpTimeout;
 } EVENT_START, *PEVENT_START;
 
+#pragma warning(push)
+#pragma warning(disable : 4201)
 typedef struct _DOKAN_RENAME_INFORMATION {
-  BOOLEAN ReplaceIfExists;
+#if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
+	union {
+		BOOLEAN ReplaceIfExists;  // FileRenameInformation
+		ULONG Flags;              // FileRenameInformationEx
+	} DUMMYUNIONNAME;
+#else
+	BOOLEAN ReplaceIfExists;
+#endif
   ULONG FileNameLength;
   WCHAR FileName[1];
 } DOKAN_RENAME_INFORMATION, *PDOKAN_RENAME_INFORMATION;
+#pragma warning(pop)
 
 typedef struct _DOKAN_LINK_INFORMATION {
   BOOLEAN ReplaceIfExists;
