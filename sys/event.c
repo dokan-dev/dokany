@@ -300,6 +300,129 @@ DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
                                 FALSE);
 }
 
+INT
+DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry, 
+                      __in PEVENT_INFORMATION EventInfo, 
+                      __in PDEVICE_OBJECT DeviceObject,
+                      __in BOOLEAN Wait)
+{
+  INT ret ;
+
+  switch (IrpEntry->IrpSp->MajorFunction) {
+  case IRP_MJ_DIRECTORY_CONTROL:
+    ret = DokanCompleteDirectoryControl(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_READ:
+    ret = DokanCompleteRead(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_WRITE:
+    ret = DokanCompleteWrite(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_QUERY_INFORMATION:
+    ret = DokanCompleteQueryInformation(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_QUERY_VOLUME_INFORMATION:
+    ret = DokanCompleteQueryVolumeInformation(IrpEntry, EventInfo, DeviceObject, Wait);
+    break;
+  case IRP_MJ_CREATE:
+    ret = DokanCompleteCreate(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_CLEANUP:
+    ret = DokanCompleteCleanup(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_LOCK_CONTROL:
+    ret = DokanCompleteLock(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_SET_INFORMATION:
+    ret = DokanCompleteSetInformation(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_FLUSH_BUFFERS:
+    ret = DokanCompleteFlush(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_QUERY_SECURITY:
+    ret = DokanCompleteQuerySecurity(IrpEntry, EventInfo, Wait);
+    break;
+  case IRP_MJ_SET_SECURITY:
+    ret = DokanCompleteSetSecurity(IrpEntry, EventInfo, Wait);
+    break;
+  default:
+    DDbgPrint("Unknown IRP %d\n", IrpEntry->IrpSp->MajorFunction);
+    ret = COMPLETE_SUCCESS;
+    // TODO: in this case, should complete this IRP
+    break;
+  }
+
+  return ret;
+}
+
+typedef struct _WORK_CONTEXT{
+  PIRP_ENTRY IrpEntry;
+  PEVENT_INFORMATION EventInfo;
+  PDEVICE_OBJECT DeviceObject;
+} WORK_CONTEXT, *PWORK_CONTEXT;
+
+VOID
+DokanDispathWork ( PVOID Context )
+{
+  PWORK_CONTEXT ctx = (PWORK_CONTEXT)Context;
+
+  DokanCompleteDispatch(ctx->IrpEntry,
+                        ctx->EventInfo,
+                        ctx->DeviceObject,
+                        TRUE);
+  
+  DokanFreeIrpEntry(ctx->IrpEntry);
+  ExFreePool(ctx->EventInfo);
+  ExFreePool(ctx);
+}
+
+PWORK_CONTEXT
+AllocateWorkContext(__in PIRP_ENTRY IrpEntry, 
+                    __in PEVENT_INFORMATION EventInfo, 
+                    __in ULONG SizeOfEventInfo,
+                    __in PDEVICE_OBJECT DeviceObject
+                    )
+{
+  PWORK_CONTEXT context = NULL;
+
+  context = ExAllocatePool(sizeof(WORK_CONTEXT));
+  if (NULL == context) {
+    return NULL;
+  }
+
+  context->EventInfo = ExAllocatePool(SizeOfEventInfo);
+  if (NULL == context->EventInfo) {
+    ExFreePool(context);
+    return NULL;
+  }
+
+  context->IrpEntry = IrpEntry;
+  context->DeviceObject = DeviceObject;
+  RtlCopyMemory(context->EventInfo, EventInfo, SizeOfEventInfo);
+
+  return context;
+}
+
+VOID
+DokanAddToWorkque(__in PIRP_ENTRY IrpEntry, 
+                  __in PEVENT_INFORMATION EventInfo, 
+                  __in ULONG SizeOfEventInfo,
+                  __in PDEVICE_OBJECT DeviceObject
+                  )
+{
+  PWORK_CONTEXT context;
+
+  context = AllocateWorkContext(IrpEntry, EventInfo, SizeOfEventInfo, DeviceObject);
+  if (NULL == context) {
+    DokanCompleteDispatch(IrpEntry, EventInfo, DeviceObject, TRUE);
+    return;
+  }
+
+  ExInitializeWorkItem( &IrpEntry->WorkQueueItem,
+                        DokanDispathWork ,
+                        context );
+  ExQueueWorkItem( &IrpEntry->WorkQueueItem, CriticalWorkQueue );
+}
 // When user-mode file system application returns EventInformation,
 // search corresponding pending IRP and complete it
 NTSTATUS
@@ -309,7 +432,10 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   PIRP_ENTRY irpEntry;
   PDokanVCB vcb;
   PEVENT_INFORMATION eventInfo;
+  ULONG sizeOfEventInfo;
 
+  sizeOfEventInfo = 
+    IoGetCurrentIrpStackLocation(Irp)->Parameters.DeviceIoControl.InputBufferLength;
   eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
   ASSERT(eventInfo != NULL);
 
@@ -338,6 +464,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
     PIRP irp;
     PIO_STACK_LOCATION irpSp;
+    INT ret = COMPLETE_SUCCESS;
 
     nextEntry = thisEntry->Flink;
 
@@ -392,52 +519,15 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
           "      !!WARNING!! Do not return STATUS_PENDING DokanCompleteIrp!");
     }
 
-    switch (irpSp->MajorFunction) {
-    case IRP_MJ_DIRECTORY_CONTROL:
-      DokanCompleteDirectoryControl(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_READ:
-      DokanCompleteRead(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_WRITE:
-      DokanCompleteWrite(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_QUERY_INFORMATION:
-      DokanCompleteQueryInformation(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_QUERY_VOLUME_INFORMATION:
-      DokanCompleteQueryVolumeInformation(irpEntry, eventInfo, DeviceObject);
-      break;
-    case IRP_MJ_CREATE:
-      DokanCompleteCreate(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_CLEANUP:
-      DokanCompleteCleanup(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_LOCK_CONTROL:
-      DokanCompleteLock(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_SET_INFORMATION:
-      DokanCompleteSetInformation(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_FLUSH_BUFFERS:
-      DokanCompleteFlush(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_QUERY_SECURITY:
-      DokanCompleteQuerySecurity(irpEntry, eventInfo);
-      break;
-    case IRP_MJ_SET_SECURITY:
-      DokanCompleteSetSecurity(irpEntry, eventInfo);
-      break;
-    default:
-      DDbgPrint("Unknown IRP %d\n", irpSp->MajorFunction);
-      // TODO: in this case, should complete this IRP
-      break;
+    ret = DokanCompleteDispatch(irpEntry, eventInfo, DeviceObject, FALSE);
+
+    if (COMPLETE_SUCCESS == ret) {
+      DokanFreeIrpEntry(irpEntry);
+      irpEntry = NULL;
     }
-
-    DokanFreeIrpEntry(irpEntry);
-    irpEntry = NULL;
-
+    else {
+      DokanAddToWorkque(irpEntry, eventInfo, sizeOfEventInfo, DeviceObject);
+    }
     return STATUS_SUCCESS;
   }
 

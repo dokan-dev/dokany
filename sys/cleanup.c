@@ -141,8 +141,9 @@ Return Value:
   return status;
 }
 
-VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo) {
+INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo,
+                          __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -150,6 +151,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb;
   PDokanVCB vcb;
   PFILE_OBJECT fileObject;
+  BOOLEAN isOk = FALSE;
 
   DDbgPrint("==> DokanCompleteCleanup\n");
 
@@ -172,7 +174,14 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
-  DokanFCBLockRO(fcb);
+  if (FALSE == Wait) {
+    DokanFCBTryLockRO(fcb, isOk);
+    if (FALSE == isOk) {
+      return COMPLETE_PENDING;
+    }
+  } else {
+    DokanFCBLockRO(fcb);
+  }
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);
@@ -203,4 +212,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, 0);
 
   DDbgPrint("<== DokanCompleteCleanup\n");
+
+  return COMPLETE_SUCCESS;
 }

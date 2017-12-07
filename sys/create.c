@@ -66,6 +66,7 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   }
 #endif
 
+  fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
   fcb->AdvancedFCBHeader.ValidDataLength.LowPart = 0xffffffff;
   fcb->AdvancedFCBHeader.ValidDataLength.HighPart = 0x7fffffff;
 
@@ -89,6 +90,44 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   return fcb;
 }
 
+VOID
+DokanInternalPreFreeFCB(__in PDokanFCB Fcb)
+{
+  RemoveEntryList(&Fcb->NextFCB);
+  InitializeListHead(&Fcb->NextCCB);
+
+  DDbgPrint("  Free FCB:%p\n", Fcb);
+
+  ExFreePool(Fcb->FileName.Buffer);
+  Fcb->FileName.Buffer = NULL;
+  Fcb->FileName.Length = 0;
+  Fcb->FileName.MaximumLength = 0;
+
+  FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
+
+#if _WIN32_WINNT >= 0x0501
+  FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+#else
+  if (DokanFsRtlTeardownPerStreamContexts) {
+    DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+  }
+#endif
+}
+VOID
+DokanInternalEndFreeFCB(__in PDokanFCB Fcb)
+{
+  PDokanVCB vcb;
+
+  vcb = Fcb->Vcb;
+  
+  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
+  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
+                          Fcb->AdvancedFCBHeader.Resource);
+  ExDeleteResourceLite(&Fcb->PagingIoResource);
+
+  InterlockedIncrement(&vcb->FcbFreed);
+  ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+}
 PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                       __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
@@ -109,7 +148,8 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
-
+    BOOLEAN isOk = FALSE;
+    
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
@@ -127,7 +167,14 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
         break;
       }
     }
+    if (0 == InterlockedAdd(&fcb->FileCount, 0)) {
+      DokanInternalPreFreeFCB(fcb);
+      isOk = TRUE;
+    }
     DokanFCBUnlock(fcb);
+    if (TRUE == isOk) {
+      DokanInternalEndFreeFCB(fcb);
+    }
 
     fcb = NULL;
   }
@@ -168,51 +215,10 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
   PDokanVCB vcb;
 
   ASSERT(Fcb != NULL);
-
-  vcb = Fcb->Vcb;
-
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
-  DokanFCBLockRW(Fcb);
-
-  if (InterlockedDecrement(&Fcb->FileCount) == 0) {
-
-    RemoveEntryList(&Fcb->NextFCB);
-    InitializeListHead(&Fcb->NextCCB);
-
-    DDbgPrint("  Free FCB:%p\n", Fcb);
-
-    ExFreePool(Fcb->FileName.Buffer);
-    Fcb->FileName.Buffer = NULL;
-    Fcb->FileName.Length = 0;
-    Fcb->FileName.MaximumLength = 0;
-
-    FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
-
-#if _WIN32_WINNT >= 0x0501
-    FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-#else
-    if (DokanFsRtlTeardownPerStreamContexts) {
-      DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-    }
-#endif
-
-    DokanFCBUnlock(Fcb);
-    ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-    ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                            Fcb->AdvancedFCBHeader.Resource);
-    ExDeleteResourceLite(&Fcb->PagingIoResource);
-
-    InterlockedIncrement(&vcb->FcbFreed);
-    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
-  } else {
-    DokanFCBUnlock(Fcb);
-  }
-
-  ExReleaseResourceLite(&vcb->Resource);
-  KeLeaveCriticalRegion();
+  InterlockedDecrement(&Fcb->FileCount);
 
   return STATUS_SUCCESS;
+
 }
 
 // DokanAllocateCCB must be called with exlusive Fcb lock held.
@@ -1301,14 +1307,16 @@ Return Value:
   return status;
 }
 
-VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo) {
+INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo,
+                         __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
   ULONG info;
   PDokanCCB ccb;
   PDokanFCB fcb;
+  BOOLEAN isOk = FALSE;
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -1320,8 +1328,14 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRW(fcb);
-
+  if (FALSE == Wait) {
+    DokanFCBTryLockRW(fcb, isOk);
+    if (FALSE == isOk) {
+      return COMPLETE_PENDING;
+    }
+  } else {    
+    DokanFCBLockRW(fcb);
+  }
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 
   ccb->UserContext = EventInfo->Context;
@@ -1410,8 +1424,8 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
               status);
     DokanFreeCCB(ccb);
     IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
-    DokanFCBUnlock(fcb);
     DokanFreeFCB(fcb);
+    DokanFCBUnlock(fcb);
     fcb = NULL;
     IrpEntry->FileObject->FsContext2 = NULL;
   }
@@ -1422,4 +1436,6 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteCreate\n");
+
+  return COMPLETE_SUCCESS;
 }

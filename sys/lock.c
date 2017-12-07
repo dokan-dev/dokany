@@ -223,11 +223,13 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo) {
+INT DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
 
+  UNREFERENCED_PARAMETER(Wait);
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
@@ -236,4 +238,5 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteLock\n");
+  return COMPLETE_SUCCESS;
 }
