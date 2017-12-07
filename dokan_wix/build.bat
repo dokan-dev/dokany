@@ -1,7 +1,15 @@
-set PATH=%PATH%;%PROGRAMFILES(x86)%\MSBuild\14.0\Bin
-set VCTargetsPath=%PROGRAMFILES%
-IF %processor_architecture%==AMD64 set VCTargetsPath=%PROGRAMFILES(x86)%
-set VCTargetsPath=%VCTargetsPath%\MSBuild\Microsoft.Cpp\v4.0\V140
+FOR /f "delims=" %%A IN (
+'"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath'
+) DO SET "VS_PATH=%%A"
+
+SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\15.0\Bin
+IF NOT EXIST "%VS_PATH%" (
+	ECHO Visual C++ 2017 NOT Installed.
+	PAUSE
+	EXIT /B
+)
+
+set PATH=%PATH%;%MSBUILD_BIN_PATH%
 
 REM set version info, edit version.txt before running the batch
 if NOT exist SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe (

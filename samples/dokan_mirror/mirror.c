@@ -216,10 +216,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   securityAttrib.bInheritHandle = FALSE;
 
   DokanMapKernelToUserCreateFileFlags(
-      FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
-      &creationDisposition);
-
-  genericDesiredAccess = DokanMapStandardToGenericAccess(DesiredAccess);
+      DesiredAccess, FileAttributes, CreateOptions, CreateDisposition,
+	  &genericDesiredAccess, &fileAttributesAndFlags, &creationDisposition);
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
@@ -437,7 +435,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
       return STATUS_CANNOT_DELETE;
 
     // Truncate should always be used with write access
-    // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
     if (creationDisposition == TRUNCATE_EXISTING)
       genericDesiredAccess |= GENERIC_WRITE;
 
