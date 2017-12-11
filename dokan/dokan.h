@@ -220,7 +220,6 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx">See ZwCreateFile for more information about the parameters of this callback (MSDN).</a>
   * \see DokanMapKernelToUserCreateFileFlags
-  * \see DokanMapStandardToGenericAccess
   */
   NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(LPCWSTR FileName,
       PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
@@ -842,25 +841,22 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
 /**
  * \brief Convert \ref DOKAN_OPERATIONS.ZwCreateFile parameters to <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> parameters.
  *
+ * Dokan Kernel forward the DesiredAccess directly from the IRP_MJ_CREATE.
+ * This DesiredAccess has been converted from generic rights (user CreateFile request) to standard rights and will be converted back here.
+ * https://msdn.microsoft.com/windows/hardware/drivers/ifs/access-mask
+ *
+ * \param DesiredAccess DesiredAccess from \ref DOKAN_OPERATIONS.ZwCreateFile.
  * \param FileAttributes FileAttributes from \ref DOKAN_OPERATIONS.ZwCreateFile.
  * \param CreateOptions CreateOptions from \ref DOKAN_OPERATIONS.ZwCreateFile.
  * \param CreateDisposition CreateDisposition from \ref DOKAN_OPERATIONS.ZwCreateFile.
+ * \param outDesiredAccess New <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> dwDesiredAccess.
  * \param outFileAttributesAndFlags New <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> dwFlagsAndAttributes.
  * \param outCreationDisposition New <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> dwCreationDisposition.
  * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile function (MSDN)</a>
  */
 void DOKANAPI DokanMapKernelToUserCreateFileFlags(
-    ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
-    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
-
-/**
-* \brief Convert IRP_MJ_CREATE DesiredAccess to generic rights.
-*
-* \param DesiredAccess Standard rights to convert
-* \return New DesiredAccess with generic rights.
-* \see <a href="https://msdn.microsoft.com/windows/hardware/drivers/ifs/access-mask">Access Mask (MSDN)</a>
-*/
-ACCESS_MASK DOKANAPI DokanMapStandardToGenericAccess(ACCESS_MASK DesiredAccess);
+	ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
+	ACCESS_MASK* outDesiredAccess, DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
 
 /**
  * \brief Convert WIN32 error to NTSTATUS

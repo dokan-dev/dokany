@@ -576,6 +576,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       __leave;
     } break;
     case FileRenameInformation:
+	case FileRenameInformationEx:
       DDbgPrint("  FileRenameInformation\n");
       /* Flush any opened files before doing a rename
        * of the parent directory or the specific file
@@ -639,9 +640,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         fcb->FileName.Length + sizeof(WCHAR); // the last null char
 
     BOOLEAN isRenameOrLink =
-        irpSp->Parameters.SetFile.FileInformationClass ==
-            FileRenameInformation ||
-        irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation;
+        irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformation
+		|| irpSp->Parameters.SetFile.FileInformationClass == FileLinkInformation
+		|| irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformationEx;
 
     if (!isRenameOrLink) {
       // copy FileInformation
@@ -702,8 +703,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         }
       }
 
-      if (irpSp->Parameters.SetFile.FileInformationClass ==
-          FileRenameInformation) {
+      if (irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformation
+		  || irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformationEx) {
         DDbgPrint("   rename: %wZ => %ls, FileCount = %u\n", fcb->FileName,
                   renameContext->FileName, (ULONG)fcb->FileCount);
       }
@@ -819,7 +820,7 @@ INT DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       }
 
       // if rename is executed, reassign the file name
-      if (infoClass == FileRenameInformation) {
+      if (infoClass == FileRenameInformation || infoClass == FileRenameInformationEx) {
         PVOID buffer = NULL;
 
         // this is used to inform rename in the bellow switch case
@@ -892,6 +893,7 @@ INT DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       case FilePositionInformation:
         // this is never used
         break;
+	  case FileRenameInformationEx:
       case FileRenameInformation: {
         DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
 

@@ -12,17 +12,17 @@
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
-      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2015; Configuration: All"
+      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2017; Configuration: All"
 
-  version: 1.0.5-{build}
+  version: 1.1.0-{build}
   configuration:
   - All
   - Coverity
   - FsTest
 
   image:
-    - Visual Studio 2015
     - Visual Studio 2017
+    - Visual Studio 2015
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
 #    - Previous Visual Studio 2015
@@ -30,9 +30,9 @@
   matrix:
     exclude:
       - configuration: All
-        image: Visual Studio 2017
+        image: Visual Studio 2015
       - configuration: Coverity
-        image: Visual Studio 2017
+        image: Visual Studio 2015
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
@@ -95,7 +95,6 @@
             }
           }
 
-          downloadIfOlderThanDays "https://cygwin.com/setup-x86.exe" "${env:DOKAN_CI_CACHE}\setup-x86.exe" 7
           downloadIfOlderThanDays "https://cygwin.com/setup-x86_64.exe" "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" 7
 
           function updateCygwin($cygwinexe, $installFolder, $cacheFolder) {
@@ -131,12 +130,12 @@
 
   before_build:
   # Remove VS build warning http://help.appveyor.com/discussions/problems/4569-the-target-_convertpdbfiles-listed-in-a-beforetargets-attribute-at-c-does-not-exist-in-the-project-and-will-be-ignored
-  - del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
+  #- del "C:\Program Files (x86)\MSBuild\14.0\Microsoft.Common.targets\ImportAfter\Xamarin.Common.targets"
 
   build_script:
   - ps: |
       Write-Host Start building...
-      $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
+      $buildCmd = $(cmd /c where msbuild)
 
   - ps: |
       if ($env:CONFIGURATION -eq "Coverity") {
@@ -153,7 +152,6 @@
 
         Exec-External {& "cov-build.exe" `
         --dir cov-int `
-        --encoding=UTF-8 `
         $buildCmd $buildArgs}
 
         Exec-External {nuget install -ExcludeVersion PublishCoverity}

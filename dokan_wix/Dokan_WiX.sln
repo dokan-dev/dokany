@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2015
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 2017
+VisualStudioVersion = 15.0.27004.2008
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "DokanMSI_x86", "DokanMSI_x86.wixproj", "{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}"
 	ProjectSection(ProjectDependencies) = postProject
