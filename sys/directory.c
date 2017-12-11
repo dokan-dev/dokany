@@ -312,6 +312,7 @@ INT DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   ULONG info = 0;
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
+
   UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteDirectoryControl\n");

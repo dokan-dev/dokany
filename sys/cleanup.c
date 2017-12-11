@@ -182,6 +182,7 @@ INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   } else {
     DokanFCBLockRO(fcb);
   }
+  
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);

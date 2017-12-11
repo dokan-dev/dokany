@@ -90,44 +90,6 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   return fcb;
 }
 
-VOID
-DokanInternalPreFreeFCB(__in PDokanFCB Fcb)
-{
-  RemoveEntryList(&Fcb->NextFCB);
-  InitializeListHead(&Fcb->NextCCB);
-
-  DDbgPrint("  Free FCB:%p\n", Fcb);
-
-  ExFreePool(Fcb->FileName.Buffer);
-  Fcb->FileName.Buffer = NULL;
-  Fcb->FileName.Length = 0;
-  Fcb->FileName.MaximumLength = 0;
-
-  FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
-
-#if _WIN32_WINNT >= 0x0501
-  FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-#else
-  if (DokanFsRtlTeardownPerStreamContexts) {
-    DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-  }
-#endif
-}
-VOID
-DokanInternalEndFreeFCB(__in PDokanFCB Fcb)
-{
-  PDokanVCB vcb;
-
-  vcb = Fcb->Vcb;
-  
-  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                          Fcb->AdvancedFCBHeader.Resource);
-  ExDeleteResourceLite(&Fcb->PagingIoResource);
-
-  InterlockedIncrement(&vcb->FcbFreed);
-  ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
-}
 PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                       __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
@@ -148,8 +110,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
-    BOOLEAN isOk = FALSE;
-    
+
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
@@ -167,14 +128,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
         break;
       }
     }
-    if (0 == InterlockedAdd(&fcb->FileCount, 0)) {
-      DokanInternalPreFreeFCB(fcb);
-      isOk = TRUE;
-    }
     DokanFCBUnlock(fcb);
-    if (TRUE == isOk) {
-      DokanInternalEndFreeFCB(fcb);
-    }
 
     fcb = NULL;
   }
@@ -215,10 +169,51 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
   PDokanVCB vcb;
 
   ASSERT(Fcb != NULL);
-  InterlockedDecrement(&Fcb->FileCount);
+
+  vcb = Fcb->Vcb;
+
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
+  DokanFCBLockRW(Fcb);
+
+  if (InterlockedDecrement(&Fcb->FileCount) == 0) {
+
+    RemoveEntryList(&Fcb->NextFCB);
+    InitializeListHead(&Fcb->NextCCB);
+
+    DDbgPrint("  Free FCB:%p\n", Fcb);
+
+    ExFreePool(Fcb->FileName.Buffer);
+    Fcb->FileName.Buffer = NULL;
+    Fcb->FileName.Length = 0;
+    Fcb->FileName.MaximumLength = 0;
+
+    FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
+
+#if _WIN32_WINNT >= 0x0501
+    FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+#else
+    if (DokanFsRtlTeardownPerStreamContexts) {
+      DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+    }
+#endif
+
+    DokanFCBUnlock(Fcb);
+    ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
+    ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
+                            Fcb->AdvancedFCBHeader.Resource);
+    ExDeleteResourceLite(&Fcb->PagingIoResource);
+
+    InterlockedIncrement(&vcb->FcbFreed);
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+  } else {
+    DokanFCBUnlock(Fcb);
+  }
+
+  ExReleaseResourceLite(&vcb->Resource);
+  KeLeaveCriticalRegion();
 
   return STATUS_SUCCESS;
-
 }
 
 // DokanAllocateCCB must be called with exlusive Fcb lock held.
@@ -1328,6 +1323,7 @@ INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
+
   if (FALSE == Wait) {
     DokanFCBTryLockRW(fcb, isOk);
     if (FALSE == isOk) {
@@ -1336,6 +1332,7 @@ INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   } else {    
     DokanFCBLockRW(fcb);
   }
+  
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 
   ccb->UserContext = EventInfo->Context;
@@ -1424,8 +1421,8 @@ INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
               status);
     DokanFreeCCB(ccb);
     IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
-    DokanFreeFCB(fcb);
     DokanFCBUnlock(fcb);
+    DokanFreeFCB(fcb);
     fcb = NULL;
     IrpEntry->FileObject->FsContext2 = NULL;
   }
