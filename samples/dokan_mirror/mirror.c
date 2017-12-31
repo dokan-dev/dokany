@@ -841,7 +841,8 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
     if (creationDisposition == CREATE_NEW ||
         creationDisposition == OPEN_ALWAYS) {
-      if (g_ImpersonateCallerUser) {
+
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
         if (!ImpersonateLoggedOnUser(userTokenHandle)) {
           // handle the error if failed to impersonate
@@ -859,9 +860,13 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
         }
       }
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // Clean Up operation for impersonate
+        DWORD lastError = GetLastError();
+        if (status != STATUS_SUCCESS) //Keep the handle open for CreateFile
+          CloseHandle(userTokenHandle);
         RevertToSelf();
+        SetLastError(lastError);
       }
     }
 
@@ -875,7 +880,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
         return STATUS_NOT_A_DIRECTORY;
       }
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
         if (!ImpersonateLoggedOnUser(userTokenHandle)) {
           // handle the error if failed to impersonate
@@ -889,9 +894,12 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
                      &securityAttrib, OPEN_EXISTING,
                      fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // Clean Up operation for impersonate
+        DWORD lastError = GetLastError();
+        CloseHandle(userTokenHandle);
         RevertToSelf();
+        SetLastError(lastError);
       }
 
       if (handle == INVALID_HANDLE_VALUE) {
@@ -941,11 +949,10 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
     } else {
 
       // Truncate should always be used with write access
-      // TODO Dokan 1.1.0 move it to DokanMapStandardToGenericAccess
       if (creationDisposition == TRUNCATE_EXISTING)
         genericDesiredAccess |= GENERIC_WRITE;
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
         if (!ImpersonateLoggedOnUser(userTokenHandle)) {
           // handle the error if failed to impersonate
@@ -962,7 +969,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
           fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
           NULL);                  // template file handle
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // Clean Up operation for impersonate
         RevertToSelf();
       }
@@ -1777,8 +1784,8 @@ MirrorMoveFile(DOKAN_MOVE_FILE_EVENT *EventInfo) {
   renameInfo->RootDirectory = NULL; // hope it is never needed, shouldn't be
 
   renameInfo->FileNameLength =
-      (DWORD)newFilePathLen *
-      sizeof(newFilePath[0]); // they want length in bytes
+    (DWORD)newFilePathLen *
+    sizeof(newFilePath[0]); // they want length in bytes
 
   wcscpy_s(renameInfo->FileName, newFilePathLen + 1, newFilePath);
 
@@ -2583,27 +2590,27 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 void ShowUsage() {
   // clang-format off
   fprintf(stderr, "mirror.exe\n"
-    "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
-    "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
-    "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
-    "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
-    "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
-    "  /n (use network drive)\t\t\t Show device as network device.\n"
-    "  /m (use removable drive)\t\t\t Show device as removable media.\n"
-    "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
-    "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
-    "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
-    "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
-    "  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
-    "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
-    "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
-    "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
-    "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
-    "Examples:\n"
-    "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
-    "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
-    "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
-    "Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
+          "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+          "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
+          "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
+          "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
+          "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
+          "  /n (use network drive)\t\t\t Show device as network device.\n"
+          "  /m (use removable drive)\t\t\t Show device as removable media.\n"
+          "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
+          "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
+          "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
+          "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
+          "  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
+          "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
+          "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
+          "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
+          "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+          "Examples:\n"
+          "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
+          "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
+          "\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
+          "Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
   // clang-format on
 }
 
@@ -2702,8 +2709,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   if (wcscmp(UNCName, L"") != 0 &&
       !(dokanOptions.Options & DOKAN_OPTION_NETWORK)) {
     fwprintf(
-        stderr,
-        L"  Warning: UNC provider name should be set on network drive only.\n");
+             stderr,
+             L"  Warning: UNC provider name should be set on network drive only.\n");
   }
 
   if (dokanOptions.Options & DOKAN_OPTION_NETWORK &&
@@ -2742,15 +2749,15 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     fwprintf(stderr,
              L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
     fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
-                     L"rights to fix it\n");
+             L"rights to fix it\n");
   }
 
   if (g_ImpersonateCallerUser && !g_HasSeSecurityPrivilege) {
     fwprintf(stderr, L"Impersonate Caller User requires administrator right to "
-                     L"work properly\n");
+             L"work properly\n");
     fwprintf(stderr, L"\t=> Other users may not use the drive properly\n");
     fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
-                     L"rights to fix it\n");
+             L"rights to fix it\n");
   }
   if (g_DebugMode) {
     dokanOptions.Options |= DOKAN_OPTION_DEBUG;
