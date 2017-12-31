@@ -170,14 +170,14 @@ void FreeMirrorFileHandle(MIRROR_FILE_HANDLE *FileHandle) {
 
       EnterCriticalSection(&g_ThreadPoolCS);
       {
-        if (g_ThreadPoolCleanupGroup) {
+        if (g_ThreadPoolCleanupGroup && FileHandle->IoCompletion) {
 
           CloseThreadpoolIo(FileHandle->IoCompletion);
+          FileHandle->IoCompletion = NULL;
         }
       }
       LeaveCriticalSection(&g_ThreadPoolCS);
 
-      FileHandle->IoCompletion = NULL;
     }
 #endif
 
@@ -816,24 +816,27 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
     }
   }
 
-  PSECURITY_DESCRIPTOR fileSecurity = NULL;
+  securityAttrib.nLength = sizeof(securityAttrib);
+  securityAttrib.bInheritHandle = FALSE;
+  securityAttrib.lpSecurityDescriptor = EventInfo->SecurityContext.AccessState.SecurityDescriptor;
+
+  PSECURITY_DESCRIPTOR newFileSecurity = NULL;
 
   if (wcscmp(EventInfo->FileName, L"\\") != 0 &&
-      wcscmp(EventInfo->FileName, L"/") != 0 &&
-      creationDisposition != OPEN_EXISTING &&
-      creationDisposition != TRUNCATE_EXISTING) {
+    wcscmp(EventInfo->FileName, L"/") != 0 &&
+    creationDisposition != OPEN_EXISTING &&
+    creationDisposition != TRUNCATE_EXISTING) {
 
     // We only need security information if there's a possibility a new file could be created
 
-    MirrorCreateNewSecurity(
-        EventInfo, filePath,
-        EventInfo->SecurityContext.AccessState.SecurityDescriptor,
-        &fileSecurity);
+    if (MirrorCreateNewSecurity(
+      EventInfo, filePath,
+      EventInfo->SecurityContext.AccessState.SecurityDescriptor,
+      &newFileSecurity) == ERROR_SUCCESS)
+    {
+      securityAttrib.lpSecurityDescriptor = newFileSecurity;
+    }
   }
-
-  securityAttrib.nLength = sizeof(securityAttrib);
-  securityAttrib.lpSecurityDescriptor = fileSecurity;
-  securityAttrib.bInheritHandle = FALSE;
 
   if (EventInfo->DokanFileInfo->IsDirectory) {
 
@@ -1024,9 +1027,9 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
 
   DbgPrint(L"\n");
 
-  if (fileSecurity) {
+  if (newFileSecurity) {
 
-    DestroyPrivateObjectSecurity(&fileSecurity);
+    DestroyPrivateObjectSecurity(&newFileSecurity);
   }
 
   return status;
