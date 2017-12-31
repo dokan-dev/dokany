@@ -357,7 +357,7 @@ typedef struct _DOKAN_GET_VOLUME_ATTRIBUTES_EVENT {
 
 typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
-	LPWSTR							FileName;
+	LPCWSTR							FileName;
 	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
 	SECURITY_INFORMATION			SecurityInformation; // The types of security information being requested
 	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
@@ -366,7 +366,7 @@ typedef struct _DOKAN_GET_FILE_SECURITY_EVENT {
 
 typedef struct _DOKAN_SET_FILE_SECURITY_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
-	LPWSTR							FileName;
+	LPCWSTR							FileName;
 	PSECURITY_DESCRIPTOR			SecurityDescriptor; // A pointer to SECURITY_DESCRIPTOR buffer to be filled
 	SECURITY_INFORMATION			SecurityInformation;
 	ULONG							SecurityDescriptorSize; // length of Security descriptor buffer
@@ -374,7 +374,7 @@ typedef struct _DOKAN_SET_FILE_SECURITY_EVENT {
 
 typedef struct _DOKAN_FIND_STREAMS_EVENT {
 	PDOKAN_FILE_INFO				DokanFileInfo;
-	LPWSTR							FileName;
+	LPCWSTR							FileName;
 	PFillFindStreamData				FillFindStreamData; // call this function with PWIN32_FIND_STREAM_DATA
 } DOKAN_FIND_STREAMS_EVENT, *PDOKAN_FIND_STREAMS_EVENT;
 
