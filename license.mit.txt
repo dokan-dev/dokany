@@ -1,4 +1,4 @@
-Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
 Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
