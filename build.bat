@@ -43,7 +43,7 @@ msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=x64 /t:Build !CI_B
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 
-IF EXIST C:\cygwin ( Powershell.exe -executionpolicy remotesigned -File dokan_fuse/build.ps1 || set failed=%ERRORLEVEL% ) ELSE ( echo "Cygwin/Msys2 build disabled" )
+IF EXIST C:\cygwin64 ( Powershell.exe -executionpolicy remotesigned -File dokan_fuse/build.ps1 || set failed=%ERRORLEVEL% ) ELSE ( echo "Cygwin/Msys2 build disabled" )
 
 @if !failed! neq 0 (
     echo At least one build-command failed. The last command that failed returned with error !failed! 1>&2

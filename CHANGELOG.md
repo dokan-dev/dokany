@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.1.0.2000] - 2018-01-19
+### Fixed
+- Installer - Fix Wrong redist download link rename
+- Installer - Fix vc++ version number displayed
+- Installer - Update message download VC link
+
 ## [1.1.0.1000] - 2017-11-28
 ### Added
 - Mirror - Add Impersonate Option for Security Enhancement.
@@ -334,7 +340,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.1.0...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.1.0.2000...master
+[1.1.0.2000]: https://github.com/dokan-dev/dokany/compare/v1.1.0...v1.1.0.2000
 [1.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.5...v1.1.0
 [1.0.5.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.4...v1.0.5
 [1.0.4.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.3...v1.0.4

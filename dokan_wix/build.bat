@@ -28,7 +28,7 @@ MakeCab /f dokanx86.ddf
 
 set /p DUMMY=Please submit drivers to developer hardware dashboard. Hit ENTER when it is done...
 
-IF EXIST C:\cygwin ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )
+IF EXIST C:\cygwin64 ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )
 
 REM build light installer
 powershell -Command "(gc version.xml) -replace 'Compressed=\"yes\"', 'Compressed=\"no\"' | sc version.xml"
