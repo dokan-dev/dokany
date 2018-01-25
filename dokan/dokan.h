@@ -682,6 +682,7 @@ typedef struct _DOKAN_OPERATIONS {
 /**
 * \struct DOKAN_CONTROL
 * \brief Dokan Control
+* WARNING: This structure definition must match exactly the same structure in sys/dokan.h
 */
 typedef struct _DOKAN_CONTROL {
   /** File System Type */
@@ -694,6 +695,7 @@ typedef struct _DOKAN_CONTROL {
   WCHAR DeviceName[64];
   /** Volume Device Object */
   PVOID DeviceObject;
+  ULONG SessionId;       // Session ID of calling process
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 /**
