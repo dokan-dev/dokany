@@ -24,6 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef DOKAN_MAJOR_API_VERSION
 #define DOKAN_MAJOR_API_VERSION L"1"
+#include <minwindef.h>
 #endif
 
 #define DOKAN_DRIVER_VERSION 0x0000190
@@ -382,5 +383,24 @@ typedef struct _DOKAN_LINK_INFORMATION {
   ULONG FileNameLength;
   WCHAR FileName[1];
 } DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
+
+/**
+* \struct DOKAN_CONTROL
+* \brief Dokan Control
+*/
+typedef struct _DOKAN_CONTROL {
+  /** File System Type */
+  ULONG Type;
+  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
+  WCHAR MountPoint[MAX_PATH];
+  /** UNC name used for network volume */
+  WCHAR UNCName[64];
+  /** Disk Device Name */
+  WCHAR DeviceName[64];
+  /** Volume Device Object */
+  PVOID DeviceObject;
+  /** Session ID of calling process */
+  ULONG SessionId;
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 #endif // PUBLIC_H_

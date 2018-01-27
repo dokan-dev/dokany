@@ -680,23 +680,6 @@ typedef struct _DOKAN_OPERATIONS {
 // clang-format on
 
 /**
-* \struct DOKAN_CONTROL
-* \brief Dokan Control
-*/
-typedef struct _DOKAN_CONTROL {
-  /** File System Type */
-  ULONG Type;
-  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
-  WCHAR MountPoint[MAX_PATH];
-  /** UNC name used for network volume */
-  WCHAR UNCName[64];
-  /** Disk Device Name */
-  WCHAR DeviceName[64];
-  /** Volume Device Object */
-  PVOID DeviceObject;
-} DOKAN_CONTROL, *PDOKAN_CONTROL;
-
-/**
  * \defgroup DokanMainResult DokanMainResult
  * \brief \ref DokanMain returns error codes
  */

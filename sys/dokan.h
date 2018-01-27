@@ -178,15 +178,6 @@ typedef struct _IRP_LIST {
   KSPIN_LOCK ListLock;
 } IRP_LIST, *PIRP_LIST;
 
-typedef struct _DOKAN_CONTROL {
-  ULONG Type;            // File System Type
-  WCHAR MountPoint[260]; // Mount Point
-  WCHAR UNCName[64];
-  WCHAR DeviceName[64];        // Disk Device Name
-  PDEVICE_OBJECT DeviceObject; // Volume Device Object
-  ULONG SessionId;       // Session ID of calling process
-} DOKAN_CONTROL, *PDOKAN_CONTROL;
-
 typedef struct _MOUNT_ENTRY {
   LIST_ENTRY ListEntry;
   DOKAN_CONTROL MountControl;
