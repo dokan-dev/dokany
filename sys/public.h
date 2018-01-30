@@ -398,7 +398,7 @@ typedef struct _DOKAN_CONTROL {
   /** Disk Device Name */
   WCHAR DeviceName[64];
   /** Volume Device Object */
-  PVOID DeviceObject;
+  PVOID64 DeviceObject;
   /** Session ID of calling process */
   ULONG SessionId;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
