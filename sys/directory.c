@@ -303,7 +303,7 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return STATUS_PENDING;
 }
 
-INT DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
                                   __in PEVENT_INFORMATION EventInfo,
                                   __in BOOLEAN Wait) {
   PIRP irp;
@@ -384,5 +384,5 @@ INT DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteDirectoryControl\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

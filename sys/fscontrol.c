@@ -587,6 +587,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   vcb->Dcb = dcb;
   dcb->Vcb = vcb;
 
+  DokanInitFCBCache(vcb, 0, 0);
   InitializeListHead(&vcb->NextFCB);
 
   InitializeListHead(&vcb->DirNotifyList);

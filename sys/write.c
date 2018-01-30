@@ -327,7 +327,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo,
                         __in BOOLEAN Wait) {
   PIRP irp;
@@ -366,6 +366,18 @@ INT DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
       EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+
+      if (!(irp->Flags & IRP_PAGING_IO)) {
+        DokanFCBLockRO(fcb);
+      }
+
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
+        FILE_ACTION_MODIFIED);
+
+      if (!(irp->Flags & IRP_PAGING_IO)) {
+        DokanFCBUnlock(fcb);
+      }
+
       //Update size with new offset
       InterlockedExchange64(
         &fcb->AdvancedFCBHeader.FileSize.QuadPart,
@@ -388,5 +400,5 @@ INT DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteWrite\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

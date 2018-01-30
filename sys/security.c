@@ -136,7 +136,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
                                 __in PEVENT_INFORMATION EventInfo,
                                 __in BOOLEAN Wait) {
   PIRP irp;
@@ -205,7 +205,7 @@ INT DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteQuerySecurity\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -333,7 +333,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
                               __in PEVENT_INFORMATION EventInfo,
                               __in BOOLEAN Wait) {
   PIRP irp;
@@ -372,5 +372,5 @@ INT DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteSetSecurity\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

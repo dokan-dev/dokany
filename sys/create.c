@@ -66,7 +66,6 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   }
 #endif
 
-  fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
   fcb->AdvancedFCBHeader.ValidDataLength.LowPart = 0xffffffff;
   fcb->AdvancedFCBHeader.ValidDataLength.HighPart = 0x7fffffff;
 
@@ -88,6 +87,180 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   InterlockedIncrement(&Vcb->FcbAllocated);
 
   return fcb;
+}
+
+VOID
+DokanFreeFCBRaw(__in PDokanFCB Fcb) {
+  PDokanVCB vcb;
+
+  vcb = Fcb->Vcb;
+
+  ExFreePool(Fcb->FileName.Buffer);
+  Fcb->FileName.Buffer = NULL;
+  Fcb->FileName.Length = 0;
+  Fcb->FileName.MaximumLength = 0;
+
+  FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
+
+#if _WIN32_WINNT >= 0x0501
+  FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+#else
+  if (DokanFsRtlTeardownPerStreamContexts) {
+    DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+  }
+#endif
+
+  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
+  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
+    Fcb->AdvancedFCBHeader.Resource);
+  ExDeleteResourceLite(&Fcb->PagingIoResource);
+  InterlockedIncrement(&vcb->FcbFreed);
+  ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+}
+
+VOID DokanReleaseFCBCache(__in PDokanVCB Vcb) {
+  PLIST_ENTRY thisEntry, nextEntry, listHead;
+  PFCB_CACHE_TABLE fcbCache;
+  PDokanFCB freeFcb;
+
+  fcbCache = Vcb->FcbCacheTable;
+  Vcb->FcbCacheTable = NULL;
+
+  listHead = &fcbCache->Lru;
+
+  for (thisEntry = listHead->Flink; thisEntry != listHead;
+    thisEntry = nextEntry) {
+    nextEntry = thisEntry->Flink;
+
+    freeFcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextLruFCB);
+    RemoveEntryList(&freeFcb->NextCachedFCB);
+
+    DokanFreeFCBRaw(freeFcb);
+  }
+
+  ExFreePool(fcbCache->Table);
+  fcbCache->Table = NULL;
+
+  ExFreePool(fcbCache);
+}
+
+BOOLEAN DokanInitFCBCache(__in PDokanVCB Vcb, 
+                          __in LONG TableSize, 
+                          __in LONG MaxCached) {
+  PFCB_CACHE_TABLE fcbCache = NULL;
+  LONG i;
+
+  fcbCache = Vcb->FcbCacheTable = ExAllocatePool(sizeof(FCB_CACHE_TABLE));
+  if (NULL == fcbCache) {
+    return FALSE;
+  }
+
+  InitializeListHead(&fcbCache->Lru);
+
+  fcbCache->FcbCached = 0;
+  fcbCache->TableSize = 
+    (TableSize == 0) ? DOKAN_DEFAULT_CACHE_SIZE : TableSize;
+  fcbCache->MaxFcbCached = 
+    (MaxCached == 0) ? fcbCache->TableSize * 2 : MaxCached;
+
+  fcbCache->Table = ExAllocatePool(sizeof(LIST_ENTRY)*fcbCache->TableSize);
+  if (NULL == fcbCache->Table) {
+    ExFreePool(Vcb->FcbCacheTable);
+    Vcb->FcbCacheTable = NULL;
+    return FALSE;
+  }
+
+  for (i = 0; i < fcbCache->TableSize; ++i) {
+    InitializeListHead(&fcbCache->Table[i]);
+  }
+
+  return TRUE;
+}
+
+BOOLEAN DokanPutFcbToCache(__in PFCB_CACHE_TABLE CacheTable,
+  __in PDokanFCB Fcb) {
+  ULONG hashValue;
+  PDokanFCB freeFcb;
+  PLIST_ENTRY listHead, listEntry;
+
+  if (NULL == CacheTable) {
+    return FALSE;
+  }
+
+  if (STATUS_SUCCESS != RtlHashUnicodeString(&Fcb->FileName,
+    TRUE,
+    HASH_STRING_ALGORITHM_DEFAULT,
+    &hashValue)) {
+    return FALSE;
+  }
+
+  hashValue = hashValue % CacheTable->TableSize;
+  listHead = &CacheTable->Table[hashValue];
+
+  InsertHeadList(listHead, &Fcb->NextCachedFCB);
+  InsertHeadList(&CacheTable->Lru, &Fcb->NextLruFCB);
+  InterlockedIncrement(&CacheTable->FcbCached);
+
+  while (CacheTable->FcbCached > CacheTable->MaxFcbCached) {
+    listEntry = RemoveTailList(&CacheTable->Lru);
+    if (listEntry == &CacheTable->Lru) {
+      DDbgPrint(" list lru exception %d %d\n",
+        CacheTable->FcbCached,
+        CacheTable->MaxFcbCached);
+      break;
+    }
+
+    freeFcb = CONTAINING_RECORD(listEntry, DokanFCB, NextLruFCB);
+    RemoveEntryList(&freeFcb->NextCachedFCB);
+    DokanFreeFCBRaw(freeFcb);
+    InterlockedDecrement(&CacheTable->FcbCached);
+  }
+
+  return TRUE;
+}
+
+PDokanFCB DokanGetFcbFromCache(__in PFCB_CACHE_TABLE CacheTable,
+  __in PUNICODE_STRING FileName,
+  __in BOOLEAN CaseSensitive) {
+  PLIST_ENTRY thisEntry, nextEntry, listHead;
+  ULONG hashValue;
+  PDokanFCB fcb = NULL;
+
+  if (NULL == CacheTable) {
+    return NULL;
+  }
+
+  if (STATUS_SUCCESS != RtlHashUnicodeString(FileName,
+    TRUE,
+    HASH_STRING_ALGORITHM_DEFAULT,
+    &hashValue)) {
+    return NULL;
+  }
+
+  hashValue = hashValue % CacheTable->TableSize;
+  listHead = &CacheTable->Table[hashValue];
+
+  for (thisEntry = listHead->Flink; thisEntry != listHead;
+    thisEntry = nextEntry) {
+
+    nextEntry = thisEntry->Flink;
+
+    fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextCachedFCB);
+    if (RtlEqualUnicodeString(FileName, &fcb->FileName, !CaseSensitive)) {
+      PDokanVCB vcb;
+
+      InterlockedDecrement(&CacheTable->FcbCached);
+      RemoveEntryList(&fcb->NextCachedFCB);
+      RemoveEntryList(&fcb->NextLruFCB);
+
+      vcb = fcb->Vcb;
+      InsertTailList(&vcb->NextFCB, &fcb->NextFCB);
+
+      return fcb;
+    }
+  }
+
+  return NULL;
 }
 
 PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
@@ -133,6 +306,9 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     fcb = NULL;
   }
 
+  if (fcb == NULL) {
+    fcb = DokanGetFcbFromCache(Vcb->FcbCacheTable, &fn, CaseSensitive);
+  }
   // we don't have FCB
   if (fcb == NULL) {
     DDbgPrint("  Allocate FCB for %ls\n", FileName);
@@ -180,32 +356,12 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
 
     RemoveEntryList(&Fcb->NextFCB);
     InitializeListHead(&Fcb->NextCCB);
-
-    DDbgPrint("  Free FCB:%p\n", Fcb);
-
-    ExFreePool(Fcb->FileName.Buffer);
-    Fcb->FileName.Buffer = NULL;
-    Fcb->FileName.Length = 0;
-    Fcb->FileName.MaximumLength = 0;
-
-    FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
-
-#if _WIN32_WINNT >= 0x0501
-    FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-#else
-    if (DokanFsRtlTeardownPerStreamContexts) {
-      DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-    }
-#endif
-
     DokanFCBUnlock(Fcb);
-    ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-    ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                            Fcb->AdvancedFCBHeader.Resource);
-    ExDeleteResourceLite(&Fcb->PagingIoResource);
 
-    InterlockedIncrement(&vcb->FcbFreed);
-    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+    if (!DokanPutFcbToCache(vcb->FcbCacheTable, Fcb)) {
+      DokanFreeFCBRaw(Fcb);
+    }
+    
   } else {
     DokanFCBUnlock(Fcb);
   }
@@ -1302,7 +1458,7 @@ Return Value:
   return status;
 }
 
-INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
                          __in PEVENT_INFORMATION EventInfo,
                          __in BOOLEAN Wait) {
   PIRP irp;
@@ -1327,7 +1483,7 @@ INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   if (FALSE == Wait) {
     DokanFCBTryLockRW(fcb, isOk);
     if (FALSE == isOk) {
-      return COMPLETE_PENDING;
+      return STATUS_PENDING;
     }
   } else {    
     DokanFCBLockRW(fcb);
@@ -1434,5 +1590,5 @@ INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteCreate\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

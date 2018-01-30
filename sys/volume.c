@@ -269,7 +269,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
   return status;
 }
 
-INT DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
                                          __in PEVENT_INFORMATION EventInfo,
                                          __in PDEVICE_OBJECT DeviceObject,
                                          __in BOOLEAN Wait) {
@@ -355,7 +355,7 @@ INT DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
 NTSTATUS

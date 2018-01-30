@@ -262,7 +262,7 @@ Return Value:
   return status;
 }
 
-INT DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo,
                        __in BOOLEAN Wait) {
   PIRP irp;
@@ -348,5 +348,5 @@ INT DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, readLength);
 
   DDbgPrint("<== DokanCompleteRead\n");
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

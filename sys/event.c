@@ -300,13 +300,13 @@ DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
                                 FALSE);
 }
 
-INT
+NTSTATUS
 DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry, 
                       __in PEVENT_INFORMATION EventInfo, 
                       __in PDEVICE_OBJECT DeviceObject,
                       __in BOOLEAN Wait)
 {
-  INT ret ;
+  NTSTATUS ret ;
 
   switch (IrpEntry->IrpSp->MajorFunction) {
   case IRP_MJ_DIRECTORY_CONTROL:
@@ -347,7 +347,7 @@ DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry,
     break;
   default:
     DDbgPrint("Unknown IRP %d\n", IrpEntry->IrpSp->MajorFunction);
-    ret = COMPLETE_SUCCESS;
+    ret = STATUS_SUCCESS;
     // TODO: in this case, should complete this IRP
     break;
   }
@@ -383,15 +383,15 @@ AllocateWorkContext(__in PIRP_ENTRY IrpEntry,
                     __in PDEVICE_OBJECT DeviceObject
                     )
 {
-  PWORK_CONTEXT context = NULL;
+  PWORK_CONTEXT context;
 
   context = ExAllocatePool(sizeof(WORK_CONTEXT));
-  if (NULL == context) {
+  if (context == NULL) {
     return NULL;
   }
 
   context->EventInfo = ExAllocatePool(SizeOfEventInfo);
-  if (NULL == context->EventInfo) {
+  if (context->EventInfo == NULL) {
     ExFreePool(context);
     return NULL;
   }
@@ -413,7 +413,7 @@ DokanAddToWorkque(__in PIRP_ENTRY IrpEntry,
   PWORK_CONTEXT context;
 
   context = AllocateWorkContext(IrpEntry, EventInfo, SizeOfEventInfo, DeviceObject);
-  if (NULL == context) {
+  if (context == NULL) {
     DokanCompleteDispatch(IrpEntry, EventInfo, DeviceObject, TRUE);
     return;
   }
@@ -464,7 +464,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
     PIRP irp;
     PIO_STACK_LOCATION irpSp;
-    INT ret = COMPLETE_SUCCESS;
+    INT ret = STATUS_SUCCESS;
 
     nextEntry = thisEntry->Flink;
 
@@ -521,7 +521,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
     ret = DokanCompleteDispatch(irpEntry, eventInfo, DeviceObject, FALSE);
 
-    if (COMPLETE_SUCCESS == ret) {
+    if (STATUS_SUCCESS == ret) {
       DokanFreeIrpEntry(irpEntry);
       irpEntry = NULL;
     }

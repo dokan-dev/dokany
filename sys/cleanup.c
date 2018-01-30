@@ -141,7 +141,7 @@ Return Value:
   return status;
 }
 
-INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
                           __in PEVENT_INFORMATION EventInfo,
                           __in BOOLEAN Wait) {
   PIRP irp;
@@ -177,7 +177,7 @@ INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   if (FALSE == Wait) {
     DokanFCBTryLockRO(fcb, isOk);
     if (FALSE == isOk) {
-      return COMPLETE_PENDING;
+      return STATUS_PENDING; 
     }
   } else {
     DokanFCBLockRO(fcb);
@@ -214,5 +214,5 @@ INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   DDbgPrint("<== DokanCompleteCleanup\n");
 
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }

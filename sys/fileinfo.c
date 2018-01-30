@@ -251,7 +251,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
                                    __in PEVENT_INFORMATION EventInfo,
                                    __in BOOLEAN Wait) {
   PIRP irp;
@@ -354,7 +354,7 @@ INT DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQueryInformation\n");
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }
 
 BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix) {
@@ -747,7 +747,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
                                  __in PEVENT_INFORMATION EventInfo,
                                  __in BOOLEAN Wait) {
   PIRP irp;
@@ -930,6 +930,6 @@ INT DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     DokanCompleteIrpRequest(irp, status, info);
 
     DDbgPrint("<== DokanCompleteSetInformation\n");
-    return COMPLETE_SUCCESS;
+    return STATUS_SUCCESS;
   }
 }

@@ -512,6 +512,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
   PLIST_ENTRY nextEntry;
   ULONG totalCount = 0;
   PDokanDCB dcb;
+  PDokanVCB vcb;
   NTSTATUS status;
 
   InitializeListHead(&completeList);
@@ -567,6 +568,17 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
 
               DDbgPrint("  Delete the volume device. ReferenceCount %lu \n",
                         deviceEntry->VolumeDeviceObject->ReferenceCount);
+
+              vcb = deviceEntry->VolumeDeviceObject->DeviceExtension;
+
+              KeEnterCriticalRegion();
+              ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
+
+              DokanReleaseFCBCache(vcb);
+
+              ExReleaseResourceLite(&vcb->Resource);
+              KeLeaveCriticalRegion();
+
               IoDeleteDevice(deviceEntry->VolumeDeviceObject);
               deviceEntry->VolumeDeviceObject = NULL;
             } else {

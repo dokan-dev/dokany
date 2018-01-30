@@ -92,6 +92,7 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 #define DRIVER_CONTEXT_EVENT 2
 #define DRIVER_CONTEXT_IRP_ENTRY 3
 
+#define DOKAN_DEFAULT_CACHE_SIZE 509						// prime number
 #define DOKAN_IRP_PENDING_TIMEOUT (1000 * 15)               // in millisecond
 #define DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX (1000 * 60 * 5) // in millisecond
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
@@ -171,6 +172,14 @@ typedef struct _FSD_IDENTIFIER {
 //
 // DATA
 //
+
+typedef struct _FCB_CACHE_TABLE {
+	PLIST_ENTRY Table;
+	LIST_ENTRY Lru;
+	LONG TableSize;
+  LONG MaxFcbCached;
+	LONG FcbCached;
+}FCB_CACHE_TABLE, *PFCB_CACHE_TABLE;
 
 typedef struct _IRP_LIST {
   LIST_ENTRY ListHead;
@@ -287,6 +296,7 @@ typedef struct _DokanVolumeControlBlock {
   PDEVICE_OBJECT DeviceObject;
   PDokanDCB Dcb;
   LIST_ENTRY NextFCB;
+  PFCB_CACHE_TABLE FcbCacheTable;
 
   // NotifySync is used by notify directory change
   PNOTIFY_SYNC NotifySync;
@@ -330,7 +340,10 @@ typedef struct _DokanFileControlBlock {
   LIST_ENTRY NextFCB;
   // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
-
+  // Locking: vcb lock
+  LIST_ENTRY NextCachedFCB;
+  // Locking: vcb lock
+  LIST_ENTRY NextLruFCB;
   // Locking: Atomics - not behind an accessor.
   LONG FileCount;
 
@@ -414,8 +427,6 @@ typedef struct _DokanContextControlBlock {
 #define DokanGetFcbOplock(F) &(F)->Oplock
 #endif
 
-#define COMPLETE_PENDING 1
-#define COMPLETE_SUCCESS 0
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
 typedef struct _IRP_ENTRY {
@@ -593,52 +604,52 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
-INT DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
                                    __in PEVENT_INFORMATION EventInfo,
                                    __in BOOLEAN Wait);
 
-INT DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo,
                        __in BOOLEAN Wait);
 
-INT DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo,
                         __in BOOLEAN Wait);
 
-INT DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
                                    __in PEVENT_INFORMATION EventInfo,
                                    __in BOOLEAN Wait);
 
-INT DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
                                  __in PEVENT_INFORMATION EventInfo,
                                  __in BOOLEAN Wait);
 
-INT DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
                          __in PEVENT_INFORMATION EventInfo,
                          __in BOOLEAN Wait);
 
-INT DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
                           __in PEVENT_INFORMATION EventInfo,
                           __in BOOLEAN Wait);
 
-INT DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo,
                        __in BOOLEAN Wait);
 
-INT DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
                                          __in PEVENT_INFORMATION EventInfo,
                                          __in PDEVICE_OBJECT DeviceObject,
                                          __in BOOLEAN Wait);
 
-INT DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo,
                         __in BOOLEAN Wait);
 
-INT DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
                                 __in PEVENT_INFORMATION EventInfo,
                                 __in BOOLEAN Wait);
 
-INT DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
                               __in PEVENT_INFORMATION EventInfo,
                               __in BOOLEAN Wait);
 
@@ -682,6 +693,22 @@ VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
 
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength);
+
+
+BOOLEAN DokanInitFCBCache(__in PDokanVCB Vcb, __in LONG TableSize, 
+                          __in LONG MaxCached);
+
+VOID DokanReleaseFCBCache(__in PDokanVCB Vcb);
+
+BOOLEAN DokanPutFcbToCache(__in PFCB_CACHE_TABLE CacheTable,
+                           __in PDokanFCB Fcb);
+
+PDokanFCB DokanGetFcbFromCache(__in PFCB_CACHE_TABLE CacheTable,
+                               __in PUNICODE_STRING FileName,
+                               __in BOOLEAN CaseSensitive);  
+
+VOID
+DokanFreeFCBRaw(__in PDokanFCB Fcb);
 
 NTSTATUS
 DokanFreeFCB(__in PDokanFCB Fcb);

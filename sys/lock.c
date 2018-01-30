@@ -223,7 +223,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-INT DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo,
                        __in BOOLEAN Wait) {
   PIRP irp;
@@ -238,5 +238,5 @@ INT DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteLock\n");
-  return COMPLETE_SUCCESS;
+  return STATUS_SUCCESS;
 }
