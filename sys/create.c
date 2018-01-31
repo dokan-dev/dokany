@@ -358,7 +358,9 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     InitializeListHead(&Fcb->NextCCB);
     DokanFCBUnlock(Fcb);
 
-    if (!DokanPutFcbToCache(vcb->FcbCacheTable, Fcb)) {
+    if (!DokanFCBFlagsIsSet(Fcb, DOKAN_FCB_CACHED)) {
+      DokanFreeFCBRaw(Fcb);
+    }else if (!DokanPutFcbToCache(vcb->FcbCacheTable, Fcb)) {
       DokanFreeFCBRaw(Fcb);
     }
     
@@ -1467,7 +1469,7 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   ULONG info;
   PDokanCCB ccb;
   PDokanFCB fcb;
-  BOOLEAN isOk = FALSE;
+  BOOLEAN FCBAcquired = FALSE;
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -1481,8 +1483,8 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   ASSERT(fcb != NULL);
 
   if (FALSE == Wait) {
-    DokanFCBTryLockRW(fcb, isOk);
-    if (FALSE == isOk) {
+    DokanFCBTryLockRW(fcb, FCBAcquired);
+    if (FALSE == FCBAcquired) {
       return STATUS_PENDING;
     }
   } else {    
@@ -1549,6 +1551,7 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   }
 
   if (NT_SUCCESS(status)) {
+    DokanFCBFlagsSetBit(fcb, DOKAN_FCB_CACHED);
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
   }
 

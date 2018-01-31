@@ -151,7 +151,7 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb;
   PDokanVCB vcb;
   PFILE_OBJECT fileObject;
-  BOOLEAN isOk = FALSE;
+  BOOLEAN FCBAcquired = FALSE;
 
   DDbgPrint("==> DokanCompleteCleanup\n");
 
@@ -175,8 +175,8 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   status = EventInfo->Status;
 
   if (FALSE == Wait) {
-    DokanFCBTryLockRO(fcb, isOk);
-    if (FALSE == isOk) {
+    DokanFCBTryLockRO(fcb, FCBAcquired);
+    if (FALSE == FCBAcquired) {
       return STATUS_PENDING; 
     }
   } else {
@@ -196,6 +196,8 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
                               FILE_ACTION_REMOVED);
     }
+
+    DokanFCBFlagsClearBit(fcb, DOKAN_FCB_CACHED);
   }
   DokanFCBUnlock(fcb);
   //

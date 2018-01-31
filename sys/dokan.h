@@ -371,18 +371,18 @@ typedef struct _DokanFileControlBlock {
   // uint32 OpenHandleCount;
 } DokanFCB, *PDokanFCB;
 
-#define DokanFCBTryLockRO(fcb, isOk) do{                                                                          \
+#define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
                                       KeEnterCriticalRegion();                                                    \
-                                      isOk = ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, FALSE); \
-                                      if (FALSE == isOk) {                                                        \
+                                      FCBAcquired = ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, FALSE); \
+                                      if (FALSE == FCBAcquired) {                                                        \
                                          KeLeaveCriticalRegion();                                                 \
                                       }                                                                           \
                                     }while(0)
 
-#define DokanFCBTryLockRW(fcb, isOk) do{                                                                            \
+#define DokanFCBTryLockRW(fcb, FCBAcquired) do{                                                                            \
                                       KeEnterCriticalRegion();                                                      \
-                                      isOk = ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, FALSE);\
-                                      if (FALSE == isOk) {                                                          \
+                                      FCBAcquired = ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, FALSE);\
+                                      if (FALSE == FCBAcquired) {                                                          \
                                          KeLeaveCriticalRegion();                                                   \
                                       }                                                                             \
                                     }while(0)
