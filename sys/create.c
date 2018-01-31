@@ -1551,7 +1551,9 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   }
 
   if (NT_SUCCESS(status)) {
-    DokanFCBFlagsSetBit(fcb, DOKAN_FCB_CACHED);
+    if (DokanUnicodeStringChar(&fcb->FileName, L':') < 0) {
+      DokanFCBFlagsSetBit(fcb, DOKAN_FCB_CACHED);
+    }
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
   }
 
