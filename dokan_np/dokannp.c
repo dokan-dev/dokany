@@ -561,7 +561,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
     return WN_NO_MORE_ENTRIES;
   }
 
-  DWORD processId = GetCurrentProcessId();//当前进程id  
+  DWORD processId = GetCurrentProcessId();  
   DWORD sessionId = -1;
   BOOL  isBelongToCurrentSession = TRUE;
   ProcessIdToSessionId(processId, &sessionId);
