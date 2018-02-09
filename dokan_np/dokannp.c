@@ -1,7 +1,7 @@
 /*
 Dokan : user-mode file system library for Windows
 
-Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com> Hanix N. <hanix.nicolas@gmail.com> 
 Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
 http://dokan-dev.github.io
@@ -553,7 +553,6 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   ULONG cEntriesCopied = 0;
   PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
   PWCHAR pDst;
-
   ULONG nbRead = 0;
   DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
   if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, TRUE,
@@ -562,8 +561,23 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
     return WN_NO_MORE_ENTRIES;
   }
 
+  DWORD processId = GetCurrentProcessId();  
+  DWORD sessionId = -1;
+  BOOL  isBelongToCurrentSession = TRUE;
+  ProcessIdToSessionId(processId, &sessionId);
+  DbgPrintW(L"NPEnumResource CurrentSesstionID:%d\n", sessionId);
+  DbgPrintW(L"NPEnumResource nbRead:%d\n", nbRead);
+
   while (cEntriesCopied < *Count && pCtx->index < nbRead) {
-    if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
+	  DbgPrintW(L"NPEnumResource SesstionID:%d\n", dokanControl[pCtx->index].SessionId);
+	  isBelongToCurrentSession = TRUE;
+	  if (sessionId != dokanControl[pCtx->index].SessionId && -1 != dokanControl[pCtx->index].SessionId)
+	  {
+		  isBelongToCurrentSession = FALSE;
+		  pCtx->index++;
+		  continue;
+	  }
+    if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0 ) {
       DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
       break;
     }
