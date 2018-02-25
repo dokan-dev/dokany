@@ -121,8 +121,17 @@
           # TODO: detect if restart is necessary and only run as many times as needed.
           #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
           # See https://github.com/msys2/msys2/wiki/MSYS2-installation#iii-updating-packages
+          # For the `--ask 20` option, see
+          # <https://github.com/Alexpux/MSYS2-packages/issues/1141>.
+          #
+          # Otherwise the message
+          #
+          #     :: msys2-runtime and catgets are in conflict. Remove catgets? [y/N]
+          #
+          # is displayed when trying to update followed by an exit rather
+          # than selecting yes.
           for ($i = 0; $i -lt 3; $i++) {
-            bash "pacman -Syuu --noconfirm --cache `"$unix_msys2_cache`""
+            bash "pacman -Syuu --ask 20 --noconfirm --cache `"$unix_msys2_cache`""
           }
           # install MinGW toolchain
           bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
