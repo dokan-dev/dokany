@@ -562,7 +562,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   }
 
   DWORD processId = GetCurrentProcessId();
-  DWORD sessionId = -1;
+  DWORD sessionId = 0;
   BOOL  isBelongToCurrentSession = TRUE;
   ProcessIdToSessionId(processId, &sessionId);
   DbgPrintW(L"NPEnumResource CurrentSesstionID:%d\n", sessionId);
