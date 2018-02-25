@@ -20,28 +20,38 @@ REM Enable AppVeyor build message logging if running under AppVeyor
 IF "%APPVEYOR%"=="True" set CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
 REM Build
 msbuild dokan.sln /p:Configuration=Release /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
-msbuild dokan.sln /p:Configuration=Release /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration=Release /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Release /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Release /p:Platform=ARM64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Release" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8 Release" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win8 Release" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win10 Release" /p:Platform=ARM64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 
 msbuild dokan.sln /p:Configuration=Debug /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
-msbuild dokan.sln /p:Configuration=Debug /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration=Debug /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Debug /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration=Debug /p:Platform=ARM64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win7 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win8 Debug" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=Win32 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=x64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=ARM /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
+msbuild dokan.sln /p:Configuration="Win10 Debug" /p:Platform=ARM64 /t:Build !CI_BUILD_ARG! || set failed=%ERRORLEVEL%
 
 IF EXIST C:\cygwin64 ( Powershell.exe -executionpolicy remotesigned -File dokan_fuse/build.ps1 || set failed=%ERRORLEVEL% ) ELSE ( echo "Cygwin/Msys2 build disabled" )
 
