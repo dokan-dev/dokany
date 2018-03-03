@@ -198,7 +198,6 @@
                 <RegistryValue Type="string" Name="FullVersion" Value="$(var.BaseVersion).$(var.BuildVersion)" KeyPath="no"/>
               </RegistryKey>
               <File Id="DokanDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
-              <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="DokanfuseDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
               <File Id="dokanctlEXE" Source="..\Win32\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
               <File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
@@ -307,6 +306,7 @@
         <Directory Id="Sys32Folder" Name="System32">
           <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
             <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
+            <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll"/>
             <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
           </Component>
         </Directory>
