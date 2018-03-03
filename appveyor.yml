@@ -17,7 +17,7 @@
   version: 1.1.0-{build}
   configuration:
   - All
-  - Coverity
+  #- Coverity #https://github.com/dokan-dev/dokany/issues/665
   - FsTest
 
   image:
