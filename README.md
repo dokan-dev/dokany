@@ -65,6 +65,7 @@ Platform
  * x86
  * x64
  * ARM
+ * ARM64
 
 ## How it works
 Dokan library contains a user mode DLL (dokan1.dll) and a kernel mode file
