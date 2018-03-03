@@ -47,4 +47,4 @@ msbuild Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:re
 copy Bootstrapper\bin\Debug\DokanSetup.exe DokanSetupDbg_redist.exe
 
 REM build archive
-"C:\Program Files\7-Zip\7z.exe" a -tzip dokan.zip ../Win32 ../x64 ../ARM
+"C:\Program Files\7-Zip\7z.exe" a -tzip dokan.zip ../Win32 ../x64 ../ARM ../ARM64
