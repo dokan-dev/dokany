@@ -556,7 +556,7 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
       if (res == 0 &&
         (creation_disposition == FILE_OVERWRITE_IF ||
         creation_disposition == FILE_OPEN_IF)) {
-        res = win_error(STATUS_OBJECT_NAME_COLLISION, true);
+        return win_error(STATUS_OBJECT_NAME_COLLISION, true);
       }
 
       return res;
