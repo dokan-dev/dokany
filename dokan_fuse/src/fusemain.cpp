@@ -552,7 +552,7 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
         return win_error(STATUS_OBJECT_NAME_COLLISION, true);
       }
 
-      int res = do_open_file(file_name, share_mode, access_mode, dokan_file_info);
+      long res = do_open_file(file_name, share_mode, access_mode, dokan_file_info);
       if (res == 0 &&
         (creation_disposition == FILE_OVERWRITE_IF ||
         creation_disposition == FILE_OPEN_IF)) {
