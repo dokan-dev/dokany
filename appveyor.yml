@@ -160,7 +160,7 @@
         if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
             MSBuild.SonarQube.Runner.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.github.pullRequest=$env:APPVEYOR_PULL_REQUEST_NUMBER /d:sonar.github.repository=dokan-dev/dokany /d:sonar.github.oauth=$env:SonarQube
         } else {
-            MSBuild.SonarQube.Runner.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.branch.name=$env:APPVEYOR_REPO_BRANCH
+            MSBuild.SonarQube.Runner.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.projectVersion=$env:APPVEYOR_BUILD_VERSION
         }
         
         [System.Net.ServicePointManager]::SecurityProtocol = @('Tls12','Tls11','Tls','Ssl3')
