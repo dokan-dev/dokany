@@ -158,21 +158,17 @@
         choco install "msbuild-sonarqube-runner" -y
         
         if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
-            MSBuild.SonarQube.Runner.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.github.pullRequest=$env:APPVEYOR_PULL_REQUEST_NUMBER /d:sonar.github.repository=dokan-dev/dokany /d:sonar.github.oauth=$env:SonarQube
+            SonarScanner.MSBuild.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.github.pullRequest=$env:APPVEYOR_PULL_REQUEST_NUMBER /d:sonar.github.repository=dokan-dev/dokany /d:sonar.github.oauth=$env:SonarQube
         } else {
-            MSBuild.SonarQube.Runner.exe begin /k:"dokany" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:sonar.projectVersion=$env:APPVEYOR_BUILD_VERSION
+            SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682"
         }
-        
-        [System.Net.ServicePointManager]::SecurityProtocol = @('Tls12','Tls11','Tls','Ssl3')
-        (new-object net.webclient).DownloadFile('https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip', '.\BuildWrapper.zip')
-        [io.compression.zipfile]::ExtractToDirectory('.\BuildWrapper.zip', '.\BuildWrapper')
         
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         & 7z e .\build-wrapper-win-x86.zip
                
         Invoke-Expression ".\build-wrapper-win-x86-64.exe --out-dir bw-output msbuild dokan.sln /m /p:Configuration='Win10 Debug' /p:Platform=x64"
         
-        MSBuild.SonarQube.Runner.exe end /d:"sonar.login=094fffbd08033725384e461957a76f13c7ff5682"
+        SonarScanner.MSBuild.exe end /d:"sonar.login=094fffbd08033725384e461957a76f13c7ff5682"
       }
   - ps: |
       if ($env:CONFIGURATION -eq "Coverity") {
