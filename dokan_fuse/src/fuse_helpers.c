@@ -95,6 +95,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 case KEY_HELP:
 	usage(outargs->argv[0]);
 	/* fall through */
+	return 1;
 
 case KEY_HELP_NOHEADER:
 	helper_help();
@@ -117,10 +118,10 @@ case FUSE_OPT_KEY_NONOPT:
 		ZeroMemory(mountpoint, sizeof(mountpoint));
 		strncpy(mountpoint,arg, sizeof(mountpoint) - 1);
 		return fuse_opt_add_opt(&hopts->mountpoint, mountpoint);
-	} else {
-		fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
-		return -1;
 	}
+
+	fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
+	return -1;
 
 default:
 	return 1;
