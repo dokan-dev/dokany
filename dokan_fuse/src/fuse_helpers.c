@@ -30,13 +30,13 @@ struct helper_opts {
 
 int fuse_session_exit(struct fuse_session *se);
 
-#ifdef _MSC_VER
+/*#ifdef _MSC_VER
 static char * realpath(const char *file_name, char *resolved_name)
 {
-	strcpy(resolved_name,file_name);
+	strcpy(resolved_name,file_name); //TODO change it, strcpy is unsafe
 	return resolved_name;
 }
-#endif
+#endif*/
 
 #define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
 
