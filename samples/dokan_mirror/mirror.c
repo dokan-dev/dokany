@@ -208,7 +208,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   SECURITY_ATTRIBUTES securityAttrib;
   ACCESS_MASK genericDesiredAccess;
   // userTokenHandle is for Impersonate Caller User Option
-  HANDLE userTokenHandle;
+  HANDLE userTokenHandle = INVALID_HANDLE_VALUE;
 
   securityAttrib.nLength = sizeof(securityAttrib);
   securityAttrib.lpSecurityDescriptor =
