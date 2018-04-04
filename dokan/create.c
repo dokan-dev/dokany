@@ -87,10 +87,17 @@ VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
 }
 
 BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
-  return NT_SUCCESS(status) ||
-         (status == STATUS_OBJECT_NAME_COLLISION &&
-          (disposition == FILE_OPEN_IF || disposition == FILE_SUPERSEDE ||
-           disposition == FILE_OVERWRITE_IF));
+  if (NT_SUCCESS(status))
+    return TRUE;
+
+  // In case OPEN_ALWAYS & CREATE_ALWAYS are successfully opening an
+  // existing file, STATUS_OBJECT_NAME_COLLISION is returned instead of STATUS_SUCCESS.
+  if (status == STATUS_OBJECT_NAME_COLLISION &&
+    (disposition == FILE_OPEN_IF || disposition == FILE_SUPERSEDE ||
+      disposition == FILE_OVERWRITE_IF))
+    return TRUE;
+
+  return FALSE;
 }
 
 VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
