@@ -1,7 +1,7 @@
 -
   environment:
     CoverityProjectToken:
-      secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
+      secure: 5SIsLVvmrWC2ojiFFkiVRI2jvXeNeFwuzQgmnw85ag0=
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     AccessTokenDokanDoc:
@@ -196,14 +196,14 @@
         --overwrite}
 
         Write-Host "Uploading Coverity results..."
-        Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
+        & PublishCoverity\tools\PublishCoverity.exe publish `
         --nologo `
         -t "$env:CoverityProjectToken" `
         -e "$env:CoverityNotificationEmail" `
         -r "dokan-dev/dokany" `
         -z "coverity.zip" `
         -d "Appveyor build." `
-        --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
+        --codeVersion "$env:APPVEYOR_BUILD_VERSION"
       }
 
   - ps: |
