@@ -142,7 +142,7 @@ static int add_default_fsname(const char *progname, struct fuse_args *args)
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		return -1;
 	}
-	sprintf(fsname_opt, "-ofsname=%s", basename);
+	snprintf(fsname_opt, strlen(basename) + 64, "-ofsname=%s", basename);
 	res = fuse_opt_add_arg(args, fsname_opt);
 	free(fsname_opt);
 	return res;
