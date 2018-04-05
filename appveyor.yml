@@ -196,14 +196,21 @@
         --overwrite}
 
         Write-Host "Uploading Coverity results..."
-        & PublishCoverity\tools\PublishCoverity.exe publish `
-        --nologo `
-        -t "$env:CoverityProjectToken" `
-        -e "$env:CoverityNotificationEmail" `
-        -r "dokan-dev/dokany" `
-        -z "coverity.zip" `
-        -d "Appveyor build." `
-        --codeVersion "$env:APPVEYOR_BUILD_VERSION"
+        try
+        {
+            Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
+            --nologo `
+            -t "$env:CoverityProjectToken" `
+            -e "$env:CoverityNotificationEmail" `
+            -r "dokan-dev/dokany" `
+            -z "coverity.zip" `
+            -d "Appveyor build." `
+            --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
+        }
+        catch
+        {
+          Write-Output "Ignore PublishCoverity error"
+        }
       }
 
   - ps: |
