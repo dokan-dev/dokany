@@ -13,25 +13,28 @@ DokanFileSystem.DriverFiles = 12
 
 [DefaultInstall]
 OptionDesc = %ServiceDesc%
-CopyFiles = DokanFileSystem.DriverFiles
+CopyFiles = DokanFileSystem.CopyDriverFiles
 
 [DefaultInstall.Services]
 AddService = %ServiceName%,,DokanFileSystem.Service
 
 [DefaultUninstall]
-DelFiles   = DokanFileSystem.DriverFiles
+DelFiles   = DokanFileSystem.DeleteDriverFiles
 
 [DefaultUninstall.Services]
 DelService = %ServiceName%,0x200
+
+[DokanFileSystem.DeleteDriverFiles]
+%DriverName%.sys,,,0x00010001 ;(DELFLG_IN_USE | DELFLG_IN_USE1)
+
+[DokanFileSystem.CopyDriverFiles]
+%DriverName%.sys,,,0x00002000 ;COPYFLG_NOPRUNE
 
 [SourceDisksNames]
 1 = %Disk1%
 
 [SourceDisksFiles]
 dokan1.sys = 1
-
-[DokanFileSystem.DriverFiles]
-%DriverName%.sys
 
 [DokanFileSystem.Service]
 DisplayName    = %ServiceName%
