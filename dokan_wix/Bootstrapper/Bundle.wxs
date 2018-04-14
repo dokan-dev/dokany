@@ -125,6 +125,17 @@
     </Chain>
   </Bundle>
   <Fragment>
+    <Property Id="WINKB2919442INSTALLED" Secure="yes">
+      <DirectorySearch Id="SearchSystemWinKB2919442" Path="[WindowsFolder]WinSxS" Depth="2">
+        <FileSearch Name="TiWorker.exe" MinVersion="6.3.9600.17030"/>
+      </DirectorySearch>
+    </Property>
+    <!-- windows 8.1 KB2999226 has a dependancy with KB2919355 -->
+    <bal:Condition Message="Installation failed because on Windows 8.1 the installation of KB2999226 and its prerequisites KB2919355 and KB2919442 is required. For more info please visit https://support.microsoft.com/en-us/kb/2919355">
+      <![CDATA[Installed OR VersionNT = v6.3 AND NOT WINKB2919442INSTALLED]]>
+    </bal:Condition>
+  </Fragment>
+  <Fragment>
     <util:FileSearch Id="WINTRUST_FileSearch"
                      Path="[SystemFolder]Wintrust.dll"
                      Variable="WINTRUSTVERSION"
