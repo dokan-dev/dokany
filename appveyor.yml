@@ -6,8 +6,6 @@
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     AccessTokenDokanDoc:
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
-    SonarQubeAuthGithub:
-      secure: hD2ilzDuQmDaAhqSC0kTm3ra6uHBwmcwHT8b6bMPX3D07MJ2wAjP9/jk6frEiN9A
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
@@ -153,15 +151,16 @@
 
   - ps: |
       if ($env:CONFIGURATION -eq "SonarQube") {
+       
+        if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
+          Add-AppveyorMessage -Message "Not running SonarQube on pull request." -Category Information
+          return;
+        }
       
         Add-Type -assembly system.io.compression.filesystem
         choco install "msbuild-sonarqube-runner" -y
         
-        if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
-            SonarScanner.MSBuild.exe begin /k:"dokany" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682" /d:"sonar.analysis.mode=preview" /d:sonar.github.pullRequest=$env:APPVEYOR_PULL_REQUEST_NUMBER /d:sonar.github.repository=dokan-dev/dokany /d:"sonar.github.oauth=$env:SonarQubeAuthGithub" /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output 
-        } else {
-            SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682"
-        }
+        SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /d:sonar.organization="dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682"
         
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         & 7z e .\build-wrapper-win-x86.zip
