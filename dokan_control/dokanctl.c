@@ -151,7 +151,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       else
         fprintf(stderr, "network provider install failed\n");
     } else {
-      goto DEFAULT_CASE;
+      goto default_case;
     }
   } break;
 
@@ -165,14 +165,14 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       else
         fprintf(stderr, "network provider remove failed\n");
     } else {
-      goto DEFAULT_CASE;
+      goto default_case;
     }
   } break;
 
   case L'd': {
     WCHAR type = towlower(argv[2][0]);
     if (L'0' > type || type > L'9')
-      goto DEFAULT_CASE;
+      goto default_case;
 
     ULONG mode = type - L'0';
     if (DokanSetDebugMode(mode)) {
@@ -184,7 +184,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   case L'u': {
     if (argc < 3) {
-      goto DEFAULT_CASE;
+      goto default_case;
     }
     return Unmount(argv[2]);
   } break;
@@ -220,8 +220,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     fprintf(stdout, "Dokan driver version : 0x%lx\n", DokanDriverVersion());
   } break;
 
-  DEFAULT_CASE:
   default:
+    default_case:
     fprintf(stderr, "Unknown option - Use /? to show usage\n");
   }
 
