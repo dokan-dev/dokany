@@ -55,8 +55,9 @@ static size_t get_utf8(const unsigned char *p, size_t len, ICONV_CHAR *out) {
   return len;
 }
 
-static size_t put_utf8(unsigned char *buf, ICONV_CHAR c) {
 #define MASK(n) ((0xffffffffu << (n)) & 0xffffffffu)
+
+static size_t put_utf8(unsigned char *buf, ICONV_CHAR c) {
   size_t o_len;
   unsigned mask;
 
