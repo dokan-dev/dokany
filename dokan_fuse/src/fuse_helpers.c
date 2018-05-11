@@ -300,6 +300,7 @@ int my_sem_wait (sem_t * sem)
 
 int fuse_set_signal_handlers(struct fuse_session *se)
 {
+	//signal not supported
 	return 0;
 }
 
