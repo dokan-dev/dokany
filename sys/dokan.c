@@ -486,6 +486,8 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
     case FILE_ACTION_MODIFIED:
       Action = FILE_ACTION_MODIFIED_STREAM;
       break;
+    default:
+      break;
     }
 
     //Convert file flag to stream flag
