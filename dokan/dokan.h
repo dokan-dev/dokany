@@ -566,6 +566,10 @@ typedef struct _DOKAN_OPERATIONS {
   * Before these methods are called, \ref ZwCreateFile may not be called.
   * (ditto \ref CloseFile and \ref Cleanup)
   *
+  * FileSystemName could be anything up to 10 characters.
+  * But Windows check few feature availability based on file system name.
+  * For this, it is recommended to set NTFS or FAT here.
+  *
   * \c FILE_READ_ONLY_VOLUME is automatically added to the
   * FileSystemFlags if \ref DOKAN_OPTION_WRITE_PROTECT was
   * specified in DOKAN_OPTIONS when the volume was mounted.
