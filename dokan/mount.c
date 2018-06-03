@@ -21,7 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 #include <Dbt.h>
-#include <Shlobj.h>
+#include <ShlObj.h>
 #include <stdio.h>
 
 #pragma warning(push)
