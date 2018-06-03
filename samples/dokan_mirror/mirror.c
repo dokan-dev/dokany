@@ -265,8 +265,8 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   // be opened.
   fileAttr = GetFileAttributes(filePath);
 
-  if (fileAttr != INVALID_FILE_ATTRIBUTES) {
-    if (fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+  if (fileAttr != INVALID_FILE_ATTRIBUTES
+    && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
       if (!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
         DokanFileInfo->IsDirectory = TRUE;
         // Needed by FindFirstFile to list files in it
@@ -276,7 +276,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         DbgPrint(L"\tCannot open a dir as a file\n");
         return STATUS_FILE_IS_A_DIRECTORY;
       }
-    }
   }
 
   DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);

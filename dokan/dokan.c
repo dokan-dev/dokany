@@ -240,8 +240,8 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   if (DokanOptions->MountPoint != NULL) {
     wcscpy_s(instance->MountPoint, sizeof(instance->MountPoint) / sizeof(WCHAR),
              DokanOptions->MountPoint);
-    if (IsMountPointDriveLetter(instance->MountPoint)) {
-      if (!CheckDriveLetterAvailability(instance->MountPoint[0])) {
+    if (IsMountPointDriveLetter(instance->MountPoint)
+      && !CheckDriveLetterAvailability(instance->MountPoint[0])) {
         DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
         CloseHandle(device);
 
@@ -250,7 +250,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
         LeaveCriticalSection(&g_InstanceCriticalSection);
         return DOKAN_MOUNT_ERROR;
       }
-    }
   }
 
   if (DokanOptions->UNCName != NULL) {

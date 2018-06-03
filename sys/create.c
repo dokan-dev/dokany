@@ -711,18 +711,16 @@ Return Value:
 
     // Fail if device is read-only and request involves a write operation
 
-    if (IS_DEVICE_READ_ONLY(DeviceObject)) {
-
-      if ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
+    if (IS_DEVICE_READ_ONLY(DeviceObject)
+      && ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
           (disposition == FILE_OVERWRITE) ||
           (disposition == FILE_OVERWRITE_IF) ||
-          (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE)) {
+          (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE))) {
 
         DDbgPrint("    Media is write protected\n");
         status = STATUS_MEDIA_WRITE_PROTECTED;
         ExFreePool(fileName);
         __leave;
-      }
     }
 
     if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {

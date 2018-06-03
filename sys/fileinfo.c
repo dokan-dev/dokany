@@ -298,9 +298,9 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
     info = EventInfo->BufferLength;
     status = EventInfo->Status;
 
-    if (NT_SUCCESS(status)) {
-      //Update file size to FCB
-      if (irpSp->Parameters.QueryFile.FileInformationClass ==
+    //Update file size to FCB
+    if (NT_SUCCESS(status)      
+      && irpSp->Parameters.QueryFile.FileInformationClass ==
               FileAllInformation ||
           irpSp->Parameters.QueryFile.FileInformationClass ==
               FileStandardInformation ||
@@ -347,7 +347,6 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
                   fileSize);
       }
     }
-  }
 
   DokanCompleteIrpRequest(irp, status, info);
 
@@ -529,13 +528,12 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
 
         if (pInfoEoF->EndOfFile.QuadPart <
-            fcb->AdvancedFCBHeader.FileSize.QuadPart) {
-          if (!MmCanFileBeTruncated(fileObject->SectionObjectPointer,
+            fcb->AdvancedFCBHeader.FileSize.QuadPart
+          && !MmCanFileBeTruncated(fileObject->SectionObjectPointer,
                                     &pInfoEoF->EndOfFile)) {
             status = STATUS_USER_MAPPED_FILE;
             __leave;
           }
-        }
 
         if (!isPagingIo) {
           ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
