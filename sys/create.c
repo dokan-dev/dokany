@@ -1387,7 +1387,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   // for windows 8
   if (NT_SUCCESS(status) &&
       irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-    DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+    //DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
     DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
     DDbgPrint(
         "  FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup\n");

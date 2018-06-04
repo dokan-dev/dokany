@@ -331,6 +331,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PDokanCCB ccb;
   PDokanFCB fcb;
   PFILE_OBJECT fileObject;
+  BOOLEAN isPagingIo = FALSE;
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -346,6 +347,8 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
+  isPagingIo = (irp->Flags & IRP_PAGING_IO);
+
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
@@ -359,12 +362,12 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
       EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
-      if (!(irp->Flags & IRP_PAGING_IO)) {
+      if (!isPagingIo) {
         DokanFCBLockRO(fcb);
       }
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
         FILE_ACTION_MODIFIED);
-      if (!(irp->Flags & IRP_PAGING_IO)) {
+      if (!isPagingIo) {
         DokanFCBUnlock(fcb);
       }
 
@@ -374,10 +377,12 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
     
-    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+    if (!isPagingIo) {
+      SetFlag(fileObject->Flags, FO_FILE_MODIFIED);
+    }
 
     if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
-        !(irp->Flags & IRP_PAGING_IO)) {
+        !isPagingIo) {
       // update current byte offset only when synchronous IO and not paging IO
       fileObject->CurrentByteOffset.QuadPart =
           EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
