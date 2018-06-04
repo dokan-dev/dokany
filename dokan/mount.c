@@ -493,7 +493,7 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved, BOOL safe) {
   WCHAR drive[4] = L"C:\\";
   LONG wEventId;
 
-  if (!isalpha(cLetter)) {
+  if (!iswalpha(cLetter)) {
     DbgPrint("DokanBroadcastLink: invalid parameter\n");
     return;
   }
@@ -510,8 +510,14 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved, BOOL safe) {
   params.dbcv_size = sizeof(params);
   params.dbcv_devicetype = DBT_DEVTYP_VOLUME;
   params.dbcv_reserved = 0;
-  params.dbcv_unitmask = (1 << (toupper(cLetter) - 'A'));
+  params.dbcv_unitmask = (1 << (towupper(cLetter) - 'A'));
   params.dbcv_flags = 0;
+
+  // Find the handle of Explorer
+  HANDLE hWnd = FindWindow(L"Progman", NULL);
+  if (hWnd) {
+    SendMessage(hWnd, WM_DEVICECHANGE, device_event, (LPARAM)&params);
+  }
 
   if (BroadcastSystemMessage(
           BSF_NOHANG | BSF_FORCEIFHUNG | BSF_NOTIMEOUTIFNOTHUNG, &receipients,
