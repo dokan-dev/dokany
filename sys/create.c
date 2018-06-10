@@ -117,15 +117,12 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
               "for %ls\n",
               &fcb->FileName, fcb->FileCount, FileName);
-    if (fcb->FileName.Length == FileNameLength) {
-      // FileNameLength in bytes
-
-      // we have the FCB which is already allocated and used
-      if (RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
+    if (fcb->FileName.Length == FileNameLength // FileNameLength in bytes
+      && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
+        // we have the FCB which is already allocated and used
         DDbgPrint("  Found existing FCB for %ls\n", FileName);
         DokanFCBUnlock(fcb);
         break;
-      }
     }
     DokanFCBUnlock(fcb);
 
@@ -582,40 +579,38 @@ Return Value:
                     fileObject->FileName.Length);
     }
 
-    // Get RelatedFileObject filename.
-    if (relatedFileObject != NULL) {
+    if (relatedFileObject != NULL // Get RelatedFileObject filename.
+      && relatedFileObject->FsContext2) {
       // Using relatedFileObject->FileName is not safe here, use cached filename
       // from context.
-      if (relatedFileObject->FsContext2) {
-        PDokanCCB relatedCcb = (PDokanCCB)relatedFileObject->FsContext2;
-        if (relatedCcb->Fcb) {
-          relatedFcb = relatedCcb->Fcb;
-          DokanFCBLockRO(relatedFcb);
-          if (relatedFcb->FileName.Length > 0 &&
-              relatedFcb->FileName.Buffer != NULL) {
-            relatedFileName = ExAllocatePool(sizeof(UNICODE_STRING));
-            if (relatedFileName == NULL) {
-              DDbgPrint("    Can't allocatePool for relatedFileName\n");
-              status = STATUS_INSUFFICIENT_RESOURCES;
-              DokanFCBUnlock(relatedFcb);
-              __leave;
-            }
-            relatedFileName->Buffer =
-                ExAllocatePool(relatedFcb->FileName.MaximumLength);
-            if (relatedFileName->Buffer == NULL) {
-              DDbgPrint("    Can't allocatePool for relatedFileName buffer\n");
-              ExFreePool(relatedFileName);
-              relatedFileName = NULL;
-              status = STATUS_INSUFFICIENT_RESOURCES;
-              DokanFCBUnlock(relatedFcb);
-              __leave;
-            }
-            relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
-            relatedFileName->Length = relatedFcb->FileName.Length;
-            RtlUnicodeStringCopy(relatedFileName, &relatedFcb->FileName);
+      PDokanCCB relatedCcb = (PDokanCCB)relatedFileObject->FsContext2;
+      if (relatedCcb->Fcb) {
+        relatedFcb = relatedCcb->Fcb;
+        DokanFCBLockRO(relatedFcb);
+        if (relatedFcb->FileName.Length > 0 &&
+            relatedFcb->FileName.Buffer != NULL) {
+          relatedFileName = ExAllocatePool(sizeof(UNICODE_STRING));
+          if (relatedFileName == NULL) {
+            DDbgPrint("    Can't allocatePool for relatedFileName\n");
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            DokanFCBUnlock(relatedFcb);
+            __leave;
           }
-          DokanFCBUnlock(relatedFcb);
+          relatedFileName->Buffer =
+              ExAllocatePool(relatedFcb->FileName.MaximumLength);
+          if (relatedFileName->Buffer == NULL) {
+            DDbgPrint("    Can't allocatePool for relatedFileName buffer\n");
+            ExFreePool(relatedFileName);
+            relatedFileName = NULL;
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            DokanFCBUnlock(relatedFcb);
+            __leave;
+          }
+          relatedFileName->MaximumLength = relatedFcb->FileName.MaximumLength;
+          relatedFileName->Length = relatedFcb->FileName.Length;
+          RtlUnicodeStringCopy(relatedFileName, &relatedFcb->FileName);
         }
+        DokanFCBUnlock(relatedFcb);
       }
     }
 
@@ -1285,9 +1280,8 @@ Return Value:
       }
     }
 
-    if (parentDir) { // SL_OPEN_TARGET_DIRECTORY
-      // fcb owns parentDir, not fileName
-      if (fileName)
+    if (parentDir // SL_OPEN_TARGET_DIRECTORY
+      && fileName) { // fcb owns parentDir, not fileName
         ExFreePool(fileName);
     }
 
