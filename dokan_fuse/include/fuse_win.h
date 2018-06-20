@@ -10,7 +10,7 @@
 
 #ifdef _MSC_VER
 #define WIN32_NO_STATUS
-#include <windows.h>
+#include <Windows.h>
 #undef WIN32_NO_STATUS
 #endif
 

@@ -24,7 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 /** Do not include NTSTATUS. Fix  duplicate preprocessor definitions */
 #define WIN32_NO_STATUS
-#include <windows.h>
+#include <Windows.h>
 #undef WIN32_NO_STATUS
 #include <ntstatus.h>
 

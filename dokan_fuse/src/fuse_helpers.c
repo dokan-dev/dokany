@@ -1,4 +1,4 @@
-#include <windows.h>
+#include <Windows.h>
 #include "fuse.h"
 
 #include <stdio.h>

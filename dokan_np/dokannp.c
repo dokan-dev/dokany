@@ -30,7 +30,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <npapi.h>
 #include <stdio.h>
 #include <strsafe.h>
-#include <windows.h>
+#include <Windows.h>
 #include <winnetwk.h>
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
