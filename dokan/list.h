@@ -22,7 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef LIST_H_
 #define LIST_H_
 
-#include <Windows.h>
+#include <windows.h>
 
 #ifdef _MSC_VER
 #if _MSC_VER < 1300
