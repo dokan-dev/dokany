@@ -45,7 +45,7 @@ static HRESULT StartDokanCtlProcess(LPWSTR buffer, LPWSTR param) {
     ExitOnLastError(hr, "GetExitCodeProcess failed");
 
   if (exit_code != 0)
-    ExitOnFailure(hr, "dokanctl return an error.");
+    ExitOnFailure(hr, "dokanctl return an error: \"%ld\"", exit_code);
 
 LExit:
   // Close process and thread handles.
