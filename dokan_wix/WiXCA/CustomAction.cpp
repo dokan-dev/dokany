@@ -16,6 +16,12 @@ static HRESULT StartDokanCtlProcess(LPWSTR buffer, LPWSTR param) {
 
   /* INSTALLFOLDER=C:\Program Files\Dokan\DokanLibrary-1.1.0\ */
   std::wstring installFolderPath(buffer);
+  size_t installerFolderLength = strlen("INSTALLFOLDER=");
+  if (installFolderPath.length() <= installerFolderLength) {
+    WcaLog(LOGMSG_STANDARD, "Could not retrieve INSTALLFOLDER value from CustomActionData");
+    return E_ABORT;
+  }
+
   installFolderPath.erase(0, strlen("INSTALLFOLDER="));
   WcaLog(LOGMSG_STANDARD, "InstallFolderPath=\"%S\"", installFolderPath.c_str());
   std::wstring installDokanctlPathString =
