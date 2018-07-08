@@ -135,7 +135,7 @@
     <Condition Message="Installation failed because the VC++ 2017 x64 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "$(var.VCRedistVersion)")]]></Condition>
     <Condition Message="Installation failed because the VC++ 2017 x86 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "$(var.VCRedistVersion)")]]></Condition>
 
-    <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
+    <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 
     <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
 

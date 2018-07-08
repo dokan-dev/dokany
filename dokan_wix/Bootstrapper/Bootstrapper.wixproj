@@ -15,12 +15,12 @@
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
     <DefineConstants>Debug</DefineConstants>
-	<LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
-	<LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
+    <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Bundle.wxs" />

@@ -1,0 +1,5 @@
+LIBRARY "WiXCA"
+
+EXPORTS
+	ExecuteInstall
+	ExecuteUninstall
