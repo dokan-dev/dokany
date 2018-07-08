@@ -26,7 +26,6 @@
         ThemeFile="Resources\RtfTheme.xml"
         LocalizationFile="Resources\1033\RtfTheme.wxl"/>
       <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
-      <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
 
     </BootstrapperApplicationRef>
 
@@ -63,7 +62,6 @@
     <bal:Condition Message="Installation failed because your version of Windows is not supported. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
 
     <Chain>
-      <PackageGroupRef Id="NetFx40Web"/>
 
       <ExePackage Id="vcredist_2017_x86.exe"
                   Name="vc_redist.x86.exe"
