@@ -98,8 +98,8 @@ BOOL IsMountPointDriveLetter(LPCWSTR mountPoint) {
 }
 
 BOOL IsValidDriveLetter(WCHAR DriveLetter) {
-  return (L'b' <= DriveLetter && DriveLetter <= L'z') ||
-         (L'B' <= DriveLetter && DriveLetter <= L'Z');
+  return (L'a' <= DriveLetter && DriveLetter <= L'z') ||
+         (L'A' <= DriveLetter && DriveLetter <= L'Z');
 }
 
 BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
