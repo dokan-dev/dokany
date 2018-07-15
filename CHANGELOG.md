@@ -3,6 +3,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 1.3.0.1000
+### Added
+- Build - Add ARM64
+
+### Changed
+- Installer - Remove .NET dependency.
+- Build - Remove Windows 10 build for ARM
+- Library - Allow usage driver letter `A`
+
+### Fixed
+- Library - Fix missing session id in `DOKAN_CONTROL` for user space
+- NetworkProvider - UNC paths using only for current session show offline for other session.
+- Installer - Dokan Network Provider - Move back `dokannp1.dll` to `system32` folder and `SysWow64`
+- Mirror - Fix uninitialized `userTokenHandle`
+
 ## [1.1.0.2000] - 2018-01-19
 ### Fixed
 - Installer - Fix Wrong redist download link rename
