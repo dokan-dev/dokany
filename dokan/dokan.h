@@ -622,6 +622,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Get specified information about the security of a file or directory.
   *
+  * Return \c STATUS_NOT_IMPLEMENTED to let dokan library build a sddl of the current process user with authenticate user rights for context menu.
   * Return \c STATUS_BUFFER_OVERFLOW if buffer size is too small.
   *
   * \since Supported since version 0.6.0. The version must be specified in \ref DOKAN_OPTIONS.Version.
