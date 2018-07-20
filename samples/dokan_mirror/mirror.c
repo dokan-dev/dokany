@@ -1365,8 +1365,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-
-// Uncomment the function and set dokanOperations->GetDiskFreeSpace to personalize disk space
 /*
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
@@ -1503,6 +1501,7 @@ void ShowUsage() {
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
           "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+          "  /e Attach created disk to Windows file system.\n\n"
           "  /v Use vhd format for physical device mirroring instead of raw format.  This allows for interoperability with disk management on disk sizes up to 2TB\n\n"
           "  /x Use vhdx format for physical device mirroring instead of raw format.  This allows for interoperability with disk management for disk sizes up to 64TB.  Requires Windows 8/Server 2012 or later.\n\n"
           "Examples:\n"
@@ -1624,6 +1623,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'x':
       mirrorDevType = MirrorDevTypeVHDX;
+      break;
+    case L'e':
+      dokanOptions->IsAttachableToFileSystem = TRUE;
+      DbgPrint(L"Mirrored disk will be attached");
       break;
 
     default:

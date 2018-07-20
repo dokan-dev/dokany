@@ -122,6 +122,8 @@ typedef struct _DOKAN_OPTIONS {
   ULONG AllocationUnitSize;
   /** Sector Size of the volume. This will affect the file size. */
   ULONG SectorSize;
+  /** Do need attach created vhd\vhdx disk to Windows file system? */
+  BOOL  IsAttachableToFileSystem;
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 /**
