@@ -118,15 +118,19 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
         (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+      
       CcFlushCache(&fcb->SectionObjectPointers,
                    writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
                    irpSp->Parameters.Write.Length, NULL);
+	  
+	  ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+      ExReleaseResourceLite(&fcb->PagingIoResource);
+	  
       CcPurgeCacheSection(&fcb->SectionObjectPointers,
                           writeToEoF ? NULL
                                      : &irpSp->Parameters.Write.ByteOffset,
                           irpSp->Parameters.Write.Length, FALSE);
-      ExReleaseResourceLite(&fcb->PagingIoResource);
+
     }
 
     // Cannot write at end of the file when using paging IO
@@ -323,14 +327,17 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   PDokanCCB ccb;
   PDokanFCB fcb;
   PFILE_OBJECT fileObject;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -359,11 +366,14 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
       EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+
       if (!(irp->Flags & IRP_PAGING_IO)) {
         DokanFCBLockRO(fcb);
       }
+
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
         FILE_ACTION_MODIFIED);
+
       if (!(irp->Flags & IRP_PAGING_IO)) {
         DokanFCBUnlock(fcb);
       }
@@ -389,4 +399,6 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
 
   DDbgPrint("<== DokanCompleteWrite\n");
+
+  return STATUS_SUCCESS;
 }

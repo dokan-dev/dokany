@@ -1293,14 +1293,16 @@ Return Value:
   return status;
 }
 
-VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo,
+                         __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
   ULONG info;
   PDokanCCB ccb;
   PDokanFCB fcb;
+  BOOLEAN FCBAcquired = FALSE;
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -1312,8 +1314,16 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-  DokanFCBLockRW(fcb);
 
+  if (FALSE == Wait) {
+    DokanFCBTryLockRW(fcb, FCBAcquired);
+    if (FALSE == FCBAcquired) {
+      return STATUS_PENDING;
+    }
+  } else {    
+    DokanFCBLockRW(fcb);
+  }
+  
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 
   ccb->UserContext = EventInfo->Context;
@@ -1414,4 +1424,6 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteCreate\n");
+
+  return STATUS_SUCCESS;
 }

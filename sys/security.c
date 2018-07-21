@@ -136,8 +136,9 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+                                __in PEVENT_INFORMATION EventInfo,
+                                __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -146,6 +147,8 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   ULONG info = 0;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQuerySecurity\n");
 
@@ -201,6 +204,8 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQuerySecurity\n");
+
+  return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -328,13 +333,16 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo,
+                              __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 
@@ -363,4 +371,6 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteSetSecurity\n");
+
+  return STATUS_SUCCESS;
 }

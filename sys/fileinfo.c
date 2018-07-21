@@ -251,8 +251,9 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo,
+                                   __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -260,6 +261,7 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
   PDokanCCB ccb;
+  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQueryInformation\n");
 
@@ -351,6 +353,7 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQueryInformation\n");
+  return STATUS_SUCCESS;
 }
 
 BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix) {
@@ -391,13 +394,18 @@ VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject) {
   if (fcb->SectionObjectPointers.DataSectionObject != NULL) {
     DDbgPrint("  CcFlushCache FileName: %wZ FileCount: %lu.\n", &fcb->FileName,
               fcb->FileCount);
-    ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
-    CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+
+	CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+
+	ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+    ExReleaseResourceLite(&fcb->PagingIoResource);
+   
     CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
     if (fileObject != NULL) {
       CcUninitializeCacheMap(fileObject, NULL, NULL);
     }
-    ExReleaseResourceLite(&fcb->PagingIoResource);
+	
+    
     DDbgPrint("  CcFlushCache done FileName: %wZ FileCount: %lu.\n",
               &fcb->FileName, fcb->FileCount);
   }
@@ -536,10 +544,13 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           }
 
         if (!isPagingIo) {
-          ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+          
           CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+	  
+		  ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+		  ExReleaseResourceLite(&fcb->PagingIoResource);
+		  
           CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-          ExReleaseResourceLite(&fcb->PagingIoResource);
         }
       }
       DDbgPrint("  FileEndOfFileInformation %lld\n",
@@ -734,8 +745,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
-                                 __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+                                 __in PEVENT_INFORMATION EventInfo,
+                                 __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -748,6 +760,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
   FILE_INFORMATION_CLASS infoClass;
   irp = IrpEntry->Irp;
   status = EventInfo->Status;
+  UNREFERENCED_PARAMETER(Wait);
 
   __try {
 
@@ -915,5 +928,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     DokanCompleteIrpRequest(irp, status, info);
 
     DDbgPrint("<== DokanCompleteSetInformation\n");
+    return STATUS_SUCCESS;
   }
 }

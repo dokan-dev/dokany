@@ -111,12 +111,14 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
+  UNREFERENCED_PARAMETER(Wait);
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -133,4 +135,5 @@ VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteFlush\n");
+  return STATUS_SUCCESS;
 }

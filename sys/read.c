@@ -170,11 +170,9 @@ Return Value:
 
     if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
         (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
       CcFlushCache(&fcb->SectionObjectPointers,
                    &irpSp->Parameters.Read.ByteOffset,
                    irpSp->Parameters.Read.Length, NULL);
-      ExReleaseResourceLite(&fcb->PagingIoResource);
     }
 
     DokanFCBLockRO(fcb);
@@ -264,8 +262,9 @@ Return Value:
   return status;
 }
 
-VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -274,6 +273,8 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   PVOID buffer = NULL;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -347,4 +348,5 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, readLength);
 
   DDbgPrint("<== DokanCompleteRead\n");
+  return STATUS_SUCCESS;
 }

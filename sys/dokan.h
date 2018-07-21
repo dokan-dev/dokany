@@ -349,6 +349,21 @@ typedef struct _DokanFileControlBlock {
   // uint32 OpenHandleCount;
 } DokanFCB, *PDokanFCB;
 
+#define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
+                                      KeEnterCriticalRegion();                                                    \
+                                      FCBAcquired = ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, FALSE); \
+                                      if (FALSE == FCBAcquired) {                                                        \
+                                         KeLeaveCriticalRegion();                                                 \
+                                      }                                                                           \
+                                    }while(0)
+
+#define DokanFCBTryLockRW(fcb, FCBAcquired) do{                                                                            \
+                                      KeEnterCriticalRegion();                                                      \
+                                      FCBAcquired = ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, FALSE);\
+                                      if (FALSE == FCBAcquired) {                                                          \
+                                         KeLeaveCriticalRegion();                                                   \
+                                      }                                                                             \
+                                    }while(0)
 #define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); } while(0)
 #define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(fcb->AdvancedFCBHeader.Resource)
 #define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(fcb->AdvancedFCBHeader.Resource)
@@ -402,6 +417,7 @@ typedef struct _IRP_ENTRY {
   ULONG Flags;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
+  WORK_QUEUE_ITEM WorkQueueItem;
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
@@ -566,42 +582,54 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
-VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo,
+                                   __in BOOLEAN Wait);
 
-VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait);
 
-VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait);
 
-VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo,
+                                   __in BOOLEAN Wait);
 
-VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
-                                 __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+                                 __in PEVENT_INFORMATION EventInfo,
+                                 __in BOOLEAN Wait);
 
-VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo,
+                         __in BOOLEAN Wait);
 
-VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo,
+                          __in BOOLEAN Wait);
 
-VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait);
 
-VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
                                          __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject);
+                                         __in PDEVICE_OBJECT DeviceObject,
+                                         __in BOOLEAN Wait);
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait);
 
-VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+                                __in PEVENT_INFORMATION EventInfo,
+                                __in BOOLEAN Wait);
 
-VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo,
+                              __in BOOLEAN Wait);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
 
