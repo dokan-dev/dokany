@@ -118,11 +118,11 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
               "for %ls\n",
               &fcb->FileName, fcb->FileCount, FileName);
     if (fcb->FileName.Length == FileNameLength // FileNameLength in bytes
-      && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
-        // we have the FCB which is already allocated and used
-        DDbgPrint("  Found existing FCB for %ls\n", FileName);
-        DokanFCBUnlock(fcb);
-        break;
+        && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
+      // we have the FCB which is already allocated and used
+      DDbgPrint("  Found existing FCB for %ls\n", FileName);
+      DokanFCBUnlock(fcb);
+      break;
     }
     DokanFCBUnlock(fcb);
 
@@ -580,7 +580,7 @@ Return Value:
     }
 
     if (relatedFileObject != NULL // Get RelatedFileObject filename.
-      && relatedFileObject->FsContext2) {
+        && relatedFileObject->FsContext2) {
       // Using relatedFileObject->FileName is not safe here, use cached filename
       // from context.
       PDokanCCB relatedCcb = (PDokanCCB)relatedFileObject->FsContext2;
@@ -706,16 +706,16 @@ Return Value:
 
     // Fail if device is read-only and request involves a write operation
 
-    if (IS_DEVICE_READ_ONLY(DeviceObject)
-      && ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
-          (disposition == FILE_OVERWRITE) ||
-          (disposition == FILE_OVERWRITE_IF) ||
-          (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE))) {
+    if (IS_DEVICE_READ_ONLY(DeviceObject) &&
+        ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
+         (disposition == FILE_OVERWRITE) ||
+         (disposition == FILE_OVERWRITE_IF) ||
+         (irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE))) {
 
-        DDbgPrint("    Media is write protected\n");
-        status = STATUS_MEDIA_WRITE_PROTECTED;
-        ExFreePool(fileName);
-        __leave;
+      DDbgPrint("    Media is write protected\n");
+      status = STATUS_MEDIA_WRITE_PROTECTED;
+      ExFreePool(fileName);
+      __leave;
     }
 
     if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
@@ -1280,9 +1280,9 @@ Return Value:
       }
     }
 
-    if (parentDir // SL_OPEN_TARGET_DIRECTORY
-      && fileName) { // fcb owns parentDir, not fileName
-        ExFreePool(fileName);
+    if (parentDir      // SL_OPEN_TARGET_DIRECTORY
+        && fileName) { // fcb owns parentDir, not fileName
+      ExFreePool(fileName);
     }
 
     DokanCompleteIrpRequest(Irp, status, info);
@@ -1294,8 +1294,8 @@ Return Value:
 }
 
 NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo,
-                         __in BOOLEAN Wait) {
+                             __in PEVENT_INFORMATION EventInfo,
+                             __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -1320,10 +1320,10 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     if (FALSE == FCBAcquired) {
       return STATUS_PENDING;
     }
-  } else {    
+  } else {
     DokanFCBLockRW(fcb);
   }
-  
+
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 
   ccb->UserContext = EventInfo->Context;

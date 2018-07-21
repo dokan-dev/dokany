@@ -292,7 +292,7 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   DDbgPrint("\tFsRtlNotifyFullChangeDirectory FileName %wZ\n", &fcb->FileName);
-  
+
   DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
       vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
@@ -304,8 +304,8 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                  __in PEVENT_INFORMATION EventInfo,
-                                  __in BOOLEAN Wait) {
+                                       __in PEVENT_INFORMATION EventInfo,
+                                       __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;

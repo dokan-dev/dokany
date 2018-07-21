@@ -53,7 +53,8 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   }
 
   deviceNamePos = Dcb->SymbolicLinkName->Length / sizeof(WCHAR) - 1;
-  deviceNamePos = DokanSearchWcharinUnicodeStringWithUlong(Dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
+  deviceNamePos = DokanSearchWcharinUnicodeStringWithUlong(
+      Dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
 
   RtlStringCchCopyW(eventContext->Operation.Unmount.DeviceName,
                     sizeof(eventContext->Operation.Unmount.DeviceName) /
@@ -198,7 +199,8 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 }
 
 NTSTATUS
-DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
+DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
+                            _Inout_ PIRP Irp) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;

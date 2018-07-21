@@ -251,7 +251,7 @@ Return Value:
     // register this IRP to pending IPR list and make it pending status
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
   } __finally {
-    if(fcbLocked)
+    if (fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, readLength);
@@ -263,8 +263,8 @@ Return Value:
 }
 
 NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo,
-                       __in BOOLEAN Wait) {
+                           __in PEVENT_INFORMATION EventInfo,
+                           __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -331,8 +331,8 @@ NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   }
 
   if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
-	  DokanFreeMdl(irp);
-	  IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+    DokanFreeMdl(irp);
+    IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
 
   if (NT_SUCCESS(status)) {

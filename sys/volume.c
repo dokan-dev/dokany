@@ -270,9 +270,9 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
 }
 
 NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject,
-                                         __in BOOLEAN Wait) {
+                                             __in PEVENT_INFORMATION EventInfo,
+                                             __in PDEVICE_OBJECT DeviceObject,
+                                             __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;

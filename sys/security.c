@@ -137,8 +137,8 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                __in PEVENT_INFORMATION EventInfo,
-                                __in BOOLEAN Wait) {
+                                    __in PEVENT_INFORMATION EventInfo,
+                                    __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -309,7 +309,8 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Align BufferOffset by adding 3, then zeroing the last 2 bits.
     eventContext->Operation.SetSecurity.BufferOffset =
         (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-         fcb->FileName.Length + sizeof(WCHAR) + 3) & ~0x03;
+         fcb->FileName.Length + sizeof(WCHAR) + 3) &
+        ~0x03;
 
     RtlCopyMemory((PCHAR)eventContext +
                       eventContext->Operation.SetSecurity.BufferOffset,
@@ -334,8 +335,8 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo,
-                              __in BOOLEAN Wait) {
+                                  __in PEVENT_INFORMATION EventInfo,
+                                  __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;

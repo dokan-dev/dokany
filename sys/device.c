@@ -76,9 +76,9 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrpForService(DeviceObject, Irp);
     break;
   case IOCTL_MOUNTPOINT_CLEANUP:
-      RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
-      status = STATUS_SUCCESS;
-      break;
+    RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
+    status = STATUS_SUCCESS;
+    break;
   case IOCTL_SET_DEBUG_MODE:
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG)) {
       g_Debug = *(ULONG *)Irp->AssociatedIrp.SystemBuffer;

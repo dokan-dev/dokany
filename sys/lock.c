@@ -69,7 +69,7 @@ DokanCommonLockControl(__in PIRP Irp) {
 //
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 
-    // Fcb's AllocationSize is constant after creation.
+  // Fcb's AllocationSize is constant after creation.
   if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
        ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
         (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
@@ -98,7 +98,7 @@ DokanCommonLockControl(__in PIRP Irp) {
 #if (NTDDI_VERSION >= NTDDI_WIN8)
   }
 #endif
-    //  If we were waiting for the callback, then STATUS_PENDING would be ok too
+  //  If we were waiting for the callback, then STATUS_PENDING would be ok too
   if (Status == STATUS_SUCCESS) {
     //
     //  Now call the FsRtl routine to do the actual processing of the
@@ -210,7 +210,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     if (completeIrp) {
@@ -224,8 +224,8 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo,
-                       __in BOOLEAN Wait) {
+                           __in PEVENT_INFORMATION EventInfo,
+                           __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
 

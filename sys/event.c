@@ -301,12 +301,10 @@ DokanRegisterPendingIrpForService(__in PDEVICE_OBJECT DeviceObject,
 }
 
 NTSTATUS
-DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry, 
-                      __in PEVENT_INFORMATION EventInfo, 
-                      __in PDEVICE_OBJECT DeviceObject,
-                      __in BOOLEAN Wait)
-{
-  NTSTATUS ret ;
+DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry,
+                      __in PEVENT_INFORMATION EventInfo,
+                      __in PDEVICE_OBJECT DeviceObject, __in BOOLEAN Wait) {
+  NTSTATUS ret;
 
   switch (IrpEntry->IrpSp->MajorFunction) {
   case IRP_MJ_DIRECTORY_CONTROL:
@@ -322,7 +320,8 @@ DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry,
     ret = DokanCompleteQueryInformation(IrpEntry, EventInfo, Wait);
     break;
   case IRP_MJ_QUERY_VOLUME_INFORMATION:
-    ret = DokanCompleteQueryVolumeInformation(IrpEntry, EventInfo, DeviceObject, Wait);
+    ret = DokanCompleteQueryVolumeInformation(IrpEntry, EventInfo, DeviceObject,
+                                              Wait);
     break;
   case IRP_MJ_CREATE:
     ret = DokanCompleteCreate(IrpEntry, EventInfo, Wait);
@@ -355,34 +354,26 @@ DokanCompleteDispatch(__in PIRP_ENTRY IrpEntry,
   return ret;
 }
 
-typedef struct _WORK_CONTEXT{
+typedef struct _WORK_CONTEXT {
   PIRP_ENTRY IrpEntry;
   PEVENT_INFORMATION EventInfo;
   PDEVICE_OBJECT DeviceObject;
 } WORK_CONTEXT, *PWORK_CONTEXT;
 
-VOID
-DokanDispathWork ( PVOID Context )
-{
+VOID DokanDispathWork(PVOID Context) {
   PWORK_CONTEXT ctx = (PWORK_CONTEXT)Context;
 
-  DokanCompleteDispatch(ctx->IrpEntry,
-                        ctx->EventInfo,
-                        ctx->DeviceObject,
-                        TRUE);
-  
+  DokanCompleteDispatch(ctx->IrpEntry, ctx->EventInfo, ctx->DeviceObject, TRUE);
+
   DokanFreeIrpEntry(ctx->IrpEntry);
   ExFreePool(ctx->EventInfo);
   ExFreePool(ctx);
 }
 
 PWORK_CONTEXT
-AllocateWorkContext(__in PIRP_ENTRY IrpEntry, 
-                    __in PEVENT_INFORMATION EventInfo, 
+AllocateWorkContext(__in PIRP_ENTRY IrpEntry, __in PEVENT_INFORMATION EventInfo,
                     __in ULONG SizeOfEventInfo,
-                    __in PDEVICE_OBJECT DeviceObject
-                    )
-{
+                    __in PDEVICE_OBJECT DeviceObject) {
   PWORK_CONTEXT context;
 
   context = ExAllocatePool(sizeof(WORK_CONTEXT));
@@ -403,25 +394,21 @@ AllocateWorkContext(__in PIRP_ENTRY IrpEntry,
   return context;
 }
 
-VOID
-DokanAddToWorkque(__in PIRP_ENTRY IrpEntry, 
-                  __in PEVENT_INFORMATION EventInfo, 
-                  __in ULONG SizeOfEventInfo,
-                  __in PDEVICE_OBJECT DeviceObject
-                  )
-{
+VOID DokanAddToWorkque(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in ULONG SizeOfEventInfo,
+                       __in PDEVICE_OBJECT DeviceObject) {
   PWORK_CONTEXT context;
 
-  context = AllocateWorkContext(IrpEntry, EventInfo, SizeOfEventInfo, DeviceObject);
+  context =
+      AllocateWorkContext(IrpEntry, EventInfo, SizeOfEventInfo, DeviceObject);
   if (context == NULL) {
     DokanCompleteDispatch(IrpEntry, EventInfo, DeviceObject, TRUE);
     return;
   }
 
-  ExInitializeWorkItem( &IrpEntry->WorkQueueItem,
-                        DokanDispathWork ,
-                        context );
-  ExQueueWorkItem( &IrpEntry->WorkQueueItem, CriticalWorkQueue );
+  ExInitializeWorkItem(&IrpEntry->WorkQueueItem, DokanDispathWork, context);
+  ExQueueWorkItem(&IrpEntry->WorkQueueItem, CriticalWorkQueue);
 }
 // When user-mode file system application returns EventInformation,
 // search corresponding pending IRP and complete it
@@ -434,8 +421,8 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   PEVENT_INFORMATION eventInfo;
   ULONG sizeOfEventInfo;
 
-  sizeOfEventInfo = 
-    IoGetCurrentIrpStackLocation(Irp)->Parameters.DeviceIoControl.InputBufferLength;
+  sizeOfEventInfo = IoGetCurrentIrpStackLocation(Irp)
+                        ->Parameters.DeviceIoControl.InputBufferLength;
   eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
   ASSERT(eventInfo != NULL);
 
@@ -524,8 +511,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     if (STATUS_SUCCESS == ret) {
       DokanFreeIrpEntry(irpEntry);
       irpEntry = NULL;
-    }
-    else {
+    } else {
       DokanAddToWorkque(irpEntry, eventInfo, sizeOfEventInfo, DeviceObject);
     }
     return STATUS_SUCCESS;
@@ -708,16 +694,14 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     return status;
   }
   RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
-  RtlStringCchCopyW(baseGuidString, 64,
-                    unicodeGuid.Buffer);
+  RtlStringCchCopyW(baseGuidString, 64, unicodeGuid.Buffer);
   RtlFreeUnicodeString(&unicodeGuid);
 
   InterlockedIncrement((LONG *)&dokanGlobal->MountId);
 
   status = DokanCreateDiskDevice(
       DeviceObject->DriverObject, dokanGlobal->MountId, eventStart->MountPoint,
-      eventStart->UNCName, sessionId, baseGuidString, 
-      dokanGlobal, deviceType,
+      eventStart->UNCName, sessionId, baseGuidString, dokanGlobal, deviceType,
       deviceCharacteristics, mountGlobally, useMountManager, &dcb);
 
   if (!NT_SUCCESS(status)) {
@@ -741,7 +725,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   // Finds the last '\' and copy into DeviceName.
   // DeviceName is \Volume{D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
   deviceNamePos = dcb->SymbolicLinkName->Length / sizeof(WCHAR) - 1;
-  deviceNamePos = DokanSearchWcharinUnicodeStringWithUlong(dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
+  deviceNamePos = DokanSearchWcharinUnicodeStringWithUlong(
+      dcb->SymbolicLinkName, L'\\', deviceNamePos, 0);
 
   RtlStringCchCopyW(driverInfo->DeviceName,
                     sizeof(driverInfo->DeviceName) / sizeof(WCHAR),
@@ -899,7 +884,8 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
 
   // if the corresponding IRP not found, the user should already canceled the operation and the IRP already destroyed.
-  DDbgPrint("  EventWrite : Cannot found corresponding IRP. User should already canceled the operation. Return STATUS_CANCELLED.");
+  DDbgPrint("  EventWrite : Cannot found corresponding IRP. User should "
+            "already canceled the operation. Return STATUS_CANCELLED.");
 
   return STATUS_CANCELLED;
 }

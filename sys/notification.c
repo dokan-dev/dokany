@@ -497,10 +497,9 @@ ULONG GetCurrentSessionId(__in PIRP Irp) {
   NTSTATUS status;
 
   status = IoGetRequestorSessionId(Irp, &sessionNumber);
-  if (!NT_SUCCESS(status))
-  {
-      DDbgPrint("   IoGetRequestorSessionId failed\n");
-      return (ULONG)-1;
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("   IoGetRequestorSessionId failed\n");
+    return (ULONG)-1;
   }
   DDbgPrint("   GetCurrentSessionId %lu\n", sessionNumber);
   return sessionNumber;
@@ -520,7 +519,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   }
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
-  
+
   if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
       sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) {
     DDbgPrint(

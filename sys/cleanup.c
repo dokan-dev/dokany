@@ -142,8 +142,8 @@ Return Value:
 }
 
 NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo,
-                          __in BOOLEAN Wait) {
+                              __in PEVENT_INFORMATION EventInfo,
+                              __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -177,12 +177,12 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   if (FALSE == Wait) {
     DokanFCBTryLockRO(fcb, FCBAcquired);
     if (FALSE == FCBAcquired) {
-      return STATUS_PENDING; 
+      return STATUS_PENDING;
     }
   } else {
     DokanFCBLockRO(fcb);
   }
-  
+
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);

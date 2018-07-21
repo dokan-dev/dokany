@@ -118,19 +118,18 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
         (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-      
+
       CcFlushCache(&fcb->SectionObjectPointers,
                    writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
                    irpSp->Parameters.Write.Length, NULL);
-	  
-	  ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+
+      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
       ExReleaseResourceLite(&fcb->PagingIoResource);
-	  
+
       CcPurgeCacheSection(&fcb->SectionObjectPointers,
                           writeToEoF ? NULL
                                      : &irpSp->Parameters.Write.ByteOffset,
                           irpSp->Parameters.Write.Length, FALSE);
-
     }
 
     // Cannot write at end of the file when using paging IO
@@ -328,8 +327,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 }
 
 NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo,
-                        __in BOOLEAN Wait) {
+                            __in PEVENT_INFORMATION EventInfo,
+                            __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -365,14 +364,14 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
-      EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
 
       if (!(irp->Flags & IRP_PAGING_IO)) {
         DokanFCBLockRO(fcb);
       }
 
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-        FILE_ACTION_MODIFIED);
+                              FILE_ACTION_MODIFIED);
 
       if (!(irp->Flags & IRP_PAGING_IO)) {
         DokanFCBUnlock(fcb);
@@ -380,10 +379,10 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
       //Update size with new offset
       InterlockedExchange64(
-        &fcb->AdvancedFCBHeader.FileSize.QuadPart,
-        EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
-    
+
     DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
 
     if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
