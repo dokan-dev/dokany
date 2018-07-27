@@ -12,7 +12,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Build - Remove Windows 10 build for ARM
 - Library - Allow usage driver letter `A`
 - Documentation - Add `FSName` notice for `NTFS` & `FAT`
-- Documentation - Add `GetFileSecurity` return `STATUS_NOT_IMPLEMENTED` remark 
+- Documentation - Add `GetFileSecurity` return `STATUS_NOT_IMPLEMENTED` remark
+- Library - Update `DOKAN_VERSION` to 120 and `DOKAN_MINIMUM_COMPATIBLE_VERSION` to 110
 
 ### Fixed
 - Library - Fix missing session id in `DOKAN_CONTROL` for user space
