@@ -117,7 +117,7 @@ if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 if (!(Test-Path .\winfstest\TestSuite\winfstest.exe))
 {
 	Exec-External {if (!(Test-Path winfstest)) { git clone -q https://github.com/Liryna/winfstest.git } }
-	Exec-External {cd winfstest; git reset --hard 41ea2b555d9d9abc9ebbd58e6472e0ff703997bd; cd .. }
+	Exec-External {cd winfstest; git reset --hard 98faa827b31d6e9144ff7c2c235f0b07b0ccf5d0; cd .. }
 	$buildArgs = @(
 	".\winfstest\winfstest.sln",
 	"/m",
