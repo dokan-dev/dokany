@@ -8,7 +8,7 @@ $script:failed = 0
         cd '$currentPath'/'$buildDir' &&
         cmake ../../../ -DCMAKE_TOOLCHAIN_FILE=../../../cmake/toolchain-i686-pc-cygwin.cmake -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
         make -j `$(getconf _NPROCESSORS_ONLN) install"
-    & C:\cygwin\bin\bash -lc "
+    & C:\cygwin64\bin\bash -lc "
         cd '$currentPath' &&
         gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
     if ($LASTEXITCODE -ne 0) {
