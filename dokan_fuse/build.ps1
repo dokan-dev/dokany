@@ -10,7 +10,7 @@ $script:failed = 0
         make -j `$(getconf _NPROCESSORS_ONLN) install"
     & C:\cygwin64\bin\bash -lc "
         cd '$currentPath' &&
-        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
+        i686-pc-cygwin-gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
     if ($LASTEXITCODE -ne 0) {
         $script:failed = $LASTEXITCODE
     }
