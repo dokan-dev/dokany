@@ -231,7 +231,7 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg);
  * argument vector
  *
  * Adds the argument to the N-th position.  This is useful for adding
- * options at the beggining of the array which must not come after the
+ * options at the beginning of the array which must not come after the
  * special '--' option.
  *
  * @param args is the structure containing the current argument list

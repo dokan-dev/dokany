@@ -477,7 +477,7 @@ PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal,
   }
 
   if (!ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE)) {
-    DDbgPrint("  Not able to aquire dokanGlobal->Resource \n");
+    DDbgPrint("  Not able to acquire dokanGlobal->Resource \n");
     return NULL;
   }
 
@@ -518,7 +518,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
   InitializeListHead(&completeList);
 
   if (!ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, FALSE)) {
-    DDbgPrint("  Not able to aquire dokanGlobal->Resource \n");
+    DDbgPrint("  Not able to acquire dokanGlobal->Resource \n");
     return;
   }
 
@@ -643,7 +643,7 @@ checks wheter pending IRP is timeout or not each DOKAN_CHECK_INTERVAL
 
     if (!NT_SUCCESS(status) || status == STATUS_WAIT_0) {
       DDbgPrint("  DokanDeleteDeviceThread catched KillEvent\n");
-      // KillEvent or something error is occured
+      // KillEvent or something error is occurred
       waitObj = FALSE;
     } else {
       DeleteDeviceDelayed(dokanGlobal);

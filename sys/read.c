@@ -91,7 +91,7 @@ Return Value:
       }
 
       // here we could return the bootsector. If we don't have one
-      // the requested read lenght must be returned as requested
+      // the requested read length must be returned as requested
       readLength = irpSp->Parameters.Read.Length;
       status = STATUS_SUCCESS;
       __leave;

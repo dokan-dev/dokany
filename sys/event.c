@@ -129,7 +129,7 @@ None.
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
 /*++
 Routine Description:
-This routine performs any neccessary work before STATUS_PENDING is
+This routine performs any necessary work before STATUS_PENDING is
 returned with the Fsd thread.  This routine is called within the
 filesystem and by the oplock package.
 Arguments:

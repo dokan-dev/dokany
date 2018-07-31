@@ -77,7 +77,7 @@ VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
     }
     break;
   default:
-    DbgPrint("unkown lock function %d\n", EventContext->MinorFunction);
+    DbgPrint("unknown lock function %d\n", EventContext->MinorFunction);
   }
 
   if (openInfo != NULL)

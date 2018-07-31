@@ -55,7 +55,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Kernel - Createfile move `DOKAN_DELETE_ON_CLOSE` set flag after create success
-- Kernel - Return acces denied for paging file open request
+- Kernel - Return access denied for paging file open request
 
 ### Fixed
 - Kernel - CreateFile return `STATUS_DELETE_PENDING` for a request without share delete during a pending delete

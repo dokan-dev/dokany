@@ -400,7 +400,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
 #if (NTDDI_VERSION >= NTDDI_VISTA)
   //
   //  Do an extra test for writeable user sections if the user did not allow
-  //  write sharing - this is neccessary since a section may exist with no
+  //  write sharing - this is necessary since a section may exist with no
   //  handles
   //  open to the file its based against.
   //
@@ -1121,7 +1121,7 @@ Return Value:
           // won't work unless the oplock gets broken before the
           // user mode create happens.
           // It is believed that FILE_COMPLETE_IF_OPLOCKED is extremely
-          // rare and may never happend during normal operation.
+          // rare and may never happened during normal operation.
         } else {
 
           if (status == STATUS_SHARING_VIOLATION &&

@@ -200,7 +200,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // the size of buffer to write
     eventContext->Operation.Write.BufferLength = irpSp->Parameters.Write.Length;
 
-    // the offset from the begining of structure
+    // the offset from the beginning of structure
     // the contents to write will be copyed to this offset
     eventContext->Operation.Write.BufferOffset =
         FIELD_OFFSET(EVENT_CONTEXT, Operation.Write.FileName[0]) +
@@ -277,7 +277,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                 irpSp->Parameters.Write.ByteOffset.LowPart,
                 irpSp->Parameters.Write.Length);
 
-      // copies from begining of EventContext to the end of file name
+      // copies from beginning of EventContext to the end of file name
       RtlCopyMemory(requestContext, eventContext,
                     eventContext->Operation.Write.BufferOffset);
       // puts actual size of RequestContext

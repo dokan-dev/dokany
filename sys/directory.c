@@ -344,7 +344,7 @@ NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     // ULONG     orgLen = irpSp->Parameters.QueryDirectory.Length;
 
     //
-    // set the information recieved from user mode
+    // set the information received from user mode
     //
     ASSERT(buffer != NULL);
 

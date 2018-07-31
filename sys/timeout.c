@@ -282,11 +282,11 @@ Routine Description:
 
     if (!NT_SUCCESS(status) || status == STATUS_WAIT_0) {
       DDbgPrint("  DokanTimeoutThread catched KillEvent\n");
-      // KillEvent or something error is occured
+      // KillEvent or something error is occurred
       waitObj = FALSE;
     } else {
       // in this case the timer was executed and we are checking if the timer
-      // occured regulary using the period DOKAN_CHECK_INTERVAL. If not, this
+      // occurred regulary using the period DOKAN_CHECK_INTERVAL. If not, this
       // means the system was in sleep mode. If in this case the timer is
       // faster awaken than the incoming IOCTL_KEEPALIVE
       // the MountPoint would be removed by mistake (DokanCheckKeepAlive).

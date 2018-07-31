@@ -50,7 +50,7 @@ ULONG DokanSearchWcharinUnicodeStringWithUlong(
 
     if (inputPUnicodeString->Buffer[offsetPosition] == targetWchar) {
       if (isIgnoreTargetWchar == 1) {
-        offsetPosition++; // the next is the begining of filename
+        offsetPosition++; // the next is the beginning of filename
       }
       break;
     }

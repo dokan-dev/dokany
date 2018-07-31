@@ -511,7 +511,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   }
 
   // IMPORTANT!!
-  // this buffer length is fixed in MatchFiles funciton
+  // this buffer length is fixed in MatchFiles function
   eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
 
   if (openInfo->DirListHead == NULL) {

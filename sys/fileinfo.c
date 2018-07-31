@@ -631,7 +631,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Operation.SetFile.BufferLength =
         irpSp->Parameters.SetFile.Length;
 
-    // the offset from begining of structure to fill FileInfo
+    // the offset from beginning of structure to fill FileInfo
     eventContext->Operation.SetFile.BufferOffset =
         FIELD_OFFSET(EVENT_CONTEXT, Operation.SetFile.FileName[0]) +
         fcb->FileName.Length + sizeof(WCHAR); // the last null char
