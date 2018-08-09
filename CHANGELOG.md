@@ -16,12 +16,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Update `DOKAN_VERSION` to 120 and `DOKAN_MINIMUM_COMPATIBLE_VERSION` to 110
 
 ### Fixed
-- Library - Fix missing session id in `DOKAN_CONTROL` for user space
+- Library - Missing session id in `DOKAN_CONTROL` for user space
 - NetworkProvider - UNC paths using only for current session show offline for other session.
 - Installer - Dokan Network Provider - Move back `dokannp1.dll` to `system32` folder and `SysWow64`
 - Mirror - Initialize `userTokenHandle` correctly
 - FUSE -  Return correct status when file is open `FILE_OVERWRITE_IF` or `FILE_OPEN_IF` successfully
-- Kernel - PageIO Dead lock 
+- Kernel - PageIO Dead lock
+- Library - Get correct name (not uppercase) when repase point mount is used 
 
 ## [1.1.0.2000] - 2018-01-19
 ### Fixed
