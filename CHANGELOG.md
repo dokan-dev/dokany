@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Documentation - Add `FSName` notice for `NTFS` & `FAT`
 - Documentation - Add `GetFileSecurity` return `STATUS_NOT_IMPLEMENTED` remark
 - Library - Update `DOKAN_VERSION` to 120 and `DOKAN_MINIMUM_COMPATIBLE_VERSION` to 110
+- Kernel - Only set FO_FILE_MODIFIED for no paging io during write complete
 
 ### Fixed
 - Library - Missing session id in `DOKAN_CONTROL` for user space
