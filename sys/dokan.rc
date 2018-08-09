@@ -16,8 +16,8 @@
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,0,1000
- PRODUCTVERSION 1,1,0,1000
+ FILEVERSION 1,2,0,1000
+ PRODUCTVERSION 1,2,0,1000
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -34,12 +34,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Dokan Project"
             VALUE "FileDescription", "Dokan Driver"
-            VALUE "FileVersion", "1.1.0.1000"
+            VALUE "FileVersion", "1.2.0.1000"
             VALUE "InternalName", "dokan.sys"
             VALUE "LegalCopyright", "Copyright (C) 2018"
             VALUE "OriginalFilename", "dokan.sys"
             VALUE "ProductName", "Dokan"
-            VALUE "ProductVersion", "1.1.0.1000"
+            VALUE "ProductVersion", "1.2.0.1000"
         END
     END
     BLOCK "VarFileInfo"
