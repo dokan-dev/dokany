@@ -384,6 +384,8 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
           EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
 
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+    
     if (!isPagingIo) {
       SetFlag(fileObject->Flags, FO_FILE_MODIFIED);
     }
