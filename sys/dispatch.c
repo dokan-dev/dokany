@@ -21,34 +21,34 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-#pragma warning(disable:4214)
+#pragma warning(disable : 4214)
 struct SYMLINK_ECP_CONTEXT {
   USHORT UnparsedNameLength;
   union {
     USHORT Flags;
     struct {
       USHORT MountPoint : 1;
-    }MountPoint;
-  }FlagsMountPoint;
+    } MountPoint;
+  } FlagsMountPoint;
   USHORT DeviceNameLength;
   USHORT Zero;
   struct SYMLINK_ECP_CONTEXT *Reparsed;
   UNICODE_STRING Name;
 };
-#pragma warning(default:4214)
+#pragma warning(default : 4214)
 
 void RevertFileName(PIRP Irp) {
   RTL_OSVERSIONINFOW VersionInformation = {0};
   VersionInformation.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
-  RtlGetVersion(&VersionInformation);  
+  RtlGetVersion(&VersionInformation);
   if (VersionInformation.dwMajorVersion > 10 ||
-      (VersionInformation.dwMajorVersion ==10 &&
+      (VersionInformation.dwMajorVersion == 10 &&
        VersionInformation.dwMinorVersion > 0) ||
       (VersionInformation.dwMajorVersion == 10 &&
        VersionInformation.dwMinorVersion == 0 &&
        VersionInformation.dwBuildNumber >= 17134))
     return;
-  
+
   PECP_LIST EcpList;
   struct SYMLINK_ECP_CONTEXT *EcpContext;
   //IopSymlinkECPGuid "73d5118a-88ba-439f-92f4-46d38952d250";
@@ -73,7 +73,7 @@ void RevertFileName(PIRP Irp) {
     USHORT UnparsedNameLength = EcpContext->UnparsedNameLength;
     if (UnparsedNameLength != 0) {
       PUNICODE_STRING FileName =
-&IoGetCurrentIrpStackLocation(Irp)->FileObject->FileName;
+          &IoGetCurrentIrpStackLocation(Irp)->FileObject->FileName;
       USHORT FileNameLength = FileName->Length;
       USHORT NameLength = EcpContext->Name.Length;
       if (UnparsedNameLength <= NameLength &&
@@ -81,8 +81,8 @@ void RevertFileName(PIRP Irp) {
         UNICODE_STRING us1;
         us1.Length = UnparsedNameLength;
         us1.MaximumLength = UnparsedNameLength;
-        us1.Buffer = (PWSTR)RtlOffsetToPointer(FileName->Buffer,
-                                               FileNameLength - UnparsedNameLength);
+        us1.Buffer = (PWSTR)RtlOffsetToPointer(
+            FileName->Buffer, FileNameLength - UnparsedNameLength);
         UNICODE_STRING us2;
         us2.Length = UnparsedNameLength;
         us2.MaximumLength = UnparsedNameLength;
@@ -94,7 +94,7 @@ void RevertFileName(PIRP Irp) {
       }
     }
   }
-} 
+}
 
 NTSTATUS
 DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
