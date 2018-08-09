@@ -104,9 +104,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       writeToEoF = TRUE;
     }
 
-    if (Irp->Flags & IRP_PAGING_IO) {
-      isPagingIo = TRUE;
-    }
+    isPagingIo = (Irp->Flags & IRP_PAGING_IO);
 
     if (Irp->Flags & IRP_NOCACHE) {
       isNonCached = TRUE;
@@ -335,6 +333,7 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PDokanCCB ccb;
   PDokanFCB fcb;
   PFILE_OBJECT fileObject;
+  BOOLEAN isPagingIo = FALSE;
 
   UNREFERENCED_PARAMETER(Wait);
 
@@ -345,6 +344,8 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
+
+  isPagingIo = (irp->Flags & IRP_PAGING_IO);
 
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
@@ -366,14 +367,14 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
         EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
 
-      if (!(irp->Flags & IRP_PAGING_IO)) {
+      if (!isPagingIo) {
         DokanFCBLockRO(fcb);
       }
 
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
                               FILE_ACTION_MODIFIED);
 
-      if (!(irp->Flags & IRP_PAGING_IO)) {
+      if (!isPagingIo) {
         DokanFCBUnlock(fcb);
       }
 
@@ -383,10 +384,12 @@ NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
           EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
 
-    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+    if (!isPagingIo) {
+      SetFlag(fileObject->Flags, FO_FILE_MODIFIED);
+    }
 
     if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
-        !(irp->Flags & IRP_PAGING_IO)) {
+        !isPagingIo) {
       // update current byte offset only when synchronous IO and not paging IO
       fileObject->CurrentByteOffset.QuadPart =
           EventInfo->Operation.Write.CurrentByteOffset.QuadPart;

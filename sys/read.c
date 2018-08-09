@@ -157,9 +157,8 @@ Return Value:
       __leave;
     }
 
-    if (Irp->Flags & IRP_PAGING_IO) {
-      isPagingIo = TRUE;
-    }
+    isPagingIo = (Irp->Flags & IRP_PAGING_IO);
+
     if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
       isSynchronousIo = TRUE;
     }
