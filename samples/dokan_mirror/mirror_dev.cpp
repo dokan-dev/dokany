@@ -34,13 +34,6 @@ THE SOFTWARE.
 #include <stdbool.h>
 #include "../../makevhdx/VHD_VHDX_Base.h"
 
-static wchar_t *g_MirrorDevDokanPathPrefix = L"\\MIRROR";
-static size_t g_MirrorDevDokanPathPrefixLength = 8;
-static wchar_t *g_MirrorDevDokanVhdPostfix = L".VHD";
-static size_t g_MirrorDevDokanVhdPostfixLength = 4;
-static wchar_t *g_MirrorDevDokanVhdxPostfix = L".VHDX";
-static size_t g_MirrorDevDokanVhdxPostfixLength = 5;
-
 
 /**
 * Use a fixed offset with the disk - to experiment with exporting a partition only.

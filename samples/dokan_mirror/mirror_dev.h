@@ -43,6 +43,13 @@ extern "C" {
   void MirrorDevTeardown();
   void DbgPrint(LPCWSTR format, ...);
 
+  static wchar_t *g_MirrorDevDokanPathPrefix = L"\\MIRROR";
+  static size_t g_MirrorDevDokanPathPrefixLength = 8;
+  static wchar_t *g_MirrorDevDokanVhdPostfix = L".VHD";
+  static size_t g_MirrorDevDokanVhdPostfixLength = 4;
+  static wchar_t *g_MirrorDevDokanVhdxPostfix = L".VHDX";
+  static size_t g_MirrorDevDokanVhdxPostfixLength = 5;
+
 #ifdef __cplusplus
 }
 #endif

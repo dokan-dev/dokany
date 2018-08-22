@@ -176,8 +176,7 @@ void CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
             DokanOptions->AllocationUnitSize, DokanOptions->SectorSize);
 }
 
-DWORD AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly)
-{
+DWORD DOKANAPI AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly) {
 	OPEN_VIRTUAL_DISK_PARAMETERS openParameters;
 	VIRTUAL_DISK_ACCESS_MASK accessMask;
 	ATTACH_VIRTUAL_DISK_PARAMETERS attachParameters;
@@ -186,7 +185,7 @@ DWORD AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly)
 	LPCTSTR extension;
 	HANDLE vhdHandle;
 	ATTACH_VIRTUAL_DISK_FLAG attachFlags;
-	DWORD opStatus;
+	DWORD opStatus = 0;
 
 	vhdHandle = INVALID_HANDLE_VALUE;
 	sd = NULL;
@@ -231,6 +230,17 @@ DWORD AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly)
 	// OPEN_VIRTUAL_DISK_FLAG_NONE bypasses any special handling of the open.
 	//
 
+  int retry_count = 10;
+  int sleep_interval_ms = 10;
+  
+  do {
+    WaitForSingleObject(NULL, sleep_interval_ms); // non-blocking sleep
+    opStatus = OpenVirtualDisk(&storageType, VirtualDiskPath, accessMask, OPEN_VIRTUAL_DISK_FLAG_NONE, &openParameters, &vhdHandle);
+
+    if (opStatus == ERROR_SUCCESS)
+      break;
+  } while (retry_count--);
+
 	opStatus = OpenVirtualDisk(&storageType, VirtualDiskPath, accessMask, OPEN_VIRTUAL_DISK_FLAG_NONE, &openParameters, &vhdHandle);
 
 	if (opStatus != ERROR_SUCCESS) {
@@ -272,10 +282,8 @@ DWORD AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly)
 
 Cleanup:
 
-	if (opStatus == ERROR_SUCCESS) {
-		wprintf(L"success\n");
-	} else {
-		wprintf(L"error = %u\n", opStatus);
+	if (opStatus != ERROR_SUCCESS) {
+    	DbgPrintW(L"Error to attach, Windows error = %u\n", opStatus);
 	}
 
 	if (sd != NULL) {
@@ -290,7 +298,7 @@ Cleanup:
 	return opStatus;
 }
 
-DWORD DetachVHD(_In_ LPCWSTR VirtualDiskPath) {
+DWORD DOKANAPI DetachVHD(_In_ LPCWSTR VirtualDiskPath) {
 	VIRTUAL_STORAGE_TYPE storageType;
 	OPEN_VIRTUAL_DISK_PARAMETERS openParameters;
 	VIRTUAL_DISK_ACCESS_MASK accessMask;
@@ -355,10 +363,8 @@ DWORD DetachVHD(_In_ LPCWSTR VirtualDiskPath) {
 
 Cleanup:
 
-	if (opStatus == ERROR_SUCCESS) {
-		wprintf(L"success\n");
-	} else {
-		wprintf(L"error = %u\n", opStatus);
+	if (opStatus != ERROR_SUCCESS) {
+    	DbgPrintW(L"Error to detach, Windows error = %u\n", opStatus);
 	}
 
 	if (vhdHandle != INVALID_HANDLE_VALUE) {
@@ -478,10 +484,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                                                     NULL);
   }
 
-  // TODO find a way to use g_MirrorDevDokanPathPrefix
-  swprintf_s(path, MAX_PATH, L"%s\\MIRROR.VHDX", instance->MountPoint);
-  //swprintf_s(path, MAX_PATH, L"%s\\%s.VHDX", g_MirrorDevDokanPathPrefix, instance->MountPoint);
-
   if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
     SendReleaseIRP(instance->DeviceName);
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
@@ -501,20 +503,19 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOperations->Mounted(&fileInfo);
   }
 
-  DWORD attachStatus = 0;
+  BOOL wait_position = TRUE;
+  int retCode = DOKAN_SUCCESS;
 
   if (DokanOptions->IsAttachableToFileSystem) {
-    // attach name of vhd\x
-    
-    attachStatus = AttachVHD(path, TRUE);
+    if (AttachVHD(DokanOptions->AttachPath, TRUE) != ERROR_SUCCESS) {
+      wait_position = FALSE;
+      retCode = DOKAN_ATTACH_ERROR;
+    }
   }
 
   // wait for thread terminations
-  WaitForMultipleObjects(threadNum, threadIds, TRUE, INFINITE);
-
-  if (DokanOptions->IsAttachableToFileSystem) {
-    attachStatus = DettachVHD(path);
-  }
+  if (wait_position)
+    WaitForMultipleObjects(threadNum, threadIds, TRUE, INFINITE);
 
   for (i = 0; i < threadNum; ++i) {
     CloseHandle(threadIds[i]);
@@ -536,7 +537,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
 
   DeleteDokanInstance(instance);
 
-  return DOKAN_SUCCESS;
+  return retCode;
 }
 
 LPWSTR

@@ -45,6 +45,8 @@ BOOL g_UseStdErr;
 BOOL g_DebugMode;
 BOOL g_HasSeSecurityPrivilege;
 BOOL g_ImpersonateCallerUser;
+BOOL g_IsAttachedVDisk;
+wchar_t *g_MirrorDevDokanPostfix;
 
 static void DbgPrint(LPCWSTR format, ...) {
   if (g_DebugMode) {
@@ -77,6 +79,7 @@ static void DbgPrint(LPCWSTR format, ...) {
 static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
+static WCHAR AttachPath[DOKAN_MAX_PATH] = L"";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -345,7 +348,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (creationDisposition == CREATE_NEW ||
         creationDisposition == OPEN_ALWAYS) {
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
         if (!ImpersonateLoggedOnUser(userTokenHandle)) {
           // handle the error if failed to impersonate
@@ -364,7 +367,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
 
-      if (g_ImpersonateCallerUser) {
+      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // Clean Up operation for impersonate
         DWORD lastError = GetLastError();
         if (status != STATUS_SUCCESS) //Keep the handle open for CreateFile
@@ -1197,9 +1200,9 @@ MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
-    LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
-    PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
+  LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
+  PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
+  PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   BOOLEAN requestingSaclInfo;
 
@@ -1218,7 +1221,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
   MirrorCheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation,
-                  PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
+    PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
   MirrorCheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
@@ -1267,7 +1270,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 
   // Ensure the Security Descriptor Length is set
   DWORD securityDescriptorLength =
-      GetSecurityDescriptorLength(SecurityDescriptor);
+    GetSecurityDescriptorLength(SecurityDescriptor);
   DbgPrint(L"  GetUserObjectSecurity return true,  *LengthNeeded = "
            L"securityDescriptorLength \n");
   *LengthNeeded = securityDescriptorLength;
@@ -1278,9 +1281,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
-    LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
-    PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
-    PDOKAN_FILE_INFO DokanFileInfo) {
+  LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
+  PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
+  PDOKAN_FILE_INFO DokanFileInfo) {
   HANDLE handle;
   WCHAR filePath[DOKAN_MAX_PATH];
 
@@ -1305,10 +1308,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
-    LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
-    LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
-    LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
-    PDOKAN_FILE_INFO DokanFileInfo) {
+  LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
+  LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
+  LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
+  PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
   WCHAR volumeRoot[4];
@@ -1365,6 +1368,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
+// Uncomment the function and set dokanOperations->GetDiskFreeSpace to personalize disk space
 /*
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
@@ -1474,6 +1478,13 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   case CTRL_LOGOFF_EVENT:
   case CTRL_SHUTDOWN_EVENT:
     SetConsoleCtrlHandler(CtrlHandler, FALSE);
+
+    if (g_IsAttachedVDisk) {
+      WCHAR path[MAX_PATH];
+      swprintf_s(path, MAX_PATH, L"%s%s%s", MountPoint, g_MirrorDevDokanPathPrefix, g_MirrorDevDokanPostfix);
+      DetachVHD(path);
+    }
+
     DokanRemoveMountPoint(MountPoint);
     return TRUE;
   default:
@@ -1540,6 +1551,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   g_DebugMode = FALSE;
   g_UseStdErr = FALSE;
+  g_IsAttachedVDisk = FALSE;
+  g_MirrorDevDokanPostfix = NULL;
 
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
   dokanOptions->Version = DOKAN_VERSION;
@@ -1620,12 +1633,15 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'v':
       mirrorDevType = MirrorDevTypeVHD;
+      g_MirrorDevDokanPostfix = g_MirrorDevDokanVhdPostfix;
       break;
     case L'x':
       mirrorDevType = MirrorDevTypeVHDX;
+      g_MirrorDevDokanPostfix = g_MirrorDevDokanVhdxPostfix;
       break;
     case L'e':
       dokanOptions->IsAttachableToFileSystem = TRUE;
+      g_IsAttachedVDisk = TRUE;
       DbgPrint(L"Mirrored disk will be attached");
       break;
 
@@ -1703,6 +1719,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
 
+  if (g_IsAttachedVDisk) {
+    swprintf_s(AttachPath, sizeof(AttachPath) / sizeof(WCHAR), L"%s%s%s", MountPoint, g_MirrorDevDokanPathPrefix, g_MirrorDevDokanPostfix);
+    dokanOptions->AttachPath = AttachPath;
+    DbgPrint(L"AttachPath: %ls\n", AttachPath);
+  }
+
   int rc = EXIT_SUCCESS;
   if (PhysicalDevice != NULL)
   {
@@ -1771,6 +1793,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case DOKAN_VERSION_ERROR:
       fprintf(stderr, "Version error\n");
+      break;
+    case DOKAN_ATTACH_ERROR:
+      fprintf(stderr, "Can't attach mirrored disk\n");
       break;
     default:
       fprintf(stderr, "Unknown error: %d\n", status);

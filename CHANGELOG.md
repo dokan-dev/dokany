@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased] - 1.2.0.1000
 ### Added
+- Mirror - Present mirrored device like VHD(X) disk
+- Library - Functionality to attach VHD(X) image disks to OS file sytem
+
+### Added
 - Build - Add ARM64
 
 ### Changed

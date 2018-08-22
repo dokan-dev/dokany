@@ -124,6 +124,8 @@ typedef struct _DOKAN_OPTIONS {
   ULONG SectorSize;
   /** Do need attach created vhd\vhdx disk to Windows file system? */
   BOOL  IsAttachableToFileSystem;
+  /** Path with name to attaching disk to file system */
+  LPCWSTR  AttachPath;
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 /**
@@ -719,12 +721,40 @@ typedef struct _DOKAN_OPERATIONS {
  */
 #define DOKAN_VERSION_ERROR -7
 
+ /**
+ * Dokan attach VHD(X) failed.
+ */
+#define DOKAN_ATTACH_ERROR -8
+
 /** @} */
 
 /**
  * \defgroup Dokan Dokan
  */
 /** @{ */
+
+/**
+* \brief Attach vhd\vhdx\iso disk to Windows Disk Management.
+*
+* This function attach disk.
+* If the attach fails, it will directly return a \ref error non zero.
+*
+* \param VirtualDiskPath a \ref path to virtual disk.
+* \param ReadOnly a \ref flag that show will be disk writable or not.
+* \return \ref AttachVHD status.
+*/
+DWORD DOKANAPI AttachVHD(_In_ LPCWSTR VirtualDiskPath, _In_ BOOLEAN ReadOnly);
+
+/**
+* \brief Detach vhd\vhdx\iso disk from Windows Disk Management.
+*
+* This function detach disk.
+* If the detach fails, it will directly return a \ref error non zero.
+*
+* \param VirtualDiskPath a \ref path to virtual disk.
+* \return \ref DettachVHD status.
+*/
+DWORD DOKANAPI DetachVHD(LPCWSTR VirtualDiskPath);
 
 /**
  * \brief Mount a new Dokan Volume.

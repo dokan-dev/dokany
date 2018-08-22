@@ -3,6 +3,8 @@ LIBRARY	dokan1
 
 EXPORTS
 
+AttachVHD
+DetachVHD
 DokanMain
 DokanUnmount
 DokanIsNameInExpression
