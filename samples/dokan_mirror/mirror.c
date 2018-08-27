@@ -1364,8 +1364,9 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
+
+// Uncomment the function and set dokanOperations->GetDiskFreeSpace to personalize disk space
 /*
-//Uncomment for personalize disk space
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
     PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
