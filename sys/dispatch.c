@@ -37,6 +37,11 @@ struct SYMLINK_ECP_CONTEXT {
 };
 #pragma warning(default : 4214)
 
+/*
+ * Revert file name when reparse point is used
+ * We get real name from the IRP_MJ_CREATE extra information in ECPs
+ * This behavior is fixed in >= win10 1803
+ */
 void RevertFileName(PIRP Irp) {
   RTL_OSVERSIONINFOW VersionInformation = {0};
   VersionInformation.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
