@@ -94,7 +94,7 @@ advantage of this approach is that it allows programmers to develop file systems
 in user mode which is safe and easy to debug.
  
 To learn more about Dokan file system development, see the
-[API documentation](https://dokan-dev.github.io/dokany-doc/html/).
+[![API documentation](https://img.shields.io/badge/Documentation-API-green.svg)](https://dokan-dev.github.io/dokany-doc/html/).
 
 ## Build
 In short, download and install the
