@@ -741,7 +741,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
  * \brief Unmount a Dokan device from a driver letter.
  *
  * \param DriveLetter Dokan driver letter to unmount.
- * \return \c TRUE if device was unmounted or False in case of failure or device not found.
+ * \return \c TRUE if device was unmounted or \c FALSE in case of failure or device not found.
  */
 BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 
@@ -749,7 +749,7 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
  * \brief Unmount a Dokan device from a mount point
  *
  * \param MountPoint Mount point to unmount ("Z", "Z:", "Z:\", "Z:\MyMountPoint").
- * \return \c TRUE if device was unmounted or False in case of failure or device not found.
+ * \return \c TRUE if device was unmounted or \c FALSE in case of failure or device not found.
  */
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
@@ -764,7 +764,7 @@ BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
  *
  * \param MountPoint Mount point to unmount ("Z", "Z:", "Z:\", "Z:\MyMountPoint").
  * \param Safe Process is not in DLL_PROCESS_DETACH state.
- * \return True if device was unmounted or False in case of failure or device not found.
+ * \return \c TRUE if device was unmounted or \c FALSE in case of failure or device not found.
  */
 BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
 
