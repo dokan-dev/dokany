@@ -101,22 +101,22 @@ extern "C" {
  * \see DokanMain
  */
 typedef struct _DOKAN_OPTIONS {
-  /** Version of the Dokan features requested (version "123" is equal to Dokan version 1.2.3). */
+  /** Version of the Dokan features requested without dots (version "123" is equal to Dokan version 1.2.3). */
   USHORT Version;
-  /** Number of threads to be used internally by Dokan library. More threads will handle more events at the same time. */
+  /** Number of threads to be used by Dokan library internally. More threads will handle more events at the same time. */
   USHORT ThreadCount;
   /** Features enabled for the mount. See \ref DOKAN_OPTION. */
   ULONG Options;
   /** FileSystem can store anything here. */
   ULONG64 GlobalContext;
-  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS). */
+  /** Mount point. It can be a driver letter like "M:\" or a folder path "C:\mount\dokan" on a NTFS partition. */
   LPCWSTR MountPoint;
   /**
   * UNC Name for the Network Redirector
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff556761(v=vs.85).aspx">Support for UNC Naming</a>
   */
   LPCWSTR UNCName;
-  /** Max timeout in milliseconds of each request before Dokan gives up. */
+  /** Max timeout in milliseconds of each request before Dokan gives up to wait events to complete. */
   ULONG Timeout;
   /** Allocation Unit Size of the volume. This will affect the file size. */
   ULONG AllocationUnitSize;
