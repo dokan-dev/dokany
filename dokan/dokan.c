@@ -381,7 +381,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   HANDLE device;
   HANDLE threadIds[DOKAN_MAX_THREAD];
   PDOKAN_INSTANCE instance;
-  WCHAR path[MAX_PATH];
 
   g_DebugMode = DokanOptions->Options & DOKAN_OPTION_DEBUG;
   g_UseStdErr = DokanOptions->Options & DOKAN_OPTION_STDERR;
