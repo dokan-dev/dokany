@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - FUSE -  Return correct status when file is open `FILE_OVERWRITE_IF` or `FILE_OPEN_IF` successfully
 - Kernel - PageIO Dead lock
 - Library - Get correct name (not uppercase) when repase point mount is used 
+- Cert - Runs with admin rights and checks Secureboot is enabled
 
 ## [1.1.0.2000] - 2018-01-19
 ### Fixed
