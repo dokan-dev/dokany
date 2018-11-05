@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased] - 1.2.1.1000
 ### Added
 ### Changed
+- Cert - Runs with admin rights and checks Secureboot is enabled
+
 ### Fixed
 
 ## [1.2.0.1000] - 2018-08-09
@@ -28,8 +30,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Mirror - Initialize `userTokenHandle` correctly
 - FUSE -  Return correct status when file is open `FILE_OVERWRITE_IF` or `FILE_OPEN_IF` successfully
 - Kernel - PageIO Dead lock
-- Library - Get correct name (not uppercase) when repase point mount is used 
-- Cert - Runs with admin rights and checks Secureboot is enabled
+- Library - Get correct name (not uppercase) when repase point mount is used
 
 ## [1.1.0.2000] - 2018-01-19
 ### Fixed
