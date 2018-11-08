@@ -97,6 +97,7 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
 
 #define DOKAN_KEEPALIVE_TIMEOUT (1000 * 15) // in millisecond
+#define DOKAN_KEEPALIVE_COUNT_MAX 3
 
 #if _WIN32_WINNT > 0x501
 
@@ -253,6 +254,7 @@ typedef struct _DokanDiskControlBlock {
   ULONG MountId;
   ULONG Flags;
   LARGE_INTEGER TickCount;
+  USHORT KeepaliveCount;
 
   CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
