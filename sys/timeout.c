@@ -94,6 +94,10 @@ VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
   ExAcquireResourceSharedLite(&Dcb->Resource, TRUE);
 
   if (Dcb->TickCount.QuadPart < tickCount.QuadPart) {
+    Dcb->KeepaliveCount += 1;
+  }
+
+  if (Dcb->KeepaliveCount >= DOKAN_KEEPALIVE_COUNT_MAX) {
 
     vcb = Dcb->Vcb;
 

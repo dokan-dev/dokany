@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Added
 ### Changed
 - Cert - Runs with admin rights and checks Secureboot is enabled
+- Kernel - Force unmount after multiple consecutive timeout
 
 ### Fixed
 
