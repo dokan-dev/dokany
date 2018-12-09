@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -290,6 +291,9 @@ typedef struct _DokanVolumeControlBlock {
   ULONG Flags;
   BOOLEAN HasEventWait;
 
+  // Whether keep-alive has been activated on this volume.
+  BOOLEAN IsKeepaliveActive;
+
 } DokanVCB, *PDokanVCB;
 
 // Flags for volume
@@ -347,6 +351,22 @@ typedef struct _DokanFileControlBlock {
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
+
+  // A keep-alive FCB is a special FCB whose last cleanup triggers automatic
+  // unmounting. This is meant to unmount the file system when the owning
+  // process abruptly terminates, replacing dokan's original ping/timeout-based
+  // mechanism. The owning process must open the special keepalive file name,
+  // then issue a FSCTL_ACTIVATE_KEEPALIVE DeviceIoControl to that file handle
+  // (which sets the IsKeepaliveActive flag), and hold the handle open until
+  // after normal unmounting. The DeviceIoControl step ensures that if a filter
+  // turns the CreateFile into a CreateFile + CloseHandle + CreateFile sequence,
+  // the hidden CloseHandle call doesn't trigger unmounting.
+
+  // TRUE if this FCB points to the keep-alive file name. This prevents the FCB
+  // from dispatching normally to user mode, but the IsKeepaliveActive flag must
+  // also be true in order for auto-unmounting to happen.
+  BOOLEAN IsKeepalive;
+
 } DokanFCB, *PDokanFCB;
 
 #define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \

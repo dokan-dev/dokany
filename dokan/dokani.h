@@ -188,8 +188,6 @@ VOID ClearFindData(PLIST_ENTRY ListHead);
 
 VOID ClearFindStreamData(PLIST_ENTRY ListHead);
 
-UINT WINAPI DokanKeepAlive(PVOID Param);
-
 PDOKAN_OPEN_INFO
 GetDokanOpenInfo(PEVENT_CONTEXT EventInfomation, PDOKAN_INSTANCE DokanInstance);
 

@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -150,6 +151,12 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+
+    if (fcb->IsKeepalive) {
+      Irp->IoStatus.Information = 0;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DDbgPrint("   DOKAN_FILE_DIRECTORY %p\n", fcb);

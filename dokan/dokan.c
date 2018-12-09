@@ -25,6 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <conio.h>
 #include <process.h>
 #include <stdlib.h>
+#include <strsafe.h>
 #include <tchar.h>
 
 #define DokanMapKernelBit(dest, src, userBit, kernelBit)                       \
@@ -209,12 +210,10 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   if (DokanOptions->ThreadCount == 0) {
     DokanOptions->ThreadCount = 5;
 
-  } else if ((DOKAN_MAX_THREAD - 1) < DokanOptions->ThreadCount) {
-    // DOKAN_MAX_THREAD includes DokanKeepAlive thread, so
-    // available thread is DOKAN_MAX_THREAD -1
+  } else if (DOKAN_MAX_THREAD < DokanOptions->ThreadCount) {
     DokanDbgPrintW(L"Dokan Error: too many thread count %d\n",
                    DokanOptions->ThreadCount);
-    DokanOptions->ThreadCount = DOKAN_MAX_THREAD - 1;
+    DokanOptions->ThreadCount = DOKAN_MAX_THREAD;
   }
 
   device = CreateFile(DOKAN_GLOBAL_DEVICE_NAME,           // lpFileName
@@ -262,14 +261,6 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_START_ERROR;
   }
 
-  // Start Keep Alive thread
-  threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                  0,    // stack size
-                                                  DokanKeepAlive,
-                                                  (PVOID)instance, // param
-                                                  0, // create flag
-                                                  NULL);
-
   for (i = 0; i < DokanOptions->ThreadCount; ++i) {
     threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
                                                     0,    // stack size
@@ -284,6 +275,25 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
     CloseHandle(device);
     return DOKAN_MOUNT_ERROR;
+  }
+
+  wchar_t keepalive_path[128];
+  StringCbPrintfW(keepalive_path, sizeof(keepalive_path), L"\\\\?%s%s",
+                  instance->DeviceName, DOKAN_KEEPALIVE_FILE_NAME);
+  HANDLE keepalive_handle =
+      CreateFile(keepalive_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+  if (keepalive_handle == INVALID_HANDLE_VALUE) {
+    // We don't consider this a fatal error because the keepalive handle is only
+    // needed for abnormal termination cases anyway.
+    DbgPrintW(L"Failed to open keepalive file: %s\n", keepalive_path);
+  }
+
+  DWORD keepalive_bytes_returned = 0;
+  BOOL keepalive_active =
+      DeviceIoControl(keepalive_handle, FSCTL_ACTIVATE_KEEPALIVE, NULL, 0, NULL,
+                      0, &keepalive_bytes_returned, NULL);
+  if (!keepalive_active) {
+    DbgPrintW(L"Failed to activate keepalive handle.\n");
   }
 
   // Here we should have been mounter by mountmanager thanks to
@@ -305,6 +315,10 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     CloseHandle(threadIds[i]);
   }
 
+  // Note that the keepalive close that actually has unmounting effect is the
+  // implicit one that happens if the process dies. If this one runs, it will be
+  // a no-op.
+  CloseHandle(keepalive_handle);
   CloseHandle(device);
 
   if (DokanOperations->Unmounted) {

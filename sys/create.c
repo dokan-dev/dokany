@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -25,6 +26,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #pragma alloc_text(PAGE, DokanDispatchCreate)
 #pragma alloc_text(PAGE, DokanCheckShareAccess)
 #endif
+
+static const UNICODE_STRING keepAliveFileName =
+    RTL_CONSTANT_STRING(DOKAN_KEEPALIVE_FILE_NAME);
 
 // We must NOT call without VCB lock
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
@@ -145,6 +149,9 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     }
 
     ASSERT(fcb != NULL);
+    if (RtlEqualUnicodeString(&fcb->FileName, &keepAliveFileName, FALSE)) {
+      fcb->IsKeepalive = TRUE;
+    }
 
     // we already have FCB
   } else {
@@ -781,6 +788,13 @@ Return Value:
     fileObject->FsContext2 = ccb;
     fileObject->PrivateCacheMap = NULL;
     fileObject->SectionObjectPointer = &fcb->SectionObjectPointers;
+    if (fcb->IsKeepalive) {
+      DDbgPrint("Opened keepalive file from process %d.",
+                   IoGetRequestorProcessId(Irp));
+      info = FILE_OPENED;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
     // fileObject->Flags |= FILE_NO_INTERMEDIATE_BUFFERING;
 
     alignedEventContextSize = PointerAlignSize(sizeof(EVENT_CONTEXT));

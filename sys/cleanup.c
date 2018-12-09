@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -85,6 +86,24 @@ Return Value:
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+
+    if (fcb->IsKeepalive) {
+      DokanFCBLockRW(fcb);
+      BOOLEAN keepaliveActive =
+          (fcb->FileCount == 1 && fcb->Vcb->IsKeepaliveActive);
+      fcb->Vcb->IsKeepaliveActive = FALSE;
+      DokanFCBUnlock(fcb);
+      if (keepaliveActive) {
+        if (IsUnmountPendingVcb(vcb)) {
+          DDbgPrint("Ignoring keepalive close because unmount is already in progress.");
+        } else {
+          DDbgPrint("Unmounting due to keepalive close.");
+          DokanUnmount(vcb->Dcb);
+        }
+      }
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
     FlushFcb(fcb, fileObject);
 

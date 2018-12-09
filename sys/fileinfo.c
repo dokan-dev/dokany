@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -218,6 +219,11 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
+
+    if (fcb != NULL && fcb->IsKeepalive) {
+      status = STATUS_SUCCESS;
       __leave;
     }
 

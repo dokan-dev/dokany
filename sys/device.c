@@ -984,6 +984,7 @@ Return Value:
       break;
 
     case IOCTL_KEEPALIVE:
+	  //Remove for Dokan 2.x.x
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);

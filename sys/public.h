@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -70,6 +71,11 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define IOCTL_MOUNTPOINT_CLEANUP                                            \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+// DeviceIoControl code to send to a keepalive handle to activate it (see the
+// documentation for the keepalive flags in the DokanFCB struct).
+#define FSCTL_ACTIVATE_KEEPALIVE                                               \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80F, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define DRIVER_FUNC_INSTALL 0x01
 #define DRIVER_FUNC_REMOVE 0x02
 
@@ -98,6 +104,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 // used in DOKAN_START->DeviceType
 #define DOKAN_DISK_FILE_SYSTEM 0
 #define DOKAN_NETWORK_FILE_SYSTEM 1
+
+#define DOKAN_KEEPALIVE_FILE_NAME L"\\__drive_fs_keepalive"
 
 /*
  * This structure is used for copying UNICODE_STRING from the kernel mode driver
