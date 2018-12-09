@@ -51,6 +51,8 @@
 
   install:
     - ps: |
+        New-Item -ItemType Directory -Force -Path ${env:DOKAN_CI_CACHE} | Out-Null
+    - ps: |
         if ($env:CONFIGURATION -eq "FsTest" -or $env:CONFIGURATION -eq "All") {
           .\cert\dokan-import.ps1
         }
