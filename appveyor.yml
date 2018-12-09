@@ -37,6 +37,8 @@
         image: Visual Studio 2015
       - configuration: SonarQube
         image: Visual Studio 2015
+      - configuration: Documentation
+        image: Visual Studio 2015
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
