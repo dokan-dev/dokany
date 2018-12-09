@@ -316,7 +316,7 @@ Routine Description:
       } else {
         ReleaseTimeoutPendingIrp(Dcb);
         if (!vcb->IsKeepaliveActive)
-			DokanCheckKeepAlive(Dcb); //Remove for Dokan 2.x.x
+          DokanCheckKeepAlive(Dcb); //Remove for Dokan 2.x.x
       }
       KeQuerySystemTime(&LastTime);
     }

@@ -20,6 +20,7 @@
   - Coverity
   - SonarQube
   - FsTest
+  - Documentation
 
   image:
     - Visual Studio 2017
@@ -86,7 +87,7 @@
           Exec-External {& powershell .\scripts\install_wlk_ifstest.ps1 }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
+        if ($env:CONFIGURATION -eq "Documentation") {
           Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
         }
     - ps: |
@@ -378,7 +379,7 @@
           }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
+        if ($env:CONFIGURATION -eq "Documentation") {
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
             }
