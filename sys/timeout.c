@@ -263,7 +263,7 @@ DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
 }
 
 KSTART_ROUTINE DokanTimeoutThread;
-VOID DokanTimeoutThread(PDokanDCB Dcb)
+VOID DokanTimeoutThread(PVOID pDcb)
 /*++
 
 Routine Description:
@@ -280,6 +280,7 @@ Routine Description:
   LARGE_INTEGER LastTime = {0};
   LARGE_INTEGER CurrentTime = {0};
   PDokanVCB vcb;
+  PDokanDCB Dcb = pDcb;
 
   DDbgPrint("==> DokanTimeoutThread\n");
 

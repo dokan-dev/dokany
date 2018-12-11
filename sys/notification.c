@@ -319,10 +319,11 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
 }
 
 KSTART_ROUTINE NotificationThread;
-VOID NotificationThread(__in PDokanDCB Dcb) {
+VOID NotificationThread(__in PVOID pDcb) {
   PKEVENT events[5];
   PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
+  PDokanDCB Dcb = pDcb;
 
   DDbgPrint("==> NotificationThread\n");
 

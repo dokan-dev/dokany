@@ -613,7 +613,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
 }
 
 KSTART_ROUTINE DokanDeleteDeviceThread;
-VOID DokanDeleteDeviceThread(PDOKAN_GLOBAL dokanGlobal)
+VOID DokanDeleteDeviceThread(PVOID pdokanGlobal)
 /*++
 
 Routine Description:
@@ -627,6 +627,7 @@ checks wheter pending IRP is timeout or not each DOKAN_CHECK_INTERVAL
   PVOID pollevents[2];
   LARGE_INTEGER timeout = {0};
   BOOLEAN waitObj = TRUE;
+  PDOKAN_GLOBAL dokanGlobal = pdokanGlobal;
 
   DDbgPrint("==> DokanDeleteDeviceThread\n");
 
@@ -1048,8 +1049,9 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
 }
 
 KSTART_ROUTINE DokanRegisterUncProvider;
-VOID DokanRegisterUncProvider(__in PDokanDCB Dcb) {
+VOID DokanRegisterUncProvider(__in PVOID pDcb) {
   NTSTATUS status;
+  PDokanDCB Dcb = pDcb;
 
   if (Dcb->UNCName != NULL && Dcb->UNCName->Length > 0) {
     status =
@@ -1089,7 +1091,8 @@ NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb) {
 }
 
 KSTART_ROUTINE DokanDeregisterUncProvider;
-VOID DokanDeregisterUncProvider(__in PDokanDCB Dcb) {
+VOID DokanDeregisterUncProvider(__in PVOID pDcb) {
+  PDokanDCB Dcb = pDcb;
   if (Dcb->MupHandle) {
     FsRtlDeregisterUncProvider(Dcb->MupHandle);
     Dcb->MupHandle = 0;
@@ -1098,8 +1101,9 @@ VOID DokanDeregisterUncProvider(__in PDokanDCB Dcb) {
 }
 
 KSTART_ROUTINE DokanCreateMountPointSysProc;
-VOID DokanCreateMountPointSysProc(__in PDokanDCB Dcb) {
+VOID DokanCreateMountPointSysProc(__in PVOID pDcb) {
   NTSTATUS status;
+  PDokanDCB Dcb = pDcb;
 
   DDbgPrint("=> DokanCreateMountPointSysProc\n");
 
@@ -1168,7 +1172,8 @@ BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint) {
 }
 
 KSTART_ROUTINE DokanDeleteMountPointSysProc;
-VOID DokanDeleteMountPointSysProc(__in PDokanDCB Dcb) {
+VOID DokanDeleteMountPointSysProc(__in PVOID pDcb) {
+  PDokanDCB Dcb = pDcb;
   DDbgPrint("=> DokanDeleteMountPointSysProc\n");
   if (DeleteMountPointSymbolicLink(Dcb->MountPoint)) {
     SetLongFlag(Dcb->Flags, DCB_MOUNTPOINT_DELETED);
