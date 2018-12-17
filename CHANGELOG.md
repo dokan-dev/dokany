@@ -4,11 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - 1.2.1.1000
-### Added
 ### Changed
+- Kernel/Library - Replace keepalive ping event by a single keep alive file handle
 - Cert - Runs with admin rights and checks Secureboot is enabled
 
 ### Fixed
+- Kernel - Fix Buffer Overflow by adding mount length path check 
 
 ## [1.2.0.1000] - 2018-08-09
 ### Added
