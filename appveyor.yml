@@ -397,7 +397,7 @@
             Exec-External {& git config --global user.email "appveyor@appveyor.org"}
             Exec-External {& git config --global user.name "appveyor"}
             Exec-External {& git clone -b gh-pages --single-branch https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc}
-            Exec-External {& doxygen Doxyfile}
+            Exec-External {& .\doxygen Doxyfile}
             cd doc
             if ($(git status --porcelain)) {
               Write-Host "Update documentation..." -ForegroundColor Green
