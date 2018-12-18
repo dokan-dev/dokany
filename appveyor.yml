@@ -92,7 +92,12 @@
         }
     - ps: |
         if ($env:CONFIGURATION -eq "Documentation") {
-          Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+          # choco doxygen.portable has ftp download issue for now
+          # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+          cd $env:APPVEYOR_BUILD_FOLDER\documentations
+          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.14/doxygen-1.8.14.windows.x64.bin.zip -OutFile .\doxygen-1.8.14.windows.x64.bin.zip
+          & 7z e .\doxygen-1.8.14.windows.x64.bin.zip
+          cd $env:APPVEYOR_BUILD_FOLDER
         }
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
