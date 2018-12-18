@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 1.2.1.1000
+### Added
+### Changed
+### Fixed
+
 ## [1.2.1.1000] - 2018-12-18
 ### Changed
 - Kernel/Library - Replace keepalive ping event by a single keep alive file handle
