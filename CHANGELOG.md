@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased] - 1.2.1.1000
 ### Added
 ### Changed
+ - Bump DOKAN_VERSION to 121
 ### Fixed
 
 ## [1.2.1.1000] - 2018-12-18
