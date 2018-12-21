@@ -3,10 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 1.2.1.1000
+
+## [1.2.1.2000] - 2018-12-21
 ### Added
-### Changed
+- SetAssemblyVersion - Add update dokan version define
+
 ### Fixed
+- Library - Bump Dokan version to 121
 
 ## [1.2.1.1000] - 2018-12-18
 ### Changed

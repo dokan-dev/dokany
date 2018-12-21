@@ -65,6 +65,13 @@ namespace SetAssemblyVersion
                     props = Regex.Replace(props, @"<DOKANVersion>[0-9]+.[0-9]+.[0-9]+<\/DOKANVersion>",
                         defineVersionString);
                     File.WriteAllText(args[2] + @"\Dokan.props", props);
+
+                    Console.WriteLine("Update Dokan header define version");
+                    var dokanHeader = File.ReadAllText(args[2] + @"\dokan\dokan.h");
+                    var dokanDefineVersion = $@"#define DOKAN_VERSION {productVersion.Major}{productVersion.Minor}{productVersion.Build}";
+                    dokanHeader = Regex.Replace(dokanHeader, @"#define DOKAN_VERSION [0-9]{3}",
+                        dokanDefineVersion);
+                    File.WriteAllText(args[2] + @"\dokan\dokan.h", dokanHeader);
                 }
 
                 return result;
