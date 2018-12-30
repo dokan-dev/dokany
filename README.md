@@ -32,7 +32,7 @@ Since version 0.8.0, dokany broke compatibility with the dokan API. See
 [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#choose-a-version)
 for more information.
 
-**Signed x86 / x64 drivers** are provided at each release.
+**Signed x86 / x64 / ARM / ARM64 drivers** are provided at each release.
 
 ## Licensing
 Dokan contains LGPL and MIT licensed programs.
