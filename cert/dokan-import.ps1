@@ -6,6 +6,8 @@ if ($testadmin -eq $false)
 	Start-Process powershell.exe -Verb RunAs -ArgumentList ('-noprofile -noexit -file "{0}" -elevated' -f ($myinvocation.MyCommand.Definition))
 	exit $LASTEXITCODE
 }
+
+
 if (confirm-securebootUEFI) 
 {
 	write-Host "Secureboot is enabled. This needs to be disabled so that the driver signed with a self signed certificate can be loaded." -ForegroundColor Red
@@ -14,6 +16,7 @@ if (confirm-securebootUEFI)
 }
 else
 {
+	Write-Host "Looking for CertMgr"
 	if (!(Get-Command "CertMgr" -errorAction SilentlyContinue))	
 	{	
 			Write-Host "CertMgr (Certificate Manager Tool)does not seem to be installed on your system." -ForegroundColor Red
@@ -21,6 +24,7 @@ else
 			return;
 	}
 
+	Write-Host "Import Dokan certificate"
 	Import-Certificate cert\DokanCA.cer -CertStoreLocation "Cert:\LocalMachine\Root"
 	Import-Certificate cert\DokanCA.cer -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher"
 	Import-PfxCertificate .\cert\DokanSign.pfx  -CertStoreLocation "Cert:\CurrentUser\my"
