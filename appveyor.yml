@@ -8,6 +8,7 @@
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
+      DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
@@ -94,9 +95,15 @@
         if ($env:CONFIGURATION -eq "Documentation") {
           # choco doxygen.portable has ftp download issue for now
           # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
-          cd $env:APPVEYOR_BUILD_FOLDER\documentations
-          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.14/doxygen-1.8.14.windows.x64.bin.zip -OutFile .\doxygen-1.8.14.windows.x64.bin.zip
-          & 7z e .\doxygen-1.8.14.windows.x64.bin.zip
+          New-Item -Force -Type Directory $env:DOXYGEN_INST_DIR | Out-Null
+          cd $env:DOXYGEN_INST_DIR
+          $doxygen_zip = "$env:TEMP\doxygen.zip"
+          # Version has to be < 1.8.12 because doxyboot theme is incompatible with later versions
+          # https://github.com/Velron/doxygen-bootstrapped/issues/20
+          # https://github.com/Velron/doxygen-bootstrapped/issues/27
+          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip
+          Exec-External {& 7z x "$doxygen_zip"}
+          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
           cd $env:APPVEYOR_BUILD_FOLDER
         }
     - ps: |
@@ -397,7 +404,7 @@
             Exec-External {& git config --global user.email "appveyor@appveyor.org"}
             Exec-External {& git config --global user.name "appveyor"}
             Exec-External {& git clone -b gh-pages --single-branch https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc}
-            Exec-External {& .\doxygen Doxyfile}
+            Exec-External {& doxygen Doxyfile}
             cd doc
             if ($(git status --porcelain)) {
               Write-Host "Update documentation..." -ForegroundColor Green
