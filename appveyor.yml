@@ -95,15 +95,20 @@
         if ($env:CONFIGURATION -eq "Documentation") {
           # choco doxygen.portable has ftp download issue for now
           # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
+          if (Test-Path $env:DOXYGEN_INST_DIR) {
+            Write-Host "Doxygen in cache, skipping."
+            return
+          }
           New-Item -Force -Type Directory $env:DOXYGEN_INST_DIR | Out-Null
           cd $env:DOXYGEN_INST_DIR
           $doxygen_zip = "$env:TEMP\doxygen.zip"
           # Version has to be < 1.8.12 because doxyboot theme is incompatible with later versions
           # https://github.com/Velron/doxygen-bootstrapped/issues/20
           # https://github.com/Velron/doxygen-bootstrapped/issues/27
+          Write-Host "Downloading Doxygen..."
           Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip
-          Exec-External {& 7z x "$doxygen_zip"}
-          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
+          Exec-External {& 7z x -y "$doxygen_zip"}
           cd $env:APPVEYOR_BUILD_FOLDER
         }
     - ps: |
