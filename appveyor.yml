@@ -108,6 +108,9 @@
           # https://github.com/Velron/doxygen-bootstrapped/issues/27
           Write-Host "Downloading Doxygen..."
           Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip
+          if ($(Get-FileHash -Algorithm SHA256 $doxygen_zip).Hash -ne "6CE7C259975FB3DC449313913DE71B89665D15C49CF674DB6952F304BB3DFAAA") {
+            throw "Hash mismatch while downloading Doxygen"
+          }
           Exec-External {& 7z x -y "$doxygen_zip"}
           cd $env:APPVEYOR_BUILD_FOLDER
         }
