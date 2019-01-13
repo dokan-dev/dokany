@@ -193,6 +193,11 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     } break;
     case FileStreamInformation:
       DDbgPrint("  FileStreamInformation\n");
+      if (!vcb->Dcb->UseAltStream) {
+        DDbgPrint("    alternate stream disabled\n");
+        status = STATUS_NOT_IMPLEMENTED;
+        __leave;
+      }
       break;
     case FileStandardLinkInformation:
       DDbgPrint("  FileStandardLinkInformation\n");
