@@ -228,6 +228,31 @@ typedef struct _FILE_DISPOSITION_INFORMATION {
   BOOLEAN DeleteFile;
 } FILE_DISPOSITION_INFORMATION, *PFILE_DISPOSITION_INFORMATION;
 
+#define FILE_DISPOSITION_DO_NOT_DELETE 0x00000000 // Specifies the system should not delete a file.
+#define FILE_DISPOSITION_DELETE 0x00000001 // Specifies the system should delete a file.
+#define FILE_DISPOSITION_POSIX_SEMANTICS  0x00000002 // Specifies the system should perform a POSIX - style delete.
+#define FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK  0x00000004 // Specifies the system should force an image section check.
+#define FILE_DISPOSITION_ON_CLOSE 0x00000008 // Specifies if the system sets or clears the on - close state.
+
+/**
+ * \struct FILE_DISPOSITION_INFORMATION_EX
+ * \brief Used as an argument to the ZwSetInformationFile routine.
+ *
+ * The struct is requested during IRP_MJ_QUERY_INFORMATION with query FileDispositionInformationEx
+ */
+typedef struct _FILE_DISPOSITION_INFORMATION_EX {
+  /**
+   * Specifies what action(s) the system should take with a specific file while deleting.
+   *
+   *    \li \c FILE_DISPOSITION_DO_NOT_DELETE Specifies the system should not delete a file.
+   *    \li \c FILE_DISPOSITION_DELETE Specifies the system should delete a file.
+   *    \li \c FILE_DISPOSITION_POSIX_SEMANTICS Specifies the system should perform a POSIX-style delete.
+   *    \li \c FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK Specifies the system should force an image section check.
+   *    \li \c FILE_DISPOSITION_ON_CLOSE Specifies if the system sets or clears the on-close state.
+   */
+  ULONG Flags;
+} FILE_DISPOSITION_INFORMATION_EX, *PFILE_DISPOSITION_INFORMATION_EX;
+
 /**
  * \struct FILE_END_OF_FILE_INFORMATION
  * \brief Used as an argument to the ZwSetInformationFile routine.

@@ -91,18 +91,31 @@ NTSTATUS
 DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
                                PDOKAN_FILE_INFO FileInfo,
                                PDOKAN_OPERATIONS DokanOperations) {
-  PFILE_DISPOSITION_INFORMATION dispositionInfo =
-      (PFILE_DISPOSITION_INFORMATION)(
-          (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
+
+  BOOLEAN DeleteFileFlag = FALSE;
+  if (EventContext->Operation.SetFile.FileInformationClass ==
+      FileDispositionInformation) {
+
+    PFILE_DISPOSITION_INFORMATION dispositionInfo =
+        (PFILE_DISPOSITION_INFORMATION)(
+            (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
+    DeleteFileFlag = dispositionInfo->DeleteFile;
+  } else { //FileDispositionInformationEx
+    PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
+        (PFILE_DISPOSITION_INFORMATION_EX)(
+            (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
+
+    DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
+  }
 
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
     return STATUS_NOT_IMPLEMENTED;
 
-  if (dispositionInfo->DeleteFile == FileInfo->DeleteOnClose) {
+  if (DeleteFileFlag == FileInfo->DeleteOnClose) {
     return STATUS_SUCCESS;
   }
 
-  if (DokanOperations->GetFileInformation) {
+  if (DokanOperations->GetFileInformation && DeleteFileFlag) {
     BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
     ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
     NTSTATUS result = DokanOperations->GetFileInformation(
@@ -113,7 +126,7 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
       return STATUS_CANNOT_DELETE;
   }
 
-  FileInfo->DeleteOnClose = (dispositionInfo->DeleteFile) ? TRUE : FALSE;
+  FileInfo->DeleteOnClose = DeleteFileFlag;
 
   if (FileInfo->IsDirectory) {
     return DokanOperations->DeleteDirectory(
@@ -247,6 +260,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     break;
 
   case FileDispositionInformation:
+  case FileDispositionInformationEx:
     status = DokanSetDispositionInformation(EventContext, &fileInfo,
                                             DokanInstance->DokanOperations);
     break;
