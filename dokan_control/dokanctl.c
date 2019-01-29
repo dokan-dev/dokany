@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -146,10 +146,12 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     if (type == L'd') {
       return InstallDriver(driverFullPath);
     } else if (type == L'n') {
-      if (DokanNetworkProviderInstall())
+      if (DokanNetworkProviderInstall()) {
         fprintf(stdout, "network provider install ok\n");
-      else
+      } else {
         fprintf(stderr, "network provider install failed\n");
+        return EXIT_FAILURE;
+      }
     } else {
       goto default_case;
     }
@@ -162,8 +164,10 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     } else if (type == L'n') {
       if (DokanNetworkProviderUninstall())
         fprintf(stdout, "network provider remove ok\n");
-      else
+      else {
         fprintf(stderr, "network provider remove failed\n");
+        return EXIT_FAILURE;
+      }
     } else {
       goto default_case;
     }
@@ -179,6 +183,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       fprintf(stdout, "set debug mode ok\n");
     } else {
       fprintf(stderr, "set debug mode failed\n");
+      return EXIT_FAILURE;
     }
   } break;
 
@@ -210,6 +215,8 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       }
     } else {
       fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
+      free(dokanControl);
+      return EXIT_FAILURE;
     }
     free(dokanControl);
   } break;
@@ -223,6 +230,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   default:
     default_case:
     fprintf(stderr, "Unknown option - Use /? to show usage\n");
+    return EXIT_FAILURE;
   }
 
   return EXIT_SUCCESS;

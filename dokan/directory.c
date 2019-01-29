@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -511,7 +511,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   }
 
   // IMPORTANT!!
-  // this buffer length is fixed in MatchFiles funciton
+  // this buffer length is fixed in MatchFiles function
   eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
 
   if (openInfo->DirListHead == NULL) {

@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -69,7 +69,7 @@ DokanCommonLockControl(__in PIRP Irp) {
 //
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 
-    // Fcb's AllocationSize is constant after creation.
+  // Fcb's AllocationSize is constant after creation.
   if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
        ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
         (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
@@ -98,7 +98,7 @@ DokanCommonLockControl(__in PIRP Irp) {
 #if (NTDDI_VERSION >= NTDDI_WIN8)
   }
 #endif
-    //  If we were waiting for the callback, then STATUS_PENDING would be ok too
+  //  If we were waiting for the callback, then STATUS_PENDING would be ok too
   if (Status == STATUS_SUCCESS) {
     //
     //  Now call the FsRtl routine to do the actual processing of the
@@ -210,7 +210,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     if (completeIrp) {
@@ -223,11 +223,13 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                           __in PEVENT_INFORMATION EventInfo,
+                           __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
 
+  UNREFERENCED_PARAMETER(Wait);
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
@@ -236,4 +238,5 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteLock\n");
+  return STATUS_SUCCESS;
 }

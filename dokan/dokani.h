@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -187,8 +187,6 @@ VOID CheckFileName(LPWSTR FileName);
 VOID ClearFindData(PLIST_ENTRY ListHead);
 
 VOID ClearFindStreamData(PLIST_ENTRY ListHead);
-
-UINT WINAPI DokanKeepAlive(PVOID Param);
 
 PDOKAN_OPEN_INFO
 GetDokanOpenInfo(PEVENT_CONTEXT EventInfomation, PDOKAN_INSTANCE DokanInstance);

@@ -122,12 +122,7 @@
       </RegistrySearch>
     </Property>
 
-    <PropertyRef Id="NETFRAMEWORK40FULL"/>
-
     <!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
-    <Condition Message='This setup requires Microsoft .NET Framework 4.0 or newer to be installed for this installation to continue.'>
-      <![CDATA[Installed OR NETFRAMEWORK40FULL]]>
-    </Condition>
 
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND ServicePackLevel >= 1)]]></Condition>
@@ -135,7 +130,7 @@
     <Condition Message="Installation failed because the VC++ 2017 x64 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "$(var.VCRedistVersion)")]]></Condition>
     <Condition Message="Installation failed because the VC++ 2017 x86 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "$(var.VCRedistVersion)")]]></Condition>
 
-    <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.CA.dll"/>
+    <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 
     <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
 

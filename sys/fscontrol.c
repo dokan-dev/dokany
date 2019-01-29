@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -131,7 +132,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
         || ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
             FlagOn(InputBuffer->Flags, REQUEST_OPLOCK_INPUT_FLAG_REQUEST))
 #endif
-            ) {
+    ) {
 
       AcquiredVcb = ExAcquireResourceSharedLite(&(Fcb->Vcb->Resource), TRUE);
 
@@ -163,7 +164,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       } else {
         // Shouldn't be something like UncleanCount counter and not FileCount
         // here?
-        OplockCount = 0;//Fcb->FileCount;
+        OplockCount = 0; //Fcb->FileCount;
       }
     } else if ((FsControlCode == FSCTL_OPLOCK_BREAK_ACKNOWLEDGE) ||
                (FsControlCode == FSCTL_OPBATCH_ACK_CLOSE_PENDING) ||
@@ -173,7 +174,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
                || ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
                    FlagOn(InputBuffer->Flags, REQUEST_OPLOCK_INPUT_FLAG_ACK))
 #endif
-                   ) {
+    ) {
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
     } else if (FsControlCode == FSCTL_REQUEST_OPLOCK) {
@@ -242,12 +243,46 @@ NTSTATUS
 DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PIO_STACK_LOCATION irpSp;
+  PFILE_OBJECT fileObject = NULL;
+  PDokanCCB ccb = NULL;
+  PDokanFCB fcb = NULL;
 
   UNREFERENCED_PARAMETER(DeviceObject);
 
   irpSp = IoGetCurrentIrpStackLocation(*pIrp);
 
   switch (irpSp->Parameters.FileSystemControl.FsControlCode) {
+
+  case FSCTL_ACTIVATE_KEEPALIVE:
+    fileObject = irpSp->FileObject;
+    if (fileObject == NULL) {
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FileObject.");
+      return STATUS_INVALID_PARAMETER;
+    }
+    ccb = fileObject->FsContext2;
+    if (ccb == NULL || ccb->Identifier.Type != CCB) {
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.");
+      return STATUS_INVALID_PARAMETER;
+    }
+
+    fcb = ccb->Fcb;
+    if (fcb == NULL || fcb->Identifier.Type != FCB) {
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.");
+      return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!fcb->IsKeepalive) {
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE for wrong file: %wZ",
+          &fcb->FileName);
+      return STATUS_INVALID_PARAMETER;
+    }
+
+    DDbgPrint("Activating keepalive handle.");
+    DokanFCBLockRW(fcb);
+    fcb->Vcb->IsKeepaliveActive = TRUE;
+    DokanFCBUnlock(fcb);
+    status = STATUS_SUCCESS;
+    break;
 
   case FSCTL_REQUEST_OPLOCK_LEVEL_1:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK_LEVEL_1\n");

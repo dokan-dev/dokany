@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -269,9 +269,10 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
   return status;
 }
 
-VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject) {
+NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+                                             __in PEVENT_INFORMATION EventInfo,
+                                             __in PDEVICE_OBJECT DeviceObject,
+                                             __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -280,6 +281,8 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   PVOID buffer = NULL;
   PDokanDCB dcb;
   PDokanVCB vcb;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
 
@@ -351,6 +354,8 @@ VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
+
+  return STATUS_SUCCESS;
 }
 
 NTSTATUS

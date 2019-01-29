@@ -33,6 +33,8 @@ struct fuse_config
   int setsignals;
   unsigned int timeoutInSec;
   int networkDrive;
+  unsigned long allocationUnitSize;
+  unsigned long sectorSize;
 };
 
 struct fuse_session

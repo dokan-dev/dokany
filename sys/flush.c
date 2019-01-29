@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -100,7 +100,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, 0);
@@ -111,12 +111,14 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                            __in PEVENT_INFORMATION EventInfo,
+                            __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
+  UNREFERENCED_PARAMETER(Wait);
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -133,4 +135,5 @@ VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteFlush\n");
+  return STATUS_SUCCESS;
 }

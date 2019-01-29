@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -76,9 +76,9 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrpForService(DeviceObject, Irp);
     break;
   case IOCTL_MOUNTPOINT_CLEANUP:
-      RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
-      status = STATUS_SUCCESS;
-      break;
+    RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
+    status = STATUS_SUCCESS;
+    break;
   case IOCTL_SET_DEBUG_MODE:
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG)) {
       g_Debug = *(ULONG *)Irp->AssociatedIrp.SystemBuffer;
@@ -984,6 +984,7 @@ Return Value:
       break;
 
     case IOCTL_KEEPALIVE:
+	  //Remove for Dokan 2.x.x
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);

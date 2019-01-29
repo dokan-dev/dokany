@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -86,6 +87,24 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    if (fcb->IsKeepalive) {
+      DokanFCBLockRW(fcb);
+      BOOLEAN keepaliveActive =
+          (fcb->FileCount == 1 && fcb->Vcb->IsKeepaliveActive);
+      fcb->Vcb->IsKeepaliveActive = FALSE;
+      DokanFCBUnlock(fcb);
+      if (keepaliveActive) {
+        if (IsUnmountPendingVcb(vcb)) {
+          DDbgPrint("Ignoring keepalive close because unmount is already in progress.");
+        } else {
+          DDbgPrint("Unmounting due to keepalive close.");
+          DokanUnmount(vcb->Dcb);
+        }
+      }
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     FlushFcb(fcb, fileObject);
 
     DokanFCBLockRW(fcb);
@@ -141,8 +160,9 @@ Return Value:
   return status;
 }
 
-VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo,
+                              __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -150,6 +170,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb;
   PDokanVCB vcb;
   PFILE_OBJECT fileObject;
+  BOOLEAN FCBAcquired = FALSE;
 
   DDbgPrint("==> DokanCompleteCleanup\n");
 
@@ -172,18 +193,21 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
-  DokanFCBLockRO(fcb);
-  if (FlagOn(fileObject->Flags, FO_FILE_MODIFIED)) {
+  if (FALSE == Wait) {
+    DokanFCBTryLockRO(fcb, FCBAcquired);
+    if (FALSE == FCBAcquired) {
+      return STATUS_PENDING;
+    }
+  } else {
+    DokanFCBLockRO(fcb);
+  }
+
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);
   }
 
-  if (DokanCCBFlagsIsSet(ccb, DOKAN_DELETE_ON_CLOSE)) {
-    DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-    DokanFCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
-  }
-
-  if (1 == fcb->FileCount && DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                               FILE_ACTION_REMOVED);
@@ -208,4 +232,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, 0);
 
   DDbgPrint("<== DokanCompleteCleanup\n");
+
+  return STATUS_SUCCESS;
 }

@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -290,6 +291,9 @@ typedef struct _DokanVolumeControlBlock {
   ULONG Flags;
   BOOLEAN HasEventWait;
 
+  // Whether keep-alive has been activated on this volume.
+  BOOLEAN IsKeepaliveActive;
+
 } DokanVCB, *PDokanVCB;
 
 // Flags for volume
@@ -347,8 +351,39 @@ typedef struct _DokanFileControlBlock {
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
+
+  // A keep-alive FCB is a special FCB whose last cleanup triggers automatic
+  // unmounting. This is meant to unmount the file system when the owning
+  // process abruptly terminates, replacing dokan's original ping/timeout-based
+  // mechanism. The owning process must open the special keepalive file name,
+  // then issue a FSCTL_ACTIVATE_KEEPALIVE DeviceIoControl to that file handle
+  // (which sets the IsKeepaliveActive flag), and hold the handle open until
+  // after normal unmounting. The DeviceIoControl step ensures that if a filter
+  // turns the CreateFile into a CreateFile + CloseHandle + CreateFile sequence,
+  // the hidden CloseHandle call doesn't trigger unmounting.
+
+  // TRUE if this FCB points to the keep-alive file name. This prevents the FCB
+  // from dispatching normally to user mode, but the IsKeepaliveActive flag must
+  // also be true in order for auto-unmounting to happen.
+  BOOLEAN IsKeepalive;
+
 } DokanFCB, *PDokanFCB;
 
+#define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
+                                      KeEnterCriticalRegion();                                                    \
+                                      FCBAcquired = ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, FALSE); \
+                                      if (FALSE == FCBAcquired) {                                                        \
+                                         KeLeaveCriticalRegion();                                                 \
+                                      }                                                                           \
+                                    }while(0)
+
+#define DokanFCBTryLockRW(fcb, FCBAcquired) do{                                                                            \
+                                      KeEnterCriticalRegion();                                                      \
+                                      FCBAcquired = ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, FALSE);\
+                                      if (FALSE == FCBAcquired) {                                                          \
+                                         KeLeaveCriticalRegion();                                                   \
+                                      }                                                                             \
+                                    }while(0)
 #define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); } while(0)
 #define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(fcb->AdvancedFCBHeader.Resource)
 #define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(fcb->AdvancedFCBHeader.Resource)
@@ -402,6 +437,7 @@ typedef struct _IRP_ENTRY {
   ULONG Flags;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
+  WORK_QUEUE_ITEM WorkQueueItem;
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
@@ -566,42 +602,54 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
-VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo,
+                                   __in BOOLEAN Wait);
 
-VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait);
 
-VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait);
 
-VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo,
+                                   __in BOOLEAN Wait);
 
-VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
-                                 __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+                                 __in PEVENT_INFORMATION EventInfo,
+                                 __in BOOLEAN Wait);
 
-VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo,
+                         __in BOOLEAN Wait);
 
-VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo,
+                          __in BOOLEAN Wait);
 
-VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo,
+                       __in BOOLEAN Wait);
 
-VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
                                          __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject);
+                                         __in PDEVICE_OBJECT DeviceObject,
+                                         __in BOOLEAN Wait);
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo,
+                        __in BOOLEAN Wait);
 
-VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+                                __in PEVENT_INFORMATION EventInfo,
+                                __in BOOLEAN Wait);
 
-VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo);
+NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo,
+                              __in BOOLEAN Wait);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
 

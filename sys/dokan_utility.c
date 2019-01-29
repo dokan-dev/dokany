@@ -1,7 +1,7 @@
 /*
 Dokan : user-mode file system library for Windows
 
-Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
 Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
 http://dokan-dev.github.io
@@ -32,30 +32,28 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
   Set isIgnoreTargetWchar = 1, you are trying to get the offset in order to get something like : Volume{D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
 
 */
-ULONG DokanSearchWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
-	__in ULONG offsetPosition, __in int isIgnoreTargetWchar) {
+ULONG DokanSearchWcharinUnicodeStringWithUlong(
+    __in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
+    __in ULONG offsetPosition, __in int isIgnoreTargetWchar) {
 
-	ASSERT(inputPUnicodeString != NULL);
+  ASSERT(inputPUnicodeString != NULL);
 
-	if (offsetPosition > inputPUnicodeString->MaximumLength)
-	{
-		// trying to prevent BSOD for invalid input parameter
-		offsetPosition = inputPUnicodeString->Length;
-		// if inputPUnicodeString->Length == 0, the while loop will be skiped directly. So, the return value will be 0.
-	}
+  if (offsetPosition > inputPUnicodeString->MaximumLength) {
+    // trying to prevent BSOD for invalid input parameter
+    offsetPosition = inputPUnicodeString->Length;
+    // if inputPUnicodeString->Length == 0, the while loop will be skiped directly. So, the return value will be 0.
+  }
 
-	// 0 > 0 will return false and end the loop
-	while (offsetPosition > 0)
-	{
-		offsetPosition--;
+  // 0 > 0 will return false and end the loop
+  while (offsetPosition > 0) {
+    offsetPosition--;
 
-		if (inputPUnicodeString->Buffer[offsetPosition] == targetWchar)
-		{
-			if (isIgnoreTargetWchar == 1) {
-				offsetPosition++; // the next is the begining of filename
-			}
-			break;
-		}
-	}
-	return offsetPosition;
+    if (inputPUnicodeString->Buffer[offsetPosition] == targetWchar) {
+      if (isIgnoreTargetWchar == 1) {
+        offsetPosition++; // the next is the beginning of filename
+      }
+      break;
+    }
+  }
+  return offsetPosition;
 }

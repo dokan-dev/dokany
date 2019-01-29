@@ -26,7 +26,6 @@
         ThemeFile="Resources\RtfTheme.xml"
         LocalizationFile="Resources\1033\RtfTheme.wxl"/>
       <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
-      <Payload Name="redist\Netfx_eula40.rtf" SourceFile="Resources\Netfx_eula40.rtf" />
 
     </BootstrapperApplicationRef>
 
@@ -63,7 +62,6 @@
     <bal:Condition Message="Installation failed because your version of Windows is not supported. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
 
     <Chain>
-      <PackageGroupRef Id="NetFx40Web"/>
 
       <ExePackage Id="vcredist_2017_x86.exe"
                   Name="vc_redist.x86.exe"
@@ -130,7 +128,7 @@
         <FileSearch Name="TiWorker.exe" MinVersion="6.3.9600.17030"/>
       </DirectorySearch>
     </Property>
-    <!-- windows 8.1 KB2999226 has a dependancy with KB2919355 -->
+    <!-- windows 8.1 KB2999226 has a dependency with KB2919355 -->
     <bal:Condition Message="Installation failed because on Windows 8.1 the installation of KB2999226 and its prerequisites KB2919355 and KB2919442 is required. For more info please visit https://support.microsoft.com/en-us/kb/2919355">
       <![CDATA[Installed OR VersionNT = v6.3 AND NOT WINKB2919442INSTALLED]]>
     </bal:Condition>

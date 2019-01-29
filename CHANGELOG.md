@@ -3,6 +3,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
+## [1.2.1.2000] - 2018-12-21
+### Added
+- SetAssemblyVersion - Add update dokan version define
+
+### Fixed
+- Library - Bump Dokan version to 121
+
+## [1.2.1.1000] - 2018-12-18
+### Changed
+- Kernel/Library - Replace keepalive ping event by a single keep alive file handle
+- Cert - Runs with admin rights and checks Secureboot is enabled
+
+### Fixed
+- Kernel - Fix Buffer Overflow by adding mount length path check 
+
+## [1.2.0.1000] - 2018-08-09
+### Added
+- Build - Add ARM64
+
+### Changed
+- Installer - Remove .NET dependency.
+- Build - Remove Windows 10 build for ARM
+- Library - Allow usage driver letter `A`
+- Documentation - Add `FSName` notice for `NTFS` & `FAT`
+- Documentation - Add `GetFileSecurity` return `STATUS_NOT_IMPLEMENTED` remark
+- Library - Update `DOKAN_VERSION` to 120 and `DOKAN_MINIMUM_COMPATIBLE_VERSION` to 110
+- Kernel - Only set FO_FILE_MODIFIED for no paging io during write complete
+
+### Fixed
+- Library - Missing session id in `DOKAN_CONTROL` for user space
+- NetworkProvider - UNC paths using only for current session show offline for other session.
+- Installer - Dokan Network Provider - Move back `dokannp1.dll` to `system32` folder and `SysWow64`
+- Mirror - Initialize `userTokenHandle` correctly
+- FUSE -  Return correct status when file is open `FILE_OVERWRITE_IF` or `FILE_OPEN_IF` successfully
+- Kernel - PageIO Dead lock
+- Library - Get correct name (not uppercase) when repase point mount is used
+
 ## [1.1.0.2000] - 2018-01-19
 ### Fixed
 - Installer - Fix Wrong redist download link rename
@@ -35,7 +73,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Kernel - Createfile move `DOKAN_DELETE_ON_CLOSE` set flag after create success
-- Kernel - Return acces denied for paging file open request
+- Kernel - Return access denied for paging file open request
 
 ### Fixed
 - Kernel - CreateFile return `STATUS_DELETE_PENDING` for a request without share delete during a pending delete
@@ -340,7 +378,9 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.1.0.2000...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.2.1.1000...master
+[1.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.0.2000...v1.2.1.1000
+[1.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.1.0.2000...v1.2.0.1000
 [1.1.0.2000]: https://github.com/dokan-dev/dokany/compare/v1.1.0...v1.1.0.2000
 [1.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.5...v1.1.0
 [1.0.5.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.4...v1.0.5

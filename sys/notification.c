@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -319,10 +319,11 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
 }
 
 KSTART_ROUTINE NotificationThread;
-VOID NotificationThread(__in PDokanDCB Dcb) {
+VOID NotificationThread(__in PVOID pDcb) {
   PKEVENT events[5];
   PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
+  PDokanDCB Dcb = pDcb;
 
   DDbgPrint("==> NotificationThread\n");
 
@@ -497,10 +498,9 @@ ULONG GetCurrentSessionId(__in PIRP Irp) {
   NTSTATUS status;
 
   status = IoGetRequestorSessionId(Irp, &sessionNumber);
-  if (!NT_SUCCESS(status))
-  {
-      DDbgPrint("   IoGetRequestorSessionId failed\n");
-      return (ULONG)-1;
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("   IoGetRequestorSessionId failed\n");
+    return (ULONG)-1;
   }
   DDbgPrint("   GetCurrentSessionId %lu\n", sessionNumber);
   return sessionNumber;
@@ -520,7 +520,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   }
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
-  
+
   if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
       sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) {
     DDbgPrint(
@@ -543,6 +543,10 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     dokanControl.MountPoint[13] = L':';
     dokanControl.MountPoint[14] = L'\0';
   } else {
+    if ((szMountPoint->Length / sizeof(WCHAR) + 12) > MAX_PATH) {
+      DDbgPrint("Montpoint Buffer has an invalid size\n");
+      return STATUS_BUFFER_OVERFLOW;
+	}
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }

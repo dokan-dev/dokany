@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -292,7 +292,7 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
 
   DDbgPrint("\tFsRtlNotifyFullChangeDirectory FileName %wZ\n", &fcb->FileName);
-  
+
   DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
       vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
@@ -303,14 +303,17 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return STATUS_PENDING;
 }
 
-VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                       __in PEVENT_INFORMATION EventInfo,
+                                       __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   ULONG info = 0;
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteDirectoryControl\n");
 
@@ -341,7 +344,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     // ULONG     orgLen = irpSp->Parameters.QueryDirectory.Length;
 
     //
-    // set the information recieved from user mode
+    // set the information received from user mode
     //
     ASSERT(buffer != NULL);
 
@@ -380,4 +383,6 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteDirectoryControl\n");
+
+  return STATUS_SUCCESS;
 }

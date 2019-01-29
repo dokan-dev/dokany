@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -21,11 +21,93 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
+#pragma warning(disable : 4214)
+struct SYMLINK_ECP_CONTEXT {
+  USHORT UnparsedNameLength;
+  union {
+    USHORT Flags;
+    struct {
+      USHORT MountPoint : 1;
+    } MountPoint;
+  } FlagsMountPoint;
+  USHORT DeviceNameLength;
+  USHORT Zero;
+  struct SYMLINK_ECP_CONTEXT *Reparsed;
+  UNICODE_STRING Name;
+};
+#pragma warning(default : 4214)
+
+/*
+ * Revert file name when reparse point is used
+ * We get real name from the IRP_MJ_CREATE extra information in ECPs
+ * This behavior is fixed in >= win10 1803
+ */
+void RevertFileName(PIRP Irp) {
+  RTL_OSVERSIONINFOW VersionInformation = {0};
+  VersionInformation.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
+  RtlGetVersion(&VersionInformation);
+  if (VersionInformation.dwMajorVersion > 10 ||
+      (VersionInformation.dwMajorVersion == 10 &&
+       VersionInformation.dwMinorVersion > 0) ||
+      (VersionInformation.dwMajorVersion == 10 &&
+       VersionInformation.dwMinorVersion == 0 &&
+       VersionInformation.dwBuildNumber >= 17134))
+    return;
+
+  PECP_LIST EcpList;
+  struct SYMLINK_ECP_CONTEXT *EcpContext;
+  //IopSymlinkECPGuid "73d5118a-88ba-439f-92f4-46d38952d250";
+  GUID IopSymlinkECPGuid;
+  IopSymlinkECPGuid.Data1 = 0x73d5118a;
+  IopSymlinkECPGuid.Data2 = 0x88ba;
+  IopSymlinkECPGuid.Data3 = 0x439f;
+  IopSymlinkECPGuid.Data4[0] = 0x92;
+  IopSymlinkECPGuid.Data4[1] = 0xf4;
+  IopSymlinkECPGuid.Data4[2] = 0x46;
+  IopSymlinkECPGuid.Data4[3] = 0xd3;
+  IopSymlinkECPGuid.Data4[4] = 0x89;
+  IopSymlinkECPGuid.Data4[5] = 0x52;
+  IopSymlinkECPGuid.Data4[6] = 0xd2;
+  IopSymlinkECPGuid.Data4[7] = 0x50;
+
+  if (0 <= FsRtlGetEcpListFromIrp(Irp, &EcpList) && EcpList &&
+      0 <= FsRtlFindExtraCreateParameter(EcpList, &IopSymlinkECPGuid,
+                                         (void **)&EcpContext, 0) &&
+      !FsRtlIsEcpFromUserMode(EcpContext) &&
+      EcpContext->FlagsMountPoint.MountPoint.MountPoint) {
+    USHORT UnparsedNameLength = EcpContext->UnparsedNameLength;
+    if (UnparsedNameLength != 0) {
+      PUNICODE_STRING FileName =
+          &IoGetCurrentIrpStackLocation(Irp)->FileObject->FileName;
+      USHORT FileNameLength = FileName->Length;
+      USHORT NameLength = EcpContext->Name.Length;
+      if (UnparsedNameLength <= NameLength &&
+          UnparsedNameLength <= FileNameLength) {
+        UNICODE_STRING us1;
+        us1.Length = UnparsedNameLength;
+        us1.MaximumLength = UnparsedNameLength;
+        us1.Buffer = (PWSTR)RtlOffsetToPointer(
+            FileName->Buffer, FileNameLength - UnparsedNameLength);
+        UNICODE_STRING us2;
+        us2.Length = UnparsedNameLength;
+        us2.MaximumLength = UnparsedNameLength;
+        us2.Buffer = (PWSTR)RtlOffsetToPointer(EcpContext->Name.Buffer,
+                                               NameLength - UnparsedNameLength);
+        if (RtlEqualUnicodeString(&us1, &us2, TRUE)) {
+          memcpy(us1.Buffer, us2.Buffer, UnparsedNameLength);
+        }
+      }
+    }
+  }
+}
+
 NTSTATUS
 DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   BOOLEAN AtIrqlPassiveLevel = FALSE;
   BOOLEAN IsTopLevelIrp = FALSE;
   NTSTATUS Status = STATUS_UNSUCCESSFUL;
+
+  RevertFileName(Irp);
 
   __try {
 

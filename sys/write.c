@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2018 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -104,9 +104,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       writeToEoF = TRUE;
     }
 
-    if (Irp->Flags & IRP_PAGING_IO) {
-      isPagingIo = TRUE;
-    }
+    isPagingIo = (Irp->Flags & IRP_PAGING_IO);
 
     if (Irp->Flags & IRP_NOCACHE) {
       isNonCached = TRUE;
@@ -118,15 +116,18 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
         (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+
       CcFlushCache(&fcb->SectionObjectPointers,
                    writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
                    irpSp->Parameters.Write.Length, NULL);
+
+      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
+      ExReleaseResourceLite(&fcb->PagingIoResource);
+
       CcPurgeCacheSection(&fcb->SectionObjectPointers,
                           writeToEoF ? NULL
                                      : &irpSp->Parameters.Write.ByteOffset,
                           irpSp->Parameters.Write.Length, FALSE);
-      ExReleaseResourceLite(&fcb->PagingIoResource);
     }
 
     // Cannot write at end of the file when using paging IO
@@ -197,7 +198,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // the size of buffer to write
     eventContext->Operation.Write.BufferLength = irpSp->Parameters.Write.Length;
 
-    // the offset from the begining of structure
+    // the offset from the beginning of structure
     // the contents to write will be copyed to this offset
     eventContext->Operation.Write.BufferOffset =
         FIELD_OFFSET(EVENT_CONTEXT, Operation.Write.FileName[0]) +
@@ -274,7 +275,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                 irpSp->Parameters.Write.ByteOffset.LowPart,
                 irpSp->Parameters.Write.Length);
 
-      // copies from begining of EventContext to the end of file name
+      // copies from beginning of EventContext to the end of file name
       RtlCopyMemory(requestContext, eventContext,
                     eventContext->Operation.Write.BufferOffset);
       // puts actual size of RequestContext
@@ -323,8 +324,9 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo) {
+NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                            __in PEVENT_INFORMATION EventInfo,
+                            __in BOOLEAN Wait) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -332,6 +334,8 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb;
   PFILE_OBJECT fileObject;
   BOOLEAN isPagingIo = FALSE;
+
+  UNREFERENCED_PARAMETER(Wait);
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -341,13 +345,13 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
+  isPagingIo = (irp->Flags & IRP_PAGING_IO);
+
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
-
-  isPagingIo = (irp->Flags & IRP_PAGING_IO);
 
   ccb->UserContext = EventInfo->Context;
   // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
@@ -361,21 +365,26 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
 
     //Check if file size changed
     if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
-      EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+
       if (!isPagingIo) {
         DokanFCBLockRO(fcb);
       }
+
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-        FILE_ACTION_MODIFIED);
+                              FILE_ACTION_MODIFIED);
+
       if (!isPagingIo) {
         DokanFCBUnlock(fcb);
       }
 
       //Update size with new offset
       InterlockedExchange64(
-        &fcb->AdvancedFCBHeader.FileSize.QuadPart,
-        EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
     }
+
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
     
     if (!isPagingIo) {
       SetFlag(fileObject->Flags, FO_FILE_MODIFIED);
@@ -394,4 +403,6 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
 
   DDbgPrint("<== DokanCompleteWrite\n");
+
+  return STATUS_SUCCESS;
 }

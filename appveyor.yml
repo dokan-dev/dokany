@@ -8,18 +8,20 @@
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
+      DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2017; Configuration: All"
 
-  version: 1.1.0-{build}
+  version: 1.2.1-{build}
   configuration:
   - All
   - Coverity
   - SonarQube
   - FsTest
+  - Documentation
 
   image:
     - Visual Studio 2017
@@ -36,6 +38,8 @@
         image: Visual Studio 2015
       - configuration: SonarQube
         image: Visual Studio 2015
+      - configuration: Documentation
+        image: Visual Studio 2015
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
@@ -49,6 +53,8 @@
 #    - ps: $blockRdp = $true; Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
 
   install:
+    - ps: |
+        New-Item -ItemType Directory -Force -Path ${env:DOKAN_CI_CACHE} | Out-Null
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest" -or $env:CONFIGURATION -eq "All") {
           .\cert\dokan-import.ps1
@@ -86,8 +92,27 @@
           Exec-External {& powershell .\scripts\install_wlk_ifstest.ps1 }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
-          Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+        if ($env:CONFIGURATION -eq "Documentation") {
+          # choco doxygen.portable has ftp download issue for now
+          # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
+          if (Test-Path $env:DOXYGEN_INST_DIR) {
+            Write-Host "Doxygen in cache, skipping."
+            return
+          }
+          New-Item -Force -Type Directory $env:DOXYGEN_INST_DIR | Out-Null
+          cd $env:DOXYGEN_INST_DIR
+          $doxygen_zip = "$env:TEMP\doxygen.zip"
+          # Version has to be < 1.8.12 because doxyboot theme is incompatible with later versions
+          # https://github.com/Velron/doxygen-bootstrapped/issues/20
+          # https://github.com/Velron/doxygen-bootstrapped/issues/27
+          Write-Host "Downloading Doxygen..."
+          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip
+          if ($(Get-FileHash -Algorithm SHA256 $doxygen_zip).Hash -ne "6CE7C259975FB3DC449313913DE71B89665D15C49CF674DB6952F304BB3DFAAA") {
+            throw "Hash mismatch while downloading Doxygen"
+          }
+          Exec-External {& 7z x -y "$doxygen_zip"}
+          cd $env:APPVEYOR_BUILD_FOLDER
         }
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
@@ -378,7 +403,7 @@
           }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
+        if ($env:CONFIGURATION -eq "Documentation") {
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
             }
