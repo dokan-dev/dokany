@@ -367,6 +367,9 @@ typedef struct _DokanFileControlBlock {
   // also be true in order for auto-unmounting to happen.
   BOOLEAN IsKeepalive;
 
+  // Locking: DokanFCBShareAccess{RO,RW}
+  ERESOURCE ShareAccessResource;
+
 } DokanFCB, *PDokanFCB;
 
 #define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
@@ -387,6 +390,10 @@ typedef struct _DokanFileControlBlock {
 #define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); } while(0)
 #define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(fcb->AdvancedFCBHeader.Resource)
 #define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(fcb->AdvancedFCBHeader.Resource)
+
+#define DokanFCBShareAccessLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(&fcb->ShareAccessResource, TRUE); } while(0)
+#define DokanFCBShareAccessLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(&fcb->ShareAccessResource)
+#define DokanFCBShareAccessUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(&fcb->ShareAccessResource)
 //#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
 //#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
 //#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExReleaseResourceLite(fcb->AdvancedFCBHeader.Resource); KeLeaveCriticalRegion(); } while(0)
@@ -561,6 +568,13 @@ DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
 NTSTATUS
 DokanCheckShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
                       _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);
+
+VOID DokanSetShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
+    _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);
+
+VOID DokanUpdateShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb);
+
+VOID DokanRemoveShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb);
 
 NTSTATUS
 DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,

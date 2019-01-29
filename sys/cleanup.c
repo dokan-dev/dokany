@@ -227,7 +227,7 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
-  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+  DokanRemoveShareAccess(irpSp->FileObject, fcb);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

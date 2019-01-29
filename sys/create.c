@@ -56,6 +56,7 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   fcb->Vcb = Vcb;
 
   ExInitializeResourceLite(&fcb->PagingIoResource);
+  ExInitializeResourceLite(&fcb->ShareAccessResource);
   ExInitializeResourceLite(fcb->AdvancedFCBHeader.Resource);
 
   ExInitializeFastMutex(&fcb->AdvancedFCBHeaderMutex);
@@ -206,6 +207,7 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
     ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
                             Fcb->AdvancedFCBHeader.Resource);
     ExDeleteResourceLite(&Fcb->PagingIoResource);
+    ExDeleteResourceLite(&Fcb->ShareAccessResource);
 
     InterlockedIncrement(&vcb->FcbFreed);
     ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
@@ -422,6 +424,8 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   }
 #endif
 
+  DokanFCBShareAccessLockRO(FcbOrDcb);
+
   //
   //  Check if the Fcb has the proper share access.
   //
@@ -429,7 +433,39 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   status = IoCheckShareAccess(DesiredAccess, ShareAccess, FileObject,
                               &FcbOrDcb->ShareAccess, FALSE);
 
+  DokanFCBShareAccessUnlock(FcbOrDcb);
+
   return status;
+}
+
+VOID DokanRemoveShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb)
+{
+  DokanFCBShareAccessLockRW(FcbOrDcb);
+
+  IoRemoveShareAccess(FileObject, &FcbOrDcb->ShareAccess);
+
+  DokanFCBShareAccessUnlock(FcbOrDcb);
+}
+
+VOID DokanUpdateShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb)
+{
+  DokanFCBShareAccessLockRW(FcbOrDcb);
+
+  IoUpdateShareAccess(FileObject, &FcbOrDcb->ShareAccess);
+
+  DokanFCBShareAccessUnlock(FcbOrDcb);
+}
+
+VOID DokanSetShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
+    _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
+{
+  DokanFCBShareAccessLockRW(FcbOrDcb);
+
+  IoSetShareAccess(
+      DesiredAccess, ShareAccess,
+      FileObject, &FcbOrDcb->ShareAccess);
+
+  DokanFCBShareAccessUnlock(FcbOrDcb);
 }
 
 NTSTATUS
@@ -1153,12 +1189,12 @@ Return Value:
         return status;
 #endif
       }
-      IoUpdateShareAccess(fileObject, &fcb->ShareAccess);
+      DokanUpdateShareAccess(fileObject, fcb);
     } else {
-      IoSetShareAccess(
-          eventContext->Operation.Create.SecurityContext.DesiredAccess,
-          eventContext->Operation.Create.ShareAccess, fileObject,
-          &fcb->ShareAccess);
+      DokanSetShareAccess(
+        fileObject, fcb,
+        eventContext->Operation.Create.SecurityContext.DesiredAccess,
+        eventContext->Operation.Create.ShareAccess);
     }
 
     UnwindShareAccess = TRUE;
@@ -1267,7 +1303,7 @@ Return Value:
       }
 
       if (UnwindShareAccess) {
-        IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
+        DokanRemoveShareAccess(fileObject, fcb);
       }
     }
 #endif
@@ -1425,7 +1461,7 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb,
               status);
     DokanFreeCCB(ccb);
-    IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+    DokanRemoveShareAccess(irpSp->FileObject, fcb);
     DokanFCBUnlock(fcb);
     DokanFreeFCB(fcb);
     fcb = NULL;
