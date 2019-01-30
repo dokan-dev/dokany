@@ -536,6 +536,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     case FileDispositionInformation:
       DDbgPrint("  FileDispositionInformation\n");
+    case FileDispositionInformationEx:
+      DDbgPrint("  FileDispositionInformationEx\n");
       break;
     case FileEndOfFileInformation:
       if ((fileObject->SectionObjectPointer != NULL) &&
@@ -802,8 +804,8 @@ NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     if (NT_SUCCESS(status)) {
 
-      if (infoClass == FileDispositionInformation) {
-
+      if (infoClass == FileDispositionInformation ||
+          infoClass == FileDispositionInformationEx) {
         if (EventInfo->Operation.Delete.DeleteOnClose) {
 
           if (!MmFlushImageSection(&fcb->SectionObjectPointers,
@@ -877,6 +879,7 @@ NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
             FILE_ACTION_MODIFIED);
         break;
       case FileDispositionInformation:
+      case FileDispositionInformationEx:
         if (IrpEntry->FileObject->DeletePending) {
           if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
             DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,

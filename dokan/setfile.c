@@ -93,6 +93,8 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
                                PDOKAN_OPERATIONS DokanOperations) {
 
   BOOLEAN DeleteFileFlag = FALSE;
+  NTSTATUS result;
+
   if (EventContext->Operation.SetFile.FileInformationClass ==
       FileDispositionInformation) {
 
@@ -118,7 +120,7 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   if (DokanOperations->GetFileInformation && DeleteFileFlag) {
     BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
     ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
-    NTSTATUS result = DokanOperations->GetFileInformation(
+    result = DokanOperations->GetFileInformation(
         EventContext->Operation.SetFile.FileName, &byHandleFileInfo, FileInfo);
 
     if (result == STATUS_SUCCESS &&
@@ -129,12 +131,15 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   FileInfo->DeleteOnClose = DeleteFileFlag;
 
   if (FileInfo->IsDirectory) {
-    return DokanOperations->DeleteDirectory(
+    result = DokanOperations->DeleteDirectory(
         EventContext->Operation.SetFile.FileName, FileInfo);
   } else {
-    return DokanOperations->DeleteFile(EventContext->Operation.SetFile.FileName,
+    result = DokanOperations->DeleteFile(EventContext->Operation.SetFile.FileName,
                                        FileInfo);
   }
+  //Double set for later be sure FS user did not changed it
+  FileInfo->DeleteOnClose = DeleteFileFlag;
+  return result;
 }
 
 NTSTATUS
@@ -292,7 +297,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     break;
   default:
     DbgPrint("  unknown FileInformationClass %d\n",
-      EventContext->Operation.SetFile.FileInformationClass);
+             EventContext->Operation.SetFile.FileInformationClass);
     break;
   }
 
@@ -301,24 +306,13 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   eventInfo->BufferLength = 0;
   eventInfo->Status = status;
 
-  if (EventContext->Operation.SetFile.FileInformationClass ==
-      FileDispositionInformation) {
-    if (status == STATUS_SUCCESS) {
-      PFILE_DISPOSITION_INFORMATION dispositionInfo =
-          (PFILE_DISPOSITION_INFORMATION)(
-              (PCHAR)EventContext +
-              EventContext->Operation.SetFile.BufferOffset);
-      eventInfo->Operation.Delete.DeleteOnClose =
-          dispositionInfo->DeleteFile ? TRUE : FALSE;
-      DbgPrint("  dispositionInfo->DeleteFile = %d\n",
-               dispositionInfo->DeleteFile);
-    }
-
-  } else {
-    // notice new file name to driver
-    if (status == STATUS_SUCCESS &&
-        EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation
-		|| EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
+  if (status == STATUS_SUCCESS) {
+    if (EventContext->Operation.SetFile.FileInformationClass == FileDispositionInformation ||
+        EventContext->Operation.SetFile.FileInformationClass == FileDispositionInformationEx) {
+      eventInfo->Operation.Delete.DeleteOnClose = fileInfo.DeleteOnClose;
+      DbgPrint("  dispositionInfo->DeleteFile = %d\n", fileInfo.DeleteOnClose);
+    } else if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation ||
+               EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
       PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
           (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
       eventInfo->BufferLength = renameInfo->FileNameLength;
