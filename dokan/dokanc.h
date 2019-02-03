@@ -44,7 +44,7 @@ extern "C" {
 
 #define DOKAN_KEEPALIVE_TIME 3000 // in miliseconds
 
-#define DOKAN_MAX_THREAD 15
+#define DOKAN_MAX_THREAD 63
 
 // DokanOptions->DebugMode is ON?
 extern BOOL g_DebugMode;
