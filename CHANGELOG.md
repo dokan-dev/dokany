@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Changed
+- Increase DOKAN_MAX_THREAD from 15 to 63 for better performance.
 
 ## [1.2.1.2000] - 2018-12-21
 ### Added
