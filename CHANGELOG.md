@@ -4,8 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- FUSE - Expose allocation unit size and sector size.
+- Kernel - Add new `FileDispositionInformationEx` for Windows 10, version 1709
+
 ### Changed
-- Increase DOKAN_MAX_THREAD from 15 to 63 for better performance.
+- Library - Increase DOKAN_MAX_THREAD from 15 to 63 for better performance.
+- Kernel - `FileStreamInformation` now return directly `STATUS_NOT_IMPLEMENTED` if `UseAltStream` is disabled.
+
+### Fixed
+- Kernel - Wrong `szMountPoint->length` usage in `DokanGlobalEventRelease`
 
 ## [1.2.1.2000] - 2018-12-21
 ### Added
