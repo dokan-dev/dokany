@@ -883,6 +883,7 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
          listEntry = listEntry->Flink, ++i) {
       if (irpSp->Parameters.DeviceIoControl.OutputBufferLength <
           (sizeof(DOKAN_CONTROL) * (i + 1))) {
+        //We should return needed buffer size to userland
         status = STATUS_BUFFER_OVERFLOW;
         __leave;
       }
