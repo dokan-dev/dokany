@@ -278,22 +278,27 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   wchar_t keepalive_path[128];
+  HANDLE keepalive_handle;
+  BOOL keepalive_active = FALSE;
   StringCbPrintfW(keepalive_path, sizeof(keepalive_path), L"\\\\?%s%s",
                   instance->DeviceName, DOKAN_KEEPALIVE_FILE_NAME);
-  HANDLE keepalive_handle =
-      CreateFile(keepalive_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
-  if (keepalive_handle == INVALID_HANDLE_VALUE) {
-    // We don't consider this a fatal error because the keepalive handle is only
-    // needed for abnormal termination cases anyway.
-    DbgPrintW(L"Failed to open keepalive file: %s\n", keepalive_path);
-  }
+  while (!keepalive_active) {
+    keepalive_handle = CreateFile(keepalive_path, GENERIC_READ, 0, NULL,
+                                  OPEN_EXISTING, 0, NULL);
+    if (keepalive_handle == INVALID_HANDLE_VALUE) {
+      // This is actually a fatal error - if we cannot open the keepalive
+      // handle then the DLL will shortly time out
+      DbgPrintW(L"Failed to open keepalive file: %s\n", keepalive_path);
+      return DOKAN_START_ERROR;
+    }
 
-  DWORD keepalive_bytes_returned = 0;
-  BOOL keepalive_active =
-      DeviceIoControl(keepalive_handle, FSCTL_ACTIVATE_KEEPALIVE, NULL, 0, NULL,
-                      0, &keepalive_bytes_returned, NULL);
-  if (!keepalive_active) {
-    DbgPrintW(L"Failed to activate keepalive handle.\n");
+    DWORD keepalive_bytes_returned = 0;
+    keepalive_active =
+        DeviceIoControl(keepalive_handle, FSCTL_ACTIVATE_KEEPALIVE, NULL, 0,
+                        NULL, 0, &keepalive_bytes_returned, NULL);
+    if (!keepalive_active) {
+      CloseHandle(keepalive_handle);
+    }
   }
 
   // Here we should have been mounter by mountmanager thanks to
