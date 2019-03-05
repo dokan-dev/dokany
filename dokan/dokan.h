@@ -773,17 +773,17 @@ BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
 /**
  * \brief Checks whether Name matches Expression
  * 
- * Behave like \c FsRtlIsNameInExpression routine from Microsoft\n
+ * Behave like \c FsRtlIsNameInExpression routine from <a href="https://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx">Microsoft</a>\n
  * \c * (asterisk) Matches zero or more characters.\n
  * <tt>?</tt> (question mark) Matches a single character.\n
- * \c DOS_DOT Matches either a period or zero characters beyond the name string.\n
- * \c DOS_QM Matches any single character or, upon encountering a period or end
+ * \c DOS_DOT (\c " quotation mark) Matches either a period or zero characters beyond the name string.\n
+ * \c DOS_QM (\c > greater than) Matches any single character or, upon encountering a period or end
  *        of name string, advances the expression to the end of the set of
  *        contiguous DOS_QMs.\n
- * \c DOS_STAR Matches zero or more characters until encountering and matching
+ * \c DOS_STAR (\c < less than) Matches zero or more characters until encountering and matching
  *          the final \c . in the name.
  *
- * \param Expression Expression can contain <tt>?</tt> (any one character) and \c * (any string)
+ * \param Expression Expression can contain any of the above characters.
  * \param Name Name to check
  * \param IgnoreCase Case sensitive or not
  * \return result if name matches the expression
