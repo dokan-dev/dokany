@@ -350,7 +350,8 @@ typedef struct _DOKAN_OPERATIONS {
   /**
   * \brief FindFilesWithPattern Dokan API callback
   *
-  * Same as \ref DOKAN_OPERATIONS.FindFiles but with a search pattern.
+  * Same as \ref DOKAN_OPERATIONS.FindFiles but with a search pattern.\n
+  * The search pattern is a Windows MS-DOS-style expression. See \ref DokanIsNameInExpression .
   *
   * \param PathName Path requested by the Kernel on the FileSystem.
   * \param SearchPattern Search pattern.
@@ -358,6 +359,7 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see FindFiles
+  * \see DokanIsNameInExpression
   */
   NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)(LPCWSTR PathName,
     LPCWSTR SearchPattern,
@@ -770,8 +772,18 @@ BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
 
 /**
  * \brief Checks whether Name matches Expression
+ * 
+ * Behave like \c FsRtlIsNameInExpression routine from Microsoft\n
+ * \c * (asterisk) Matches zero or more characters.\n
+ * <tt>?</tt> (question mark) Matches a single character.\n
+ * \c DOS_DOT Matches either a period or zero characters beyond the name string.\n
+ * \c DOS_QM Matches any single character or, upon encountering a period or end
+ *        of name string, advances the expression to the end of the set of
+ *        contiguous DOS_QMs.\n
+ * \c DOS_STAR Matches zero or more characters until encountering and matching
+ *          the final \c . in the name.
  *
- * \param Expression Expression can contain wildcard characters (? and *)
+ * \param Expression Expression can contain <tt>?</tt> (any one character) and \c * (any string)
  * \param Name Name to check
  * \param IgnoreCase Case sensitive or not
  * \return result if name matches the expression
