@@ -256,29 +256,37 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   case FSCTL_ACTIVATE_KEEPALIVE:
     fileObject = irpSp->FileObject;
     if (fileObject == NULL) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FileObject.");
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FileObject.\n");
       return STATUS_INVALID_PARAMETER;
     }
     ccb = fileObject->FsContext2;
     if (ccb == NULL || ccb->Identifier.Type != CCB) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.");
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.\n");
       return STATUS_INVALID_PARAMETER;
     }
 
     fcb = ccb->Fcb;
     if (fcb == NULL || fcb->Identifier.Type != FCB) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.");
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.\n");
       return STATUS_INVALID_PARAMETER;
     }
 
     if (!fcb->IsKeepalive) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE for wrong file: %wZ",
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE for wrong file: %wZ\n",
           &fcb->FileName);
       return STATUS_INVALID_PARAMETER;
     }
 
-    DDbgPrint("Activating keepalive handle.");
+    if (fcb->Vcb->IsKeepaliveActive && !ccb->IsKeepaliveActive) {
+      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE when a different keepalive handle"
+                " was already active.\n");
+      return STATUS_INVALID_PARAMETER;
+    }
+
+    DDbgPrint("Activating keepalive handle from process %lu.\n",
+              IoGetRequestorProcessId(*pIrp));
     DokanFCBLockRW(fcb);
+    ccb->IsKeepaliveActive = TRUE;
     fcb->Vcb->IsKeepaliveActive = TRUE;
     DokanFCBUnlock(fcb);
     status = STATUS_SUCCESS;

@@ -151,6 +151,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     ASSERT(fcb != NULL);
     if (RtlEqualUnicodeString(&fcb->FileName, &keepAliveFileName, FALSE)) {
       fcb->IsKeepalive = TRUE;
+      fcb->BlockUserModeDispatch = TRUE;
     }
 
     // we already have FCB
@@ -542,23 +543,29 @@ Return Value:
     }
 
     if (!vcb->HasEventWait) {
-      DDbgPrint("  Here we only go in if some antivirus software tries to "
-                "create files before startup is finished.\n");
-      if (fileObject->FileName.Length > 0) {
-        DDbgPrint("  Verify if the system tries to access System Volume\n");
-        UNICODE_STRING systemVolume;
-        RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-        BOOLEAN isSystemVolumeAccess =
-            StartsWith(&fileObject->FileName, &systemVolume);
-        if (isSystemVolumeAccess) {
-          DDbgPrint("  It's an access to System Volume, so don't return "
-                    "SUCCESS. We don't have one.\n");
-          status = STATUS_NO_SUCH_FILE;
+      if (fileObject->FileName.Length > 0 &&
+          RtlEqualUnicodeString(&fileObject->FileName, &keepAliveFileName,
+                                FALSE)) {
+        DDbgPrint("  Keepalive file called before startup finished\n");
+      } else {
+          DDbgPrint("  Here we only go in if some antivirus software tries to "
+                    "create files before startup is finished.\n");
+          if (fileObject->FileName.Length > 0) {
+            DDbgPrint("  Verify if the system tries to access System Volume\n");
+            UNICODE_STRING systemVolume;
+            RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
+            BOOLEAN isSystemVolumeAccess =
+                StartsWith(&fileObject->FileName, &systemVolume);
+            if (isSystemVolumeAccess) {
+              DDbgPrint("  It's an access to System Volume, so don't return "
+                        "SUCCESS. We don't have one.\n");
+              status = STATUS_NO_SUCH_FILE;
+              __leave;
+            }
+          }
+          status = STATUS_SUCCESS;
           __leave;
-        }
       }
-      status = STATUS_SUCCESS;
-      __leave;
     }
 
     DDbgPrint("  IrpSp->Flags = %d\n", irpSp->Flags);
@@ -742,6 +749,10 @@ Return Value:
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
+    if (fcb->BlockUserModeDispatch) {
+      DDbgPrint("Opened file with user mode dispatch blocked: %wZ\n",
+                   &fileObject->FileName);
+    }
     DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
               fcb);
 
@@ -791,6 +802,8 @@ Return Value:
     if (fcb->IsKeepalive) {
       DDbgPrint("Opened keepalive file from process %d.",
                    IoGetRequestorProcessId(Irp));
+    }
+    if (fcb->BlockUserModeDispatch) {
       info = FILE_OPENED;
       status = STATUS_SUCCESS;
       __leave;

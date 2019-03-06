@@ -527,7 +527,7 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
 VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal,
                           __in ULONG sessionId) {
-  DDbgPrint("==> RemoveSessionDevices");
+  DDbgPrint("==> RemoveSessionDevices\n");
 
   if (sessionId == -1) {
     return;
@@ -547,7 +547,7 @@ VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal,
     }
   } while (!isDone);
 
-  DDbgPrint("<== RemoveSessionDevices");
+  DDbgPrint("<== RemoveSessionDevices\n");
 }
 
 // start event dispatching

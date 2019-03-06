@@ -367,6 +367,14 @@ typedef struct _DokanFileControlBlock {
   // also be true in order for auto-unmounting to happen.
   BOOLEAN IsKeepalive;
 
+  // If true, never dispatch requests to user mode for this handle. This is set
+  // for keepalive and notification handles that are typically held by the
+  // user mode process to which the file system sends requests. That process
+  // must avoid having automatic IRP_MJ_CLEANUPs from its termination handle
+  // sweep get dispatched back to itself, since its normal threads will all be
+  // gone at that point.
+  BOOLEAN BlockUserModeDispatch;
+
 } DokanFCB, *PDokanFCB;
 
 #define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
@@ -412,6 +420,9 @@ typedef struct _DokanContextControlBlock {
 
   // Locking: Read only field. No locking needed.
   ULONG MountId;
+
+  // Whether keep-alive has been activated on this volume.
+  BOOLEAN IsKeepaliveActive;
 } DokanCCB, *PDokanCCB;
 
 //

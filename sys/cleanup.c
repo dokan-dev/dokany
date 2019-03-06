@@ -89,18 +89,25 @@ Return Value:
 
     if (fcb->IsKeepalive) {
       DokanFCBLockRW(fcb);
-      BOOLEAN keepaliveActive =
-          (fcb->FileCount == 1 && fcb->Vcb->IsKeepaliveActive);
-      fcb->Vcb->IsKeepaliveActive = FALSE;
+      BOOLEAN shouldUnmount = ccb->IsKeepaliveActive;
+      if (shouldUnmount) {
+        // Here we intentionally let the VCB-level flag stay set, because
+        // there's no sense in having an opportunity for an "operation timeout
+        // unmount" in this case.
+        ccb->IsKeepaliveActive = FALSE;
+      }
       DokanFCBUnlock(fcb);
-      if (keepaliveActive) {
+      if (shouldUnmount) {
         if (IsUnmountPendingVcb(vcb)) {
-          DDbgPrint("Ignoring keepalive close because unmount is already in progress.");
+          DDbgPrint("Ignoring keepalive close because unmount is already in"
+                    " progress.");
         } else {
           DDbgPrint("Unmounting due to keepalive close.");
           DokanUnmount(vcb->Dcb);
         }
       }
+    }
+    if (fcb->BlockUserModeDispatch) {
       status = STATUS_SUCCESS;
       __leave;
     }

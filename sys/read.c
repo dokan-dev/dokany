@@ -152,7 +152,7 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    if (fcb->IsKeepalive) {
+    if (fcb->BlockUserModeDispatch) {
       Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
       __leave;

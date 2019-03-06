@@ -214,6 +214,11 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     }
 
+    if (fcb != NULL && fcb->BlockUserModeDispatch) {
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     // if it is not treadted in swich case
 
     // calculate the length of EVENT_CONTEXT
@@ -224,11 +229,6 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-
-    if (fcb != NULL && fcb->IsKeepalive) {
-      status = STATUS_SUCCESS;
       __leave;
     }
 
