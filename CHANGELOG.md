@@ -3,17 +3,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [1.2.2.1000] - 2019-03-08
 ### Added
 - FUSE - Expose allocation unit size and sector size.
 - Kernel - Add new `FileDispositionInformationEx` for Windows 10, version 1709
 
 ### Changed
-- Library - Increase DOKAN_MAX_THREAD from 15 to 63 for better performance.
+- Library - Increase `DOKAN_MAX_THREAD` from 15 to 63 for better performance.
 - Kernel - `FileStreamInformation` now return directly `STATUS_NOT_IMPLEMENTED` if `UseAltStream` is disabled.
+- Library - Improve `DokanIsNameInExpression` documentation
 
 ### Fixed
 - Kernel - Wrong `szMountPoint->length` usage in `DokanGlobalEventRelease`
+- Kernel - Fix handle KeepAlive calls before device fully started 
 
 ## [1.2.1.2000] - 2018-12-21
 ### Added
@@ -389,7 +391,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.2.1.2000...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.2.2.1000...master
+[1.2.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.2000...v1.2.2.1000
 [1.2.1.2000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.1000...v1.2.1.2000
 [1.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.0.1000...v1.2.1.1000
 [1.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.1.0.2000...v1.2.0.1000
