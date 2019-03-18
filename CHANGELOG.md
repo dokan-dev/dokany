@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased]
 ### Fixed
 - Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters
+- Library - Add error check for `_vscprintf` and `vsprintf_s` in `DokanDbgPrint`, and `_vscwprintf` and `vswprintf_s` in `DokanDbgPrintW`
 
 ## [1.2.2.1000] - 2019-03-08
 ### Added

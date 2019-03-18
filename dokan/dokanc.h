@@ -55,19 +55,20 @@ extern BOOL g_UseStdErr;
 #ifdef _MSC_VER
 
 static VOID DokanDbgPrint(LPCSTR format, ...) {
-  const char *outputString;
-  char *buffer;
-  size_t length;
+  const char *outputString = format;    // fallback
+  char *buffer = NULL;
+  int length;
   va_list argp;
 
   va_start(argp, format);
   length = _vscprintf(format, argp) + 1;
-  buffer = (char *)_malloca(length * sizeof(char));
+  if ((length - 1) != -1) {
+    buffer = (char *)_malloca(length * sizeof(char));
+  }
   if (buffer) {
-    vsprintf_s(buffer, length, format, argp);
-    outputString = buffer;
-  } else {
-    outputString = format;
+    if (vsprintf_s(buffer, length, format, argp) != -1) {
+      outputString = buffer;
+    }
   }
   if (g_UseStdErr)
     fputs(outputString, stderr);
@@ -81,19 +82,20 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
 }
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
-  const WCHAR *outputString;
-  WCHAR *buffer;
-  size_t length;
+  const WCHAR *outputString = format;   // fallback
+  WCHAR *buffer = NULL;
+  int length;
   va_list argp;
 
   va_start(argp, format);
   length = _vscwprintf(format, argp) + 1;
-  buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
+  if ((length - 1) != -1) {
+    buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
+  }
   if (buffer) {
-    vswprintf_s(buffer, length, format, argp);
-    outputString = buffer;
-  } else {
-    outputString = format;
+    if (vswprintf_s(buffer, length, format, argp) != -1) {
+      outputString = buffer;
+    }
   }
   if (g_UseStdErr)
     fputws(outputString, stderr);
