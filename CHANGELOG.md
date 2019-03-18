@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Fixed
+- Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters
+
 ## [1.2.2.1000] - 2019-03-08
 ### Added
 - FUSE - Expose allocation unit size and sector size.

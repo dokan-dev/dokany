@@ -388,8 +388,8 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
                    );
 
     if (device == INVALID_HANDLE_VALUE) {
-      DbgPrint(
-          "Dokan Error: CreateFile failed %ws: %d\n",
+      DbgPrintW(
+          L"Dokan Error: CreateFile failed %s: %d\n",
           GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
           GetLastError());
       free(buffer);
@@ -632,12 +632,12 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   ULONG returnedLength;
   WCHAR rawDeviceName[MAX_PATH];
 
-  DbgPrint("send release to %ws\n", DeviceName);
+  DbgPrintW(L"send release to %s\n", DeviceName);
 
   if (!SendToDevice(GetRawDeviceName(DeviceName, rawDeviceName, MAX_PATH),
                     IOCTL_EVENT_RELEASE, NULL, 0, NULL, 0, &returnedLength)) {
 
-    DbgPrint("Failed to unmount device:%ws\n", DeviceName);
+    DbgPrintW(L"Failed to unmount device:%s\n", DeviceName);
     return FALSE;
   }
 
@@ -659,13 +659,13 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
         szMountPoint->Length = (USHORT)(length * sizeof(WCHAR));
         CopyMemory(szMountPoint->Buffer, MountPoint, szMountPoint->Length);
 
-        DbgPrint("send global release for %ws\n", MountPoint);
+        DbgPrintW(L"send global release for %s\n", MountPoint);
 
         if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_RELEASE,
                           szMountPoint, inputLength, NULL, 0,
                           &returnedLength)) {
 
-          DbgPrint("Failed to unmount: %ws\n", MountPoint);
+          DbgPrintW(L"Failed to unmount: %s\n", MountPoint);
           free(szMountPoint);
           return FALSE;
         }
@@ -768,7 +768,7 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
 
   if (device == INVALID_HANDLE_VALUE) {
     DWORD dwErrorCode = GetLastError();
-    DbgPrint("Dokan Error: Failed to open %ws with code %d\n", DeviceName,
+    DbgPrintW(L"Dokan Error: Failed to open %s with code %d\n", DeviceName,
              dwErrorCode);
     return FALSE;
   }
