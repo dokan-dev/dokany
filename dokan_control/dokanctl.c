@@ -192,7 +192,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       goto default_case;
     }
     return Unmount(argv[2]);
-  } break;
+  }
 
   // No admin rights required
   case L'l': {
