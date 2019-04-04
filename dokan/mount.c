@@ -254,7 +254,7 @@ BOOL DOKANAPI DokanServiceDelete(LPCWSTR ServiceName) {
 }
 
 BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
-  WCHAR mountPoint[] = L"M:";
+  WCHAR mountPoint[MAX_PATH] = L"M:";
   mountPoint[0] = DriveLetter;
   return DokanRemoveMountPoint(mountPoint);
 }
