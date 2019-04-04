@@ -65,10 +65,8 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
   if ((length - 1) != -1) {
     buffer = (char *)_malloca(length * sizeof(char));
   }
-  if (buffer) {
-    if (vsprintf_s(buffer, length, format, argp) != -1) {
-      outputString = buffer;
-    }
+  if (buffer && vsprintf_s(buffer, length, format, argp) != -1) {
+    outputString = buffer;
   }
   if (g_UseStdErr)
     fputs(outputString, stderr);
@@ -92,10 +90,8 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
   if ((length - 1) != -1) {
     buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
   }
-  if (buffer) {
-    if (vswprintf_s(buffer, length, format, argp) != -1) {
-      outputString = buffer;
-    }
+  if (buffer && vswprintf_s(buffer, length, format, argp) != -1) {
+    outputString = buffer;
   }
   if (g_UseStdErr)
     fputws(outputString, stderr);
