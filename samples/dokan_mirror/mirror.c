@@ -826,6 +826,8 @@ MirrorFindFiles(LPCWSTR FileName,
   if (filePath[fileLen - 1] != L'\\') {
     filePath[fileLen++] = L'\\';
   }
+  if (fileLen + 1 >= DOKAN_MAX_PATH)
+    return STATUS_BUFFER_OVERFLOW;
   filePath[fileLen] = L'*';
   filePath[fileLen + 1] = L'\0';
 
