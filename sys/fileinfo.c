@@ -33,7 +33,6 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG info = 0;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
-  BOOLEAN isNormalized = FALSE;
 
   // PAGED_CODE();
 
@@ -103,7 +102,6 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     case FileNormalizedNameInformation:
       DDbgPrint("  FileNormalizedNameInformation\n");
-      isNormalized = TRUE;
     case FileNameInformation: {
       DDbgPrint("  FileNameInformation\n");
       PFILE_NAME_INFORMATION nameInfo
