@@ -105,11 +105,9 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("  FileNormalizedNameInformation\n");
       isNormalized = TRUE;
     case FileNameInformation: {
-      PFILE_NAME_INFORMATION nameInfo;
-
       DDbgPrint("  FileNameInformation\n");
-
-      nameInfo = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      PFILE_NAME_INFORMATION nameInfo
+        = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
       ASSERT(nameInfo != NULL);
 
       BOOLEAN isNetworkFileSystem =
@@ -119,25 +117,27 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       BOOLEAN doConcat = FALSE;
 
       if (isNetworkFileSystem) {
+        // Network redirector drivers IRP_MJ_QUERY_INFORMATION
+        // request for FileAllInformation or FileNameInformatio
+        // must respond with the full "\server\share\file" path for the file name
         if (fcb->FileName.Length == 0 || fcb->FileName.Buffer[0] != L'\\') {
           DDbgPrint("  NetworkFileSystem has no root folder. So return the "
                     "full device name \n");
           fileName = vcb->Dcb->DiskDeviceName;
           length = fileName->Length;
         } else {
-          if (isNormalized) {
-            DDbgPrint("  FullFileName should be returned \n");
-            fileName = vcb->Dcb->DiskDeviceName;
-            length = fileName->Length + vcb->Dcb->DiskDeviceName->Length;
-            doConcat = TRUE;
-          }
+          DDbgPrint("  FullFileName should be returned \n");
+          length = fileName->Length + vcb->Dcb->DiskDeviceName->Length;
+          fileName = vcb->Dcb->DiskDeviceName;
+          doConcat = TRUE;
         }
       }
 
       if (irpSp->Parameters.QueryFile.Length <
           sizeof(FILE_NAME_INFORMATION) + length) {
 
-        info = irpSp->Parameters.QueryFile.Length;
+        info = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]) +
+               irpSp->Parameters.QueryFile.Length;
         status = STATUS_BUFFER_OVERFLOW;
 
       } else {
