@@ -58,6 +58,11 @@ int ShowUsage() {
   return EXIT_FAILURE;
 }
 
+int DefaultCaseOption() {
+  fprintf(stderr, "Unknown option - Use /? to show usage\n");
+  return EXIT_FAILURE;
+}
+
 int Unmount(LPCWSTR MountPoint) {
   int status = EXIT_SUCCESS;
 
@@ -153,7 +158,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
         return EXIT_FAILURE;
       }
     } else {
-      goto default_case;
+      return DefaultCaseOption();
     }
   } break;
 
@@ -169,14 +174,14 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
         return EXIT_FAILURE;
       }
     } else {
-      goto default_case;
+      return DefaultCaseOption();
     }
   } break;
 
   case L'd': {
     WCHAR type = towlower(argv[2][0]);
     if (L'0' > type || type > L'9')
-      goto default_case;
+      return DefaultCaseOption();
 
     ULONG mode = type - L'0';
     if (DokanSetDebugMode(mode)) {
@@ -189,7 +194,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   case L'u': {
     if (argc < 3) {
-      goto default_case;
+      return DefaultCaseOption();
     }
     return Unmount(argv[2]);
   }
@@ -228,9 +233,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   } break;
 
   default:
-    default_case:
-    fprintf(stderr, "Unknown option - Use /? to show usage\n");
-    return EXIT_FAILURE;
+    return DefaultCaseOption();
   }
 
   return EXIT_SUCCESS;
