@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 ### Fixed
+- Kernel - Fix long rename BSOD with network option enabled
 - Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters
 - Library - Add error check for `_vscprintf` and `vsprintf_s` in `DokanDbgPrint`, and `_vscwprintf` and `vswprintf_s` in `DokanDbgPrintW`
 
