@@ -615,7 +615,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or \c NTSTATUS appropriate to the request result.
-  * \see Unmounted
+  * \see Mounted
   */
   NTSTATUS(DOKAN_CALLBACK *Unmounted)(PDOKAN_FILE_INFO DokanFileInfo);
 
