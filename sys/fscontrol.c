@@ -241,7 +241,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
 
 NTSTATUS
 DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject = NULL;
   PDokanCCB ccb = NULL;
@@ -392,8 +392,6 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
 
   case FSCTL_FILESYSTEM_GET_STATISTICS:
     DDbgPrint("    FSCTL_FILESYSTEM_GET_STATISTICS\n");
-    // must return STATUS_INVALID_DEVICE_REQUEST for network share to work in win8 and above.
-    status = STATUS_INVALID_DEVICE_REQUEST;
     break;
 
   case FSCTL_GET_NTFS_VOLUME_DATA:
@@ -719,7 +717,7 @@ VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice) {
 NTSTATUS
 DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
                                __in PIRP Irp) {
-  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
   PIO_STACK_LOCATION irpSp;
 
   __try {
@@ -753,7 +751,7 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
 
     default:
       DDbgPrint("  unknown %d\n", irpSp->MinorFunction);
-      status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_DEVICE_REQUEST;
       break;
     }
 
