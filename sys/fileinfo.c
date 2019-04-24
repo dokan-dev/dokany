@@ -108,55 +108,42 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
       ASSERT(nameInfo != NULL);
 
-      BOOLEAN isNetworkFileSystem =
-          (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+      PUINT8 nameInfoFileName = (PUINT8)nameInfo->FileName;
+      PUINT8 allocatedBufferEnd = irpSp->Parameters.QueryFile.Length +
+                                  (PUINT8)Irp->AssociatedIrp.SystemBuffer;
       PUNICODE_STRING fileName = &fcb->FileName;
-      USHORT length = fcb->FileName.Length;
-      BOOLEAN doConcat = FALSE;
-
-      if (isNetworkFileSystem) {
-        // Network redirector drivers IRP_MJ_QUERY_INFORMATION
-        // request for FileAllInformation or FileNameInformatio
-        // must respond with the full "\server\share\file" path for the file name
-        if (fcb->FileName.Length == 0 || fcb->FileName.Buffer[0] != L'\\') {
-          DDbgPrint("  NetworkFileSystem has no root folder. So return the "
-                    "full device name \n");
-          fileName = vcb->Dcb->DiskDeviceName;
-          length = fileName->Length;
-        } else {
-          DDbgPrint("  FullFileName should be returned \n");
-          length = fileName->Length + vcb->Dcb->DiskDeviceName->Length;
-          fileName = vcb->Dcb->DiskDeviceName;
-          doConcat = TRUE;
-        }
-      }
+      status = STATUS_SUCCESS;
 
       if (irpSp->Parameters.QueryFile.Length <
-          sizeof(FILE_NAME_INFORMATION) + length) {
-
-        info = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]) +
-               irpSp->Parameters.QueryFile.Length;
-        status = STATUS_BUFFER_OVERFLOW;
-
-      } else {
-
-        RtlZeroMemory(Irp->AssociatedIrp.SystemBuffer,
-                      irpSp->Parameters.QueryFile.Length);
-
-        nameInfo->FileNameLength = fileName->Length;
-        RtlCopyMemory(&nameInfo->FileName[0], fileName->Buffer,
-                      fileName->Length);
-
-        if (doConcat) {
-          DDbgPrint("  Concat the devicename with the filename to get the "
-                    "fullname of the file \n");
-          RtlStringCchCatW(nameInfo->FileName, NTSTRSAFE_MAX_CCH,
-                           fcb->FileName.Buffer);
-        }
-
-        info = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0]) + length;
-        status = STATUS_SUCCESS;
+          UFIELD_OFFSET(FILE_NAME_INFORMATION, FileName[0])) {
+        info = 0;
+        status = STATUS_BUFFER_TOO_SMALL;
+        __leave;
       }
+
+      nameInfo->FileNameLength =
+          vcb->Dcb->DiskDeviceName->Length + fileName->Length;
+
+      ULONG copyLength = vcb->Dcb->DiskDeviceName->Length;
+      if (copyLength > allocatedBufferEnd - nameInfoFileName) {
+        copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
+        status = STATUS_BUFFER_OVERFLOW;
+      }
+
+      RtlCopyMemory(nameInfoFileName, vcb->Dcb->DiskDeviceName->Buffer,
+                    copyLength);
+      nameInfoFileName += copyLength;
+
+      copyLength = fileName->Length;
+      if (copyLength > allocatedBufferEnd - nameInfoFileName) {
+        copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
+        status = STATUS_BUFFER_OVERFLOW;
+      }
+
+      RtlCopyMemory(nameInfoFileName, fileName->Buffer, copyLength);
+      nameInfoFileName += copyLength;
+
+      info = (ULONG)(nameInfoFileName - (PUINT8)Irp->AssociatedIrp.SystemBuffer);
       __leave;
     } break;
     case FileNetworkOpenInformation:
