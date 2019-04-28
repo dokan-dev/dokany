@@ -4,10 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- Library - `DokanGetMountPointList` now returns his own buffer that need to be released with `DokanReleaseMountPointList`.
+- Kernel - Return proper error status for `DFileSystemControl`.
+
 ### Fixed
-- Kernel - Fix long rename BSOD with network option enabled
-- Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters
-- Library - Add error check for `_vscprintf` and `vsprintf_s` in `DokanDbgPrint`, and `_vscwprintf` and `vswprintf_s` in `DokanDbgPrintW`
+- Kernel - Fix long rename BSOD with network option enabled.
+- Kernel - Fix root rename with 360 antivirus.
+- Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters.
+- Library - Add error check for `_vscprintf` and `vsprintf_s` in `DokanDbgPrint`, and `_vscwprintf` and `vswprintf_s` in `DokanDbgPrintW`.
+- Library - Fix `DokanUnmount` possible oob memory.
+- Mirror - Fix possible oob memory during long findfiles path.
+- Mirror - Fix possible oob memory during long DeleteDirectory path.
+- Kernel - Lock global resources during `DokanGetMountPointList` avoid possible BSOD.
 
 ## [1.2.2.1000] - 2019-03-08
 ### Added
