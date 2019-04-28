@@ -201,28 +201,32 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   // No admin rights required
   case L'l': {
+    ULONG listSize = 32;
     ULONG nbRead = 0;
-    PDOKAN_CONTROL dokanControl =
-        malloc(DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
-    if (dokanControl == NULL) {
-      fprintf(stderr, "Failed to allocate dokanControl\n");
-      return EXIT_FAILURE;
-    }
+    PDOKAN_CONTROL dokanControl = NULL;
+    BOOL success;
 
-    ZeroMemory(dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
-    if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
-                               &nbRead)) {
-      fwprintf(stdout, L"  Mount points: %d\n", nbRead);
-      for (unsigned int p = 0; p < nbRead; ++p) {
-        fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n",
-                 p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
-                 dokanControl[p].DeviceName);
+    do {
+      if (listSize < nbRead)
+        listSize = nbRead;
+      if (dokanControl != NULL)
+        free(dokanControl);
+      dokanControl = malloc(listSize * sizeof(*dokanControl));
+      if (dokanControl == NULL)
+        return EXIT_FAILURE;
+      success = DokanGetMountPointList(dokanControl, listSize, FALSE, &nbRead);
+      if (!success && nbRead == 0) {
+        fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
+        free(dokanControl);
+        return EXIT_FAILURE;
       }
-    } else {
-      fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
-      free(dokanControl);
-      return EXIT_FAILURE;
-    }
+    } while (!success);
+
+    fwprintf(stdout, L"  Mount points: %d\n", nbRead);
+    for (ULONG p = 0; p < nbRead; ++p)
+      fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n", p,
+               dokanControl[p].MountPoint, dokanControl[p].UNCName,
+               dokanControl[p].DeviceName);
     free(dokanControl);
   } break;
 

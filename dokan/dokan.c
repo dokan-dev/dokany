@@ -796,38 +796,48 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
 BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
                                      BOOL uncOnly, PULONG nbRead) {
   ULONG returnedLength = 0;
-  PDOKAN_CONTROL dokanControl =
-      malloc(DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
-  if (dokanControl == NULL) {
-    return FALSE;
-  }
+  PDOKAN_CONTROL dokanControl = NULL;
+  ULONG bufferLength = 32 * sizeof(*dokanControl);
+  BOOL success;
 
-  ZeroMemory(dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
   *nbRead = 0;
 
-  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST, NULL,
-                   0, dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl),
-                   &returnedLength)) {
-    for (int i = 0; i < DOKAN_MAX_INSTANCES; ++i) {
-      if (wcscmp(dokanControl[i].DeviceName, L"") == 0) {
-        break;
-      }
-      if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0) {
-        if (length < ((*nbRead) + 1)) {
-          free(dokanControl);
-          return TRUE;
-        }
+  do {
+    if (dokanControl != NULL)
+      free(dokanControl);
+    dokanControl = malloc(bufferLength);
+    if (dokanControl == NULL)
+      return FALSE;
+    ZeroMemory(dokanControl, bufferLength);
 
-        CopyMemory(&list[*nbRead], &dokanControl[i], sizeof(DOKAN_CONTROL));
-        (*nbRead)++;
-      }
+    success =
+        SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_EVENT_MOUNTPOINT_LIST,
+                     NULL, 0, dokanControl, bufferLength, &returnedLength);
+
+    if (!success && GetLastError() != ERROR_MORE_DATA) {
+      free(dokanControl);
+      return FALSE;
     }
+    bufferLength *= 2;
+  } while (!success);
+
+  if (returnedLength == 0) {
     free(dokanControl);
     return TRUE;
   }
 
+  *nbRead = returnedLength / sizeof(DOKAN_CONTROL);
+  if (*nbRead > length)
+    return FALSE;
+
+  for (ULONG i = 0; i < *nbRead; ++i) {
+    if (wcscmp(dokanControl[i].DeviceName, L"") == 0)
+      break;
+    if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0)
+      CopyMemory(&list[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
+  }
   free(dokanControl);
-  return FALSE;
+  return TRUE;
 }
 
 BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {

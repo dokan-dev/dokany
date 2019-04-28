@@ -58,8 +58,6 @@ extern "C" {
 #define DOKAN_VERSION 122
 /** Minimum Dokan version (ver 1.1.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 110
-/** Maximum number of dokan instances.*/
-#define DOKAN_MAX_INSTANCES 32
 /** Driver file name including the DOKAN_MAJOR_API_VERSION */
 #define DOKAN_DRIVER_NAME L"dokan" DOKAN_MAJOR_API_VERSION L".sys"
 /** Network provider name including the DOKAN_MAJOR_API_VERSION */
@@ -829,7 +827,10 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 /**
  * \brief Get active Dokan mount points.
  *
- * \param list Allocate array of DOKAN_CONTROL.
+ * This method can fail if allocated buffer is too small.
+ * In that case, nbRead will provide the length needed.
+ *
+ * \param list Allocate array of \ref DOKAN_CONTROL.
  * \param length Number of \ref DOKAN_CONTROL instances in list.
  * \param uncOnly Get only instances that have UNC Name.
  * \param nbRead Number of instances successfully retrieved.
