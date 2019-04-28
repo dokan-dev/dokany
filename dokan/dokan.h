@@ -827,17 +827,21 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 /**
  * \brief Get active Dokan mount points.
  *
- * This method can fail if allocated buffer is too small.
- * In that case, nbRead will provide the length needed.
+ * Returned array need to be released by calling \ref DokanReleaseMountPointList
  *
- * \param list Allocate array of \ref DOKAN_CONTROL.
- * \param length Number of \ref DOKAN_CONTROL instances in list.
  * \param uncOnly Get only instances that have UNC Name.
  * \param nbRead Number of instances successfully retrieved.
- * \return List retrieved or not.
+ * \return Allocate array of \ref DOKAN_CONTROL.
  */
-BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
-                                     BOOL uncOnly, PULONG nbRead);
+PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
+
+/**
+ * \brief Release Mount point list resources from \ref DokanGetMountPointList.
+ *
+ * \param Allocate array of \ref DOKAN_CONTROL from \ref DokanGetMountPointList.
+ */
+VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list);
+
 
 /**
  * \brief Convert \ref DOKAN_OPERATIONS.ZwCreateFile parameters to <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> parameters.

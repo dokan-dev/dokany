@@ -20,4 +20,5 @@ DokanUseStdErr
 DokanDebugMode
 DokanMapKernelToUserCreateFileFlags
 DokanGetMountPointList
+DokanReleaseMountPointList
 DokanNtStatusFromWin32

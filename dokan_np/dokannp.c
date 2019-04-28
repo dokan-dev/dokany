@@ -234,32 +234,18 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
 
   ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
-  ULONG listSize = 32;
-  PDOKAN_CONTROL dokanControl = NULL;
-  BOOL success;
+  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
+  if (dokanControl == NULL) {
+    DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
+    return WN_NOT_CONNECTED;
+  }
 
-  do {
-    if (listSize < nbRead)
-      listSize = nbRead;
-    if (dokanControl != NULL)
-      free(dokanControl);
-    dokanControl = malloc(listSize * sizeof(*dokanControl));
-    if (dokanControl == NULL)
-      return WN_NOT_CONNECTED;
-
-    success = DokanGetMountPointList(dokanControl, listSize, FALSE, &nbRead);
-    if (!success && nbRead == 0) {
-      DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
-      free(dokanControl);
-      return WN_NOT_CONNECTED;
-    }
-  } while (!success);
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
     if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
       if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
-        free(dokanControl);
+        DokanReleaseMountPointList(dokanControl);
         // No UNC, always return success
         if (*BufferSize == 0)
           return WN_MORE_DATA;
@@ -271,16 +257,16 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
       DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
       if (len > *BufferSize) {
         *BufferSize = len;
-        free(dokanControl);
+        DokanReleaseMountPointList(dokanControl);
         return WN_MORE_DATA;
       }
       CopyMemory(RemoteName, dokanControl[i].UNCName, len);
       *BufferSize = len;
-      free(dokanControl);
+      DokanReleaseMountPointList(dokanControl);
       return WN_SUCCESS;
     }
   }
-  free(dokanControl);
+  DokanReleaseMountPointList(dokanControl);
   return WN_NOT_CONNECTED;
 }
 
@@ -570,27 +556,12 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   ULONG cEntriesCopied = 0;
   PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
   PWCHAR pDst;
-  ULONG listSize = 32;
   ULONG nbRead = 0;
-  PDOKAN_CONTROL dokanControl = NULL;
-  BOOL success;
-
-  do {
-    if (listSize < nbRead)
-      listSize = nbRead;
-    if (dokanControl != NULL)
-      free(dokanControl);
-    dokanControl = malloc(listSize * sizeof(*dokanControl));
-    if (dokanControl == NULL)
-      return WN_NO_MORE_ENTRIES;
-
-    success = DokanGetMountPointList(dokanControl, listSize, FALSE, &nbRead);
-    if (!success && nbRead == 0) {
+  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(TRUE, &nbRead);
+  if (dokanControl == NULL) {
       DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
-      free(dokanControl);
-      return WN_NO_MORE_ENTRIES;
-    }
-  } while (!success);
+    return WN_NO_MORE_ENTRIES;
+  }
 
   DWORD processId = GetCurrentProcessId();
   DWORD sessionId = 0;
@@ -765,7 +736,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       dwStatus = WN_NO_MORE_ENTRIES;
     } else {
       DbgPrintW(L"NPEnumResource: invalid dwScope 0x%x\n", pCtx->dwScope);
-      free(dokanControl);
+      DokanReleaseMountPointList(dokanControl);
       return WN_BAD_HANDLE;
     }
   }
@@ -785,7 +756,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
   DbgPrintW(L"NPEnumResource: Entries returned %d, dwStatus 0x%08X\n",
             cEntriesCopied, dwStatus);
-  free(dokanControl);
+  DokanReleaseMountPointList(dokanControl);
   return dwStatus;
 }
 

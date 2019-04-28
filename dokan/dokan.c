@@ -793,10 +793,10 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
   return TRUE;
 }
 
-BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
-                                     BOOL uncOnly, PULONG nbRead) {
+PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead) {
   ULONG returnedLength = 0;
   PDOKAN_CONTROL dokanControl = NULL;
+  PDOKAN_CONTROL results = NULL;
   ULONG bufferLength = 32 * sizeof(*dokanControl);
   BOOL success;
 
@@ -807,7 +807,7 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
       free(dokanControl);
     dokanControl = malloc(bufferLength);
     if (dokanControl == NULL)
-      return FALSE;
+      return NULL;
     ZeroMemory(dokanControl, bufferLength);
 
     success =
@@ -816,29 +816,27 @@ BOOL DOKANAPI DokanGetMountPointList(PDOKAN_CONTROL list, ULONG length,
 
     if (!success && GetLastError() != ERROR_MORE_DATA) {
       free(dokanControl);
-      return FALSE;
+      return NULL;
     }
     bufferLength *= 2;
   } while (!success);
 
   if (returnedLength == 0) {
     free(dokanControl);
-    return TRUE;
+    return NULL;
   }
 
   *nbRead = returnedLength / sizeof(DOKAN_CONTROL);
-  if (*nbRead > length)
-    return FALSE;
-
+  results = malloc(returnedLength);
   for (ULONG i = 0; i < *nbRead; ++i) {
-    if (wcscmp(dokanControl[i].DeviceName, L"") == 0)
-      break;
     if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0)
-      CopyMemory(&list[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
+      CopyMemory(&results[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
   }
   free(dokanControl);
-  return TRUE;
+  return results;
 }
+
+VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list) { free(list); }
 
 BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
   UNREFERENCED_PARAMETER(Reserved);
