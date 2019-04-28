@@ -199,7 +199,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     }
 
-    if (fcb != NULL && fcb->BlockUserModeDispatch) {
+    if (fcb->BlockUserModeDispatch) {
       status = STATUS_SUCCESS;
       __leave;
     }
