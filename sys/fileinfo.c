@@ -125,7 +125,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           vcb->Dcb->DiskDeviceName->Length + fileName->Length;
 
       ULONG copyLength = vcb->Dcb->DiskDeviceName->Length;
-      if (copyLength > allocatedBufferEnd - nameInfoFileName) {
+      if (copyLength > (ULONG)(allocatedBufferEnd - nameInfoFileName)) {
         copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
         status = STATUS_BUFFER_OVERFLOW;
       }
@@ -135,7 +135,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       nameInfoFileName += copyLength;
 
       copyLength = fileName->Length;
-      if (copyLength > allocatedBufferEnd - nameInfoFileName) {
+      if (copyLength > (ULONG)(allocatedBufferEnd - nameInfoFileName)) {
         copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
         status = STATUS_BUFFER_OVERFLOW;
       }

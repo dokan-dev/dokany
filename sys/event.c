@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -30,7 +31,7 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   KIRQL oldIrql;
   PIRP_ENTRY irpEntry;
   ULONG serialNumber = 0;
-  PIO_STACK_LOCATION irpSp;
+  PIO_STACK_LOCATION irpSp = NULL;
 
   UNREFERENCED_PARAMETER(DeviceObject);
 
@@ -571,8 +572,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
   ULONG sessionId = (ULONG)-1;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
-  DDbgPrint("==> DokanEventStart\n");
+  DokanLogInfo(&logger, L"Entered event start.");
 
   dokanGlobal = DeviceObject->DeviceExtension;
   if (GetIdentifierType(dokanGlobal) != DGL) {
@@ -594,7 +596,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
       ExFreePool(eventStart);
     if (baseGuidString)
       ExFreePool(baseGuidString);
-    return STATUS_INSUFFICIENT_RESOURCES;
+    return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
+                         L"Failed to allocate buffers in event start.");
   }
 
   RtlCopyMemory(eventStart, Irp->AssociatedIrp.SystemBuffer,
@@ -602,6 +605,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   driverInfo = Irp->AssociatedIrp.SystemBuffer;
 
   if (eventStart->UserVersion != DOKAN_DRIVER_VERSION) {
+    DokanLogInfo(&logger, L"Driver version check in event start failed.");
     driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
     driverInfo->Status = DOKAN_START_FAILED;
     Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -670,7 +674,10 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   DDbgPrint("  Checking for MountPoint %ls \n", dokanControl.MountPoint);
   PMOUNT_ENTRY foundEntry = FindMountEntry(dokanGlobal, &dokanControl, FALSE);
   if (foundEntry != NULL) {
-    DDbgPrint("  MountPoint exists already %ls \n", dokanControl.MountPoint);
+    DokanLogInfo(
+        &logger,
+        L"Mount point exists; DOKAN_EVENT_RESOLVE_MOUNT_CONFLICTS not set: %s",
+        dokanControl.MountPoint);
     driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
     driverInfo->Status = DOKAN_START_FAILED;
     Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -691,7 +698,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
     ExFreePool(baseGuidString);
-    return status;
+    return DokanLogError(&logger, status, L"Failed to convert GUID to string.");
   }
   RtlZeroMemory(baseGuidString, 64 * sizeof(WCHAR));
   RtlStringCchCopyW(baseGuidString, 64, unicodeGuid.Buffer);
@@ -709,12 +716,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
     ExFreePool(baseGuidString);
-    return status;
+    return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
   dcb->FileLockInUserMode = fileLockUserMode;
 
-  DDbgPrint("  MountId:%d\n", dcb->MountId);
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;
@@ -746,7 +752,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     dcb->IrpTimeout = eventStart->IrpTimeout;
   }
 
-  DDbgPrint("  DeviceName:%ws\n", driverInfo->DeviceName);
+  DokanLogInfo(&logger, L"Event start using mount ID: %d; device name: %s.",
+               dcb->MountId, driverInfo->DeviceName);
 
   dcb->UseAltStream = 0;
   if (eventStart->Flags & DOKAN_EVENT_ALTERNATIVE_STREAM_ON) {
@@ -767,7 +774,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ExFreePool(eventStart);
   ExFreePool(baseGuidString);
 
-  DDbgPrint("<== DokanEventStart\n");
+  DokanLogInfo(&logger, L"Finished event start successfully");
 
   return Irp->IoStatus.Status;
 }

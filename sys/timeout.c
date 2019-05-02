@@ -127,6 +127,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   PIRP irp;
   BOOLEAN shouldUnmount = FALSE;
   PDokanVCB vcb = Dcb->Vcb;
+  DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
 
   DDbgPrint("==> ReleaseTimeoutPendingIRP\n");
   InitializeListHead(&completeList);
@@ -205,9 +206,10 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
     // the keepalive handle. In that case, we unmount the file system as soon
     // as some specific operation gets timed out, which avoids repeated delays
     // in Explorer.
-    DDbgPrint(
-        "Unmounting due to operation timeout before keepalive handle was"
-        " activated.");
+    DokanLogInfo(
+        &logger,
+        L"Unmounting due to operation timeout before keepalive handle was"
+        L" activated.");
     DokanUnmount(Dcb);
   }
   return STATUS_SUCCESS;
@@ -281,6 +283,7 @@ Routine Description:
   LARGE_INTEGER CurrentTime = {0};
   PDokanVCB vcb;
   PDokanDCB Dcb = pDcb;
+  DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
 
   DDbgPrint("==> DokanTimeoutThread\n");
 
@@ -312,8 +315,7 @@ Routine Description:
       KeQuerySystemTime(&CurrentTime);
       if ((CurrentTime.QuadPart - LastTime.QuadPart) >
           ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
-        DDbgPrint("  System seems to be awaken from sleep mode. So do not "
-                  "Check Keep Alive yet.\n");
+        DokanLogInfo(&logger, L"Wake from sleep detected.");
       } else {
         ReleaseTimeoutPendingIrp(Dcb);
         if (!vcb->IsKeepaliveActive)

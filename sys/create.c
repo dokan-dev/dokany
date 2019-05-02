@@ -169,19 +169,16 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 }
 
 NTSTATUS
-DokanFreeFCB(__in PDokanFCB Fcb) {
-  PDokanVCB vcb;
-
+DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
+  DOKAN_INIT_LOGGER(logger, Vcb->DeviceObject->DriverObject, 0);
+  ASSERT(Vcb != NULL);
   ASSERT(Fcb != NULL);
 
-  vcb = Fcb->Vcb;
-
   KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
+  ExAcquireResourceExclusiveLite(&Vcb->Resource, TRUE);
   DokanFCBLockRW(Fcb);
 
   if (InterlockedDecrement(&Fcb->FileCount) == 0) {
-
     RemoveEntryList(&Fcb->NextFCB);
     InitializeListHead(&Fcb->NextCCB);
 
@@ -208,13 +205,13 @@ DokanFreeFCB(__in PDokanFCB Fcb) {
                             Fcb->AdvancedFCBHeader.Resource);
     ExDeleteResourceLite(&Fcb->PagingIoResource);
 
-    InterlockedIncrement(&vcb->FcbFreed);
+    InterlockedIncrement(&Vcb->FcbFreed);
     ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
   } else {
     DokanFCBUnlock(Fcb);
   }
 
-  ExReleaseResourceLite(&vcb->Resource);
+  ExReleaseResourceLite(&Vcb->Resource);
   KeLeaveCriticalRegion();
 
   return STATUS_SUCCESS;
@@ -486,6 +483,7 @@ Return Value:
   BOOLEAN EventContextConsumed = FALSE;
   DWORD disposition = 0;
   BOOLEAN fcbLocked = FALSE;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_CREATE);
 
   PAGED_CODE();
 
@@ -543,7 +541,7 @@ Return Value:
     }
 
     if (!vcb->HasEventWait) {
-      if (fileObject->FileName.Length > 0 &&
+      if (fileObject->FileName.Length > 0 && // TODO Move to function for all BlockUserModeDispatch filename
           RtlEqualUnicodeString(&fileObject->FileName, &keepAliveFileName,
                                 FALSE)) {
         DDbgPrint("  Keepalive file called before startup finished\n");
@@ -563,6 +561,9 @@ Return Value:
               __leave;
             }
           }
+          DokanLogInfo(&logger,
+                       L"Handle created before IOCTL_EVENT_WAIT for file %wZ",
+                       &fileObject->FileName);
           status = STATUS_SUCCESS;
           __leave;
       }
@@ -750,7 +751,8 @@ Return Value:
       __leave;
     }
     if (fcb->BlockUserModeDispatch) {
-      DDbgPrint("Opened file with user mode dispatch blocked: %wZ\n",
+        DokanLogInfo(&logger,
+                     L"Opened file with user mode dispatch blocked: %wZ",
                    &fileObject->FileName);
     }
     DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
@@ -800,7 +802,7 @@ Return Value:
     fileObject->PrivateCacheMap = NULL;
     fileObject->SectionObjectPointer = &fcb->SectionObjectPointers;
     if (fcb->IsKeepalive) {
-      DDbgPrint("Opened keepalive file from process %d.",
+      DokanLogInfo(&logger, L"Opened keepalive file from process %d.",
                    IoGetRequestorProcessId(Irp));
     }
     if (fcb->BlockUserModeDispatch) {
@@ -1303,7 +1305,7 @@ Return Value:
         DokanFreeCCB(ccb);
       }
       if (fcb) {
-        DokanFreeFCB(fcb);
+        DokanFreeFCB(vcb, fcb);
       }
     }
 
@@ -1327,8 +1329,9 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
   ULONG info;
-  PDokanCCB ccb;
-  PDokanFCB fcb;
+  PDokanCCB ccb = NULL;
+  PDokanFCB fcb = NULL;
+  PDokanVCB vcb = NULL;
   BOOLEAN FCBAcquired = FALSE;
 
   irp = IrpEntry->Irp;
@@ -1341,6 +1344,9 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
+
+  vcb = irpSp->DeviceObject->DeviceExtension;
+  ASSERT(vcb != NULL);
 
   if (FALSE == Wait) {
     DokanFCBTryLockRW(fcb, FCBAcquired);
@@ -1440,7 +1446,7 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     DokanFreeCCB(ccb);
     IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
     DokanFCBUnlock(fcb);
-    DokanFreeFCB(fcb);
+    DokanFreeFCB(vcb, fcb);
     fcb = NULL;
     IrpEntry->FileObject->FsContext2 = NULL;
   }

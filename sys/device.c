@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -131,6 +132,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG outputLength = 0;
   ULONG inputLength = 0;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_DEVICE_CONTROL);
 
   DDbgPrint("   => DokanDiskDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -471,7 +473,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME: {
     PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
     DDbgPrint("   IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME\n");
-
     if (outputLength < sizeof(MOUNTDEV_SUGGESTED_LINK_NAME)) {
       status = STATUS_BUFFER_TOO_SMALL;
       Irp->IoStatus.Information = sizeof(MOUNTDEV_SUGGESTED_LINK_NAME);
@@ -485,8 +486,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       if (IsMountPointDriveLetter(dcb->MountPoint) == STATUS_SUCCESS) {
         linkName->UseOnlyIfThereAreNoOtherLinks = FALSE;
         linkName->NameLength = dcb->MountPoint->Length;
-
         if (sizeof(USHORT) + linkName->NameLength <= outputLength) {
+          DokanLogInfo(&logger, L"Returning suggested drive letter: %wZ",
+                       dcb->MountPoint);
           RtlCopyMemory((PCHAR)linkName->Name, dcb->MountPoint->Buffer,
                         linkName->NameLength);
           Irp->IoStatus.Information =
@@ -508,6 +510,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("   MountPoint is NULL or undefined\n");
       status = STATUS_NOT_FOUND;
     }
+    DokanLogInfo(&logger, L"Suggested drive letter return status: %I32x",
+                 status);
   } break;
   case IOCTL_MOUNTDEV_LINK_CREATED: {
     PMOUNTDEV_NAME mountdevName = Irp->AssociatedIrp.SystemBuffer;
@@ -528,7 +532,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                     mountdevName->NameLength);
       DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
-
+      DokanLogInfo(&logger, L"Link created: %s", symbolicLinkNameBuf);
       if (wcsncmp(symbolicLinkNameBuf, L"\\DosDevices\\", 12) == 0) {
         if (dcb->MountPoint != NULL && dcb->MountPoint->Length == 0) {
           ExFreePool(dcb->MountPoint);

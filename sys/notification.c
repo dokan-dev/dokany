@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -408,32 +409,37 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PLIST_ENTRY fcbEntry, fcbNext, fcbHead;
   PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
   NTSTATUS status = STATUS_SUCCESS;
-
-  DDbgPrint("==> DokanEventRelease\n");
+  DOKAN_INIT_LOGGER(logger,
+                    DeviceObject == NULL ? NULL
+                                         : DeviceObject->DriverObject,
+                    0);
 
   if (DeviceObject == NULL) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  DokanLogInfo(&logger, L"Entered event release.");
+
   vcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(vcb) != VCB) {
-    return STATUS_INVALID_PARAMETER;
+    return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                         L"VCB being released has wrong identifier type.");
   }
   dcb = vcb->Dcb;
 
   if (IsDeletePending(dcb->DeviceObject)) {
-    DDbgPrint("    DokanEventRelease already running for this device\n");
+    DokanLogInfo(&logger, L"Event release is already running for this device.");
     return STATUS_SUCCESS;
   }
 
   if (IsUnmountPendingVcb(vcb)) {
-    DDbgPrint("    DokanEventRelease already running for this volume\n");
+    DokanLogInfo(&logger, L"Event release is already running for this volume.");
     return STATUS_SUCCESS;
   }
 
   status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
+    DokanLogError(&logger, status, L"IoAcquireRemoveLock failed in release.");
     return STATUS_DEVICE_REMOVED;
   }
 
@@ -446,7 +452,8 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   SetLongFlag(vcb->Flags, VCB_DISMOUNT_PENDING);
   SetLongFlag(dcb->Flags, DCB_DELETE_PENDING);
 
-  DDbgPrint("     Starting unmount for device %wZ\n", dcb->DiskDeviceName);
+  DokanLogInfo(&logger, L"Starting unmount for device %wZ",
+               dcb->DiskDeviceName);
 
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingEvent);
@@ -488,7 +495,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   DokanDeleteDeviceObject(dcb);
 
-  DDbgPrint("<== DokanEventRelease\n");
+  DokanLogInfo(&logger, L"Finished event release.");
 
   return status;
 }

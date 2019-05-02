@@ -50,6 +50,7 @@ Return Value:
   PDokanFCB fcb = NULL;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_CLEANUP);
 
   __try {
 
@@ -99,10 +100,11 @@ Return Value:
       DokanFCBUnlock(fcb);
       if (shouldUnmount) {
         if (IsUnmountPendingVcb(vcb)) {
-          DDbgPrint("Ignoring keepalive close because unmount is already in"
-                    " progress.");
+          DokanLogInfo(&logger,
+                       L"Ignoring keepalive close because unmount is already in"
+                       L" progress.");
         } else {
-          DDbgPrint("Unmounting due to keepalive close.");
+          DokanLogInfo(&logger, L"Unmounting due to keepalive close.");
           DokanUnmount(vcb->Dcb);
         }
       }

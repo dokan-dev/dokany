@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -143,6 +144,9 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     break;
   }
 
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
+
   // make a MDL for UserBuffer that can be used later on another thread context
   if (Irp->MdlAddress == NULL) {
     status = DokanAllocateMdl(Irp, irpSp->Parameters.QueryDirectory.Length);
@@ -152,8 +156,6 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     flags = DOKAN_MDL_ALLOCATED;
   }
 
-  fcb = ccb->Fcb;
-  ASSERT(fcb != NULL);
   DokanFCBLockRO(fcb);
 
   // size of EVENT_CONTEXT is sum of its length and file name length

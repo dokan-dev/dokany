@@ -76,7 +76,12 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     DDbgPrint("    DokanOplockRequest STATUS_INVALID_PARAMETER\n");
     return STATUS_INVALID_PARAMETER;
   }
+  DOKAN_INIT_LOGGER(logger, Vcb->DeviceObject->DriverObject, 0);
+
   Dcb = Vcb->Dcb;
+  if (Dcb == NULL || Dcb->Identifier.Type != DCB) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
 
@@ -246,6 +251,8 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   PFILE_OBJECT fileObject = NULL;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject,
+                    IRP_MJ_FILE_SYSTEM_CONTROL);
 
   UNREFERENCED_PARAMETER(DeviceObject);
 
@@ -256,35 +263,45 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   case FSCTL_ACTIVATE_KEEPALIVE:
     fileObject = irpSp->FileObject;
     if (fileObject == NULL) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FileObject.\n");
-      return STATUS_INVALID_PARAMETER;
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_ACTIVATE_KEEPALIVE with no FileObject.");
     }
     ccb = fileObject->FsContext2;
     if (ccb == NULL || ccb->Identifier.Type != CCB) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.\n");
-      return STATUS_INVALID_PARAMETER;
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+                           L"Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.");
     }
 
     fcb = ccb->Fcb;
     if (fcb == NULL || fcb->Identifier.Type != FCB) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.\n");
-      return STATUS_INVALID_PARAMETER;
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+                           L"Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.");
     }
 
     if (!fcb->IsKeepalive) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE for wrong file: %wZ\n",
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_ACTIVATE_KEEPALIVE for wrong file: %wZ",
           &fcb->FileName);
-      return STATUS_INVALID_PARAMETER;
     }
 
     if (fcb->Vcb->IsKeepaliveActive && !ccb->IsKeepaliveActive) {
-      DDbgPrint("Received FSCTL_ACTIVATE_KEEPALIVE when a different keepalive handle"
-                " was already active.\n");
-      return STATUS_INVALID_PARAMETER;
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_ACTIVATE_KEEPALIVE when a different keepalive handle"
+          L" was already active.");
     }
 
-    DDbgPrint("Activating keepalive handle from process %lu.\n",
-              IoGetRequestorProcessId(*pIrp));
+    DokanLogInfo(&logger, L"Activating keepalive handle from process %lu.",
+                 IoGetRequestorProcessId(*pIrp));
     DokanFCBLockRW(fcb);
     ccb->IsKeepaliveActive = TRUE;
     fcb->Vcb->IsKeepaliveActive = TRUE;
@@ -571,6 +588,9 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   PDRIVER_OBJECT DriverObject = DiskDevice->DriverObject;
   NTSTATUS status = STATUS_UNRECOGNIZED_VOLUME;
 
+  DOKAN_INIT_LOGGER(logger, DriverObject, IRP_MJ_FILE_SYSTEM_CONTROL);
+  DokanLogInfo(&logger, L"Mounting disk device.");
+
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dcb = irpSp->Parameters.MountVolume.DeviceObject->DeviceExtension;
   if (!dcb) {
@@ -584,14 +604,14 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   }
 
   if (IsDeletePending(dcb->DeviceObject)) {
-    DDbgPrint(" This is a remount try of the device");
-    return STATUS_DEVICE_REMOVED;
+    return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
+                         L"This is a remount try of the device.");
   }
 
   BOOLEAN isNetworkFileSystem =
       (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
-  DDbgPrint(" Mounting volume using MountPoint %wZ device %wZ \n",
+  DokanLogInfo(&logger, L"Mounting volume using MountPoint %wZ device %wZ",
             dcb->MountPoint, dcb->DiskDeviceName);
 
   if (!isNetworkFileSystem) {
@@ -616,8 +636,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   }
 
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateDevice failed: 0x%x\n", status);
-    return status;
+    return DokanLogError(&logger, status, L"IoCreateDevice failed.");
   }
 
   vcb = volDeviceObject->DeviceExtension;
@@ -674,8 +693,8 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
     mountEntry->MountControl.DeviceObject = volDeviceObject;
   } else {
     ExReleaseResourceLite(&dcb->Resource);
-    DDbgPrint("MountEntry not found. This way the dokanControl does not have "
-              "the DeviceObject \n") return STATUS_DEVICE_REMOVED;
+    return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
+                         L"MountEntry not found.");
   }
 
   ExReleaseResourceLite(&dcb->Resource);
@@ -690,7 +709,8 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   if (dcb->UseMountManager) {
     status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
     if (!NT_SUCCESS(status)) {
-      DDbgPrint("  DokanSendVolumeArrivalNotification failed: 0x%x\n", status);
+      DokanLogError(&logger, status,
+                    L"DokanSendVolumeArrivalNotification failed.");
     }
   }
   DokanCreateMountPoint(dcb);
@@ -699,7 +719,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
     DokanRegisterUncProviderSystem(dcb);
   }
 
-  DDbgPrint("  Mounting successfully done \n");
+  DokanLogInfo(&logger, L"Mounting successfully done.");
 
   return STATUS_SUCCESS;
 }

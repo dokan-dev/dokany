@@ -2,6 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -20,6 +21,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+
+#include "dokanfs_msg.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(INIT, DriverEntry)
@@ -415,6 +418,104 @@ VOID DokanNoOpRelease(__in PVOID Fcb) {
 #define PrintStatus(val, flag)                                                 \
   if (val == flag)                                                             \
   DDbgPrint("  status = " #flag "\n")
+
+#define DOKAN_LOG_MAX_CHAR_COUNT 2048
+#define DOKAN_LOG_MAX_PACKET_BYTES                                             \
+  (ERROR_LOG_MAXIMUM_SIZE - sizeof(IO_ERROR_LOG_PACKET))
+#define DOKAN_LOG_MAX_PACKET_NONNULL_CHARS                                     \
+  (DOKAN_LOG_MAX_PACKET_BYTES / sizeof(WCHAR) - 1)
+
+VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
+                        __in UCHAR MajorFunctionCode, __in NTSTATUS MessageId,
+                        __in NTSTATUS Status, __in LPCTSTR Format,
+                        __in va_list Args) {
+  NTSTATUS status = STATUS_SUCCESS;
+  PIO_ERROR_LOG_PACKET packet = NULL;
+  WCHAR *message = NULL;
+  size_t messageCapacity = DOKAN_LOG_MAX_CHAR_COUNT;
+  size_t messageCharCount = 0;
+  size_t messageCharsWritten = 0;
+  size_t packetCount = 0;
+  size_t i = 0;
+  UCHAR packetCharCount = 0;
+  UCHAR packetSize = 0;
+
+  __try {
+    message = ExAllocatePool(sizeof(WCHAR) * messageCapacity);
+    if (message == NULL) {
+      DDbgPrint("Failed to allocate message of capacity %d\n", messageCapacity);
+      __leave;
+    }
+
+    status = RtlStringCchVPrintfW(message, messageCapacity, Format, Args);
+    if (status == STATUS_BUFFER_OVERFLOW) {
+      // In this case we want to at least log what we can fit.
+      DDbgPrint("Log message was larger than DOKAN_LOG_MAX_CHAR_COUNT."
+                " Format: %S\n", Format);
+    } else if (status != STATUS_SUCCESS) {
+      DDbgPrint("Failed to generate log message with format: %S; status: %x\n",
+                Format, status);
+      __leave;
+    }
+
+    status = RtlStringCchLengthW(message, messageCapacity, &messageCharCount);
+    if (status != STATUS_SUCCESS) {
+      DDbgPrint("Failed to determine message length, status: %x\n", status);
+      __leave;
+    }
+
+    packetCount = messageCharCount / DOKAN_LOG_MAX_PACKET_NONNULL_CHARS;
+    if (messageCharCount % DOKAN_LOG_MAX_PACKET_NONNULL_CHARS != 0) {
+      ++packetCount;
+    }
+
+    for (i = 0; i < packetCount; i++) {
+      packetCharCount = (UCHAR)min(messageCharCount - messageCharsWritten,
+                                   DOKAN_LOG_MAX_PACKET_NONNULL_CHARS);
+      packetSize = sizeof(IO_ERROR_LOG_PACKET)
+          + sizeof(WCHAR) * (packetCharCount + 1);
+      packet = IoAllocateErrorLogEntry(DriverObject, packetSize);
+      if (packet == NULL) {
+        DDbgPrint("Failed to allocate packet of size %d\n", packetSize);
+        __leave;
+      }
+      RtlZeroMemory(packet, packetSize);
+      packet->MajorFunctionCode = MajorFunctionCode;
+      packet->NumberOfStrings = 1;
+      packet->StringOffset =
+          (USHORT)((char *)&packet->DumpData[0] - (char *)packet);
+      packet->ErrorCode = MessageId;
+      packet->FinalStatus = Status;
+      RtlCopyMemory(&packet->DumpData[0], message + messageCharsWritten,
+                    sizeof(WCHAR) * packetCharCount);
+      IoWriteErrorLogEntry(packet); // Destroys packet.
+      packet = NULL;
+      messageCharsWritten += packetCharCount;
+    }
+  } __finally {
+    if (message != NULL) {
+      ExFreePool(message);
+    }
+  }
+}
+
+NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger, __in NTSTATUS Status,
+                       __in LPCTSTR Format, ...) {
+  va_list args;
+  va_start(args, Format);
+  DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
+                     DOKANFS_ERROR_MSG, Status, Format, args);
+  va_end(args);
+  return Status;
+}
+
+VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...) {
+  va_list args;
+  va_start(args, Format);
+  DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
+                     DOKANFS_INFO_MSG, STATUS_SUCCESS, Format, args);
+  va_end(args);
+}
 
 VOID DokanPrintNTStatus(NTSTATUS Status) {
   DDbgPrint("  status = 0x%x\n", Status);

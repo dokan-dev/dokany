@@ -147,6 +147,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -155,6 +156,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -163,6 +165,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -170,6 +173,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -178,6 +182,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -186,6 +191,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -193,6 +199,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -201,6 +208,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM64'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -209,6 +217,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -216,6 +225,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -224,6 +234,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -232,6 +243,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -239,6 +251,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -247,6 +260,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -255,6 +269,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -262,6 +277,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -270,6 +286,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM64'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -278,6 +295,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -285,6 +303,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -293,6 +312,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -301,6 +321,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -308,6 +329,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -316,6 +338,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARMSupport>true</WindowsSDKDesktopARMSupport>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM64'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -324,6 +347,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
     <WindowsSDKDesktopARM64Support>true</WindowsSDKDesktopARM64Support>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -331,6 +355,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -338,6 +363,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'" Label="Configuration">
     <TargetVersion>WindowsV6.3</TargetVersion>
@@ -345,6 +371,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -352,6 +379,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -359,6 +387,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
@@ -366,6 +395,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -373,6 +403,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -380,6 +411,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -1250,9 +1282,143 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dokan.rc" />
+    <ResourceCompile Include="dokanfs_msg.rc" />
   </ItemGroup>
   <ItemGroup>
     <Inf Include="dokan.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="dokanfs_msg.mc">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Release|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Release|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Release|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Release|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Release|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Release|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">mc "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">Compiling Dokan Messages...</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">%(Filename).rc;%(Filename).h;MSG00409.bin</Outputs>
+    </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

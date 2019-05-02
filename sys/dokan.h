@@ -202,6 +202,43 @@ typedef struct _DOKAN_GLOBAL {
   KEVENT KillDeleteDeviceEvent;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
+typedef struct _DOKAN_LOGGER {
+
+  PDRIVER_OBJECT DriverObject;
+  UCHAR MajorFunctionCode;
+
+} DOKAN_LOGGER, *PDOKAN_LOGGER;
+
+#define DOKAN_INIT_LOGGER(logger, driverObject, majorFunctionCode)             \
+  DOKAN_LOGGER logger;                                                         \
+  logger.DriverObject = driverObject;                                          \
+  logger.MajorFunctionCode = majorFunctionCode;
+
+// Logs an error to the Windows event log, even in production, with the given
+// status, and returns the status passed in.
+NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
+                       __in NTSTATUS Status,
+                       __in LPCTSTR Format,
+                       ...);
+
+// Logs an informational message to the Windows event log, even in production.
+VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...);
+
+// A compact stack trace that can be easily logged.
+typedef struct _DokanBackTrace {
+  // The full address of a point-of-reference instruction near where the logging
+  // occurs. One should be able to find this instruction in the disassembly of
+  // the driver by seeing the log message content aside from this value. This
+  // value then tells you the absolute address of that instruction at runtime.
+  ULONG64 Address;
+
+  // Three return addresses truncated to their lowest 20 bits. The lowest 20
+  // bits of this value is the most distant return address, the next 20 bits are
+  // the next frame up, etc. To find each of the 3 instructions referenced here,
+  // one replaces the lowest 20 bits of Ip.
+  ULONG64 ReturnAddresses;
+} DokanBackTrace, *PDokanBackTrace;
+
 // make sure Identifier is the top of struct
 typedef struct _DokanDiskControlBlock {
 
@@ -704,7 +741,7 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength);
 
 NTSTATUS
-DokanFreeFCB(__in PDokanFCB Fcb);
+DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb);
 
