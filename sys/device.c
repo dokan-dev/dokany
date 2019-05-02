@@ -988,7 +988,7 @@ Return Value:
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);
-        DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
+        DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT_DEFAULT);
         ExReleaseResourceAndLeaveCriticalRegion(&dcb->Resource);
         status = STATUS_SUCCESS;
       } else {

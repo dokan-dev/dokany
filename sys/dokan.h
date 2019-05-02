@@ -97,7 +97,7 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 #define DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX (1000 * 60 * 5) // in millisecond
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
 
-#define DOKAN_KEEPALIVE_TIMEOUT (1000 * 15) // in millisecond
+#define DOKAN_KEEPALIVE_TIMEOUT_DEFAULT (1000 * 15) // in millisecond
 
 #if _WIN32_WINNT > 0x501
 

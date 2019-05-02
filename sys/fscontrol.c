@@ -682,7 +682,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
 
   // Start check thread
   ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT * 3);
+  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT_DEFAULT * 3);
   ExReleaseResourceLite(&dcb->Resource);
   DokanStartCheckThread(dcb);
 
