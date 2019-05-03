@@ -218,7 +218,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   case L'v': {
     fprintf(stdout, "dokanctl : %s %s\n", __DATE__, __TIME__);
-    fprintf(stdout, "Dokan version : %d\n", DokanVersion());
+    fprintf(stdout, "Dokan version : %ld\n", DokanVersion());
     fprintf(stdout, "Dokan driver version : 0x%lx\n", DokanDriverVersion());
   } break;
 
