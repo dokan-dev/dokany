@@ -47,3 +47,6 @@ ReleasePS
 /dokan_wix/UpgradeLog.htm
 /.vs
 /dokan_wix/.vs
+/sys/dokanfs_msg.h
+/sys/dokanfs_msg.rc
+/sys/MSG00409.bin
