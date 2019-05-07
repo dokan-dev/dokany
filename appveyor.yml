@@ -175,7 +175,7 @@
       $buildCmd = $(cmd /c where msbuild)
 
   - ps: |
-      if ($env:CONFIGURATION -eq "SonarQube") {
+      if ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
        
         if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
           Add-AppveyorMessage -Message "Not running SonarQube on pull request." -Category Information
@@ -195,7 +195,7 @@
         SonarScanner.MSBuild.exe end /d:"sonar.login=094fffbd08033725384e461957a76f13c7ff5682"
       }
   - ps: |
-      if ($env:CONFIGURATION -eq "Coverity") {
+      if ($env:CONFIGURATION -eq "Coverity" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
 
         if (!"$env:CoverityProjectToken") {
           Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
