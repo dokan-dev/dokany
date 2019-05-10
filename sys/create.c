@@ -758,6 +758,7 @@ Return Value:
         fcb = ccb->Fcb;
         OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRIED);
         allocateCcb = FALSE;
+        ExFreePool(fileName);
       }
     }
     if (allocateCcb) {
