@@ -735,6 +735,49 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
+// Returns the last index, |i|, so that [0, i] represents the range of the path
+// to the parent directory. For example, if |fileName| is |C:\temp\text.txt|,
+// returns 7 (the index of |\| right before |text.txt|).
+//
+// Returns -1 if no '\\' is found,
+LONG GetParentDirectoryEndingIndex(PUNICODE_STRING fileName) {
+  if (fileName->Length == 0) {
+    return -1;
+  }
+  // If the path ends with L'\\' (in which case, this is a directory, that last
+  // '\\' character can be ignored.)
+  USHORT lastIndex = fileName->Length / sizeof(WCHAR) - 1;
+  if (fileName->Buffer[lastIndex] == L'\\') {
+    lastIndex--;
+  }
+  for (LONG index = lastIndex; index >= 0; index--) {
+    if (fileName->Buffer[index] == L'\\') {
+      return index;
+    }
+  }
+  // There is no '\\' found.
+  return -1;
+}
+
+// Returns |TRUE| if |fileName1| and |fileName2| represent paths to two
+// files/folders that are in the same directory.
+BOOLEAN IsInSameDirectory(PUNICODE_STRING fileName1,
+                          PUNICODE_STRING fileName2) {
+  LONG parentEndingIndex = GetParentDirectoryEndingIndex(fileName1);
+  if (parentEndingIndex != GetParentDirectoryEndingIndex(fileName2)) {
+    return FALSE;
+  }
+  for (LONG i = 0; i < parentEndingIndex; i++) {
+    // TODO(ttdinhtrong): This code assumes case sensitive, which is not always
+    // true. As of now we do not know if the user is in case sensitive or case
+    // insensitive mode.
+    if (fileName1->Buffer[i] != fileName2->Buffer[i]) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
 VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
                                  __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
@@ -894,20 +937,31 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       case FileRenameInformation: {
         DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
 
+        if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
         DokanNotifyReportChange0(fcb, &oldFileName,
                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
                                      ? FILE_NOTIFY_CHANGE_DIR_NAME
                                      : FILE_NOTIFY_CHANGE_FILE_NAME,
                                  FILE_ACTION_RENAMED_OLD_NAME);
-
-        // free old file name
-        ExFreePool(oldFileName.Buffer);
-
         DokanNotifyReportChange(fcb,
                                 DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
                                     ? FILE_NOTIFY_CHANGE_DIR_NAME
                                     : FILE_NOTIFY_CHANGE_FILE_NAME,
                                 FILE_ACTION_RENAMED_NEW_NAME);
+        } else {
+          DokanNotifyReportChange0(fcb, &oldFileName,
+                                   DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                       ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                       : FILE_NOTIFY_CHANGE_FILE_NAME,
+                                   FILE_ACTION_REMOVED);
+          DokanNotifyReportChange(fcb,
+                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                      ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                      : FILE_NOTIFY_CHANGE_FILE_NAME,
+                                  FILE_ACTION_ADDED);
+        }
+        // free old file name
+        ExFreePool(oldFileName.Buffer);
       } break;
       case FileValidDataLengthInformation:
         DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
