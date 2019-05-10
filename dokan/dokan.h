@@ -99,19 +99,10 @@ extern "C" {
 /** Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it */
 #define DOKAN_OPTION_FILELOCK_USER_MODE 256
 /**
- * Enable logging of abnormally long kernel lock acquisition waits. This is
- * detrimental to performance and should not be enabled in normal use.
- */
-#define DOKAN_OPTION_LOCK_DEBUG_ENABLED 512
-/**
  * Whether to disable any oplock support on the volume.
  * Regular range locks are enabled regardless.
  */
-#define DOKAN_OPTION_DISABLE_OPLOCKS 4096
-/** Whether the driver should log oplock requests. This may be detrimental to
- * preformance and should not be enabled in normal use.
- */
-#define DOKAN_OPTION_LOG_OPLOCKS 16384
+#define DOKAN_OPTION_DISABLE_OPLOCKS 512
 
 /** @} */
 
