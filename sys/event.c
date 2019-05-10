@@ -557,6 +557,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
   BOOLEAN oplocksDisabled = FALSE;
+  BOOLEAN optimizeSingleNameSearch = FALSE;
   ULONG sessionId = (ULONG)-1;
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
@@ -642,7 +643,12 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   if (eventStart->Flags & DOKAN_EVENT_DISABLE_OPLOCKS) {
     DDbgPrint("  OpLocks disabled\n");
-    oplocksDisabled = FALSE;
+    oplocksDisabled = TRUE;
+  }
+
+  if (eventStart->Flags & DOKAN_EVENT_OPTIMIZE_SINGLE_NAME_SEARCH) {
+    DDbgPrint("  Optimize single name search enabled\n");
+    optimizeSingleNameSearch = TRUE;
   }
 
   KeEnterCriticalRegion();
@@ -712,6 +718,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   dcb->OplocksDisabled = oplocksDisabled;
   dcb->FileLockInUserMode = fileLockUserMode;
+  dcb->OptimizeSingleNameSearch = optimizeSingleNameSearch;
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;

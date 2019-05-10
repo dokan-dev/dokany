@@ -302,6 +302,15 @@ typedef struct _DokanDiskControlBlock {
   ULONG IrpTimeout;
   ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
+  // Whether to satisfy a name query like "bar" under "\foo" by finding an open
+  // FCB with \foo\bar as a prefix and copying the "bar" part from that. On
+  // Windows 7, this can save a lot of time, because the fileinfo.sys filter
+  // driver typically does a path normalization within CreateFile operations.
+  // The Filter Manager on Windows 7 normalizes paths by searching each parent
+  // for the name of each child. On newer versions of Windows, it does a
+  // one-shot FileNormalizedNameInformation query against the target file, so
+  // this type of directory search is not common.
+  BOOLEAN OptimizeSingleNameSearch;
 
   // Whether any oplock functionality should be disabled.
   BOOLEAN OplocksDisabled;
@@ -586,6 +595,9 @@ VOID DokanResourceUnlockWithDebugInfo(__in PERESOURCE Resource,
     DokanResourceUnlock(&(fcb)->PagingIoResource);                             \
   }
 
+// Locks the given VCB for read-write and returns TRUE, if it is not already
+// locked at all by another thread; otherwise returns FALSE.
+BOOLEAN DokanVCBTryLockRW(PDokanVCB vcb);
 #define DokanVCBLockRW(vcb)                                                    \
   if (DokanLockDebugEnabled()) {                                               \
     DokanResourceLockWithDebugInfo(TRUE, &(vcb)->Resource,                     \

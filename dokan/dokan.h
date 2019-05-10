@@ -103,6 +103,13 @@ extern "C" {
  * Regular range locks are enabled regardless.
  */
 #define DOKAN_OPTION_DISABLE_OPLOCKS 512
+/**
+ * Whether to satisfy a single-entry, name-only directory search without
+ * dispatching to the FindFiles callback, if there is an open file from which
+ * the driver can just copy the normalized name. These searches are frequently
+ * done inside of CreateFile calls on Windows 7.
+ */
+#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH 1024
 
 /** @} */
 

@@ -923,6 +923,15 @@ VOID DokanResourceUnlockWithDebugInfo(
   KeLeaveCriticalRegion();
 }
 
+BOOLEAN DokanVCBTryLockRW(PDokanVCB Vcb) {
+  KeEnterCriticalRegion();
+  BOOLEAN result = ExAcquireResourceExclusiveLite(&(Vcb)->Resource, FALSE);
+  if (!result) {
+    KeLeaveCriticalRegion();
+  }
+  return result;
+}
+
 ULONG GetOplockControlDebugInfoBit(ULONG FsControlCode) {
   switch (FsControlCode) {
     case FSCTL_REQUEST_OPLOCK_LEVEL_1:
