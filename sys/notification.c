@@ -139,20 +139,23 @@ VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
   KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
 }
 
-VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
+// Moves the contents of the given Source list to Dest, discarding IRPs that
+// have been canceled while waiting in the list. The IRPs that end up in Dest
+// should then be acted on in some way that leads to their completion. The
+// Source list is still usable and is empty after this function returns.
+VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
   PLIST_ENTRY listHead;
-  LIST_ENTRY completeList;
   PIRP_ENTRY irpEntry;
   KIRQL oldIrql;
   PIRP irp;
 
-  InitializeListHead(&completeList);
+  InitializeListHead(Dest);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-  KeAcquireSpinLock(&PendingIrp->ListLock, &oldIrql);
+  KeAcquireSpinLock(&Source->ListLock, &oldIrql);
 
-  while (!IsListEmpty(&PendingIrp->ListHead)) {
-    listHead = RemoveHeadList(&PendingIrp->ListHead);
+  while (!IsListEmpty(&Source->ListHead)) {
+    listHead = RemoveHeadList(&Source->ListHead);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
     irp = irpEntry->Irp;
     if (irp == NULL) {
@@ -168,12 +171,20 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
       irpEntry->CancelRoutineFreeMemory = TRUE;
       continue;
     }
-    InsertTailList(&completeList, &irpEntry->ListEntry);
+    InsertTailList(Dest, &irpEntry->ListEntry);
   }
 
-  KeClearEvent(&PendingIrp->NotEmpty);
-  KeReleaseSpinLock(&PendingIrp->ListLock, oldIrql);
+  KeClearEvent(&Source->NotEmpty);
+  KeReleaseSpinLock(&Source->ListLock, oldIrql);
+}
 
+VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
+  PLIST_ENTRY listHead;
+  LIST_ENTRY completeList;
+  PIRP_ENTRY irpEntry;
+  PIRP irp;
+
+  MoveIrpList(PendingIrp, &completeList);
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
@@ -200,6 +211,24 @@ VOID ReleaseNotifyEvent(__in PIRP_LIST NotifyEvent) {
 
   KeClearEvent(&NotifyEvent->NotEmpty);
   KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
+}
+
+VOID RetryIrps(__in PIRP_LIST PendingRetryIrp) {
+  PLIST_ENTRY listHead;
+  LIST_ENTRY retryList;
+  PIRP_ENTRY irpEntry;
+  PDEVICE_OBJECT deviceObject;
+  PIRP irp;
+
+  MoveIrpList(PendingRetryIrp, &retryList);
+  while (!IsListEmpty(&retryList)) {
+    listHead = RemoveHeadList(&retryList);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+    irp = irpEntry->Irp;
+    deviceObject = irpEntry->IrpSp->DeviceObject;
+    DokanFreeIrpEntry(irpEntry);
+    DokanBuildRequest(deviceObject, irp);
+  }
 }
 
 VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
@@ -321,14 +350,14 @@ VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
 
 KSTART_ROUTINE NotificationThread;
 VOID NotificationThread(__in PVOID pDcb) {
-  PKEVENT events[5];
+  PKEVENT events[6];
   PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
 
   DDbgPrint("==> NotificationThread\n");
 
-  waitBlock = ExAllocatePool(sizeof(KWAIT_BLOCK) * 5);
+  waitBlock = ExAllocatePool(sizeof(KWAIT_BLOCK) * 6);
   if (waitBlock == NULL) {
     DDbgPrint("  Can't allocate WAIT_BLOCK\n");
     return;
@@ -338,17 +367,19 @@ VOID NotificationThread(__in PVOID pDcb) {
   events[2] = &Dcb->PendingEvent.NotEmpty;
   events[3] = &Dcb->Global->PendingService.NotEmpty;
   events[4] = &Dcb->Global->NotifyService.NotEmpty;
-
+  events[5] = &Dcb->PendingRetryIrp.NotEmpty;
   do {
-    status = KeWaitForMultipleObjects(5, events, WaitAny, Executive, KernelMode,
+    status = KeWaitForMultipleObjects(6, events, WaitAny, Executive, KernelMode,
                                       FALSE, NULL, waitBlock);
 
     if (status != STATUS_WAIT_0) {
       if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
         NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent);
-      } else {
+      } else if (status == STATUS_WAIT_0 + 3 || status == STATUS_WAIT_0 + 4) {
         NotificationLoop(&Dcb->Global->PendingService,
                          &Dcb->Global->NotifyService);
+      } else {
+        RetryIrps(&Dcb->PendingRetryIrp);
       }
     }
   } while (status != STATUS_WAIT_0);
@@ -457,6 +488,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingEvent);
+  ReleasePendingIrp(&dcb->PendingRetryIrp);
   DokanStopCheckThread(dcb);
   DokanStopEventNotificationThread(dcb);
 
@@ -464,8 +496,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   // search CCB list to complete not completed Directory Notification
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&vcb->Resource, TRUE);
+  DokanVCBLockRW(vcb);
 
   fcbHead = &vcb->NextFCB;
 
@@ -488,8 +519,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DokanFCBUnlock(fcb);
   }
 
-  ExReleaseResourceLite(&vcb->Resource);
-  KeLeaveCriticalRegion();
+  DokanVCBUnlock(vcb);
 
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, Irp);
 

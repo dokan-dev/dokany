@@ -147,6 +147,8 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
+  OplockDebugRecordMajorFunction(fcb, IRP_MJ_DIRECTORY_CONTROL);
+
   // make a MDL for UserBuffer that can be used later on another thread context
   if (Irp->MdlAddress == NULL) {
     status = DokanAllocateMdl(Irp, irpSp->Parameters.QueryDirectory.Length);
@@ -305,17 +307,14 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return STATUS_PENDING;
 }
 
-NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                       __in PEVENT_INFORMATION EventInfo,
-                                       __in BOOLEAN Wait) {
+VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
   ULONG info = 0;
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
-
-  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteDirectoryControl\n");
 
@@ -385,6 +384,4 @@ NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteDirectoryControl\n");
-
-  return STATUS_SUCCESS;
 }

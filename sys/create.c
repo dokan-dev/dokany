@@ -104,8 +104,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   fn.MaximumLength = fn.Length + sizeof(WCHAR);
   fn.Buffer = FileName;
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&Vcb->Resource, TRUE);
+  DokanVCBLockRW(Vcb);
 
   // search the FCB which is already allocated
   // (being used now)
@@ -117,7 +116,6 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DokanFCBLockRO(fcb);
     DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
               "for %ls\n",
               &fcb->FileName, fcb->FileCount, FileName);
@@ -125,10 +123,8 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
         && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
       // we have the FCB which is already allocated and used
       DDbgPrint("  Found existing FCB for %ls\n", FileName);
-      DokanFCBUnlock(fcb);
       break;
     }
-    DokanFCBUnlock(fcb);
 
     fcb = NULL;
   }
@@ -143,8 +139,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     if (fcb == NULL) {
       DDbgPrint("    Was not able to get FCB for FileName %ls\n", FileName);
       ExFreePool(FileName);
-      ExReleaseResourceLite(&Vcb->Resource);
-      KeLeaveCriticalRegion();
+      DokanVCBUnlock(Vcb);
       return NULL;
     }
 
@@ -161,10 +156,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   }
 
   InterlockedIncrement(&fcb->FileCount);
-
-  ExReleaseResourceLite(&Vcb->Resource);
-  KeLeaveCriticalRegion();
-
+  DokanVCBUnlock(Vcb);
   return fcb;
 }
 
@@ -174,8 +166,9 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   ASSERT(Vcb != NULL);
   ASSERT(Fcb != NULL);
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&Vcb->Resource, TRUE);
+  ASSERT(Fcb->Vcb == Vcb);
+
+  DokanVCBLockRW(Vcb);
   DokanFCBLockRW(Fcb);
 
   if (InterlockedDecrement(&Fcb->FileCount) == 0) {
@@ -199,6 +192,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
     }
 #endif
 
+    Fcb->Identifier.Type = FREED_FCB;
     DokanFCBUnlock(Fcb);
     ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
     ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
@@ -211,9 +205,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
     DokanFCBUnlock(Fcb);
   }
 
-  ExReleaseResourceLite(&Vcb->Resource);
-  KeLeaveCriticalRegion();
-
+  DokanVCBUnlock(Vcb);
   return STATUS_SUCCESS;
 }
 
@@ -244,6 +236,17 @@ PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
 
   InterlockedIncrement(&Fcb->Vcb->CcbAllocated);
   return ccb;
+}
+
+VOID
+DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp) {
+  if (Ccb->AtomicOplockRequestPending) {
+    FsRtlCheckOplockEx(DokanGetFcbOplock(Ccb->Fcb), Irp,
+                       OPLOCK_FLAG_BACK_OUT_ATOMIC_OPLOCK, NULL, NULL,
+                       NULL);
+    Ccb->AtomicOplockRequestPending = FALSE;
+    OplockDebugRecordFlag(Ccb->Fcb, DOKAN_OPLOCK_DEBUG_ATOMIC_BACKOUT);
+  }
 }
 
 NTSTATUS
@@ -430,6 +433,19 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   return status;
 }
 
+// Oplock break completion routine used for async oplock breaks that are
+// triggered in DokanDispatchCreate. This either queues the IRP_MJ_CREATE to get
+// re-dispatched or queues it to get failed asynchronously by calling
+// DokanCompleteCreate in a safe context.
+VOID DokanRetryCreateAfterOplockBreak(__in PVOID Context, __in PIRP Irp) {
+  if (NT_SUCCESS(Irp->IoStatus.Status)) {
+    DokanRegisterPendingRetryIrp((PDEVICE_OBJECT)Context, Irp);
+  } else {
+    DokanRegisterAsyncCreateFailure((PDEVICE_OBJECT)Context, Irp,
+                                    Irp->IoStatus.Status);
+  }
+}
+
 NTSTATUS
 DokanDispatchCreate(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
@@ -479,7 +495,6 @@ Return Value:
   PSECURITY_DESCRIPTOR newFileSecurityDescriptor = NULL;
   BOOLEAN OpenRequiringOplock = FALSE;
   BOOLEAN UnwindShareAccess = FALSE;
-  BOOLEAN BackoutOplock = FALSE;
   BOOLEAN EventContextConsumed = FALSE;
   DWORD disposition = 0;
   BOOLEAN fcbLocked = FALSE;
@@ -733,35 +748,50 @@ Return Value:
       __leave;
     }
 
-    if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
-      status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
-      if (status != STATUS_SUCCESS) {
-        ExFreePool(fileName);
-        fileName = NULL;
+    BOOLEAN allocateCcb = TRUE;
+    if (fileObject->FsContext2 != NULL) {
+      // Check if we are retrying a create we started before.
+      ccb = fileObject->FsContext2;
+      if (GetIdentifierType(ccb) == CCB &&
+            (DokanCCBFlagsIsSet(ccb, DOKAN_RETRY_CREATE))) {
+        DokanCCBFlagsClearBit(ccb, DOKAN_RETRY_CREATE);
+        fcb = ccb->Fcb;
+        OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRIED);
+        allocateCcb = FALSE;
+      }
+    }
+    if (allocateCcb) {
+      // Allocate an FCB or find one in the open list.
+      if (irpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
+        status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
+        if (status != STATUS_SUCCESS) {
+          ExFreePool(fileName);
+          fileName = NULL;
+          __leave;
+        }
+        fcb = DokanGetFCB(vcb, parentDir, parentDirLength,
+                          FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
+      } else {
+        fcb = DokanGetFCB(vcb, fileName, fileNameLength,
+                          FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
+      }
+      if (fcb == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
         __leave;
       }
-      fcb = DokanGetFCB(vcb, parentDir, parentDirLength,
-                        FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
-    } else {
-      fcb = DokanGetFCB(vcb, fileName, fileNameLength,
-                        FlagOn(irpSp->Flags, SL_CASE_SENSITIVE));
-    }
-    if (fcb == NULL) {
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-    if (fcb->BlockUserModeDispatch) {
+      if (fcb->BlockUserModeDispatch) {
         DokanLogInfo(&logger,
                      L"Opened file with user mode dispatch blocked: %wZ",
-                   &fileObject->FileName);
-    }
-    DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
-              fcb);
+                     &fileObject->FileName);
+      }
+      DDbgPrint("  Create: FileName:%wZ got fcb %p\n", &fileObject->FileName,
+                fcb);
 
-    // Cannot create a file already open
-    if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
-      status = STATUS_OBJECT_NAME_COLLISION;
-      __leave;
+      // Cannot create a file already open
+      if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
+        status = STATUS_OBJECT_NAME_COLLISION;
+        __leave;
+      }
     }
 
     // Cannot create a directory temporary
@@ -786,7 +816,10 @@ Return Value:
        */
     }
 
-    ccb = DokanAllocateCCB(dcb, fcb);
+    if (allocateCcb) {
+      ccb = DokanAllocateCCB(dcb, fcb);
+    }
+
     if (ccb == NULL) {
       DDbgPrint("    Was not able to allocate CCB\n");
       status = STATUS_INSUFFICIENT_RESOURCES;
@@ -930,6 +963,11 @@ Return Value:
           alignedObjectNameSize;
     }
 
+    OplockDebugRecordCreateRequest(
+        fcb,
+        irpSp->Parameters.Create.SecurityContext->DesiredAccess,
+        irpSp->Parameters.Create.ShareAccess);
+
     // Other SecurityContext attributes
     eventContext->Operation.Create.SecurityContext.DesiredAccess =
         irpSp->Parameters.Create.SecurityContext->DesiredAccess;
@@ -1028,8 +1066,14 @@ Return Value:
               eventContext->Operation.Create.FileNameOffset +
               (parentDir ? fileNameLength : fcb->FileName.Length)) = 0;
 
-    DokanFCBUnlock(fcb);
-    fcbLocked = FALSE;
+    // The FCB lock used to be released here, but that creates a race condition
+    // with oplock allocation, which is done lazily during calls like
+    // FsRtlOplockFsctrl. The OPLOCK struct is really just an opaque pointer to
+    // a NONOPAQUE_OPLOCK that is lazily allocated, and the OPLOCK is changed to
+    // point to that without any hidden locking. Once it exists, changes to the
+    // oplock state are automatically guarded by a mutex inside the
+    // NONOPAQUE_OPLOCK.
+
     //
     // Oplock
     //
@@ -1040,6 +1084,9 @@ Return Value:
 #else
     OpenRequiringOplock = FALSE;
 #endif
+    if (FlagOn(irpSp->Parameters.Create.Options, FILE_COMPLETE_IF_OPLOCKED)) {
+      OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_COMPLETE_IF_OPLOCKED);
+    }
 
     // Share access support
 
@@ -1083,9 +1130,13 @@ Return Value:
 
           POPLOCK oplock = DokanGetFcbOplock(fcb);
           // This may enter a wait state!
+
+          OplockDebugRecordFlag(fcb,
+                                DOKAN_OPLOCK_DEBUG_EXPLICIT_BREAK_IN_CREATE);
+          OplockDebugRecordProcess(fcb);
+
           OplockBreakStatus = FsRtlOplockBreakH(
-              oplock, Irp, 0, eventContext,
-              NULL /* DokanOplockComplete */, // block instead of callback
+              oplock, Irp, 0, DeviceObject, DokanRetryCreateAfterOplockBreak,
               DokanPrePostIrp);
 
           //
@@ -1093,7 +1144,7 @@ Return Value:
           //  then the IRP
           //  has been posted and we need to stop working.
           //
-          if (OplockBreakStatus == STATUS_PENDING) { // shouldn't happen now
+          if (OplockBreakStatus == STATUS_PENDING) {
             DDbgPrint("   FsRtlOplockBreakH returned STATUS_PENDING\n");
             status = STATUS_PENDING;
             __leave;
@@ -1187,11 +1238,10 @@ Return Value:
     //  that the Oplock check proceeds against any added access we had
     //  to give the caller.
     //
-    // This may block and enter wait state!
     if (fcb->FileCount > 1) {
       status =
-          FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                           NULL /* DokanOplockComplete */, DokanPrePostIrp);
+          FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, DeviceObject,
+                           DokanRetryCreateAfterOplockBreak, DokanPrePostIrp);
 
       //
       //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -1222,6 +1272,8 @@ Return Value:
 
     if (OpenRequiringOplock) {
       DDbgPrint("   OpenRequiringOplock\n");
+      OplockDebugRecordAtomicRequest(fcb);
+
       //
       //  If the caller wants atomic create-with-oplock semantics, tell
       //  the oplock package.
@@ -1249,7 +1301,7 @@ Return Value:
       // if we fail after this point, the oplock will need to be backed out
       // if the oplock was granted (status == STATUS_SUCCESS)
       if (status == STATUS_SUCCESS) {
-        BackoutOplock = TRUE;
+        ccb->AtomicOplockRequestPending = TRUE;
       }
     }
 
@@ -1275,12 +1327,9 @@ Return Value:
     //  Also unwind any share access that was added to the fcb
 
     if (!NT_SUCCESS(status)) {
-      if (BackoutOplock) {
-        FsRtlCheckOplockEx(DokanGetFcbOplock(fcb), Irp,
-                           OPLOCK_FLAG_BACK_OUT_ATOMIC_OPLOCK, NULL, NULL,
-                           NULL);
+      if (ccb != NULL) {
+        DokanMaybeBackOutAtomicOplockRequest(ccb, Irp);
       }
-
       if (UnwindShareAccess) {
         IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
       }
@@ -1307,6 +1356,13 @@ Return Value:
       if (fcb) {
         DokanFreeFCB(vcb, fcb);
       }
+
+      // Since we have just un-referenced the CCB and FCB, don't leave the
+      // contexts on the FILE_OBJECT pointing to them, or they might be misused
+      // later. The pgpfsfd filter driver has been seen to do that when saving
+      // attachments from Outlook.
+      fileObject->FsContext = NULL;
+      fileObject->FsContext2 = NULL;
     }
 
     if (parentDir      // SL_OPEN_TARGET_DIRECTORY
@@ -1322,9 +1378,8 @@ Return Value:
   return status;
 }
 
-NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                             __in PEVENT_INFORMATION EventInfo,
-                             __in BOOLEAN Wait) {
+VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -1332,7 +1387,6 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
   PDokanVCB vcb = NULL;
-  BOOLEAN FCBAcquired = FALSE;
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -1347,15 +1401,7 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   vcb = irpSp->DeviceObject->DeviceExtension;
   ASSERT(vcb != NULL);
-
-  if (FALSE == Wait) {
-    DokanFCBTryLockRW(fcb, FCBAcquired);
-    if (FALSE == FCBAcquired) {
-      return STATUS_PENDING;
-    }
-  } else {
     DokanFCBLockRW(fcb);
-  }
 
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 
@@ -1440,9 +1486,11 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
                                 FILE_ACTION_ADDED);
       }
     }
+    ccb->AtomicOplockRequestPending = FALSE;
   } else {
     DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb,
               status);
+    DokanMaybeBackOutAtomicOplockRequest(ccb, irp);
     DokanFreeCCB(ccb);
     IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
     DokanFCBUnlock(fcb);
@@ -1457,6 +1505,4 @@ NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteCreate\n");
-
-  return STATUS_SUCCESS;
 }

@@ -1363,6 +1363,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     dcb->DeviceCharacteristics = DeviceCharacteristics;
     dcb->SessionId = SessionId;
     KeInitializeEvent(&dcb->KillEvent, NotificationEvent, FALSE);
+    KeInitializeEvent(&dcb->ForceTimeoutEvent, NotificationEvent, FALSE);
     IoInitializeRemoveLock(&dcb->RemoveLock, TAG, 1, 100);
     //
     // Establish user-buffer access method.
@@ -1373,6 +1374,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     DokanInitIrpList(&dcb->PendingIrp);
     DokanInitIrpList(&dcb->PendingEvent);
     DokanInitIrpList(&dcb->NotifyEvent);
+    DokanInitIrpList(&dcb->PendingRetryIrp);
 
     KeInitializeEvent(&dcb->ReleaseEvent, NotificationEvent, FALSE);
     ExInitializeResourceLite(&dcb->Resource);

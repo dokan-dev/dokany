@@ -154,9 +154,14 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
 
-    // this IRP is NOT timeout yet
-    if (tickCount.QuadPart < irpEntry->TickCount.QuadPart) {
-      break;
+    // If an async operation (like an oplock break or CancelIoEx call from user
+    // mode) has set the AsyncStatus to a failure status, then we clean up that
+    // IRP as if it had timed out but use the status. The normal way an IRP gets
+    // timed out is by its TickCount being too long ago. Continuing here means
+    // the IRP is not eligible for cleanup in either way.
+    if (irpEntry->AsyncStatus == STATUS_SUCCESS &&
+        tickCount.QuadPart < irpEntry->TickCount.QuadPart) {
+      continue;
     }
 
     RemoveEntryList(thisEntry);
@@ -165,23 +170,28 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     irp = irpEntry->Irp;
 
-    if (irp == NULL) {
-      // this IRP has already been canceled
-      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-      DokanFreeIrpEntry(irpEntry);
-      continue;
+    // Create IRPs are special in that this routine is always their place of
+    // effective cancellation. So we only care about races with the cancel
+    // routine for other IRPs (which can be effectively canceled in either
+    // place).
+    if (irpEntry->IrpSp->MajorFunction != IRP_MJ_CREATE) {
+      if (irp == NULL) {
+        // Already canceled previously.
+        ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+        DokanFreeIrpEntry(irpEntry);
+        continue;
+      }
+      if (IoSetCancelRoutine(irp, NULL) == NULL) {
+        // Cancel routine is already destined to run.
+        InitializeListHead(&irpEntry->ListEntry);
+        irpEntry->CancelRoutineFreeMemory = TRUE;
+        continue;
+      }
     }
 
-    // this IRP is not canceled yet
-    if (IoSetCancelRoutine(irp, NULL) == NULL) {
-      // Cancel routine will run as soon as we release the lock
-      InitializeListHead(&irpEntry->ListEntry);
-      irpEntry->CancelRoutineFreeMemory = TRUE;
-      continue;
-    }
-    // IrpEntry is saved here for CancelRoutine
-    // Clear it to prevent to be completed by CancelRoutine twice
+    // Prevent possible future runs of the cancel routine from doing anything.
     irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+
     InsertTailList(&completeList, &irpEntry->ListEntry);
   }
 
@@ -195,7 +205,25 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
     irp = irpEntry->Irp;
-    DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+    PIO_STACK_LOCATION irpSp = irpEntry->IrpSp;
+    if (irpSp->MajorFunction == IRP_MJ_CREATE) {
+      BOOLEAN canceled = (irpEntry->TickCount.QuadPart == 0);
+      PFILE_OBJECT fileObject = irpEntry->FileObject;
+      if (fileObject != NULL) {
+        PDokanCCB ccb = fileObject->FsContext2;
+        if (ccb != NULL) {
+          PDokanFCB fcb = ccb->Fcb;
+          OplockDebugRecordFlag(fcb, canceled
+                                         ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
+                                         : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
+        }
+      }
+      DokanCancelCreateIrp(Dcb->DeviceObject, irpEntry,
+                           canceled ? STATUS_CANCELLED
+                                    : STATUS_INSUFFICIENT_RESOURCES);
+    } else {
+      DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+    }
     DokanFreeIrpEntry(irpEntry);
   }
 
@@ -276,7 +304,7 @@ Routine Description:
 {
   NTSTATUS status;
   KTIMER timer;
-  PVOID pollevents[2];
+  PVOID pollevents[3];
   LARGE_INTEGER timeout = {0};
   BOOLEAN waitObj = TRUE;
   LARGE_INTEGER LastTime = {0};
@@ -290,7 +318,8 @@ Routine Description:
   KeInitializeTimerEx(&timer, SynchronizationTimer);
 
   pollevents[0] = (PVOID)&Dcb->KillEvent;
-  pollevents[1] = (PVOID)&timer;
+  pollevents[1] = (PVOID)&Dcb->ForceTimeoutEvent;
+  pollevents[2] = (PVOID)&timer;
 
   vcb = Dcb->Vcb;
 
@@ -299,7 +328,7 @@ Routine Description:
   KeQuerySystemTime(&LastTime);
 
   while (waitObj) {
-    status = KeWaitForMultipleObjects(2, pollevents, WaitAny, Executive,
+    status = KeWaitForMultipleObjects(3, pollevents, WaitAny, Executive,
                                       KernelMode, FALSE, NULL, NULL);
 
     if (!NT_SUCCESS(status) || status == STATUS_WAIT_0) {
@@ -307,6 +336,7 @@ Routine Description:
       // KillEvent or something error is occurred
       waitObj = FALSE;
     } else {
+      KeClearEvent(&Dcb->ForceTimeoutEvent);
       // in this case the timer was executed and we are checking if the timer
       // occurred regulary using the period DOKAN_CHECK_INTERVAL. If not, this
       // means the system was in sleep mode. If in this case the timer is

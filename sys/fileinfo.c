@@ -73,8 +73,9 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-    DokanFCBLockRO(fcb);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_QUERY_INFORMATION);    
+    DokanFCBLockRO(fcb);
     switch (irpSp->Parameters.QueryFile.FileInformationClass) {
     case FileBasicInformation:
       DDbgPrint("  FileBasicInformation\n");
@@ -247,9 +248,8 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
-                                       __in PEVENT_INFORMATION EventInfo,
-                                       __in BOOLEAN Wait) {
+VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -257,7 +257,6 @@ NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
   PDokanCCB ccb;
-  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQueryInformation\n");
 
@@ -349,7 +348,6 @@ NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQueryInformation\n");
-  return STATUS_SUCCESS;
 }
 
 BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix) {
@@ -393,8 +391,8 @@ VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject) {
 
     CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
 
-    ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
-    ExReleaseResourceLite(&fcb->PagingIoResource);
+    DokanPagingIoLockRW(fcb);
+    DokanPagingIoUnlock(fcb);
 
     CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
     if (fileObject != NULL) {
@@ -424,8 +422,7 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
     return;
   }
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&fcbRelatedTo->Vcb->Resource, TRUE);
+  DokanVCBLockRW(fcbRelatedTo->Vcb);
 
   listHead = &fcbRelatedTo->Vcb->NextFCB;
 
@@ -454,8 +451,7 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
     fcb = NULL;
   }
 
-  ExReleaseResourceLite(&fcbRelatedTo->Vcb->Resource);
-  KeLeaveCriticalRegion();
+  DokanVCBUnlock(fcbRelatedTo->Vcb);
 
   DDbgPrint("  FlushAllCachedFcb finished\n");
 }
@@ -509,7 +505,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_SET_INFORMATION);
     switch (irpSp->Parameters.SetFile.FileInformationClass) {
     case FileAllocationInformation:
       DDbgPrint(
@@ -542,8 +538,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
           CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
 
-          ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
-          ExReleaseResourceLite(&fcb->PagingIoResource);
+          DokanPagingIoLockRW(fcb);
+          DokanPagingIoUnlock(fcb);
 
           CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
         }
@@ -709,9 +705,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                              DokanOplockComplete, DokanPrePostIrp);
-
+    status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                              DokanPrePostIrp);
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
     //  to service an oplock break and we need to leave now.
@@ -740,9 +735,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
-                                     __in PEVENT_INFORMATION EventInfo,
-                                     __in BOOLEAN Wait) {
+VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+                                 __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -751,11 +745,11 @@ NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb = NULL;
   UNICODE_STRING oldFileName;
   BOOLEAN fcbLocked = FALSE;
+  BOOLEAN vcbLocked = FALSE;
 
   FILE_INFORMATION_CLASS infoClass;
   irp = IrpEntry->Irp;
   status = EventInfo->Status;
-  UNREFERENCED_PARAMETER(Wait);
 
   __try {
 
@@ -771,19 +765,27 @@ NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    
+    info = EventInfo->BufferLength;
+
+    infoClass = irpSp->Parameters.SetFile.FileInformationClass;
 
     // Note that we do not acquire the resource for paging file
     // operations in order to avoid deadlock with Mm
     if (!(irp->Flags & IRP_PAGING_IO)) {
+      // If we are going to change the FileName on the FCB, then we want the VCB
+      // locked so that we don't race with the loop in create.c that searches
+      // currently open FCBs for a matching name. However, we need to lock that
+      // before the FCB so that the lock order is consistent everywhere.
+      if (NT_SUCCESS(status) && infoClass == FileRenameInformation) {
+        DokanVCBLockRW(fcb->Vcb);
+        vcbLocked = TRUE;
+      }
       DokanFCBLockRW(fcb);
       fcbLocked = TRUE;
     }
 
     ccb->UserContext = EventInfo->Context;
-
-    info = EventInfo->BufferLength;
-
-    infoClass = irpSp->Parameters.SetFile.FileInformationClass;
 
     RtlZeroMemory(&oldFileName, sizeof(UNICODE_STRING));
 
@@ -919,12 +921,15 @@ NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     }
 
   } __finally {
-    if (fcb && fcbLocked)
+    if (fcbLocked) {
       DokanFCBUnlock(fcb);
+    }
+    if (vcbLocked) {
+      DokanVCBUnlock(fcb->Vcb);
+    }
 
     DokanCompleteIrpRequest(irp, status, info);
 
     DDbgPrint("<== DokanCompleteSetInformation\n");
-    return STATUS_SUCCESS;
   }
 }

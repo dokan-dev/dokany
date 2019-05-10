@@ -53,7 +53,7 @@ int ShowUsage() {
           "  /r d                : Remove driver\n"
           "  /r n                : Remove network provider\n"
           "  /l a                : List current mount points\n"
-          "  /d [0-9]            : Enable Kernel Debug output\n"
+          "  /d [0-7]            : Enable Kernel Debug output\n"
           "  /v                  : Print Dokan version\n");
   return EXIT_FAILURE;
 }
@@ -180,7 +180,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   case L'd': {
     WCHAR type = towlower(argv[2][0]);
-    if (L'0' > type || type > L'9')
+    if (L'0' > type || type > L'7')
       return DefaultCaseOption();
 
     ULONG mode = type - L'0';

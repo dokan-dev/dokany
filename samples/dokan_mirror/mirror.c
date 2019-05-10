@@ -1504,6 +1504,7 @@ void ShowUsage() {
           "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
+          "  /e Disable OpLocks\t\t\t\t Disable OpLocks kernel operations. Otherwise Dokan will take care of it.\n"
           "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
           "Examples:\n"
           "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
@@ -1581,6 +1582,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'f':
       dokanOptions->Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
+      break;
+    case L'e':
+      dokanOptions->Options |= DOKAN_OPTION_DISABLE_OPLOCKS;
       break;
     case L'u':
       command++;

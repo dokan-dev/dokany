@@ -38,8 +38,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 // DEFINES
 //
 
-#define DOKAN_DEBUG_DEFAULT 0
-
 extern ULONG g_Debug;
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
@@ -102,13 +100,13 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 #if _WIN32_WINNT > 0x501
 
 #define DDbgPrint(...)                                                         \
-  if (g_Debug) {                                                               \
+  if (g_Debug & DOKAN_DEBUG_DEFAULT) {                                         \
     KdPrintEx(                                                                 \
         (DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[DokanFS] " __VA_ARGS__));  \
   }
 #else
 #define DDbgPrint(...)                                                         \
-  if (g_Debug) {                                                               \
+  if (g_Debug & DOKAN_DEBUG_DEFAULT) {                                         \
     DbgPrint("[DokanFS] " __VA_ARGS__);                                        \
   }
 #endif
@@ -155,6 +153,7 @@ typedef enum _FSD_IDENTIFIER_TYPE {
   VCB = ':VCB', // Volume Control Block
   FCB = ':FCB', // File Control Block
   CCB = ':CCB', // Context Control Block
+  FREED_FCB = ':FFC', // FCB that has been freed
 } FSD_IDENTIFIER_TYPE;
 
 //
@@ -256,6 +255,11 @@ typedef struct _DokanDiskControlBlock {
   IRP_LIST PendingIrp;
   IRP_LIST PendingEvent;
   IRP_LIST NotifyEvent;
+  // IRPs that need to be retried in kernel mode, e.g. due to oplock breaks
+  // asynchronously requested on an earlier try. These are IRPs that have never
+  // yet been dispatched to user mode. The IRPs are supposed to be added here at
+  // the time they become ready to retry.
+  IRP_LIST PendingRetryIrp;
 
   PUNICODE_STRING DiskDeviceName;
   PUNICODE_STRING SymbolicLinkName;
@@ -272,7 +276,7 @@ typedef struct _DokanDiskControlBlock {
 
   // When timeout is occuerd, KillEvent is triggered.
   KEVENT KillEvent;
-
+  KEVENT ForceTimeoutEvent;
   KEVENT ReleaseEvent;
 
   // the thread to deal with timeout
@@ -299,10 +303,29 @@ typedef struct _DokanDiskControlBlock {
   ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
 
+  // Whether any oplock functionality should be disabled.
+  BOOLEAN OplocksDisabled;
 } DokanDCB, *PDokanDCB;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \
   (DeviceObject->Characteristics & FILE_READ_ONLY_DEVICE)
+
+// Information that can be attached to an object whose use is governed by an
+// ERESOURCE, to help diagnose locking problems.
+typedef struct _DokanResourceDebugInfo {
+  // A description of the call site in the code where the resource was
+  // exclusively acquired. If it is not exclusively acquired currently, this is
+  // NULL.
+  const char* ExclusiveLockSite;
+
+  // The thread in which the lock was exclusively acquired. If it is not
+  // exclusively acquired currently, this is NULL.
+  PKTHREAD ExclusiveOwnerThread;
+
+  // The number of active acquisitions held by ExclusiveOwnerThread. A value
+  // greater than 1 means it has been recursively acquired.
+  ULONG ExclusiveLockCount;
+} DokanResourceDebugInfo, *PDokanResourceDebugInfo;
 
 typedef struct _DokanVolumeControlBlock {
 
@@ -327,6 +350,8 @@ typedef struct _DokanVolumeControlBlock {
   LONG CcbFreed;
   ULONG Flags;
   BOOLEAN HasEventWait;
+  DokanResourceDebugInfo ResourceDebugInfo;
+  DOKAN_LOGGER ResourceLogger;
 
   // Whether keep-alive has been activated on this volume.
   BOOLEAN IsKeepaliveActive;
@@ -340,6 +365,57 @@ typedef struct _DokanVolumeControlBlock {
 // Flags for device
 #define DCB_DELETE_PENDING 0x00000001
 #define DCB_MOUNTPOINT_DELETED 0x00000004
+
+// Captures information about how oplocks have been used with an FCB for the
+// whole lifetime of the FCB (and therefore the lifetime of the associated
+// OPLOCK struct).
+typedef struct _DokanOplockDebugInfo {
+  // All of the access masks for all IRP_MJ_CREATEs that have ever targeted this
+  // FCB, whether or not they were successful.
+  ULONG AccessMask;
+
+  // All of the share access flags from all IRP_MJ_CREATEs that have ever
+  // targeted this FCB, whether or not they were successful.
+  ULONG ShareAccessMask;
+
+  // All of the IRP major functions that have ever been used with this FCB. If
+  // a function has been used then 1 << MajorFunction is 1 in here.
+  ULONG MajorFunctionMask;
+
+  // All of the RequestedOplockLevel bits that have ever been used with this FCB
+  // ORed together.
+  ULONG OplockLevelMask;
+
+  // All of the oplock-related FSCTL minor functions values that have ever been
+  // used with this FCB. The functions have bits assigned by
+  // GetOplockControlDebugInfoBit.
+  ULONG OplockFsctlMask;
+
+  // Pointers to all EPROCESS objects that have ever made oplock-related
+  // requests (via an FSCTL or IRP_MJ_CREATE) on this FCB, ORed together.
+  ULONG64 OplockProcessMask;
+
+  // The number of FILE_OPEN_REQUIRING_OPLOCK opens that have occurred.
+  LONG AtomicRequestCount;
+
+  // The number of IRP_MJ_FILE_SYSTEM_CONTROL requests related to oplocks that
+  // have occurred.
+  LONG OplockFsctlCount;
+
+  // DOKAN_OPLOCK_DEBUG_* values indicating things that have ever happened in
+  // the lifetime of the FCB.
+  ULONG Flags;
+} DokanOplockDebugInfo, *PDokanOplockDebugInfo;
+
+// Flags indicating oplock-related events that have occurred on an FCB.
+#define DOKAN_OPLOCK_DEBUG_ATOMIC_BACKOUT 1
+#define DOKAN_OPLOCK_DEBUG_COMPLETE_IF_OPLOCKED 2
+#define DOKAN_OPLOCK_DEBUG_EXPLICIT_BREAK_IN_CREATE 4
+#define DOKAN_OPLOCK_DEBUG_GENERIC_ACKNOWLEDGEMENT 8
+#define DOKAN_OPLOCK_DEBUG_CANCELED_CREATE 16
+#define DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE 32
+#define DOKAN_OPLOCK_DEBUG_CREATE_RETRY_QUEUED 64
+#define DOKAN_OPLOCK_DEBUG_CREATE_RETRIED 128
 
 typedef struct _DokanFileControlBlock {
   // Locking: Identifier is read-only, no locks needed.
@@ -372,6 +448,8 @@ typedef struct _DokanFileControlBlock {
   SHARE_ACCESS ShareAccess;
 
   // Locking: DokanFCBLock{RO,RW} - e.g. renames change this field.
+  // Modifications must lock the VCB followed by the FCB. Reads may
+  // lock either one.
   UNICODE_STRING FileName;
 
   // Locking: FsRtl routines should be enough after initialization.
@@ -388,6 +466,8 @@ typedef struct _DokanFileControlBlock {
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;
+  DokanResourceDebugInfo ResourceDebugInfo;
+  DokanResourceDebugInfo PagingIoResourceDebugInfo;
 
   // A keep-alive FCB is a special FCB whose last cleanup triggers automatic
   // unmounting. This is meant to unmount the file system when the owning
@@ -412,29 +492,127 @@ typedef struct _DokanFileControlBlock {
   // gone at that point.
   BOOLEAN BlockUserModeDispatch;
 
+  // Info that is useful for troubleshooting oplock problems in a debugger.
+  DokanOplockDebugInfo OplockDebugInfo;
+
 } DokanFCB, *PDokanFCB;
 
-#define DokanFCBTryLockRO(fcb, FCBAcquired) do{                                                                          \
-                                      KeEnterCriticalRegion();                                                    \
-                                      FCBAcquired = ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, FALSE); \
-                                      if (FALSE == FCBAcquired) {                                                        \
-                                         KeLeaveCriticalRegion();                                                 \
-                                      }                                                                           \
-                                    }while(0)
+#define DokanResourceLockRO(resource)                                          \
+  {                                                                            \
+    KeEnterCriticalRegion();                                                   \
+    ExAcquireResourceSharedLite(resource, TRUE);                               \
+  }
 
-#define DokanFCBTryLockRW(fcb, FCBAcquired) do{                                                                            \
-                                      KeEnterCriticalRegion();                                                      \
-                                      FCBAcquired = ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, FALSE);\
-                                      if (FALSE == FCBAcquired) {                                                          \
-                                         KeLeaveCriticalRegion();                                                   \
-                                      }                                                                             \
-                                    }while(0)
-#define DokanFCBLockRO(fcb) do { KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); } while(0)
-#define DokanFCBLockRW(fcb) ExEnterCriticalRegionAndAcquireResourceExclusive(fcb->AdvancedFCBHeader.Resource)
-#define DokanFCBUnlock(fcb) ExReleaseResourceAndLeaveCriticalRegion(fcb->AdvancedFCBHeader.Resource)
-//#define DokanFCBLockRO(fcb) do { DDbgPrint("ZZZ LockRO %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExAcquireResourceSharedLite(fcb->AdvancedFCBHeader.Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
-//#define DokanFCBLockRW(fcb) do { DDbgPrint("ZZZ LockRW %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExAcquireResourceExclusiveLite(fcb->AdvancedFCBHeader.Resource, TRUE); KeLeaveCriticalRegion(); } while(0)
-//#define DokanFCBUnlock(fcb) do { DDbgPrint("ZZZ Unlock %s %p\n", __FUNCTION__, fcb); KeEnterCriticalRegion(); ExReleaseResourceLite(fcb->AdvancedFCBHeader.Resource); KeLeaveCriticalRegion(); } while(0)
+#define DokanResourceLockRW(resource)                                          \
+  ExEnterCriticalRegionAndAcquireResourceExclusive(resource)
+
+#define DokanResourceUnlock(resource)                                          \
+  ExReleaseResourceAndLeaveCriticalRegion(resource)
+
+VOID DokanResourceLockWithDebugInfo(__in BOOLEAN Writable,
+                                    __in PERESOURCE Resource,
+                                    __in PDokanResourceDebugInfo DebugInfo,
+                                    __in PDOKAN_LOGGER Logger,
+                                    __in const char *Site,
+                                    __in const UNICODE_STRING *ResourceName,
+                                    __in const void *ResourcePointer);
+
+VOID DokanResourceUnlockWithDebugInfo(__in PERESOURCE Resource,
+                                      __in PDokanResourceDebugInfo DebugInfo);
+
+#define DokanStringizeInternal(x) #x
+#define DokanStringize(x) DokanStringizeInternal(x)
+#define DokanCallSiteID __FUNCTION__ ":" DokanStringize(__LINE__)
+
+#define DokanOpLockDebugEnabled()                                              \
+  (g_Debug & DOKAN_DEBUG_OPLOCKS)
+
+#define DokanLockDebugEnabled()                                                \
+  (g_Debug & DOKAN_DEBUG_LOCK)
+
+#define DokanFCBLockRW(fcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(TRUE, (fcb)->AdvancedFCBHeader.Resource,    \
+                                   &(fcb)->ResourceDebugInfo,                  \
+                                   &(fcb)->Vcb->ResourceLogger,                \
+                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
+  } else {                                                                     \
+    DokanResourceLockRW((fcb)->AdvancedFCBHeader.Resource);                    \
+  }
+
+#define DokanFCBLockRO(fcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(FALSE, (fcb)->AdvancedFCBHeader.Resource,   \
+                                   &(fcb)->ResourceDebugInfo,                  \
+                                   &(fcb)->Vcb->ResourceLogger,                \
+                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
+  } else {                                                                     \
+    DokanResourceLockRO((fcb)->AdvancedFCBHeader.Resource);                    \
+  }
+
+#define DokanFCBUnlock(fcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceUnlockWithDebugInfo((fcb)->AdvancedFCBHeader.Resource,        \
+                                     &(fcb)->ResourceDebugInfo);               \
+  } else {                                                                     \
+    DokanResourceUnlock((fcb)->AdvancedFCBHeader.Resource);                    \
+  }
+
+#define DokanPagingIoLockRW(fcb)                                               \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(TRUE, &(fcb)->PagingIoResource,             \
+                                   &(fcb)->PagingIoResourceDebugInfo,          \
+                                   &(fcb)->Vcb->ResourceLogger,                \
+                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
+  } else {                                                                     \
+    DokanResourceLockRW(&(fcb)->PagingIoResource);                             \
+  }
+
+#define DokanPagingIoLockRO(fcb)                                               \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(FALSE, &(fcb)->PagingIoResource,            \
+                                   &(fcb)->PagingIoResourceDebugInfo,          \
+                                   &(fcb)->Vcb->ResourceLogger,                \
+                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
+  } else {                                                                     \
+    DokanResourceLockRO(&(fcb)->PagingIoResource);                             \
+  }
+
+#define DokanPagingIoUnlock(fcb)                                               \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceUnlockWithDebugInfo(&(fcb)->PagingIoResource,                 \
+                                     &(fcb)->PagingIoResourceDebugInfo);       \
+  } else {                                                                     \
+    DokanResourceUnlock(&(fcb)->PagingIoResource);                             \
+  }
+
+#define DokanVCBLockRW(vcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(TRUE, &(vcb)->Resource,                     \
+                                   &(vcb)->ResourceDebugInfo,                  \
+                                   &(vcb)->ResourceLogger, DokanCallSiteID,    \
+                                   (vcb)->Dcb->MountPoint, (vcb));             \
+  } else {                                                                     \
+    DokanResourceLockRW(&(vcb)->Resource);                                     \
+  }
+
+#define DokanVCBLockRO(vcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceLockWithDebugInfo(FALSE, &(vcb)->Resource,                    \
+                                   &(vcb)->ResourceDebugInfo,                  \
+                                   &(vcb)->ResourceLogger, DokanCallSiteID,    \
+                                   (vcb)->Dcb->MountPoint, (vcb));             \
+  } else {                                                                     \
+    DokanResourceLockRO(&(vcb)->Resource);                                     \
+  }
+
+#define DokanVCBUnlock(vcb)                                                    \
+  if (DokanLockDebugEnabled()) {                                               \
+    DokanResourceUnlockWithDebugInfo(&(vcb)->Resource,                         \
+                                     &(vcb)->ResourceDebugInfo);               \
+  } else {                                                                     \
+    DokanResourceUnlock(&(vcb)->Resource);                                     \
+  }
 
 typedef struct _DokanContextControlBlock {
   // Locking: Read only field. No locking needed.
@@ -460,6 +638,13 @@ typedef struct _DokanContextControlBlock {
 
   // Whether keep-alive has been activated on this volume.
   BOOLEAN IsKeepaliveActive;
+
+  // Whether this CCB has a pending IRP_MJ_CREATE with
+  // FILE_OPEN_REQUIRING_OPLOCK, which has gotten past the request for the
+  // oplock in DokanDispatchCreate. If so, the request needs to be backed out if
+  // the IRP_MJ_CREATE does not succeed. The flag is cleared when the oplock
+  // request is backed out.
+  BOOLEAN AtomicOplockRequestPending;
 } DokanCCB, *PDokanCCB;
 
 //
@@ -473,6 +658,15 @@ typedef struct _DokanContextControlBlock {
 #define DokanGetFcbOplock(F) &(F)->Oplock
 #endif
 
+// Calls FsRtlCheckOplock if oplocks are enabled for the volume associated with
+// the given FCB. Otherwise, returns STATUS_SUCCESS.
+NTSTATUS DokanCheckOplock(
+    __in PDokanFCB Fcb,
+    __in PIRP Irp,
+    __in_opt PVOID Context,
+    __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
+    __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine);
+
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
 typedef struct _IRP_ENTRY {
@@ -482,10 +676,10 @@ typedef struct _IRP_ENTRY {
   PIO_STACK_LOCATION IrpSp;
   PFILE_OBJECT FileObject;
   BOOLEAN CancelRoutineFreeMemory;
+  NTSTATUS AsyncStatus;
   ULONG Flags;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
-  WORK_QUEUE_ITEM WorkQueueItem;
 } IRP_ENTRY, *PIRP_ENTRY;
 
 typedef struct _DEVICE_ENTRY {
@@ -588,6 +782,8 @@ DRIVER_CANCEL DokanEventCancelRoutine;
 
 DRIVER_CANCEL DokanIrpCancelRoutine;
 
+DRIVER_CANCEL DokanCreateIrpCancelRoutine;
+
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp);
 
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp);
@@ -647,57 +843,60 @@ NTSTATUS
 DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                         __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
 
+VOID
+DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+
+VOID
+DokanRegisterAsyncCreateFailure(__in PDEVICE_OBJECT DeviceObject,
+                                __in PIRP Irp,
+                                __in NTSTATUS Status);
+
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
-NTSTATUS DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo,
-                                   __in BOOLEAN Wait);
+VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo);
 
-NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo,
-                       __in BOOLEAN Wait);
+VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo);
 
-NTSTATUS DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo);
+
+VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+                                   __in PEVENT_INFORMATION EventInfo);
+
+VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+                                 __in PEVENT_INFORMATION EventInfo);
+
+// Invokes DokanCompleteCreate safely to time out an IRP_MJ_CREATE from a thread
+// that is not already in the context of a file system request.
+VOID
+DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
+                     __in PIRP_ENTRY IrpEntry,
+                     __in NTSTATUS Status);
+
+VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+                         __in PEVENT_INFORMATION EventInfo);
+
+VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo);
+
+VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo);
+
+VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
                         __in PEVENT_INFORMATION EventInfo,
-                        __in BOOLEAN Wait);
+                                         __in PDEVICE_OBJECT DeviceObject);
 
-NTSTATUS DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
-                                   __in PEVENT_INFORMATION EventInfo,
-                                   __in BOOLEAN Wait);
+VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo);
 
-NTSTATUS DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
-                                 __in PEVENT_INFORMATION EventInfo,
-                                 __in BOOLEAN Wait);
+VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+                                __in PEVENT_INFORMATION EventInfo);
 
-NTSTATUS DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
-                         __in PEVENT_INFORMATION EventInfo,
-                         __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                          __in PEVENT_INFORMATION EventInfo,
-                          __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                       __in PEVENT_INFORMATION EventInfo,
-                       __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject,
-                                         __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo,
-                        __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                __in PEVENT_INFORMATION EventInfo,
-                                __in BOOLEAN Wait);
-
-NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo,
-                              __in BOOLEAN Wait);
+VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
 
@@ -739,6 +938,10 @@ VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
 
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength);
+
+// Backs out an atomic oplock request that was made in DokanDispatchCreate. This
+// should be called if the IRP for which the request was made is about to fail.
+VOID DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp);
 
 NTSTATUS
 DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
@@ -839,5 +1042,37 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 
 ULONG DokanSearchWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
 	__in ULONG offsetPosition, __in int isIgnoreTargetWchar);
+
+// Logs the occurrence of the given type of IRP in the oplock debug info of the
+// FCB.
+void OplockDebugRecordMajorFunction(__in PDokanFCB Fcb,
+                                    __in UCHAR MajorFunction);
+
+// Logs the occurrence of an event type indicated by the DOKAN_OPLOCK_DEBUG_*
+// constants. The Flag value should be one constant.
+void OplockDebugRecordFlag(__in PDokanFCB Fcb, __in ULONG Flag);
+
+// Logs the process doing an oplock-related operation in the oplock debug info
+// of the FCB. This is not needed for explicit oplock requests. Use it e.g. for
+// an IRP_MJ_CREATE that requests an atomic oplock.
+void OplockDebugRecordProcess(__in PDokanFCB Fcb);
+
+// Records debug info about an oplock-related IRP_MJ_FILE_SYSTEM_CONTROL in the
+// oplock debug info of the FCB. The OplockLevel is a valid combination of
+// Windows OPLOCK_LEVEL_CACHE_* flags indicating the kind of oplock requested,
+// if applicable.
+void OplockDebugRecordRequest(__in PDokanFCB Fcb,
+                              __in ULONG FsControlMinorFunction,
+                              __in ULONG OplockLevel);
+
+// Logs the occurrence of an IRP_MJ_CREATE request with the specified access
+// flags in the oplock debug info of the FCB. Further information, like the
+// presence of an atomic oplock request, should be logged separately.
+void OplockDebugRecordCreateRequest(__in PDokanFCB Fcb,
+                                    __in ACCESS_MASK AccessMask,
+                                    __in ULONG ShareAccess);
+
+// Logs an atomic oplock request within a create operation.
+void OplockDebugRecordAtomicRequest(__in PDokanFCB Fcb);
 
 #endif // DOKAN_H_

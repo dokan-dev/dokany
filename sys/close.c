@@ -105,6 +105,7 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
     DokanFCBLockRW(fcb);
     if (fcb->BlockUserModeDispatch) {
       DokanLogInfo(&logger, L"Closed file with user mode dispatch blocked: %wZ",

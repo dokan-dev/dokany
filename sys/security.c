@@ -136,9 +136,8 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
-                                    __in PEVENT_INFORMATION EventInfo,
-                                    __in BOOLEAN Wait) {
+VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+                                __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status;
@@ -147,8 +146,6 @@ NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   ULONG info = 0;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
-
-  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQuerySecurity\n");
 
@@ -204,8 +201,6 @@ NTSTATUS DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQuerySecurity\n");
-
-  return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -309,8 +304,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Align BufferOffset by adding 3, then zeroing the last 2 bits.
     eventContext->Operation.SetSecurity.BufferOffset =
         (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-         fcb->FileName.Length + sizeof(WCHAR) + 3) &
-        ~0x03;
+         fcb->FileName.Length + sizeof(WCHAR) + 3) & ~0x03;
 
     RtlCopyMemory((PCHAR)eventContext +
                       eventContext->Operation.SetSecurity.BufferOffset,
@@ -334,16 +328,14 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
-                                  __in PEVENT_INFORMATION EventInfo,
-                                  __in BOOLEAN Wait) {
+VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+                              __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
 
-  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 
@@ -372,6 +364,4 @@ NTSTATUS DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteSetSecurity\n");
-
-  return STATUS_SUCCESS;
 }

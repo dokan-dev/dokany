@@ -88,6 +88,7 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLEANUP);
     if (fcb->IsKeepalive) {
       DokanFCBLockRW(fcb);
       BOOLEAN shouldUnmount = ccb->IsKeepaliveActive;
@@ -139,8 +140,8 @@ Return Value:
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                              DokanOplockComplete, DokanPrePostIrp);
+    status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                              DokanPrePostIrp);
     DokanFCBUnlock(fcb);
 
     //
@@ -169,9 +170,8 @@ Return Value:
   return status;
 }
 
-NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
-                              __in PEVENT_INFORMATION EventInfo,
-                              __in BOOLEAN Wait) {
+VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+                          __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -179,7 +179,6 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   PDokanFCB fcb;
   PDokanVCB vcb;
   PFILE_OBJECT fileObject;
-  BOOLEAN FCBAcquired = FALSE;
 
   DDbgPrint("==> DokanCompleteCleanup\n");
 
@@ -202,14 +201,7 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
-  if (FALSE == Wait) {
-    DokanFCBTryLockRO(fcb, FCBAcquired);
-    if (FALSE == FCBAcquired) {
-      return STATUS_PENDING;
-    }
-  } else {
-    DokanFCBLockRO(fcb);
-  }
+  DokanFCBLockRO(fcb);
 
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
@@ -241,6 +233,4 @@ NTSTATUS DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, 0);
 
   DDbgPrint("<== DokanCompleteCleanup\n");
-
-  return STATUS_SUCCESS;
 }

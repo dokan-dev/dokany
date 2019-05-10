@@ -29,7 +29,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #pragma alloc_text(PAGE, DokanUnload)
 #endif
 
-ULONG g_Debug = DOKAN_DEBUG_DEFAULT;
+ULONG g_Debug = DOKAN_DEBUG_NONE;
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
@@ -83,60 +83,78 @@ DokanFastIoRead(__in PFILE_OBJECT FileObject, __in PLARGE_INTEGER FileOffset,
 
 FAST_IO_ACQUIRE_FILE DokanAcquireForCreateSection;
 VOID DokanAcquireForCreateSection(__in PFILE_OBJECT FileObject) {
-  PFSRTL_ADVANCED_FCB_HEADER header;
-
-  header = FileObject->FsContext;
-  if (header && header->Resource) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(header->Resource, TRUE);
+  PDokanCCB ccb = (PDokanCCB)FileObject->FsContext2;
+  if (ccb != NULL) {
+    DokanFCBLockRW(ccb->Fcb);
     KeLeaveCriticalRegion();
   }
-
   DDbgPrint("DokanAcquireForCreateSection\n");
 }
 
 FAST_IO_RELEASE_FILE DokanReleaseForCreateSection;
 VOID DokanReleaseForCreateSection(__in PFILE_OBJECT FileObject) {
-  PFSRTL_ADVANCED_FCB_HEADER header;
-
-  header = FileObject->FsContext;
-  if (header && header->Resource) {
+  PDokanCCB ccb = (PDokanCCB)FileObject->FsContext2;
+  if (ccb != NULL) {
     KeEnterCriticalRegion();
-    ExReleaseResourceLite(header->Resource);
-    KeLeaveCriticalRegion();
+    DokanFCBUnlock(ccb->Fcb);
   }
 
   DDbgPrint("DokanReleaseForCreateSection\n");
+}
+
+FAST_IO_ACQUIRE_FOR_CCFLUSH DokanAcquireForCcFlush;
+NTSTATUS DokanAcquireForCcFlush(__in PFILE_OBJECT FileObject,
+                                __in PDEVICE_OBJECT DeviceObject) {
+  // This does the same locking that the FsRtlAcquireFileForCcFlushEx call
+  // within CcFlushCache would be doing, if we did not bother implementing
+  // this function. The only point of implementing it is because our specific
+  // incantation for acquiring the same locks will get this instrumented when
+  // enable lock debugging is on.
+  UNREFERENCED_PARAMETER(DeviceObject);
+  PDokanCCB ccb = (PDokanCCB)FileObject->FsContext2;
+  if (ccb != NULL) {
+    DokanPagingIoLockRO(ccb->Fcb);
+    KeLeaveCriticalRegion();
+  }
+  return STATUS_SUCCESS;
+}
+
+FAST_IO_RELEASE_FOR_CCFLUSH DokanReleaseForCcFlush;
+NTSTATUS DokanReleaseForCcFlush(__in PFILE_OBJECT FileObject,
+                                __in PDEVICE_OBJECT DeviceObject) {
+  // See the comment in DokanAcquireForCcFlush.
+  UNREFERENCED_PARAMETER(DeviceObject);
+  PDokanCCB ccb = (PDokanCCB)FileObject->FsContext2;
+  if (ccb != NULL) {
+    // The unlock calls below expect to be in their own critical region index.
+    KeEnterCriticalRegion();
+    DokanPagingIoUnlock(ccb->Fcb);
+  }
+  return STATUS_SUCCESS;
 }
 
 NTSTATUS
 DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
                                                CallbackData,
                                            __out PVOID *CompletionContext) {
-  PFSRTL_ADVANCED_FCB_HEADER header;
-  PDokanFCB fcb = NULL;
   PDokanCCB ccb;
 
   UNREFERENCED_PARAMETER(CompletionContext);
 
   DDbgPrint("DokanFilterCallbackAcquireForCreateSection\n");
 
-  header = CallbackData->FileObject->FsContext;
   ccb = CallbackData->FileObject->FsContext2;
 
-  if (ccb)
-    fcb = ccb->Fcb;
-
-  if (header && header->Resource) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(header->Resource, TRUE);
+  if (ccb != NULL) {
+    DokanFCBLockRW(ccb->Fcb);
     KeLeaveCriticalRegion();
   }
 
-  if (CallbackData->Parameters.AcquireForSectionSynchronization.SyncType !=
-      SyncTypeCreateSection) {
+  if (ccb == NULL ||
+      CallbackData->Parameters.AcquireForSectionSynchronization.SyncType !=
+          SyncTypeCreateSection) {
     return STATUS_FSFILTER_OP_COMPLETED_SUCCESSFULLY;
-  } else if (fcb && fcb->ShareAccess.Writers == 0) {
+  } else if (ccb->Fcb->ShareAccess.Writers == 0) {
     return STATUS_FILE_LOCKED_WITH_ONLY_READERS;
   } else {
     return STATUS_FILE_LOCKED_WITH_WRITERS;
@@ -264,6 +282,8 @@ Return Value:
   fastIoDispatch->FastIoWrite = FsRtlCopyWrite;
   fastIoDispatch->AcquireFileForNtCreateSection = DokanAcquireForCreateSection;
   fastIoDispatch->ReleaseFileForNtCreateSection = DokanReleaseForCreateSection;
+  fastIoDispatch->AcquireForCcFlush = DokanAcquireForCcFlush;
+  fastIoDispatch->ReleaseForCcFlush = DokanReleaseForCcFlush;
   fastIoDispatch->MdlRead = FsRtlMdlReadDev;
   fastIoDispatch->MdlReadComplete = FsRtlMdlReadCompleteDev;
   fastIoDispatch->PrepareMdlWrite = FsRtlPrepareMdlWriteDev;
@@ -415,6 +435,23 @@ VOID DokanNoOpRelease(__in PVOID Fcb) {
   DDbgPrint("<== DokanNoOpRelease\n");
 }
 
+NTSTATUS DokanCheckOplock(
+    __in PDokanFCB Fcb,
+    __in PIRP Irp,
+    __in_opt PVOID Context,
+    __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
+    __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine) {
+  ASSERT(Fcb->Vcb != NULL);
+  ASSERT(Fcb->Vcb->Dcb != NULL);
+  if (Fcb->Vcb != NULL && Fcb->Vcb->Dcb != NULL &&
+      !Fcb->Vcb->Dcb->OplocksDisabled) {
+    return FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, Context,
+                            CompletionRoutine, PostIrpRoutine);
+  }
+  return STATUS_SUCCESS;
+}
+
+
 #define PrintStatus(val, flag)                                                 \
   if (val == flag)                                                             \
   DDbgPrint("  status = " #flag "\n")
@@ -426,8 +463,10 @@ VOID DokanNoOpRelease(__in PVOID Fcb) {
   (DOKAN_LOG_MAX_PACKET_BYTES / sizeof(WCHAR) - 1)
 
 VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
-                        __in UCHAR MajorFunctionCode, __in NTSTATUS MessageId,
-                        __in NTSTATUS Status, __in LPCTSTR Format,
+                        __in UCHAR MajorFunctionCode,
+                        __in NTSTATUS MessageId,
+                        __in NTSTATUS Status,
+                        __in LPCTSTR Format,
                         __in va_list Args) {
   NTSTATUS status = STATUS_SUCCESS;
   PIO_ERROR_LOG_PACKET packet = NULL;
@@ -499,8 +538,10 @@ VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
   }
 }
 
-NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger, __in NTSTATUS Status,
-                       __in LPCTSTR Format, ...) {
+NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
+                       __in NTSTATUS Status,
+                       __in LPCTSTR Format,
+                       ...) {
   va_list args;
   va_start(args, Format);
   DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
@@ -727,4 +768,221 @@ PointerAlignSize(ULONG sizeInBytes) {
   }
 
   return sizeInBytes;
+}
+
+#define DOKAN_RESOURCE_LOCK_DEBUG_INTERVAL_MSEC 10
+#define DOKAN_RESOURCE_LOCK_WARNING_MSEC 1000000  // 1 sec
+
+static const UNICODE_STRING noName = RTL_CONSTANT_STRING(L"<no name>");
+
+VOID DokanLockWarn(__in const ERESOURCE* Resource,
+                   __in const DokanResourceDebugInfo* DebugInfo,
+                   __in PDOKAN_LOGGER Logger,
+                   __in const char* Site,
+                   __in const UNICODE_STRING* ObjectName,
+                   __in const void* ObjectPointer) {
+  if (ObjectName == NULL || ObjectName->Length == 0) {
+    ObjectName = &noName;
+  }
+
+  if (DebugInfo->ExclusiveOwnerThread != NULL) {
+    DokanLogInfo(
+        Logger,
+        L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            L" in thread %I64x at %S."
+            L" Current exclusive owner is thread %I64x"
+            L" with outermost lock at %S.",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site,
+        DebugInfo->ExclusiveOwnerThread,
+        DebugInfo->ExclusiveLockSite);
+    // This is like DDbgPrint but gets written "unconditionally" as long as you
+    // have the Debug Print Filter set up in the registry. Normal DDbgPrint
+    // calls are utterly stripped from release builds. We know that
+    // DokanLockWarn doesn't get invoked unless DriveFS is in lock debug mode,
+    // so this is OK.
+    DbgPrintEx(
+        DPFLTR_IHVDRIVER_ID,
+        DPFLTR_TRACE_LEVEL,
+        "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            " in thread %I64x at %s."
+            " Current exclusive owner is thread %I64x"
+            " with outermost lock at %s.\n",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site,
+        DebugInfo->ExclusiveOwnerThread,
+        DebugInfo->ExclusiveLockSite);
+  } else {
+    DokanLogInfo(
+        Logger,
+        L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            L" in thread %I64x at %S."
+            L" This resource has an unknown shared lock.",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site);
+    DbgPrintEx(
+        DPFLTR_IHVDRIVER_ID,
+        DPFLTR_TRACE_LEVEL,
+        "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            " in thread %I64x at %s."
+            " This resource has an unknown shared lock.\n",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site);
+  }
+}
+
+VOID DokanLockNotifyResolved(__in const ERESOURCE* Resource,
+                             __in PDOKAN_LOGGER Logger) {
+  DokanLogInfo(Logger,
+      L"Blocking on ERESOURCE %I64x has resolved on thread %I64x",
+      Resource,
+      KeGetCurrentThread());
+  DbgPrintEx(
+      DPFLTR_IHVDRIVER_ID,
+      DPFLTR_TRACE_LEVEL,
+      "Blocking on ERESOURCE %I64x has resolved on thread %I64x",
+      Resource,
+      KeGetCurrentThread());
+}
+
+VOID DokanResourceLockWithDebugInfo(__in BOOLEAN Writable,
+                                    __in PERESOURCE Resource,
+                                    __in PDokanResourceDebugInfo DebugInfo,
+                                    __in PDOKAN_LOGGER Logger,
+                                    __in const char* Site,
+                                    __in const UNICODE_STRING* ObjectName,
+                                    __in const void* ObjectPointer) {
+  // The wait is in 100ns units. Negative means "from now" as opposed to an
+  // absolute wake up time.
+  LARGE_INTEGER wait = RtlConvertLongToLargeInteger(
+      -DOKAN_RESOURCE_LOCK_DEBUG_INTERVAL_MSEC * 10);
+  LARGE_INTEGER lastWarnTime = {0};
+  LARGE_INTEGER systemTime = {0};
+  BOOLEAN warned = FALSE;
+  BOOLEAN result = FALSE;
+  for (;;) {
+    KeEnterCriticalRegion();
+    if (Writable) {
+      result = ExAcquireResourceExclusiveLite(Resource, FALSE);
+    } else {
+      result = ExAcquireResourceSharedLite(Resource, FALSE);
+    }
+    if (result) {
+      break;
+    }
+    KeLeaveCriticalRegion();
+    KeQuerySystemTime(&systemTime);
+    if (lastWarnTime.QuadPart == 0) {
+      lastWarnTime = systemTime;
+    } else if ((systemTime.QuadPart - lastWarnTime.QuadPart) / 10
+               >= DOKAN_RESOURCE_LOCK_WARNING_MSEC) {
+      DokanLockWarn(Resource, DebugInfo, Logger, Site, ObjectName,
+                    ObjectPointer);
+      warned = TRUE;
+      lastWarnTime = systemTime;
+    }
+    KeDelayExecutionThread(KernelMode, TRUE, &wait);
+  }
+
+  if (ExIsResourceAcquiredExclusiveLite(Resource)) {
+    if (DebugInfo->ExclusiveLockCount == 0) {
+      DebugInfo->ExclusiveLockSite = Site;
+      DebugInfo->ExclusiveOwnerThread = KeGetCurrentThread();
+    }
+    // Note that we may need this increment even for a non-writable request,
+    // since any recursive acquire of an exclusive lock is exclusive.
+    ++DebugInfo->ExclusiveLockCount;
+  }
+  if (warned) {
+    DokanLockNotifyResolved(Resource, Logger);
+  }
+}
+
+VOID DokanResourceUnlockWithDebugInfo(
+    __in PERESOURCE Resource,
+    __in PDokanResourceDebugInfo DebugInfo) {
+  if (ExIsResourceAcquiredExclusiveLite(Resource)) {
+    if (--DebugInfo->ExclusiveLockCount == 0) {
+      DebugInfo->ExclusiveLockSite = NULL;
+      DebugInfo->ExclusiveOwnerThread = NULL;
+    }
+  }
+  ExReleaseResourceLite(Resource);
+  KeLeaveCriticalRegion();
+}
+
+ULONG GetOplockControlDebugInfoBit(ULONG FsControlCode) {
+  switch (FsControlCode) {
+    case FSCTL_REQUEST_OPLOCK_LEVEL_1:
+      return 1;
+    case FSCTL_REQUEST_OPLOCK_LEVEL_2:
+      return 2;
+    case FSCTL_REQUEST_BATCH_OPLOCK:
+      return 4;
+    case FSCTL_OPLOCK_BREAK_ACKNOWLEDGE:
+      return 8;
+    case FSCTL_OPBATCH_ACK_CLOSE_PENDING:
+      return 16;
+    case FSCTL_OPLOCK_BREAK_NOTIFY:
+      return 32;
+    case FSCTL_OPLOCK_BREAK_ACK_NO_2:
+      return 64;
+    case FSCTL_REQUEST_FILTER_OPLOCK:
+      return 128;
+    case FSCTL_REQUEST_OPLOCK:
+      return 256;
+    default:
+      return 65536;
+  }
+}
+
+void OplockDebugRecordMajorFunction(__in PDokanFCB Fcb, UCHAR MajorFunction) {
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.MajorFunctionMask,
+                (1 << MajorFunction));
+}
+
+void OplockDebugRecordFlag(__in PDokanFCB Fcb, ULONG Flag) {
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.Flags, Flag);
+}
+
+void OplockDebugRecordProcess(__in PDokanFCB Fcb) {
+  InterlockedOr64((PLONG64)&Fcb->OplockDebugInfo.OplockProcessMask,
+                  (LONG64)PsGetCurrentProcess());
+}
+
+void OplockDebugRecordRequest(__in PDokanFCB Fcb,
+                              __in ULONG FsControlMinorFunction,
+                              __in ULONG OplockLevel) {
+  OplockDebugRecordMajorFunction(Fcb, IRP_MJ_FILE_SYSTEM_CONTROL);
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.OplockFsctlMask,
+                GetOplockControlDebugInfoBit(FsControlMinorFunction));
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.OplockLevelMask, OplockLevel);
+  InterlockedIncrement(&Fcb->OplockDebugInfo.OplockFsctlCount);
+  OplockDebugRecordProcess(Fcb);
+}
+
+void OplockDebugRecordCreateRequest(__in PDokanFCB Fcb,
+                                    __in ACCESS_MASK AccessMask,
+                                    __in ULONG ShareAccess) {
+  OplockDebugRecordMajorFunction(Fcb, IRP_MJ_CREATE);
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.AccessMask, (LONG)AccessMask);
+  InterlockedOr((PLONG)&Fcb->OplockDebugInfo.ShareAccessMask,
+                (LONG)ShareAccess);
+}
+
+void OplockDebugRecordAtomicRequest(PDokanFCB Fcb) {
+  OplockDebugRecordProcess(Fcb);
+  InterlockedIncrement(&Fcb->OplockDebugInfo.AtomicRequestCount);
 }

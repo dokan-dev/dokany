@@ -269,10 +269,9 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
   return status;
 }
 
-NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                             __in PEVENT_INFORMATION EventInfo,
-                                             __in PDEVICE_OBJECT DeviceObject,
-                                             __in BOOLEAN Wait) {
+VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -281,8 +280,6 @@ NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   PVOID buffer = NULL;
   PDokanDCB dcb;
   PDokanVCB vcb;
-
-  UNREFERENCED_PARAMETER(Wait);
 
   DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
 
@@ -354,8 +351,6 @@ NTSTATUS DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, info);
 
   DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
-
-  return STATUS_SUCCESS;
 }
 
 NTSTATUS

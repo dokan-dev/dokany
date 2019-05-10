@@ -145,6 +145,56 @@ DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return Status;
 }
 
+VOID
+DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
+                     __in PIRP_ENTRY IrpEntry,
+                     __in NTSTATUS Status) {
+  BOOLEAN AtIrqlPassiveLevel = FALSE;
+  BOOLEAN IsTopLevelIrp = FALSE;
+  PIRP Irp = IrpEntry->Irp;
+  PEVENT_INFORMATION eventInfo = NULL;
+
+  __try {
+
+    __try {
+
+      AtIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
+
+      if (AtIrqlPassiveLevel) {
+        FsRtlEnterFileSystem();
+      }
+
+      if (!IoGetTopLevelIrp()) {
+        IsTopLevelIrp = TRUE;
+        IoSetTopLevelIrp(Irp);
+      }
+
+      eventInfo = ExAllocatePool(sizeof(EVENT_INFORMATION));
+      RtlZeroMemory(eventInfo, sizeof(EVENT_INFORMATION));
+      eventInfo->Status = Status;
+      DokanCompleteCreate(IrpEntry, eventInfo);
+
+    } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
+
+      DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
+    }
+
+  } __finally {
+
+    if (eventInfo != NULL) {
+      ExFreePool(eventInfo);
+    }
+
+    if (IsTopLevelIrp) {
+      IoSetTopLevelIrp(NULL);
+    }
+
+    if (AtIrqlPassiveLevel) {
+      FsRtlExitFileSystem();
+    }
+  }
+}
+
 NTSTATUS
 DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;

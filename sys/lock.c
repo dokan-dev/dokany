@@ -91,8 +91,7 @@ DokanCommonLockControl(__in PIRP Irp) {
     // what we want to do
     // so now wait for the oplock to be broken (pass in NULL for the callback)
     // This may block and enter wait state.
-    Status =
-        FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
+    Status = DokanCheckOplock(Fcb, Irp, NULL /* EventContext */,
                          NULL /*DokanOplockComplete*/, NULL);
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
@@ -173,6 +172,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ASSERT(fcb != NULL);
     DokanFCBLockRW(fcb);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_LOCK_CONTROL);
     if (dcb->FileLockInUserMode) {
 
       eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -223,13 +223,11 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
-                           __in PEVENT_INFORMATION EventInfo,
-                           __in BOOLEAN Wait) {
+VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
 
-  UNREFERENCED_PARAMETER(Wait);
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
 
@@ -238,5 +236,4 @@ NTSTATUS DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteLock\n");
-  return STATUS_SUCCESS;
 }

@@ -76,13 +76,21 @@ extern "C" {
 #define DOKAN_OPTION_DEBUG 1
 /** Enable ouput debug message to stderr */
 #define DOKAN_OPTION_STDERR 2
-/** Use alternate stream */
+/**
+ * Enable the use of alternate stream paths in the form
+ * <file-name>:<stream-name>. If this is not specified then the driver will
+ * fail any attempt to access a path with a colon.
+ */
 #define DOKAN_OPTION_ALT_STREAM 4
 /** Enable mount drive as write-protected */
 #define DOKAN_OPTION_WRITE_PROTECT 8
 /** Use network drive - Dokan network provider needs to be installed */
 #define DOKAN_OPTION_NETWORK 16
-/** Use removable drive */
+/**
+ * Enable the invocation of user-mode file locking callbacks. If this is not
+ * specified, then the driver uses FsRtlCheckOplock and related functions to
+ * implement locking.
+ */
 #define DOKAN_OPTION_REMOVABLE 32
 /** Use mount manager */
 #define DOKAN_OPTION_MOUNT_MANAGER 64
@@ -90,6 +98,20 @@ extern "C" {
 #define DOKAN_OPTION_CURRENT_SESSION 128
 /** Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it */
 #define DOKAN_OPTION_FILELOCK_USER_MODE 256
+/**
+ * Enable logging of abnormally long kernel lock acquisition waits. This is
+ * detrimental to performance and should not be enabled in normal use.
+ */
+#define DOKAN_OPTION_LOCK_DEBUG_ENABLED 512
+/**
+ * Whether to disable any oplock support on the volume.
+ * Regular range locks are enabled regardless.
+ */
+#define DOKAN_OPTION_DISABLE_OPLOCKS 4096
+/** Whether the driver should log oplock requests. This may be detrimental to
+ * preformance and should not be enabled in normal use.
+ */
+#define DOKAN_OPTION_LOG_OPLOCKS 16384
 
 /** @} */
 
@@ -110,9 +132,9 @@ typedef struct _DOKAN_OPTIONS {
   /** Mount point. It can be a driver letter like "M:\" or a folder path "C:\mount\dokan" on a NTFS partition. */
   LPCWSTR MountPoint;
   /**
-  * UNC Name for the Network Redirector
-  * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff556761(v=vs.85).aspx">Support for UNC Naming</a>
-  */
+   * UNC Name for the Network Redirector
+   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff556761(v=vs.85).aspx">Support for UNC Naming</a>
+   */
   LPCWSTR UNCName;
   /** Max timeout in milliseconds of each request before Dokan gives up to wait events to complete. */
   ULONG Timeout;
@@ -770,7 +792,7 @@ BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
 
 /**
  * \brief Checks whether Name matches Expression
- * 
+ *
  * Behave like \c FsRtlIsNameInExpression routine from <a href="https://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx">Microsoft</a>\n
  * \c * (asterisk) Matches zero or more characters.\n
  * <tt>?</tt> (question mark) Matches a single character.\n
@@ -842,7 +864,6 @@ PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
  */
 VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list);
 
-
 /**
  * \brief Convert \ref DOKAN_OPERATIONS.ZwCreateFile parameters to <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> parameters.
  *
@@ -860,8 +881,9 @@ VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list);
  * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile function (MSDN)</a>
  */
 void DOKANAPI DokanMapKernelToUserCreateFileFlags(
-	ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG CreateOptions, ULONG CreateDisposition,
-	ACCESS_MASK* outDesiredAccess, DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+    ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG CreateOptions,
+    ULONG CreateDisposition, ACCESS_MASK *outDesiredAccess,
+    DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
 
 /**
  * \brief Convert WIN32 error to NTSTATUS

@@ -152,6 +152,7 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_READ);
     if (fcb->BlockUserModeDispatch) {
       Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
@@ -227,8 +228,8 @@ Return Value:
     //
     if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
       // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-      status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+      status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                                DokanPrePostIrp);
 
       //
       //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -268,9 +269,8 @@ Return Value:
   return status;
 }
 
-NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
-                           __in PEVENT_INFORMATION EventInfo,
-                           __in BOOLEAN Wait) {
+VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+                       __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   NTSTATUS status = STATUS_SUCCESS;
@@ -279,8 +279,6 @@ NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   PVOID buffer = NULL;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
-
-  UNREFERENCED_PARAMETER(Wait);
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -354,5 +352,4 @@ NTSTATUS DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, status, readLength);
 
   DDbgPrint("<== DokanCompleteRead\n");
-  return STATUS_SUCCESS;
 }

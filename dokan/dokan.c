@@ -709,6 +709,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_FILELOCK_USER_MODE) {
     eventStart.Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
   }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_DISABLE_OPLOCKS) {
+    eventStart.Flags |= DOKAN_EVENT_DISABLE_OPLOCKS;
+  }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
            Instance->MountPoint, sizeof(Instance->MountPoint));

@@ -58,6 +58,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_FLUSH_BUFFERS);
     DokanFCBLockRO(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -80,8 +81,8 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // fileObject->Flags &= FO_CLEANUP_COMPLETE;
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                              DokanOplockComplete, DokanPrePostIrp);
+    status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                              DokanPrePostIrp);
 
     //
     //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -111,14 +112,12 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
-NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
-                            __in PEVENT_INFORMATION EventInfo,
-                            __in BOOLEAN Wait) {
+VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo) {
   PIRP irp;
   PIO_STACK_LOCATION irpSp;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
-  UNREFERENCED_PARAMETER(Wait);
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
@@ -135,5 +134,4 @@ NTSTATUS DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
 
   DDbgPrint("<== DokanCompleteFlush\n");
-  return STATUS_SUCCESS;
 }
