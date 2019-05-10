@@ -900,6 +900,13 @@ DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
+// Determines whether the given file object was obtained by opening the volume
+// itself as opposed to a specific file.
+BOOLEAN
+IsVolumeOpen(__in PDokanVCB Vcb, __in PFILE_OBJECT FileObject) {
+  return FileObject != NULL && FileObject->FsContext == &Vcb->VolumeFileHeader;
+}
+
 NTSTATUS
 DokanDispatchDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
@@ -1010,6 +1017,15 @@ Return Value:
       break;
 
     default: {
+      // Device control functions are only supposed to work on a volume handle.
+      // Some win32 functions, like GetVolumePathName, rely on these operations
+      // failing for file/directory handles. On the other hand, dokan issues its
+      // custom operations on non-volume handles, so we can't do this check at
+      // the top.
+      if (!IsVolumeOpen(vcb, irpSp->FileObject)) {
+        status = STATUS_INVALID_PARAMETER;
+        break;
+      }
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           irpSp->Parameters.DeviceIoControl.IoControlCode);
       status = STATUS_NOT_IMPLEMENTED;
