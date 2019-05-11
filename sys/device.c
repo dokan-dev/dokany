@@ -951,6 +951,7 @@ Return Value:
 
       DDbgPrint("==> DokanDispatchIoControl\n");
       DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+      DDbgPrint("  IoControlCode: %lx\n", controlCode);
     }
 
     if (DeviceObject->DriverObject == NULL ||
@@ -1015,17 +1016,7 @@ Return Value:
     case IOCTL_GET_ACCESS_TOKEN:
       status = DokanGetAccessToken(DeviceObject, Irp);
       break;
-
     default: {
-      // Device control functions are only supposed to work on a volume handle.
-      // Some win32 functions, like GetVolumePathName, rely on these operations
-      // failing for file/directory handles. On the other hand, dokan issues its
-      // custom operations on non-volume handles, so we can't do this check at
-      // the top.
-      if (!IsVolumeOpen(vcb, irpSp->FileObject)) {
-        status = STATUS_INVALID_PARAMETER;
-        break;
-      }
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           irpSp->Parameters.DeviceIoControl.IoControlCode);
       status = STATUS_NOT_IMPLEMENTED;
@@ -1042,6 +1033,16 @@ Return Value:
       if (status == STATUS_NOT_IMPLEMENTED) {
         PrintUnknownDeviceIoctlCode(
             irpSp->Parameters.DeviceIoControl.IoControlCode);
+      }
+
+      // Device control functions are only supposed to work on a volume handle.
+      // Some win32 functions, like GetVolumePathName, rely on these operations
+      // failing for file/directory handles. On the other hand, dokan issues its
+      // custom operations on non-volume handles, so we can't do this check at
+      // the top.
+      if (status == STATUS_NOT_IMPLEMENTED
+          && !IsVolumeOpen(vcb, irpSp->FileObject)) {
+        status = STATUS_INVALID_PARAMETER;
       }
     } break;
     } // switch IoControlCode
