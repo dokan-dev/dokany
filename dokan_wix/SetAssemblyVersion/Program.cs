@@ -16,7 +16,7 @@ namespace SetAssemblyVersion
             if (args.Length < 3)
             {
                 ShowHelp();
-                return (int) EReturnCode.MissingParametersHelpShown;
+                return (int)EReturnCode.MissingParametersHelpShown;
             }
 
             // Expected content of changelog.md file:
@@ -28,7 +28,7 @@ namespace SetAssemblyVersion
 
             var productVersion = ReadVersion(args[0]);
             if (productVersion == new Version())
-                return (int) EReturnCode.VersionMissingOrInvalid;
+                return (int)EReturnCode.VersionMissingOrInvalid;
 
             Console.WriteLine("");
 
@@ -37,51 +37,51 @@ namespace SetAssemblyVersion
             var versionComma =
                 $"{productVersion.Major},{productVersion.Minor},{productVersion.Build},{productVersion.Revision.ToString("0000")}";
 
-                var xmlFile = args[1].Replace("\"", "").Trim();
+            var xmlFile = args[1].Replace("\"", "").Trim();
 
-                var result = ModifyProductParametersXml(xmlFile, productVersion);
-                if ((EReturnCode) result == EReturnCode.None)
+            var result = ModifyProductParametersXml(xmlFile, productVersion);
+            if ((EReturnCode)result == EReturnCode.None)
+            {
+                var files = Directory.GetFiles(args[2], "*.rc", SearchOption.AllDirectories);
+                Console.WriteLine("Update version in RC Files");
+
+                foreach (var file in files)
                 {
-                    var files = Directory.GetFiles(args[2], "*.rc", SearchOption.AllDirectories);
-                    Console.WriteLine("Update version in RC Files");
+                    Console.WriteLine("RC File {0} version updated.", file);
+                    var rcfile = File.ReadAllText(file);
+                    rcfile = Regex.Replace(rcfile, @"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", version);
+                    rcfile = Regex.Replace(rcfile, @"[0-9]+,[0-9]+,[0-9]+,[0-9]+", versionComma);
 
-                    foreach (var file in files)
-                    {
-                        Console.WriteLine("RC File {0} version updated.", file);
-                        var rcfile = File.ReadAllText(file);
-                        rcfile = Regex.Replace(rcfile, @"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", version);
-                        rcfile = Regex.Replace(rcfile, @"[0-9]+,[0-9]+,[0-9]+,[0-9]+", versionComma);
+                    File.WriteAllText(file, rcfile);
+                }
 
-                        File.WriteAllText(file, rcfile);
-                    }
+                Console.WriteLine("Update build VS define versions");
+                var props = File.ReadAllText(args[2] + @"\Dokan.props");
+                var majorApiDefineVersionString = $@"<DOKANAPIVersion>{productVersion.Major}</DOKANAPIVersion>";
+                props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]+<\/DOKANAPIVersion>",
+                    majorApiDefineVersionString);
+                var defineVersionString =
+                    $@"<DOKANVersion>{productVersion.Major}.{productVersion.Minor}.{productVersion.Build}</DOKANVersion>";
+                props = Regex.Replace(props, @"<DOKANVersion>[0-9]+.[0-9]+.[0-9]+<\/DOKANVersion>",
+                    defineVersionString);
+                File.WriteAllText(args[2] + @"\Dokan.props", props);
 
-                    Console.WriteLine("Update build VS define versions");
-                    var props = File.ReadAllText(args[2] + @"\Dokan.props");
-                    var majorApiDefineVersionString = $@"<DOKANAPIVersion>{productVersion.Major}</DOKANAPIVersion>";
-                    props = Regex.Replace(props, @"<DOKANAPIVersion>[0-9]+<\/DOKANAPIVersion>",
-                        majorApiDefineVersionString);
-                    var defineVersionString =
-                        $@"<DOKANVersion>{productVersion.Major}.{productVersion.Minor}.{productVersion.Build}</DOKANVersion>";
-                    props = Regex.Replace(props, @"<DOKANVersion>[0-9]+.[0-9]+.[0-9]+<\/DOKANVersion>",
-                        defineVersionString);
-                    File.WriteAllText(args[2] + @"\Dokan.props", props);
+                Console.WriteLine("Update Dokan header define version");
+                var dokanHeader = File.ReadAllText(args[2] + @"\dokan\dokan.h");
+                var dokanDefineVersion = $@"#define DOKAN_VERSION {productVersion.Major}{productVersion.Minor}{productVersion.Build}";
+                dokanHeader = Regex.Replace(dokanHeader, @"#define DOKAN_VERSION [0-9]{3}",
+                    dokanDefineVersion);
+                File.WriteAllText(args[2] + @"\dokan\dokan.h", dokanHeader);
 
-                    Console.WriteLine("Update Dokan header define version");
-                    var dokanHeader = File.ReadAllText(args[2] + @"\dokan\dokan.h");
-                    var dokanDefineVersion = $@"#define DOKAN_VERSION {productVersion.Major}{productVersion.Minor}{productVersion.Build}";
-                    dokanHeader = Regex.Replace(dokanHeader, @"#define DOKAN_VERSION [0-9]{3}",
-                        dokanDefineVersion);
-                    File.WriteAllText(args[2] + @"\dokan\dokan.h", dokanHeader);
-
-                    Console.WriteLine("Update Public header define version");
-                    var dokanPublicHeader = File.ReadAllText(args[2] + @"\sys\public.h");
-                    var dokanPublicDefineVersion = $"#define DOKAN_MAJOR_API_VERSION L\"{productVersion.Major}\"";
-                    dokanPublicHeader = Regex.Replace(dokanPublicHeader, "#define DOKAN_MAJOR_API_VERSION L\"[0-9]\"",
-                        dokanPublicDefineVersion);
-                    File.WriteAllText(args[2] + @"\sys\public.h", dokanPublicHeader);
+                Console.WriteLine("Update Public header define version");
+                var dokanPublicHeader = File.ReadAllText(args[2] + @"\sys\public.h");
+                var dokanPublicDefineVersion = $"#define DOKAN_MAJOR_API_VERSION L\"{productVersion.Major}\"";
+                dokanPublicHeader = Regex.Replace(dokanPublicHeader, "#define DOKAN_MAJOR_API_VERSION L\"[0-9]\"",
+                    dokanPublicDefineVersion);
+                File.WriteAllText(args[2] + @"\sys\public.h", dokanPublicHeader);
             }
 
-                return result;
+            return result;
         }
 
         /// <summary>
@@ -133,7 +133,7 @@ namespace SetAssemblyVersion
             Console.WriteLine("Modifying Version xml file: " + xmlFile);
 
             if (!File.Exists(xmlFile))
-                return (int) EReturnCode.FileIsMissing;
+                return (int)EReturnCode.FileIsMissing;
 
             var lines = File.ReadAllLines(xmlFile);
 
@@ -199,7 +199,7 @@ namespace SetAssemblyVersion
 
             File.WriteAllLines(xmlFile, lines);
 
-            return (int) EReturnCode.None;
+            return (int)EReturnCode.None;
         }
 
         /// <summary>
