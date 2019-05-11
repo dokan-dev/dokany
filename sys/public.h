@@ -76,6 +76,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define FSCTL_ACTIVATE_KEEPALIVE                                               \
   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80F, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+// DeviceIoControl code to send path notification request.
+#define FSCTL_NOTIFY_PATH                                                      \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define DRIVER_FUNC_INSTALL 0x01
 #define DRIVER_FUNC_REMOVE 0x02
 
@@ -107,6 +111,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_NETWORK_FILE_SYSTEM 1
 
 #define DOKAN_KEEPALIVE_FILE_NAME L"\\__drive_fs_keepalive"
+#define DOKAN_NOTIFICATION_FILE_NAME L"\\drive_fs_notification"
 
 /*
  * This structure is used for copying UNICODE_STRING from the kernel mode driver
@@ -118,6 +123,20 @@ typedef struct _DOKAN_UNICODE_STRING_INTERMEDIATE {
   USHORT MaximumLength;
   WCHAR Buffer[1];
 } DOKAN_UNICODE_STRING_INTERMEDIATE, *PDOKAN_UNICODE_STRING_INTERMEDIATE;
+
+/*
+ * This structure is used for sending notify path information from the user mode
+ * driver to the kernel mode driver. See below links for parameter details for
+ * CompletionFilter and Action, and FsRtlNotifyFullReportChange call.
+ * https://msdn.microsoft.com/en-us/library/windows/hardware/ff547026(v=vs.85).aspx
+ * https://msdn.microsoft.com/en-us/library/windows/hardware/ff547041(v=vs.85).aspx
+ */
+typedef struct _DOKAN_NOTIFY_PATH_INTERMEDIATE {
+  ULONG CompletionFilter;
+  ULONG Action;
+  USHORT Length;
+  WCHAR Buffer[1];
+} DOKAN_NOTIFY_PATH_INTERMEDIATE, *PDOKAN_NOTIFY_PATH_INTERMEDIATE;
 
 /*
  * This structure is used for copying ACCESS_STATE from the kernel mode driver

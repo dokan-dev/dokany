@@ -30,6 +30,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 static const UNICODE_STRING keepAliveFileName =
     RTL_CONSTANT_STRING(DOKAN_KEEPALIVE_FILE_NAME);
 
+static const UNICODE_STRING notificationFileName =
+    RTL_CONSTANT_STRING(DOKAN_NOTIFICATION_FILE_NAME);
+
 // We must NOT call without VCB lock
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength) {
@@ -146,6 +149,9 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     ASSERT(fcb != NULL);
     if (RtlEqualUnicodeString(&fcb->FileName, &keepAliveFileName, FALSE)) {
       fcb->IsKeepalive = TRUE;
+      fcb->BlockUserModeDispatch = TRUE;
+    }
+    if (RtlEqualUnicodeString(&fcb->FileName, &notificationFileName, FALSE)) {
       fcb->BlockUserModeDispatch = TRUE;
     }
 
@@ -377,6 +383,12 @@ VOID SetFileObjectForVCB(__in PFILE_OBJECT FileObject, __in PDokanVCB Vcb) {
   FileObject->FsContext = &Vcb->VolumeFileHeader;
 }
 
+BOOL IsDokanProcessFiles(UNICODE_STRING FileName) {
+  return (FileName.Length > 0 &&
+          (RtlEqualUnicodeString(&FileName, &keepAliveFileName, FALSE) ||
+           RtlEqualUnicodeString(&FileName, &notificationFileName, FALSE)));
+}
+
 NTSTATUS
 DokanCheckShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
                       _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
@@ -556,31 +568,29 @@ Return Value:
     }
 
     if (!vcb->HasEventWait) {
-      if (fileObject->FileName.Length > 0 && // TODO Move to function for all BlockUserModeDispatch filename
-          RtlEqualUnicodeString(&fileObject->FileName, &keepAliveFileName,
-                                FALSE)) {
-        DDbgPrint("  Keepalive file called before startup finished\n");
+      if (IsDokanProcessFiles(fileObject->FileName)) {
+        DDbgPrint("  Dokan Process file called before startup finished\n");
       } else {
-          DDbgPrint("  Here we only go in if some antivirus software tries to "
-                    "create files before startup is finished.\n");
-          if (fileObject->FileName.Length > 0) {
-            DDbgPrint("  Verify if the system tries to access System Volume\n");
-            UNICODE_STRING systemVolume;
-            RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-            BOOLEAN isSystemVolumeAccess =
-                StartsWith(&fileObject->FileName, &systemVolume);
-            if (isSystemVolumeAccess) {
-              DDbgPrint("  It's an access to System Volume, so don't return "
-                        "SUCCESS. We don't have one.\n");
-              status = STATUS_NO_SUCH_FILE;
-              __leave;
-            }
+        DDbgPrint("  Here we only go in if some antivirus software tries to "
+                  "create files before startup is finished.\n");
+        if (fileObject->FileName.Length > 0) {
+          DDbgPrint("  Verify if the system tries to access System Volume\n");
+          UNICODE_STRING systemVolume;
+          RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
+          BOOLEAN isSystemVolumeAccess =
+              StartsWith(&fileObject->FileName, &systemVolume);
+          if (isSystemVolumeAccess) {
+            DDbgPrint("  It's an access to System Volume, so don't return "
+                      "SUCCESS. We don't have one.\n");
+            status = STATUS_NO_SUCH_FILE;
+            __leave;
           }
-          DokanLogInfo(&logger,
-                       L"Handle created before IOCTL_EVENT_WAIT for file %wZ",
-                       &fileObject->FileName);
-          status = STATUS_SUCCESS;
-          __leave;
+        }
+        DokanLogInfo(&logger,
+                     L"Handle created before IOCTL_EVENT_WAIT for file %wZ",
+                     &fileObject->FileName);
+        status = STATUS_SUCCESS;
+        __leave;
       }
     }
 

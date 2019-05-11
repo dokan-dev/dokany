@@ -411,6 +411,54 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     status = STATUS_SUCCESS;
     break;
 
+  case FSCTL_NOTIFY_PATH:
+    PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath;
+    irpSp = IoGetCurrentIrpStackLocation(*pIrp);
+    if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
+        sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE)) {
+      DDbgPrint(
+          "Input buffer is too small (< DOKAN_NOTIFY_PATH_INTERMEDIATE)\n");
+      return STATUS_BUFFER_TOO_SMALL;
+    }
+    pNotifyPath =
+        (PDOKAN_NOTIFY_PATH_INTERMEDIATE)(*pIrp)->AssociatedIrp.SystemBuffer;
+    if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
+        sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) + pNotifyPath->Length -
+            sizeof(WCHAR)) {
+      DDbgPrint("Input buffer is too small\n");
+      return STATUS_BUFFER_TOO_SMALL;
+    }
+    fileObject = irpSp->FileObject;
+    if (fileObject == NULL) {
+      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                           L"Received FSCTL_NOTIFY_PATH with no FileObject.");
+    }
+    ccb = fileObject->FsContext2;
+    if (ccb == NULL || ccb->Identifier.Type != CCB) {
+      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                           L"Received FSCTL_NOTIFY_PATH with no CCB.");
+    }
+    fcb = ccb->Fcb;
+    if (fcb == NULL || fcb->Identifier.Type != FCB) {
+      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                           L"Received FSCTL_NOTIFY_PATH with no FCB.");
+    }
+    UNICODE_STRING receivedBuffer;
+    receivedBuffer.Length = pNotifyPath->Length;
+    receivedBuffer.MaximumLength = pNotifyPath->Length;
+    receivedBuffer.Buffer = pNotifyPath->Buffer;
+    DDbgPrint("Received FSCTL_NOTIFY_PATH, CompletionFilter: %lu, Action: %lu, "
+              "Length: %i, Path: %wZ\n",
+              pNotifyPath->CompletionFilter, pNotifyPath->Action,
+              receivedBuffer.Length, &receivedBuffer);
+    DokanFCBLockRO(fcb);
+    DokanNotifyReportChange0(fcb, &receivedBuffer,
+                             pNotifyPath->CompletionFilter,
+                             pNotifyPath->Action);
+    DokanFCBUnlock(fcb);
+    status = STATUS_SUCCESS;
+    break;
+
   case FSCTL_REQUEST_OPLOCK_LEVEL_1:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK_LEVEL_1\n");
     status = DokanOplockRequest(pIrp);

@@ -99,17 +99,23 @@ extern "C" {
 /** Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it */
 #define DOKAN_OPTION_FILELOCK_USER_MODE 256
 /**
+ * Whether DokanNotifyXXX functions should be enabled, which requires this
+ * library to maintain a special handle while the file system is mounted.
+ * Without this flag, the functions always return FALSE if invoked.
+ */
+#define DOKAN_OPTION_ENABLE_NOTIFICATION_API 512
+/**
  * Whether to disable any oplock support on the volume.
  * Regular range locks are enabled regardless.
  */
-#define DOKAN_OPTION_DISABLE_OPLOCKS 512
+#define DOKAN_OPTION_DISABLE_OPLOCKS 1024
 /**
  * Whether to satisfy a single-entry, name-only directory search without
  * dispatching to the FindFiles callback, if there is an open file from which
  * the driver can just copy the normalized name. These searches are frequently
  * done inside of CreateFile calls on Windows 7.
  */
-#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH 1024
+#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH 2048
 
 /** @} */
 
@@ -882,6 +888,57 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG CreateOptions,
     ULONG CreateDisposition, ACCESS_MASK *outDesiredAccess,
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+
+/**
+ * Note that all of the file paths passed in to the Notify methods below must
+ * include the drive letter, for example "G:<path>".
+ */
+/**
+ * \brief Notify dokan that a file or a directory has been created.
+ *
+ * \param FilePath Full path to the file or directory, including mount point.
+ * \param IsDirectory Indicates if the path is a directory.
+ * \return TRUE if notification succeeded.
+ */
+BOOL DOKANAPI DokanNotifyCreate(LPCWSTR FilePath, BOOL IsDirectory);
+
+/**
+ * \brief Notify dokan that a file or a directory has been deleted.
+ *
+ * \param FilePath Full path to the file or directory, including mount point.
+ * \param IsDirectory Indicates if the path is a directory.
+ * \return TRUE if notification succeeded.
+ */
+BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory);
+
+/**
+ * \brief Notify dokan that file or directory attributes have changed.
+ *
+ * \param FilePath Full path to the file or directory, including mount point.
+ * \return TRUE if notification succeeded.
+ */
+BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath);
+
+/**
+ * \brief Notify dokan that file or directory extended attributes have changed.
+ *
+ * \param FilePath Full path to the file or directory, including mount point.
+ * \return TRUE if notification succeeded.
+ */
+BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
+
+/**
+ * \brief Notify dokan that a file or a directory has been renamed. This method
+ *  supports in-place rename for file/directory within the same parent.
+ *
+ * \param OldPath Old path to the file or directory, including mount point.
+ * \param NewPath New path to the file or directory, including mount point.
+ * \param IsDirectory Indicates if the path is a directory.
+ * \param IsInSameFolder Indicates if the file or directory have same parent.
+ * \return TRUE if notification succeeded.
+ */
+BOOL DOKANAPI DokanNotifyRename(LPCWSTR OldPath, LPCWSTR NewPath,
+                                BOOL IsDirectory, BOOL IsInSameDirectory);
 
 /**
  * \brief Convert WIN32 error to NTSTATUS

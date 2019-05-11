@@ -1590,6 +1590,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L'z':
       dokanOptions->Options |= DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH;
       break;
+    case L'b':
+      dokanOptions->Options |= DOKAN_OPTION_ENABLE_NOTIFICATION_API;
+      break;
     case L'u':
       command++;
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);

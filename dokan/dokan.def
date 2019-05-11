@@ -22,3 +22,8 @@ DokanMapKernelToUserCreateFileFlags
 DokanGetMountPointList
 DokanReleaseMountPointList
 DokanNtStatusFromWin32
+DokanNotifyCreate
+DokanNotifyDelete
+DokanNotifyUpdate
+DokanNotifyXAttrUpdate
+DokanNotifyRename

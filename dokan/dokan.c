@@ -40,6 +40,7 @@ BOOL g_UseStdErr = FALSE;
 
 CRITICAL_SECTION g_InstanceCriticalSection;
 LIST_ENTRY g_InstanceList;
+HANDLE g_notify_handle = INVALID_HANDLE_VALUE;
 
 VOID DOKANAPI DokanUseStdErr(BOOL Status) { g_UseStdErr = Status; }
 
@@ -296,6 +297,19 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DbgPrintW(L"Failed to activate keepalive handle.\n");
   }
 
+  if (DokanOptions->Options & DOKAN_OPTION_ENABLE_NOTIFICATION_API) {
+    wchar_t notify_path[128];
+    StringCbPrintfW(notify_path, sizeof(notify_path), L"\\\\?%s%s",
+                    instance->DeviceName, DOKAN_NOTIFICATION_FILE_NAME);
+    g_notify_handle =
+        CreateFile(notify_path, GENERIC_READ,
+                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                   OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (g_notify_handle == INVALID_HANDLE_VALUE) {
+      DbgPrintW(L"Failed to open notify handle: %s\n", notify_path);
+    }
+  }
+
   // Here we should have been mounter by mountmanager thanks to
   // IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME
   DbgPrintW(L"mounted: %s -> %s\n", instance->MountPoint, instance->DeviceName);
@@ -318,6 +332,9 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   // Note that the keepalive close that actually has unmounting effect is the
   // implicit one that happens if the process dies. If this one runs, it will be
   // a no-op.
+  if (g_notify_handle != INVALID_HANDLE_VALUE) {
+    CloseHandle(g_notify_handle);
+  }
   CloseHandle(keepalive_handle);
   CloseHandle(device);
 
@@ -969,4 +986,74 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
 	  if (genericAll)
 		  *outDesiredAccess &= ~FILE_ALL_ACCESS;
   }
+}
+
+BOOL DOKANAPI DokanNotifyPath(LPCWSTR FilePath, ULONG CompletionFilter,
+                              ULONG Action) {
+  if (FilePath == NULL || g_notify_handle == INVALID_HANDLE_VALUE) {
+    DbgPrint("early failyre\n");
+    return FALSE;
+  }
+  size_t length = wcslen(FilePath);
+  const size_t prefixSize = 2; // size of mount letter plus ":"
+  if (length <= prefixSize) {
+    DbgPrint("to small failyre\n");
+    return FALSE;
+  }
+  // remove the mount letter and colon from length, for example: "G:"
+  length -= prefixSize;
+  ULONG returnedLength;
+  ULONG inputLength = (ULONG)(
+      sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) + (length * sizeof(WCHAR)));
+  PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = malloc(inputLength);
+  ZeroMemory(pNotifyPath, inputLength);
+  pNotifyPath->CompletionFilter = CompletionFilter;
+  pNotifyPath->Action = Action;
+  pNotifyPath->Length = (USHORT)(length * sizeof(WCHAR));
+  CopyMemory(pNotifyPath->Buffer, FilePath + prefixSize, pNotifyPath->Length);
+  if (!DeviceIoControl(g_notify_handle, FSCTL_NOTIFY_PATH, pNotifyPath,
+                       inputLength, NULL, 0, &returnedLength, NULL)) {
+    DbgPrint("Failed to send notify path command:%ws\n", FilePath);
+    free(pNotifyPath);
+    return FALSE;
+  }
+  free(pNotifyPath);
+  return TRUE;
+}
+
+BOOL DOKANAPI DokanNotifyCreate(LPCWSTR FilePath, BOOL IsDirectory) {
+  return DokanNotifyPath(FilePath,
+                         IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                     : FILE_NOTIFY_CHANGE_FILE_NAME,
+                         FILE_ACTION_ADDED);
+}
+
+BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory) {
+  return DokanNotifyPath(FilePath,
+                         IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                     : FILE_NOTIFY_CHANGE_FILE_NAME,
+                         FILE_ACTION_REMOVED);
+}
+
+BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath) {
+  return DokanNotifyPath(FilePath, FILE_NOTIFY_CHANGE_ATTRIBUTES,
+                         FILE_ACTION_MODIFIED);
+}
+
+BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath) {
+  return DokanNotifyPath(FilePath, FILE_NOTIFY_CHANGE_ATTRIBUTES,
+                         FILE_ACTION_MODIFIED);
+}
+
+BOOL DOKANAPI DokanNotifyRename(LPCWSTR OldPath, LPCWSTR NewPath,
+                                BOOL IsDirectory, BOOL IsInSameDirectory) {
+  BOOL success = DokanNotifyPath(
+      OldPath,
+      IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
+      IsInSameDirectory ? FILE_ACTION_RENAMED_OLD_NAME : FILE_ACTION_REMOVED);
+  success &= DokanNotifyPath(
+      NewPath,
+      IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
+      IsInSameDirectory ? FILE_ACTION_RENAMED_NEW_NAME : FILE_ACTION_ADDED);
+  return success;
 }
