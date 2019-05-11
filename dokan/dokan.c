@@ -991,13 +991,11 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
 BOOL DOKANAPI DokanNotifyPath(LPCWSTR FilePath, ULONG CompletionFilter,
                               ULONG Action) {
   if (FilePath == NULL || g_notify_handle == INVALID_HANDLE_VALUE) {
-    DbgPrint("early failyre\n");
     return FALSE;
   }
   size_t length = wcslen(FilePath);
   const size_t prefixSize = 2; // size of mount letter plus ":"
   if (length <= prefixSize) {
-    DbgPrint("to small failyre\n");
     return FALSE;
   }
   // remove the mount letter and colon from length, for example: "G:"

@@ -890,15 +890,21 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
     DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
 
 /**
+ * \defgroup DokanNotify Dokan Notify
+ * \brief Dokan User FS file changes notification
+ *
+ * User FileSystem can notify Dokan of outside file changes with those functions.
  * Note that all of the file paths passed in to the Notify methods below must
  * include the drive letter, for example "G:<path>".
+ * @{
  */
+
 /**
  * \brief Notify dokan that a file or a directory has been created.
  *
  * \param FilePath Full path to the file or directory, including mount point.
  * \param IsDirectory Indicates if the path is a directory.
- * \return TRUE if notification succeeded.
+ * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyCreate(LPCWSTR FilePath, BOOL IsDirectory);
 
@@ -907,7 +913,7 @@ BOOL DOKANAPI DokanNotifyCreate(LPCWSTR FilePath, BOOL IsDirectory);
  *
  * \param FilePath Full path to the file or directory, including mount point.
  * \param IsDirectory Indicates if the path is a directory.
- * \return TRUE if notification succeeded.
+ * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory);
 
@@ -915,7 +921,7 @@ BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory);
  * \brief Notify dokan that file or directory attributes have changed.
  *
  * \param FilePath Full path to the file or directory, including mount point.
- * \return TRUE if notification succeeded.
+ * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath);
 
@@ -923,7 +929,7 @@ BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath);
  * \brief Notify dokan that file or directory extended attributes have changed.
  *
  * \param FilePath Full path to the file or directory, including mount point.
- * \return TRUE if notification succeeded.
+ * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
 
@@ -935,10 +941,12 @@ BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
  * \param NewPath New path to the file or directory, including mount point.
  * \param IsDirectory Indicates if the path is a directory.
  * \param IsInSameFolder Indicates if the file or directory have same parent.
- * \return TRUE if notification succeeded.
+ * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyRename(LPCWSTR OldPath, LPCWSTR NewPath,
                                 BOOL IsDirectory, BOOL IsInSameDirectory);
+
+/**@}*/
 
 /**
  * \brief Convert WIN32 error to NTSTATUS
