@@ -72,7 +72,14 @@ namespace SetAssemblyVersion
                     dokanHeader = Regex.Replace(dokanHeader, @"#define DOKAN_VERSION [0-9]{3}",
                         dokanDefineVersion);
                     File.WriteAllText(args[2] + @"\dokan\dokan.h", dokanHeader);
-                }
+
+                    Console.WriteLine("Update Public header define version");
+                    var dokanPublicHeader = File.ReadAllText(args[2] + @"\sys\public.h");
+                    var dokanPublicDefineVersion = $"#define DOKAN_MAJOR_API_VERSION L\"{productVersion.Major}\"";
+                    dokanPublicHeader = Regex.Replace(dokanPublicHeader, "#define DOKAN_MAJOR_API_VERSION L\"[0-9]\"",
+                        dokanPublicDefineVersion);
+                    File.WriteAllText(args[2] + @"\sys\public.h", dokanPublicHeader);
+            }
 
                 return result;
         }
