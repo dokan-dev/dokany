@@ -143,9 +143,24 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // name
     DokanFCBLockRO(fcb);
     fcbLocked = TRUE;
-    eventLength = sizeof(EVENT_CONTEXT) + irpSp->Parameters.Write.Length +
-                  fcb->FileName.Length;
 
+    LARGE_INTEGER safeEventLength;
+    safeEventLength.QuadPart =
+        sizeof(EVENT_CONTEXT) + irpSp->Parameters.Write.Length +
+                  fcb->FileName.Length;
+    if (safeEventLength.HighPart != 0 ||
+        safeEventLength.QuadPart <
+            sizeof(EVENT_CONTEXT) + fcb->FileName.Length) {
+      DOKAN_INIT_LOGGER(logger, vcb->DeviceObject->DriverObject, IRP_MJ_WRITE);
+      DokanLogError(&logger,
+                    STATUS_INVALID_PARAMETER,
+                    L"Write with unsupported total size: %I64u",
+                    safeEventLength.QuadPart);
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
+
+    eventLength = safeEventLength.LowPart;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
     // no more memory!
