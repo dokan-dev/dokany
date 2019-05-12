@@ -763,7 +763,7 @@ Return Value:
       // Check if we are retrying a create we started before.
       ccb = fileObject->FsContext2;
       if (GetIdentifierType(ccb) == CCB &&
-            (DokanCCBFlagsIsSet(ccb, DOKAN_RETRY_CREATE))) {
+          (DokanCCBFlagsIsSet(ccb, DOKAN_RETRY_CREATE))) {
         DokanCCBFlagsClearBit(ccb, DOKAN_RETRY_CREATE);
         fcb = ccb->Fcb;
         OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRIED);
@@ -1412,7 +1412,7 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
 
   vcb = irpSp->DeviceObject->DeviceExtension;
   ASSERT(vcb != NULL);
-    DokanFCBLockRW(fcb);
+  DokanFCBLockRW(fcb);
 
   DDbgPrint("  FileName:%wZ\n", &fcb->FileName);
 

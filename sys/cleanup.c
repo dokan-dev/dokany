@@ -201,7 +201,9 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
-  DokanFCBLockRO(fcb);
+  DokanFCBLockRW(fcb);
+
+  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
 
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
@@ -227,8 +229,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
-
-  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
 
   DokanCompleteIrpRequest(irp, status, 0);
 
