@@ -6,6 +6,8 @@
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     AccessTokenDokanDoc:
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
+    SonarQubeToken:
+      secure: /gni/fn6VjMyw7qdAvkHuB2h3NoRFdXNqlQSAvqiYsuODhOPDkGGX/yNeOP5F2On
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
@@ -185,14 +187,14 @@
         Add-Type -assembly system.io.compression.filesystem
         choco install "msbuild-sonarqube-runner" -y
         
-        SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /o:"dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="094fffbd08033725384e461957a76f13c7ff5682"
+        SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /o:"dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="$env:SonarQubeToken"
         
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         & 7z e .\build-wrapper-win-x86.zip
                
         Invoke-Expression ".\build-wrapper-win-x86-64.exe --out-dir bw-output msbuild dokan.sln /m /p:Configuration='Win10 Debug' /p:Platform=x64"
         
-        SonarScanner.MSBuild.exe end /d:"sonar.login=094fffbd08033725384e461957a76f13c7ff5682"
+        SonarScanner.MSBuild.exe end /d:"sonar.login=$env:SonarQubeToken"
       }
   - ps: |
       if ($env:CONFIGURATION -eq "Coverity" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
