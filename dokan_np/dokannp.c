@@ -254,13 +254,15 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
         return WN_SUCCESS;
       }
 
-      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
+      /* Include trailing 0 and leading '\' */
+      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 2) * sizeof(WCHAR);
       if (len > *BufferSize) {
         *BufferSize = len;
         DokanReleaseMountPointList(dokanControl);
         return WN_MORE_DATA;
       }
-      CopyMemory(RemoteName, dokanControl[i].UNCName, len);
+      RemoteName[0] = L'\\';
+      CopyMemory(&RemoteName[1], dokanControl[i].UNCName, len);
       *BufferSize = len;
       DokanReleaseMountPointList(dokanControl);
       return WN_SUCCESS;
