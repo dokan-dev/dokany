@@ -87,11 +87,7 @@ extern "C" {
 #define DOKAN_OPTION_WRITE_PROTECT 8
 /** Use network drive - Dokan network provider needs to be installed */
 #define DOKAN_OPTION_NETWORK 16
-/**
- * Enable the invocation of user-mode file locking callbacks. If this is not
- * specified, then the driver uses FsRtlCheckOplock and related functions to
- * implement locking.
- */
+/** Use removable drive */
 #define DOKAN_OPTION_REMOVABLE 32
 /** Use mount manager */
 #define DOKAN_OPTION_MOUNT_MANAGER 64
