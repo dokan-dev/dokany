@@ -64,13 +64,14 @@ $ifstestParameters = @(
 	"-t", "AVChangeLogTest"                # reason: Part of ChangeJournal
 	"-t", "MountedDirtyTest"               # reason: Need a reboot to see the result
 	"-t", "SetCompressionTest"             # reason: Compression is not enable on Mirror
-	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not implemented in Mirror
+	"-t", "FileOpenByIDTest"               # reason: FILE_OPEN_BY_FILE_ID not supported
 	"-t", "OpenVolumeTest"                 # reason: We do not have FCB for \ to count open
 	"-t", "CaseSensitiveTest"              # reason: NTFS and CreateFile is not case sensitive by default
 	"-t", "ShortFileNameTest"              # reason: shortname not supported by Mirror
 	"-t", "TunnelingTest"                  # reason: shortname not supported by Mirror
 	"-t", "CompressionInformationTest"     # reason: compression not supported
-	"-t", "LinkInformationTest"            # reason: file link  not supported
+	"-t", "LinkInformationTest"            # reason: file link not supported
+	"-t", "StreamStandardInformationTest"  # reason: file link not supported
 	"-t", "AlternateNameInformationTest"   # reason: alternate name not supported
 	"-t", "HardLinkInformationTest"        # reason: hard link not supported
 	"-t", "EaInformationTest"              # reason: extended file attributes not supported
