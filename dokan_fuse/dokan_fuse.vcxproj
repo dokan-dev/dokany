@@ -193,6 +193,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -392,6 +393,7 @@
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;FUSE_USE_VERSION=27;_FILE_OFFSET_BITS=64;fuse_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
