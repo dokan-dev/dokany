@@ -31,6 +31,7 @@
     - Visual Studio 2015
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
+#    - Previous Visual Studio 2019
 #    - Previous Visual Studio 2015
 #    - Previous Visual Studio 2017
   matrix:
@@ -262,7 +263,7 @@
         $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\signtool.exe"
 
         cd dokan_wix
         $Platform = "Any CPU"

@@ -111,8 +111,8 @@
     </Inf>
   </ItemGroup>
   <ItemGroup>
-    <MessageCompile Include="dokanfs_msg.mc">
+    <CustomBuild Include="dokanfs_msg.mc">
       <Filter>Driver Files</Filter>
-    </MessageCompile>
+    </CustomBuild>
   </ItemGroup>
 </Project>
