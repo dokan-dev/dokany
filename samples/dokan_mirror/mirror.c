@@ -1488,7 +1488,7 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 
 void ShowUsage() {
   // clang-format off
-  fprintf(stderr, "mirror.exe\n"
+  fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
           "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
           "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
