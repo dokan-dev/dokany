@@ -160,6 +160,9 @@
           #
           # is displayed when trying to update followed by an exit rather
           # than selecting yes.
+          
+          # Tmp fix update issue dependencies conflict ncurses pdcurses
+          bash "pacman -R --noconfirm mingw-w64-{x86_64,i686}-gcc-ada mingw-w64-{x86_64,i686}-gcc-objc"
           for ($i = 0; $i -lt 3; $i++) {
             bash "pacman -Syuu --ask 20 --noconfirm --cache `"$unix_msys2_cache`""
           }
