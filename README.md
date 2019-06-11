@@ -54,7 +54,8 @@ You can obtain source files from https://dokan-dev.github.io
 
 ## Environment
 Dokan works on
- * Windows Server 2016 
+ * Windows Server 2019
+ * Windows Server 2016
  * Windows 10
  * Windows Server 2012 R2
  * Windows 8.1
