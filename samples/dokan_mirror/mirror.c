@@ -1368,7 +1368,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-
 // Uncomment the function and set dokanOperations->GetDiskFreeSpace to personalize disk space
 /*
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
@@ -1383,6 +1382,29 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
   return STATUS_SUCCESS;
 }
 */
+
+static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
+    PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
+    PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
+  DWORD SectorsPerCluster;
+  DWORD BytesPerSector;
+  DWORD NumberOfFreeClusters;
+  DWORD TotalNumberOfClusters;
+  WCHAR DriveLetter[3] = {'C', ':', 0};
+  DriveLetter[0] = RootDirectory[0];
+
+  GetDiskFreeSpace(DriveLetter, &SectorsPerCluster, &BytesPerSector,
+                   &NumberOfFreeClusters, &TotalNumberOfClusters);
+  *FreeBytesAvailable =
+      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * NumberOfFreeClusters;
+  *TotalNumberOfFreeBytes =
+      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * NumberOfFreeClusters;
+  *TotalNumberOfBytes =
+      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * TotalNumberOfClusters;
+  return STATUS_SUCCESS;
+}
 
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
@@ -1704,7 +1726,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations->UnlockFile = MirrorUnlockFile;
   dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
   dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
-  dokanOperations->GetDiskFreeSpace = NULL; // MirrorDokanGetDiskFreeSpace;
+  dokanOperations->GetDiskFreeSpace = MirrorDokanGetDiskFreeSpace;
   dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
   dokanOperations->Unmounted = MirrorUnmounted;
   dokanOperations->FindStreams = MirrorFindStreams;
