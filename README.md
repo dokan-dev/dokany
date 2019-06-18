@@ -100,7 +100,7 @@ To learn more about Dokan file system development, see the
 
 ## Build
 In short, download and install the
-[Visual Studio 2017](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx)
+[Visual Studio 2019](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx)
 with [SDK 10](https://dev.windows.com/en-us/downloads/windows-10-sdk) &
 [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
 
