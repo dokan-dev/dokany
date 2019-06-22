@@ -2,13 +2,19 @@ $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Princi
 $testadmin = $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 if ($testadmin -eq $false) 
 {
-    write-host "Restarting in an Admin prompt"
+	write-host "Restarting in an Admin prompt"
 	Start-Process powershell.exe -Verb RunAs -ArgumentList ('-noprofile -noexit -file "{0}" -elevated' -f ($myinvocation.MyCommand.Definition))
 	exit $LASTEXITCODE
 }
 
+$securebootUEFI=$false
+Try
+{
+	$securebootUEFI = confirm-securebootUEFI
+}
+Catch { }
 
-if (confirm-securebootUEFI) 
+if ($securebootUEFI) 
 {
 	write-Host "Secureboot is enabled. This needs to be disabled so that the driver signed with a self signed certificate can be loaded." -ForegroundColor Red
 	write-host "See https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/disabling-secure-boot#span-iddisablesecurebootspandisable-secure-boot for instructions to disable it" -ForegroundColor Red
