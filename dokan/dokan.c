@@ -175,10 +175,10 @@ void CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations) {
-  ULONG threadNum = 0;
-  ULONG i;
   HANDLE device;
   HANDLE threadIds[DOKAN_MAX_THREAD];
+  HANDLE legacyKeepAliveThreadIds = NULL;
+  BOOL keepalive_active = FALSE;
   PDOKAN_INSTANCE instance;
 
   g_DebugMode = DokanOptions->Options & DOKAN_OPTION_DEBUG;
@@ -263,13 +263,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     return DOKAN_START_ERROR;
   }
 
-  for (i = 0; i < DokanOptions->ThreadCount; ++i) {
-    threadIds[threadNum++] = (HANDLE)_beginthreadex(NULL, // Security Attributes
-                                                    0,    // stack size
-                                                    DokanLoop,
-                                                    (PVOID)instance, // param
-                                                    0, // create flag
-                                                    NULL);
+  for (ULONG i = 0; i < DokanOptions->ThreadCount; ++i) {
+    threadIds[i] = (HANDLE)_beginthreadex(NULL, // Security Attributes
+                                          0,    // stack size
+                                          DokanLoop,
+                                          (PVOID)instance, // param
+                                          0, // create flag
+                                          NULL);
   }
 
   if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
@@ -288,14 +288,25 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     // We don't consider this a fatal error because the keepalive handle is only
     // needed for abnormal termination cases anyway.
     DbgPrintW(L"Failed to open keepalive file: %s\n", keepalive_path);
+  } else {
+    DWORD keepalive_bytes_returned = 0;
+    keepalive_active =
+        DeviceIoControl(keepalive_handle, FSCTL_ACTIVATE_KEEPALIVE, NULL, 0,
+                        NULL, 0, &keepalive_bytes_returned, NULL);
+    if (!keepalive_active)
+      DbgPrintW(L"Failed to activate keepalive handle.\n");
   }
 
-  DWORD keepalive_bytes_returned = 0;
-  BOOL keepalive_active =
-      DeviceIoControl(keepalive_handle, FSCTL_ACTIVATE_KEEPALIVE, NULL, 0, NULL,
-                      0, &keepalive_bytes_returned, NULL);
   if (!keepalive_active) {
-    DbgPrintW(L"Failed to activate keepalive handle.\n");
+    DbgPrintW(L"Enable legacy keepalive.\n");
+    // Start Legacy Keep Alive thread - We are probably using older driver
+    legacyKeepAliveThreadIds =
+        (HANDLE)_beginthreadex(NULL, // Security Attributes
+                               0,    // stack size
+                               DokanKeepAlive,
+                               (PVOID)instance, // param
+                               0,               // create flag
+                               NULL);
   }
 
   if (DokanOptions->Options & DOKAN_OPTION_ENABLE_NOTIFICATION_API) {
@@ -323,20 +334,24 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOperations->Mounted(&fileInfo);
   }
 
-  // wait for thread terminations
-  WaitForMultipleObjects(threadNum, threadIds, TRUE, INFINITE);
-
-  for (i = 0; i < threadNum; ++i) {
+  // wait for loop thread terminations
+  WaitForMultipleObjects(DokanOptions->ThreadCount, threadIds, TRUE, INFINITE);
+  for (ULONG i = 0; i < DokanOptions->ThreadCount; ++i) {
     CloseHandle(threadIds[i]);
   }
 
+  if (legacyKeepAliveThreadIds) {
+    WaitForMultipleObjects(1, legacyKeepAliveThreadIds, TRUE, INFINITE);
+    CloseHandle(legacyKeepAliveThreadIds);
+  }
+
+  if (g_notify_handle != INVALID_HANDLE_VALUE)
+    CloseHandle(g_notify_handle);
   // Note that the keepalive close that actually has unmounting effect is the
   // implicit one that happens if the process dies. If this one runs, it will be
   // a no-op.
-  if (g_notify_handle != INVALID_HANDLE_VALUE) {
-    CloseHandle(g_notify_handle);
-  }
-  CloseHandle(keepalive_handle);
+  if (keepalive_handle != INVALID_HANDLE_VALUE)
+    CloseHandle(keepalive_handle);
   CloseHandle(device);
 
   if (DokanOperations->Unmounted) {
