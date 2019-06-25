@@ -6,9 +6,9 @@ FOR /f "delims=" %%A IN (
 '"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath'
 ) DO SET "VS_PATH=%%A"
 
-SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\15.0\Bin
+SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\Current\Bin
 IF NOT EXIST "%VS_PATH%" (
-	ECHO Visual C++ 2017 NOT Installed.
+	ECHO Visual C++ 2019 NOT Installed.
 	PAUSE
 	EXIT /B
 )
