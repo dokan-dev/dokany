@@ -12,7 +12,8 @@
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
-      MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
+      MSYS2_CACHE: '%TEMP%\msys2-cache'
+      MSYS2_INST_DIR: '%DOKAN_CI_CACHE%\msys64'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
@@ -151,12 +152,32 @@
         if ($env:CONFIGURATION -eq "All") {
           function bash($bash_command) {
             Write-Host "MSYS2-Bash: $bash_command"
-            Exec-External {& C:\msys64\usr\bin\bash.exe --login -c $bash_command }
+            Exec-External {& $env:MSYS2_INST_DIR\usr\bin\bash.exe --login -c $bash_command }
             Write-Host "MSYS2-Bash $bash_command " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
+
+          function install-msys2() {
+            if (Test-Path $env:MSYS2_INST_DIR) {
+              Write-Host "MSYS2 already installed at $env:MSYS2_INST_DIR"
+              return
+            }
+            $msys2_tar_url = "http://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20190524.tar.xz"
+            $msys2_tar_sha256 = "168E156FA9F00D90A8445676C023C63BE6E82F71487F4E2688AB5CB13B345383"
+            $msys2_tar = "$env:TEMP\msys2-base-x86_64.tar.xz"
+            Invoke-WebRequest $msys2_tar_url -OutFile $msys2_tar
+            if ($(Get-FileHash -Algorithm SHA256 $msys2_tar).Hash -ne $msys2_tar_sha256) {
+              throw "Hash mismatch while downloading Doxygen"
+            }
+            Write-Host "Extracting MSYS2"
+            Exec-External {& cmd /c "7z x -so $msys2_tar | 7z x -si -ttar -o$env:MSYS2_INST_DIR\..\"}
+            # Needed to execute scripts on first start. Also acts as a sanity check.
+            bash "echo MSYS2 installed"
+          }
+          install-msys2
+          
           New-Item -Force -Type Directory $env:MSYS2_CACHE
-          $unix_msys2_cache = (Exec-External {& C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
+          $unix_msys2_cache = (Exec-External {& $env:MSYS2_INST_DIR\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
           # We run the upgrade three times, because MSYS2 cannot upgrade itself without restarting
           # TODO: detect if restart is necessary and only run as many times as needed.
           #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
@@ -171,13 +192,11 @@
           # is displayed when trying to update followed by an exit rather
           # than selecting yes.
           
-          # Tmp fix update issue dependencies conflict ncurses pdcurses
-          bash "pacman -R --noconfirm mingw-w64-{x86_64,i686}-gcc-ada mingw-w64-{x86_64,i686}-gcc-objc"
           for ($i = 0; $i -lt 3; $i++) {
             bash "pacman -Syuu --ask 20 --noconfirm --cache `"$unix_msys2_cache`""
           }
           # install MinGW toolchain
-          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake make"
         }
 
   before_build:
