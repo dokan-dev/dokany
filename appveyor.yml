@@ -21,7 +21,7 @@
   version: 1.2.2-{build}
   configuration:
   - All
-  - Coverity
+  #- Coverity
   - SonarQube
   - FsTest
   - Documentation
@@ -39,16 +39,16 @@
     exclude:
       - configuration: All
         image: Visual Studio 2015
-      - configuration: Coverity
-        image: Visual Studio 2015
+      #- configuration: Coverity
+      #  image: Visual Studio 2015
       - configuration: SonarQube
         image: Visual Studio 2015
       - configuration: Documentation
         image: Visual Studio 2015
       - configuration: All
         image: Visual Studio 2017
-      - configuration: Coverity
-        image: Visual Studio 2017
+      #- configuration: Coverity
+      #  image: Visual Studio 2017
       - configuration: SonarQube
         image: Visual Studio 2017
       - configuration: Documentation
