@@ -222,7 +222,7 @@
         SonarScanner.MSBuild.exe begin /k:"dokany" /v:$env:APPVEYOR_BUILD_VERSION /o:"dokan-dev" /d:sonar.cfamily.build-wrapper-output=bw-output /d:sonar.host.url="https://sonarcloud.io" /d:sonar.login="$env:SonarQubeToken"
         
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
-        & 7z e .\build-wrapper-win-x86.zip
+        Exec-External { & 7z e .\build-wrapper-win-x86.zip }
                
         Invoke-Expression ".\build-wrapper-win-x86-64.exe --out-dir bw-output msbuild dokan.sln /m /p:Configuration='Win10 Debug' /p:Platform=x64"
         
@@ -295,9 +295,9 @@
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
-        & $buildCmd $buildArgs
+        Exec-External { & $buildCmd $buildArgs }
 
-        & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
+        Exec-External { & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\ }
 
         cd ${env:APPVEYOR_BUILD_FOLDER}
         Exec-External {& .\build.bat}
