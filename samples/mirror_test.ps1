@@ -96,7 +96,25 @@ $ifstestParameters = @(
 	"/U", $ifstest_pass
 )
 
-$buildCmd = & "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | select-object -first 1
+$vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vswhere)
+{
+	$path = & "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+	if ($path) {
+		$buildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
+		if (-not (test-path $buildCmd)) {
+			$buildCmd = join-path $path 'MSBuild\15.0\Bin\MSBuild.exe'
+			if (-not (test-path $buildCmd)) {
+				throw 'Failed to find MSBuild'
+			}
+		}
+	} else { throw 'Failed to find MSBuild' }
+}
+else
+{
+	$buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
+}
+
 $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
 $env:CI_BUILD_ARG = ""
 if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
