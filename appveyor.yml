@@ -22,7 +22,7 @@
   configuration:
   - All
   #- Coverity
-  - SonarQube
+  #- SonarQube
   - FsTest
   - Documentation
 
