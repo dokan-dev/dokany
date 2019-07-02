@@ -51,10 +51,25 @@ $hlks = @(
             'e54a669f7bfb1c6c6ee7bba08b02a6dc.cab' = 'FFABDD814B114457A084B80BEAC4500B2C64AD7F55007495D9551EA53CE18485';
             'fd0d8d2173424e55667bc3e935e1e376.cab' = 'ADBC46F9064B5DFCC94681B1210ACDCA255646DD434EF3AFDF3FD9BFB303BFA4';
         };
+    },
+	@{
+        # This checks for Windows 10 1809
+        'suitable_for_os_version' = [Environment]::OSVersion.Version -ge (New-Object 'Version' 10, 0, 17763, 0);
+        'name' = 'Windows HLK for Windows 10, version 1809';
+        'base_url' = 'http://download.microsoft.com/download/9/D/E/9DE48D44-C2D0-4706-8EBC-552F1A47BB06/hlk/Installers/';
+        'installer_file' = 'HLK Filter.Driver Content-x86_en-us.msi';
+        'nttest_path' = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST";
+        'files' = @{
+            'HLK Filter.Driver Content-x86_en-us.msi' = 'ef7a7b8fc5aa4baced9bd8bcbbd0685198f2e761d1a0746a1de51df0d3baee0f';
+            '4c5579196433c53cc1ec3d7b40ae5fd2.cab' = 'd5f69ea11e628c0fb51a6346684780b9add04078cccc7f7b343db66af86d715e';
+            '6119459287e24c3503279ff684647c83.cab' = 'c60b003189d6a5516124cc9775c8ab58cc3b3c4952c4641863afaab0e2ad142f';
+            'e54a669f7bfb1c6c6ee7bba08b02a6dc.cab' = '79b8897faba62df4aae1b2d5a9bc87da47624f3eb19ed44de8be8960f179fb9b';
+            'fd0d8d2173424e55667bc3e935e1e376.cab' = '162df11cae21c22fd4e437e4598fb1b445bf550572c015c60dc2ac9e5677a0cb';
+        };
     }
 )
 
-$hlk_info = $hlks | Where-Object {$_['suitable_for_os_version']}
+$hlk_info = $hlks | Where-Object {$_['suitable_for_os_version']} | select-object -last 1
 Write-Host "Using $($hlk_info['name'])"
 $base_url = $hlk_info['base_url']
 $installer_file = $hlk_info['installer_file']
