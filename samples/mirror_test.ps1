@@ -96,23 +96,21 @@ $ifstestParameters = @(
 	"/U", $ifstest_pass
 )
 
+$fstoolsRevision="f010a68f96e004e8ef76436c0582e64216f400a0"
+$winfstestRevision="98faa827b31d6e9144ff7c2c235f0b07b0ccf5d0"
+$buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (Test-Path $vswhere)
-{
+if (Test-Path $vswhere) {
 	$path = & "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
 	if ($path) {
-		$buildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
-		if (-not (test-path $buildCmd)) {
-			$buildCmd = join-path $path 'MSBuild\15.0\Bin\MSBuild.exe'
-			if (-not (test-path $buildCmd)) {
-				throw 'Failed to find MSBuild'
-			}
+		$tmpBuildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
+		if (test-path $tmpBuildCmd) {
+			# Visual studio 2019
+			$buildCmd = $tmpBuildCmd
+			$fstoolsRevision="9e378a7745a7dcb6fbfc1f649975e7a47c8f952e"
+			$winfstestRevision="d8b70ad91fae6681edeef15c35344ae280467600"
 		}
-	} else { throw 'Failed to find MSBuild' }
-}
-else
-{
-	$buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
+	}
 }
 
 $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
@@ -123,7 +121,7 @@ Write-Host Build test tools -ForegroundColor Green
 if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 {
 	Exec-External {if (!(Test-Path fstools)) { git clone -q https://github.com/Liryna/fstools.git } }
-	Exec-External {cd fstools; git reset --hard 9e378a7745a7dcb6fbfc1f649975e7a47c8f952e; cd .. }
+	Exec-External {cd fstools; git reset --hard $fstoolsRevision; cd .. }
 	$buildArgs = @(
 	".\fstools\winfstest.sln",
 	"/m",
@@ -136,7 +134,7 @@ if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 if (!(Test-Path .\winfstest\TestSuite\winfstest.exe))
 {
 	Exec-External {if (!(Test-Path winfstest)) { git clone -q https://github.com/Liryna/winfstest.git } }
-	Exec-External {cd winfstest; git reset --hard d8b70ad91fae6681edeef15c35344ae280467600; cd .. }
+	Exec-External {cd winfstest; git reset --hard $winfstestRevision; cd .. }
 	$buildArgs = @(
 	".\winfstest\winfstest.sln",
 	"/m",
