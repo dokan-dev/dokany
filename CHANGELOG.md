@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 ### Added
+- Mirror - Use `GetDiskFreeSpace` during `MirrorDokanGetDiskFreeSpace`.
 - Kernel - Add most important log msg to Event Viewer.
 - Kernel - Add `DOKAN_OPTION_DISABLE_OPLOCKS` dokan option.
 - Kernel - Add check that `DeviceControl` are performed on a volume handle and not a file.
@@ -14,10 +15,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Write - Check total event length is not longer than what we can allocate.
 
 ### Changed
+- Use latest WDK & SDK for Windows 10 version 1903 and toolset v142.
+- Installer - Update VCRedistVersion to VS 2019 14.21.27702.
+- Mirror - Improve ShowUsage.
 - Library - `DokanGetMountPointList` now returns his own buffer that need to be released with `DokanReleaseMountPointList`.
 - Kernel - Return proper error status for `DFileSystemControl`.
 - Kernel - Fix OpLocks / Remove FCB Retry lock.
 - Kernel - Use debug mode option to enable lock or/and oplock kernel log.
+- Kernel - Rename `DOKAN_KEEPALIVE_TIMEOUT` to `DOKAN_KEEPALIVE_TIMEOUT_DEFAULT`
 
 ### Fixed
 - Kernel - Fix long rename BSOD with network option enabled.
@@ -30,7 +35,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Lock global resources during `DokanGetMountPointList` avoid possible BSOD.
 - Kernel - Send correct notify change during `FileRenameInformation` when move to a diff folder.
 - Kernel - Move all `Io ShareAccess` under fcb RW lock.
-- Dokannp - Add leading `\` to `UNCName` during `NPGetConnection`
+- Dokannp - Add leading `\` to `UNCName` during `NPGetConnection`.
 
 ## [1.2.2.1000] - 2019-03-08
 ### Added
