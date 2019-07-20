@@ -868,9 +868,11 @@ PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead) {
 
   *nbRead = returnedLength / sizeof(DOKAN_CONTROL);
   results = malloc(returnedLength);
-  for (ULONG i = 0; i < *nbRead; ++i) {
-    if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0)
-      CopyMemory(&results[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
+  if (results != NULL) {
+    for (ULONG i = 0; i < *nbRead; ++i) {
+      if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0)
+        CopyMemory(&results[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
+    }
   }
   free(dokanControl);
   return results;
@@ -1020,6 +1022,10 @@ BOOL DOKANAPI DokanNotifyPath(LPCWSTR FilePath, ULONG CompletionFilter,
   ULONG inputLength = (ULONG)(
       sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) + (length * sizeof(WCHAR)));
   PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = malloc(inputLength);
+  if (pNotifyPath == NULL) {
+    DbgPrint("Failed to allocate NotifyPath\n");
+    return FALSE;
+  }
   ZeroMemory(pNotifyPath, inputLength);
   pNotifyPath->CompletionFilter = CompletionFilter;
   pNotifyPath->Action = Action;

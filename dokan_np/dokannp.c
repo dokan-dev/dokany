@@ -976,7 +976,7 @@ DWORD APIENTRY NPGetUniversalName(__in LPCWSTR LocalPath, __in DWORD InfoLevel,
   WCHAR LocalDrive[3];
 
   const WCHAR *lpRemainingPath;
-  WCHAR *lpString;
+  WCHAR *lpString = NULL;
 
   DbgPrintW(
       L"NPGetUniversalName LocalPath = %s, InfoLevel = %d, *BufferSize = %d\n",
