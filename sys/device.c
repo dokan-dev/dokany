@@ -546,7 +546,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   mountdevName->NameLength))) {
 
           DDbgPrint("   Update mount Point by %ws\n", symbolicLinkNameBuf);
-          ExFreePool(dcb->MountPoint);
+          if (dcb->MountPoint)
+            ExFreePool(dcb->MountPoint);
 
           dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
           if (dcb->DiskDeviceName != NULL) {
