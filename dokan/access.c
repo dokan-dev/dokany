@@ -61,9 +61,9 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
   RtlZeroMemory(eventInfo, eventInfoSize);
 
   eventInfo->SerialNumber = eventContext->SerialNumber;
-
+  GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH);
   status = SendToDevice(
-      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+      rawDeviceName,
       IOCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
       eventInfoSize, &returnedLength);
   if (status) {

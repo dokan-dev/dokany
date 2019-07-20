@@ -371,15 +371,13 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   return DOKAN_SUCCESS;
 }
 
-LPWSTR
+VOID
 GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
                  rsize_t DestinationBufferSizeInElements) {
   if (DeviceName && DestinationBuffer && DestinationBufferSizeInElements > 0) {
     wcscpy_s(DestinationBuffer, DestinationBufferSizeInElements, L"\\\\.");
     wcscat_s(DestinationBuffer, DestinationBufferSizeInElements, DeviceName);
   }
-
-  return DestinationBuffer;
 }
 
 void ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions) {
@@ -406,12 +404,12 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
   }
   RtlZeroMemory(buffer, sizeof(char) * EVENT_CONTEXT_MAX_SIZE);
 
+  GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH);
+
   status = TRUE;
   while (status) {
 
-    device =
-        CreateFile(GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName,
-                                    MAX_PATH),         // lpFileName
+    device = CreateFile(rawDeviceName,                 // lpFileName
                    GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
                    FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
                    NULL,                               // lpSecurityAttributes
@@ -423,7 +421,7 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
     if (device == INVALID_HANDLE_VALUE) {
       DbgPrintW(
           L"Dokan Error: CreateFile failed %s: %d\n",
-          GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+          rawDeviceName,
           GetLastError());
       free(buffer);
       result = (DWORD)-1;
@@ -667,7 +665,8 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
 
   DbgPrintW(L"send release to %s\n", DeviceName);
 
-  if (!SendToDevice(GetRawDeviceName(DeviceName, rawDeviceName, MAX_PATH),
+  GetRawDeviceName(DeviceName, rawDeviceName, MAX_PATH);
+  if (!SendToDevice(rawDeviceName,
                     IOCTL_EVENT_RELEASE, NULL, 0, NULL, 0, &returnedLength)) {
 
     DbgPrintW(L"Failed to unmount device:%s\n", DeviceName);

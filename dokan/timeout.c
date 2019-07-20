@@ -56,9 +56,8 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
 
   eventInfo->SerialNumber = eventContext->SerialNumber;
   eventInfo->Operation.ResetTimeout.Timeout = Timeout;
-
-  status = SendToDevice(
-      GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH),
+  GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH);
+  status = SendToDevice(rawDeviceName,
       IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
   free(eventInfo);
   return status;
@@ -70,10 +69,11 @@ UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
   ULONG ReturnedLength;
   WCHAR rawDeviceName[MAX_PATH];
 
+  GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH);
+
   while (TRUE) {
 
-    device = CreateFile(
-        GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+    device = CreateFile(rawDeviceName,
         GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
         FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
         NULL,                               // lpSecurityAttributes
@@ -85,7 +85,7 @@ UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
     if (device == INVALID_HANDLE_VALUE) {
       DbgPrint(
           "Dokan Error: DokanKeepAlive CreateFile failed %ws: %d\n",
-          GetRawDeviceName(DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
+          rawDeviceName,
           GetLastError());
       break;
     }
