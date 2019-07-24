@@ -56,7 +56,7 @@ extern "C" {
 /** @{ */
 
 /** The current Dokan version (ver 1.2.0). \ref DOKAN_OPTIONS.Version */
-#define DOKAN_VERSION 122
+#define DOKAN_VERSION 130
 /** Minimum Dokan version (ver 1.1.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 110
 /** Driver file name including the DOKAN_MAJOR_API_VERSION */

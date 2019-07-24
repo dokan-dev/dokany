@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [1.3.0.1000] - 2019-07-24
 ### Added
 - Mirror - Use `GetDiskFreeSpace` during `MirrorDokanGetDiskFreeSpace`.
 - Kernel - Add most important log msg to Event Viewer.
