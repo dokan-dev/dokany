@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+### Changed
+### Fixed
+
 ## [1.3.0.1000] - 2019-07-24
 ### Added
 - Mirror - Use `GetDiskFreeSpace` during `MirrorDokanGetDiskFreeSpace`.
