@@ -21,7 +21,7 @@
   version: 1.3.0-{build}
   configuration:
   - All
-  #- Coverity
+  - Coverity
   #- SonarQube
   - FsTest
   - Documentation
@@ -39,16 +39,16 @@
     exclude:
       - configuration: All
         image: Visual Studio 2015
-      #- configuration: Coverity
-      #  image: Visual Studio 2015
+      - configuration: Coverity
+        image: Visual Studio 2015
       - configuration: SonarQube
         image: Visual Studio 2015
       - configuration: Documentation
         image: Visual Studio 2015
       - configuration: All
         image: Visual Studio 2017
-      #- configuration: Coverity
-      #  image: Visual Studio 2017
+      - configuration: Coverity
+        image: Visual Studio 2017
       - configuration: SonarQube
         image: Visual Studio 2017
       - configuration: Documentation
@@ -235,40 +235,50 @@
           Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
           return;
         }
+        
+        $installCovPath = "$env:TEMP\install_coverity.ps1"
+        (New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/appveyor/build-images/master/scripts/Windows/install_coverity.ps1', $installCovPath)
+        & $installCovPath
+        
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win10 Debug",
         "/p:Platform=x64")
-
-        Exec-External {& "cov-build.exe" `
+  
+        Exec-External {& "$env:SYSTEMDRIVE\Tools\Coverity\bin\cov-build.exe" `
         --dir cov-int `
         $buildCmd $buildArgs}
 
         Exec-External {nuget install -ExcludeVersion PublishCoverity}
         Write-Host "Compressing Coverity results..."
-        Exec-External {& PublishCoverity\tools\PublishCoverity.exe compress `
-        --nologo `
-        -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
-        -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
-        --overwrite}
+        Exec-External { & tar czvf dokan.tgz cov-int 2>&1 | out-null }
 
         Write-Host "Uploading Coverity results..."
-        try
-        {
-            Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
-            --nologo `
-            -t "$env:CoverityProjectToken" `
-            -e "$env:CoverityNotificationEmail" `
-            -r "dokan-dev/dokany" `
-            -z "coverity.zip" `
-            -d "Appveyor build." `
-            --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
+        Add-Type -AssemblyName "System.Net.Http"
+        $client = New-Object Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromMinutes(5)
+        $form = New-Object Net.Http.MultipartFormDataContent
+        [Net.Http.HttpContent]$formField = New-Object Net.Http.StringContent($env:CoverityProjectToken)
+        $form.Add($formField, "`"token`"")
+        $formField = New-Object Net.Http.StringContent($env:CoverityNotificationEmail)
+        $form.Add($formField, "`"email`"")
+        $fs = New-Object IO.FileStream("$env:APPVEYOR_BUILD_FOLDER\dokan.tgz", [IO.FileMode]::Open, [IO.FileAccess]::Read)
+        $formField = New-Object Net.Http.StreamContent($fs)
+        $form.Add($formField, "`"file`"", "dokan.tgz")
+        $formField = New-Object Net.Http.StringContent($env:APPVEYOR_BUILD_VERSION)
+        $form.Add($formField, "`"version`"")
+        $formField = New-Object Net.Http.StringContent("AppVeyor scheduled build.")
+        $form.Add($formField, "`"description`"")
+        $url = "https://scan.coverity.com/builds?project=dokan-dev%2Fdokany"
+        $task = $client.PostAsync($url, $form)
+        try {
+          $task.Wait()  # throws AggregateException on timeout
+        } catch [AggregateException] {
+          throw $_.Exception.InnerException
         }
-        catch
-        {
-          Write-Output "Ignore PublishCoverity error"
-        }
+        $task.Result
+        $fs.Close()
       }
 
   - ps: |
