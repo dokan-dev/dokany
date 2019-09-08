@@ -341,7 +341,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   if (legacyKeepAliveThreadIds) {
-    WaitForMultipleObjects(1, legacyKeepAliveThreadIds, TRUE, INFINITE);
+    WaitForSingleObject(legacyKeepAliveThreadIds, INFINITE);
     CloseHandle(legacyKeepAliveThreadIds);
   }
 
