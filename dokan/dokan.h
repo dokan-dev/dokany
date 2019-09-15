@@ -227,11 +227,20 @@ typedef void* (WINAPI *PDokanMalloc)(size_t size, const char *fileName, int line
 typedef void (WINAPI *PDokanFree)(void *userData);
 typedef void* (WINAPI *PDokanRealloc)(void *userData, size_t newSize, const char *fileName, int lineNumber);
 
+typedef BOOL (WINAPI *PDokanDbgPrint)(LPCSTR logString);
+typedef BOOL (WINAPI *PDokanDbgPrintW)(LPCWSTR logString);
+
 typedef struct _DOKAN_MEMORY_CALLBACKS {
 	PDokanMalloc	Malloc;
 	PDokanFree		Free;
 	PDokanRealloc	Realloc;
 } DOKAN_MEMORY_CALLBACKS, *PDOKAN_MEMORY_CALLBACKS;
+
+typedef struct _DOKAN_LOG_CALLBACKS
+{
+	PDokanDbgPrint DbgPrint;
+	PDokanDbgPrintW DbgPrintW;
+} DOKAN_LOG_CALLBACKS, *PDOKAN_LOG_CALLBACKS;
 
 #define DOKAN_EXCEPTION_NOT_INITIALIZED			0x0f0ff0ff
 #define DOKAN_EXCEPTION_INITIALIZATION_FAILED	0x0fbadbad
@@ -1102,7 +1111,7 @@ void DOKANAPI DokanEndDispatchSetFileSecurity(DOKAN_SET_FILE_SECURITY_EVENT *Eve
 DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool();
 
 // Init/shutdown
-void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks);
+void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLBACKS* logCallbacks);
 void DOKANAPI DokanShutdown();
 /** @} */
 

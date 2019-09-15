@@ -52,6 +52,9 @@ extern BOOL g_DebugMode;
 // DokanOptions->UseStdErr is ON?
 extern BOOL g_UseStdErr;
 
+extern volatile PDokanDbgPrint g_PDokanDbgPrint;
+extern volatile PDokanDbgPrintW g_PDokanDbgPrintW;
+
 #ifdef _MSC_VER
 
 static VOID DokanDbgPrint(LPCSTR format, ...) {
@@ -71,10 +74,18 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
     outputString = buffer;
   }
 
-  OutputDebugStringA(outputString);
+  BOOL allowStandardPrint = FALSE;
+  if (g_PDokanDbgPrint)
+  {
+	  allowStandardPrint = g_PDokanDbgPrint(outputString);
+  }
+  if (allowStandardPrint)
+  {
+	  OutputDebugStringA(outputString);
+  }
 
-  if(g_UseStdErr) {
-	  
+  if(g_UseStdErr && allowStandardPrint)
+  {  
 	  fputs(outputString, stderr);
 	  fflush(stderr);
   }
@@ -103,10 +114,18 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
     outputString = buffer;
   }
 
-  OutputDebugStringW(outputString);
+  BOOL allowStandardPrint = FALSE;
+  if (g_PDokanDbgPrint)
+  {
+	  allowStandardPrint = g_PDokanDbgPrintW(outputString);
+  }
+  if (allowStandardPrint)
+  {
+	  OutputDebugStringW(outputString);
+  }
 
-  if(g_UseStdErr) {
-
+  if(g_UseStdErr && allowStandardPrint)
+  {
 	  fputws(outputString, stderr);
 	  fflush(stderr);
   }
