@@ -105,12 +105,12 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("  FileNormalizedNameInformation\n");
     case FileNameInformation: {
       DDbgPrint("  FileNameInformation\n");
-      PFILE_NAME_INFORMATION nameInfo =
-          (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      PFILE_NAME_INFORMATION nameInfo
+        = (PFILE_NAME_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
       ASSERT(nameInfo != NULL);
 
-      BOOLEAN isNetworkFileSystem =
-          (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+      BOOLEAN isNetworkFileSystem
+        = (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
       PUNICODE_STRING fileName = &fcb->FileName;
       USHORT length = fcb->FileName.Length;
       BOOLEAN doConcat = FALSE;
