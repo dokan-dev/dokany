@@ -137,7 +137,11 @@ typedef struct _DOKAN_OPTIONS {
    * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff556761(v=vs.85).aspx">Support for UNC Naming</a>
    */
   LPCWSTR UNCName;
-  /** Max timeout in milliseconds of each request before Dokan gives up to wait events to complete. */
+  /**
+   * Max timeout in milliseconds of each request before Dokan gives up to wait events to complete.
+   * A timeout request is a sign that the userland implementation is no longer able to properly manage requests in time.
+   * The driver will therefore unmount the device when a timeout trigger in order to keep the system stable.
+   */
   ULONG Timeout;
   /** Allocation Unit Size of the volume. This will affect the file size. */
   ULONG AllocationUnitSize;
