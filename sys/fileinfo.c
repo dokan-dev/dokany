@@ -122,18 +122,24 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         __leave;
       }
 
-      nameInfo->FileNameLength =
-          vcb->Dcb->DiskDeviceName->Length + fileName->Length;
+      ULONG copyLength;
 
-      ULONG copyLength = vcb->Dcb->DiskDeviceName->Length;
-      if (copyLength > (ULONG)(allocatedBufferEnd - nameInfoFileName)) {
-        copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
-        status = STATUS_BUFFER_OVERFLOW;
+      if (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM) {
+        nameInfo->FileNameLength =
+            vcb->Dcb->DiskDeviceName->Length + fileName->Length;
+
+        copyLength = vcb->Dcb->DiskDeviceName->Length;
+        if (copyLength > (ULONG)(allocatedBufferEnd - nameInfoFileName)) {
+          copyLength = (ULONG)(allocatedBufferEnd - nameInfoFileName);
+          status = STATUS_BUFFER_OVERFLOW;
+        }
+
+        RtlCopyMemory(nameInfoFileName, vcb->Dcb->DiskDeviceName->Buffer,
+                      copyLength);
+        nameInfoFileName += copyLength;
+      } else {
+        nameInfo->FileNameLength = fileName->Length;
       }
-
-      RtlCopyMemory(nameInfoFileName, vcb->Dcb->DiskDeviceName->Buffer,
-                    copyLength);
-      nameInfoFileName += copyLength;
 
       copyLength = fileName->Length;
       if (copyLength > (ULONG)(allocatedBufferEnd - nameInfoFileName)) {
