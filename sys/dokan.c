@@ -542,20 +542,24 @@ NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
                        __in NTSTATUS Status,
                        __in LPCTSTR Format,
                        ...) {
-  va_list args;
-  va_start(args, Format);
-  DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
-                     DOKANFS_ERROR_MSG, Status, Format, args);
-  va_end(args);
+  if (g_Debug & DOKAN_DEBUG_DEFAULT) {
+    va_list args;
+    va_start(args, Format);
+    DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
+                       DOKANFS_ERROR_MSG, Status, Format, args);
+    va_end(args);
+  }
   return Status;
 }
 
 VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...) {
-  va_list args;
-  va_start(args, Format);
-  DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
-                     DOKANFS_INFO_MSG, STATUS_SUCCESS, Format, args);
-  va_end(args);
+  if (g_Debug & DOKAN_DEBUG_DEFAULT) {
+    va_list args;
+    va_start(args, Format);
+    DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
+                       DOKANFS_INFO_MSG, STATUS_SUCCESS, Format, args);
+    va_end(args);
+  }
 }
 
 VOID DokanPrintNTStatus(NTSTATUS Status) {
