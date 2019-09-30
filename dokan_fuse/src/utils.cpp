@@ -86,15 +86,13 @@ static size_t put_utf8(unsigned char *buf, ICONV_CHAR c) {
 
   buf += o_len;
   mask = 0xff80;
-  for (;;) {
+  auto tmp_len = o_len;
+  while (--tmp_len) {
     *--buf = 0x80 | (c & 0x3f);
     c >>= 6;
     mask >>= 1;
-    if (c < 0x40) {
-      *--buf = mask | c;
-      break;
-    }
   }
+  *--buf = mask | c;
   return o_len;
 }
 
