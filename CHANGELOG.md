@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased]
 ### Added
 ### Changed
+- Kernel - Only log to event viewer when debug default log is enabled
 ### Fixed
+- Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`
+- Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices
+- FUSE - Infinite loop when using characters from Unicode supplementary planes ('🔈' for example)
 
 ## [1.3.0.1000] - 2019-07-24
 ### Added
