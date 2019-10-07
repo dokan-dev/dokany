@@ -949,7 +949,7 @@ BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
  *  supports in-place rename for file/directory within the same parent.
  *
  * \param OldPath Old, absolute path to the file or directory, including the mount-point of the file system.
- * \param NewPath New,absolute path to the file or directory, including the mount-point of the file system.
+ * \param NewPath New, absolute path to the file or directory, including the mount-point of the file system.
  * \param IsDirectory Indicates if the path is a directory.
  * \param IsInSameFolder Indicates if the file or directory have the same parent directory.
  * \return \c TRUE if notification succeeded.
