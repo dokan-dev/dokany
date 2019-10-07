@@ -892,18 +892,28 @@ void DOKANAPI DokanMapKernelToUserCreateFileFlags(
 
 /**
  * \defgroup DokanNotify Dokan Notify
- * \brief Dokan User FS file changes notification
+ * \brief Dokan User FS file-change notification
  *
- * User FileSystem can notify Dokan of outside file changes with those functions.
- * Note that all of the file paths passed in to the Notify methods below must
- * include the drive letter, for example "G:<path>".
+ * The application implementing the user file system can notify
+ * the Dokan kernel driver of external file- and directory-changes.
+ *
+ * For example, the mirror application can notify the driver about
+ * changes made in the mirrored directory so that those changes will
+ * be automatically reflected in the implemented mirror file system.
+ *
+ * This requires the FilePath passed to the respective DokanNotify*-functions
+ * to include the absolute path of the changed file including the drive-letter
+ * and the path to the mount point, e.g. "C:\Dokan\ChangedFile.txt".
+ *
+ * These functions SHOULD NOT be called from within the implemented
+ * file system and thus be independent of any Dokan file system operation.
  * @{
  */
 
 /**
  * \brief Notify dokan that a file or a directory has been created.
  *
- * \param FilePath Full path to the file or directory, including mount point.
+ * \param FilePath Absolute path to the file or directory, including the mount-point of the file system.
  * \param IsDirectory Indicates if the path is a directory.
  * \return \c TRUE if notification succeeded.
  */
@@ -912,8 +922,8 @@ BOOL DOKANAPI DokanNotifyCreate(LPCWSTR FilePath, BOOL IsDirectory);
 /**
  * \brief Notify dokan that a file or a directory has been deleted.
  *
- * \param FilePath Full path to the file or directory, including mount point.
- * \param IsDirectory Indicates if the path is a directory.
+ * \param FilePath Absolute path to the file or directory, including the mount-point of the file system.
+ * \param IsDirectory Indicates if the path was a directory.
  * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory);
@@ -921,7 +931,7 @@ BOOL DOKANAPI DokanNotifyDelete(LPCWSTR FilePath, BOOL IsDirectory);
 /**
  * \brief Notify dokan that file or directory attributes have changed.
  *
- * \param FilePath Full path to the file or directory, including mount point.
+ * \param FilePath Absolute path to the file or directory, including the mount-point of the file system.
  * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath);
@@ -929,7 +939,7 @@ BOOL DOKANAPI DokanNotifyUpdate(LPCWSTR FilePath);
 /**
  * \brief Notify dokan that file or directory extended attributes have changed.
  *
- * \param FilePath Full path to the file or directory, including mount point.
+ * \param FilePath Absolute path to the file or directory, including the mount-point of the file system.
  * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
@@ -938,10 +948,10 @@ BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
  * \brief Notify dokan that a file or a directory has been renamed. This method
  *  supports in-place rename for file/directory within the same parent.
  *
- * \param OldPath Old path to the file or directory, including mount point.
- * \param NewPath New path to the file or directory, including mount point.
+ * \param OldPath Old, absolute path to the file or directory, including the mount-point of the file system.
+ * \param NewPath New, absolute path to the file or directory, including the mount-point of the file system.
  * \param IsDirectory Indicates if the path is a directory.
- * \param IsInSameFolder Indicates if the file or directory have same parent.
+ * \param IsInSameFolder Indicates if the file or directory have the same parent directory.
  * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyRename(LPCWSTR OldPath, LPCWSTR NewPath,

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Added
 ### Changed
 - Kernel - Only log to event viewer when debug default log is enabled.
+- Library - Clarified documentation of dokan file-change notification functions
 ### Fixed
 - Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`.
 - Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices.
