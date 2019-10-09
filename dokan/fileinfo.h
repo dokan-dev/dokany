@@ -723,6 +723,91 @@ typedef struct _FILE_ID_BOTH_DIR_INFORMATION {
 } FILE_ID_BOTH_DIR_INFORMATION, *PFILE_ID_BOTH_DIR_INFORMATION;
 
 /**
+ * \struct FILE_ID_EXTD_BOTH_DIR_INFORMATION
+ * \brief Used to query detailed information for the files in a directory.
+ */
+typedef struct _FILE_ID_EXTD_BOTH_DIR_INFORMATION {
+  /**
+   * Byte offset of the next FILE_DIRECTORY_INFORMATION entry, if multiple entries are present in a buffer.
+   * This member is zero if no other entries follow this one.
+   */
+  ULONG NextEntryOffset;
+  /**
+   * Byte offset of the file within the parent directory. This member is undefined for file systems, such as NTFS,
+   * in which the position of a file within the parent directory is not fixed and can be changed at any time to maintain sort order.
+   */
+  ULONG FileIndex;
+  /**
+   * Time when the file was created.
+   */
+  LARGE_INTEGER CreationTime;
+  /**
+   * Last time the file was accessed.
+   */
+  LARGE_INTEGER LastAccessTime;
+  /**
+   * Last time information was written to the file.
+   */
+  LARGE_INTEGER LastWriteTime;
+  /**
+   * Last time the file was changed.
+   */
+  LARGE_INTEGER ChangeTime;
+  /**
+   * Absolute new end-of-file position as a byte offset from the start of the file.
+   * EndOfFile specifies the byte offset to the end of the file.
+   * Because this value is zero-based, it actually refers to the first free byte in the file. In other words,
+   * EndOfFile is the offset to the byte immediately following the last valid byte in the file.
+   */
+  LARGE_INTEGER EndOfFile;
+  /**
+   * File allocation size, in bytes. Usually, this value is a multiple of the sector or cluster size of the underlying physical device.
+   */
+  LARGE_INTEGER AllocationSize;
+  /**
+   *  File attributes, which can be any valid combination of the following:
+   *
+   *   \li \c FILE_ATTRIBUTE_READONLY
+   *   \li \c FILE_ATTRIBUTE_HIDDEN
+   *   \li \c FILE_ATTRIBUTE_SYSTEM
+   *   \li \c FILE_ATTRIBUTE_DIRECTORY
+   *   \li \c FILE_ATTRIBUTE_ARCHIVE
+   *   \li \c FILE_ATTRIBUTE_NORMAL
+   *   \li \c FILE_ATTRIBUTE_TEMPORARY
+   *   \li \c FILE_ATTRIBUTE_COMPRESSED
+   */
+  ULONG FileAttributes;
+  /**
+   * Specifies the length of the file name string.
+   */
+  ULONG FileNameLength;
+  /**
+   * Combined length, in bytes, of the extended attributes (EA) for the file.
+   */
+  ULONG EaSize;
+  /**
+   * Tag value for the reparse point.
+   */
+  ULONG ReparsePointTag;
+  /**
+   * The 128-byte file reference number for the file. This number is generated and assigned to the file by the file system.
+   */
+  FILE_ID_128 FileId;
+  /**
+   * Specifies the length, in bytes, of the short file name string.
+   */
+  CCHAR ShortNameLength;
+  /**
+   * Unicode string containing the short (8.3) name for the file.
+   */
+  WCHAR ShortName[12];
+  /**
+   * Specifies the first character of the file name string. This is followed in memory by the remainder of the string.
+   */
+  WCHAR FileName[1];
+} FILE_ID_EXTD_BOTH_DIR_INFORMATION, *PFILE_ID_EXTD_BOTH_DIR_INFORMATION;
+
+/**
  * \struct FILE_NAMES_INFORMATION
  * \brief Used to query detailed information about the names of files in a directory.
  */

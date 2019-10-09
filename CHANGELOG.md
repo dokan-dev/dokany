@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 ### Added
+- Kernel - Added support for FileIdExtdBothDirectoryInformation, which is required when the target is mapped as a volume into docker containers.
 ### Changed
 - Kernel - Only log to event viewer when debug default log is enabled.
 - Library - Clarified documentation of dokan file-change notification functions
