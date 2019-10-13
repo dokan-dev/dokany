@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Changed
 - Kernel - Only log to event viewer when debug default log is enabled.
 - Library - Clarified documentation of dokan file-change notification functions
+- Build - Run Code Analysis on all builds of debug build configurations within Visual Studio, but not by default from msbuild.
 ### Fixed
 - Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`.
 - Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices.
