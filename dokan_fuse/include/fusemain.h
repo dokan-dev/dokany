@@ -27,6 +27,8 @@ private:
 public:
 	impl_file_locks() { InitializeCriticalSection(&lock); }
 	~impl_file_locks() { DeleteCriticalSection(&lock); };
+	impl_file_locks(impl_file_locks &other) = delete;
+	impl_file_locks &operator=(const impl_file_locks &other) = delete;
 	int get_file(const std::string &name, bool is_dir, DWORD access_mode, DWORD shared_mode, std::unique_ptr<impl_file_handle>& out);
 	void renamed_file(const std::string &name,const std::string &new_name);
 	void remove_file(const std::string& name);
@@ -50,6 +52,8 @@ class impl_chain_guard
 public:
 	impl_chain_guard(impl_fuse_context* ctx, int caller_pid);
 	~impl_chain_guard();
+	impl_chain_guard(impl_chain_guard &other) = delete;
+	impl_chain_guard &operator=(const impl_chain_guard &other) = delete;
 };
 
 class win_error
@@ -110,11 +114,11 @@ public:
 
 	struct walk_data
 	{
-		impl_fuse_context *ctx;
+		impl_fuse_context *ctx = nullptr;
 		std::string dirname;
-		PDOKAN_FILE_INFO DokanFileInfo;
-		PFillFindData delegate;
-        PWalkDirectoryWithSetFuseContext delegateSetFuseContext;
+		PDOKAN_FILE_INFO DokanFileInfo = nullptr;
+		PFillFindData delegate = nullptr;
+		PWalkDirectoryWithSetFuseContext delegateSetFuseContext = nullptr;
 		std::vector<std::string> getdir_data; //Used only in walk_directory_getdir()
 	};
 	static int walk_directory(void *buf, const char *name,
@@ -212,6 +216,8 @@ class impl_file_lock
 public:
 	impl_file_lock(impl_file_locks* _locks, const std::string& name): name_(name), locks(_locks), first(nullptr) { InitializeCriticalSection(&lock); }
 	~impl_file_lock() { DeleteCriticalSection(&lock); };
+	impl_file_lock(impl_file_lock &other) = delete;
+	impl_file_lock &operator=(const impl_file_lock &other) = delete;
 	void remove_file(impl_file_handle *file);
 	const std::string& get_name() const {return name_;}
 };
@@ -231,6 +237,8 @@ class impl_file_handle
 	impl_file_handle(bool is_dir, DWORD shared_mode);
 public:
 	~impl_file_handle();
+	impl_file_handle(impl_file_handle &other) = delete;
+	impl_file_handle &operator=(const impl_file_handle &other) = delete;
 
 	bool is_dir() const {return is_dir_;}
 	int close(const struct fuse_operations *ops);
