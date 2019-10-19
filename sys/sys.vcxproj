@@ -523,17 +523,17 @@
     <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
@@ -543,17 +543,17 @@
     <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
@@ -603,17 +603,17 @@
     <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
@@ -643,17 +643,17 @@
     <OutDir>$(SolutionDir)$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>$(Platform)\$(ConfigurationName)\</IntDir>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|ARM64'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
   </PropertyGroup>
@@ -681,13 +681,13 @@
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
@@ -705,7 +705,7 @@
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
@@ -717,7 +717,7 @@
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>dokan$(DOKANAPIVersion)</TargetName>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Windows Kits\10\CodeAnalysis\DriverRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
@@ -732,7 +732,7 @@
     </Link>
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Inf>
@@ -749,7 +749,7 @@
     </Link>
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Inf>
@@ -766,7 +766,7 @@
     </Link>
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Inf>
@@ -779,7 +779,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|Win32'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -796,7 +796,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -813,7 +813,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|ARM64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -830,7 +830,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|Win32'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -846,7 +846,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -862,7 +862,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|ARM64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -878,7 +878,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|Win32'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -894,7 +894,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -910,7 +910,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|ARM64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -1118,7 +1118,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
@@ -1135,7 +1135,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win7 Debug|x64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
@@ -1168,7 +1168,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
@@ -1185,7 +1185,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <EnablePREfast>false</EnablePREfast>
+      <EnablePREfast>true</EnablePREfast>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
