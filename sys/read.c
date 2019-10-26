@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -91,7 +92,7 @@ Return Value:
       }
 
       // here we could return the bootsector. If we don't have one
-      // the requested read lenght must be returned as requested
+      // the requested read length must be returned as requested
       readLength = irpSp->Parameters.Read.Length;
       status = STATUS_SUCCESS;
       __leave;
@@ -151,15 +152,21 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_READ);
+    if (fcb->BlockUserModeDispatch) {
+      Irp->IoStatus.Information = 0;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DDbgPrint("   DOKAN_FILE_DIRECTORY %p\n", fcb);
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
-    if (Irp->Flags & IRP_PAGING_IO) {
-      isPagingIo = TRUE;
-    }
+    isPagingIo = (Irp->Flags & IRP_PAGING_IO);
+
     if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
       isSynchronousIo = TRUE;
     }
@@ -170,11 +177,9 @@ Return Value:
 
     if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
         (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
-      ExAcquireResourceExclusiveLite(&fcb->PagingIoResource, TRUE);
       CcFlushCache(&fcb->SectionObjectPointers,
                    &irpSp->Parameters.Read.ByteOffset,
                    irpSp->Parameters.Read.Length, NULL);
-      ExReleaseResourceLite(&fcb->PagingIoResource);
     }
 
     DokanFCBLockRO(fcb);
@@ -223,8 +228,8 @@ Return Value:
     //
     if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
       // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-      status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                                DokanOplockComplete, DokanPrePostIrp);
+      status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                                DokanPrePostIrp);
 
       //
       //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
@@ -251,9 +256,9 @@ Return Value:
     }
 
     // register this IRP to pending IPR list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
   } __finally {
-    if(fcbLocked)
+    if (fcbLocked)
       DokanFCBUnlock(fcb);
 
     DokanCompleteIrpRequest(Irp, status, readLength);
@@ -330,8 +335,8 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   }
 
   if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
-	  DokanFreeMdl(irp);
-	  IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+    DokanFreeMdl(irp);
+    IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
 
   if (NT_SUCCESS(status)) {

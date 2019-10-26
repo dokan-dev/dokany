@@ -17,5 +17,5 @@ Feature request can skip this form. Bug report **must** complete it. `Check List
 
 
 # Logs
-Please attach in separate files: mirror output, library logs and kernel [logs](https://github.com/dokan-dev/dokany/wiki/How-to-Debug-Dokan).
-In case of BSOD, please attach minidump or dump analyze output.
+Please attach in separate files: mirror [output](https://github.com/dokan-dev/dokany/wiki/How-to-Debug-Dokan#mirrorfs), library logs and kernel [logs](https://github.com/dokan-dev/dokany/wiki/How-to-Debug-Dokan#get-logs).
+In case of BSOD, please attach minidump or dump [analyze output](https://github.com/dokan-dev/dokany/wiki/How-to-Debug-Dokan#crash-report-bsod).

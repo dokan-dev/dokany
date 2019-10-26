@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -44,7 +44,7 @@ extern "C" {
 
 #define DOKAN_KEEPALIVE_TIME 3000 // in miliseconds
 
-#define DOKAN_MAX_THREAD 15
+#define DOKAN_MAX_THREAD 63
 
 // DokanOptions->DebugMode is ON?
 extern BOOL g_DebugMode;
@@ -56,25 +56,19 @@ extern BOOL g_UseStdErr;
 
 static VOID DokanDbgPrint(LPCSTR format, ...) {
 
-  const char *outputString;
-  char *buffer;
-  size_t length;
+  const char *outputString = format; // fallback
+  char *buffer = NULL;
+  int length;
   va_list argp;
 
   va_start(argp, format);
 
   length = _vscprintf(format, argp) + 1;
-
-  buffer = (char *)_malloca(length * sizeof(char));
-
-  if (buffer) {
-
-    vsprintf_s(buffer, length, format, argp);
-    outputString = buffer;
+  if ((length - 1) != -1) {
+    buffer = (char *)_malloca(length * sizeof(char));
   }
-  else {
-
-    outputString = format;
+  if (buffer && vsprintf_s(buffer, length, format, argp) != -1) {
+    outputString = buffer;
   }
 
   OutputDebugStringA(outputString);
@@ -94,25 +88,19 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
 
-  const WCHAR *outputString;
-  WCHAR *buffer;
-  size_t length;
+  const WCHAR *outputString = format;   // fallback
+  WCHAR *buffer = NULL;
+  int length;
   va_list argp;
 
   va_start(argp, format);
 
   length = _vscwprintf(format, argp) + 1;
-
-  buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
-
-  if (buffer) {
-
-    vswprintf_s(buffer, length, format, argp);
-    outputString = buffer;
+  if ((length - 1) != -1) {
+    buffer = (WCHAR *)_malloca(length * sizeof(WCHAR));
   }
-  else {
-
-    outputString = format;
+  if (buffer && vswprintf_s(buffer, length, format, argp) != -1) {
+    outputString = buffer;
   }
 
   OutputDebugStringW(outputString);

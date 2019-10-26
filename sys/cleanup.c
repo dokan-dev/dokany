@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -49,6 +50,7 @@ Return Value:
   PDokanFCB fcb = NULL;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_CLEANUP);
 
   __try {
 
@@ -86,6 +88,33 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLEANUP);
+    if (fcb->IsKeepalive) {
+      DokanFCBLockRW(fcb);
+      BOOLEAN shouldUnmount = ccb->IsKeepaliveActive;
+      if (shouldUnmount) {
+        // Here we intentionally let the VCB-level flag stay set, because
+        // there's no sense in having an opportunity for an "operation timeout
+        // unmount" in this case.
+        ccb->IsKeepaliveActive = FALSE;
+      }
+      DokanFCBUnlock(fcb);
+      if (shouldUnmount) {
+        if (IsUnmountPendingVcb(vcb)) {
+          DokanLogInfo(&logger,
+                       L"Ignoring keepalive close because unmount is already in"
+                       L" progress.");
+        } else {
+          DokanLogInfo(&logger, L"Unmounting due to keepalive close.");
+          DokanUnmount(vcb->Dcb);
+        }
+      }
+    }
+    if (fcb->BlockUserModeDispatch) {
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     FlushFcb(fcb, fileObject);
 
     DokanFCBLockRW(fcb);
@@ -111,8 +140,8 @@ Return Value:
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-    status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, eventContext,
-                              DokanOplockComplete, DokanPrePostIrp);
+    status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                              DokanPrePostIrp);
     DokanFCBUnlock(fcb);
 
     //
@@ -129,7 +158,7 @@ Return Value:
     }
 
     // register this IRP to pending IRP list
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
 
@@ -172,7 +201,10 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
 
   status = EventInfo->Status;
 
-  DokanFCBLockRO(fcb);
+  DokanFCBLockRW(fcb);
+
+  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
+
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
     DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);
@@ -197,8 +229,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
-
-  IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);
 
   DokanCompleteIrpRequest(irp, status, 0);
 

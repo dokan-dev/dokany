@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -175,6 +175,41 @@ VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
   RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillIdExtBothDirInfo(PFILE_ID_EXTD_BOTH_DIR_INFORMATION Buffer,
+                            PWIN32_FIND_DATAW FindData, ULONG Index,
+                            PDOKAN_INSTANCE DokanInstance) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
+  Buffer->ShortNameLength = 0;
+
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
+
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
+
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
+
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
+
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
+
+  Buffer->EaSize = 0;
+  Buffer->ReparsePointTag = 0;
+  RtlFillMemory(&Buffer->FileId.Identifier, sizeof Buffer->FileId.Identifier, 0);
+
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+}
+
 VOID DokanFillBothDirInfo(PFILE_BOTH_DIR_INFORMATION Buffer,
                           PWIN32_FIND_DATAW FindData, ULONG Index,
                           PDOKAN_INSTANCE DokanInstance) {
@@ -249,6 +284,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
   case FileIdBothDirectoryInformation:
     thisEntrySize += sizeof(FILE_ID_BOTH_DIR_INFORMATION);
     break;
+  case FileIdExtdBothDirectoryInformation:
+    thisEntrySize += sizeof(FILE_ID_EXTD_BOTH_DIR_INFORMATION);
+    break;
   default:
     break;
   }
@@ -283,6 +321,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
   case FileIdBothDirectoryInformation:
     DokanFillIdBothDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
+  case FileIdExtdBothDirectoryInformation:
+    DokanFillIdExtBothDirInfo(Buffer, FindData, Index, DokanInstance);
+    break;    
   default:
     break;
   }
@@ -628,7 +669,8 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
       fileInfoClass != FileFullDirectoryInformation &&
       fileInfoClass != FileNamesInformation &&
       fileInfoClass != FileIdBothDirectoryInformation &&
-      fileInfoClass != FileBothDirectoryInformation) {
+      fileInfoClass != FileBothDirectoryInformation &&
+      fileInfoClass != FileIdExtdBothDirectoryInformation) {
 
     DbgPrint("Dokan Information: Unsupported file information class %d\n", fileInfoClass);
 
@@ -698,9 +740,9 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
 		  return;
 	  }
 
-	  if((EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength == 0
-		  && dokan->DokanOperations->FindFiles)
-		  || !dokan->DokanOperations->FindFilesWithPattern) {
+	  if((EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength == 0		  
+		  || !dokan->DokanOperations->FindFilesWithPattern)
+              && dokan->DokanOperations->FindFiles) {
 
 		  DOKAN_FIND_FILES_EVENT *findFiles = &EventInfo->EventInfo.FindFiles;
 
@@ -716,8 +758,8 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
 
 			  DokanEndDispatchFindFiles(findFiles, status);
 		  }
-	  }
-	  else if(dokan->DokanOperations->FindFilesWithPattern) {
+	  } else if (EventInfo->KernelInfo.EventContext.Operation.Directory.SearchPatternLength != 0 &&
+					dokan->DokanOperations->FindFilesWithPattern) {
 
 		  DOKAN_FIND_FILES_PATTERN_EVENT *findFilesPattern = &EventInfo->EventInfo.FindFilesWithPattern;
 
@@ -744,19 +786,6 @@ void BeginDispatchDirectoryInformation(DOKAN_IO_EVENT *EventInfo) {
 #define DOS_QM (L'>')
 #define DOS_DOT (L'"')
 
-// check whether Name matches Expression
-// Expression can contain "?"(any one character) and "*" (any string)
-// when IgnoreCase is TRUE, do case insenstive matching
-//
-// http://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx
-// * (asterisk) Matches zero or more characters.
-// ? (question mark) Matches a single character.
-// DOS_DOT Matches either a period or zero characters beyond the name string.
-// DOS_QM Matches any single character or, upon encountering a period or end
-//        of name string, advances the expression to the end of the set of
-//        contiguous DOS_QMs.
-// DOS_STAR Matches zero or more characters until encountering and matching
-//          the final . in the name.
 BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, // matching pattern
                                       LPCWSTR Name,       // file name
                                       BOOL IgnoreCase) {

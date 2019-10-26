@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -69,7 +69,7 @@ DokanCommonLockControl(__in PIRP Irp) {
 //
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 
-    // Fcb's AllocationSize is constant after creation.
+  // Fcb's AllocationSize is constant after creation.
   if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
        ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
         (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
@@ -91,14 +91,13 @@ DokanCommonLockControl(__in PIRP Irp) {
     // what we want to do
     // so now wait for the oplock to be broken (pass in NULL for the callback)
     // This may block and enter wait state.
-    Status =
-        FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, NULL /* EventContext */,
+    Status = DokanCheckOplock(Fcb, Irp, NULL /* EventContext */,
                          NULL /*DokanOplockComplete*/, NULL);
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
   }
 #endif
-    //  If we were waiting for the callback, then STATUS_PENDING would be ok too
+  //  If we were waiting for the callback, then STATUS_PENDING would be ok too
   if (Status == STATUS_SUCCESS) {
     //
     //  Now call the FsRtl routine to do the actual processing of the
@@ -173,6 +172,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ASSERT(fcb != NULL);
     DokanFCBLockRW(fcb);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_LOCK_CONTROL);
     if (dcb->FileLockInUserMode) {
 
       eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
@@ -203,14 +203,14 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       eventContext->Operation.Lock.Key = irpSp->Parameters.LockControl.Key;
 
       // register this IRP to waiting IRP list and make it pending status
-      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
     } else {
       status = DokanCommonLockControl(Irp);
       completeIrp = FALSE;
     }
 
   } __finally {
-    if(fcb)
+    if (fcb)
       DokanFCBUnlock(fcb);
 
     if (completeIrp) {

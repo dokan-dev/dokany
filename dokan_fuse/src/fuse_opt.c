@@ -102,11 +102,13 @@ int fuse_opt_add_opt(char **opts, const char *opt)
     if (!*opts)
         newopts = STRDUP(opt);
     else {
-		size_t oldlen = strlen(*opts);
-        newopts = (char *)realloc(*opts, oldlen + 1 + strlen(opt) + 1);
+        size_t oldlen = strlen(*opts);
+        size_t optlen = strlen(opt);
+        newopts = (char *)realloc(*opts, oldlen + 1 + optlen + 1);
         if (newopts) {
             newopts[oldlen] = ',';
-            strcpy(newopts + oldlen + 1, opt);
+            strncpy(newopts + oldlen + 1, opt, optlen);
+            newopts[oldlen + 1 + optlen] = '\0';
         }
     }
     if (!newopts)
@@ -222,17 +224,20 @@ static int process_opt_sep_arg(struct fuse_opt_context *ctx,
     int res;
     char *newarg;
     char *param;
+    size_t paramlen;
 
     if (next_arg(ctx, arg) == -1)
         return -1;
 
     param = ctx->argv[ctx->argctr];
-    newarg = (char *)malloc(sep + strlen(param) + 1);
+    paramlen = strlen(param);
+    newarg = (char *)malloc(sep + paramlen + 1);
     if (!newarg)
         return alloc_failed();
 
     memcpy(newarg, arg, sep);
-    strcpy(newarg + sep, param);
+    strncpy(newarg + sep, param, paramlen);
+    newarg[sep+paramlen] = '\0';
     res = process_opt(ctx, opt, sep, newarg, iso);
     free(newarg);
 

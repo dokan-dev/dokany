@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -49,6 +50,7 @@ Return Value:
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
   PDokanFCB fcb;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_CLOSE);
 
   __try {
 
@@ -88,7 +90,7 @@ Return Value:
         DokanFreeCCB(ccb);
         DokanFCBUnlock(fcb);
 
-        DokanFreeFCB(fcb);
+        DokanFreeFCB(vcb, fcb);
 
         fileObject->FsContext2 = NULL;
       }
@@ -103,7 +105,18 @@ Return Value:
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
     DokanFCBLockRW(fcb);
+    if (fcb->BlockUserModeDispatch) {
+      DokanLogInfo(&logger, L"Closed file with user mode dispatch blocked: %wZ",
+                   &fcb->FileName);
+      DokanFreeCCB(ccb);
+      DokanFCBUnlock(fcb);
+      DokanFreeFCB(vcb, fcb);
+      status = STATUS_SUCCESS;
+      __leave;
+    }
+
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
@@ -113,7 +126,7 @@ Return Value:
       DDbgPrint("   Free CCB:%p\n", ccb);
       DokanFreeCCB(ccb);
       DokanFCBUnlock(fcb);
-      DokanFreeFCB(fcb);
+      DokanFreeFCB(vcb, fcb);
       status = STATUS_SUCCESS;
       __leave;
     }
@@ -129,7 +142,7 @@ Return Value:
     DDbgPrint("   Free CCB:%p\n", ccb);
     DokanFreeCCB(ccb);
     DokanFCBUnlock(fcb);
-    DokanFreeFCB(fcb);
+    DokanFreeFCB(vcb, fcb);
 
     // Close can not be pending status
     // don't register this IRP

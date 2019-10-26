@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -24,6 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef DOKAN_MAJOR_API_VERSION
 #define DOKAN_MAJOR_API_VERSION L"2"
+#include <minwindef.h>
 #endif
 
 #define DOKAN_DRIVER_VERSION 0x0000190
@@ -48,6 +50,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define IOCTL_EVENT_START                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#define IOCTL_EVENT_WRITE                                                      \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, 0x806, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
 
 #define IOCTL_KEEPALIVE                                                        \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x809, METHOD_NEITHER, FILE_ANY_ACCESS)
@@ -66,6 +70,15 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #define IOCTL_MOUNTPOINT_CLEANUP                                            \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// DeviceIoControl code to send to a keepalive handle to activate it (see the
+// documentation for the keepalive flags in the DokanFCB struct).
+#define FSCTL_ACTIVATE_KEEPALIVE                                               \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80F, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// DeviceIoControl code to send path notification request.
+#define FSCTL_NOTIFY_PATH                                                      \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define DRIVER_FUNC_INSTALL 0x01
 #define DRIVER_FUNC_REMOVE 0x02
@@ -91,10 +104,14 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_WRITE_TO_END_OF_FILE 128
 #define DOKAN_NOCACHE 256
 #define DOKAN_FILE_CHANGE_LAST_WRITE 512
+#define DOKAN_RETRY_CREATE 1024
 
 // used in DOKAN_START->DeviceType
 #define DOKAN_DISK_FILE_SYSTEM 0
 #define DOKAN_NETWORK_FILE_SYSTEM 1
+
+#define DOKAN_KEEPALIVE_FILE_NAME L"\\__drive_fs_keepalive"
+#define DOKAN_NOTIFICATION_FILE_NAME L"\\drive_fs_notification"
 
 /*
  * This structure is used for copying UNICODE_STRING from the kernel mode driver
@@ -106,6 +123,20 @@ typedef struct _DOKAN_UNICODE_STRING_INTERMEDIATE {
   USHORT MaximumLength;
   WCHAR Buffer[1];
 } DOKAN_UNICODE_STRING_INTERMEDIATE, *PDOKAN_UNICODE_STRING_INTERMEDIATE;
+
+/*
+ * This structure is used for sending notify path information from the user mode
+ * driver to the kernel mode driver. See below links for parameter details for
+ * CompletionFilter and Action, and FsRtlNotifyFullReportChange call.
+ * https://msdn.microsoft.com/en-us/library/windows/hardware/ff547026(v=vs.85).aspx
+ * https://msdn.microsoft.com/en-us/library/windows/hardware/ff547041(v=vs.85).aspx
+ */
+typedef struct _DOKAN_NOTIFY_PATH_INTERMEDIATE {
+  ULONG CompletionFilter;
+  ULONG Action;
+  USHORT Length;
+  WCHAR Buffer[1];
+} DOKAN_NOTIFY_PATH_INTERMEDIATE, *PDOKAN_NOTIFY_PATH_INTERMEDIATE;
 
 /*
  * This structure is used for copying ACCESS_STATE from the kernel mode driver
@@ -298,6 +329,9 @@ typedef struct _EVENT_CONTEXT {
   } Operation;
 } EVENT_CONTEXT, *PEVENT_CONTEXT;
 
+#define WRITE_MAX_SIZE                                                         \
+  (EVENT_CONTEXT_MAX_SIZE - sizeof(EVENT_CONTEXT) - 256 * sizeof(WCHAR))
+
 #define DOKAN_EVENT_INFO_MIN_BUFFER_SIZE 8
 #define DOKAN_EVENT_INFO_DEFAULT_BUFFER_SIZE (1024 * 4)
 
@@ -361,6 +395,14 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_MOUNT_MANAGER 8
 #define DOKAN_EVENT_CURRENT_SESSION 16
 #define DOKAN_EVENT_FILELOCK_USER_MODE 32
+#define DOKAN_EVENT_DISABLE_OPLOCKS 64
+#define DOKAN_EVENT_OPTIMIZE_SINGLE_NAME_SEARCH 128
+
+// Dokan debug log options
+#define DOKAN_DEBUG_NONE 0
+#define DOKAN_DEBUG_DEFAULT 1
+#define DOKAN_DEBUG_LOCK 2
+#define DOKAN_DEBUG_OPLOCKS 4
 
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
@@ -379,8 +421,10 @@ typedef struct _EVENT_START {
   ULONG IrpTimeout;
 } EVENT_START, *PEVENT_START;
 
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4201)
+#endif
 typedef struct _DOKAN_RENAME_INFORMATION {
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN10_RS1)
 	union {
@@ -393,12 +437,33 @@ typedef struct _DOKAN_RENAME_INFORMATION {
   ULONG FileNameLength;
   WCHAR FileName[1];
 } DOKAN_RENAME_INFORMATION, *PDOKAN_RENAME_INFORMATION;
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 
 typedef struct _DOKAN_LINK_INFORMATION {
   BOOLEAN ReplaceIfExists;
   ULONG FileNameLength;
   WCHAR FileName[1];
 } DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
+
+/**
+* \struct DOKAN_CONTROL
+* \brief Dokan Control
+*/
+typedef struct _DOKAN_CONTROL {
+  /** File System Type */
+  ULONG Type;
+  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
+  WCHAR MountPoint[MAX_PATH];
+  /** UNC name used for network volume */
+  WCHAR UNCName[64];
+  /** Disk Device Name */
+  WCHAR DeviceName[64];
+  /** Volume Device Object */
+  PVOID64 DeviceObject;
+  /** Session ID of calling process */
+  ULONG SessionId;
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 #endif // PUBLIC_H_

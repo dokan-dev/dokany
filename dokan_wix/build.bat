@@ -2,9 +2,9 @@ FOR /f "delims=" %%A IN (
 '"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath'
 ) DO SET "VS_PATH=%%A"
 
-SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\15.0\Bin
+SET MSBUILD_BIN_PATH=%VS_PATH%\MSBuild\Current\Bin
 IF NOT EXIST "%VS_PATH%" (
-	ECHO Visual C++ 2017 NOT Installed.
+	ECHO Visual C++ 2019 NOT Installed.
 	PAUSE
 	EXIT /B
 )
@@ -28,7 +28,7 @@ MakeCab /f dokanx86.ddf
 
 set /p DUMMY=Please submit drivers to developer hardware dashboard. Hit ENTER when it is done...
 
-IF EXIST C:\cygwin ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )
+IF EXIST C:\cygwin64 ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"false\"', 'BuildCygwin=\"true\"' | sc version.xml" ) ELSE ( powershell -Command "(gc version.xml) -replace 'BuildCygwin=\"true\"', 'BuildCygwin=\"false\"' | sc version.xml" )
 
 REM build light installer
 powershell -Command "(gc version.xml) -replace 'Compressed=\"yes\"', 'Compressed=\"no\"' | sc version.xml"
@@ -47,4 +47,4 @@ msbuild Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:re
 copy Bootstrapper\bin\Debug\DokanSetup.exe DokanSetupDbg_redist.exe
 
 REM build archive
-"C:\Program Files\7-Zip\7z.exe" a -tzip dokan.zip ../Win32 ../x64 ../ARM
+"C:\Program Files\7-Zip\7z.exe" a -tzip dokan.zip ../Win32 ../x64 ../ARM ../ARM64

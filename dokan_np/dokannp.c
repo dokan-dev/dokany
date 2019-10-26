@@ -1,7 +1,7 @@
 /*
 Dokan : user-mode file system library for Windows
 
-Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
 Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
 http://dokan-dev.github.io
@@ -234,17 +234,18 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
 
   ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
-  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
-                              &nbRead)) {
+  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
+  if (dokanControl == NULL) {
     DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
     return WN_NOT_CONNECTED;
   }
+
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
     if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
       if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
+        DokanReleaseMountPointList(dokanControl);
         // No UNC, always return success
         if (*BufferSize == 0)
           return WN_MORE_DATA;
@@ -253,17 +254,21 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
         return WN_SUCCESS;
       }
 
-      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 1) * sizeof(WCHAR);
+      /* Include trailing 0 and leading '\' */
+      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 2) * sizeof(WCHAR);
       if (len > *BufferSize) {
         *BufferSize = len;
+        DokanReleaseMountPointList(dokanControl);
         return WN_MORE_DATA;
       }
-      CopyMemory(RemoteName, dokanControl[i].UNCName, len);
+      RemoteName[0] = L'\\';
+      CopyMemory(&RemoteName[1], dokanControl[i].UNCName, len);
       *BufferSize = len;
+      DokanReleaseMountPointList(dokanControl);
       return WN_SUCCESS;
     }
   }
-
+  DokanReleaseMountPointList(dokanControl);
   return WN_NOT_CONNECTED;
 }
 
@@ -553,16 +558,29 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   ULONG cEntriesCopied = 0;
   PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
   PWCHAR pDst;
-
   ULONG nbRead = 0;
-  DOKAN_CONTROL dokanControl[DOKAN_MAX_INSTANCES];
-  if (!DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, TRUE,
-                              &nbRead)) {
-    DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
+  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(TRUE, &nbRead);
+  if (dokanControl == NULL) {
+      DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
     return WN_NO_MORE_ENTRIES;
   }
 
+  DWORD processId = GetCurrentProcessId();
+  DWORD sessionId = 0;
+  BOOL  isBelongToCurrentSession = TRUE;
+  ProcessIdToSessionId(processId, &sessionId);
+  DbgPrintW(L"NPEnumResource CurrentSesstionID:%d\n", sessionId);
+  DbgPrintW(L"NPEnumResource nbRead:%d\n", nbRead);
+
   while (cEntriesCopied < *Count && pCtx->index < nbRead) {
+    DbgPrintW(L"NPEnumResource SesstionID:%d\n", dokanControl[pCtx->index].SessionId);
+    isBelongToCurrentSession = TRUE;
+    if (sessionId != dokanControl[pCtx->index].SessionId && -1 != dokanControl[pCtx->index].SessionId)
+    {
+      isBelongToCurrentSession = FALSE;
+      pCtx->index++;
+      continue;
+    }
     if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
       DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
       break;
@@ -572,10 +590,10 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       DbgPrintW(L"NPEnumResource: RESOURCE_CONNECTED\n");
 
       if (lstrlenW(dokanControl[pCtx->index].MountPoint) >
-          12 /* \DosDevices\C: */) {
+        12 /* \DosDevices\C: */) {
         /* How many bytes is needed for the current NETRESOURCE data. */
         ULONG cbRemoteName =
-            (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+          (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
         cbEntry = sizeof(NETRESOURCE);
         cbEntry += 3 * sizeof(WCHAR);            /* C:\0*/
         cbEntry += sizeof(WCHAR) + cbRemoteName; /* Leading \. */
@@ -614,7 +632,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
         CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
 
         DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
-                  pNetResource->lpRemoteName);
+          pNetResource->lpRemoteName);
 
         cEntriesCopied++;
         pNetResource++;
@@ -628,14 +646,14 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
         WCHAR *lpServerName = NULL;
         ULONG ulServerName = 0;
         parseServerName(&dokanControl[pCtx->index].UNCName[1], &lpServerName,
-                        &ulServerName);
+          &ulServerName);
 
         /* Return server.
         * Determine the space needed for this entry.
         */
         cbEntry = sizeof(NETRESOURCE);
         cbEntry +=
-            (2 + ulServerName) * sizeof(WCHAR); /* \\ + the server name */
+          (2 + ulServerName) * sizeof(WCHAR); /* \\ + the server name */
         cbEntry += sizeof(DOKAN_NP_NAME);
 
         if (cbEntry > cbRemaining) {
@@ -673,7 +691,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       } else {
         /* How many bytes is needed for the current NETRESOURCE data. */
         ULONG cbRemoteName =
-            (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+          (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
         cbEntry = sizeof(NETRESOURCE);
         /* Remote name: \\ + server + \ + name. */
         cbEntry += 1 * sizeof(WCHAR) + cbRemoteName;
@@ -708,7 +726,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
         CopyMemory(pDst, DOKAN_NP_NAME, sizeof(DOKAN_NP_NAME));
 
         DbgPrintW(L"NPEnumResource: lpRemoteName: %ls\n",
-                  pNetResource->lpRemoteName);
+          pNetResource->lpRemoteName);
 
         cEntriesCopied++;
         pNetResource++;
@@ -720,6 +738,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       dwStatus = WN_NO_MORE_ENTRIES;
     } else {
       DbgPrintW(L"NPEnumResource: invalid dwScope 0x%x\n", pCtx->dwScope);
+      DokanReleaseMountPointList(dokanControl);
       return WN_BAD_HANDLE;
     }
   }
@@ -739,6 +758,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
   DbgPrintW(L"NPEnumResource: Entries returned %d, dwStatus 0x%08X\n",
             cEntriesCopied, dwStatus);
+  DokanReleaseMountPointList(dokanControl);
   return dwStatus;
 }
 
@@ -956,7 +976,7 @@ DWORD APIENTRY NPGetUniversalName(__in LPCWSTR LocalPath, __in DWORD InfoLevel,
   WCHAR LocalDrive[3];
 
   const WCHAR *lpRemainingPath;
-  WCHAR *lpString;
+  WCHAR *lpString = NULL;
 
   DbgPrintW(
       L"NPGetUniversalName LocalPath = %s, InfoLevel = %d, *BufferSize = %d\n",

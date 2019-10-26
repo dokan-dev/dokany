@@ -194,7 +194,6 @@ int impl_fuse_context::do_create_file(LPCWSTR FileName, DWORD Disposition,
   // Create file?
   if (Disposition != FILE_CREATE && Disposition != FILE_SUPERSEDE &&
       Disposition != FILE_OPEN_IF && Disposition != FILE_OVERWRITE_IF) {
-    SetLastError(ERROR_FILE_NOT_FOUND);
     return -ENOENT; // No, we're trying to open an existing file!
   }
 
@@ -552,16 +551,17 @@ win_error impl_fuse_context::create_file(LPCWSTR file_name, DWORD access_mode,
           return -EINVAL;
         CHECKED(ops_.truncate(fname.c_str(), 0));
       } else if (creation_disposition == FILE_CREATE) {
-        SetLastError(ERROR_FILE_EXISTS);
         return win_error(STATUS_OBJECT_NAME_COLLISION, true);
       }
 
-      if (creation_disposition == FILE_OVERWRITE_IF ||
-          creation_disposition == FILE_OPEN_IF) {
-          SetLastError(ERROR_ALREADY_EXISTS);
+      long res = do_open_file(file_name, share_mode, access_mode, dokan_file_info);
+      if (res == 0 &&
+        (creation_disposition == FILE_OVERWRITE_IF ||
+        creation_disposition == FILE_OPEN_IF)) {
+        return win_error(STATUS_OBJECT_NAME_COLLISION, true);
       }
 
-      return do_open_file(file_name, share_mode, access_mode, dokan_file_info);
+      return res;
     }
   }
 }

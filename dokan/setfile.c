@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -111,16 +111,31 @@ void DOKANAPI DokanEndDispatchSetFileBasicInformation(DOKAN_SET_FILE_BASIC_INFO_
 
 void DokanSetDispositionInformation(DOKAN_IO_EVENT *EventInfo) {
 
-	DOKAN_CAN_DELETE_FILE_EVENT *canDeleteFile = &EventInfo->EventInfo.CanDeleteFile;
-	PFILE_DISPOSITION_INFORMATION dispositionInfo =
-      (PFILE_DISPOSITION_INFORMATION)(
-          (PCHAR)&EventInfo->KernelInfo.EventContext + EventInfo->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+  DOKAN_CAN_DELETE_FILE_EVENT *canDeleteFile =
+      &EventInfo->EventInfo.CanDeleteFile;
+  BOOLEAN DeleteFileFlag = FALSE;
+
+  if (EventInfo->KernelInfo.EventContext.Operation.SetFile
+          .FileInformationClass == FileDispositionInformation) {
+    PFILE_DISPOSITION_INFORMATION dispositionInfo =
+        (PFILE_DISPOSITION_INFORMATION)(
+            (PCHAR)&EventInfo->KernelInfo.EventContext +
+            EventInfo->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+    DeleteFileFlag = dispositionInfo->DeleteFile;
+  } else { //FileDispositionInformationEx
+    PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
+        (PFILE_DISPOSITION_INFORMATION_EX)(
+            (PCHAR)&EventInfo->KernelInfo.EventContext +
+            EventInfo->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+
+    DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
+  }
 
 	NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
 	assert((void*)canDeleteFile == (void*)EventInfo);
 
-	if(!dispositionInfo->QueryDeleteFile) {
+	if (!DeleteFileFlag) {
 		
 		DokanEndDispatchCanDeleteFile(canDeleteFile, STATUS_SUCCESS);
 		return;
@@ -142,14 +157,28 @@ void DokanSetDispositionInformation(DOKAN_IO_EVENT *EventInfo) {
 
 void DOKANAPI DokanEndDispatchCanDeleteFile(DOKAN_CAN_DELETE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {
 
-	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT*)EventInfo;
-	PFILE_DISPOSITION_INFORMATION dispositionInfo =
-		(PFILE_DISPOSITION_INFORMATION)(
-		(PCHAR)&ioEvent->KernelInfo.EventContext + ioEvent->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+	DOKAN_IO_EVENT *ioEvent = (DOKAN_IO_EVENT *)EventInfo;
+	BOOLEAN DeleteFileFlag = FALSE;
+
+	if (ioEvent->KernelInfo.EventContext.Operation.SetFile.FileInformationClass ==
+		FileDispositionInformation) {
+		PFILE_DISPOSITION_INFORMATION dispositionInfo =
+			(PFILE_DISPOSITION_INFORMATION)(
+				(PCHAR)&ioEvent->KernelInfo.EventContext +
+				ioEvent->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+		DeleteFileFlag = dispositionInfo->DeleteFile;
+	} else { //FileDispositionInformationEx
+		PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
+			(PFILE_DISPOSITION_INFORMATION_EX)(
+				(PCHAR)&ioEvent->KernelInfo.EventContext +
+				ioEvent->KernelInfo.EventContext.Operation.SetFile.BufferOffset);
+
+		DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
+	}
 
 	if(ResultStatus == STATUS_SUCCESS) {
 
-		ioEvent->EventResult->Operation.Delete.DeleteOnClose = dispositionInfo->QueryDeleteFile ? TRUE : FALSE;
+		ioEvent->EventResult->Operation.Delete.DeleteOnClose = DeleteFileFlag;
 	}
 
 	EndGenericSetOperation((DOKAN_IO_EVENT*)EventInfo, ResultStatus);
@@ -289,6 +318,7 @@ void BeginDispatchSetInformation(DOKAN_IO_EVENT *EventInfo) {
     break;
 
   case FileDispositionInformation:
+  case FileDispositionInformationEx:
     DokanSetDispositionInformation(EventInfo);
     break;
 

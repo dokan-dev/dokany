@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -122,7 +122,7 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlCopyMemory(eventContext->Operation.Security.FileName,
                   fcb->FileName.Buffer, fcb->FileName.Length);
 
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags, NULL);
+    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
 
   } __finally {
     if (fcb)
@@ -226,11 +226,8 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG securityDescLength;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
-  IRP_ENTRY_CONTEXT irpEntryContext;
   ULONG bufferOffset;
-
-  RtlZeroMemory(&irpEntryContext, sizeof(irpEntryContext));
-
+  
   __try {
 
     DDbgPrint("==> DokanSetSecurity\n");
@@ -353,7 +350,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 	//SeCaptureSubjectContext(&irpEntryContext.Security.SecuritySubjectContext);
 
     //status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, &irpEntryContext);
-	status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
+	status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
     if (fcb)
@@ -374,6 +371,7 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
+
 
   DDbgPrint("==> DokanCompleteSetSecurity\n");
 

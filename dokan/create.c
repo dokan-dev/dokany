@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -86,7 +86,6 @@ VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
   ioSecurityContext->DesiredAccess =
       EventContext->Operation.Create.SecurityContext.DesiredAccess;
 }
-
 
 void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
@@ -190,7 +189,7 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
     // ERROR_ALREADY_EXISTS
     SetLastError(ERROR_SUCCESS);
 
-      // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
+    // This should call SetLastError(ERROR_ALREADY_EXISTS) when appropriate
 	status = dokan->DokanOperations->ZwCreateFile(createFileEvent);
 
   }
@@ -207,11 +206,17 @@ void BeginDispatchCreate(DOKAN_IO_EVENT *EventInfo) {
 
 BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
 
-	return status == STATUS_SUCCESS
-		|| (status == STATUS_OBJECT_NAME_COLLISION
-			&& (disposition == FILE_OPEN_IF
-				|| disposition == FILE_SUPERSEDE
-				|| disposition == FILE_OVERWRITE_IF));
+  if (NT_SUCCESS(status))
+    return TRUE;
+
+  // In case OPEN_ALWAYS & CREATE_ALWAYS are successfully opening an
+  // existing file, STATUS_OBJECT_NAME_COLLISION is returned instead of STATUS_SUCCESS.
+  if (status == STATUS_OBJECT_NAME_COLLISION &&
+      (disposition == FILE_OPEN_IF || disposition == FILE_SUPERSEDE ||
+       disposition == FILE_OVERWRITE_IF))
+    return TRUE;
+
+  return FALSE;
 }
 
 void DOKANAPI DokanEndDispatchCreate(DOKAN_CREATE_FILE_EVENT *EventInfo, NTSTATUS ResultStatus) {

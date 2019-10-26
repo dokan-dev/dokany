@@ -101,10 +101,18 @@
     <ResourceCompile Include="dokan.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+    <ResourceCompile Include="dokanfs_msg.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="dokan.inf">
       <Filter>Driver Files</Filter>
     </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="dokanfs_msg.mc">
+      <Filter>Driver Files</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>

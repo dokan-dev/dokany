@@ -8,6 +8,109 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Dokan API now async
 - Kernel - Write buffer process improved
 
+## [Unreleased]
+### Added
+- Kernel - Added support for FileIdExtdBothDirectoryInformation, which is required when the target is mapped as a volume into docker containers.
+### Changed
+- Kernel - Only log to event viewer when debug default log is enabled.
+- Library - Clarified documentation of dokan file-change notification functions
+- Build - Run Code Analysis on all builds of debug build configurations within Visual Studio, but not by default from msbuild.
+### Fixed
+- Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`.
+- Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices.
+- FUSE - Infinite loop when using characters from Unicode supplementary planes ('🔈' for example).
+
+## [1.3.0.1000] - 2019-07-24
+### Added
+- Mirror - Use `GetDiskFreeSpace` during `MirrorDokanGetDiskFreeSpace`.
+- Kernel - Add most important log msg to Event Viewer.
+- Kernel - Add `DOKAN_OPTION_DISABLE_OPLOCKS` dokan option.
+- Kernel - Add check that `DeviceControl` are performed on a volume handle and not a file.
+- Kernel - Add `DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH` dokan option to speedup Win7 file name normalization.
+- Library - Add functions to notify Dokan Kernel that files in use fs has changed `DokanNotifyCreate / DokanNotifyDelete / DokanNotifyUpdate / DokanNotifyXAttrUpdate / DokanNotifyRename`.
+- SetAssemblyVersion - Now update `DOKAN_MAJOR_API_VERSION`.
+- Kernel - Write - Check total event length is not longer than what we can allocate.
+
+### Changed
+- Use latest WDK & SDK for Windows 10 version 1903 and toolset v142.
+- Installer - Update VCRedistVersion to VS 2019 14.21.27702.
+- Mirror - Improve ShowUsage.
+- Library - `DokanGetMountPointList` now returns his own buffer that need to be released with `DokanReleaseMountPointList`.
+- Kernel - Return proper error status for `DFileSystemControl`.
+- Kernel - Fix OpLocks / Remove FCB Retry lock.
+- Kernel - Use debug mode option to enable lock or/and oplock kernel log.
+- Kernel - Rename `DOKAN_KEEPALIVE_TIMEOUT` to `DOKAN_KEEPALIVE_TIMEOUT_DEFAULT`
+
+### Fixed
+- Kernel - Fix long rename BSOD with network option enabled.
+- Kernel - Fix root rename with 360 antivirus.
+- Library - Use `DbgPrintW` instead of `DbgPrint` when printing wide characters.
+- Library - Add error check for `_vscprintf` and `vsprintf_s` in `DokanDbgPrint`, and `_vscwprintf` and `vswprintf_s` in `DokanDbgPrintW`.
+- Library - Fix `DokanUnmount` possible oob memory.
+- Mirror - Fix possible oob memory during long findfiles path.
+- Mirror - Fix possible oob memory during long DeleteDirectory path.
+- Kernel - Lock global resources during `DokanGetMountPointList` avoid possible BSOD.
+- Kernel - Send correct notify change during `FileRenameInformation` when move to a diff folder.
+- Kernel - Move all `Io ShareAccess` under fcb RW lock.
+- Dokannp - Add leading `\` to `UNCName` during `NPGetConnection`.
+
+## [1.2.2.1000] - 2019-03-08
+### Added
+- FUSE - Expose allocation unit size and sector size.
+- Kernel - Add new `FileDispositionInformationEx` for Windows 10, version 1709
+
+### Changed
+- Library - Increase `DOKAN_MAX_THREAD` from 15 to 63 for better performance.
+- Kernel - `FileStreamInformation` now return directly `STATUS_NOT_IMPLEMENTED` if `UseAltStream` is disabled.
+- Library - Improve `DokanIsNameInExpression` documentation
+
+### Fixed
+- Kernel - Wrong `szMountPoint->length` usage in `DokanGlobalEventRelease`
+- Kernel - Fix handle KeepAlive calls before device fully started 
+
+## [1.2.1.2000] - 2018-12-21
+### Added
+- SetAssemblyVersion - Add update dokan version define
+
+### Fixed
+- Library - Bump Dokan version to 121
+
+## [1.2.1.1000] - 2018-12-18
+### Changed
+- Kernel/Library - Replace keepalive ping event by a single keep alive file handle
+- Cert - Runs with admin rights and checks Secureboot is enabled
+
+### Fixed
+- Kernel - Fix Buffer Overflow by adding mount length path check 
+
+## [1.2.0.1000] - 2018-08-09
+### Added
+- Build - Add ARM64
+
+### Changed
+- Installer - Remove .NET dependency.
+- Build - Remove Windows 10 build for ARM
+- Library - Allow usage driver letter `A`
+- Documentation - Add `FSName` notice for `NTFS` & `FAT`
+- Documentation - Add `GetFileSecurity` return `STATUS_NOT_IMPLEMENTED` remark
+- Library - Update `DOKAN_VERSION` to 120 and `DOKAN_MINIMUM_COMPATIBLE_VERSION` to 110
+- Kernel - Only set FO_FILE_MODIFIED for no paging io during write complete
+
+### Fixed
+- Library - Missing session id in `DOKAN_CONTROL` for user space
+- NetworkProvider - UNC paths using only for current session show offline for other session.
+- Installer - Dokan Network Provider - Move back `dokannp1.dll` to `system32` folder and `SysWow64`
+- Mirror - Initialize `userTokenHandle` correctly
+- FUSE -  Return correct status when file is open `FILE_OVERWRITE_IF` or `FILE_OPEN_IF` successfully
+- Kernel - PageIO Dead lock
+- Library - Get correct name (not uppercase) when repase point mount is used
+
+## [1.1.0.2000] - 2018-01-19
+### Fixed
+- Installer - Fix Wrong redist download link rename
+- Installer - Fix vc++ version number displayed
+- Installer - Update message download VC link
+
 ## [1.1.0.1000] - 2017-11-28
 ### Added
 - Mirror - Add Impersonate Option for Security Enhancement.
@@ -34,7 +137,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Kernel - Createfile move `DOKAN_DELETE_ON_CLOSE` set flag after create success
-- Kernel - Return acces denied for paging file open request
+- Kernel - Return access denied for paging file open request
 
 ### Fixed
 - Kernel - CreateFile return `STATUS_DELETE_PENDING` for a request without share delete during a pending delete
@@ -340,7 +443,12 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.1.0...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.2.2.1000...master
+[1.2.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.2000...v1.2.2.1000
+[1.2.1.2000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.1000...v1.2.1.2000
+[1.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.0.1000...v1.2.1.1000
+[1.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.1.0.2000...v1.2.0.1000
+[1.1.0.2000]: https://github.com/dokan-dev/dokany/compare/v1.1.0...v1.1.0.2000
 [1.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.5...v1.1.0
 [1.0.5.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.4...v1.0.5
 [1.0.4.1000]: https://github.com/dokan-dev/dokany/compare/v1.0.3...v1.0.4

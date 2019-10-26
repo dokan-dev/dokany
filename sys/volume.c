@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -256,7 +256,7 @@ DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
       eventContext->Operation.Volume.BufferLength =
           irpSp->Parameters.QueryVolume.Length;
 
-      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0, NULL);
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
     }
 
   } __finally {

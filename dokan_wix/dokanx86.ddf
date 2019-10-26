@@ -17,5 +17,10 @@
 ; and each driver package must be in a separate subfolder.
 .Set DestinationDir=Dokanx86
 ; Specify files to be included in cab file
+<<<<<<< HEAD
 ..\Win32\Win10Release\sys\dokan.inf
 ..\Win32\Win10Release\sys\dokan2.sys
+=======
+Win32\Win10Release\sys\dokan.inf
+Win32\Win10Release\sys\dokan1.sys
+>>>>>>> master

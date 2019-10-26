@@ -1,30 +1,38 @@
 -
   environment:
     CoverityProjectToken:
-      secure: 1mtSEr5uFQI5rdwItPXrR1y4fV+SUWt55lUSQB5o3x8=
+      secure: 5SIsLVvmrWC2ojiFFkiVRI2jvXeNeFwuzQgmnw85ag0=
     CoverityNotificationEmail:
       secure: 0SPcT7MZEWl9NsqpKSOoLBCfqx/KVDAte5+xvbRremg=
     AccessTokenDokanDoc:
       secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
+    SonarQubeToken:
+      secure: /gni/fn6VjMyw7qdAvkHuB2h3NoRFdXNqlQSAvqiYsuODhOPDkGGX/yNeOP5F2On
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
+      DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
-      MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2'
+      MSYS2_CACHE: '%TEMP%\msys2-cache'
+      MSYS2_INST_DIR: '%DOKAN_CI_CACHE%\msys64'
       CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
-      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2017; Configuration: All"
+      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
   version: 2.0.0-{build}
   configuration:
   - All
   - Coverity
+  - SonarQube
   - FsTest
+  - Documentation
 
   image:
+    - Visual Studio 2019
     - Visual Studio 2017
     - Visual Studio 2015
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
+#    - Previous Visual Studio 2019
 #    - Previous Visual Studio 2015
 #    - Previous Visual Studio 2017
   matrix:
@@ -33,6 +41,18 @@
         image: Visual Studio 2015
       - configuration: Coverity
         image: Visual Studio 2015
+      - configuration: SonarQube
+        image: Visual Studio 2015
+      - configuration: Documentation
+        image: Visual Studio 2015
+      - configuration: All
+        image: Visual Studio 2017
+      - configuration: Coverity
+        image: Visual Studio 2017
+      - configuration: SonarQube
+        image: Visual Studio 2017
+      - configuration: Documentation
+        image: Visual Studio 2017
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
@@ -46,6 +66,8 @@
 #    - ps: $blockRdp = $true; Invoke-Expression (Invoke-WebRequest 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')
 
   install:
+    - ps: |
+        New-Item -ItemType Directory -Force -Path ${env:DOKAN_CI_CACHE} | Out-Null
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest" -or $env:CONFIGURATION -eq "All") {
           .\cert\dokan-import.ps1
@@ -65,15 +87,7 @@
           throw ("Tried rebooting two times, failed")
         }
     - ps: |
-        function Exec-External {
-          param(
-            [Parameter(Position=0,Mandatory=1)][scriptblock] $command
-          )
-          & $command
-          if ($LASTEXITCODE -ne 0) {
-            throw ("Command returned non-zero error-code ${LASTEXITCODE}: $command")
-          }
-        }
+        . .\scripts\build_helper.ps1
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           Exec-External {& net user dokan_ifstest D0kan_1fstest /ADD }
@@ -83,8 +97,27 @@
           Exec-External {& powershell .\scripts\install_wlk_ifstest.ps1 }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
-          Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+        if ($env:CONFIGURATION -eq "Documentation") {
+          # choco doxygen.portable has ftp download issue for now
+          # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
+          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
+          if (Test-Path $env:DOXYGEN_INST_DIR) {
+            Write-Host "Doxygen in cache, skipping."
+            return
+          }
+          New-Item -Force -Type Directory $env:DOXYGEN_INST_DIR | Out-Null
+          cd $env:DOXYGEN_INST_DIR
+          $doxygen_zip = "$env:TEMP\doxygen.zip"
+          # Version has to be < 1.8.12 because doxyboot theme is incompatible with later versions
+          # https://github.com/Velron/doxygen-bootstrapped/issues/20
+          # https://github.com/Velron/doxygen-bootstrapped/issues/27
+          Write-Host "Downloading Doxygen..."
+          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip -UserAgent [Microsoft.PowerShell.Commands.PSUserAgent]::FireFox
+          if ($(Get-FileHash -Algorithm SHA256 $doxygen_zip).Hash -ne "6CE7C259975FB3DC449313913DE71B89665D15C49CF674DB6952F304BB3DFAAA") {
+            throw "Hash mismatch while downloading Doxygen"
+          }
+          Exec-External {& 7z x -y "$doxygen_zip"}
+          cd $env:APPVEYOR_BUILD_FOLDER
         }
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
@@ -111,21 +144,51 @@
         if ($env:CONFIGURATION -eq "All") {
           function bash($bash_command) {
             Write-Host "MSYS2-Bash: $bash_command"
-            Exec-External {& C:\msys64\usr\bin\bash.exe --login -c $bash_command }
+            Exec-External {& $env:MSYS2_INST_DIR\usr\bin\bash.exe --login -c $bash_command }
             Write-Host "MSYS2-Bash $bash_command " -NoNewLine
             Write-Host "[ OK ]" -ForegroundColor Green
           }
+
+          function install-msys2() {
+            if (Test-Path $env:MSYS2_INST_DIR) {
+              Write-Host "MSYS2 already installed at $env:MSYS2_INST_DIR"
+              return
+            }
+            $msys2_tar_url = "http://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20190524.tar.xz"
+            $msys2_tar_sha256 = "168E156FA9F00D90A8445676C023C63BE6E82F71487F4E2688AB5CB13B345383"
+            $msys2_tar = "$env:TEMP\msys2-base-x86_64.tar.xz"
+            Invoke-WebRequest $msys2_tar_url -OutFile $msys2_tar
+            if ($(Get-FileHash -Algorithm SHA256 $msys2_tar).Hash -ne $msys2_tar_sha256) {
+              throw "Hash mismatch while downloading Doxygen"
+            }
+            Write-Host "Extracting MSYS2"
+            Exec-External {& cmd /c "7z x -so $msys2_tar | 7z x -si -ttar -o$env:MSYS2_INST_DIR\..\"}
+            # Needed to execute scripts on first start. Also acts as a sanity check.
+            bash "echo MSYS2 installed"
+          }
+          install-msys2
+          
           New-Item -Force -Type Directory $env:MSYS2_CACHE
-          $unix_msys2_cache = (Exec-External {& C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
+          $unix_msys2_cache = (Exec-External {& $env:MSYS2_INST_DIR\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
           # We run the upgrade three times, because MSYS2 cannot upgrade itself without restarting
           # TODO: detect if restart is necessary and only run as many times as needed.
           #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
           # See https://github.com/msys2/msys2/wiki/MSYS2-installation#iii-updating-packages
+          # For the `--ask 20` option, see
+          # <https://github.com/Alexpux/MSYS2-packages/issues/1141>.
+          #
+          # Otherwise the message
+          #
+          #     :: msys2-runtime and catgets are in conflict. Remove catgets? [y/N]
+          #
+          # is displayed when trying to update followed by an exit rather
+          # than selecting yes.
+          
           for ($i = 0; $i -lt 3; $i++) {
-            bash "pacman -Syuu --noconfirm --cache `"$unix_msys2_cache`""
+            bash "pacman -Syuu --ask 20 --noconfirm --cache `"$unix_msys2_cache`""
           }
           # install MinGW toolchain
-          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake"
+          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake make"
         }
 
   before_build:
@@ -138,39 +201,72 @@
       $buildCmd = $(cmd /c where msbuild)
 
   - ps: |
-      if ($env:CONFIGURATION -eq "Coverity") {
+      if ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
+       
+        if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
+          Add-AppveyorMessage -Message "Not running SonarQube on pull request." -Category Information
+          return;
+        }
+      
+        Add-Type -assembly system.io.compression.filesystem
+        choco install "msbuild-sonarqube-runner" -y
+        
+        Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
+        Exec-External { & 7z e .\build-wrapper-win-x86.zip }
+        $env:Path += ";$((Get-Location).Path)"
+        .\scripts\sonar-build.ps1 dokany dokany-dev-sys $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
+      }
+  - ps: |
+      if ($env:CONFIGURATION -eq "Coverity" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
 
         if (!"$env:CoverityProjectToken") {
           Add-AppveyorMessage -Message "Not running Coverity due to missing credential. Is this a fork or a pull request?" -Category Information
           return;
         }
+        
+        $installCovPath = "$env:TEMP\install_coverity.ps1"
+        (New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/appveyor/build-images/master/scripts/Windows/install_coverity.ps1', $installCovPath)
+        & $installCovPath
+        
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Win10 Debug",
         "/p:Platform=x64")
 
-        Exec-External {& "cov-build.exe" `
+        Exec-External {& "$env:SYSTEMDRIVE\Tools\Coverity\bin\cov-build.exe" `
         --dir cov-int `
         $buildCmd $buildArgs}
 
         Exec-External {nuget install -ExcludeVersion PublishCoverity}
         Write-Host "Compressing Coverity results..."
-        Exec-External {& PublishCoverity\tools\PublishCoverity.exe compress `
-        --nologo `
-        -i "$env:APPVEYOR_BUILD_FOLDER\cov-int" `
-        -o "$env:APPVEYOR_BUILD_FOLDER\coverity.zip" `
-        --overwrite}
+        Exec-External { & tar czvf dokan.tgz cov-int 2>&1 | out-null }
 
         Write-Host "Uploading Coverity results..."
-        Exec-External {& PublishCoverity\tools\PublishCoverity.exe publish `
-        --nologo `
-        -t "$env:CoverityProjectToken" `
-        -e "$env:CoverityNotificationEmail" `
-        -r "dokan-dev/dokany" `
-        -z "coverity.zip" `
-        -d "Appveyor build." `
-        --codeVersion "$env:APPVEYOR_BUILD_VERSION"}
+        Add-Type -AssemblyName "System.Net.Http"
+        $client = New-Object Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromMinutes(5)
+        $form = New-Object Net.Http.MultipartFormDataContent
+        [Net.Http.HttpContent]$formField = New-Object Net.Http.StringContent($env:CoverityProjectToken)
+        $form.Add($formField, "`"token`"")
+        $formField = New-Object Net.Http.StringContent($env:CoverityNotificationEmail)
+        $form.Add($formField, "`"email`"")
+        $fs = New-Object IO.FileStream("$env:APPVEYOR_BUILD_FOLDER\dokan.tgz", [IO.FileMode]::Open, [IO.FileAccess]::Read)
+        $formField = New-Object Net.Http.StreamContent($fs)
+        $form.Add($formField, "`"file`"", "dokan.tgz")
+        $formField = New-Object Net.Http.StringContent($env:APPVEYOR_BUILD_VERSION)
+        $form.Add($formField, "`"version`"")
+        $formField = New-Object Net.Http.StringContent("AppVeyor scheduled build.")
+        $form.Add($formField, "`"description`"")
+        $url = "https://scan.coverity.com/builds?project=dokan-dev%2Fdokany"
+        $task = $client.PostAsync($url, $form)
+        try {
+          $task.Wait()  # throws AggregateException on timeout
+        } catch [AggregateException] {
+          throw $_.Exception.InnerException
+        }
+        $task.Result
+        $fs.Close()
       }
 
   - ps: |
@@ -184,10 +280,10 @@
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
-        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.10;C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
+        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.11;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\8.1\bin\x64\signtool.exe"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\signtool.exe"
 
         cd dokan_wix
         $Platform = "Any CPU"
@@ -197,12 +293,12 @@
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
         "/p:Configuration=Release",
         "/p:Platform=${Platform}")
-        & $buildCmd $buildArgs
+        Exec-External { & $buildCmd $buildArgs }
 
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
 
         cd ${env:APPVEYOR_BUILD_FOLDER}
-        Exec-External {& .\build.bat}
+        Exec-External {& .\scripts\build.ps1}
         .\cert\dokan-sign.ps1
 
         cd dokan_wix
@@ -339,7 +435,7 @@
           }
         }
     - ps: |
-        if ($env:CONFIGURATION -eq "All") {
+        if ($env:CONFIGURATION -eq "Documentation") {
             if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
               return;
             }

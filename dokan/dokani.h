@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -60,7 +60,6 @@ extern "C" {
 typedef struct _DOKAN_INSTANCE_THREADINFO {
 	PTP_POOL			ThreadPool;
 	PTP_CLEANUP_GROUP	CleanupGroup;
-	PTP_TIMER			KeepAliveTimer;
 	PTP_IO				IoCompletion;
 	TP_CALLBACK_ENVIRON CallbackEnvironment;
 } DOKAN_INSTANCE_THREADINFO;
@@ -109,6 +108,8 @@ typedef struct _DOKAN_INSTANCE {
   HANDLE						Device;
   HANDLE						DeviceClosedWaitHandle;
   DOKAN_INSTANCE_THREADINFO		ThreadInfo;
+  HANDLE						NotifyHandle;
+  HANDLE						KeepaliveHandle;
 
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
@@ -221,7 +222,7 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                   ULONG InputLength, PVOID OutputBuffer, ULONG OutputLength,
                   PULONG ReturnedLength);
 
-LPWSTR
+VOID
 GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
                  rsize_t DestinationBufferSizeInElements);
 

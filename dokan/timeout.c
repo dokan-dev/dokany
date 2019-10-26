@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -45,45 +45,11 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
 
   eventInfo->SerialNumber = ioEvent->KernelInfo.EventContext.SerialNumber;
   eventInfo->Operation.ResetTimeout.Timeout = Timeout;
-
+  GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH);
   status = SendToDevice(
-      GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH),
-      IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
+      rawDeviceName, IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
 
   DokanFree(eventInfo);
 
   return status;
-}
-
-void NTAPI DokanKeepAlive(
-	_Inout_     PTP_CALLBACK_INSTANCE Instance,
-	_Inout_opt_ PVOID                 Context,
-	_Inout_     PTP_TIMER             Timer
-	) {
-	
-	UNREFERENCED_PARAMETER(Instance);
-
-	HANDLE device = (HANDLE)Context;
-	ULONG ReturnedLength;
-
-
-    BOOL status = DeviceIoControl(device,          // Handle to device
-                                  IOCTL_KEEPALIVE, // IO Control code
-                                  NULL,            // Input Buffer to driver.
-                                  0,    // Length of input buffer in bytes.
-                                  NULL, // Output Buffer from driver.
-                                  0,    // Length of output buffer in bytes.
-                                  &ReturnedLength, // Bytes placed in buffer.
-                                  NULL             // synchronous call
-                                  );
-
-	if(!status) {
-
-		// disable timer
-		SetThreadpoolTimer(Timer, NULL, 0, 0);
-
-		DWORD errCode = GetLastError();
-
-		DbgPrint("Dokan Error: Dokan device ioctl failed for keepalive with code %d. Disabling keepalive timer.\n", errCode);
-	}
 }

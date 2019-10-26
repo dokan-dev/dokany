@@ -1,7 +1,8 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -76,9 +77,9 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanRegisterPendingIrpForService(DeviceObject, Irp);
     break;
   case IOCTL_MOUNTPOINT_CLEANUP:
-      RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
-      status = STATUS_SUCCESS;
-      break;
+    RemoveSessionDevices(dokanGlobal, GetCurrentSessionId(Irp));
+    status = STATUS_SUCCESS;
+    break;
   case IOCTL_SET_DEBUG_MODE:
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength >= sizeof(ULONG)) {
       g_Debug = *(ULONG *)Irp->AssociatedIrp.SystemBuffer;
@@ -131,6 +132,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG outputLength = 0;
   ULONG inputLength = 0;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_DEVICE_CONTROL);
 
   DDbgPrint("   => DokanDiskDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -471,7 +473,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME: {
     PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
     DDbgPrint("   IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME\n");
-
     if (outputLength < sizeof(MOUNTDEV_SUGGESTED_LINK_NAME)) {
       status = STATUS_BUFFER_TOO_SMALL;
       Irp->IoStatus.Information = sizeof(MOUNTDEV_SUGGESTED_LINK_NAME);
@@ -485,8 +486,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       if (IsMountPointDriveLetter(dcb->MountPoint) == STATUS_SUCCESS) {
         linkName->UseOnlyIfThereAreNoOtherLinks = FALSE;
         linkName->NameLength = dcb->MountPoint->Length;
-
         if (sizeof(USHORT) + linkName->NameLength <= outputLength) {
+          DokanLogInfo(&logger, L"Returning suggested drive letter: %wZ",
+                       dcb->MountPoint);
           RtlCopyMemory((PCHAR)linkName->Name, dcb->MountPoint->Buffer,
                         linkName->NameLength);
           Irp->IoStatus.Information =
@@ -508,6 +510,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("   MountPoint is NULL or undefined\n");
       status = STATUS_NOT_FOUND;
     }
+    DokanLogInfo(&logger, L"Suggested drive letter return status: %I32x",
+                 status);
   } break;
   case IOCTL_MOUNTDEV_LINK_CREATED: {
     PMOUNTDEV_NAME mountdevName = Irp->AssociatedIrp.SystemBuffer;
@@ -528,7 +532,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       RtlCopyMemory(symbolicLinkNameBuf, mountdevName->Name,
                     mountdevName->NameLength);
       DDbgPrint("   MountDev Name: %ws\n", symbolicLinkNameBuf);
-
+      DokanLogInfo(&logger, L"Link created: %s", symbolicLinkNameBuf);
       if (wcsncmp(symbolicLinkNameBuf, L"\\DosDevices\\", 12) == 0) {
         if (dcb->MountPoint != NULL && dcb->MountPoint->Length == 0) {
           ExFreePool(dcb->MountPoint);
@@ -542,7 +546,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   mountdevName->NameLength))) {
 
           DDbgPrint("   Update mount Point by %ws\n", symbolicLinkNameBuf);
-          ExFreePool(dcb->MountPoint);
+          if (dcb->MountPoint)
+            ExFreePool(dcb->MountPoint);
 
           dcb->MountPoint = DokanAllocateUnicodeString(symbolicLinkNameBuf);
           if (dcb->DiskDeviceName != NULL) {
@@ -896,6 +901,13 @@ DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   return status;
 }
 
+// Determines whether the given file object was obtained by opening the volume
+// itself as opposed to a specific file.
+BOOLEAN
+IsVolumeOpen(__in PDokanVCB Vcb, __in PFILE_OBJECT FileObject) {
+  return FileObject != NULL && FileObject->FsContext == &Vcb->VolumeFileHeader;
+}
+
 NTSTATUS
 DokanDispatchDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
@@ -940,6 +952,7 @@ Return Value:
 
       DDbgPrint("==> DokanDispatchIoControl\n");
       DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+      DDbgPrint("  IoControlCode: %lx\n", controlCode);
     }
 
     if (DeviceObject->DriverObject == NULL ||
@@ -979,10 +992,11 @@ Return Value:
       break;
 
     case IOCTL_KEEPALIVE:
+	  //Remove for Dokan 2.x.x
       DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);
-        DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT);
+        DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT_DEFAULT);
         ExReleaseResourceAndLeaveCriticalRegion(&dcb->Resource);
         status = STATUS_SUCCESS;
       } else {
@@ -998,7 +1012,6 @@ Return Value:
     case IOCTL_GET_ACCESS_TOKEN:
       status = DokanGetAccessToken(DeviceObject, Irp);
       break;
-
     default: {
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           irpSp->Parameters.DeviceIoControl.IoControlCode);
@@ -1016,6 +1029,16 @@ Return Value:
       if (status == STATUS_NOT_IMPLEMENTED) {
         PrintUnknownDeviceIoctlCode(
             irpSp->Parameters.DeviceIoControl.IoControlCode);
+      }
+
+      // Device control functions are only supposed to work on a volume handle.
+      // Some win32 functions, like GetVolumePathName, rely on these operations
+      // failing for file/directory handles. On the other hand, dokan issues its
+      // custom operations on non-volume handles, so we can't do this check at
+      // the top.
+      if (status == STATUS_NOT_IMPLEMENTED
+          && !IsVolumeOpen(vcb, irpSp->FileObject)) {
+        status = STATUS_INVALID_PARAMETER;
       }
     } break;
     } // switch IoControlCode

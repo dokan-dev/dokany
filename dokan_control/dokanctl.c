@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -53,8 +53,13 @@ int ShowUsage() {
           "  /r d                : Remove driver\n"
           "  /r n                : Remove network provider\n"
           "  /l a                : List current mount points\n"
-          "  /d [0-9]            : Enable Kernel Debug output\n"
+          "  /d [0-7]            : Enable Kernel Debug output\n"
           "  /v                  : Print Dokan version\n");
+  return EXIT_FAILURE;
+}
+
+int DefaultCaseOption() {
+  fprintf(stderr, "Unknown option - Use /? to show usage\n");
   return EXIT_FAILURE;
 }
 
@@ -155,12 +160,14 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 	  return result;
 
     } else if (type == L'n') {
-      if (DokanNetworkProviderInstall())
+      if (DokanNetworkProviderInstall()) {
         fprintf(stdout, "network provider install ok\n");
-      else
+      } else {
         fprintf(stderr, "network provider install failed\n");
+        return EXIT_FAILURE;
+      }
     } else {
-      goto DEFAULT;
+      return DefaultCaseOption();
     }
   } break;
 
@@ -176,71 +183,65 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
     } else if (type == L'n') {
       if (DokanNetworkProviderUninstall())
         fprintf(stdout, "network provider remove ok\n");
-      else
+      else {
         fprintf(stderr, "network provider remove failed\n");
+        return EXIT_FAILURE;
+      }
     } else {
-      goto DEFAULT;
+      return DefaultCaseOption();
     }
   } break;
 
   case L'd': {
     WCHAR type = towlower(argv[2][0]);
-    if (L'0' > type || type > L'9')
-      goto DEFAULT;
+    if (L'0' > type || type > L'7')
+      return DefaultCaseOption();
 
     ULONG mode = type - L'0';
     if (DokanSetDebugMode(mode)) {
       fprintf(stdout, "set debug mode ok\n");
     } else {
       fprintf(stderr, "set debug mode failed\n");
+      return EXIT_FAILURE;
     }
   } break;
 
   case L'u': {
     if (argc < 3) {
-      goto DEFAULT;
+      return DefaultCaseOption();
     }
     int result = Unmount(argv[2]);
 
     DokanShutdown();
 
     return result;
-  } break;
+  }
 
   // No admin rights required
   case L'l': {
     ULONG nbRead = 0;
-    PDOKAN_CONTROL dokanControl =
-        malloc(DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
+    PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
     if (dokanControl == NULL) {
-      fprintf(stderr, "Failed to allocate dokanControl\n");
+      fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
       return EXIT_FAILURE;
     }
 
-    ZeroMemory(dokanControl, DOKAN_MAX_INSTANCES * sizeof(*dokanControl));
-    if (DokanGetMountPointList(dokanControl, DOKAN_MAX_INSTANCES, FALSE,
-                               &nbRead)) {
       fwprintf(stdout, L"  Mount points: %d\n", nbRead);
-      for (unsigned int p = 0; p < nbRead; ++p) {
-        fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n",
-                 p, dokanControl[p].MountPoint, dokanControl[p].UNCName,
+    for (ULONG p = 0; p < nbRead; ++p)
+      fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n", p,
+               dokanControl[p].MountPoint, dokanControl[p].UNCName,
                  dokanControl[p].DeviceName);
-      }
-    } else {
-      fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
-    }
-    free(dokanControl);
+    DokanReleaseMountPointList(dokanControl);
   } break;
 
   case L'v': {
     fprintf(stdout, "dokanctl : %s %s\n", __DATE__, __TIME__);
-    fprintf(stdout, "Dokan version : %d\n", DokanVersion());
+    fprintf(stdout, "Dokan version : %ld\n", DokanVersion());
     fprintf(stdout, "Dokan driver version : 0x%lx\n", DokanDriverVersion());
   } break;
 
   DEFAULT:
-  default:
-    fprintf(stderr, "Unknown option - Use /? to show usage\n");
+    return DefaultCaseOption();
   }
 
   DokanShutdown();

@@ -36,7 +36,7 @@ BEGIN
             VALUE "FileDescription", "Dokan Fuse library"
             VALUE "FileVersion", "2.0.0.1000"
             VALUE "InternalName", "dokanfuse.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2017"
+            VALUE "LegalCopyright", "Copyright (C) 2018"
             VALUE "OriginalFilename", "dokanfuse.dll"
             VALUE "ProductName", "Dokan"
             VALUE "ProductVersion", "2.0.0.1000"

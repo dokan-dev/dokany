@@ -30,8 +30,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int ntstatus_error_to_errno(int win_res);
-int errno_to_ntstatus_error(int err);
+int ntstatus_error_to_errno(long win_res);
+long errno_to_ntstatus_error(int err);
 
 //This stuff is useful only on Windows in MSVC
 #ifdef _MSC_VER
@@ -187,7 +187,7 @@ struct stat64_cygwin
 	blkcnt_t      st_blocks;
 	timestruc_t   st_birthtim;
 };
-/* The following breaks struct stat definiton in native Windows stats.h
+/* The following breaks struct stat definition in native Windows stats.h
 * So whenever referencing st_atime|st_ctime|st_mtime, replacing is needed.
 */
 /*

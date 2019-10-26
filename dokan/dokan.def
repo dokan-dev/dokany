@@ -20,7 +20,13 @@ DokanUseStdErr
 DokanDebugMode
 DokanMapKernelToUserCreateFileFlags
 DokanGetMountPointList
+DokanReleaseMountPointList
 DokanNtStatusFromWin32
+DokanNotifyCreate
+DokanNotifyDelete
+DokanNotifyUpdate
+DokanNotifyXAttrUpdate
+DokanNotifyRename
 DokanVector_Alloc
 DokanVector_AllocWithCapacity
 DokanVector_StackAlloc

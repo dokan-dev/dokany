@@ -1,8 +1,13 @@
 /*
 Dokan : user-mode file system library for Windows
 
+<<<<<<< HEAD
 Copyright (C) 2015 - 2017 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
 Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
+=======
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
+>>>>>>> master
 
 http://dokan-dev.github.io
 
@@ -638,7 +643,7 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   SECURITY_ATTRIBUTES securityAttrib;
   ACCESS_MASK genericDesiredAccess;
   // userTokenHandle is for Impersonate Caller User Option
-  HANDLE userTokenHandle;
+  HANDLE userTokenHandle = INVALID_HANDLE_VALUE;
 
   DokanMapKernelToUserCreateFileFlags(EventInfo, &genericDesiredAccess,
     &fileAttributesAndFlags,
@@ -697,8 +702,8 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
   // be opened.
   fileAttr = GetFileAttributes(filePath);
 
-  if (fileAttr != INVALID_FILE_ATTRIBUTES) {
-    if (fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+  if (fileAttr != INVALID_FILE_ATTRIBUTES
+    && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
       if (!(EventInfo->CreateOptions & FILE_NON_DIRECTORY_FILE)) {
         EventInfo->DokanFileInfo->IsDirectory = TRUE;
         // Needed by FindFirstFile to list files in it
@@ -708,7 +713,6 @@ MirrorCreateFile(DOKAN_CREATE_FILE_EVENT *EventInfo) {
         DbgPrint(L"\tCannot open a dir as a file\n");
         return STATUS_FILE_IS_A_DIRECTORY;
       }
-    }
   }
 
   DbgPrint(L"\n\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
@@ -1617,6 +1621,8 @@ MirrorFindFiles(DOKAN_FIND_FILES_EVENT *EventInfo) {
   if (filePath[fileLen - 1] != L'\\') {
     filePath[fileLen++] = L'\\';
   }
+  if (fileLen + 1 >= DOKAN_MAX_PATH)
+    return STATUS_BUFFER_OVERFLOW;
   filePath[fileLen] = L'*';
   filePath[fileLen + 1] = L'\0';
 
@@ -1670,6 +1676,8 @@ MirrorCanDeleteDirectory(LPWSTR filePath) {
     filePath[fileLen++] = L'\\';
   }
 
+  if (fileLen + 1 >= DOKAN_MAX_PATH)
+    return STATUS_BUFFER_OVERFLOW;
   filePath[fileLen] = L'*';
   filePath[fileLen + 1] = L'\0';
 
@@ -2308,7 +2316,6 @@ MirrorGetVolumeAttributes(DOKAN_GET_VOLUME_ATTRIBUTES_EVENT *EventInfo) {
   return STATUS_SUCCESS;
 }
 
-//Uncomment for personalize disk space
 static NTSTATUS DOKAN_CALLBACK
 MirrorDokanGetDiskFreeSpace(DOKAN_GET_DISK_FREE_SPACE_EVENT *EventInfo) {
 
@@ -2592,7 +2599,7 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 
 void ShowUsage() {
   // clang-format off
-  fprintf(stderr, "mirror.exe\n"
+  fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
           "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
           "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
@@ -2608,7 +2615,9 @@ void ShowUsage() {
           "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
-          "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
+          "  /e Disable OpLocks\t\t\t\t Disable OpLocks kernel operations. Otherwise Dokan will take care of it.\n"
+          "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
+          "  /z Optimize single name search\t\t Speed up directory query under Windows 7.\n\n"
           "Examples:\n"
           "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
           "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
@@ -2681,6 +2690,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'f':
       dokanOptions.Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
+      break;
+    case L'e':
+      dokanOptions.Options |= DOKAN_OPTION_DISABLE_OPLOCKS;
+      break;
+    case L'z':
+      dokanOptions.Options |= DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH;
       break;
     case L'u':
       command++;
