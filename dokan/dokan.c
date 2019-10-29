@@ -58,7 +58,8 @@ NewDokanInstance() {
 #if _MSC_VER < 1300
   InitializeCriticalSection(&instance->CriticalSection);
 #else
-  InitializeCriticalSectionAndSpinCount(&instance->CriticalSection, 0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&instance->CriticalSection,
+                                              0x80000400);
 #endif
 
   InitializeListHead(&instance->ListEntry);
@@ -888,7 +889,7 @@ BOOL WINAPI DllMain(HINSTANCE Instance, DWORD Reason, LPVOID Reserved) {
 #if _MSC_VER < 1300
     InitializeCriticalSection(&g_InstanceCriticalSection);
 #else
-    InitializeCriticalSectionAndSpinCount(&g_InstanceCriticalSection,
+    (void)InitializeCriticalSectionAndSpinCount(&g_InstanceCriticalSection,
                                           0x80000400);
 #endif
 

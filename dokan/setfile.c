@@ -182,7 +182,7 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
     return STATUS_NOT_IMPLEMENTED;
 
   if (renameInfo->FileName[0] != L'\\') {
-    ULONG pos;
+    ULONGLONG pos;
     for (pos = EventContext->Operation.SetFile.FileNameLength / sizeof(WCHAR);
          pos != 0; --pos) {
       if (EventContext->Operation.SetFile.FileName[pos] == '\\')
