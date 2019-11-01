@@ -1681,19 +1681,18 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   // properly.
   g_HasSeSecurityPrivilege = AddSeSecurityNamePrivilege();
   if (!g_HasSeSecurityPrivilege) {
-    fwprintf(stderr, L"Failed to add security privilege to process\n");
     fwprintf(stderr,
-             L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n");
-    fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
-             L"rights to fix it\n");
+             L"[Mirror] Failed to add security privilege to process\n"
+             L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n"
+             L"\t=> Please restart mirror sample with administrator rights to fix it\n");
   }
 
   if (g_ImpersonateCallerUser && !g_HasSeSecurityPrivilege) {
-    fwprintf(stderr, L"Impersonate Caller User requires administrator right to "
-             L"work properly\n");
-    fwprintf(stderr, L"\t=> Other users may not use the drive properly\n");
-    fwprintf(stderr, L"\t=> Please restart mirror sample with administrator "
-             L"rights to fix it\n");
+    fwprintf(
+        stderr,
+        L"[Mirror] Impersonate Caller User requires administrator right to work properly\n"
+        L"\t=> Other users may not use the drive properly\n"
+        L"\t=> Please restart mirror sample with administrator rights to fix it\n");
   }
 
   if (g_DebugMode) {
