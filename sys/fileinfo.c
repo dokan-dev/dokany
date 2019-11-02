@@ -947,16 +947,16 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
 
         if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
-        DokanNotifyReportChange0(fcb, &oldFileName,
-                                 DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                     ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                     : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                 FILE_ACTION_RENAMED_OLD_NAME);
-        DokanNotifyReportChange(fcb,
-                                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                    ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                    : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                FILE_ACTION_RENAMED_NEW_NAME);
+          DokanNotifyReportChange0(fcb, &oldFileName,
+                                   DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                       ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                       : FILE_NOTIFY_CHANGE_FILE_NAME,
+                                   FILE_ACTION_RENAMED_OLD_NAME);
+          DokanNotifyReportChange(fcb,
+                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                      ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                      : FILE_NOTIFY_CHANGE_FILE_NAME,
+                                  FILE_ACTION_RENAMED_NEW_NAME);
         } else {
           DokanNotifyReportChange0(fcb, &oldFileName,
                                    DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)

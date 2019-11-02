@@ -159,7 +159,7 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
 
 BOOLEAN
 DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
-#if _WIN32_WINNT > _WIN32_WINNT_WIN7
+#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
   NTSTATUS Status = ExInitializeLookasideListEx(
       pCache, NULL, NULL, NonPagedPoolNx, 0, cbElement, TAG, 0);
 #else
