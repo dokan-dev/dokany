@@ -63,15 +63,8 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   ExInitializeFastMutex(&fcb->AdvancedFCBHeaderMutex);
 
-#if _WIN32_WINNT >= 0x0501
   FsRtlSetupAdvancedHeader(&fcb->AdvancedFCBHeader,
                            &fcb->AdvancedFCBHeaderMutex);
-#else
-  if (DokanFsRtlTeardownPerStreamContexts) {
-    FsRtlSetupAdvancedHeader(&fcb->AdvancedFCBHeader,
-                             &fcb->AdvancedFCBHeaderMutex);
-  }
-#endif
 
   fcb->AdvancedFCBHeader.ValidDataLength.LowPart = 0xffffffff;
   fcb->AdvancedFCBHeader.ValidDataLength.HighPart = 0x7fffffff;
@@ -190,13 +183,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
 
     FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
 
-#if _WIN32_WINNT >= 0x0501
     FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-#else
-    if (DokanFsRtlTeardownPerStreamContexts) {
-      DokanFsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-    }
-#endif
 
     Fcb->Identifier.Type = FREED_FCB;
     DokanFCBUnlock(Fcb);
@@ -417,7 +404,6 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
       DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_DELETE_ON_CLOSE))
     return STATUS_DELETE_PENDING;
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
   //
   //  Do an extra test for writeable user sections if the user did not allow
   //  write sharing - this is necessary since a section may exist with no
@@ -433,7 +419,6 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
     DDbgPrint("  DokanCheckShareAccess FCB has no write shared access\n");
     return STATUS_SHARING_VIOLATION;
   }
-#endif
 
   //
   //  Check if the Fcb has the proper share access.
@@ -1089,12 +1074,8 @@ Return Value:
     // Oplock
     //
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
     OpenRequiringOplock = BooleanFlagOn(irpSp->Parameters.Create.Options,
                                         FILE_OPEN_REQUIRING_OPLOCK);
-#else
-    OpenRequiringOplock = FALSE;
-#endif
     if (FlagOn(irpSp->Parameters.Create.Options, FILE_COMPLETE_IF_OPLOCKED)) {
       OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_COMPLETE_IF_OPLOCKED);
     }
@@ -1121,8 +1102,6 @@ Return Value:
       if (!NT_SUCCESS(status)) {
 
         DDbgPrint("   DokanCheckShareAccess failed with 0x%x\n", status);
-
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 
         NTSTATUS OplockBreakStatus = STATUS_SUCCESS;
 
@@ -1225,10 +1204,6 @@ Return Value:
           DDbgPrint("create: sharing/oplock failed, status = 0x%08x\n", status);
           __leave;
         }
-
-#else
-        return status;
-#endif
       }
       IoUpdateShareAccess(fileObject, &fcb->ShareAccess);
     } else {
@@ -1329,7 +1304,6 @@ Return Value:
     // so we shouldn't necessarily clean up only because
     // AbnormalTermination() returns true
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
     //
     //  If we're not getting out with success, and if the caller wanted
     //  atomic create-with-oplock semantics make sure we back out any
@@ -1345,7 +1319,7 @@ Return Value:
         IoRemoveShareAccess(fileObject, &fcb->ShareAccess);
       }
     }
-#endif
+
     if (fcbLocked)
       DokanFCBUnlock(fcb);
 

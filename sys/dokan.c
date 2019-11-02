@@ -34,10 +34,6 @@ LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 
-#if _WIN32_WINNT < 0x0501
-PFN_FSRTLTEARDOWNPERSTREAMCONTEXTS DokanFsRtlTeardownPerStreamContexts;
-#endif
-
 NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 UNICODE_STRING FcbFileNameNull;
 
@@ -163,7 +159,7 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
 
 BOOLEAN
 DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
-#if _WIN32_WINNT > 0x601
+#if _WIN32_WINNT > _WIN32_WINNT_WIN7
   NTSTATUS Status = ExInitializeLookasideListEx(
       pCache, NULL, NULL, NonPagedPoolNx, 0, cbElement, TAG, 0);
 #else
@@ -297,12 +293,6 @@ Return Value:
 #else
   ExInitializeNPagedLookasideList(&DokanIrpEntryLookasideList, NULL, NULL, 0,
                                   sizeof(IRP_ENTRY), TAG, 0);
-#endif
-
-#if _WIN32_WINNT < 0x0501
-  RtlInitUnicodeString(&functionName, L"FsRtlTeardownPerStreamContexts");
-  DokanFsRtlTeardownPerStreamContexts =
-      MmGetSystemRoutineAddress(&functionName);
 #endif
 
   RtlZeroMemory(&filterCallbacks, sizeof(FS_FILTER_CALLBACKS));

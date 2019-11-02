@@ -97,23 +97,11 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 
 #define DOKAN_KEEPALIVE_TIMEOUT_DEFAULT (1000 * 15) // in millisecond
 
-#if _WIN32_WINNT > 0x501
-
 #define DDbgPrint(...)                                                         \
   if (g_Debug & DOKAN_DEBUG_DEFAULT) {                                         \
     KdPrintEx(                                                                 \
         (DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[DokanFS] " __VA_ARGS__));  \
   }
-#else
-#define DDbgPrint(...)                                                         \
-  if (g_Debug & DOKAN_DEBUG_DEFAULT) {                                         \
-    DbgPrint("[DokanFS] " __VA_ARGS__);                                        \
-  }
-#endif
-
-#if _WIN32_WINNT < 0x0501
-extern PFN_FSRTLTEARDOWNPERSTREAMCONTEXTS DokanFsRtlTeardownPerStreamContexts;
-#endif
 
 extern UNICODE_STRING FcbFileNameNull;
 #define DokanPrintFileName(FileObject)                                         \
