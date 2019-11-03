@@ -63,40 +63,39 @@ DokanCommonLockControl(__in PIRP Irp) {
     return STATUS_INVALID_PARAMETER;
   }
 
-//
-//  We check whether we can proceed
-//  based on the state of the file oplocks.
-//
-#if (NTDDI_VERSION >= NTDDI_WIN8)
+  //
+  //  We check whether we can proceed
+  //  based on the state of the file oplocks.
+  //
 
-  // Fcb's AllocationSize is constant after creation.
-  if (((IRP_MN_LOCK == irpSp->MinorFunction) &&
+  if (!DokanFsRtlAreThereWaitingFileLocks ||
+      // For >= NTDDI_WIN8 we check the file state
+      // Fcb's AllocationSize is constant after creation.
+      ((IRP_MN_LOCK == irpSp->MinorFunction) &&
        ((ULONGLONG)irpSp->Parameters.LockControl.ByteOffset.QuadPart <
         (ULONGLONG)Fcb->AdvancedFCBHeader.AllocationSize.QuadPart)) ||
       ((IRP_MN_LOCK != irpSp->MinorFunction) &&
-       FsRtlAreThereWaitingFileLocks(&Fcb->FileLock))) {
+       DokanFsRtlAreThereWaitingFileLocks(&Fcb->FileLock))) {
 
-//
-//  Check whether we can proceed based on the state of file oplocks if doing
-//  an operation that interferes with oplocks. Those operations are:
-//
-//      1. Lock a range within the file's AllocationSize.
-//      2. Unlock a range when there are waiting locks on the file. This one
-//         is not guaranteed to interfere with oplocks, but it could, as
-//         unlocking this range might cause a waiting lock to be granted
-//         within AllocationSize!
-//
-#endif
+    //
+    //  Check whether we can proceed based on the state of file oplocks if doing
+    //  an operation that interferes with oplocks. Those operations are:
+    //
+    //      1. Lock a range within the file's AllocationSize.
+    //      2. Unlock a range when there are waiting locks on the file. This one
+    //         is not guaranteed to interfere with oplocks, but it could, as
+    //         unlocking this range might cause a waiting lock to be granted
+    //         within AllocationSize!
+    //
+
     // Dokan DokanOplockComplete sends the operation to user mode, which isn't
     // what we want to do
     // so now wait for the oplock to be broken (pass in NULL for the callback)
     // This may block and enter wait state.
     Status = DokanCheckOplock(Fcb, Irp, NULL /* EventContext */,
-                         NULL /*DokanOplockComplete*/, NULL);
-
-#if (NTDDI_VERSION >= NTDDI_WIN8)
+                              NULL /*DokanOplockComplete*/, NULL);
   }
-#endif
+
   //  If we were waiting for the callback, then STATUS_PENDING would be ok too
   if (Status == STATUS_SUCCESS) {
     //

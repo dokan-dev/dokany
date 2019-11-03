@@ -28,6 +28,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef DOKAN_H_
 #define DOKAN_H_
 
+#define POOL_NX_OPTIN 1
 #include <ntifs.h>
 #include <ntdddisk.h>
 #include <ntstrsafe.h>
@@ -42,6 +43,18 @@ extern ULONG g_Debug;
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
+
+// GetSystemRoutineAddress Function Pointer
+typedef NTKERNELAPI BOOLEAN DokanPtr_FsRtlCheckLockForOplockRequest(
+    _In_ PFILE_LOCK FileLock, _In_ PLARGE_INTEGER AllocationSize);
+typedef NTKERNELAPI BOOLEAN
+DokanPtr_FsRtlAreThereWaitingFileLocks(_In_ PFILE_LOCK FileLock);
+
+// extern GetSystemRoutineAddress
+extern DokanPtr_FsRtlCheckLockForOplockRequest
+    *DokanFsRtlCheckLockForOplockRequest;
+extern DokanPtr_FsRtlAreThereWaitingFileLocks
+    *DokanFsRtlAreThereWaitingFileLocks;
 
 #define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan_" DOKAN_MAJOR_API_VERSION
 #define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
@@ -74,19 +87,12 @@ extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 #ifdef ExAllocatePool
 #undef ExAllocatePool
 #endif
-#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
-#define ExAllocatePool(size) ExAllocatePoolWithTag(NonPagedPoolNx, size, TAG)
-#else
 #define ExAllocatePool(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
-#endif
 
-#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
+extern ULONG DokanMdlSafePriority;
 #define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
-  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority | MdlMappingNoExecute)
-#else
-#define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
-  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority)
-#endif
+  MmGetSystemAddressForMdlSafe(mdl,                                            \
+                               NormalPagePriority | DokanMdlSafePriority)
 
 #define DRIVER_CONTEXT_EVENT 2
 #define DRIVER_CONTEXT_IRP_ENTRY 3
@@ -452,14 +458,13 @@ typedef struct _DokanFileControlBlock {
   // Locking: FsRtl routines should be enough after initialization.
   FILE_LOCK FileLock;
 
-#if (NTDDI_VERSION < NTDDI_WIN8)
   //
   //  The following field is used by the oplock module
-  //  to maintain current oplock information.
+  //  to maintain current oplock information for < NTDDI_WIN8.
+  //  OPLOCK is part of FSRTL_ADVANCED_FCB_HEADER since NTDDI_WIN8.
   //
   // Locking: DokanFCBLock{RO,RW}
   OPLOCK Oplock;
-#endif
 
   // uint32 ReferenceCount;
   // uint32 OpenHandleCount;

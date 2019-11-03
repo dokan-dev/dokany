@@ -226,17 +226,16 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
           //
           if (!DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
 
-//
-//  Set OplockCount to nonzero if FsRtl denies access
-//  based on current byte-range lock state.
-//
-#if (NTDDI_VERSION >= NTDDI_WIN8)
-            OplockCount = (ULONG)!FsRtlCheckLockForOplockRequest(
-                &Fcb->FileLock, &Fcb->AdvancedFCBHeader.AllocationSize);
-#else //NTDDI_WIN7
-          OplockCount =
-              (ULONG)FsRtlAreThereCurrentOrInProgressFileLocks(&Fcb->FileLock);
-#endif
+            //
+            //  Set OplockCount to nonzero if FsRtl denies access
+            //  based on current byte-range lock state.
+            //
+            if (DokanFsRtlCheckLockForOplockRequest) // Win8+
+              OplockCount = (ULONG)!DokanFsRtlCheckLockForOplockRequest(
+                  &Fcb->FileLock, &Fcb->AdvancedFCBHeader.AllocationSize);
+            else
+              OplockCount = (ULONG)FsRtlAreThereCurrentOrInProgressFileLocks(
+                  &Fcb->FileLock);
           }
         } else {
           // Shouldn't be something like UncleanCount counter and not FileCount

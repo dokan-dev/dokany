@@ -214,7 +214,7 @@
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         Exec-External { & 7z e .\build-wrapper-win-x86.zip }
         $env:Path += ";$((Get-Location).Path)"
-        .\scripts\sonar-build.ps1 dokany dokany-dev-sys $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
+        .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
       }
   - ps: |
       if ($env:CONFIGURATION -eq "Coverity" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
@@ -231,7 +231,7 @@
         $buildArgs = @(
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Win10 Debug",
+        "/p:Configuration=Debug",
         "/p:Platform=x64")
   
         Exec-External {& "$env:SYSTEMDRIVE\Tools\Coverity\bin\cov-build.exe" `
