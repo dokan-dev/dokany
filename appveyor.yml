@@ -159,7 +159,7 @@
             $msys2_tar = "$env:TEMP\msys2-base-x86_64.tar.xz"
             Invoke-WebRequest $msys2_tar_url -OutFile $msys2_tar
             if ($(Get-FileHash -Algorithm SHA256 $msys2_tar).Hash -ne $msys2_tar_sha256) {
-              throw "Hash mismatch while downloading Doxygen"
+              throw "Hash mismatch while downloading msys2"
             }
             Write-Host "Extracting MSYS2"
             Exec-External {& cmd /c "7z x -so $msys2_tar | 7z x -si -ttar -o$env:MSYS2_INST_DIR\..\"}
