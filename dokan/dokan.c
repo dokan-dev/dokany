@@ -2019,8 +2019,7 @@ DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
 	return threadPool;
 }
 
-void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLBACKS* logCallbacks)
-{
+void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLBACKS* logCallbacks) {
 	// ensure 64-bit alignment
 	assert(offsetof(EVENT_INFORMATION, Buffer) % 8 == 0);
 
@@ -2053,8 +2052,7 @@ void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLB
 #endif
 	}
 
-	if (logCallbacks)
-	{
+	if (logCallbacks) {
 #if INTPTR_MAX == INT64_MAX
 		InterlockedExchange64((volatile LONG64*)&g_PDokanDbgPrint, (LONG64)logCallbacks->DbgPrint);
 		InterlockedExchange64((volatile LONG64*)&g_PDokanDbgPrintW, (LONG64)logCallbacks->DbgPrintW);
@@ -2062,7 +2060,7 @@ void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLB
 		InterlockedExchange((volatile LONG*)&g_PDokanDbgPrint, (LONG)logCallbacks->DbgPrint);
 		InterlockedExchange((volatile LONG*)&g_PDokanDbgPrintW, (LONG)logCallbacks->DbgPrintW);
 #else
-		#error Unsupported architecture!
+#error Unsupported architecture!
 #endif
 	}
 
