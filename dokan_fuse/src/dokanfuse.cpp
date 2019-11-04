@@ -634,7 +634,7 @@ bool fuse_chan::init() {
 
   // check version
   typedef ULONG(__stdcall * DokanVersionType)();
-  typedef void(__stdcall *DokanInitType)(DOKAN_MEMORY_CALLBACKS *memoryCallbacks);
+  typedef void(__stdcall *DokanInitType)(DOKAN_MEMORY_CALLBACKS *memoryCallbacks, DOKAN_LOG_CALLBACKS *logCallbacks);
 
   DokanVersionType ResolvedDokanVersion;
   DokanInitType ResolvedInit;
@@ -647,7 +647,7 @@ bool fuse_chan::init() {
 	  return false;
   }
 
-  ResolvedInit(NULL);
+  ResolvedInit(NULL, NULL);
 
   ResolvedDokanVersion =
       (DokanVersionType)GetProcAddress(dokanDll, "DokanVersion");

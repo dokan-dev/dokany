@@ -2824,7 +2824,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
 #else
 
-  DokanInit(NULL);
+  DokanInit(NULL, NULL);
 
 #endif
 
