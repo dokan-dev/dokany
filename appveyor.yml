@@ -298,7 +298,7 @@
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
 
         cd ${env:APPVEYOR_BUILD_FOLDER}
-        Exec-External {& .\scripts\build.ps1}
+        Exec-External {& .\scripts\build.ps1 -Configurations Release }
         .\cert\dokan-sign.ps1
 
         cd dokan_wix

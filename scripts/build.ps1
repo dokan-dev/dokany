@@ -1,7 +1,7 @@
 param (
 	[string[]]$BuildPart = @('win', 'cygwin'),
 	[string[]]$Platforms = @('Win32', 'x64', 'ARM', 'ARM64'),
-	[string[]]$Configurations = @('Release')
+	[string[]]$Configurations = @('Release', 'Debug')
 )
 
 . .\scripts\build_helper.ps1
