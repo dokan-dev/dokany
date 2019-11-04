@@ -227,8 +227,8 @@ typedef void* (WINAPI *PDokanMalloc)(size_t size, const char *fileName, int line
 typedef void (WINAPI *PDokanFree)(void *userData);
 typedef void* (WINAPI *PDokanRealloc)(void *userData, size_t newSize, const char *fileName, int lineNumber);
 
-typedef BOOL (WINAPI *PDokanDbgPrint)(LPCSTR logString);
-typedef BOOL (WINAPI *PDokanDbgPrintW)(LPCWSTR logString);
+typedef void (WINAPI *PDokanDbgPrint)(LPCSTR logString);
+typedef void (WINAPI *PDokanDbgPrintW)(LPCWSTR logString);
 
 typedef struct _DOKAN_MEMORY_CALLBACKS {
 	PDokanMalloc	Malloc;

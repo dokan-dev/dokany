@@ -59,7 +59,6 @@ extern volatile PDokanDbgPrintW g_PDokanDbgPrintW;
 
 static VOID DokanDbgPrint(LPCSTR format, ...) {
 
-  BOOL allowStandardPrint = TRUE;
   const char *outputString = format; // fallback
   char *buffer = NULL;
   int length;
@@ -76,17 +75,15 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
   }
 
   if (g_PDokanDbgPrint) {
-	  allowStandardPrint = g_PDokanDbgPrint(outputString);
-  }
-  if (allowStandardPrint) {
+	g_PDokanDbgPrint(outputString);
+  } else {
 	  OutputDebugStringA(outputString);
+	  if (g_UseStdErr) {
+		  fputs(outputString, stderr);
+		  fflush(stderr);
+	  }
   }
 
-  if(g_UseStdErr && allowStandardPrint) {  
-	  fputs(outputString, stderr);
-	  fflush(stderr);
-  }
-    
   if(buffer) {
 	  _freea(buffer);
   }
@@ -96,7 +93,6 @@ static VOID DokanDbgPrint(LPCSTR format, ...) {
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
 
-  BOOL allowStandardPrint = TRUE;
   const WCHAR *outputString = format;   // fallback
   WCHAR *buffer = NULL;
   int length;
@@ -113,15 +109,13 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
   }
 
   if (g_PDokanDbgPrint) {
-	  allowStandardPrint = g_PDokanDbgPrintW(outputString);
-  }
-  if (allowStandardPrint) {
+	  g_PDokanDbgPrintW(outputString);
+  } else {
 	  OutputDebugStringW(outputString);
-  }
-
-  if(g_UseStdErr && allowStandardPrint) {
-	  fputws(outputString, stderr);
-	  fflush(stderr);
+	  if (g_UseStdErr) {
+		  fputws(outputString, stderr);
+		  fflush(stderr);
+	  }
   }
 
   if(buffer) {
