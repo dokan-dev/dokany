@@ -386,7 +386,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     status = STATUS_SUCCESS;
     break;
 
-  case FSCTL_NOTIFY_PATH:
+  case FSCTL_NOTIFY_PATH: {
     PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath;
     irpSp = IoGetCurrentIrpStackLocation(*pIrp);
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
@@ -432,8 +432,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
                              pNotifyPath->Action);
     DokanFCBUnlock(fcb);
     status = STATUS_SUCCESS;
-    break;
-
+  } break;
   case FSCTL_REQUEST_OPLOCK_LEVEL_1:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK_LEVEL_1\n");
     status = DokanOplockRequest(pIrp);
