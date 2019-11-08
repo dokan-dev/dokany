@@ -208,7 +208,7 @@ VOID InitMultiVersionResources() {
     DokanFsRtlCheckLockForOplockRequest =
         (DokanPtr_FsRtlCheckLockForOplockRequest *)MmGetSystemRoutineAddress(
             &SystemRoutineName);
-    RtlInitUnicodeString(&SystemRoutineName, L"FsRtlCheckLockForOplockRequest");
+    RtlInitUnicodeString(&SystemRoutineName, L"FsRtlAreThereWaitingFileLocks");
     DokanFsRtlAreThereWaitingFileLocks =
         (DokanPtr_FsRtlAreThereWaitingFileLocks *)MmGetSystemRoutineAddress(
             &SystemRoutineName);
