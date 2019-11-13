@@ -1,9 +1,10 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
-  http://dokan-dev.net/en
+  http://dokan-dev.github.io
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the Free
@@ -18,260 +19,448 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokan.h"
 
+NTSTATUS
+DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
+                                    __in PIRP Irp) {
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PIO_STACK_LOCATION irpSp;
+  PVOID buffer;
+  PFILE_OBJECT fileObject;
+  PDokanVCB vcb;
+  PDokanDCB dcb;
+  PDokanCCB ccb;
+  ULONG info = 0;
+  ULONG RequiredLength;
+
+  __try {
+
+    DDbgPrint("==> DokanQueryVolumeInformation\n");
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
+
+    dcb = vcb->Dcb;
+
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    buffer = Irp->AssociatedIrp.SystemBuffer;
+
+    fileObject = irpSp->FileObject;
+
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject == NULL\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
+
+    DDbgPrint("  FileName: %wZ\n", &fileObject->FileName);
+
+    switch (irpSp->Parameters.QueryVolume.FsInformationClass) {
+    case FileFsVolumeInformation:
+      DDbgPrint("  FileFsVolumeInformation\n");
+      if (vcb->HasEventWait) {
+        break;
+      }
+
+      DDbgPrint("  Still no threads for processing available - "
+                "FileFsVolumeInformation \n");
+      PFILE_FS_VOLUME_INFORMATION FsVolInfo;
+
+      if (irpSp->Parameters.QueryVolume.Length <
+          sizeof(FILE_FS_VOLUME_INFORMATION)) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      FsVolInfo = (PFILE_FS_VOLUME_INFORMATION)buffer;
+      FsVolInfo->VolumeCreationTime.QuadPart = 0;
+      FsVolInfo->VolumeSerialNumber = 0x19831116;
+
+      FsVolInfo->VolumeLabelLength =
+          (USHORT)wcslen(VOLUME_LABEL) * sizeof(WCHAR);
+      /* We don't support ObjectId */
+      FsVolInfo->SupportsObjects = FALSE;
+
+      RequiredLength = sizeof(FILE_FS_VOLUME_INFORMATION) +
+                       FsVolInfo->VolumeLabelLength - sizeof(WCHAR);
+
+      if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
+        Irp->IoStatus.Information = sizeof(FILE_FS_VOLUME_INFORMATION);
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      RtlCopyMemory(FsVolInfo->VolumeLabel, VOLUME_LABEL,
+                    FsVolInfo->VolumeLabelLength);
+
+      Irp->IoStatus.Information = RequiredLength;
+      status = STATUS_SUCCESS;
+      __leave;
+      break;
+
+    case FileFsLabelInformation:
+      DDbgPrint("  FileFsLabelInformation\n");
+      break;
+
+    case FileFsSizeInformation:
+      DDbgPrint("  FileFsSizeInformation\n");
+      if (vcb->HasEventWait) {
+        break;
+      }
+
+      DDbgPrint("  Still no threads for processing available - "
+                "FileFsSizeInformation \n");
+      PFILE_FS_SIZE_INFORMATION sizeInfo;
+
+      if (irpSp->Parameters.QueryVolume.Length <
+          sizeof(FILE_FS_SIZE_INFORMATION)) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      ULONGLONG freeBytesAvailable = 512 * 1024 * 1024;
+      ULONGLONG totalBytes = 1024 * 1024 * 1024;
+
+      sizeInfo = (PFILE_FS_SIZE_INFORMATION)buffer;
+      sizeInfo->TotalAllocationUnits.QuadPart =
+          totalBytes / DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE;
+      sizeInfo->AvailableAllocationUnits.QuadPart =
+          freeBytesAvailable / DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE;
+      sizeInfo->SectorsPerAllocationUnit =
+          DOKAN_DEFAULT_ALLOCATION_UNIT_SIZE / DOKAN_DEFAULT_SECTOR_SIZE;
+      sizeInfo->BytesPerSector = DOKAN_DEFAULT_SECTOR_SIZE;
+
+      Irp->IoStatus.Information = sizeof(FILE_FS_SIZE_INFORMATION);
+      status = STATUS_SUCCESS;
+      __leave;
+
+      break;
+
+    case FileFsDeviceInformation: {
+      PFILE_FS_DEVICE_INFORMATION device;
+      DDbgPrint("  FileFsDeviceInformation\n");
+      device = (PFILE_FS_DEVICE_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      if (irpSp->Parameters.QueryVolume.Length <
+          sizeof(FILE_FS_DEVICE_INFORMATION)) {
+        status = STATUS_BUFFER_TOO_SMALL;
+        info = sizeof(FILE_FS_DEVICE_INFORMATION);
+        __leave;
+      }
+      device->DeviceType = dcb->DeviceType;
+      device->Characteristics = dcb->DeviceCharacteristics;
+      status = STATUS_SUCCESS;
+      info = sizeof(FILE_FS_DEVICE_INFORMATION);
+      __leave;
+    } break;
+
+    case FileFsAttributeInformation:
+      DDbgPrint("  FileFsAttributeInformation\n");
+      if (vcb->HasEventWait) {
+        break;
+      }
+
+      DDbgPrint("  Still no threads for processing available\n");
+      PFILE_FS_ATTRIBUTE_INFORMATION FsAttrInfo;
+
+      if (irpSp->Parameters.QueryVolume.Length <
+          sizeof(FILE_FS_ATTRIBUTE_INFORMATION)) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      FsAttrInfo =
+          (PFILE_FS_ATTRIBUTE_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
+      FsAttrInfo->FileSystemAttributes = FILE_SUPPORTS_HARD_LINKS |
+                                         FILE_CASE_SENSITIVE_SEARCH |
+                                         FILE_CASE_PRESERVED_NAMES;
+
+      FsAttrInfo->MaximumComponentNameLength = 256;
+      FsAttrInfo->FileSystemNameLength = 8;
+
+      RequiredLength = sizeof(FILE_FS_ATTRIBUTE_INFORMATION) +
+                       FsAttrInfo->FileSystemNameLength - sizeof(WCHAR);
+
+      if (irpSp->Parameters.QueryVolume.Length < RequiredLength) {
+        Irp->IoStatus.Information = sizeof(FILE_FS_ATTRIBUTE_INFORMATION);
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      RtlCopyMemory(FsAttrInfo->FileSystemName, L"NTFS",
+                    FsAttrInfo->FileSystemNameLength);
+      Irp->IoStatus.Information = RequiredLength;
+      status = STATUS_SUCCESS;
+      __leave;
+      break;
+
+    case FileFsControlInformation:
+      DDbgPrint("  FileFsControlInformation\n");
+      break;
+
+    case FileFsFullSizeInformation:
+      DDbgPrint("  FileFsFullSizeInformation\n");
+      break;
+    case FileFsObjectIdInformation:
+      DDbgPrint("  FileFsObjectIdInformation\n");
+      break;
+
+    case FileFsMaximumInformation:
+      DDbgPrint("  FileFsMaximumInformation\n");
+      break;
+
+    default:
+      break;
+    }
+
+    if (irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsVolumeInformation ||
+        irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsSizeInformation ||
+        irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsAttributeInformation ||
+        irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsFullSizeInformation) {
+
+      ULONG eventLength = sizeof(EVENT_CONTEXT);
+      PEVENT_CONTEXT eventContext;
+
+      ccb = fileObject->FsContext2;
+      if (ccb && !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        status = STATUS_INVALID_PARAMETER;
+        __leave;
+      }
+
+      // this memory must be freed in this {}
+      eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, NULL);
+
+      if (eventContext == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
+
+      if (ccb) {
+        eventContext->Context = ccb->UserContext;
+        eventContext->FileFlags = DokanCCBFlagsGet(ccb);
+        // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+      }
+
+      eventContext->Operation.Volume.FsInformationClass =
+          irpSp->Parameters.QueryVolume.FsInformationClass;
+
+      // the length which can be returned to user-mode
+      eventContext->Operation.Volume.BufferLength =
+          irpSp->Parameters.QueryVolume.Length;
+
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    }
+
+  } __finally {
+
+    DokanCompleteIrpRequest(Irp, status, info);
+
+    DDbgPrint("<== DokanQueryVolumeInformation\n");
+  }
+
+  return status;
+}
+
+VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
+                                         __in PEVENT_INFORMATION EventInfo,
+                                         __in PDEVICE_OBJECT DeviceObject) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_SUCCESS;
+  ULONG info = 0;
+  ULONG bufferLen = 0;
+  PVOID buffer = NULL;
+  PDokanDCB dcb;
+  PDokanVCB vcb;
+
+  DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
+
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
+
+  vcb = DeviceObject->DeviceExtension;
+  dcb = vcb->Dcb;
+
+  // buffer which is used to copy VolumeInfo
+  buffer = irp->AssociatedIrp.SystemBuffer;
+
+  // available buffer size to inform
+  bufferLen = irpSp->Parameters.QueryVolume.Length;
+
+  // if buffer is invalid or short of length
+  if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
+
+    info = 0;
+    status = STATUS_INSUFFICIENT_RESOURCES;
+
+  } else {
+    // If this is an attribute request and the volume
+    // is write protected, ensure read-only flag is present
+    if (irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsAttributeInformation &&
+        IS_DEVICE_READ_ONLY(IrpEntry->IrpSp->DeviceObject)) {
+
+      DDbgPrint("    Adding FILE_READ_ONLY_VOLUME flag to attributes\n");
+      PFILE_FS_ATTRIBUTE_INFORMATION attrInfo =
+          (PFILE_FS_ATTRIBUTE_INFORMATION)EventInfo->Buffer;
+      attrInfo->FileSystemAttributes |= FILE_READ_ONLY_VOLUME;
+    }
+
+    // copy the information from user-mode to specified buffer
+    ASSERT(buffer != NULL);
+
+    if (irpSp->Parameters.QueryVolume.FsInformationClass ==
+            FileFsVolumeInformation &&
+        dcb->VolumeLabel != NULL) {
+
+      PFILE_FS_VOLUME_INFORMATION volumeInfo =
+          (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
+
+      ULONG remainingLength = bufferLen;
+      remainingLength -=
+          FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG bytesToCopy = (ULONG)wcslen(dcb->VolumeLabel) * sizeof(WCHAR);
+      if (remainingLength < bytesToCopy) {
+        bytesToCopy = remainingLength;
+      }
+
+      volumeInfo->VolumeLabelLength = bytesToCopy;
+      RtlCopyMemory(volumeInfo->VolumeLabel, dcb->VolumeLabel, bytesToCopy);
+      remainingLength -= bytesToCopy;
+
+      EventInfo->BufferLength = bufferLen - remainingLength;
+    }
+
+    RtlZeroMemory(buffer, bufferLen);
+    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+
+    // the written length
+    info = EventInfo->BufferLength;
+
+    status = EventInfo->Status;
+  }
+
+  DokanCompleteIrpRequest(irp, status, info);
+
+  DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
+}
 
 NTSTATUS
-DokanDispatchQueryVolumeInformation(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-   )
-{
-	NTSTATUS			status = STATUS_INVALID_PARAMETER;
-	PIO_STACK_LOCATION  irpSp;
-	PVOID				buffer;
-	PFILE_OBJECT		fileObject;
-	PDokanVCB			vcb;
-	PDokanDCB			dcb;
-	PDokanCCB			ccb;
-	ULONG               info = 0;
+DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
+                                  __in PIRP Irp) {
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PDokanVCB vcb;
+  PDokanDCB dcb;
+  PIO_STACK_LOCATION irpSp;
+  PVOID buffer;
+  FS_INFORMATION_CLASS FsInformationClass;
 
-	//PAGED_CODE();
+  __try
 
-	__try {
+  {
+    DDbgPrint("==> DokanSetVolumeInformation\n");
 
-		FsRtlEnterFileSystem();
+    vcb = DeviceObject->DeviceExtension;
+    if (GetIdentifierType(vcb) != VCB) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		DDbgPrint("==> DokanQueryVolumeInformation\n");
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    dcb = vcb->Dcb;
 
-		vcb = DeviceObject->DeviceExtension;
-		if (GetIdentifierType(vcb) != VCB) {
-			return STATUS_INVALID_PARAMETER;
-		}
-		dcb = vcb->Dcb;
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    buffer = Irp->AssociatedIrp.SystemBuffer;
+    FsInformationClass = irpSp->Parameters.SetVolume.FsInformationClass;
 
-		irpSp			= IoGetCurrentIrpStackLocation(Irp);
-		buffer			= Irp->AssociatedIrp.SystemBuffer;
+    switch (FsInformationClass) {
+    case FileFsLabelInformation:
 
-		fileObject		= irpSp->FileObject;
+      DDbgPrint("  FileFsLabelInformation\n");
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+      if (sizeof(FILE_FS_LABEL_INFORMATION) >
+          irpSp->Parameters.SetVolume.Length) {
+        status = STATUS_INVALID_PARAMETER;
+        __leave;
+      }
 
+      PFILE_FS_LABEL_INFORMATION Info = (PFILE_FS_LABEL_INFORMATION)buffer;
+      ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+      if (dcb->VolumeLabel != NULL)
+        ExFreePool(dcb->VolumeLabel);
+      dcb->VolumeLabel =
+          ExAllocatePool(Info->VolumeLabelLength + sizeof(WCHAR));
+      if (dcb->VolumeLabel == NULL) {
+        DDbgPrint("  can't allocate VolumeLabel\n");
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
 
-		DDbgPrint("  FileName: %wZ\n", &fileObject->FileName);
+      RtlCopyMemory(dcb->VolumeLabel, Info->VolumeLabel,
+                    Info->VolumeLabelLength);
+      dcb->VolumeLabel[Info->VolumeLabelLength / sizeof(WCHAR)] = '\0';
+      ExReleaseResourceLite(&dcb->Resource);
+      DDbgPrint(" volume label changed to %ws\n", dcb->VolumeLabel);
 
-		ccb = fileObject->FsContext2;
+      status = STATUS_SUCCESS;
+      break;
+    case FileFsVolumeInformation:
+      DDbgPrint("  FileFsVolumeInformation\n");
+      break;
+    case FileFsSizeInformation:
+      DDbgPrint("  FileFsSizeInformation\n");
+      break;
+    case FileFsDeviceInformation:
+      DDbgPrint("  FileFsDeviceInformation\n");
+      break;
+    case FileFsAttributeInformation:
+      DDbgPrint("  FileFsAttributeInformation\n");
+      break;
+    case FileFsControlInformation:
+      DDbgPrint("  FileFsControlInformation\n");
+      break;
+    case FileFsFullSizeInformation:
+      DDbgPrint("  FileFsFullSizeInformation\n");
+      break;
+    case FileFsObjectIdInformation:
+      DDbgPrint("  FileFsObjectIdInformation\n");
+      break;
+    case FileFsDriverPathInformation:
+      DDbgPrint("  FileFsDriverPathInformation\n");
+      break;
+    case FileFsVolumeFlagsInformation:
+      DDbgPrint("  FileFsVolumeFlagsInformation\n");
+      break;
+    case FileFsSectorSizeInformation:
+      DDbgPrint("  FileFsSectorSizeInformation\n");
+      break;
+    case FileFsDataCopyInformation:
+      DDbgPrint("  FileFsDataCopyInformation\n");
+      break;
+    case FileFsMetadataSizeInformation:
+      DDbgPrint("  FileFsMetadataSizeInformation\n");
+      break;
+    case FileFsMaximumInformation:
+      DDbgPrint("  FileFsMaximumInformation\n");
+      break;
+    default:
+      DDbgPrint("  unknown FsInformationClass %d\n", FsInformationClass);
+      break;
+    }
 
-		//	ASSERT(ccb != NULL);
+  } __finally {
 
-		switch(irpSp->Parameters.QueryVolume.FsInformationClass) {
-		case FileFsVolumeInformation:
-			DDbgPrint("  FileFsVolumeInformation\n");
-			break;
+    DokanCompleteIrpRequest(Irp, status, 0);
+  }
 
-		case FileFsLabelInformation:
-			DDbgPrint("  FileFsLabelInformation\n");
-			break;
-	        
-		case FileFsSizeInformation:
-			DDbgPrint("  FileFsSizeInformation\n");
-			break;
-	    
-		case FileFsDeviceInformation:
-			{
-				PFILE_FS_DEVICE_INFORMATION device;
-				DDbgPrint("  FileFsDeviceInformation\n");
-				device = (PFILE_FS_DEVICE_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-				if (irpSp->Parameters.QueryVolume.Length < sizeof(FILE_FS_DEVICE_INFORMATION)) {
-					status = STATUS_BUFFER_TOO_SMALL;
-					info = sizeof(FILE_FS_DEVICE_INFORMATION);
-					__leave;
-				}
-				device->DeviceType = dcb->DeviceType;
-				device->Characteristics = dcb->DeviceCharacteristics;
-				status = STATUS_SUCCESS;
-				info = sizeof(FILE_FS_DEVICE_INFORMATION);
-				__leave;
-			}
-			break;
-	    
-		case FileFsAttributeInformation:
-			DDbgPrint("  FileFsAttributeInformation\n");
-			break;
-	    
-		case FileFsControlInformation:
-			DDbgPrint("  FileFsControlInformation\n");
-			break;
-	    
-		case FileFsFullSizeInformation:
-			DDbgPrint("  FileFsFullSizeInformation\n");
-			break;
-		case FileFsObjectIdInformation:
-			DDbgPrint("  FileFsObjectIdInformation\n");
-			break;
-	    
-		case FileFsMaximumInformation:
-			DDbgPrint("  FileFsMaximumInformation\n");
-			break;
-	    
-		default:
-			break;
-		}
+  DDbgPrint("<== DokanSetVolumeInformation\n");
 
-
-		if (irpSp->Parameters.QueryVolume.FsInformationClass == FileFsVolumeInformation
-			|| irpSp->Parameters.QueryVolume.FsInformationClass == FileFsSizeInformation
-			|| irpSp->Parameters.QueryVolume.FsInformationClass == FileFsAttributeInformation
-			|| irpSp->Parameters.QueryVolume.FsInformationClass == FileFsFullSizeInformation) {
-
-
-			ULONG			eventLength = sizeof(EVENT_CONTEXT);
-			PEVENT_CONTEXT	eventContext;
-
-			if (ccb && !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-				status = STATUS_INVALID_PARAMETER;
-				__leave;
-			}
-
-			// this memory must be freed in this {}
-			eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, NULL);
-
-			if (eventContext == NULL) {
-				status = STATUS_INSUFFICIENT_RESOURCES;
-				__leave;
-			}
-		
-			if (ccb) {
-				eventContext->Context = ccb->UserContext;
-				eventContext->FileFlags = ccb->Flags;
-				//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
-			}
-
-			eventContext->Operation.Volume.FsInformationClass =
-				irpSp->Parameters.QueryVolume.FsInformationClass;
-
-			// the length which can be returned to user-mode
-			eventContext->Operation.Volume.BufferLength = irpSp->Parameters.QueryVolume.Length;
-
-
-			status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
-		}
-
-	} __finally {
-
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = info;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		}
-
-		DDbgPrint("<== DokanQueryVolumeInformation\n");
-
-		FsRtlExitFileSystem();
-	}
-
-	return status;
+  return status;
 }
-
-
-VOID
-DokanCompleteQueryVolumeInformation(
-	__in PIRP_ENTRY			IrpEntry,
-	__in PEVENT_INFORMATION	EventInfo
-	)
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status   = STATUS_SUCCESS;
-	ULONG				info	 = 0;
-	ULONG				bufferLen= 0;
-	PVOID				buffer	 = NULL;
-	PDokanCCB			ccb;
-
-	//FsRtlEnterFileSystem();
-
-	DDbgPrint("==> DokanCompleteQueryVolumeInformation\n");
-
-	irp = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;
-
-	ccb = IrpEntry->FileObject->FsContext2;
-
-	//ASSERT(ccb != NULL);
-
-	// does not save Context!!
-	// ccb->UserContext = EventInfo->Context;
-
-	// buffer which is used to copy VolumeInfo
-	buffer = irp->AssociatedIrp.SystemBuffer;
-
-	// available buffer size to inform
-	bufferLen = irpSp->Parameters.QueryVolume.Length;
-
-	// if buffer is invalid or short of length
-	if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
-
-		info   = 0;
-		status = STATUS_INSUFFICIENT_RESOURCES;
-
-	} else {
-
-		// copy the information from user-mode to specified buffer
-		ASSERT(buffer != NULL);
-		
-		RtlZeroMemory(buffer, bufferLen);
-		RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-
-		// the written length
-		info = EventInfo->BufferLength;
-
-		status = EventInfo->Status;
-	}
-
-
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = info;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
-
-	DokanPrintNTStatus(status);
-	DDbgPrint("<== DokanCompleteQueryVolumeInformation\n");
-
-	//FsRtlExitFileSystem();
-}
-
-
-
-NTSTATUS
-DokanDispatchSetVolumeInformation(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-   )
-{
-	NTSTATUS status = STATUS_INVALID_PARAMETER;
-
-    UNREFERENCED_PARAMETER(DeviceObject);
-
-	//PAGED_CODE();
-
-	//FsRtlEnterFileSystem();
-
-	DDbgPrint("==> DokanSetVolumeInformation\n");
-
-	Irp->IoStatus.Status = status;
-	Irp->IoStatus.Information = 0;
-	IoCompleteRequest(Irp, IO_NO_INCREMENT);
-
-	DDbgPrint("<== DokanSetVolumeInformation");
-
-	//FsRtlExitFileSystem();
-
-	return status;
-}
-

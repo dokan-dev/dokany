@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?include ..\version.xml ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:dep='http://schemas.microsoft.com/wix/DependencyExtension'
+     xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'
+     xmlns:netfx='http://schemas.microsoft.com/wix/NetFxExtension'
+>
+  <Bundle Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) Bundle"
+          IconSourceFile="..\dokan.ico"
+          Version="$(var.BaseVersion).$(var.BuildVersion)"
+          Manufacturer="$(var.CompanyName)"
+          dep:ProviderKey="$(var.ProviderKey)"
+          UpgradeCode="$(var.BundleUpgradeCode)"
+          UpdateUrl="$(var.UpdateURL)"
+          DisableModify="yes"
+            >
+    <util:FileSearchRef Id='WINTRUST_FileSearch' />
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+      <bal:WixStandardBootstrapperApplication
+        LicenseFile="Resources\licdata.rtf"
+        LogoFile="Resources\dokan.png"
+        ShowVersion="yes"
+        SuppressOptionsUI="no"
+        SuppressRepair="yes"
+        ThemeFile="Resources\RtfTheme.xml"
+        LocalizationFile="Resources\1033\RtfTheme.wxl"/>
+      <Payload Name="Resources\1033\RtfTheme.wxl" SourceFile="Resources\1033\RtfTheme.wxl" />
+
+    </BootstrapperApplicationRef>
+
+    <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)"/>
+    <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
+    <Variable Name="DevFilesCheckbox" Type="numeric" Value="1"/>
+
+    <util:FileSearch Id="SearchSystem"
+                     Path="[SystemFolder]advapi32.dll"
+                     Variable="ADVAPIVERSION"
+                     Result="version"
+                     />
+
+    <util:FileSearch Id="SearchSystem2"
+                     Path="[SystemFolder]ucrtbase.dll"
+                     Variable="UCRTVERSION"
+                     Result="version"
+                     />
+
+    <util:FileSearch Id="SearchSystem3"
+                     Path="[WindowsFolder]System32\ucrtbase.dll"
+                     Variable="UCRTVERSION64"
+                     Result="version"
+                       />
+
+    <util:RegistrySearch Id="vcredist_2019_x86_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2019_x86_installed" Win64="no"/>
+    <util:RegistrySearch Id="vcredist_2019_x86_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2019_x86_version" Result="exists" Win64="no"/>
+    <util:RegistrySearch Id="vcredist_2019_x86_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2019_x86_versionnumber" Result="value" Win64="no"/>
+
+    <util:RegistrySearch Id="vcredist_2019_x64_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2019_x64_installed" Win64="yes"/>
+    <util:RegistrySearch Id="vcredist_2019_x64_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2019_x64_version" Result="exists" Win64="yes"/>
+    <util:RegistrySearch Id="vcredist_2019_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2019_x64_versionnumber" Result="value" Win64="yes"/>
+
+    <bal:Condition Message="Installation failed because your version of Windows is not supported. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
+
+    <Chain>
+
+      <ExePackage Id="vcredist_2019_x86.exe"
+                  Name="vc_redist.x86.exe"
+                  InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  Protocol="netfx4"
+                  Compressed="$(var.Compressed)"
+                  Permanent="yes"
+                  DetectCondition="vcredist_2019_x86_installed AND vcredist_2019_x86_version AND vcredist_2019_x86_versionnumber &gt;= v$(var.VCRedistVersion)"
+                  PerMachine="yes"
+                  Vital="yes"
+                  Cache="no"
+                  SuppressSignatureVerification="yes"
+                  SourceFile="Redist\vcredist_2019\vc_redist.x86.exe"
+                  DownloadUrl="https://download.visualstudio.microsoft.com/download/pr/c8edbb87-c7ec-4500-a461-71e8912d25e9/99ba493d660597490cbb8b3211d2cae4/vc_redist.x86.exe"
+      />
+
+      <ExePackage Id="vcredist_2019_x64.exe"
+                  Name="vc_redist.x64.exe"
+                  InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
+                  Protocol="netfx4"
+                  Compressed="$(var.Compressed)"
+                  Permanent="yes"
+                  InstallCondition="VersionNT64"
+                  DetectCondition="vcredist_2019_x64_installed AND vcredist_2019_x64_version AND vcredist_2019_x64_versionnumber &gt;= v$(var.VCRedistVersion)"
+                  PerMachine="yes"
+                  Vital="yes"
+                  Cache="yes"
+                  SuppressSignatureVerification="yes"
+                  SourceFile="Redist\vcredist_2019\vc_redist.x64.exe"
+                  DownloadUrl="https://download.visualstudio.microsoft.com/download/pr/9e04d214-5a9d-4515-9960-3d71398d98c3/1e1e62ab57bbb4bf5199e8ce88f040be/vc_redist.x64.exe"
+                  />
+
+      <MsiPackage SourceFile="..\bin\x86\$(var.Configuration)\Dokan_x86.msi"
+                  InstallCondition="NOT VersionNT64"
+                  Compressed="yes"
+                  Visible="no"
+                  >
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
+        <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+        <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
+      </MsiPackage>
+
+      <MsiPackage SourceFile="..\bin\x64\$(var.Configuration)\Dokan_x64.msi"
+                  InstallCondition="VersionNT64"
+                  Compressed="yes"
+                  Visible="no"
+                  >
+        <!--<MsiProperty Name="ADDLOCAL" Value="ALL" />-->
+        <MsiProperty Name="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+        <MsiProperty Name="INSTALLDIR" Value="[InstallFolder]" />
+        <MsiProperty Name="INSTALLDEVFILES" Value="[DevFilesCheckbox]" />
+      </MsiPackage>
+
+    </Chain>
+  </Bundle>
+  <Fragment>
+    <Property Id="WINKB2919442INSTALLED" Secure="yes">
+      <DirectorySearch Id="SearchSystemWinKB2919442" Path="[WindowsFolder]WinSxS" Depth="2">
+        <FileSearch Name="TiWorker.exe" MinVersion="6.3.9600.17030"/>
+      </DirectorySearch>
+    </Property>
+    <!-- windows 8.1 KB2999226 has a dependency with KB2919355 -->
+    <bal:Condition Message="Installation failed because on Windows 8.1 the installation of KB2999226 and its prerequisites KB2919355 and KB2919442 is required. For more info please visit https://support.microsoft.com/en-us/kb/2919355">
+      <![CDATA[Installed OR VersionNT = v6.3 AND NOT WINKB2919442INSTALLED]]>
+    </bal:Condition>
+  </Fragment>
+  <Fragment>
+    <util:FileSearch Id="WINTRUST_FileSearch"
+                     Path="[SystemFolder]Wintrust.dll"
+                     Variable="WINTRUSTVERSION"
+                     Result="version"
+                     />
+    <!-- check for GDR/LDR version. See https://github.com/dokan-dev/dokany/commit/9782a6491775ef3660a71f40f381d3f48e511f14 -->
+    <bal:Condition
+      Message="Microsoft patch KB3033929 is not installed. A reboot is needed between the installation of said patch and the installation of $(var.ProductName). https://support.microsoft.com/en-us/kb/3033929">
+      <![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ((WINTRUSTVERSION >= v6.1.7601.18741 AND WINTRUSTVERSION < v6.1.7601.22000) OR WINTRUSTVERSION >= v6.1.7601.22948))]]>
+    </bal:Condition>
+  </Fragment>
+</Wix>

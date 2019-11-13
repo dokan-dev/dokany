@@ -1,9 +1,10 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
-  http://dokan-dev.net/en
+  http://dokan-dev.github.io
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the Free
@@ -18,47 +19,43 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokani.h"
-#include "fileinfo.h"
 
+VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                   PDOKAN_INSTANCE DokanInstance) {
+  DOKAN_FILE_INFO fileInfo;
+  PEVENT_INFORMATION eventInfo;
+  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  PDOKAN_OPEN_INFO openInfo;
+  NTSTATUS status;
 
-VOID
-DispatchFlush(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	DOKAN_FILE_INFO		fileInfo;
-	PEVENT_INFORMATION	eventInfo;
-	ULONG				sizeOfEventInfo = sizeof(EVENT_INFORMATION);
-	PDOKAN_OPEN_INFO	openInfo;
-	int status;
+  CheckFileName(EventContext->Operation.Flush.FileName);
 
-	CheckFileName(EventContext->Operation.Flush.FileName);
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
+  DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-	DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  if (DokanInstance->DokanOperations->FlushFileBuffers) {
 
-	eventInfo->Status = STATUS_SUCCESS;
+    status = DokanInstance->DokanOperations->FlushFileBuffers(
+        EventContext->Operation.Flush.FileName, &fileInfo);
 
-	if (DokanInstance->DokanOperations->FlushFileBuffers) {
+  } else {
+    status = STATUS_NOT_IMPLEMENTED;
+  }
 
-		status = DokanInstance->DokanOperations->FlushFileBuffers(
-			EventContext->Operation.Flush.FileName,
-					&fileInfo);
+  if (status == STATUS_NOT_IMPLEMENTED) {
+    eventInfo->Status = STATUS_SUCCESS;
+  } else {
+    eventInfo->Status =
+        status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
+  }
 
-		eventInfo->Status = status < 0 ?
-					STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
-	}
+  if (openInfo != NULL)
+    openInfo->UserContext = fileInfo.Context;
 
-	openInfo->UserContext = fileInfo.Context;
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
 
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-
-	free(eventInfo);
-	return;
+  free(eventInfo);
 }
-

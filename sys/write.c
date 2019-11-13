@@ -1,9 +1,11 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
-  http://dokan-dev.net/en
+  http://dokan-dev.github.io
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the Free
@@ -18,264 +20,402 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
- 
 #include "dokan.h"
 
-
 NTSTATUS
-DokanDispatchWrite(
-	__in PDEVICE_OBJECT DeviceObject,
-	__in PIRP Irp
-	)
-{
-	PIO_STACK_LOCATION	irpSp;
-	PFILE_OBJECT		fileObject;
-	NTSTATUS			status =STATUS_INVALID_PARAMETER;
-	PEVENT_CONTEXT		eventContext;
-	ULONG				eventLength;
-	PDokanCCB			ccb;
-	PDokanFCB			fcb;
-	PDokanVCB			vcb;
-	PVOID				buffer;
+DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+  PIO_STACK_LOCATION irpSp;
+  PFILE_OBJECT fileObject;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  PEVENT_CONTEXT eventContext;
+  ULONG eventLength;
+  PDokanCCB ccb;
+  PDokanFCB fcb = NULL;
+  PDokanVCB vcb;
+  PVOID buffer;
+  BOOLEAN writeToEoF = FALSE;
+  BOOLEAN isPagingIo = FALSE;
+  BOOLEAN isNonCached = FALSE;
+  BOOLEAN isSynchronousIo = FALSE;
+  BOOLEAN fcbLocked = FALSE;
 
-	//PAGED_CODE();
+  __try {
 
-	__try {
+    DDbgPrint("==> DokanWrite\n");
 
-		FsRtlEnterFileSystem();
+    irpSp = IoGetCurrentIrpStackLocation(Irp);
+    fileObject = irpSp->FileObject;
 
-		DDbgPrint("==> DokanWrite\n");
+    //
+    //  If this is a zero length write then return SUCCESS immediately.
+    //
 
-		irpSp		= IoGetCurrentIrpStackLocation(Irp);
-		fileObject	= irpSp->FileObject;
+    if (irpSp->Parameters.Write.Length == 0) {
+      DDbgPrint("  Parameters.Write.Length == 0\n");
+      Irp->IoStatus.Information = 0;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		if (fileObject == NULL) {
-			DDbgPrint("  fileObject == NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (fileObject == NULL) {
+      DDbgPrint("  fileObject == NULL\n");
+      status = STATUS_INVALID_DEVICE_REQUEST;
+      __leave;
+    }
 
-		vcb = DeviceObject->DeviceExtension;
+    vcb = DeviceObject->DeviceExtension;
 
-		if (GetIdentifierType(vcb) != VCB ||
-			!DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (GetIdentifierType(vcb) != VCB ||
+        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-		DokanPrintFileName(fileObject);
+    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DokanPrintFileName(fileObject);
 
-		ccb			= fileObject->FsContext2;
-		ASSERT(ccb != NULL);
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
 
-		fcb			= ccb->Fcb;
-		ASSERT(fcb != NULL);
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
 
-		if (fcb->Flags & DOKAN_FILE_DIRECTORY) {
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    OplockDebugRecordMajorFunction(fcb, IRP_MJ_WRITE);
+    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		if (irpSp->Parameters.Write.Length == 0) {
-			status = STATUS_SUCCESS;
-			__leave;
-		}
+    if (Irp->MdlAddress) {
+      DDbgPrint("  use MdlAddress\n");
+      buffer = MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
+    } else {
+      DDbgPrint("  use UserBuffer\n");
+      buffer = Irp->UserBuffer;
+    }
 
-		if (Irp->MdlAddress) {
-			DDbgPrint("  use MdlAddress\n");
-			buffer = MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
-		} else {
-			DDbgPrint("  use UserBuffer\n");
-			buffer = Irp->UserBuffer;
-		}
+    if (buffer == NULL) {
+      DDbgPrint("  buffer == NULL\n");
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		if (buffer == NULL) {
-			DDbgPrint("  buffer == NULL\n");
-			status = STATUS_INVALID_PARAMETER;
-			__leave;
-		}
+    if (irpSp->Parameters.Write.ByteOffset.LowPart ==
+            FILE_WRITE_TO_END_OF_FILE &&
+        irpSp->Parameters.Write.ByteOffset.HighPart == -1) {
+      writeToEoF = TRUE;
+    }
 
-		// the length of EventContext is sum of length to write and length of file name
-		eventLength = sizeof(EVENT_CONTEXT)
-							+ irpSp->Parameters.Write.Length
-							+ fcb->FileName.Length;
+    isPagingIo = (Irp->Flags & IRP_PAGING_IO);
 
-		eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    if (Irp->Flags & IRP_NOCACHE) {
+      isNonCached = TRUE;
+    }
 
-		// no more memory!
-		if (eventContext == NULL) {
-			status = STATUS_INSUFFICIENT_RESOURCES;
-			__leave;
-		}
+    if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
+      isSynchronousIo = TRUE;
+    }
 
-		eventContext->Context = ccb->UserContext;
-		//DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+    if (!isPagingIo && (fileObject->SectionObjectPointer != NULL) &&
+        (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
 
-		// When the length is bigger than usual event notitfication buffer,
-		// saves pointer in DiverContext to copy EventContext after allocating
-		// more bigger memory.
-		Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = eventContext;
-		
-		if (Irp->Flags & IRP_PAGING_IO) {
-			DDbgPrint("  Paging IO\n");
-			eventContext->FileFlags |= DOKAN_PAGING_IO;
-		}
-		if (fileObject->Flags & FO_SYNCHRONOUS_IO) {
-			DDbgPrint("  Synchronous IO\n");
-			eventContext->FileFlags |= DOKAN_SYNCHRONOUS_IO;
-		}
+      CcFlushCache(&fcb->SectionObjectPointers,
+                   writeToEoF ? NULL : &irpSp->Parameters.Write.ByteOffset,
+                   irpSp->Parameters.Write.Length, NULL);
 
-		// offset of file to write
-		eventContext->Operation.Write.ByteOffset = irpSp->Parameters.Write.ByteOffset;
+      DokanPagingIoLockRW(fcb);
+      DokanPagingIoUnlock(fcb);
 
-		if (irpSp->Parameters.Write.ByteOffset.LowPart == FILE_WRITE_TO_END_OF_FILE
-			&& irpSp->Parameters.Write.ByteOffset.HighPart == -1) {
+      CcPurgeCacheSection(&fcb->SectionObjectPointers,
+                          writeToEoF ? NULL
+                                     : &irpSp->Parameters.Write.ByteOffset,
+                          irpSp->Parameters.Write.Length, FALSE);
+    }
 
-			eventContext->FileFlags |= DOKAN_WRITE_TO_END_OF_FILE;
-			DDbgPrint("  WriteOffset = end of file\n");
-		}
+    // Cannot write at end of the file when using paging IO
+    if (writeToEoF && isPagingIo) {
+      DDbgPrint("  writeToEoF & isPagingIo\n");
+      Irp->IoStatus.Information = 0;
+      status = STATUS_SUCCESS;
+      __leave;
+    }
 
-		if ((fileObject->Flags & FO_SYNCHRONOUS_IO) &&
-			((irpSp->Parameters.Write.ByteOffset.LowPart == FILE_USE_FILE_POINTER_POSITION) &&
-			(irpSp->Parameters.Write.ByteOffset.HighPart == -1))) {
-			// NOTE:
-			// http://msdn.microsoft.com/en-us/library/ms795960.aspx
-			// Do not check IrpSp->Parameters.Write.ByteOffset.QuadPart == 0
-			// Probably the document is wrong.
-			eventContext->Operation.Write.ByteOffset.QuadPart = fileObject->CurrentByteOffset.QuadPart;
-		}
+    // the length of EventContext is sum of length to write and length of file
+    // name
+    DokanFCBLockRO(fcb);
+    fcbLocked = TRUE;
 
-		// the size of buffer to write
-		eventContext->Operation.Write.BufferLength = irpSp->Parameters.Write.Length;
+    LARGE_INTEGER safeEventLength;
+    safeEventLength.QuadPart =
+        sizeof(EVENT_CONTEXT) + irpSp->Parameters.Write.Length +
+                  fcb->FileName.Length;
+    if (safeEventLength.HighPart != 0 ||
+        safeEventLength.QuadPart <
+            sizeof(EVENT_CONTEXT) + fcb->FileName.Length) {
+      DOKAN_INIT_LOGGER(logger, vcb->DeviceObject->DriverObject, IRP_MJ_WRITE);
+      DokanLogError(&logger,
+                    STATUS_INVALID_PARAMETER,
+                    L"Write with unsupported total size: %I64u",
+                    safeEventLength.QuadPart);
+      status = STATUS_INVALID_PARAMETER;
+      __leave;
+    }
 
-		// the offset from the begining of structure
-		// the contents to write will be copyed to this offset
-		eventContext->Operation.Write.BufferOffset = FIELD_OFFSET(EVENT_CONTEXT, Operation.Write.FileName[0]) +
-			fcb->FileName.Length + sizeof(WCHAR); // adds last null char
+    eventLength = safeEventLength.LowPart;
+    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
-		// copies the content to write to EventContext
-		RtlCopyMemory((PCHAR)eventContext + eventContext->Operation.Write.BufferOffset,
-			buffer, irpSp->Parameters.Write.Length);
+    // no more memory!
+    if (eventContext == NULL) {
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
 
-		// copies file name
-		eventContext->Operation.Write.FileNameLength = fcb->FileName.Length;
-		RtlCopyMemory(eventContext->Operation.Write.FileName, fcb->FileName.Buffer, fcb->FileName.Length);
-		
-		// When eventlength is less than event notification buffer,
-		// returns it to user-mode using pending event.
-		if (eventLength <= EVENT_CONTEXT_MAX_SIZE) {
+    eventContext->Context = ccb->UserContext;
+    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-			DDbgPrint("   Offset %d:%d, Length %d\n",
-				irpSp->Parameters.Write.ByteOffset.HighPart,
-				irpSp->Parameters.Write.ByteOffset.LowPart,
-				irpSp->Parameters.Write.Length);
+    // When the length is bigger than usual event notitfication buffer,
+    // saves pointer in DiverContext to copy EventContext after allocating
+    // more bigger memory.
+    Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = eventContext;
 
-			// EventContext is no longer needed, clear it
-			Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+    if (isPagingIo) {
+      DDbgPrint("  Paging IO\n");
+      eventContext->FileFlags |= DOKAN_PAGING_IO;
+    }
+    if (isSynchronousIo) {
+      DDbgPrint("  Synchronous IO\n");
+      eventContext->FileFlags |= DOKAN_SYNCHRONOUS_IO;
+    }
+    if (isNonCached) {
+      DDbgPrint("  Nocache\n");
+      eventContext->FileFlags |= DOKAN_NOCACHE;
+    }
 
-			// register this IRP to IRP waiting list and make it pending status
-			status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    // offset of file to write
+    eventContext->Operation.Write.ByteOffset =
+        irpSp->Parameters.Write.ByteOffset;
 
-		// Resuests bigger memory
-		// eventContext will be freed later using Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT]
-		} else {
-			// the length at lest file name can be stored
-			ULONG	requestContextLength = max(sizeof(EVENT_CONTEXT), eventContext->Operation.Write.BufferOffset);
-			PEVENT_CONTEXT requestContext = AllocateEventContext(vcb->Dcb, Irp, requestContextLength, ccb);
+    if (writeToEoF) {
+      eventContext->FileFlags |= DOKAN_WRITE_TO_END_OF_FILE;
+      DDbgPrint("  WriteOffset = end of file\n");
+    }
 
-			// no more memory!
-			if (requestContext == NULL) {
-				status = STATUS_INSUFFICIENT_RESOURCES;
-				Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
-				DokanFreeEventContext(eventContext);
-				__leave;
-			}
+    if (isSynchronousIo &&
+        ((irpSp->Parameters.Write.ByteOffset.LowPart ==
+          FILE_USE_FILE_POINTER_POSITION) &&
+         (irpSp->Parameters.Write.ByteOffset.HighPart == -1))) {
+      // NOTE:
+      // http://msdn.microsoft.com/en-us/library/ms795960.aspx
+      // Do not check IrpSp->Parameters.Write.ByteOffset.QuadPart == 0
+      // Probably the document is wrong.
+      eventContext->Operation.Write.ByteOffset.QuadPart =
+          fileObject->CurrentByteOffset.QuadPart;
+    }
 
-			DDbgPrint("   Offset %d:%d, Length %d (request)\n",
-				irpSp->Parameters.Write.ByteOffset.HighPart,
-				irpSp->Parameters.Write.ByteOffset.LowPart,
-				irpSp->Parameters.Write.Length);
+    // the size of buffer to write
+    eventContext->Operation.Write.BufferLength = irpSp->Parameters.Write.Length;
 
-			// copies from begining of EventContext to the end of file name
-			RtlCopyMemory(requestContext, eventContext, eventContext->Operation.Write.BufferOffset);
-			// puts actual size of RequestContext
-			requestContext->Length = requestContextLength;
-			// requsts enough size to copy EventContext
-			requestContext->Operation.Write.RequestLength = eventLength;
+    // the offset from the beginning of structure
+    // the contents to write will be copyed to this offset
+    eventContext->Operation.Write.BufferOffset =
+        FIELD_OFFSET(EVENT_CONTEXT, Operation.Write.FileName[0]) +
+        fcb->FileName.Length + sizeof(WCHAR); // adds last null char
 
-			// regiters this IRP to IRP wainting list and make it pending status
-			status = DokanRegisterPendingIrp(DeviceObject, Irp, requestContext, 0);
-		}
+    // copies the content to write to EventContext
+    RtlCopyMemory((PCHAR)eventContext +
+                      eventContext->Operation.Write.BufferOffset,
+                  buffer, irpSp->Parameters.Write.Length);
 
-	} __finally {
+    // copies file name
+    eventContext->Operation.Write.FileNameLength = fcb->FileName.Length;
+    RtlCopyMemory(eventContext->Operation.Write.FileName, fcb->FileName.Buffer,
+                  fcb->FileName.Length);
 
-		// if status of IRP is not pending, must complete current IRP
-		if (status != STATUS_PENDING) {
-			Irp->IoStatus.Status = status;
-			Irp->IoStatus.Information = 0;
-			IoCompleteRequest(Irp, IO_NO_INCREMENT);
-			DokanPrintNTStatus(status);
-		} else {
-			DDbgPrint("  STATUS_PENDING\n");
-		}
+    // When eventlength is less than event notification buffer,
+    // returns it to user-mode using pending event.
+    if (eventLength <= EVENT_CONTEXT_MAX_SIZE) {
 
-		DDbgPrint("<== DokanWrite\n");
+      DDbgPrint("   Offset %d:%d, Length %d\n",
+                irpSp->Parameters.Write.ByteOffset.HighPart,
+                irpSp->Parameters.Write.ByteOffset.LowPart,
+                irpSp->Parameters.Write.Length);
 
-		FsRtlExitFileSystem();
+      // EventContext is no longer needed, clear it
+      Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
 
-	}
+      //
+      //  We now check whether we can proceed based on the state of
+      //  the file oplocks.
+      //
+      // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
+      if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
+        status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+                                  DokanPrePostIrp);
 
-	return status;
+        //
+        //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+        //  to service an oplock break and we need to leave now.
+        //
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(eventContext);
+          }
+          __leave;
+        }
+      }
+
+      // register this IRP to IRP waiting list and make it pending status
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+
+      // Resuests bigger memory
+      // eventContext will be freed later using
+      // Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT]
+    } else {
+      // the length at lest file name can be stored
+      ULONG requestContextLength = max(
+          sizeof(EVENT_CONTEXT), eventContext->Operation.Write.BufferOffset);
+      PEVENT_CONTEXT requestContext =
+          AllocateEventContext(vcb->Dcb, Irp, requestContextLength, ccb);
+
+      // no more memory!
+      if (requestContext == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+        DokanFreeEventContext(eventContext);
+        __leave;
+      }
+
+      DDbgPrint("   Offset %d:%d, Length %d (request)\n",
+                irpSp->Parameters.Write.ByteOffset.HighPart,
+                irpSp->Parameters.Write.ByteOffset.LowPart,
+                irpSp->Parameters.Write.Length);
+
+      // copies from beginning of EventContext to the end of file name
+      RtlCopyMemory(requestContext, eventContext,
+                    eventContext->Operation.Write.BufferOffset);
+      // puts actual size of RequestContext
+      requestContext->Length = requestContextLength;
+      // requsts enough size to copy EventContext
+      requestContext->Operation.Write.RequestLength = eventLength;
+
+      //
+      //  We now check whether we can proceed based on the state of
+      //  the file oplocks.
+      //
+      // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
+      if (!FlagOn(Irp->Flags, IRP_PAGING_IO)) {
+        status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), Irp, requestContext,
+                                  DokanOplockComplete, DokanPrePostIrp);
+
+        //
+        //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
+        //  to service an oplock break and we need to leave now.
+        //
+        if (status != STATUS_SUCCESS) {
+          if (status == STATUS_PENDING) {
+            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+          } else {
+            DokanFreeEventContext(requestContext);
+            Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
+            DokanFreeEventContext(eventContext);
+          }
+          __leave;
+        }
+      }
+
+      // regiters this IRP to IRP wainting list and make it pending status
+      status = DokanRegisterPendingIrp(DeviceObject, Irp, requestContext, 0);
+    }
+
+  } __finally {
+    if (fcbLocked)
+      DokanFCBUnlock(fcb);
+
+    DokanCompleteIrpRequest(Irp, status, 0);
+
+    DDbgPrint("<== DokanWrite\n");
+  }
+
+  return status;
 }
 
+VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+                        __in PEVENT_INFORMATION EventInfo) {
+  PIRP irp;
+  PIO_STACK_LOCATION irpSp;
+  NTSTATUS status = STATUS_SUCCESS;
+  PDokanCCB ccb;
+  PDokanFCB fcb;
+  PFILE_OBJECT fileObject;
+  BOOLEAN isPagingIo = FALSE;
 
 
-VOID
-DokanCompleteWrite(
-	__in PIRP_ENTRY			IrpEntry,
-	__in PEVENT_INFORMATION	EventInfo
-	)
-{
-	PIRP				irp;
-	PIO_STACK_LOCATION	irpSp;
-	NTSTATUS			status     = STATUS_SUCCESS;
-	PDokanCCB			ccb;
-	PFILE_OBJECT		fileObject;
+  fileObject = IrpEntry->FileObject;
+  ASSERT(fileObject != NULL);
 
-	fileObject = IrpEntry->FileObject;
-	ASSERT(fileObject != NULL);
+  DDbgPrint("==> DokanCompleteWrite %wZ\n", &fileObject->FileName);
 
-	DDbgPrint("==> DokanCompleteWrite %wZ\n", &fileObject->FileName);
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
 
-	irp   = IrpEntry->Irp;
-	irpSp = IrpEntry->IrpSp;	
+  isPagingIo = (irp->Flags & IRP_PAGING_IO);
 
-	ccb = fileObject->FsContext2;
-	ASSERT(ccb != NULL);
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-	ccb->UserContext = EventInfo->Context;
-	//DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
-	status = EventInfo->Status;
+  ccb->UserContext = EventInfo->Context;
+  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
-	irp->IoStatus.Status = status;
-	irp->IoStatus.Information = EventInfo->BufferLength;
+  status = EventInfo->Status;
 
-	if (NT_SUCCESS(status) &&
-		EventInfo->BufferLength != 0 &&
-		fileObject->Flags & FO_SYNCHRONOUS_IO &&
-		!(irp->Flags & IRP_PAGING_IO)) {
-		// update current byte offset only when synchronous IO and not paging IO
-		fileObject->CurrentByteOffset.QuadPart =
-			EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
-		DDbgPrint("  Updated CurrentByteOffset %I64d\n",
-			fileObject->CurrentByteOffset.QuadPart);
-	}
+  irp->IoStatus.Status = status;
+  irp->IoStatus.Information = EventInfo->BufferLength;
 
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+  if (NT_SUCCESS(status)) {
 
-	DokanPrintNTStatus(status);
-	DDbgPrint("<== DokanCompleteWrite\n");
+    //Check if file size changed
+    if (fcb->AdvancedFCBHeader.FileSize.QuadPart <
+        EventInfo->Operation.Write.CurrentByteOffset.QuadPart) {
+
+      if (!isPagingIo) {
+        DokanFCBLockRO(fcb);
+      }
+
+      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
+                              FILE_ACTION_MODIFIED);
+
+      if (!isPagingIo) {
+        DokanFCBUnlock(fcb);
+      }
+
+      //Update size with new offset
+      InterlockedExchange64(
+          &fcb->AdvancedFCBHeader.FileSize.QuadPart,
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart);
+    }
+
+    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
+    
+    if (!isPagingIo) {
+      SetFlag(fileObject->Flags, FO_FILE_MODIFIED);
+    }
+
+    if (EventInfo->BufferLength != 0 && fileObject->Flags & FO_SYNCHRONOUS_IO &&
+        !isPagingIo) {
+      // update current byte offset only when synchronous IO and not paging IO
+      fileObject->CurrentByteOffset.QuadPart =
+          EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
+      DDbgPrint("  Updated CurrentByteOffset %I64d\n",
+                fileObject->CurrentByteOffset.QuadPart);
+    }
+  }
+
+  DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
+
+  DDbgPrint("<== DokanCompleteWrite\n");
 }
-

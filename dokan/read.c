@@ -1,9 +1,10 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+  Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
+  Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
-  http://dokan-dev.net/en
+  http://dokan-dev.github.io
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the Free
@@ -18,60 +19,49 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "dokani.h"
-#include "fileinfo.h"
 
+VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                  PDOKAN_INSTANCE DokanInstance) {
+  PEVENT_INFORMATION eventInfo;
+  PDOKAN_OPEN_INFO openInfo;
+  ULONG readLength = 0;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  DOKAN_FILE_INFO fileInfo;
+  ULONG sizeOfEventInfo;
 
-VOID
-DispatchRead(
-	HANDLE				Handle,
-	PEVENT_CONTEXT		EventContext,
-	PDOKAN_INSTANCE		DokanInstance)
-{
-	PEVENT_INFORMATION		eventInfo;
-	PDOKAN_OPEN_INFO		openInfo;
-	ULONG					readLength = 0;
-	int						status;
-	DOKAN_FILE_INFO			fileInfo;
-	ULONG					sizeOfEventInfo;
-	
-	sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Read.BufferLength;
+  sizeOfEventInfo =
+      sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Read.BufferLength;
 
-	CheckFileName(EventContext->Operation.Read.FileName);
+  CheckFileName(EventContext->Operation.Read.FileName);
 
-	eventInfo = DispatchCommon(
-		EventContext, sizeOfEventInfo, DokanInstance, &fileInfo, &openInfo);
+  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
+                             &fileInfo, &openInfo);
 
-	DbgPrint("###Read %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###Read %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-	if (DokanInstance->DokanOperations->ReadFile) {
-		status = DokanInstance->DokanOperations->ReadFile(
-			EventContext->Operation.Read.FileName,
-				eventInfo->Buffer,
-				EventContext->Operation.Read.BufferLength,
-				&readLength,
-				EventContext->Operation.Read.ByteOffset.QuadPart,
-				&fileInfo);
-	} else {
-		status = -1;
-	}
+  if (DokanInstance->DokanOperations->ReadFile) {
+    status = DokanInstance->DokanOperations->ReadFile(
+        EventContext->Operation.Read.FileName, eventInfo->Buffer,
+        EventContext->Operation.Read.BufferLength, &readLength,
+        EventContext->Operation.Read.ByteOffset.QuadPart, &fileInfo);
+  }
 
-	openInfo->UserContext = fileInfo.Context;
-	eventInfo->BufferLength = 0;
+  if (openInfo != NULL)
+    openInfo->UserContext = fileInfo.Context;
+  eventInfo->BufferLength = 0;
+  eventInfo->Status = status;
 
-	if (status < 0) {
-		eventInfo->Status = STATUS_INVALID_PARAMETER;
-	} else if(readLength == 0) {
-		eventInfo->Status = STATUS_END_OF_FILE;
-	} else {
-		eventInfo->Status = STATUS_SUCCESS;
-		eventInfo->BufferLength = readLength;
-		eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
-			EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
-	}
+  if (status == STATUS_SUCCESS) {
+    if (readLength == 0) {
+      eventInfo->Status = STATUS_END_OF_FILE;
+    } else {
+      eventInfo->BufferLength = readLength;
+      eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
+          EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
+    }
+  }
 
-	SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-	free(eventInfo);
-	return;
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  free(eventInfo);
 }

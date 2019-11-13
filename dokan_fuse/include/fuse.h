@@ -6,11 +6,11 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_H_
-#define _FUSE_H_
+#ifndef FUSE_H_
+#define FUSE_H_
 
 /* Include Windows compatibility stuff early*/
-#ifdef WIN32
+#ifdef _WIN32
 #include "fuse_win.h"
 typedef struct _FILETIME FILETIME;
 #else
@@ -89,9 +89,7 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  * The file system operations:
  *
  * Most of these should work very similarly to the well known UNIX
- * file system operations.  A major exception is that instead of
- * returning an error in 'errno', the operation should return the
- * negated error value (-errno) directly.
+ * file system operations.
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
@@ -447,7 +445,7 @@ struct fuse_operations {
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 
-#ifdef WIN32
+#ifdef _WIN32
 	/* these to support extented windows calls */
 	uint32_t (*win_get_attributes) (const char *fn);
 	int (*win_set_attributes) (const char *fn, uint32_t attr);
@@ -583,7 +581,6 @@ struct fuse_context *fuse_get_context(void);
 /**
  * Check if a request has already been interrupted
  *
- * @param req request handle
  * @return 1 if the request has been interrupted, 0 otherwise
  */
 int fuse_interrupted(void);
@@ -853,4 +850,4 @@ struct fuse_session *fuse_get_session(struct fuse *f);
 }
 #endif
 
-#endif /* _FUSE_H_ */
+#endif /* FUSE_H_ */

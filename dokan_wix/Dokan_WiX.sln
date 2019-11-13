@@ -1,0 +1,82 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2008
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "DokanMSI_x86", "DokanMSI_x86.wixproj", "{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}"
+EndProject
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "Bootstrapper", "Bootstrapper\Bootstrapper.wixproj", "{D8A3E7DE-948C-4686-B015-BC342BECA990}"
+	ProjectSection(ProjectDependencies) = postProject
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74} = {46A515A3-4A7F-48CE-96E8-4590F4BDFF74}
+		{05687AB6-5280-459B-896D-9A09E7E16AB9} = {05687AB6-5280-459B-896D-9A09E7E16AB9}
+	EndProjectSection
+EndProject
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "DokanMSI_x64", "DokanMSI_x64.wixproj", "{05687AB6-5280-459B-896D-9A09E7E16AB9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6D7E56F9-3617-46F4-8153-29A6AA2929AE}"
+	ProjectSection(SolutionItems) = preProject
+		dokan.inf = dokan.inf
+		README.url = README.url
+		version.xml = version.xml
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WiXCA", "WiXCA\WiXCA.vcxproj", "{457A77F5-A390-4DCB-82E1-391C45B42C6D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Debug|x64.ActiveCfg = Debug|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Debug|x86.ActiveCfg = Debug|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Debug|x86.Build.0 = Debug|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Release|Mixed Platforms.Build.0 = Release|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Release|x64.ActiveCfg = Release|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Release|x86.ActiveCfg = Release|x86
+		{46A515A3-4A7F-48CE-96E8-4590F4BDFF74}.Release|x86.Build.0 = Release|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Debug|x64.ActiveCfg = Debug|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Debug|x86.ActiveCfg = Debug|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Debug|x86.Build.0 = Debug|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Release|Mixed Platforms.Build.0 = Release|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Release|x64.ActiveCfg = Release|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Release|x86.ActiveCfg = Release|x86
+		{D8A3E7DE-948C-4686-B015-BC342BECA990}.Release|x86.Build.0 = Release|x86
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Debug|Mixed Platforms.ActiveCfg = Debug|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Debug|Mixed Platforms.Build.0 = Debug|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Debug|x64.ActiveCfg = Debug|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Debug|x64.Build.0 = Debug|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Debug|x86.ActiveCfg = Debug|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Release|Mixed Platforms.ActiveCfg = Release|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Release|Mixed Platforms.Build.0 = Release|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Release|x64.ActiveCfg = Release|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Release|x64.Build.0 = Release|x64
+		{05687AB6-5280-459B-896D-9A09E7E16AB9}.Release|x86.ActiveCfg = Release|x64
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Debug|Mixed Platforms.Build.0 = Debug|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Debug|x64.ActiveCfg = Debug|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Debug|x86.ActiveCfg = Debug|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Debug|x86.Build.0 = Debug|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Release|Mixed Platforms.ActiveCfg = Release|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Release|Mixed Platforms.Build.0 = Release|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Release|x64.ActiveCfg = Release|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Release|x86.ActiveCfg = Release|Win32
+		{457A77F5-A390-4DCB-82E1-391C45B42C6D}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {00BB6AF0-B0E8-4329-95EC-9706E4D3BC68}
+	EndGlobalSection
+EndGlobal

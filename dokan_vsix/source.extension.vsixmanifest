@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="dokanfs_vsix.1" Version="1.0" Language="en-US" Publisher="Maxime C." />
+    <DisplayName>DokanFS</DisplayName>
+    <Description xml:space="preserve">Dokan User-Mode File System project</Description>
+    <MoreInfo>http://dokan-dev.github.io</MoreInfo>
+    <License>license.mit.txt</License>
+    <Icon>dokan_logo.png</Icon>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[14.0]" />
+  </Installation>
+  <Dependencies>
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.ProjectTemplate" d:Source="File" Path="ProjectTemplates" d:TargetPath="ProjectTemplates\dokanfs.zip" />
+  </Assets>
+</PackageManifest>

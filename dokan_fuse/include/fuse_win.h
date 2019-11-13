@@ -2,14 +2,16 @@
 * Win32 helper functions                                       *
 * Compilation on MSVC requires /Zc:wchar_t compiler option     *
 * ----------------------------------------------------------- */
-#ifndef _FUSE_WIN_H_
-#define _FUSE_WIN_H_
+#ifndef FUSE_WIN_H_
+#define FUSE_WIN_H_
 
 #include <time.h>
 #include <sys/types.h>
 
 #ifdef _MSC_VER
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
 #endif
 
 /** Only use the latest version on Windows */
@@ -28,8 +30,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int win32_error_to_errno(int win_res);
-int errno_to_win32_error(int err);
+int ntstatus_error_to_errno(long win_res);
+long errno_to_ntstatus_error(int err);
 
 //This stuff is useful only on Windows in MSVC
 #ifdef _MSC_VER
@@ -52,7 +54,7 @@ typedef unsigned int gid_t;
 typedef unsigned int uid_t;
 #endif
 
-#if !defined(HAVE_STRUCT_TIMESPEC) && !defined(__CYGWIN__) && !defined(_TIMESPEC_DEFINED) /* win32 pthread.h defines it */
+#if !defined(HAVE_STRUCT_TIMESPEC) && !defined(__CYGWIN__) && !defined(_TIMESPEC_DEFINED) && defined(_CRT_NO_TIME_T) /* win32 pthread.h time.h defines it */
 /* POSIX.1b structure for a time value.  This is like a `struct timeval' but
 has nanoseconds instead of microseconds.  */
 #define HAVE_STRUCT_TIMESPEC 1
@@ -70,6 +72,11 @@ struct timespec
 //Block sizes
 typedef unsigned __int64 fsfilcnt64_t;
 typedef unsigned __int64 fsblkcnt64_t;
+typedef struct timespec timestruc_t;
+typedef unsigned short nlink_t;
+typedef unsigned __int64 uint64_t;
+typedef unsigned int blksize_t;
+typedef unsigned __int64 blkcnt_t;
 
 /** Transplanted from <sys/statvfs.h>*/
 struct statvfs
@@ -101,13 +108,18 @@ struct flock {
 /////////////////////////////////////////////////////////////////////
 #if defined(_MSC_VER)
 //UNIX compatibility
+typedef struct timespec timestruc_t;
 typedef unsigned int mode_t;
+typedef unsigned short nlink_t;
 typedef unsigned int pid_t;
 typedef unsigned int gid_t;
 typedef unsigned int uid_t;
+typedef unsigned int blksize_t;
+typedef unsigned __int64 blkcnt_t;
 typedef unsigned int uint32_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64 int64_t;
+
 
 //OCTAL constants!
 #define	S_IFLNK 0120000
@@ -154,7 +166,36 @@ struct flock {
 
 #else
 #define FUSE_OFF_T __int64
-#define FUSE_STAT _stati64
+// #define FUSE_STAT _stati64
+// use stat from cygwin instead for having more members and 
+// being more compatible
+// stat ported from cygwin sys/stat.h
+struct stat64_cygwin
+{
+	dev_t         st_dev;
+	uint64_t      st_ino;
+	mode_t        st_mode;
+	nlink_t       st_nlink;
+	uid_t         st_uid;
+	gid_t         st_gid;
+	dev_t         st_rdev;
+	FUSE_OFF_T    st_size;
+	timestruc_t   st_atim;
+	timestruc_t   st_mtim;
+	timestruc_t   st_ctim;
+	blksize_t     st_blksize;
+	blkcnt_t      st_blocks;
+	timestruc_t   st_birthtim;
+};
+/* The following breaks struct stat definition in native Windows stats.h
+* So whenever referencing st_atime|st_ctime|st_mtime, replacing is needed.
+*/
+/*
+#define st_atime st_atim.tv_sec
+#define st_ctime st_ctim.tv_sec
+#define st_mtime st_mtim.tv_sec
+*/
+#define FUSE_STAT stat64_cygwin
 #if 0
 struct stat64 {
 	dev_t st_dev;
@@ -177,4 +218,4 @@ struct stat64 {
 #define F_UNLCK	2
 #define F_SETLK	6
 
-#endif //_FUSE_WIN_H_
+#endif // FUSE_WIN_H_

@@ -1,5 +1,5 @@
 
-LIBRARY	dokan
+LIBRARY	dokan1
 
 EXPORTS
 
@@ -14,7 +14,16 @@ DokanResetTimeout
 DokanNetworkProviderInstall
 DokanNetworkProviderUninstall
 DokanSetDebugMode
-DokanMountControl
 DokanOpenRequestorToken
 DokanRemoveMountPoint
-
+DokanUseStdErr
+DokanDebugMode
+DokanMapKernelToUserCreateFileFlags
+DokanGetMountPointList
+DokanReleaseMountPointList
+DokanNtStatusFromWin32
+DokanNotifyCreate
+DokanNotifyDelete
+DokanNotifyUpdate
+DokanNotifyXAttrUpdate
+DokanNotifyRename

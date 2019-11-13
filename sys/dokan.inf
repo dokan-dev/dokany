@@ -1,0 +1,57 @@
+[Version]
+Signature         = "$Windows NT$"
+Class             = DiskDrive
+ClassGuid         = {4d36e967-e325-11ce-bfc1-08002be10318}
+Provider          = %Dokan%
+DriverVer         = 01/01/2018,1.0.0.0
+CatalogFile       = %DriverName%.cat
+DriverPackageType = FileSystem
+
+[DestinationDirs]
+DefaultDestDir              = 12
+DokanFileSystem.DriverFiles = 12
+
+[DefaultInstall]
+OptionDesc = %ServiceDesc%
+CopyFiles = DokanFileSystem.DriverFiles
+
+[DefaultInstall.Services]
+AddService = %ServiceName%,,DokanFileSystem.Service,DokanFileSystem.EventLog
+
+[DefaultUninstall]
+DelFiles   = DokanFileSystem.DriverFiles
+
+[DefaultUninstall.Services]
+DelService = %ServiceName%,0x200
+
+[SourceDisksNames]
+1 = %Disk1%
+
+[SourceDisksFiles]
+dokan1.sys = 1
+
+[DokanFileSystem.DriverFiles]
+%DriverName%.sys
+
+[DokanFileSystem.Service]
+DisplayName    = %ServiceName%
+Description    = %ServiceDesc%
+ServiceBinary  = %12%\%DriverName%.sys
+ServiceType    = 2 ;    SERVICE_FILE_SYSTEM_DRIVER
+StartType      = 1 ;    SERVICE_SYSTEM_START
+ErrorControl   = 1 ;    SERVICE_ERROR_NORMAL
+LoadOrderGroup = "File System"
+
+[DokanFileSystem.EventLog]
+AddReg = DokanFileSystem.EventLog.Reg
+
+[DokanFileSystem.EventLog.Reg]
+HKR,,EventMessageFile,0x00020000,"%%SystemRoot%%\System32\drivers\%DriverName%.sys"
+HKR,,TypesSupported,0x00010001,7
+
+[Strings]
+Dokan = "Dokan"
+DriverName = "dokan1"
+Disk1 = "Dokan installation media"
+ServiceDesc = "Dokan kernel-mode file system driver."
+ServiceName = "dokan1"

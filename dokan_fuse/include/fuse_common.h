@@ -8,12 +8,12 @@
 
 /** @file */
 
-#if !defined(_FUSE_H_) && !defined(_FUSE_LOWLEVEL_H_)
+#if !defined(FUSE_H_) && !defined(FUSE_LOWLEVEL_H_)
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
 
-#ifndef _FUSE_COMMON_H_
-#define _FUSE_COMMON_H_
+#ifndef FUSE_COMMON_H_
+#define FUSE_COMMON_H_
 
 #include "fuse_opt.h"
 #ifndef _MSC_VER
@@ -31,7 +31,7 @@
 
 /* This interface uses 64 bit off_t, except on Windows where it's 
 possible to use 32-bit filelengths for compatibility with MSVC CRT */
-#ifndef WIN32
+#ifndef _MSC_VER
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
 #error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
@@ -246,4 +246,4 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
 }
 #endif
 
-#endif /* _FUSE_COMMON_H_ */
+#endif /* FUSE_COMMON_H_ */

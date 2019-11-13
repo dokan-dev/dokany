@@ -10,6 +10,8 @@
 #include <errno.h>
 
 #ifdef __CYGWIN__
+#define _BSD_SOURCE
+#include <unistd.h>
 #include <semaphore.h>
 #endif
 
@@ -28,13 +30,13 @@ struct helper_opts {
 
 int fuse_session_exit(struct fuse_session *se);
 
-#ifdef _MSC_VER
+/*#ifdef _MSC_VER
 static char * realpath(const char *file_name, char *resolved_name)
 {
-	strcpy(resolved_name,file_name);
+	strcpy(resolved_name,file_name); //TODO change it, strcpy is unsafe
 	return resolved_name;
 }
-#endif
+#endif*/
 
 #define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
 
@@ -93,6 +95,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 case KEY_HELP:
 	usage(outargs->argv[0]);
 	/* fall through */
+	return 1;
 
 case KEY_HELP_NOHEADER:
 	helper_help();
@@ -112,12 +115,13 @@ case FUSE_OPT_KEY_NONOPT:
 			fprintf(stderr, "fuse: bad mount point `%s': %s\n", arg, strerror(errno));
 			return -1;
 		}*/
-		strcpy(mountpoint,arg);
+		ZeroMemory(mountpoint, sizeof(mountpoint));
+		strncpy(mountpoint,arg, sizeof(mountpoint) - 1);
 		return fuse_opt_add_opt(&hopts->mountpoint, mountpoint);
-	} else {
-		fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
-		return -1;
 	}
+
+	fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
+	return -1;
 
 default:
 	return 1;
@@ -139,7 +143,7 @@ static int add_default_fsname(const char *progname, struct fuse_args *args)
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		return -1;
 	}
-	sprintf(fsname_opt, "-ofsname=%s", basename);
+	snprintf(fsname_opt, strlen(basename) + 64, "-ofsname=%s", basename);
 	res = fuse_opt_add_arg(args, fsname_opt);
 	free(fsname_opt);
 	return res;
@@ -179,18 +183,22 @@ err:
 
 int fuse_daemonize(int foreground)
 {
-	/** No daemons on Windows */
-#ifdef __CYGWIN__
-	int res;
-
 	if (!foreground) {
-		res = daemon(0, 0);
+#ifdef __CYGWIN__
+		int res = daemon(0, 0);
 		if (res == -1) {
 			perror("fuse: failed to daemonize program\n");
 			return -1;
 		}
-	}
+#else
+		/** No daemons on Windows but we detach from current console **/
+		if (FreeConsole() == 0) {
+			DWORD currentError = GetLastError();
+			fprintf(stderr, "fuse: daemonize failed = %lu\n", currentError);
+			return -1;
+		}
 #endif
+	}
 	return 0;
 }
 
@@ -263,7 +271,7 @@ void fuse_remove_signal_handlers(struct fuse_session *se)
 
 int my_sem_init(sem_t *sem, int pshared, int initial)
 {
-	*sem=CreateSemaphore (NULL, initial, LONG_MAX, NULL);
+	*sem=(sem_t)CreateSemaphore (NULL, initial, SEM_VALUE_MAX, NULL);
 	return *sem==NULL?-1:0;
 }
 
@@ -292,11 +300,13 @@ int my_sem_wait (sem_t * sem)
 
 int fuse_set_signal_handlers(struct fuse_session *se)
 {
+	//signal not supported
 	return 0;
 }
 
 void fuse_remove_signal_handlers(struct fuse_session *se)
 {
+	//signal not supported
 }
 
 #endif //CYGWIN

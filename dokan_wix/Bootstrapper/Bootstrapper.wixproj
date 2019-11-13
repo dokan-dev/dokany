@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>3.9</ProductVersion>
+    <ProjectGuid>D8A3E7DE-948C-4686-B015-BC342BECA990</ProjectGuid>
+    <SchemaVersion>2.0</SchemaVersion>
+    <OutputName>DokanSetup</OutputName>
+    <OutputType>Bundle</OutputType>
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <DefineConstants>Debug</DefineConstants>
+    <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Bundle.wxs" />
+  </ItemGroup>
+  <ItemGroup>
+    <WixExtension Include="WixDependencyExtension">
+      <HintPath>$(WixExtDir)\WixDependencyExtension.dll</HintPath>
+      <Name>WixDependencyExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUtilExtension">
+      <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
+      <Name>WixUtilExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixNetFxExtension">
+      <HintPath>$(WixExtDir)\WixNetFxExtension.dll</HintPath>
+      <Name>WixNetFxExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixBalExtension">
+      <HintPath>$(WixExtDir)\WixBalExtension.dll</HintPath>
+      <Name>WixBalExtension</Name>
+    </WixExtension>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Resources\dokan.png" />
+    <Content Include="Resources\licdata.rtf" />
+    <Content Include="Resources\Netfx_eula40.rtf" />
+    <Content Include="Resources\RtfTheme.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Resources" />
+    <Folder Include="Resources\1033" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\1033\RtfTheme.wxl" />
+  </ItemGroup>
+  <Import Project="$(WixTargetsPath)" />
+  <PropertyGroup>
+    <PreBuildEvent>cd /d "$(ProjectDir)"
+if NOT exist Redist\vcredist_2019\vc_redist.x86.exe (
+if NOT exist Redist\ mkdir Redist
+if NOT exist Redist\vcredist_2019\ mkdir Redist\vcredist_2019\
+powershell -command "wget https://download.visualstudio.microsoft.com/download/pr/9e04d214-5a9d-4515-9960-3d71398d98c3/1e1e62ab57bbb4bf5199e8ce88f040be/vc_redist.x64.exe -OutFile Redist\vcredist_2019\VC_redist.x64.exe"
+powershell -command "wget https://download.visualstudio.microsoft.com/download/pr/c8edbb87-c7ec-4500-a461-71e8912d25e9/99ba493d660597490cbb8b3211d2cae4/vc_redist.x86.exe -OutFile Redist\vcredist_2019\VC_redist.x86.exe"
+)
+  </PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" (
+  "%25WIX%25\bin\insignia.exe" -ib "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)engine.exe"
+  "%25SIGNTOOL%25" sign /v /i "%25CERTISSUER%25" /t http://timestamp.verisign.com/scripts/timstamp.dll "$(TargetDir)engine.exe"
+  "%25SIGNTOOL%25" sign /as /v /i "%25CERTISSUER%25" /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 "$(TargetDir)engine.exe"
+  "%25WIX%25\bin\insignia.exe" -ab "$(TargetDir)engine.exe" "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)$(TargetFileName)"
+  "%25SIGNTOOL%25" sign /v /i "%25CERTISSUER%25" /t http://timestamp.verisign.com/scripts/timstamp.dll "$(TargetDir)$(TargetFileName)"
+  "%25SIGNTOOL%25" sign /as /v /i "%25CERTISSUER%25" /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 "$(TargetDir)$(TargetFileName)"
+  del "$(TargetDir)engine.exe"
+)</PostBuildEvent>
+  </PropertyGroup>
+  <!--
+	To modify your build process, add your task inside one of the targets below and uncomment it.
+	Other similar extension points exist, see Wix.targets.
+	<Target Name="BeforeBuild">
+	</Target>
+	<Target Name="AfterBuild">
+	</Target>
+	-->
+</Project>

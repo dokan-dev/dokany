@@ -6,13 +6,19 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_OPT_H_
-#define _FUSE_OPT_H_
+#ifndef FUSE_OPT_H_
+#define FUSE_OPT_H_
 
 /** @file
  *
  * This file defines the option parsing interface of FUSE
  */
+
+#ifdef _MSC_VER
+#define STRDUP _strdup
+#else
+#define STRDUP strdup
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,7 +100,7 @@ struct fuse_opt {
  * Key option.	In case of a match, the processing function will be
  * called with the specified key.
  */
-#define FUSE_OPT_KEY(templ, key) { templ, (unsigned int)(-1), key }
+#define FUSE_OPT_KEY(templ, key) { templ, (unsigned long)(-1), key }
 
 /**
  * Last option.	 An array of 'struct fuse_opt' must end with a NULL
@@ -225,7 +231,7 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg);
  * argument vector
  *
  * Adds the argument to the N-th position.  This is useful for adding
- * options at the beggining of the array which must not come after the
+ * options at the beginning of the array which must not come after the
  * special '--' option.
  *
  * @param args is the structure containing the current argument list
@@ -258,4 +264,4 @@ int fuse_opt_match(const struct fuse_opt opts[], const char *opt);
 }
 #endif
 
-#endif /* _FUSE_OPT_H_ */
+#endif /* FUSE_OPT_H_ */
