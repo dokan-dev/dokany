@@ -646,6 +646,12 @@ int impl_fuse_context::write_file(LPCWSTR /*file_name*/, LPCVOID buffer,
   if (hndl->is_dir())
     return -EACCES;
 
+  if (offset < 0) {
+	  struct FUSE_STAT stat;
+	  if (0 == ops_.getattr(hndl->get_name().c_str(), &stat)) {
+		  offset = stat.st_size;
+	  }
+  }
   // Clip the maximum write size
   if (num_bytes_to_write > conn_info_.max_write)
     num_bytes_to_write = conn_info_.max_write;
@@ -1032,7 +1038,9 @@ int impl_file_locks::get_file(const std::string &name, bool is_dir,
   // check previous files with same names
   DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
   for (impl_file_handle *p = lock->first; p; p = p->next_file)
-    share &= p->shared_mode_;
+	  if (file.get() != p) {
+		  share &= p->shared_mode_;
+	  }
   if ((required_share(access_mode) | share) != share) {
     file.reset();
     res = -EACCES;
