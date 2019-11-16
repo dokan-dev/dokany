@@ -318,7 +318,6 @@ Return Value:
 
   if (!NT_SUCCESS(status)) {
     CleanupGlobalDiskDevice(dokanGlobal);
-    ExFreePool(DriverObject->FastIoDispatch);
     DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x\n",
               status);
     return status;
@@ -327,14 +326,12 @@ Return Value:
   if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
     DDbgPrint("  DokanLookasideCreate g_DokanCCBLookasideList  failed");
     CleanupGlobalDiskDevice(dokanGlobal);
-    ExFreePool(DriverObject->FastIoDispatch);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
     DDbgPrint("  DokanLookasideCreate g_DokanFCBLookasideList  failed");
     CleanupGlobalDiskDevice(dokanGlobal);
-    ExFreePool(DriverObject->FastIoDispatch);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
@@ -343,7 +340,6 @@ Return Value:
                             sizeof(ERESOURCE))) {
     DDbgPrint("  DokanLookasideCreate g_DokanEResourceLookasideList  failed");
     CleanupGlobalDiskDevice(dokanGlobal);
-    ExFreePool(DriverObject->FastIoDispatch);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
@@ -384,7 +380,6 @@ Return Value:
   if (GetIdentifierType(dokanGlobal) == DGL) {
     DDbgPrint("  Delete Global DeviceObject\n");
     CleanupGlobalDiskDevice(dokanGlobal);
-    ExFreePool(DriverObject->FastIoDispatch);
   }
 
   ExDeleteNPagedLookasideList(&DokanIrpEntryLookasideList);
