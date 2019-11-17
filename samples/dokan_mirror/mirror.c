@@ -1368,7 +1368,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-// Uncomment the function and set dokanOperations->GetDiskFreeSpace to personalize disk space
+// Uncomment the function and set dokanOperations.GetDiskFreeSpace to personalize disk space
 /*
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
@@ -1393,9 +1393,16 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
   DWORD NumberOfFreeClusters;
   DWORD TotalNumberOfClusters;
   WCHAR DriveLetter[3] = {'C', ':', 0};
-  DriveLetter[0] = RootDirectory[0];
+  PWCHAR RootPathName;
 
-  GetDiskFreeSpace(DriveLetter, &SectorsPerCluster, &BytesPerSector,
+  if (RootDirectory[0] == L'\\') { // UNC as Root
+    RootPathName = RootDirectory;
+  } else {
+    DriveLetter[0] = RootDirectory[0];
+    RootPathName = DriveLetter;
+  }
+
+  GetDiskFreeSpace(RootPathName, &SectorsPerCluster, &BytesPerSector,
                    &NumberOfFreeClusters, &TotalNumberOfClusters);
   *FreeBytesAvailable =
       ((ULONGLONG)SectorsPerCluster) * BytesPerSector * NumberOfFreeClusters;
@@ -1540,30 +1547,20 @@ void ShowUsage() {
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
-  PDOKAN_OPERATIONS dokanOperations =
-    (PDOKAN_OPERATIONS)malloc(sizeof(DOKAN_OPERATIONS));
-  if (dokanOperations == NULL) {
-    return EXIT_FAILURE;
-  }
-  PDOKAN_OPTIONS dokanOptions = (PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
-  if (dokanOptions == NULL) {
-    free(dokanOperations);
-    return EXIT_FAILURE;
-  }
+  DOKAN_OPERATIONS dokanOperations;
+  DOKAN_OPTIONS dokanOptions;
 
   if (argc < 3) {
     ShowUsage();
-    free(dokanOperations);
-    free(dokanOptions);
     return EXIT_FAILURE;
   }
 
   g_DebugMode = FALSE;
   g_UseStdErr = FALSE;
 
-  ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
-  dokanOptions->Version = DOKAN_VERSION;
-  dokanOptions->ThreadCount = 0; // use default
+  ZeroMemory(&dokanOptions, sizeof(DOKAN_OPTIONS));
+  dokanOptions.Version = DOKAN_VERSION;
+  dokanOptions.ThreadCount = 0; // use default
 
   for (command = 1; command < argc; command++) {
     switch (towlower(argv[command][1])) {
@@ -1571,16 +1568,21 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       command++;
       wcscpy_s(RootDirectory, sizeof(RootDirectory) / sizeof(WCHAR),
                argv[command]);
+      if (!wcslen(RootDirectory)) {
+        DbgPrint(L"Invalid RootDirectory\n");
+        return EXIT_FAILURE;
+      }
+
       DbgPrint(L"RootDirectory: %ls\n", RootDirectory);
       break;
     case L'l':
       command++;
       wcscpy_s(MountPoint, sizeof(MountPoint) / sizeof(WCHAR), argv[command]);
-      dokanOptions->MountPoint = MountPoint;
+      dokanOptions.MountPoint = MountPoint;
       break;
     case L't':
       command++;
-      dokanOptions->ThreadCount = (USHORT)_wtoi(argv[command]);
+      dokanOptions.ThreadCount = (USHORT)_wtoi(argv[command]);
       break;
     case L'd':
       g_DebugMode = TRUE;
@@ -1589,33 +1591,33 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       g_UseStdErr = TRUE;
       break;
     case L'n':
-      dokanOptions->Options |= DOKAN_OPTION_NETWORK;
+      dokanOptions.Options |= DOKAN_OPTION_NETWORK;
       break;
     case L'm':
-      dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
+      dokanOptions.Options |= DOKAN_OPTION_REMOVABLE;
       break;
     case L'w':
-      dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
+      dokanOptions.Options |= DOKAN_OPTION_WRITE_PROTECT;
       break;
     case L'o':
-      dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
+      dokanOptions.Options |= DOKAN_OPTION_MOUNT_MANAGER;
       break;
     case L'c':
-      dokanOptions->Options |= DOKAN_OPTION_CURRENT_SESSION;
+      dokanOptions.Options |= DOKAN_OPTION_CURRENT_SESSION;
       break;
     case L'f':
-      dokanOptions->Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
+      dokanOptions.Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
       break;
     case L'e':
-      dokanOptions->Options |= DOKAN_OPTION_DISABLE_OPLOCKS;
+      dokanOptions.Options |= DOKAN_OPTION_DISABLE_OPLOCKS;
       break;
     case L'z':
-      dokanOptions->Options |= DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH;
+      dokanOptions.Options |= DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH;
       break;
     case L'u':
       command++;
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
-      dokanOptions->UNCName = UNCName;
+      dokanOptions.UNCName = UNCName;
       DbgPrint(L"UNC Name: %ls\n", UNCName);
       break;
     case L'p':
@@ -1623,53 +1625,45 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'i':
       command++;
-      dokanOptions->Timeout = (ULONG)_wtol(argv[command]);
+      dokanOptions.Timeout = (ULONG)_wtol(argv[command]);
       break;
     case L'a':
       command++;
-      dokanOptions->AllocationUnitSize = (ULONG)_wtol(argv[command]);
+      dokanOptions.AllocationUnitSize = (ULONG)_wtol(argv[command]);
       break;
     case L'k':
       command++;
-      dokanOptions->SectorSize = (ULONG)_wtol(argv[command]);
+      dokanOptions.SectorSize = (ULONG)_wtol(argv[command]);
       break;
     default:
       fwprintf(stderr, L"unknown command: %s\n", argv[command]);
-      free(dokanOperations);
-      free(dokanOptions);
       return EXIT_FAILURE;
     }
   }
 
   if (wcscmp(UNCName, L"") != 0 &&
-      !(dokanOptions->Options & DOKAN_OPTION_NETWORK)) {
+      !(dokanOptions.Options & DOKAN_OPTION_NETWORK)) {
     fwprintf(
              stderr,
              L"  Warning: UNC provider name should be set on network drive only.\n");
   }
 
-  if (dokanOptions->Options & DOKAN_OPTION_NETWORK &&
-      dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
+  if (dokanOptions.Options & DOKAN_OPTION_NETWORK &&
+      dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) {
     fwprintf(stderr, L"Mount manager cannot be used on network drive.\n");
-    free(dokanOperations);
-    free(dokanOptions);
     return EXIT_FAILURE;
   }
 
-  if (!(dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+  if (!(dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) &&
       wcscmp(MountPoint, L"") == 0) {
     fwprintf(stderr, L"Mount Point required.\n");
-    free(dokanOperations);
-    free(dokanOptions);
     return EXIT_FAILURE;
   }
 
-  if ((dokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
-      (dokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION)) {
+  if ((dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+      (dokanOptions.Options & DOKAN_OPTION_CURRENT_SESSION)) {
     fwprintf(stderr,
              L"Mount Manager always mount the drive for all user sessions.\n");
-    free(dokanOperations);
-    free(dokanOptions);
     return EXIT_FAILURE;
   }
 
@@ -1696,42 +1690,42 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   }
 
   if (g_DebugMode) {
-    dokanOptions->Options |= DOKAN_OPTION_DEBUG;
+    dokanOptions.Options |= DOKAN_OPTION_DEBUG;
   }
   if (g_UseStdErr) {
-    dokanOptions->Options |= DOKAN_OPTION_STDERR;
+    dokanOptions.Options |= DOKAN_OPTION_STDERR;
   }
 
-  dokanOptions->Options |= DOKAN_OPTION_ALT_STREAM;
+  dokanOptions.Options |= DOKAN_OPTION_ALT_STREAM;
 
-  ZeroMemory(dokanOperations, sizeof(DOKAN_OPERATIONS));
-  dokanOperations->ZwCreateFile = MirrorCreateFile;
-  dokanOperations->Cleanup = MirrorCleanup;
-  dokanOperations->CloseFile = MirrorCloseFile;
-  dokanOperations->ReadFile = MirrorReadFile;
-  dokanOperations->WriteFile = MirrorWriteFile;
-  dokanOperations->FlushFileBuffers = MirrorFlushFileBuffers;
-  dokanOperations->GetFileInformation = MirrorGetFileInformation;
-  dokanOperations->FindFiles = MirrorFindFiles;
-  dokanOperations->FindFilesWithPattern = NULL;
-  dokanOperations->SetFileAttributes = MirrorSetFileAttributes;
-  dokanOperations->SetFileTime = MirrorSetFileTime;
-  dokanOperations->DeleteFile = MirrorDeleteFile;
-  dokanOperations->DeleteDirectory = MirrorDeleteDirectory;
-  dokanOperations->MoveFile = MirrorMoveFile;
-  dokanOperations->SetEndOfFile = MirrorSetEndOfFile;
-  dokanOperations->SetAllocationSize = MirrorSetAllocationSize;
-  dokanOperations->LockFile = MirrorLockFile;
-  dokanOperations->UnlockFile = MirrorUnlockFile;
-  dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
-  dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
-  dokanOperations->GetDiskFreeSpace = MirrorDokanGetDiskFreeSpace;
-  dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
-  dokanOperations->Unmounted = MirrorUnmounted;
-  dokanOperations->FindStreams = MirrorFindStreams;
-  dokanOperations->Mounted = MirrorMounted;
+  ZeroMemory(&dokanOperations, sizeof(DOKAN_OPERATIONS));
+  dokanOperations.ZwCreateFile = MirrorCreateFile;
+  dokanOperations.Cleanup = MirrorCleanup;
+  dokanOperations.CloseFile = MirrorCloseFile;
+  dokanOperations.ReadFile = MirrorReadFile;
+  dokanOperations.WriteFile = MirrorWriteFile;
+  dokanOperations.FlushFileBuffers = MirrorFlushFileBuffers;
+  dokanOperations.GetFileInformation = MirrorGetFileInformation;
+  dokanOperations.FindFiles = MirrorFindFiles;
+  dokanOperations.FindFilesWithPattern = NULL;
+  dokanOperations.SetFileAttributes = MirrorSetFileAttributes;
+  dokanOperations.SetFileTime = MirrorSetFileTime;
+  dokanOperations.DeleteFile = MirrorDeleteFile;
+  dokanOperations.DeleteDirectory = MirrorDeleteDirectory;
+  dokanOperations.MoveFile = MirrorMoveFile;
+  dokanOperations.SetEndOfFile = MirrorSetEndOfFile;
+  dokanOperations.SetAllocationSize = MirrorSetAllocationSize;
+  dokanOperations.LockFile = MirrorLockFile;
+  dokanOperations.UnlockFile = MirrorUnlockFile;
+  dokanOperations.GetFileSecurity = MirrorGetFileSecurity;
+  dokanOperations.SetFileSecurity = MirrorSetFileSecurity;
+  dokanOperations.GetDiskFreeSpace = MirrorDokanGetDiskFreeSpace;
+  dokanOperations.GetVolumeInformation = MirrorGetVolumeInformation;
+  dokanOperations.Unmounted = MirrorUnmounted;
+  dokanOperations.FindStreams = MirrorFindStreams;
+  dokanOperations.Mounted = MirrorMounted;
 
-  status = DokanMain(dokanOptions, dokanOperations);
+  status = DokanMain(&dokanOptions, &dokanOperations);
   switch (status) {
   case DOKAN_SUCCESS:
     fprintf(stderr, "Success\n");
@@ -1761,8 +1755,5 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     fprintf(stderr, "Unknown error: %d\n", status);
     break;
   }
-
-  free(dokanOptions);
-  free(dokanOperations);
-  return EXIT_SUCCESS;
+  return STATUS_SUCCESS;
 }
