@@ -209,7 +209,7 @@
         }
       
         Add-Type -assembly system.io.compression.filesystem
-        choco install "msbuild-sonarqube-runner" -y
+        Exec-External {& choco install "msbuild-sonarqube-runner" -y }
         
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         Exec-External { & 7z e .\build-wrapper-win-x86.zip }
