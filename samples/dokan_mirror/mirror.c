@@ -1755,5 +1755,5 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     fprintf(stderr, "Unknown error: %d\n", status);
     break;
   }
-  return STATUS_SUCCESS;
+  return EXIT_SUCCESS;
 }
