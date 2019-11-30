@@ -964,14 +964,18 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
  *
  * \param uncOnly Get only instances that have UNC Name.
  * \param nbRead Number of instances successfully retrieved.
- * \return Allocate array of \ref DOKAN_CONTROL.
+ * \return Allocate array of DOKAN_CONTROL.
  */
 PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
 
 /**
  * \brief Release Mount point list resources from \ref DokanGetMountPointList.
  *
- * \param Allocate array of \ref DOKAN_CONTROL from \ref DokanGetMountPointList.
+ * After \ref DokanGetMountPointList call you will receive a dynamically allocated array of DOKAN_CONTROL.
+ * This array needs to be released when no longer needed by calling this function.
+ *
+ * \param list Allocated array of DOKAN_CONTROL from \ref DokanGetMountPointList.
+ * \return Nothing.
  */
 VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list);
 
@@ -1058,7 +1062,7 @@ BOOL DOKANAPI DokanNotifyXAttrUpdate(LPCWSTR FilePath);
  * \param OldPath Old, absolute path to the file or directory, including the mount-point of the file system.
  * \param NewPath New, absolute path to the file or directory, including the mount-point of the file system.
  * \param IsDirectory Indicates if the path is a directory.
- * \param IsInSameFolder Indicates if the file or directory have the same parent directory.
+ * \param IsInSameDirectory Indicates if the file or directory have the same parent directory.
  * \return \c TRUE if notification succeeded.
  */
 BOOL DOKANAPI DokanNotifyRename(LPCWSTR OldPath, LPCWSTR NewPath,

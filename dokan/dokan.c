@@ -523,7 +523,8 @@ NewDokanInstance() {
 #if _MSC_VER < 1300
   InitializeCriticalSection(&instance->CriticalSection);
 #else
-  InitializeCriticalSectionAndSpinCount(&instance->CriticalSection, 0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&instance->CriticalSection,
+                                              0x80000400);
 #endif
 
   InitializeListHead(&instance->ListEntry);

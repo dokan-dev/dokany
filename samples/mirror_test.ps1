@@ -39,9 +39,13 @@ $Configs = @(
 		"Destination" = "$($DokanDriverLetter):";
 		"Name" = "driveRemovable";
 	},
-
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /o";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "driveRemovableMntMgr";
+	},
+	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /o /m";
 		"Destination" = "$($DokanDriverLetter):";
 		"Name" = "driveMntMgr";
 	},

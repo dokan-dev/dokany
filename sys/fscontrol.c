@@ -121,11 +121,9 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   BOOLEAN AcquiredVcb = FALSE;
   BOOLEAN AcquiredFcb = FALSE;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
   PREQUEST_OPLOCK_INPUT_BUFFER InputBuffer = NULL;
   ULONG InputBufferLength;
   ULONG OutputBufferLength;
-#endif
 
   PAGED_CODE();
 
@@ -165,8 +163,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     return STATUS_NOT_SUPPORTED;
   }
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
-
   //
   //  Get the input & output buffer lengths and pointers.
   //
@@ -200,8 +196,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     return STATUS_INVALID_PARAMETER;
   }
 
-#endif
-
   //
   //  Use a try finally to free the Fcb/Vcb
   //
@@ -214,11 +208,9 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     if ((FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_1) ||
         (FsControlCode == FSCTL_REQUEST_BATCH_OPLOCK) ||
         (FsControlCode == FSCTL_REQUEST_FILTER_OPLOCK) ||
-        (FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_2)
-#if (NTDDI_VERSION >= NTDDI_WIN7)
-        || ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
+        (FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_2) ||
+        ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
             FlagOn(InputBuffer->Flags, REQUEST_OPLOCK_INPUT_FLAG_REQUEST))
-#endif
     ) {
 
       DokanVCBLockRO(Fcb->Vcb);
@@ -226,32 +218,24 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       DokanFCBLockRW(Fcb);
       AcquiredFcb = TRUE;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
       if (!Dcb->FileLockInUserMode) {
 
         if (FsRtlOplockIsSharedRequest(Irp)) {
-#else
-      if (!Dcb->FileLockInUserMode &&
-          FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_2) {
-#endif
           //
           //  Byte-range locks are only valid on files.
           //
           if (!DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
 
-//
-//  Set OplockCount to nonzero if FsRtl denies access
-//  based on current byte-range lock state.
-//
-#if (NTDDI_VERSION >= NTDDI_WIN8)
-            OplockCount = (ULONG)!FsRtlCheckLockForOplockRequest(
-                &Fcb->FileLock, &Fcb->AdvancedFCBHeader.AllocationSize);
-#elif (NTDDI_VERSION >= NTDDI_WIN7)
-          OplockCount =
-              (ULONG)FsRtlAreThereCurrentOrInProgressFileLocks(&Fcb->FileLock);
-#else
-        OplockCount = (ULONG)FsRtlAreThereCurrentFileLocks(&Fcb->FileLock);
-#endif
+            //
+            //  Set OplockCount to nonzero if FsRtl denies access
+            //  based on current byte-range lock state.
+            //
+            if (DokanFsRtlCheckLockForOplockRequest) // Win8+
+              OplockCount = (ULONG)!DokanFsRtlCheckLockForOplockRequest(
+                  &Fcb->FileLock, &Fcb->AdvancedFCBHeader.AllocationSize);
+            else
+              OplockCount = (ULONG)FsRtlAreThereCurrentOrInProgressFileLocks(
+                  &Fcb->FileLock);
           }
         } else {
           // Shouldn't be something like UncleanCount counter and not FileCount
@@ -262,15 +246,12 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     } else if ((FsControlCode == FSCTL_OPLOCK_BREAK_ACKNOWLEDGE) ||
                (FsControlCode == FSCTL_OPBATCH_ACK_CLOSE_PENDING) ||
                (FsControlCode == FSCTL_OPLOCK_BREAK_NOTIFY) ||
-               (FsControlCode == FSCTL_OPLOCK_BREAK_ACK_NO_2)
-#if (NTDDI_VERSION >= NTDDI_WIN7)
-               || ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
+               (FsControlCode == FSCTL_OPLOCK_BREAK_ACK_NO_2) ||
+               ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
                    FlagOn(InputBuffer->Flags, REQUEST_OPLOCK_INPUT_FLAG_ACK))
-#endif
     ) {
       DokanFCBLockRO(Fcb);
       AcquiredFcb = TRUE;
-#if (NTDDI_VERSION >= NTDDI_WIN7)
     } else if (FsControlCode == FSCTL_REQUEST_OPLOCK) {
       //
       //  The caller didn't provide either REQUEST_OPLOCK_INPUT_FLAG_REQUEST or
@@ -280,9 +261,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       Status = STATUS_INVALID_PARAMETER;
       __leave;
     } else {
-#else
-    } else {
-#endif
       DDbgPrint("    DokanOplockRequest STATUS_INVALID_PARAMETER\n");
       Status = STATUS_INVALID_PARAMETER;
       __leave;
@@ -293,12 +271,9 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     //  for delete.
     //
     if (((FsControlCode == FSCTL_REQUEST_FILTER_OPLOCK) ||
-         (FsControlCode == FSCTL_REQUEST_BATCH_OPLOCK)
-#if (NTDDI_VERSION >= NTDDI_WIN7)
-         ||
+         (FsControlCode == FSCTL_REQUEST_BATCH_OPLOCK) ||
          ((FsControlCode == FSCTL_REQUEST_OPLOCK) &&
           FlagOn(InputBuffer->RequestedOplockLevel, OPLOCK_LEVEL_CACHE_HANDLE))
-#endif
              ) &&
         DokanFCBFlagsIsSet(Fcb, DOKAN_DELETE_ON_CLOSE)) {
 
@@ -411,7 +386,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     status = STATUS_SUCCESS;
     break;
 
-  case FSCTL_NOTIFY_PATH:
+  case FSCTL_NOTIFY_PATH: {
     PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath;
     irpSp = IoGetCurrentIrpStackLocation(*pIrp);
     if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
@@ -457,8 +432,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
                              pNotifyPath->Action);
     DokanFCBUnlock(fcb);
     status = STATUS_SUCCESS;
-    break;
-
+  } break;
   case FSCTL_REQUEST_OPLOCK_LEVEL_1:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK_LEVEL_1\n");
     status = DokanOplockRequest(pIrp);
@@ -499,12 +473,10 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     status = DokanOplockRequest(pIrp);
     break;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
   case FSCTL_REQUEST_OPLOCK:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK\n");
     status = DokanOplockRequest(pIrp);
     break;
-#endif
 
   case FSCTL_LOCK_VOLUME:
     DDbgPrint("    FSCTL_LOCK_VOLUME\n");
@@ -805,15 +777,8 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
 
   ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
 
-#if _WIN32_WINNT >= 0x0501
   FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
                            &vcb->AdvancedFCBHeaderMutex);
-#else
-  if (DokanFsRtlTeardownPerStreamContexts) {
-    FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-                             &vcb->AdvancedFCBHeaderMutex);
-  }
-#endif
 
   vpb = irpSp->Parameters.MountVolume.Vpb;
   DokanInitVpb(vpb, vcb->DeviceObject);

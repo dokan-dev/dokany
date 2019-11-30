@@ -12,13 +12,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Added
 - Kernel - Added support for FileIdExtdBothDirectoryInformation, which is required when the target is mapped as a volume into docker containers.
 ### Changed
+- Kernel - Single build target Win7 / enable new features according to OS during runtime.
 - Kernel - Only log to event viewer when debug default log is enabled.
-- Library - Clarified documentation of dokan file-change notification functions
+- Library - Clarified documentation of dokan file-change notification functions.
 - Build - Run Code Analysis on all builds of debug build configurations within Visual Studio, but not by default from msbuild.
 ### Fixed
 - Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`.
 - Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices.
 - FUSE - Infinite loop when using characters from Unicode supplementary planes ('🔈' for example).
+- FUSE - Support WriteFile with offset `-1`.
+- FUSE - `get_file` - Do not use the current file shared mode.
 
 ## [1.3.0.1000] - 2019-07-24
 ### Added
@@ -443,7 +446,8 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.2.2.1000...master
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.3.0.1000...master
+[1.3.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.2.1000...v1.3.0.1000
 [1.2.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.2000...v1.2.2.1000
 [1.2.1.2000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.1000...v1.2.1.2000
 [1.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.0.1000...v1.2.1.1000

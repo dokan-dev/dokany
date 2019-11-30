@@ -1,5 +1,7 @@
 param (
-	[string[]]$BUILD_PART = @('lib', 'sys', 'cygwin')
+	[string[]]$BuildPart = @('win', 'cygwin'),
+	[string[]]$Platforms = @('Win32', 'x64', 'ARM', 'ARM64'),
+	[string[]]$Configurations = @('Release', 'Debug')
 )
 
 . .\scripts\build_helper.ps1
@@ -14,51 +16,17 @@ if (!([bool](Get-Command -Name buildWrapper -ErrorAction SilentlyContinue))) {
 	set-alias buildWrapper "$msBuildPath"
 }
 
-if ($BUILD_PART -contains 'lib') {
-	Write-Host Build dokan ...
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Release /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Release /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Release /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Release /p:Platform=ARM64 /t:Build $CI_BUILD_ARG }
-
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Debug /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Debug /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Debug /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration=Debug /p:Platform=ARM64 /t:Build $CI_BUILD_ARG }
-	Write-Host Build dokan done !
+if ($BuildPart -contains 'win') {
+	foreach ($Configuration in $Configurations) {
+		foreach ($Platform in $Platforms) {
+			Write-Host Build dokan $Configuration $Platform ...
+			Exec-External { buildWrapper .\dokan.sln /p:Configuration=$Configuration /p:Platform=$Platform /t:Build $CI_BUILD_ARG }
+			Write-Host Build dokan $Configuration $Platform done !
+		}
+	}
 }
 
-if ($BUILD_PART -contains 'sys') {
-	Write-Host Build dokan sys ...
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win7 Release" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win7 Release" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Release" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Release" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Release" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Release" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Release" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Release" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Release" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Release" /p:Platform=ARM64 /t:Build $CI_BUILD_ARG }
-
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win7 Debug" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win7 Debug" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Debug" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Debug" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8 Debug" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win8.1 Debug" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Debug" /p:Platform=Win32 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Debug" /p:Platform=x64 /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Debug" /p:Platform=ARM /t:Build $CI_BUILD_ARG }
-	Exec-External { buildWrapper .\dokan.sln /p:Configuration="Win10 Debug" /p:Platform=ARM64 /t:Build $CI_BUILD_ARG }
-	Write-Host Build dokan sys done !
-}
-
-if ($BUILD_PART -contains 'cygwin') {
+if ($BuildPart -contains 'cygwin') {
 	if (Test-Path -Path C:\cygwin64) {
 		$ErrorActionPreference = "Continue" #cmake has normal stdout through stderr...
 		Exec-External { ./dokan_fuse/build.ps1 }

@@ -288,10 +288,9 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IRP_MJ_SET_SECURITY:
     return DokanDispatchSetSecurity(DeviceObject, Irp);
 
-#if (_WIN32_WINNT >= 0x0500)
   case IRP_MJ_PNP:
     return DokanDispatchPnp(DeviceObject, Irp);
-#endif //(_WIN32_WINNT >= 0x0500)
+
   default:
     DDbgPrint("DokanDispatchRequest: Unexpected major function: %xh\n",
               irpSp->MajorFunction);
