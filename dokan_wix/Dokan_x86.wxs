@@ -207,9 +207,9 @@
             </Component>
             <Directory Id="DRIVERDIR" Name="driver">
               <Component Id="Driver_Win32" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
-                <File Id="Driver_Sys" Source="..\Win32\$(var.Configuration)\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
-                <File Id="Driver_Cat" Source="..\Win32\$(var.Configuration)\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
-                <File Id="Driver_Inf" Source="..\Win32\$(var.Configuration)\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
+                <File Id="Driver_Sys" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+                <File Id="Driver_Cat" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+                <File Id="Driver_Inf" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Driver_Win32pdb" Guid="{184A5365-8C4C-4853-A9DA-381C0B12D8D1}">

@@ -17,5 +17,5 @@
 ; and each driver package must be in a separate subfolder.
 .Set DestinationDir=Dokanx64
 ; Specify files to be included in cab file
-x64\Release\sys\dokan.inf
-x64\Release\sys\dokan1.sys
+x64\Release\Driver\sys\dokan.inf
+x64\Release\Driver\sys\dokan1.sys
