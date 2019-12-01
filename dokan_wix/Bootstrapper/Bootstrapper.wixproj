@@ -70,11 +70,11 @@ powershell -command "wget https://download.visualstudio.microsoft.com/download/p
   <PropertyGroup>
     <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" (
   "%25WIX%25\bin\insignia.exe" -ib "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)engine.exe"
-  "%25SIGNTOOL%25" sign /v /i "%25CERTISSUER%25" /t http://timestamp.verisign.com/scripts/timstamp.dll "$(TargetDir)engine.exe"
-  "%25SIGNTOOL%25" sign /as /v /i "%25CERTISSUER%25" /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 "$(TargetDir)engine.exe"
+  "%25SIGNTOOL%25" sign /v /sha1 "%25SHA1_CERTTHUMBPRINT%25" /t http://timestamp.digicert.com "$(TargetDir)engine.exe"
+  "%25SIGNTOOL%25" sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "%25SHA2_CERTTHUMBPRINT%25" "$(TargetDir)engine.exe"
   "%25WIX%25\bin\insignia.exe" -ab "$(TargetDir)engine.exe" "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)$(TargetFileName)"
-  "%25SIGNTOOL%25" sign /v /i "%25CERTISSUER%25" /t http://timestamp.verisign.com/scripts/timstamp.dll "$(TargetDir)$(TargetFileName)"
-  "%25SIGNTOOL%25" sign /as /v /i "%25CERTISSUER%25" /fd SHA256 /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 "$(TargetDir)$(TargetFileName)"
+  "%25SIGNTOOL%25" sign /v /sha1 "%25SHA1_CERTTHUMBPRINT%25" /t http://timestamp.digicert.com "$(TargetDir)$(TargetFileName)"
+  "%25SIGNTOOL%25" sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "%25SHA2_CERTTHUMBPRINT%25" "$(TargetDir)$(TargetFileName)"
   del "$(TargetDir)engine.exe"
 )</PostBuildEvent>
   </PropertyGroup>

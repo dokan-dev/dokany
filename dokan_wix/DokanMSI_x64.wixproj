@@ -76,7 +76,7 @@
     <PreBuildEvent />
   </PropertyGroup>
   <PropertyGroup>
-    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" "%25SIGNTOOL%25" sign /fd SHA256 /v /i "%25CERTISSUER%25" /tr http://timestamp.globalsign.com/%3fsignature=sha2 /td SHA256 "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
+    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" "%25SIGNTOOL%25" sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 "%25SHA2_CERTTHUMBPRINT%25" "$(TargetDir)$(TargetFileName)"</PostBuildEvent>
   </PropertyGroup>
   <!--
 	To modify your build process, add your task inside one of the targets below and uncomment it.
