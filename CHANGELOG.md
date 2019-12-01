@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [Unreleased] - 1.4.0.1000
 ### Added
 - Kernel - Added support for FileIdExtdBothDirectoryInformation, which is required when the target is mapped as a volume into docker containers.
 ### Changed
