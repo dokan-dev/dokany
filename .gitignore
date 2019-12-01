@@ -50,3 +50,5 @@ ReleasePS
 /sys/dokanfs_msg.h
 /sys/dokanfs_msg.rc
 /sys/MSG00409.bin
+/disk1/Dokanx64.cab
+/disk1/Dokanx86.cab
