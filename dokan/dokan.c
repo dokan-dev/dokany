@@ -84,6 +84,9 @@ volatile PDokanMalloc	g_DokanMalloc = NULL;
 volatile PDokanFree		g_DokanFree = NULL;
 volatile PDokanRealloc	g_DokanRealloc = NULL;
 
+volatile PDokanDbgPrint g_PDokanDbgPrint = NULL;
+volatile PDokanDbgPrintW g_PDokanDbgPrintW = NULL;
+
 volatile LONG			g_DokanInitialized = 0;
 
 // TODO NEXT:
@@ -2017,8 +2020,7 @@ DOKAN_API PTP_POOL DOKAN_CALLBACK DokanGetThreadPool() {
 	return threadPool;
 }
 
-void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks) {
-
+void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS* memoryCallbacks, DOKAN_LOG_CALLBACKS* logCallbacks) {
 	// ensure 64-bit alignment
 	assert(offsetof(EVENT_INFORMATION, Buffer) % 8 == 0);
 
@@ -2046,6 +2048,18 @@ void DOKANAPI DokanInit(DOKAN_MEMORY_CALLBACKS *memoryCallbacks) {
 		InterlockedExchange((volatile LONG*)&g_DokanMalloc, (LONG)memoryCallbacks->Malloc);
 		InterlockedExchange((volatile LONG*)&g_DokanFree, (LONG)memoryCallbacks->Free);
 		InterlockedExchange((volatile LONG*)&g_DokanRealloc, (LONG)memoryCallbacks->Realloc);
+#else
+#error Unsupported architecture!
+#endif
+	}
+
+	if (logCallbacks) {
+#if INTPTR_MAX == INT64_MAX
+		InterlockedExchange64((volatile LONG64*)&g_PDokanDbgPrint, (LONG64)logCallbacks->DbgPrint);
+		InterlockedExchange64((volatile LONG64*)&g_PDokanDbgPrintW, (LONG64)logCallbacks->DbgPrintW);
+#elif INTPTR_MAX == INT32_MAX
+		InterlockedExchange((volatile LONG*)&g_PDokanDbgPrint, (LONG)logCallbacks->DbgPrint);
+		InterlockedExchange((volatile LONG*)&g_PDokanDbgPrintW, (LONG)logCallbacks->DbgPrintW);
 #else
 #error Unsupported architecture!
 #endif

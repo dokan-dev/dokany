@@ -2824,11 +2824,11 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   memoryCallbacks.Free = MirrorFree;
   memoryCallbacks.Realloc = MirrorRealloc;
 
-  DokanInit(&memoryCallbacks);
+  DokanInit(&memoryCallbacks, NULL);
 
 #else
 
-  DokanInit(NULL);
+  DokanInit(NULL, NULL);
 
 #endif
 

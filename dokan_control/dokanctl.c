@@ -114,7 +114,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   PVOID wow64OldValue;
   BOOL isAdmin;
 
-  DokanInit(NULL);
+  DokanInit(NULL, NULL);
   isAdmin = IsUserAnAdmin();
 
   DokanUseStdErr(TRUE); // Set dokan library debug output
