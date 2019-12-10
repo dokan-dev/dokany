@@ -66,8 +66,8 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   FsRtlSetupAdvancedHeader(&fcb->AdvancedFCBHeader,
                            &fcb->AdvancedFCBHeaderMutex);
 
-  fcb->AdvancedFCBHeader.ValidDataLength.LowPart = 0xffffffff;
-  fcb->AdvancedFCBHeader.ValidDataLength.HighPart = 0x7fffffff;
+  // ValidDataLength not supported - initialize to an appropriate value
+  fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
 
   fcb->AdvancedFCBHeader.PagingIoResource = &fcb->PagingIoResource;
 
