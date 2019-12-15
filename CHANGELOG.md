@@ -5,17 +5,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased] - 1.4.0.1000
 ### Added
-- Kernel - Added support for FileIdExtdBothDirectoryInformation, which is required when the target is mapped as a volume into docker containers.
+- Kernel - Added support for `FileIdExtdBothDirectoryInformation`, which is required when the target is mapped as a volume into docker containers.
+
 ### Changed
-- Kernel - Single build target Win7 / enable new features according to OS during runtime.
+- Kernel - Single build target Win7 / enable new features according to OS during runtime. Remove supported XP/Vista code.
 - Kernel - Only log to event viewer when debug default log is enabled.
 - Library - Clarified documentation of dokan file-change notification functions.
 - Build - Run Code Analysis on all builds of debug build configurations within Visual Studio, but not by default from msbuild.
+- Mirror - Add `GetDiskFreeSpace` UNC as Root support.
+
 ### Fixed
 - Library - Incorrect call to `legacyKeepAliveThreadIds` `WaitForObject`.
-- Kernel - FileNameInformation - Only concat `UNCName` / `DiskDeviceName` for network devices.
+- Kernel - `FileNameInformation` - Only concat `UNCName` / `DiskDeviceName` for network devices.
 - FUSE - Infinite loop when using characters from Unicode supplementary planes ('🔈' for example).
-- FUSE - Support WriteFile with offset `-1`.
+- FUSE - Support `WriteFile` with offset `-1`.
 - FUSE - `get_file` - Do not use the current file shared mode.
 
 ## [1.3.0.1000] - 2019-07-24
