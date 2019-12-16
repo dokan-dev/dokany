@@ -51,3 +51,6 @@ ReleasePS
 /sys/dokanfs_msg.rc
 /sys/MSG00409.bin
 /dokan_wix/Dokan.cab
+/msbuild.log
+/setup.inf
+/setup.rpt
