@@ -1,0 +1,34 @@
+; *** dokan1.ddf example ***
+;
+.OPTION EXPLICIT     ; Generate errors
+.Set CabinetFileCountThreshold=0
+.Set FolderFileCountThreshold=0
+.Set FolderSizeThreshold=0
+.Set MaxCabinetSize=0
+.Set MaxDiskFileCount=0
+.Set MaxDiskSize=0
+.Set CompressionType=MSZIP
+.Set Cabinet=on
+.Set Compress=on
+.Set CabinetNameTemplate=Dokan.cab
+.Set DiskDirectory1=dokan_wix
+.Set DestinationDir=x64
+x64\Release\Driver\sys\dokan.inf
+x64\Release\Driver\sys\dokan1.sys
+x64\Release\Driver\sys\dokan1.cat
+x64\Release\Driver\dokan1.pdb
+.Set DestinationDir=x86
+Win32\Release\Driver\sys\dokan.inf
+Win32\Release\Driver\sys\dokan1.sys
+Win32\Release\Driver\sys\dokan1.cat
+Win32\Release\Driver\dokan1.pdb
+.Set DestinationDir=ARM
+ARM\Release\Driver\sys\dokan.inf
+ARM\Release\Driver\sys\dokan1.sys
+ARM\Release\Driver\sys\dokan1.cat
+ARM\Release\Driver\dokan1.pdb
+.Set DestinationDir=ARM64
+ARM64\Release\Driver\sys\dokan.inf
+ARM64\Release\Driver\sys\dokan1.sys
+ARM64\Release\Driver\sys\dokan1.cat
+ARM64\Release\Driver\dokan1.pdb

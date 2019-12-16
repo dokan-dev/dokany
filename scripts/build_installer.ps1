@@ -15,10 +15,17 @@ Exec-External { .\scripts\build.ps1 }
 
 Exec-External { .\scripts\sign.ps1 }
 
-Exec-External { MakeCab /f .\dokan_wix\dokanx64.ddf }
-Exec-External { MakeCab /f .\dokan_wix\dokanx86.ddf }
+Exec-External { MakeCab /f .\dokan_wix\dokan.ddf }
+if (-not ([string]::IsNullOrEmpty($env:EV_CERTTHUMBPRINT)))
+{
+	Write-Host EV Sign cab ...
+	set-alias st "$env:SIGNTOOL"
+	Exec-External { st sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "$env:EV_CERTTHUMBPRINT" .\dokan_wix\Dokan.cab }
+	Write-Host EV Sign cab done
+}
+else { Write-Host EV_CERTTHUMBPRINT env variable is missing. EV Signature cab is needed for developer hardware dashboard submission. }
 
-Read-Host -Prompt "Please submit drivers to developer hardware dashboard. Hit ENTER when it is done..." 
+Read-Host -Prompt "Please submit driver cab to developer hardware dashboard. Hit ENTER when it is done..." 
 
 if (Test-Path -Path C:\cygwin64) {
 	Write-Host Include Cygwin binaries in installer
