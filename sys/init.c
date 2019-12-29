@@ -1015,15 +1015,22 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
                     FALSE);
   DokanStartDeleteDeviceThread(dokanGlobal);
   //
-  // Establish user-buffer access method.
+  // Request direct I/O user-buffer access method.
   //
-  fsDiskDeviceObject->Flags |= DO_DIRECT_IO;
-  fsDiskDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
-  fsCdDeviceObject->Flags |= DO_DIRECT_IO;
-  fsCdDeviceObject->Flags |= DO_LOW_PRIORITY_FILESYSTEM;
+  SetFlag(fsDiskDeviceObject->Flags, DO_DIRECT_IO);
+  SetFlag(fsCdDeviceObject->Flags, DO_DIRECT_IO);
+  //
+  // Inserted FS next-to-last position in the queue
+  // during IoRegisterFileSystem.
+  //
+  SetFlag(fsDiskDeviceObject->Flags, DO_LOW_PRIORITY_FILESYSTEM);
+  SetFlag(fsCdDeviceObject->Flags, DO_LOW_PRIORITY_FILESYSTEM);
 
-  fsDiskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
-  fsCdDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+  //
+  // The initialization is complete.
+  //
+  ClearFlag(fsDiskDeviceObject->Flags, DO_DEVICE_INITIALIZING);
+  ClearFlag(fsCdDeviceObject->Flags, DO_DEVICE_INITIALIZING);
 
   // Register file systems
   IoRegisterFileSystem(fsDiskDeviceObject);
