@@ -26,8 +26,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <conio.h>
 #include <process.h>
 #include <stdlib.h>
-#include <strsafe.h>
 #include <tchar.h>
+#include <strsafe.h>
 
 #define DokanMapKernelBit(dest, src, userBit, kernelBit)                       \
   if (((src) & (kernelBit)) == (kernelBit))                                    \

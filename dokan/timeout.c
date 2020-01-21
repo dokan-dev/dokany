@@ -64,7 +64,8 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
 }
 
 /* Legacy KeepAlive - Remove for 2.0.0 */
-UINT WINAPI DokanKeepAlive(PDOKAN_INSTANCE DokanInstance) {
+UINT WINAPI DokanKeepAlive(PVOID instance) {
+  PDOKAN_INSTANCE DokanInstance = (PDOKAN_INSTANCE)instance;
   HANDLE device;
   ULONG ReturnedLength;
   WCHAR rawDeviceName[MAX_PATH];

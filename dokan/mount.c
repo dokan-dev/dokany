@@ -20,8 +20,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
-#include <Dbt.h>
-#include <ShlObj.h>
+#include <dbt.h>
+#include <shlobj.h>
 #include <stdio.h>
 
 #pragma warning(push)
