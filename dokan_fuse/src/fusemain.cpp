@@ -605,13 +605,15 @@ int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer,
   CHECKED(cast_from_longlong(offset, &off));
   fuse_file_info finfo(hndl->make_finfo());
 
+  std::string file_name = hndl->get_name();
   DWORD total_read = 0;
   while (total_read < num_bytes_to_read) {
     DWORD to_read = num_bytes_to_read - total_read;
     if (to_read > MAX_READ_SIZE)
       to_read = MAX_READ_SIZE;
 
-    int res = ops_.read(hndl->get_name().c_str(), static_cast<char *>(buffer), to_read, off,
+    int res = ops_.read(file_name.c_str(), static_cast<char *>(buffer), to_read,
+                        off,
                         &finfo);
     if (res < 0)
       return res; // Error
