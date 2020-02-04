@@ -14,7 +14,7 @@
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%TEMP%\msys2-cache'
       MSYS2_INST_DIR: '%DOKAN_CI_CACHE%\msys64'
-      CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
+#     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
