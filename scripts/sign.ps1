@@ -14,6 +14,11 @@ if ([string]::IsNullOrEmpty($env:SIGNTOOL)) {
 	throw ("SIGNTOOL env variable is not set.");
 }
 
+if ([string]::IsNullOrEmpty($env:SHA1_CERTTHUMBPRINT) -or [string]::IsNullOrEmpty($env:SHA2_CERTTHUMBPRINT)) {
+	throw ("SHA1_CERTTHUMBPRINT or SHA2_CERTTHUMBPRINT env variable are not set.");
+}
+
+
 set-alias st "$env:SIGNTOOL"
 
 Write-Host Sign Dokan ...
