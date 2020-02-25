@@ -27,7 +27,7 @@ if ($BuildPart -contains 'win') {
 }
 
 if ($BuildPart -contains 'cygwin') {
-	if (Test-Path -Path C:\cygwin64) {
+	if ((Test-Path -Path env:CYGWIN_INST_DIR) -or (Test-Path -Path 'C:\cygwin64')) {
 		$ErrorActionPreference = "Continue" #cmake has normal stdout through stderr...
 		Exec-External { ./dokan_fuse/build.ps1 }
 		$ErrorActionPreference = "Stop"
