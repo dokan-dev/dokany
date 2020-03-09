@@ -753,10 +753,6 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_DISABLE_OPLOCKS) {
     eventStart.Flags |= DOKAN_EVENT_DISABLE_OPLOCKS;
   }
-  if (Instance->DokanOptions->Options &
-      DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH) {
-    eventStart.Flags |= DOKAN_EVENT_OPTIMIZE_SINGLE_NAME_SEARCH;
-  }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
            Instance->MountPoint, sizeof(Instance->MountPoint));

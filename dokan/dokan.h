@@ -112,7 +112,7 @@ extern "C" {
  * the driver can just copy the normalized name. These searches are frequently
  * done inside of CreateFile calls on Windows 7.
  */
-#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH 2048
+#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH__REMOVED__ 2048
 
 /** @} */
 
