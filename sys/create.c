@@ -327,7 +327,7 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
   if (!*parentDir)
     return STATUS_INSUFFICIENT_RESOURCES;
 
-  RtlZeroMemory(*parentDir, len + 1);
+  RtlZeroMemory(*parentDir, (len + 1) * sizeof(WCHAR));
   RtlStringCchCopyW(*parentDir, len, fileName);
 
   for (i = len - 1; i >= 0; i--) {
