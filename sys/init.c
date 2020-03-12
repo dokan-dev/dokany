@@ -900,6 +900,9 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
       mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
       RtlCopyMemory(&dokanControl[i], &mountEntry->MountControl,
                     sizeof(DOKAN_CONTROL));
+      // Remove Kernel information
+      // TODO create specific struct for userland
+      dokanControl[i].DeviceObject = NULL;
     }
 
     status = STATUS_SUCCESS;
