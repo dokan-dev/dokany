@@ -84,6 +84,12 @@ AllocateEventContextRaw(__in ULONG EventContextLength) {
   PDRIVER_EVENT_CONTEXT driverEventContext;
   PEVENT_CONTEXT eventContext;
 
+  if (EventContextLength < sizeof(EVENT_CONTEXT)) {
+    DDbgPrint(
+        " AllocateEventContextRaw invalid EventContextLength requested.\n");
+    return NULL;
+  }
+
   driverContextLength =
       EventContextLength - sizeof(EVENT_CONTEXT) + sizeof(DRIVER_EVENT_CONTEXT);
   driverEventContext = ExAllocatePool(driverContextLength);
