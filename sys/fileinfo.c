@@ -606,18 +606,27 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // it is sum of file name length and size of FileInformation
     DokanFCBLockRW(fcb);
     fcbLocked = TRUE;
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length +
-                  irpSp->Parameters.SetFile.Length;
+
+    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+    if (irpSp->Parameters.SetFile.Length > MAXULONG - eventLength) {
+      DDbgPrint("  Invalid SetFile Length received\n");
+      status = STATUS_INSUFFICIENT_RESOURCES;
+      __leave;
+    }
+    eventLength += irpSp->Parameters.SetFile.Length;
 
     targetFileObject = irpSp->Parameters.SetFile.FileObject;
-
     if (targetFileObject) {
       DDbgPrint("  FileObject Specified %wZ\n", &(targetFileObject->FileName));
+      if (targetFileObject->FileName.Length > MAXULONG - eventLength) {
+        DDbgPrint("  Invalid FileObject FileName Length received\n");
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        __leave;
+      }
       eventLength += targetFileObject->FileName.Length;
     }
 
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
-
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
@@ -672,7 +681,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                     renameInfo->FileNameLength);
 
       if (targetFileObject != NULL) {
-        // if Parameters.SetFile.FileObject is specified, replase
+        // if Parameters.SetFile.FileObject is specified, replace
         // FILE_RENAME_INFO's file name by
         // FileObject's file name. The buffer size is already adjusted.
 
