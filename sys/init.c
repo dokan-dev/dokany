@@ -1060,7 +1060,13 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
     return NULL;
   }
   RtlCopyMemory(buffer, String, length);
-  RtlInitUnicodeString(unicode, buffer);
+  NTSTATUS result = RtlUnicodeStringInitEx(unicode, buffer, 0);
+  if (!NT_SUCCESS(result)) {
+    DDbgPrint("   DokanAllocateUnicodeString invalid string size received.\n");
+    ExFreePool(buffer);
+    ExFreePool(unicode);
+    return NULL;
+  }
   return unicode;
 }
 
