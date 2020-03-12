@@ -835,6 +835,8 @@ LONG
 DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char);
 
+LONG DokanStringChar(__in PWCHAR String, __in ULONG Length, __in WCHAR Char);
+
 NTSTATUS
 DokanCheckShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
                       _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);

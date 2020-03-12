@@ -604,6 +604,21 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     return STATUS_SUCCESS;
   }
 
+  if (DokanStringChar(eventStart->MountPoint,
+                        sizeof(eventStart->MountPoint), '\0') == -1 ||
+      DokanStringChar(eventStart->UNCName,
+                        sizeof(eventStart->UNCName), '\0') == -1) {
+    DokanLogInfo(&logger, L"MountPoint / UNCName provided are not null "
+                          L"terminated in event start failed.");
+    driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
+    driverInfo->Status = DOKAN_START_FAILED;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
+    ExFreePool(eventStart);
+    ExFreePool(baseGuidString);
+    return STATUS_SUCCESS;
+  }
+
   switch (eventStart->DeviceType) {
   case DOKAN_DISK_FILE_SYSTEM:
     deviceType = FILE_DEVICE_DISK_FILE_SYSTEM;
