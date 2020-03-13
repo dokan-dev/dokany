@@ -551,8 +551,9 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   szMountPoint =
       (PDOKAN_UNICODE_STRING_INTERMEDIATE)Irp->AssociatedIrp.SystemBuffer;
   if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + szMountPoint->MaximumLength) {
-    DDbgPrint("Input buffer is too small\n");
+      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + szMountPoint->MaximumLength
+      || szMountPoint->MaximumLength < szMountPoint->Length) {
+    DDbgPrint("Input buffer is too small or MaximumLength is smaller than Length\n");
     return STATUS_BUFFER_TOO_SMALL;
   }
 
