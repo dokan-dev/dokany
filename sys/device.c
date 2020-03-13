@@ -521,6 +521,12 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_MOUNTDEV_LINK_CREATED: {
     PMOUNTDEV_NAME mountdevName = Irp->AssociatedIrp.SystemBuffer;
     DDbgPrint("   IOCTL_MOUNTDEV_LINK_CREATED\n");
+    if (inputLength < sizeof(MOUNTDEV_NAME) ||
+        inputLength < sizeof(MOUNTDEV_NAME) + mountdevName->NameLength) {
+      status = STATUS_BUFFER_TOO_SMALL;
+      Irp->IoStatus.Information = 0;
+      break;
+    }
 
     status = STATUS_SUCCESS;
     if (!IsUnmountPending(DeviceObject) && mountdevName != NULL &&
@@ -597,6 +603,12 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_MOUNTDEV_LINK_DELETED: {
     PMOUNTDEV_NAME mountdevName = Irp->AssociatedIrp.SystemBuffer;
     DDbgPrint("   IOCTL_MOUNTDEV_LINK_DELETED\n");
+    if (inputLength < sizeof(MOUNTDEV_NAME) ||
+        inputLength < sizeof(MOUNTDEV_NAME) + mountdevName->NameLength) {
+      status = STATUS_BUFFER_TOO_SMALL;
+      Irp->IoStatus.Information = 0;
+      break;
+    }
     status = STATUS_SUCCESS;
     if (dcb->UseMountManager) {
       if (mountdevName != NULL && mountdevName->NameLength > 0) {
