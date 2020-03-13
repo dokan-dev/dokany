@@ -362,6 +362,11 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case IOCTL_STORAGE_QUERY_PROPERTY:
     DDbgPrint("  IOCTL_STORAGE_QUERY_PROPERTY\n");
     PSTORAGE_PROPERTY_QUERY query = NULL;
+    if (inputLength < sizeof(STORAGE_PROPERTY_QUERY)) {
+      status = STATUS_BUFFER_TOO_SMALL;
+      Irp->IoStatus.Information = 0;
+      break;
+    }
     query = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
     ASSERT(query != NULL);
     if (query->QueryType == PropertyExistsQuery) {
