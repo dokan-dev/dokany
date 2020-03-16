@@ -213,14 +213,14 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
         PDokanCCB ccb = fileObject->FsContext2;
         if (ccb != NULL) {
           PDokanFCB fcb = ccb->Fcb;
-          OplockDebugRecordFlag(fcb, canceled
-                                         ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
-                                         : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
+          OplockDebugRecordFlag(
+              fcb, canceled ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
+                            : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
         }
       }
-      DokanCancelCreateIrp(Dcb->DeviceObject, irpEntry,
-                           canceled ? STATUS_CANCELLED
-                                    : STATUS_INSUFFICIENT_RESOURCES);
+      DokanCancelCreateIrp(
+          Dcb->DeviceObject, irpEntry,
+          canceled ? STATUS_CANCELLED : STATUS_INSUFFICIENT_RESOURCES);
     } else {
       DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
     }

@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2017 - 2018 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -331,12 +331,9 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject,
                     IRP_MJ_FILE_SYSTEM_CONTROL);
 
-  UNREFERENCED_PARAMETER(DeviceObject);
-
   irpSp = IoGetCurrentIrpStackLocation(*pIrp);
 
   switch (irpSp->Parameters.FileSystemControl.FsControlCode) {
-
   case FSCTL_ACTIVATE_KEEPALIVE:
     fileObject = irpSp->FileObject;
     if (fileObject == NULL) {
@@ -350,7 +347,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
       return DokanLogError(
           &logger,
           STATUS_INVALID_PARAMETER,
-                           L"Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.");
+          L"Received FSCTL_ACTIVATE_KEEPALIVE with no CCB.");
     }
 
     fcb = ccb->Fcb;
@@ -358,7 +355,7 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
       return DokanLogError(
           &logger,
           STATUS_INVALID_PARAMETER,
-                           L"Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.");
+          L"Received FSCTL_ACTIVATE_KEEPALIVE with no FCB.");
     }
 
     if (!fcb->IsKeepalive) {
@@ -405,27 +402,33 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     }
     fileObject = irpSp->FileObject;
     if (fileObject == NULL) {
-      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-                           L"Received FSCTL_NOTIFY_PATH with no FileObject.");
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_NOTIFY_PATH with no FileObject.");
     }
     ccb = fileObject->FsContext2;
     if (ccb == NULL || ccb->Identifier.Type != CCB) {
-      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-                           L"Received FSCTL_NOTIFY_PATH with no CCB.");
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_NOTIFY_PATH with no CCB.");
     }
     fcb = ccb->Fcb;
     if (fcb == NULL || fcb->Identifier.Type != FCB) {
-      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-                           L"Received FSCTL_NOTIFY_PATH with no FCB.");
+      return DokanLogError(
+          &logger,
+          STATUS_INVALID_PARAMETER,
+          L"Received FSCTL_NOTIFY_PATH with no FCB.");
     }
     UNICODE_STRING receivedBuffer;
     receivedBuffer.Length = pNotifyPath->Length;
     receivedBuffer.MaximumLength = pNotifyPath->Length;
     receivedBuffer.Buffer = pNotifyPath->Buffer;
-    DDbgPrint("Received FSCTL_NOTIFY_PATH, CompletionFilter: %lu, Action: %lu, "
-              "Length: %i, Path: %wZ\n",
-              pNotifyPath->CompletionFilter, pNotifyPath->Action,
-              receivedBuffer.Length, &receivedBuffer);
+    DDbgPrint(
+        "Received FSCTL_NOTIFY_PATH, CompletionFilter: %lu, Action: %lu, "
+        "Length: %i, Path: %wZ", pNotifyPath->CompletionFilter,
+        pNotifyPath->Action, receivedBuffer.Length, &receivedBuffer);
     DokanFCBLockRO(fcb);
     DokanNotifyReportChange0(fcb, &receivedBuffer,
                              pNotifyPath->CompletionFilter,
@@ -734,7 +737,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
       (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
   DokanLogInfo(&logger, L"Mounting volume using MountPoint %wZ device %wZ",
-            dcb->MountPoint, dcb->DiskDeviceName);
+               dcb->MountPoint, dcb->DiskDeviceName);
 
   if (!isNetworkFileSystem) {
     status = IoCreateDevice(DriverObject,               // DriverObject
@@ -793,7 +796,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   ObReferenceObject(volDeviceObject);
 
   DDbgPrint("  ExAcquireResourceExclusiveLite dcb resource \n")
-      ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
 
   // set the device on dokanControl
   RtlZeroMemory(&dokanControl, sizeof(dokanControl));
@@ -892,9 +895,7 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
     }
 
   } __finally {
-
     DokanCompleteIrpRequest(Irp, status, 0);
-
     DDbgPrint("<== DokanFileSystemControl\n");
   }
 

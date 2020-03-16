@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2017 - 2018 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -481,9 +481,9 @@ typedef struct _DokanFileControlBlock {
   // turns the CreateFile into a CreateFile + CloseHandle + CreateFile sequence,
   // the hidden CloseHandle call doesn't trigger unmounting.
 
-  // TRUE if this FCB points to the keep-alive file name. This prevents the FCB
-  // from dispatching normally to user mode, but the IsKeepaliveActive flag must
-  // also be true in order for auto-unmounting to happen.
+  // TRUE if this FCB points to the keep-alive file name. This allows keepalive
+  // activation to happen on a particular CCB, which sets IsKeepaliveActive on
+  // that CCB and triggers unmount-on-cleanup behavior.
   BOOLEAN IsKeepalive;
 
   // If true, never dispatch requests to user mode for this handle. This is set
@@ -532,92 +532,120 @@ VOID DokanResourceUnlockWithDebugInfo(__in PERESOURCE Resource,
 #define DokanLockDebugEnabled()                                                \
   (g_Debug & DOKAN_DEBUG_LOCK)
 
-#define DokanFCBLockRW(fcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(TRUE, (fcb)->AdvancedFCBHeader.Resource,    \
-                                   &(fcb)->ResourceDebugInfo,                  \
-                                   &(fcb)->Vcb->ResourceLogger,                \
-                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
-  } else {                                                                     \
-    DokanResourceLockRW((fcb)->AdvancedFCBHeader.Resource);                    \
-  }
+#define DokanFCBLockRW(fcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          TRUE,                                                  \
+          (fcb)->AdvancedFCBHeader.Resource,                     \
+          &(fcb)->ResourceDebugInfo,                             \
+          &(fcb)->Vcb->ResourceLogger,                           \
+          DokanCallSiteID,                                       \
+          &(fcb)->FileName,                                      \
+          (fcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRW((fcb)->AdvancedFCBHeader.Resource);    \
+    }
 
-#define DokanFCBLockRO(fcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(FALSE, (fcb)->AdvancedFCBHeader.Resource,   \
-                                   &(fcb)->ResourceDebugInfo,                  \
-                                   &(fcb)->Vcb->ResourceLogger,                \
-                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
-  } else {                                                                     \
-    DokanResourceLockRO((fcb)->AdvancedFCBHeader.Resource);                    \
-  }
+#define DokanFCBLockRO(fcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          FALSE,                                                 \
+          (fcb)->AdvancedFCBHeader.Resource,                     \
+          &(fcb)->ResourceDebugInfo,                             \
+          &(fcb)->Vcb->ResourceLogger,                           \
+          DokanCallSiteID,                                       \
+          &(fcb)->FileName,                                      \
+          (fcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRO((fcb)->AdvancedFCBHeader.Resource);    \
+    }
 
-#define DokanFCBUnlock(fcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceUnlockWithDebugInfo((fcb)->AdvancedFCBHeader.Resource,        \
-                                     &(fcb)->ResourceDebugInfo);               \
-  } else {                                                                     \
-    DokanResourceUnlock((fcb)->AdvancedFCBHeader.Resource);                    \
-  }
+#define DokanFCBUnlock(fcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceUnlockWithDebugInfo(                          \
+          (fcb)->AdvancedFCBHeader.Resource,                     \
+          &(fcb)->ResourceDebugInfo);                            \
+    } else {                                                     \
+      DokanResourceUnlock((fcb)->AdvancedFCBHeader.Resource);    \
+    }
 
-#define DokanPagingIoLockRW(fcb)                                               \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(TRUE, &(fcb)->PagingIoResource,             \
-                                   &(fcb)->PagingIoResourceDebugInfo,          \
-                                   &(fcb)->Vcb->ResourceLogger,                \
-                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
-  } else {                                                                     \
-    DokanResourceLockRW(&(fcb)->PagingIoResource);                             \
-  }
+#define DokanPagingIoLockRW(fcb)                                 \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          TRUE,                                                  \
+          &(fcb)->PagingIoResource,                              \
+          &(fcb)->PagingIoResourceDebugInfo,                     \
+          &(fcb)->Vcb->ResourceLogger,                           \
+          DokanCallSiteID,                                       \
+          &(fcb)->FileName,                                      \
+          (fcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRW(&(fcb)->PagingIoResource);             \
+    }
 
-#define DokanPagingIoLockRO(fcb)                                               \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(FALSE, &(fcb)->PagingIoResource,            \
-                                   &(fcb)->PagingIoResourceDebugInfo,          \
-                                   &(fcb)->Vcb->ResourceLogger,                \
-                                   DokanCallSiteID, &(fcb)->FileName, (fcb));  \
-  } else {                                                                     \
-    DokanResourceLockRO(&(fcb)->PagingIoResource);                             \
-  }
+#define DokanPagingIoLockRO(fcb)                                 \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          FALSE,                                                 \
+          &(fcb)->PagingIoResource,                              \
+          &(fcb)->PagingIoResourceDebugInfo,                     \
+          &(fcb)->Vcb->ResourceLogger,                           \
+          DokanCallSiteID,                                       \
+          &(fcb)->FileName,                                      \
+          (fcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRO(&(fcb)->PagingIoResource);             \
+    }
 
-#define DokanPagingIoUnlock(fcb)                                               \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceUnlockWithDebugInfo(&(fcb)->PagingIoResource,                 \
-                                     &(fcb)->PagingIoResourceDebugInfo);       \
-  } else {                                                                     \
-    DokanResourceUnlock(&(fcb)->PagingIoResource);                             \
-  }
+#define DokanPagingIoUnlock(fcb)                                 \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceUnlockWithDebugInfo(                          \
+          &(fcb)->PagingIoResource,                              \
+          &(fcb)->PagingIoResourceDebugInfo);                    \
+    } else {                                                     \
+      DokanResourceUnlock(&(fcb)->PagingIoResource);             \
+    }
 
 // Locks the given VCB for read-write and returns TRUE, if it is not already
 // locked at all by another thread; otherwise returns FALSE.
 BOOLEAN DokanVCBTryLockRW(PDokanVCB vcb);
-#define DokanVCBLockRW(vcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(TRUE, &(vcb)->Resource,                     \
-                                   &(vcb)->ResourceDebugInfo,                  \
-                                   &(vcb)->ResourceLogger, DokanCallSiteID,    \
-                                   (vcb)->Dcb->MountPoint, (vcb));             \
-  } else {                                                                     \
-    DokanResourceLockRW(&(vcb)->Resource);                                     \
-  }
 
-#define DokanVCBLockRO(vcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceLockWithDebugInfo(FALSE, &(vcb)->Resource,                    \
-                                   &(vcb)->ResourceDebugInfo,                  \
-                                   &(vcb)->ResourceLogger, DokanCallSiteID,    \
-                                   (vcb)->Dcb->MountPoint, (vcb));             \
-  } else {                                                                     \
-    DokanResourceLockRO(&(vcb)->Resource);                                     \
-  }
+#define DokanVCBLockRW(vcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          TRUE,                                                  \
+          &(vcb)->Resource,                                      \
+          &(vcb)->ResourceDebugInfo,                             \
+          &(vcb)->ResourceLogger,                                \
+          DokanCallSiteID,                                       \
+          (vcb)->Dcb->MountPoint,                                \
+          (vcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRW(&(vcb)->Resource);                     \
+    }
 
-#define DokanVCBUnlock(vcb)                                                    \
-  if (DokanLockDebugEnabled()) {                                               \
-    DokanResourceUnlockWithDebugInfo(&(vcb)->Resource,                         \
-                                     &(vcb)->ResourceDebugInfo);               \
-  } else {                                                                     \
-    DokanResourceUnlock(&(vcb)->Resource);                                     \
-  }
+#define DokanVCBLockRO(vcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceLockWithDebugInfo(                            \
+          FALSE,                                                 \
+          &(vcb)->Resource,                                      \
+          &(vcb)->ResourceDebugInfo,                             \
+          &(vcb)->ResourceLogger,                                \
+          DokanCallSiteID,                                       \
+          (vcb)->Dcb->MountPoint,                                \
+          (vcb));                                                \
+    } else {                                                     \
+      DokanResourceLockRO(&(vcb)->Resource);                     \
+    }
+
+#define DokanVCBUnlock(vcb)                                      \
+  if (DokanLockDebugEnabled()) {                                 \
+      DokanResourceUnlockWithDebugInfo(                          \
+          &(vcb)->Resource,                                      \
+          &(vcb)->ResourceDebugInfo);                            \
+    } else {                                                     \
+      DokanResourceUnlock(&(vcb)->Resource);                     \
+    }
 
 typedef struct _DokanContextControlBlock {
   // Locking: Read only field. No locking needed.
@@ -641,7 +669,7 @@ typedef struct _DokanContextControlBlock {
   // Locking: Read only field. No locking needed.
   ULONG MountId;
 
-  // Whether keep-alive has been activated on this volume.
+  // Whether keep-alive has been activated on this FCB.
   BOOLEAN IsKeepaliveActive;
 
   // Whether this CCB has a pending IRP_MJ_CREATE with
@@ -891,7 +919,7 @@ VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
                        __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                        __in PEVENT_INFORMATION EventInfo,
+                                         __in PEVENT_INFORMATION EventInfo,
                                          __in PDEVICE_OBJECT DeviceObject);
 
 VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
@@ -1004,7 +1032,9 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
-BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix);
+
+BOOLEAN
+StartsWith(__in const PUNICODE_STRING str, __in const PUNICODE_STRING prefix);
 
 PDEVICE_ENTRY 
 FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);

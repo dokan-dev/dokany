@@ -431,10 +431,12 @@ VOID DokanNoOpRelease(__in PVOID Fcb) {
   DDbgPrint("<== DokanNoOpRelease\n");
 }
 
-NTSTATUS
-DokanCheckOplock(__in PDokanFCB Fcb, __in PIRP Irp, __in_opt PVOID Context,
-                 __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
-                 __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine) {
+NTSTATUS DokanCheckOplock(
+    __in PDokanFCB Fcb,
+    __in PIRP Irp,
+    __in_opt PVOID Context,
+    __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
+    __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine) {
   ASSERT(Fcb->Vcb != NULL);
   ASSERT(Fcb->Vcb->Dcb != NULL);
   if (Fcb->Vcb != NULL && Fcb->Vcb->Dcb != NULL &&
@@ -450,14 +452,16 @@ DokanCheckOplock(__in PDokanFCB Fcb, __in PIRP Irp, __in_opt PVOID Context,
   DDbgPrint("  status = " #flag "\n")
 
 #define DOKAN_LOG_MAX_CHAR_COUNT 2048
-#define DOKAN_LOG_MAX_PACKET_BYTES                                             \
-  (ERROR_LOG_MAXIMUM_SIZE - sizeof(IO_ERROR_LOG_PACKET))
-#define DOKAN_LOG_MAX_PACKET_NONNULL_CHARS                                     \
-  (DOKAN_LOG_MAX_PACKET_BYTES / sizeof(WCHAR) - 1)
+#define DOKAN_LOG_MAX_PACKET_BYTES \
+    (ERROR_LOG_MAXIMUM_SIZE - sizeof(IO_ERROR_LOG_PACKET))
+#define DOKAN_LOG_MAX_PACKET_NONNULL_CHARS \
+    (DOKAN_LOG_MAX_PACKET_BYTES / sizeof(WCHAR) - 1)
 
 VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
-                        __in UCHAR MajorFunctionCode, __in NTSTATUS MessageId,
-                        __in NTSTATUS Status, __in LPCTSTR Format,
+                        __in UCHAR MajorFunctionCode,
+                        __in NTSTATUS MessageId,
+                        __in NTSTATUS Status,
+                        __in LPCTSTR Format,
                         __in va_list Args) {
   NTSTATUS status = STATUS_SUCCESS;
   PIO_ERROR_LOG_PACKET packet = NULL;
@@ -481,8 +485,7 @@ VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
     if (status == STATUS_BUFFER_OVERFLOW) {
       // In this case we want to at least log what we can fit.
       DDbgPrint("Log message was larger than DOKAN_LOG_MAX_CHAR_COUNT."
-                " Format: %S\n",
-                Format);
+                " Format: %S\n", Format);
     } else if (status != STATUS_SUCCESS) {
       DDbgPrint("Failed to generate log message with format: %S; status: %x\n",
                 Format, status);
@@ -530,8 +533,10 @@ VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
   }
 }
 
-NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger, __in NTSTATUS Status,
-                       __in LPCTSTR Format, ...) {
+NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
+                       __in NTSTATUS Status,
+                       __in LPCTSTR Format,
+                       ...) {
   if (g_Debug & DOKAN_DEBUG_DEFAULT) {
     va_list args;
     va_start(args, Format);
@@ -600,8 +605,10 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
   DokanPrintNTStatus(Status);
 }
 
-VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
-                              __in ULONG FilterMatch, __in ULONG Action) {
+VOID DokanNotifyReportChange0(__in PDokanFCB Fcb,
+                              __in PUNICODE_STRING FileName,
+                              __in ULONG FilterMatch,
+                              __in ULONG Action) {
   USHORT nameOffset;
 
   DDbgPrint("==> DokanNotifyReportChange %wZ\n", FileName);
@@ -609,6 +616,8 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
   ASSERT(Fcb != NULL);
   ASSERT(FileName != NULL);
 
+  // Alternate streams are supposed to use a different set of action
+  // and filter values, but we do not expect the caller to be aware of this.
   if (DokanUnicodeStringChar(FileName, L':') != -1) { //FileStream
 
     //Convert file action to stream action
@@ -626,7 +635,7 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
       break;
     }
 
-    //Convert file flag to stream flag
+    // Convert file flag to stream flag
     if (FlagOn(FilterMatch,
                FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_FILE_NAME))
       SetFlag(FilterMatch, FILE_NOTIFY_CHANGE_STREAM_NAME);
@@ -635,7 +644,7 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
     if (FlagOn(FilterMatch, FILE_NOTIFY_CHANGE_LAST_WRITE))
       SetFlag(FilterMatch, FILE_NOTIFY_CHANGE_STREAM_WRITE);
 
-    //Cleanup file flag converted
+    // Cleanup file flag converted
     ClearFlag(FilterMatch, ~(FILE_NOTIFY_CHANGE_STREAM_NAME |
                              FILE_NOTIFY_CHANGE_STREAM_SIZE |
                              FILE_NOTIFY_CHANGE_STREAM_WRITE));
@@ -771,7 +780,8 @@ static const UNICODE_STRING noName = RTL_CONSTANT_STRING(L"<no name>");
 
 VOID DokanLockWarn(__in const ERESOURCE *Resource,
                    __in const DokanResourceDebugInfo *DebugInfo,
-                   __in PDOKAN_LOGGER Logger, __in const char *Site,
+                   __in PDOKAN_LOGGER Logger,
+                   __in const char *Site,
                    __in const UNICODE_STRING *ObjectName,
                    __in const void *ObjectPointer) {
   if (ObjectName == NULL || ObjectName->Length == 0) {
@@ -779,49 +789,75 @@ VOID DokanLockWarn(__in const ERESOURCE *Resource,
   }
 
   if (DebugInfo->ExclusiveOwnerThread != NULL) {
-    DokanLogInfo(Logger,
-                 L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
-                 L" in thread %I64x at %S."
-                 L" Current exclusive owner is thread %I64x"
-                 L" with outermost lock at %S.",
-                 ObjectName, ObjectPointer, Resource, KeGetCurrentThread(),
-                 Site, DebugInfo->ExclusiveOwnerThread,
-                 DebugInfo->ExclusiveLockSite);
+    DokanLogInfo(
+        Logger,
+        L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            L" in thread %I64x at %S."
+            L" Current exclusive owner is thread %I64x"
+            L" with outermost lock at %S.",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site,
+        DebugInfo->ExclusiveOwnerThread,
+        DebugInfo->ExclusiveLockSite);
     // This is like DDbgPrint but gets written "unconditionally" as long as you
     // have the Debug Print Filter set up in the registry. Normal DDbgPrint
     // calls are utterly stripped from release builds. We know that
     // DokanLockWarn doesn't get invoked unless DriveFS is in lock debug mode,
     // so this is OK.
-    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL,
-               "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
-               " in thread %I64x at %s."
-               " Current exclusive owner is thread %I64x"
-               " with outermost lock at %s.\n",
-               ObjectName, ObjectPointer, Resource, KeGetCurrentThread(), Site,
-               DebugInfo->ExclusiveOwnerThread, DebugInfo->ExclusiveLockSite);
+    DbgPrintEx(
+        DPFLTR_IHVDRIVER_ID,
+        DPFLTR_TRACE_LEVEL,
+        "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            " in thread %I64x at %s."
+            " Current exclusive owner is thread %I64x"
+            " with outermost lock at %s.\n",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site,
+        DebugInfo->ExclusiveOwnerThread,
+        DebugInfo->ExclusiveLockSite);
   } else {
-    DokanLogInfo(Logger,
-                 L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
-                 L" in thread %I64x at %S."
-                 L" This resource has an unknown shared lock.",
-                 ObjectName, ObjectPointer, Resource, KeGetCurrentThread(),
-                 Site);
-    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL,
-               "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
-               " in thread %I64x at %s."
-               " This resource has an unknown shared lock.\n",
-               ObjectName, ObjectPointer, Resource, KeGetCurrentThread(), Site);
+    DokanLogInfo(
+        Logger,
+        L"Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            L" in thread %I64x at %S."
+            L" This resource has an unknown shared lock.",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site);
+    DbgPrintEx(
+        DPFLTR_IHVDRIVER_ID,
+        DPFLTR_TRACE_LEVEL,
+        "Stuck trying to lock %wZ (%I64x with ERESOURCE %I64x)"
+            " in thread %I64x at %s."
+            " This resource has an unknown shared lock.\n",
+        ObjectName,
+        ObjectPointer,
+        Resource,
+        KeGetCurrentThread(),
+        Site);
   }
 }
 
 VOID DokanLockNotifyResolved(__in const ERESOURCE *Resource,
                              __in PDOKAN_LOGGER Logger) {
   DokanLogInfo(Logger,
-               L"Blocking on ERESOURCE %I64x has resolved on thread %I64x",
-               Resource, KeGetCurrentThread());
-  DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL,
-             "Blocking on ERESOURCE %I64x has resolved on thread %I64x",
-             Resource, KeGetCurrentThread());
+      L"Blocking on ERESOURCE %I64x has resolved on thread %I64x",
+      Resource,
+      KeGetCurrentThread());
+  DbgPrintEx(
+      DPFLTR_IHVDRIVER_ID,
+      DPFLTR_TRACE_LEVEL,
+      "Blocking on ERESOURCE %I64x has resolved on thread %I64x",
+      Resource,
+      KeGetCurrentThread());
 }
 
 VOID DokanResourceLockWithDebugInfo(__in BOOLEAN Writable,
@@ -853,8 +889,8 @@ VOID DokanResourceLockWithDebugInfo(__in BOOLEAN Writable,
     KeQuerySystemTime(&systemTime);
     if (lastWarnTime.QuadPart == 0) {
       lastWarnTime = systemTime;
-    } else if ((systemTime.QuadPart - lastWarnTime.QuadPart) / 10 >=
-               DOKAN_RESOURCE_LOCK_WARNING_MSEC) {
+    } else if ((systemTime.QuadPart - lastWarnTime.QuadPart) / 10
+               >= DOKAN_RESOURCE_LOCK_WARNING_MSEC) {
       DokanLockWarn(Resource, DebugInfo, Logger, Site, ObjectName,
                     ObjectPointer);
       warned = TRUE;
@@ -877,8 +913,9 @@ VOID DokanResourceLockWithDebugInfo(__in BOOLEAN Writable,
   }
 }
 
-VOID DokanResourceUnlockWithDebugInfo(__in PERESOURCE Resource,
-                                      __in PDokanResourceDebugInfo DebugInfo) {
+VOID DokanResourceUnlockWithDebugInfo(
+    __in PERESOURCE Resource,
+    __in PDokanResourceDebugInfo DebugInfo) {
   if (ExIsResourceAcquiredExclusiveLite(Resource)) {
     if (--DebugInfo->ExclusiveLockCount == 0) {
       DebugInfo->ExclusiveLockSite = NULL;

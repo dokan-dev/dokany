@@ -67,8 +67,8 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            &fcb->AdvancedFCBHeaderMutex);
 
   // ValidDataLength not supported - initialize to 0x7fffffff / 0xffffffff
-  // If fcb->Header.IsFastIoPossible was set
-  // the Cache manager would send us a SetFilelnformation IRP to update this value
+  // If fcb->Header.IsFastIoPossible was set the Cache manager would send
+  // us a SetFilelnformation IRP to update this value
   fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
 
   fcb->AdvancedFCBHeader.PagingIoResource = &fcb->PagingIoResource;
@@ -400,7 +400,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   NTSTATUS status;
   PAGED_CODE();
 
-  // Cannot open a flag with delete pending without share delete
+  // Cannot open a file with delete pending without share delete
   if ((FcbOrDcb->Identifier.Type == FCB) &&
       !FlagOn(ShareAccess, FILE_SHARE_DELETE) &&
       DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_DELETE_ON_CLOSE))
@@ -606,8 +606,8 @@ Return Value:
                     fileObject->FileName.Length);
     }
 
-    if (relatedFileObject != NULL // Get RelatedFileObject filename.
-        && relatedFileObject->FsContext2) {
+    // Get RelatedFileObject filename.
+    if (relatedFileObject != NULL && relatedFileObject->FsContext2) {
       // Using relatedFileObject->FileName is not safe here, use cached filename
       // from context.
       PDokanCCB relatedCcb = (PDokanCCB)relatedFileObject->FsContext2;
@@ -675,8 +675,7 @@ Return Value:
       }
       if (relatedFileName->Length > 0 && fileObject->FileName.Length > 0 &&
           relatedFileName->Buffer[relatedFileName->Length / sizeof(WCHAR) -
-                                  1] != '\\' &&
-          fileObject->FileName.Buffer[0] != ':') {
+                                  1] != '\\' && fileObject->FileName.Buffer[0] != ':') {
         needBackSlashAfterRelatedFile = TRUE;
         fileNameLength += sizeof(WCHAR);
       }
@@ -756,6 +755,7 @@ Return Value:
         OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRIED);
         allocateCcb = FALSE;
         ExFreePool(fileName);
+        fileName = NULL;
       }
     }
     if (allocateCcb) {
@@ -805,13 +805,12 @@ Return Value:
     DokanFCBLockRW(fcb);
 
     if (irpSp->Flags & SL_OPEN_PAGING_FILE) {
+      // Paging file is not supported
+      // We would have otherwise set FSRTL_FLAG2_IS_PAGING_FILE
+      // and clear FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS on
+      // fcb->AdvancedFCBHeader.Flags2
       status = STATUS_ACCESS_DENIED;
       __leave;
-      // Paging file is not supported
-      /*
-       fcb->AdvancedFCBHeader.Flags2 |= FSRTL_FLAG2_IS_PAGING_FILE;
-       fcb->AdvancedFCBHeader.Flags2 &= ~FSRTL_FLAG2_SUPPORTS_FILTER_CONTEXTS;
-       */
     }
 
     if (allocateCcb) {
@@ -1352,8 +1351,9 @@ Return Value:
       fileObject->FsContext2 = NULL;
     }
 
-    if (parentDir      // SL_OPEN_TARGET_DIRECTORY
-        && fileName) { // fcb owns parentDir, not fileName
+    // If it's SL_OPEN_TARGET_DIRECTORY then
+    // the FCB takes ownership of parentDir instead of fileName
+    if (parentDir && fileName) {
       ExFreePool(fileName);
     }
 
@@ -1453,8 +1453,8 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
   }
 
-  // remember FILE_DELETE_ON_CLOSE so than the file can be deleted in close
-  // for windows 8
+  // On Windows 8 and above, you can mark the file
+  // for delete-on-close at create time, which is acted on during cleanup.
   if (NT_SUCCESS(status) &&
       irpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
     DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);

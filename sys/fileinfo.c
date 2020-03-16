@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2017 - 2018 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -27,6 +27,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
+  FILE_INFORMATION_CLASS infoClass;
   PDokanCCB ccb;
   PDokanFCB fcb = NULL;
   PDokanVCB vcb;
@@ -41,9 +42,9 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
+    infoClass = irpSp->Parameters.QueryFile.FileInformationClass;
 
-    DDbgPrint("  FileInfoClass %d\n",
-              irpSp->Parameters.QueryFile.FileInformationClass);
+    DDbgPrint("  FileInfoClass %d\n", infoClass);
     DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
 
     if (fileObject == NULL) {
@@ -76,7 +77,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_QUERY_INFORMATION);    
     DokanFCBLockRO(fcb);
-    switch (irpSp->Parameters.QueryFile.FileInformationClass) {
+    switch (infoClass) {
     case FileBasicInformation:
       DDbgPrint("  FileBasicInformation\n");
       break;
@@ -204,8 +205,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DDbgPrint("  FileRemoteProtocolInformation\n");
       break;
     default:
-      DDbgPrint("  unknown type:%d\n",
-                irpSp->Parameters.QueryFile.FileInformationClass);
+      DDbgPrint("  unknown type:%d\n", infoClass);
       break;
     }
 
@@ -230,8 +230,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventContext->Context = ccb->UserContext;
     // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
-    eventContext->Operation.File.FileInformationClass =
-        irpSp->Parameters.QueryFile.FileInformationClass;
+    eventContext->Operation.File.FileInformationClass = infoClass;
 
     // bytes length which is able to be returned
     eventContext->Operation.File.BufferLength =
@@ -359,7 +358,8 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQueryInformation\n");
 }
 
-BOOLEAN StartsWith(__in PUNICODE_STRING str, __in PUNICODE_STRING prefix) {
+BOOLEAN StartsWith(__in const PUNICODE_STRING str,
+                   __in const PUNICODE_STRING prefix) {
   if (prefix == NULL || prefix->Length == 0) {
     return TRUE;
   }
@@ -817,7 +817,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
-    
+
     info = EventInfo->BufferLength;
 
     infoClass = irpSp->Parameters.SetFile.FileInformationClass;

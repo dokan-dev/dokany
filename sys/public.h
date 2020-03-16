@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2017 - 2018 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -103,8 +103,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_SYNCHRONOUS_IO 64
 #define DOKAN_WRITE_TO_END_OF_FILE 128
 #define DOKAN_NOCACHE 256
-#define DOKAN_FILE_CHANGE_LAST_WRITE 512
-#define DOKAN_RETRY_CREATE 1024
+#define DOKAN_RETRY_CREATE 512
+#define DOKAN_FILE_CHANGE_LAST_WRITE 1024
 
 // used in DOKAN_START->DeviceType
 #define DOKAN_DISK_FILE_SYSTEM 0
@@ -366,7 +366,7 @@ typedef struct _EVENT_INFORMATION {
 
 } EVENT_INFORMATION, *PEVENT_INFORMATION;
 
-// Dokan events
+// Dokan mount options
 #define DOKAN_EVENT_ALTERNATIVE_STREAM_ON 1
 #define DOKAN_EVENT_WRITE_PROTECT 2
 #define DOKAN_EVENT_REMOVABLE 4

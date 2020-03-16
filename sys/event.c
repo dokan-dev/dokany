@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2017 - 2018 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -579,10 +579,12 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   if (outBufferLen != sizeof(EVENT_DRIVER_INFO) ||
       inBufferLen != sizeof(EVENT_START) || eventStart == NULL ||
       baseGuidString == NULL) {
-    if (eventStart)
+    if (eventStart) {
       ExFreePool(eventStart);
-    if (baseGuidString)
+    }
+    if (baseGuidString) {
       ExFreePool(baseGuidString);
+    }
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate buffers in event start.");
   }
@@ -888,7 +890,8 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
 
-  // if the corresponding IRP not found, the user should already canceled the operation and the IRP already destroyed.
+  // if the corresponding IRP not found, the user should already
+  // canceled the operation and the IRP already destroyed.
   DDbgPrint("  EventWrite : Cannot found corresponding IRP. User should "
             "already canceled the operation. Return STATUS_CANCELLED.");
 

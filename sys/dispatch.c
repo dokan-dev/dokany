@@ -280,8 +280,9 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     return DokanDispatchCleanup(DeviceObject, Irp);
 
   case IRP_MJ_SHUTDOWN:
-    // A driver does not receive an IRP_MJ_SHUTDOWN request for a device object unless
-    // it registers to do so with either IoRegisterShutdownNotification or IoRegisterLastChanceShutdownNotification.
+    // A driver does not receive an IRP_MJ_SHUTDOWN request for a device object
+    // unless it registers to do so with either IoRegisterShutdownNotification
+    // or IoRegisterLastChanceShutdownNotification.
     // We do not call those functions and therefore should not get the IRP
     return DokanDispatchShutdown(DeviceObject, Irp);
 
