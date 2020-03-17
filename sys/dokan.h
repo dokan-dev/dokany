@@ -969,6 +969,9 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
 VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                              __in ULONG Action);
 
+// Ends all pending waits for directory change notifications.
+VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb);
+
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength);
 

@@ -432,13 +432,17 @@ VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
   DDbgPrint("<== DokanStopEventNotificationThread\n");
 }
 
+VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb) {
+  DokanVCBLockRW(Vcb);
+  DOKAN_INIT_LOGGER(logger, Vcb->Dcb->DeviceObject->DriverObject, 0);
+  DokanLogInfo(&logger, L"Cleaning up all change notification waiters.");
+  FsRtlNotifyCleanupAll(Vcb->NotifySync, &Vcb->DirNotifyList);
+  DokanVCBUnlock(Vcb);
+}
+
 NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanDCB dcb;
   PDokanVCB vcb;
-  PDokanFCB fcb;
-  PDokanCCB ccb;
-  PLIST_ENTRY fcbEntry, fcbNext, fcbHead;
-  PLIST_ENTRY ccbEntry, ccbNext, ccbHead;
   NTSTATUS status = STATUS_SUCCESS;
   DOKAN_INIT_LOGGER(logger,
                     DeviceObject == NULL ? NULL
@@ -484,7 +488,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   SetLongFlag(dcb->Flags, DCB_DELETE_PENDING);
 
   DokanLogInfo(&logger, L"Starting unmount for device %wZ",
-               dcb->DiskDeviceName);
+                        dcb->DiskDeviceName);
 
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingEvent);
@@ -494,33 +498,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
-  // search CCB list to complete not completed Directory Notification
-
-  DokanVCBLockRW(vcb);
-
-  fcbHead = &vcb->NextFCB;
-
-  for (fcbEntry = fcbHead->Flink; fcbEntry != fcbHead; fcbEntry = fcbNext) {
-
-    fcbNext = fcbEntry->Flink;
-    fcb = CONTAINING_RECORD(fcbEntry, DokanFCB, NextFCB);
-    DokanFCBLockRW(fcb);
-
-    ccbHead = &fcb->NextCCB;
-
-    for (ccbEntry = ccbHead->Flink; ccbEntry != ccbHead; ccbEntry = ccbNext) {
-      ccbNext = ccbEntry->Flink;
-      ccb = CONTAINING_RECORD(ccbEntry, DokanCCB, NextCCB);
-
-      DDbgPrint("  NotifyCleanup ccb:%p, context:%X, filename:%wZ\n", ccb,
-                (ULONG)ccb->UserContext, &fcb->FileName);
-      FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
-    }
-    DokanFCBUnlock(fcb);
-  }
-
-  DokanVCBUnlock(vcb);
-
+  DokanCleanupAllChangeNotificationWaiters(vcb);
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, Irp);
 
   DokanDeleteDeviceObject(dcb);
