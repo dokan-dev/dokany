@@ -559,6 +559,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN oplocksDisabled = FALSE;
   BOOLEAN optimizeSingleNameSearch = FALSE;
   ULONG sessionId = (ULONG)-1;
+  BOOL startFailure = FALSE;
+
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
   DokanLogInfo(&logger, L"Entered event start.");
@@ -572,13 +574,16 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
   inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
+  if (outBufferLen != sizeof(EVENT_DRIVER_INFO) ||
+      inBufferLen != sizeof(EVENT_START)) {
+    return DokanLogError(
+        &logger, STATUS_INSUFFICIENT_RESOURCES,
+        L"Buffer IN/OUT received do not match the expected size.");
+  }
 
   eventStart = ExAllocatePool(sizeof(EVENT_START));
   baseGuidString = ExAllocatePool(64 * sizeof(WCHAR));
-
-  if (outBufferLen != sizeof(EVENT_DRIVER_INFO) ||
-      inBufferLen != sizeof(EVENT_START) || eventStart == NULL ||
-      baseGuidString == NULL) {
+  if (eventStart == NULL || baseGuidString == NULL) {
     if (eventStart) {
       ExFreePool(eventStart);
     }
@@ -591,17 +596,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   RtlCopyMemory(eventStart, Irp->AssociatedIrp.SystemBuffer,
                 sizeof(EVENT_START));
-  driverInfo = Irp->AssociatedIrp.SystemBuffer;
-
   if (eventStart->UserVersion != DOKAN_DRIVER_VERSION) {
     DokanLogInfo(&logger, L"Driver version check in event start failed.");
-    driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
-    driverInfo->Status = DOKAN_START_FAILED;
-    Irp->IoStatus.Status = STATUS_SUCCESS;
-    Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
-    return STATUS_SUCCESS;
+    startFailure = TRUE;
   }
 
   if (DokanStringChar(eventStart->MountPoint,
@@ -610,6 +607,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
                         sizeof(eventStart->UNCName), '\0') == -1) {
     DokanLogInfo(&logger, L"MountPoint / UNCName provided are not null "
                           L"terminated in event start failed.");
+    startFailure = TRUE;
+  }
+
+  driverInfo = Irp->AssociatedIrp.SystemBuffer;
+  if (startFailure) {
     driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
     driverInfo->Status = DOKAN_START_FAILED;
     Irp->IoStatus.Status = STATUS_SUCCESS;
