@@ -22,10 +22,9 @@ if (-not ([string]::IsNullOrEmpty($env:EV_CERTTHUMBPRINT)))
 	set-alias st "$env:SIGNTOOL"
 	Exec-External { st sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "$env:EV_CERTTHUMBPRINT" .\dokan_wix\Dokan.cab }
 	Write-Host EV Sign cab done
+	Read-Host -Prompt "Please submit driver cab to developer hardware dashboard. Hit ENTER when it is done..." 
 }
 else { Write-Host EV_CERTTHUMBPRINT env variable is missing. EV Signature cab is needed for developer hardware dashboard submission. }
-
-Read-Host -Prompt "Please submit driver cab to developer hardware dashboard. Hit ENTER when it is done..." 
 
 if (Test-Path -Path C:\cygwin64) {
 	Write-Host Include Cygwin binaries in installer

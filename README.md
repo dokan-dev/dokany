@@ -99,9 +99,8 @@ To learn more about Dokan file system development, see the
 
 ## Build
 In short, download and install the
-[Visual Studio 2019](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx)
-with [SDK 10](https://dev.windows.com/en-us/downloads/windows-10-sdk) &
-[WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
+[Visual Studio 2019](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx), select [Windows 10 SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk/) component during the install or from the Tools menu &
+install the [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
 
 For details, see the
 [build page](https://github.com/dokan-dev/dokany/wiki/Build).
