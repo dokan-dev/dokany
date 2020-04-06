@@ -402,36 +402,26 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     break;
 
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
+    // Note: GetVolumeNameForVolumeMountPoint, which wraps this function, may
+    // return an error even if this returns success, if it doesn't match the
+    // Mount Manager's cached data.
     PMOUNTDEV_NAME mountdevName;
     PUNICODE_STRING deviceName = dcb->DiskDeviceName;
 
     DDbgPrint("   IOCTL_MOUNTDEV_QUERY_DEVICE_NAME\n");
 
-    if (outputLength < sizeof(MOUNTDEV_NAME)) {
+    mountdevName =
+        (PMOUNTDEV_NAME)PrepareOutputWithSize(Irp, sizeof(MOUNTDEV_NAME),
+                                              /*SetInformationOnFailure=*/TRUE);
+    if (!mountdevName) {
       status = STATUS_BUFFER_TOO_SMALL;
-      Irp->IoStatus.Information = sizeof(MOUNTDEV_NAME);
       break;
     }
-
-    mountdevName = (PMOUNTDEV_NAME)Irp->AssociatedIrp.SystemBuffer;
-    ASSERT(mountdevName != NULL);
-    /* NOTE: When Windows API GetVolumeNameForVolumeMountPoint is called, this
-       IO control is called.
-       Even if status = STATUS_SUCCESS, GetVolumeNameForVolumeMountPoint can
-       returns error
-       if it doesn't match cached data from mount manager (looks like).
-    */
-    RtlZeroMemory(mountdevName, outputLength);
     mountdevName->NameLength = deviceName->Length;
-
-    if (sizeof(USHORT) + mountdevName->NameLength <= outputLength) {
-      RtlCopyMemory((PCHAR)mountdevName->Name, deviceName->Buffer,
-                    mountdevName->NameLength);
-      Irp->IoStatus.Information = sizeof(USHORT) + mountdevName->NameLength;
+    if (AppendVarSizeOutputString(Irp, deviceName,
+                                  /*UpdateInformationOnFailure=*/FALSE)) {
       status = STATUS_SUCCESS;
-      DDbgPrint("  DeviceName %wZ\n", deviceName);
     } else {
-      Irp->IoStatus.Information = sizeof(MOUNTDEV_NAME);
       status = STATUS_BUFFER_OVERFLOW;
     }
   } break;
@@ -693,15 +683,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         PQUERY_PATH_REQUEST pathReq;
         DDbgPrint("  IOCTL_REDIR_QUERY_PATH\n");
 
-        if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-            sizeof(QUERY_PATH_REQUEST)) {
-          status = STATUS_BUFFER_OVERFLOW;
-          break;
-        }
-
-        // Always a METHOD_NEITHER IOCTL
-        pathReq = (PQUERY_PATH_REQUEST)
-                      irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
+        GET_IRP_BUFFER_OR_BREAK(Irp, pathReq);
 
         DDbgPrint("   PathNameLength = %d\n", pathReq->PathNameLength);
         DDbgPrint("   SecurityContext = %p\n", pathReq->SecurityContext);
@@ -720,15 +702,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         PQUERY_PATH_REQUEST_EX pathReqEx;
         DDbgPrint("  IOCTL_REDIR_QUERY_PATH_EX\n");
 
-        if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-            sizeof(QUERY_PATH_REQUEST_EX)) {
-          status = STATUS_BUFFER_OVERFLOW;
-          break;
-        }
-
-        // Always a METHOD_NEITHER IOCTL
-        pathReqEx = (PQUERY_PATH_REQUEST_EX)
-                        irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
+        GET_IRP_BUFFER_OR_BREAK(Irp, pathReqEx);
 
         DDbgPrint("   pSecurityContext = %p\n", pathReqEx->pSecurityContext);
         DDbgPrint("   EaLength = %d\n", pathReqEx->EaLength);
@@ -778,7 +752,13 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         break;
       }
 
-      pathResp = (PQUERY_PATH_RESPONSE)Irp->UserBuffer;
+      pathResp = (PQUERY_PATH_RESPONSE)PrepareOutputWithSize(
+          Irp, sizeof(QUERY_PATH_RESPONSE), /*SetInformationOnFailure=*/TRUE);
+      if (!pathResp) {
+        status = STATUS_BUFFER_TOO_SMALL;
+        break;
+      }
+
       pathResp->LengthAccepted = dcb->UNCName->Length;
       status = STATUS_SUCCESS;
     }

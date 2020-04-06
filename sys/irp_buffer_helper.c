@@ -70,7 +70,8 @@ PVOID GetInputBuffer(_In_ PIRP Irp) {
   }
 
   // If using a Type3InputBuffer, we need to probe it.
-  if (buffer != NULL && buffer != Irp->AssociatedIrp.SystemBuffer) {
+  if (Irp->RequestorMode != KernelMode && buffer != NULL &&
+      buffer != Irp->AssociatedIrp.SystemBuffer) {
     __try {
       ProbeForRead(buffer, GetProvidedInputSize(Irp), sizeof(char));
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
@@ -110,7 +111,7 @@ PVOID GetOutputBuffer(_In_ PIRP Irp) {
 
   // If using UserBuffer, we need to probe it, or they could pass us a kernel
   // memory address and have us overwrite it.
-  if (buffer == Irp->UserBuffer) {
+  if (Irp->RequestorMode != KernelMode && buffer == Irp->UserBuffer) {
     __try {
       ProbeForWrite(buffer, GetProvidedOutputSize(Irp), sizeof(char));
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
