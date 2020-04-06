@@ -47,7 +47,7 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
 
   driverEventContext =
       CONTAINING_RECORD(eventContext, DRIVER_EVENT_CONTEXT, EventContext);
-  completedEvent = ExAllocatePool(sizeof(KEVENT));
+  completedEvent = DokanAlloc(sizeof(KEVENT));
   if (completedEvent) {
     KeInitializeEvent(completedEvent, NotificationEvent, FALSE);
     driverEventContext->Completed = completedEvent;

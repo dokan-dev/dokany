@@ -133,14 +133,12 @@ DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName) {
   DDbgPrint("=> DokanSendVolumeArrivalNotification\n");
 
   length = sizeof(MOUNTMGR_TARGET_NAME) + DeviceName->Length - 1;
-  targetName = ExAllocatePool(length);
+  targetName = DokanAllocZero(length);
 
   if (targetName == NULL) {
     DDbgPrint("  can't allocate MOUNTMGR_TARGET_NAME\n");
     return STATUS_INSUFFICIENT_RESOURCES;
   }
-
-  RtlZeroMemory(targetName, length);
 
   targetName->DeviceNameLength = DeviceName->Length;
   RtlCopyMemory(targetName->DeviceName, DeviceName->Buffer, DeviceName->Length);
@@ -179,23 +177,19 @@ DokanSendVolumeDeletePoints(__in PUNICODE_STRING MountPoint,
   if (DeviceName != NULL) {
     length += DeviceName->Length;
   }
-  point = ExAllocatePool(length);
-
+  point = DokanAllocZero(length);
   if (point == NULL) {
     DDbgPrint("  can't allocate MOUNTMGR_CREATE_POINT_INPUT\n");
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   olength = sizeof(MOUNTMGR_MOUNT_POINTS) + 1024;
-  deletedPoints = ExAllocatePool(olength);
+  deletedPoints = DokanAllocZero(olength);
   if (deletedPoints == NULL) {
     DDbgPrint("  can't allocate PMOUNTMGR_MOUNT_POINTS\n");
     ExFreePool(point);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
-
-  RtlZeroMemory(point, length);
-  RtlZeroMemory(deletedPoints, olength);
 
   DDbgPrint("  MountPoint: %wZ\n", MountPoint);
   point->SymbolicLinkNameOffset = sizeof(MOUNTMGR_MOUNT_POINT);
@@ -242,14 +236,12 @@ DokanSendVolumeCreatePoint(__in PDRIVER_OBJECT DriverObject,
 
   length = sizeof(MOUNTMGR_CREATE_POINT_INPUT) + MountPoint->Length +
            DeviceName->Length;
-  point = ExAllocatePool(length);
-
+  point = DokanAllocZero(length);
   if (point == NULL) {
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate MOUNTMGR_CREATE_POINT_INPUT.");
   }
 
-  RtlZeroMemory(point, length);
   point->DeviceNameOffset = sizeof(MOUNTMGR_CREATE_POINT_INPUT);
   point->DeviceNameLength = DeviceName->Length;
   RtlCopyMemory((PCHAR)point + point->DeviceNameOffset, DeviceName->Buffer,
@@ -391,18 +383,17 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
 
   ASSERT(DiskDeviceObject != NULL);
 
-  deviceEntry = ExAllocatePool(sizeof(DEVICE_ENTRY));
+  deviceEntry = DokanAllocZero(sizeof(DEVICE_ENTRY));
   if (deviceEntry == NULL) {
     DDbgPrint("  InsertDeviceToDelete allocation failed\n");
     return NULL;
   }
-  RtlZeroMemory(deviceEntry, sizeof(DEVICE_ENTRY));
   deviceEntry->DiskDeviceObject = DiskDeviceObject;
   deviceEntry->VolumeDeviceObject = VolumeDeviceObject;
   deviceEntry->SessionId = SessionId;
 
   if (SessionId != -1) {
-    deviceEntry->MountPoint.Buffer = ExAllocatePool(MountPoint->MaximumLength);
+    deviceEntry->MountPoint.Buffer = DokanAlloc(MountPoint->MaximumLength);
     if (deviceEntry->MountPoint.Buffer == NULL) {
       DDbgPrint("  InsertDeviceToDelete MountPoint allocation failed\n");
       ExFreePool(deviceEntry);
@@ -442,12 +433,11 @@ PMOUNT_ENTRY
 InsertMountEntry(PDOKAN_GLOBAL dokanGlobal, PDOKAN_CONTROL DokanControl,
                  BOOLEAN lockGlobal) {
   PMOUNT_ENTRY mountEntry;
-  mountEntry = ExAllocatePool(sizeof(MOUNT_ENTRY));
+  mountEntry = DokanAllocZero(sizeof(MOUNT_ENTRY));
   if (mountEntry == NULL) {
     DDbgPrint("  InsertMountEntry allocation failed\n");
     return NULL;
   }
-  RtlZeroMemory(mountEntry, sizeof(MOUNT_ENTRY));
   RtlCopyMemory(&mountEntry->MountControl, DokanControl, sizeof(DOKAN_CONTROL));
 
   InitializeListHead(&mountEntry->ListEntry);
@@ -1051,13 +1041,13 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
   PUNICODE_STRING unicode;
   PWSTR buffer;
   ULONG length;
-  unicode = ExAllocatePool(sizeof(UNICODE_STRING));
+  unicode = DokanAlloc(sizeof(UNICODE_STRING));
   if (unicode == NULL) {
     return NULL;
   }
 
   length = (ULONG)(wcslen(String) + 1) * sizeof(WCHAR);
-  buffer = ExAllocatePool(length);
+  buffer = DokanAlloc(length);
   if (buffer == NULL) {
     ExFreePool(unicode);
     return NULL;
@@ -1286,22 +1276,17 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     DokanLogInfo(&logger,
                  L"Creating disk device; mount point = %s; mount ID = %ul",
                  MountPoint, MountId);
-    diskDeviceNameBuf = ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    diskDeviceNameBuf = DokanAllocZero(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
     symbolicLinkNameBuf =
-        ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    mountPointBuf = ExAllocatePool(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    dokanControl = ExAllocatePool(sizeof(*dokanControl));
+        DokanAllocZero(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    mountPointBuf = DokanAllocZero(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
+    dokanControl = DokanAllocZero(sizeof(DOKAN_CONTROL));
     if (diskDeviceNameBuf == NULL || symbolicLinkNameBuf == NULL ||
         mountPointBuf == NULL || dokanControl == NULL) {
       status = DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
           L"Could not allocate buffers while creating disk device.");
       __leave;
     }
-
-    RtlZeroMemory(diskDeviceNameBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    RtlZeroMemory(symbolicLinkNameBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    RtlZeroMemory(mountPointBuf, MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    RtlZeroMemory(dokanControl, sizeof(*dokanControl));
 
     // make DeviceName and SymboliLink
     if (isNetworkFileSystem) {
@@ -1467,7 +1452,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     // DokanRegisterMountedDeviceInterface(dcb->DeviceObject, dcb);
 
     // Save to the global mounted list
-    RtlZeroMemory(dokanControl, sizeof(*dokanControl));
+    RtlZeroMemory(dokanControl, sizeof(DOKAN_CONTROL));
     RtlStringCchCopyW(dokanControl->DeviceName,
                       sizeof(dokanControl->DeviceName) / sizeof(WCHAR),
                       diskDeviceNameBuf);
@@ -1514,7 +1499,7 @@ VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb) {
   }
 
   DokanLogInfo(&logger, L"Deleting device object.");
-  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlCopyMemory(dokanControl.DeviceName, Dcb->DiskDeviceName->Buffer,
                 Dcb->DiskDeviceName->Length);
   dokanControl.SessionId = Dcb->SessionId;

@@ -170,8 +170,7 @@ DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
         IoSetTopLevelIrp(Irp);
       }
 
-      eventInfo = ExAllocatePool(sizeof(EVENT_INFORMATION));
-      RtlZeroMemory(eventInfo, sizeof(EVENT_INFORMATION));
+      eventInfo = DokanAllocZero(sizeof(EVENT_INFORMATION));
       eventInfo->Status = Status;
       DokanCompleteCreate(IrpEntry, eventInfo);
 

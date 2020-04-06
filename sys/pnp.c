@@ -70,7 +70,7 @@ QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_SUCCESS;
   PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
   DEVICE_RELATION_TYPE type = irpSp->Parameters.QueryDeviceRelations.Type;
-  PDEVICE_RELATIONS DeviceRelations;
+  PDEVICE_RELATIONS deviceRelations;
   PDokanVCB vcb;
 
   // QueryDeviceRelations is currently not used
@@ -87,9 +87,9 @@ QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     DDbgPrint("  QueryDeviceRelations - TargetDeviceRelation\n");
 
-    DeviceRelations =
-        (PDEVICE_RELATIONS)ExAllocatePool(sizeof(DEVICE_RELATIONS));
-    if (!DeviceRelations) {
+    deviceRelations =
+        (PDEVICE_RELATIONS)DokanAlloc(sizeof(DEVICE_RELATIONS));
+    if (!deviceRelations) {
       DDbgPrint("  can't allocate DeviceRelations\n");
       return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -97,12 +97,10 @@ QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     /* The PnP manager will remove this when it is done with device */
     ObReferenceObject(DeviceObject);
 
-    DeviceRelations->Count = 1;
-    DeviceRelations->Objects[0] = DeviceObject;
-    Irp->IoStatus.Information = (ULONG_PTR)DeviceRelations;
-
-    return STATUS_SUCCESS;
-
+    deviceRelations->Count = 1;
+    deviceRelations->Objects[0] = DeviceObject;
+    Irp->IoStatus.Information = (ULONG_PTR)deviceRelations;
+    break;
   case EjectionRelations:
     DDbgPrint("  QueryDeviceRelations - EjectionRelations\n");
     break;

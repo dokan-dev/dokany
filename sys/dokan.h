@@ -84,15 +84,17 @@ extern DokanPtr_FsRtlAreThereWaitingFileLocks
 
 #define DOKAN_MDL_ALLOCATED 0x1
 
-#ifdef ExAllocatePool
-#undef ExAllocatePool
-#endif
-#define ExAllocatePool(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
+#define DokanAlloc(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
+
+inline PVOID DokanAllocZero(SIZE_T size) {
+  PVOID buffer = DokanAlloc(size);
+  if (buffer) { RtlZeroMemory(buffer, size); }
+  return buffer;
+}
 
 extern ULONG DokanMdlSafePriority;
 #define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
-  MmGetSystemAddressForMdlSafe(mdl,                                            \
-                               NormalPagePriority | DokanMdlSafePriority)
+  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority | DokanMdlSafePriority)
 
 #define DRIVER_CONTEXT_EVENT 2
 #define DRIVER_CONTEXT_IRP_ENTRY 3
@@ -142,11 +144,11 @@ extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 // Identifiers used to mark the structures
 //
 typedef enum _FSD_IDENTIFIER_TYPE {
-  DGL = ':DGL', // Dokan Global
-  DCB = ':DCB', // Disk Control Block
-  VCB = ':VCB', // Volume Control Block
-  FCB = ':FCB', // File Control Block
-  CCB = ':CCB', // Context Control Block
+  DGL = ':DGL',       // Dokan Global
+  DCB = ':DCB',       // Disk Control Block
+  VCB = ':VCB',       // Volume Control Block
+  FCB = ':FCB',       // File Control Block
+  CCB = ':CCB',       // Context Control Block
   FREED_FCB = ':FFC', // FCB that has been freed
 } FSD_IDENTIFIER_TYPE;
 
@@ -319,7 +321,7 @@ typedef struct _DokanResourceDebugInfo {
   // A description of the call site in the code where the resource was
   // exclusively acquired. If it is not exclusively acquired currently, this is
   // NULL.
-  const char* ExclusiveLockSite;
+  const char *ExclusiveLockSite;
 
   // The thread in which the lock was exclusively acquired. If it is not
   // exclusively acquired currently, this is NULL.
@@ -831,8 +833,7 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 
 DRIVER_DISPATCH DokanGetAccessToken;
 
-LONG
-DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
+LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char);
 
 LONG DokanStringChar(__in PWCHAR String, __in ULONG Length, __in WCHAR Char);
@@ -878,8 +879,8 @@ NTSTATUS
 DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                         __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
 
-VOID
-DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+VOID DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject,
+                                  __in PIRP Irp);
 
 VOID
 DokanRegisterAsyncCreateFailure(__in PDEVICE_OBJECT DeviceObject,
@@ -944,9 +945,9 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
-                      __in PWCHAR MountPoint, __in PWCHAR UNCName, 
-                      __in ULONG sessionID,
-                      __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
+                      __in PWCHAR MountPoint, __in PWCHAR UNCName,
+                      __in ULONG sessionID, __in PWCHAR BaseGuid,
+                      __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
                       __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
@@ -1041,7 +1042,7 @@ VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
 BOOLEAN
 StartsWith(__in const PUNICODE_STRING str, __in const PUNICODE_STRING prefix);
 
-PDEVICE_ENTRY 
+PDEVICE_ENTRY
 FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);
 
 BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint);
@@ -1080,8 +1081,9 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
 #define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
 
-ULONG DokanSearchWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
-	__in ULONG offsetPosition, __in int isIgnoreTargetWchar);
+ULONG DokanSearchWcharinUnicodeStringWithUlong(
+    __in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
+    __in ULONG offsetPosition, __in int isIgnoreTargetWchar);
 
 // Logs the occurrence of the given type of IRP in the oplock debug info of the
 // FCB.

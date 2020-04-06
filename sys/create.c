@@ -284,7 +284,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
   return STATUS_SUCCESS;
 }
 
-// Creates a buffer from ExAllocatePool() containing
+// Creates a buffer from DokanAlloc() containing
 // the parent dir of file/dir pointed to by fileName.
 // the buffer IS null terminated
 // in *parentDirLength returns length in bytes of string (not counting null
@@ -297,7 +297,7 @@ DokanFreeCCB(__in PDokanCCB ccb) {
 //       \foo\bar\ bcomes \foo\
 //
 // if there is no parent, then it return STATUS_ACCESS_DENIED
-// if ExAllocatePool() fails, then it returns STATUS_INSUFFICIENT_RESOURCES
+// if DokanAlloc() fails, then it returns STATUS_INSUFFICIENT_RESOURCES
 // otherwise returns STATUS_SUCCESS
 
 NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
@@ -322,12 +322,11 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
 
   trailingSlash = fileName[len - 1] == '\\';
 
-  *parentDir = (WCHAR *)ExAllocatePool((len + 1) * sizeof(WCHAR));
+  *parentDir = (WCHAR *)DokanAllocZero((len + 1) * sizeof(WCHAR));
 
   if (!*parentDir)
     return STATUS_INSUFFICIENT_RESOURCES;
 
-  RtlZeroMemory(*parentDir, (len + 1) * sizeof(WCHAR));
   RtlStringCchCopyW(*parentDir, len, fileName);
 
   for (i = len - 1; i >= 0; i--) {
@@ -624,7 +623,7 @@ Return Value:
         DokanFCBLockRO(relatedFcb);
         if (relatedFcb->FileName.Length > 0 &&
             relatedFcb->FileName.Buffer != NULL) {
-          relatedFileName = ExAllocatePool(sizeof(UNICODE_STRING));
+          relatedFileName = DokanAlloc(sizeof(UNICODE_STRING));
           if (relatedFileName == NULL) {
             DDbgPrint("    Can't allocatePool for relatedFileName\n");
             status = STATUS_INSUFFICIENT_RESOURCES;
@@ -632,7 +631,7 @@ Return Value:
             __leave;
           }
           relatedFileName->Buffer =
-              ExAllocatePool(relatedFcb->FileName.MaximumLength);
+              DokanAlloc(relatedFcb->FileName.MaximumLength);
           if (relatedFileName->Buffer == NULL) {
             DDbgPrint("    Can't allocatePool for relatedFileName buffer\n");
             ExFreePool(relatedFileName);
@@ -709,14 +708,12 @@ Return Value:
 
     // this memory is freed by DokanGetFCB if needed
     // "+ sizeof(WCHAR)" is for the last NULL character
-    fileName = ExAllocatePool(fileNameLength + sizeof(WCHAR));
+    fileName = DokanAllocZero(fileNameLength + sizeof(WCHAR));
     if (fileName == NULL) {
       DDbgPrint("    Can't allocatePool for fileName\n");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
-
-    RtlZeroMemory(fileName, fileNameLength + sizeof(WCHAR));
 
     if (relatedFileName != NULL && !alternateDataStreamOfRootDir) {
       DDbgPrint("  RelatedFileName:%wZ\n", relatedFileName);

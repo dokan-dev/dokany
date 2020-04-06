@@ -886,8 +886,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         oldFileName.MaximumLength = (USHORT)fcb->FileName.Length;
 
         // copy new file name
-        buffer = ExAllocatePool(EventInfo->BufferLength + sizeof(WCHAR));
-
+        buffer = DokanAllocZero(EventInfo->BufferLength + sizeof(WCHAR));
         if (buffer == NULL) {
           status = STATUS_INSUFFICIENT_RESOURCES;
           ExReleaseResourceLite(&ccb->Resource);
@@ -896,11 +895,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         }
 
         fcb->FileName.Buffer = buffer;
-
         ASSERT(fcb->FileName.Buffer != NULL);
 
-        RtlZeroMemory(fcb->FileName.Buffer,
-                      EventInfo->BufferLength + sizeof(WCHAR));
         RtlCopyMemory(fcb->FileName.Buffer, EventInfo->Buffer,
                       EventInfo->BufferLength);
 

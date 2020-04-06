@@ -91,7 +91,7 @@ static NTSTATUS DokanOptimizeSingleNameSearch(__in PIRP Irp,
   fullName.Length = 0;
   fullName.MaximumLength = DirectoryFcb->FileName.Length +
       componentName->Length + sizeof(WCHAR);
-  fullName.Buffer = ExAllocatePool(fullName.MaximumLength);
+  fullName.Buffer = DokanAlloc(fullName.MaximumLength);
   __try {
     PVOID buffer = Irp->UserBuffer;
     if (Irp->MdlAddress) {
@@ -303,15 +303,12 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       ccb->SearchPatternLength =
           irpSp->Parameters.QueryDirectory.FileName->Length;
       ccb->SearchPattern =
-          ExAllocatePool(ccb->SearchPatternLength + sizeof(WCHAR));
+          DokanAllocZero(ccb->SearchPatternLength + sizeof(WCHAR));
 
       if (ccb->SearchPattern == NULL) {
         DokanFCBUnlock(fcb);
         return STATUS_INSUFFICIENT_RESOURCES;
       }
-
-      RtlZeroMemory(ccb->SearchPattern,
-                    ccb->SearchPatternLength + sizeof(WCHAR));
 
       // copy provided search pattern to CCB
       RtlCopyMemory(ccb->SearchPattern,
@@ -472,7 +469,6 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     // set the information received from user mode
     //
     ASSERT(buffer != NULL);
-
     RtlZeroMemory(buffer, bufferLen);
 
     // DDbgPrint("   copy DirectoryInfo\n");

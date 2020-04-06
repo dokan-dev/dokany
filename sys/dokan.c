@@ -475,7 +475,7 @@ VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
   UCHAR packetSize = 0;
 
   __try {
-    message = ExAllocatePool(sizeof(WCHAR) * messageCapacity);
+    message = DokanAlloc(sizeof(WCHAR) * messageCapacity);
     if (message == NULL) {
       DDbgPrint("Failed to allocate message of capacity %d\n", messageCapacity);
       __leave;

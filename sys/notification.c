@@ -93,13 +93,11 @@ AllocateEventContextRaw(__in ULONG EventContextLength) {
 
   driverContextLength =
       EventContextLength - sizeof(EVENT_CONTEXT) + sizeof(DRIVER_EVENT_CONTEXT);
-  driverEventContext = ExAllocatePool(driverContextLength);
-
+  driverEventContext = DokanAllocZero(driverContextLength);
   if (driverEventContext == NULL) {
     return NULL;
   }
 
-  RtlZeroMemory(driverEventContext, driverContextLength);
   InitializeListHead(&driverEventContext->ListEntry);
 
   eventContext = &driverEventContext->EventContext;
@@ -364,7 +362,7 @@ VOID NotificationThread(__in PVOID pDcb) {
 
   DDbgPrint("==> NotificationThread\n");
 
-  waitBlock = ExAllocatePool(sizeof(KWAIT_BLOCK) * 6);
+  waitBlock = DokanAlloc(sizeof(KWAIT_BLOCK) * 6);
   if (waitBlock == NULL) {
     DDbgPrint("  Can't allocate WAIT_BLOCK\n");
     return;
@@ -558,7 +556,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
                     L"\\DosDevices\\");
   if ((szMountPoint->Length / sizeof(WCHAR)) < 4) {
