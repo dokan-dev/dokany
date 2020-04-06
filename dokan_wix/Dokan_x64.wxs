@@ -47,22 +47,6 @@
     <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
     <Property Id="INSTALLDEVFILES" Value="0" />
 
-    <Property Id="WIN10FOUND" Secure="yes">
-      <DirectorySearch Id="searchSystem" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="searchFile"
-                    Name="advapi32.dll"
-                    MinVersion="6.3.10000.0"/>
-      </DirectorySearch>
-    </Property>
-
-    <Property Id="UCRTINSTALLED" Secure="yes">
-      <DirectorySearch Id="searchSystem2" Path="[WindowsFolder]System32" Depth="0">
-        <FileSearch Id="UCRT_FileSearch"
-                    Name="ucrtbase.dll"
-                    MinVersion="6.2.10585.0"/>
-      </DirectorySearch>
-    </Property>
-
     <Property Id="WIN7KB3033929GDRINSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem3" Path="[SystemFolder]" Depth="0">
         <FileSearch Id="WINTRUSTGDR_FileSearch"
@@ -89,24 +73,6 @@
       </RegistrySearch>
     </Property>
 
-    <Property Id="VCREDISTINSTALLEDX64" Secure="yes">
-      <RegistrySearch Id="VCRedist_RegSearch_x64"
-                      Root="HKLM"
-                      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
-                      Name="Version"
-                      Type="raw"
-                      Win64="yes"/>
-    </Property>
-
-    <Property Id="VCREDISTINSTALLEDX86" Secure="yes">
-      <RegistrySearch Id="VCRedist_RegSearch_x86"
-                      Root="HKLM"
-                      Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum"
-                      Name="Version"
-                      Type="raw"
-                      Win64="no"/>
-    </Property>
-
     <Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
       <DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
         <FileSearch Name="dokan$(var.MajorVersion).sys" />
@@ -127,9 +93,6 @@
     <Condition Message="Installation failed because the 64-bit version of Dokan cannot be installed on a 32-bit version of Windows."><![CDATA[Installed OR VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND ServicePackLevel >= 1)]]></Condition>
     <Condition Message="Installation failed because Microsoft patch KB3033929 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/3033929"><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND (WIN7KB3033929GDRINSTALLED OR WIN7KB3033929LDRINSTALLED))]]></Condition>
-    <Condition Message="Installation failed because the VC++ 2019 x64 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX64 AND VCREDISTINSTALLEDX64 >= "$(var.VCRedistVersion)")]]></Condition>
-    <Condition Message="Installation failed because the VC++ 2019 x86 runtime minimum version $(var.VCRedistVersion) is not installed. You can download it here: https://www.visualstudio.com/downloads/#other"><![CDATA[Installed OR (VCREDISTINSTALLEDX86 AND VCREDISTINSTALLEDX86 >= "$(var.VCRedistVersion)")]]></Condition>
-
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 
     <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
@@ -178,10 +141,6 @@
         <![CDATA[DOKANREBOOTPENDING = "#1"]]>
       </Custom>
 
-
-      <Custom Action='CheckForUCRT' Before='LaunchConditions'>
-        <![CDATA[Not REMOVE="ALL" AND Not PREVIOUSFOUND AND UCRTINSTALLED = ""]]>
-      </Custom>
       <Custom Action='GetInstallDir' Before='CostFinalize'><![CDATA[REMOVE="ALL"]]></Custom>
       <Custom Action="SetFolderValue" Before="ExecuteInstallAction" />
       <Custom Action='ExecuteInstallAction' After="PublishProduct"><![CDATA[Not REMOVE="ALL"]]></Custom>

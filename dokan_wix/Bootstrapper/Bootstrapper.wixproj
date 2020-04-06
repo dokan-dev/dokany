@@ -58,16 +58,6 @@
   </ItemGroup>
   <Import Project="$(WixTargetsPath)" />
   <PropertyGroup>
-    <PreBuildEvent>cd /d "$(ProjectDir)"
-if NOT exist Redist\vcredist_2019\vc_redist.x86.exe (
-if NOT exist Redist\ mkdir Redist
-if NOT exist Redist\vcredist_2019\ mkdir Redist\vcredist_2019\
-powershell -command "wget https://download.visualstudio.microsoft.com/download/pr/9e04d214-5a9d-4515-9960-3d71398d98c3/1e1e62ab57bbb4bf5199e8ce88f040be/vc_redist.x64.exe -OutFile Redist\vcredist_2019\VC_redist.x64.exe"
-powershell -command "wget https://download.visualstudio.microsoft.com/download/pr/c8edbb87-c7ec-4500-a461-71e8912d25e9/99ba493d660597490cbb8b3211d2cae4/vc_redist.x86.exe -OutFile Redist\vcredist_2019\VC_redist.x86.exe"
-)
-  </PreBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
     <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" (
   "%25WIX%25\bin\insignia.exe" -ib "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)engine.exe"
   "%25SIGNTOOL%25" sign /v /sha1 "%25SHA1_CERTTHUMBPRINT%25" /t http://timestamp.digicert.com "$(TargetDir)engine.exe"

@@ -34,23 +34,14 @@ if (Test-Path -Path C:\cygwin64) {
 	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="true"', 'BuildCygwin="false"' | sc .\dokan_wix\version.xml
 }
 
-Write-Host Build light installer ...
-(gc .\dokan_wix\version.xml) -replace 'Compressed="yes"', 'Compressed="no"' | sc .\dokan_wix\version.xml
+Write-Host Build installer ...
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe .\dokan_wix\
 copy .\dokan_wix\bin\x64\Release\Dokan_x64.msi .\dokan_wix\
 copy .\dokan_wix\bin\x86\Release\Dokan_x86.msi .\dokan_wix\
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\Debug\DokanSetup.exe .\dokan_wix\DokanSetupDbg.exe
-Write-Host Build light installer done !
-
-Write-Host Build full installer ...
-(gc .\dokan_wix\version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc .\dokan_wix\version.xml
-Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
-copy .\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe .\dokan_wix\DokanSetup_redist.exe
-Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
-copy .\dokan_wix\Bootstrapper\bin\Debug\DokanSetup.exe .\dokan_wix\DokanSetupDbg_redist.exe
-Write-Host Build full installer done !
+Write-Host Build installer done !
 
 Write-Host Build archive ...
 set-alias sz "$env:ProgramFiles\7-Zip\7z.exe"  
