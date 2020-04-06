@@ -88,12 +88,18 @@
     <ClCompile Include="dokan_utility.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="irp_buffer_helper.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dokan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="public.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="irp_buffer_helper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

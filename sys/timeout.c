@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "irp_buffer_helper.h"
 
 VOID DokanUnmount(__in PDokanDCB Dcb) {
   ULONG eventLength;
@@ -250,13 +251,12 @@ DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
   PDokanVCB vcb;
-  PEVENT_INFORMATION eventInfo;
+  PEVENT_INFORMATION eventInfo = NULL;
   ULONG timeout; // in milisecond
 
   DDbgPrint("==> ResetPendingIrpTimeout\n");
 
-  eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-  ASSERT(eventInfo != NULL);
+  GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo)
 
   timeout = eventInfo->Operation.ResetTimeout.Timeout;
   if (DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX < timeout) {

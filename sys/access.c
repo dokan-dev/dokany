@@ -20,6 +20,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "irp_buffer_helper.h"
 
 NTSTATUS
 DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
@@ -27,22 +28,19 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
   PDokanVCB vcb;
-  PEVENT_INFORMATION eventInfo;
+  PEVENT_INFORMATION eventInfo = NULL;
   PACCESS_TOKEN accessToken;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  HANDLE handle;
   PIO_STACK_LOCATION irpSp = NULL;
+  HANDLE handle;
   BOOLEAN hasLock = FALSE;
   ULONG outBufferLen;
-  ULONG inBufferLen;
   PACCESS_STATE accessState = NULL;
 
   DDbgPrint("==> DokanGetAccessToken\n");
   vcb = DeviceObject->DeviceExtension;
 
   __try {
-    eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-    ASSERT(eventInfo != NULL);
 
     if (Irp->RequestorMode != UserMode) {
       DDbgPrint("  needs to be called from user-mode\n");
@@ -56,12 +54,11 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
       __leave;
     }
 
+    GET_IRP_BUFFER_OR_LEAVE(Irp, eventInfo)
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
-    inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
-    if (outBufferLen != sizeof(EVENT_INFORMATION) ||
-        inBufferLen != sizeof(EVENT_INFORMATION)) {
-      DDbgPrint("  wrong input or output buffer length\n");
+    if (outBufferLen != sizeof(EVENT_INFORMATION)) {
+      DDbgPrint("  wrong output buffer length\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }

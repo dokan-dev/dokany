@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "irp_buffer_helper.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, DokanOplockComplete)
@@ -540,7 +541,6 @@ VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal,
 NTSTATUS
 DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG outBufferLen;
-  ULONG inBufferLen;
   PIO_STACK_LOCATION irpSp = NULL;
   PEVENT_START eventStart = NULL;
   PEVENT_DRIVER_INFO driverInfo = NULL;
@@ -570,12 +570,12 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  // We just use eventStart variable for his type size calculation here
+  GET_IRP_BUFFER(Irp, eventStart)
   irpSp = IoGetCurrentIrpStackLocation(Irp);
 
   outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
-  inBufferLen = irpSp->Parameters.DeviceIoControl.InputBufferLength;
-  if (outBufferLen != sizeof(EVENT_DRIVER_INFO) ||
-      inBufferLen != sizeof(EVENT_START)) {
+  if (outBufferLen != sizeof(EVENT_DRIVER_INFO) || !eventStart) {
     return DokanLogError(
         &logger, STATUS_INSUFFICIENT_RESOURCES,
         L"Buffer IN/OUT received do not match the expected size.");
@@ -606,7 +606,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
       DokanStringChar(eventStart->UNCName,
                         sizeof(eventStart->UNCName), '\0') == -1) {
     DokanLogInfo(&logger, L"MountPoint / UNCName provided are not null "
-                          L"terminated in event start failed.");
+                          L"terminated in event start.");
     startFailure = TRUE;
   }
 
@@ -674,7 +674,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
 
   DOKAN_CONTROL dokanControl;
-  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
                     L"\\DosDevices\\");
   if (wcslen(eventStart->MountPoint) == 1) {
@@ -803,11 +803,10 @@ DokanEventWrite(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
   PDokanVCB vcb;
-  PEVENT_INFORMATION eventInfo;
+  PEVENT_INFORMATION eventInfo = NULL;
   PIRP writeIrp;
 
-  eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
-  ASSERT(eventInfo != NULL);
+  GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo)
 
   DDbgPrint("==> DokanEventWrite [EventInfo #%X]\n", eventInfo->SerialNumber);
 

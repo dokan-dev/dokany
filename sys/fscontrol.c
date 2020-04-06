@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "irp_buffer_helper.h"
 #include <wdmsec.h>
 
 #ifdef ALLOC_PRAGMA
@@ -122,7 +123,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   BOOLEAN AcquiredFcb = FALSE;
 
   PREQUEST_OPLOCK_INPUT_BUFFER InputBuffer = NULL;
-  ULONG InputBufferLength;
   ULONG OutputBufferLength;
 
   PAGED_CODE();
@@ -168,16 +168,14 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
   //
   if (FsControlCode == FSCTL_REQUEST_OPLOCK) {
 
-    InputBufferLength = IrpSp->Parameters.FileSystemControl.InputBufferLength;
-    InputBuffer = (PREQUEST_OPLOCK_INPUT_BUFFER)Irp->AssociatedIrp.SystemBuffer;
-
     OutputBufferLength = IrpSp->Parameters.FileSystemControl.OutputBufferLength;
 
     //
     //  Check for a minimum length on the input and ouput buffers.
     //
-    if ((InputBufferLength < sizeof(REQUEST_OPLOCK_INPUT_BUFFER)) ||
-        (OutputBufferLength < sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER))) {
+    GET_IRP_BUFFER_OR_RETURN(Irp, InputBuffer)
+    // Use OutputBuffer only for buffer size check
+    if (OutputBufferLength < sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)) {
       DDbgPrint("    DokanOplockRequest STATUS_BUFFER_TOO_SMALL\n");
       return STATUS_BUFFER_TOO_SMALL;
     }
@@ -384,22 +382,10 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
     break;
 
   case FSCTL_NOTIFY_PATH: {
-    PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath;
+    PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = NULL;
+    GET_IRP_NOTIFY_PATH_INTERMEDIATE_OR_RETURN(*pIrp, pNotifyPath)
+
     irpSp = IoGetCurrentIrpStackLocation(*pIrp);
-    if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-        sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE)) {
-      DDbgPrint(
-          "Input buffer is too small (< DOKAN_NOTIFY_PATH_INTERMEDIATE)\n");
-      return STATUS_BUFFER_TOO_SMALL;
-    }
-    pNotifyPath =
-        (PDOKAN_NOTIFY_PATH_INTERMEDIATE)(*pIrp)->AssociatedIrp.SystemBuffer;
-    if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-        sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) + pNotifyPath->Length -
-            sizeof(WCHAR)) {
-      DDbgPrint("Input buffer is too small\n");
-      return STATUS_BUFFER_TOO_SMALL;
-    }
     fileObject = irpSp->FileObject;
     if (fileObject == NULL) {
       return DokanLogError(
@@ -799,7 +785,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
 
   // set the device on dokanControl
-  RtlZeroMemory(&dokanControl, sizeof(dokanControl));
+  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
                 dcb->DiskDeviceName->Length);
   if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {

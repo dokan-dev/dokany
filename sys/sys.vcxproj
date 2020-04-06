@@ -357,6 +357,7 @@
     <ClCompile Include="flush.c" />
     <ClCompile Include="fscontrol.c" />
     <ClCompile Include="init.c" />
+    <ClCompile Include="irp_buffer_helper.c" />
     <ClCompile Include="lock.c" />
     <ClCompile Include="notification.c" />
     <ClCompile Include="pnp.c" />
@@ -368,6 +369,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dokan.h" />
+    <ClInclude Include="irp_buffer_helper.h" />
     <ClInclude Include="public.h" />
   </ItemGroup>
   <ItemGroup>

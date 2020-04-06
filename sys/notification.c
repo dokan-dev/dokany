@@ -59,6 +59,7 @@ IOCTL_EVENT_INFO:
 */
 
 #include "dokan.h"
+#include "irp_buffer_helper.h"
 
 VOID SetCommonEventContext(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext,
                            __in PIRP Irp, __in_opt PDokanCCB Ccb) {
@@ -529,7 +530,6 @@ ULONG GetCurrentSessionId(__in PIRP Irp) {
 NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
                                  __in PIRP Irp) {
   PDOKAN_GLOBAL dokanGlobal;
-  PIO_STACK_LOCATION irpSp;
   PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint;
   DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry;
@@ -539,22 +539,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     return STATUS_INVALID_PARAMETER;
   }
 
-  irpSp = IoGetCurrentIrpStackLocation(Irp);
-
-  if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE)) {
-    DDbgPrint(
-        "Input buffer is too small (< DOKAN_UNICODE_STRING_INTERMEDIATE)\n");
-    return STATUS_BUFFER_TOO_SMALL;
-  }
-  szMountPoint =
-      (PDOKAN_UNICODE_STRING_INTERMEDIATE)Irp->AssociatedIrp.SystemBuffer;
-  if (irpSp->Parameters.DeviceIoControl.InputBufferLength <
-      sizeof(DOKAN_UNICODE_STRING_INTERMEDIATE) + szMountPoint->MaximumLength
-      || szMountPoint->MaximumLength < szMountPoint->Length) {
-    DDbgPrint("Input buffer is too small or MaximumLength is smaller than Length\n");
-    return STATUS_BUFFER_TOO_SMALL;
-  }
+  GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(Irp, szMountPoint)
 
   RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
