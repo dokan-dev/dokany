@@ -54,3 +54,4 @@ ReleasePS
 /msbuild.log
 /setup.inf
 /setup.rpt
+*.bak
