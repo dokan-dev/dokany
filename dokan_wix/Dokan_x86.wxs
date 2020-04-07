@@ -213,7 +213,7 @@
                 <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Driver_Win32pdb" Guid="{184A5365-8C4C-4853-A9DA-381C0B12D8D1}">
-                <File Id="Driver_Syspdb" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+                <File Id="Driver_Syspdb" Source="..\Win32\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
               </Component>
             </Directory>
             <Directory Id="INCLUDEDIR" Name="include">
