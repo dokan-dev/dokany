@@ -570,6 +570,14 @@ VOID CheckFileName(LPWSTR FileName) {
     FileName[len - 1] = '\0';
 }
 
+ULONG DispatchGetEventInformationLength(ULONG bufferSize) {
+  // EVENT_INFORMATION has a buffer of size 8 already
+  // we remote it to the struct size and add the requested buffer size
+  // but we need at least to have enough space to set EVENT_INFORMATION
+  return max((ULONG)sizeof(EVENT_INFORMATION),
+             sizeof(EVENT_INFORMATION) - 8 + bufferSize);
+}
+
 PEVENT_INFORMATION
 DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
                PDOKAN_INSTANCE DokanInstance, PDOKAN_FILE_INFO DokanFileInfo,

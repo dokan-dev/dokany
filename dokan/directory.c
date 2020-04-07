@@ -525,10 +525,9 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PDOKAN_OPEN_INFO openInfo;
   NTSTATUS status = STATUS_SUCCESS;
   ULONG fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 +
-                          EventContext->Operation.Directory.BufferLength;
-
   BOOLEAN patternCheck = TRUE;
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
+      EventContext->Operation.Directory.BufferLength);
 
   CheckFileName(EventContext->Operation.Directory.DirectoryName);
 

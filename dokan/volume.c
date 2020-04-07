@@ -314,8 +314,8 @@ VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   DOKAN_FILE_INFO fileInfo;
   PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION) - 8 +
-                          EventContext->Operation.Volume.BufferLength;
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
+      EventContext->Operation.Volume.BufferLength);
 
   eventInfo = (PEVENT_INFORMATION)malloc(sizeOfEventInfo);
   if (eventInfo == NULL) {

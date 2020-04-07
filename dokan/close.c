@@ -26,7 +26,7 @@ VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   DOKAN_FILE_INFO fileInfo;
   PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
   UNREFERENCED_PARAMETER(Handle);
 

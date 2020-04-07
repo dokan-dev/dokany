@@ -26,9 +26,9 @@ VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
                   PDOKAN_INSTANCE DokanInstance) {
   DOKAN_FILE_INFO fileInfo;
   PEVENT_INFORMATION eventInfo;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
   PDOKAN_OPEN_INFO openInfo;
   NTSTATUS status;
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
   CheckFileName(EventContext->Operation.Lock.FileName);
 

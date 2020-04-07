@@ -28,10 +28,8 @@ VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
   ULONG readLength = 0;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   DOKAN_FILE_INFO fileInfo;
-  ULONG sizeOfEventInfo;
-
-  sizeOfEventInfo =
-      sizeof(EVENT_INFORMATION) - 8 + EventContext->Operation.Read.BufferLength;
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
+      EventContext->Operation.Read.BufferLength);
 
   CheckFileName(EventContext->Operation.Read.FileName);
 

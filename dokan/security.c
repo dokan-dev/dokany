@@ -131,12 +131,11 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   DOKAN_FILE_INFO fileInfo;
   PDOKAN_OPEN_INFO openInfo;
-  ULONG eventInfoLength;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG lengthNeeded = 0;
+  ULONG eventInfoLength = DispatchGetEventInformationLength(
+      EventContext->Operation.Security.BufferLength);
 
-  eventInfoLength = sizeof(EVENT_INFORMATION) - 8 +
-                    EventContext->Operation.Security.BufferLength;
   CheckFileName(EventContext->Operation.Security.FileName);
 
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
@@ -184,11 +183,10 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   DOKAN_FILE_INFO fileInfo;
   PDOKAN_OPEN_INFO openInfo;
-  ULONG eventInfoLength;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PSECURITY_DESCRIPTOR securityDescriptor;
+  ULONG eventInfoLength = DispatchGetEventInformationLength(0);
 
-  eventInfoLength = sizeof(EVENT_INFORMATION);
   CheckFileName(EventContext->Operation.SetSecurity.FileName);
 
   eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,

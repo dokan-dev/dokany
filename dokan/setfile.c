@@ -235,13 +235,14 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PDOKAN_OPEN_INFO openInfo;
   DOKAN_FILE_INFO fileInfo;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  ULONG sizeOfEventInfo = sizeof(EVENT_INFORMATION);
+  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
   if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation
 	  || EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
     PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
         (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
-    sizeOfEventInfo += renameInfo->FileNameLength;
+    sizeOfEventInfo =
+        DispatchGetEventInformationLength(renameInfo->FileNameLength);
   }
 
   CheckFileName(EventContext->Operation.SetFile.FileName);

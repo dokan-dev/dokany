@@ -119,6 +119,8 @@ BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
                           ULONG EventLength, PDOKAN_INSTANCE DokanInstance);
 
+ULONG DispatchGetEventInformationLength(ULONG bufferSize);
+
 PEVENT_INFORMATION
 DispatchCommon(PEVENT_CONTEXT EventContext, ULONG SizeOfEventInfo,
                PDOKAN_INSTANCE DokanInstance, PDOKAN_FILE_INFO DokanFileInfo,
