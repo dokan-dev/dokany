@@ -500,14 +500,18 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
     return -1;
   }
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
-  dokanOptions->Options |=
-      fs->conf.networkDrive ? DOKAN_OPTION_NETWORK : DOKAN_OPTION_REMOVABLE;
-  dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
 
-  wchar_t uncName[MAX_PATH + 1];
-  if (fs->conf.networkDrive && fs->conf.uncname) {
-    mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
-    dokanOptions->UNCName = uncName;
+  dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
+  if (fs->conf.mountManager)
+    dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
+  else {
+    dokanOptions->Options |=
+        fs->conf.networkDrive ? DOKAN_OPTION_NETWORK : DOKAN_OPTION_REMOVABLE;
+    wchar_t uncName[MAX_PATH + 1];
+    if (fs->conf.networkDrive && fs->conf.uncname) {
+      mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
+      dokanOptions->UNCName = uncName;
+    }
   }
 
   wchar_t mount[MAX_PATH + 1];
@@ -599,6 +603,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("alloc_unit_size=%lu", allocationUnitSize, 0),
     FUSE_LIB_OPT("sector_size=%lu", sectorSize, 0),
     FUSE_LIB_OPT("-n", networkDrive, 1),
+    FUSE_LIB_OPT("-m", mountManager, 1),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -615,6 +620,7 @@ static void fuse_lib_help(void) {
       "    -o alloc_unit_size=M   set allocation unit size\n"
       "    -o sector_size=M       set sector size\n"
       "    -n                     use network drive\n"
+      "    -m                     use mount manager\n"
       "\n");
 }
 
