@@ -357,12 +357,7 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
 
 LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char) {
-  for (ULONG i = 0; i < UnicodeString->Length / sizeof(WCHAR); ++i) {
-    if (UnicodeString->Buffer[i] == Char) {
-      return i;
-    }
-  }
-  return -1;
+  return DokanStringChar(UnicodeString->Buffer, UnicodeString->Length, Char);
 }
 
 LONG DokanStringChar(__in PWCHAR String, __in ULONG Length, __in WCHAR Char) {

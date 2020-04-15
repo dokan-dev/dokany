@@ -139,8 +139,24 @@ PVOID GetInputBuffer(_In_ PIRP Irp);
 // Information value to Size if SetInformationOnFailure is TRUE (some use cases
 // call for the Information to be the actual reserved size, and some call for it
 // to be the requested size, which are only different values when it fails).
-PCHAR PrepareOutputWithSize(_Inout_ PIRP Irp, _In_ ULONG Size,
+PVOID PrepareOutputWithSize(_Inout_ PIRP Irp, _In_ ULONG Size,
                             _In_ BOOLEAN SetInformationOnFailure);
+
+// Helper that supports the PREPARE_OUTPUT macro without causing an
+// assignment-in-conditional at call sites.
+inline BOOLEAN PrepareOutputHelper(_Inout_ PIRP Irp,
+                                   _Out_ VOID** Buffer,
+                                   _In_ ULONG Size,
+                                   _In_ BOOLEAN SetInformationOnFailure) {
+  *Buffer = PrepareOutputWithSize(Irp, Size, SetInformationOnFailure);
+  return *Buffer != NULL;
+}
+
+// Helper to make PrepareOutputWithSize calls simpler by using the local scope's
+// knowledge of the actual Buffer type.
+#define PREPARE_OUTPUT(Irp, Buffer, SetInformationOnFailure)                   \
+   PrepareOutputHelper((Irp), &(Buffer), sizeof(*Buffer),                      \
+                       (SetInformationOnFailure))
 
 // Checks if the output buffer for the given IRP is large enough to fit the
 // given additional number of bytes, beyond the initial reservation already done

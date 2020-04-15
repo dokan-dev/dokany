@@ -70,8 +70,8 @@ PVOID GetInputBuffer(_In_ PIRP Irp) {
   }
 
   // If using a Type3InputBuffer, we need to probe it.
-  if (Irp->RequestorMode != KernelMode && buffer != NULL &&
-      buffer != Irp->AssociatedIrp.SystemBuffer) {
+  if (Irp->RequestorMode != KernelMode && buffer != NULL
+      && buffer != Irp->AssociatedIrp.SystemBuffer) {
     __try {
       ProbeForRead(buffer, GetProvidedInputSize(Irp), sizeof(char));
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
@@ -121,7 +121,7 @@ PVOID GetOutputBuffer(_In_ PIRP Irp) {
   return buffer;
 }
 
-PCHAR PrepareOutputWithSize(_Inout_ PIRP Irp, _In_ ULONG Size,
+PVOID PrepareOutputWithSize(_Inout_ PIRP Irp, _In_ ULONG Size,
                             _In_ BOOLEAN SetInformationOnFailure) {
   PCHAR buffer = GetOutputBuffer(Irp);
   ULONG providedSize = GetProvidedOutputSize(Irp);

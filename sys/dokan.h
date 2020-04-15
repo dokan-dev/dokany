@@ -307,6 +307,10 @@ typedef struct _DokanDiskControlBlock {
   // one-shot FileNormalizedNameInformation query against the target file, so
   // this type of directory search is not common.
   BOOLEAN OptimizeSingleNameSearch;
+  
+  // Whether the mount manager has notified us of the actual assigned mount
+  // point yet.
+  BOOLEAN MountPointDetermined;
 
   // Whether any oplock functionality should be disabled.
   BOOLEAN OplocksDisabled;
@@ -879,8 +883,8 @@ NTSTATUS
 DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                         __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
 
-VOID DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PIRP Irp);
+VOID
+DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 VOID
 DokanRegisterAsyncCreateFailure(__in PDEVICE_OBJECT DeviceObject,
@@ -955,7 +959,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
-NTSTATUS IsMountPointDriveLetter(__in PUNICODE_STRING mountPoint);
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
 VOID DokanPrintNTStatus(NTSTATUS Status);
 
@@ -1017,9 +1020,18 @@ BOOLEAN IsDeletePending(__in PDEVICE_OBJECT DeviceObject);
 
 BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
 
-PMOUNT_ENTRY
-FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
-               __in BOOLEAN lockGlobal);
+PMOUNT_ENTRY InsertMountEntry(PDOKAN_GLOBAL dokanGlobal,
+                              PDOKAN_CONTROL DokanControl,
+                              BOOLEAN lockGlobal);
+
+PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
+                            __in PDOKAN_CONTROL DokanControl,
+                            __in BOOLEAN lockGlobal);
+
+PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
+                                  __in PUNICODE_STRING DiskDeviceName,
+                                  __in PUNICODE_STRING UNCName,
+                                  __in BOOLEAN LockGlobal);
 
 VOID PrintIdType(__in VOID *Id);
 
@@ -1028,19 +1040,44 @@ DokanAllocateMdl(__in PIRP Irp, __in ULONG Length);
 
 VOID DokanFreeMdl(__in PIRP Irp);
 
-PUNICODE_STRING
-DokanAllocateUnicodeString(__in PCWSTR String);
+// Duplicates the given null-terminated string into a new UNICODE_STRING.
+PUNICODE_STRING DokanAllocateUnicodeString(__in PCWSTR String);
 
-ULONG
-PointerAlignSize(ULONG sizeInBytes);
+// Allocates a new UNICODE_STRING and then deep copies the given one into it.
+PUNICODE_STRING DokanAllocDuplicateString(__in const UNICODE_STRING* Src);
+
+// Performs a deep copy of a UNICODE_STRING, where the actual destination
+// UNICODE_STRING struct already exists. If the destination struct has a
+// buffer already allocated, this function deletes it.
+BOOLEAN DokanDuplicateUnicodeString(__out PUNICODE_STRING Dest,
+                                    __in const UNICODE_STRING* Src);
+
+// Wraps the given raw string as a UNICODE_STRING with no copying.
+inline UNICODE_STRING DokanWrapUnicodeString(__in WCHAR* Buffer,
+                                             __in USHORT Length) {
+  UNICODE_STRING result;
+  result.Buffer = Buffer;
+  result.Length = Length;
+  result.MaximumLength = Length;
+  return result;
+}
+
+BOOLEAN StartsWith(__in const UNICODE_STRING* Str,
+                   __in const UNICODE_STRING* Prefix);
+
+// Returns TRUE if the given string starts with "\DosDevices\"
+BOOLEAN StartsWithDosDevicesPrefix(__in const UNICODE_STRING* Str);
+
+// Returns TRUE if the given string is in the form "\DosDevices\C:" with any
+// drive letter.
+BOOLEAN IsMountPointDriveLetter(__in const UNICODE_STRING* MountPoint);
+
+ULONG PointerAlignSize(ULONG sizeInBytes);
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
-
-BOOLEAN
-StartsWith(__in const PUNICODE_STRING str, __in const PUNICODE_STRING prefix);
 
 PDEVICE_ENTRY
 FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);
@@ -1081,9 +1118,8 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
 #define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
 
-ULONG DokanSearchWcharinUnicodeStringWithUlong(
-    __in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
-    __in ULONG offsetPosition, __in int isIgnoreTargetWchar);
+ULONG DokanSearchWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
+	__in ULONG offsetPosition, __in int isIgnoreTargetWchar);
 
 // Logs the occurrence of the given type of IRP in the oplock debug info of the
 // FCB.

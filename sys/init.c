@@ -56,18 +56,6 @@ static VOID FreeDcbNames(__in PDokanDCB Dcb) {
   }
 }
 
-NTSTATUS IsMountPointDriveLetter(__in PUNICODE_STRING mountPoint) {
-  if (mountPoint != NULL) {
-    // Check if mount point match \DosDevices\C:
-    USHORT length = mountPoint->Length / sizeof(WCHAR);
-    if (length > 12 && length <= 15) {
-      return STATUS_SUCCESS;
-    }
-  }
-
-  return STATUS_INVALID_PARAMETER;
-}
-
 NTSTATUS
 DokanSendIoContlToMountManager(__in ULONG IoControlCode, __in PVOID InputBuffer,
                                __in ULONG Length, __out PVOID OutputBuffer,
@@ -856,6 +844,28 @@ FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal, __in PDOKAN_CONTROL DokanControl,
     DokanLogInfo(&logger, L"No mount entry found.");
     return NULL;
   }
+}
+
+PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
+                                  __in PUNICODE_STRING DiskDeviceName,
+                                  __in PUNICODE_STRING UNCName,
+                                  __in BOOLEAN LockGlobal) {
+  PMOUNT_ENTRY mountEntry = NULL;
+  if (DiskDeviceName == NULL) {
+    return NULL;
+  }
+  PDOKAN_CONTROL dokanControl = DokanAllocZero(sizeof(DOKAN_CONTROL));
+  if (dokanControl == NULL) {
+    return NULL;
+  }
+  RtlCopyMemory(dokanControl->DeviceName, DiskDeviceName->Buffer,
+                DiskDeviceName->Length);
+  if (UNCName->Buffer != NULL && UNCName->Length > 0) {
+    RtlCopyMemory(dokanControl->UNCName, UNCName->Buffer, UNCName->Length);
+  }
+  mountEntry = FindMountEntry(DokanGlobal, dokanControl, LockGlobal);
+  ExFreePool(dokanControl);
+  return mountEntry;
 }
 
 NTSTATUS

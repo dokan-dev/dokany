@@ -358,28 +358,6 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   DDbgPrint("<== DokanCompleteQueryInformation\n");
 }
 
-BOOLEAN StartsWith(__in const PUNICODE_STRING str,
-                   __in const PUNICODE_STRING prefix) {
-  if (prefix == NULL || prefix->Length == 0) {
-    return TRUE;
-  }
-
-  if (str == NULL || prefix->Length > str->Length) {
-    return FALSE;
-  }
-
-  LPCWSTR prefixToUse, stringToCompareTo;
-  prefixToUse = prefix->Buffer;
-  stringToCompareTo = str->Buffer;
-
-  while (*prefixToUse) {
-    if (*prefixToUse++ != *stringToCompareTo++)
-      return FALSE;
-  }
-
-  return TRUE;
-}
-
 VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject) {
 
   if (fcb == NULL) {
