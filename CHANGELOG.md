@@ -3,6 +3,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 1.3.2.1000
+### Added
+- Kernel - Add `DokanAllocZero` that Alloc and ZeroMemory buffer size requested sys - Rename `ExAllocatePool` to `DokanAlloc`
+- Kernel - Add Input IRP Buffer Help macro
+- Kernel - Use `GET_IRP` for `Type3InputBuffer` and start using Output buffer function helpers for IRP
+- FUSE - Add mount manager option
+
+### Changed
+- Kernel - Do not rethrow exception during `EXCEPTION_EXECUTE_HANDLER`
+- Kernel - During EventRelease directly call `FsRtlNotifyCleanupAll` instead of going through all Fcb & Ccb
+- Library - Add support for compiling with GCC 
+
+### Fixed
+- FUSE - Read keep local filename instance
+- Installer - Fix incorrect pdb file copied for driver
+
 ## [1.3.1.1000] - 2019-12-16
 ### Added
 - Kernel - Added support for `FileIdExtdBothDirectoryInformation`, which is required when the target is mapped as a volume into docker containers.
@@ -443,6 +459,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.3.1.1000...master
 [1.3.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.3.0.1000...v1.3.1.1000
 [1.3.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.2.1000...v1.3.0.1000
 [1.2.2.1000]: https://github.com/dokan-dev/dokany/compare/v1.2.1.2000...v1.2.2.1000
