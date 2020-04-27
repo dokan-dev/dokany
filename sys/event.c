@@ -563,6 +563,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
   BOOLEAN oplocksDisabled = FALSE;
+  BOOLEAN fcbGcEnabled = FALSE;
   ULONG sessionId = (ULONG)-1;
   BOOL startFailure = FALSE;
 
@@ -670,6 +671,11 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     oplocksDisabled = TRUE;
   }
 
+  if (eventStart->Flags & DOKAN_EVENT_ENABLE_FCB_GC) {
+    DDbgPrint("  FCB GC enabled\n");
+    fcbGcEnabled = TRUE;
+  }
+
   KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
 
@@ -737,6 +743,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   dcb->OplocksDisabled = oplocksDisabled;
   dcb->FileLockInUserMode = fileLockUserMode;
+  dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;

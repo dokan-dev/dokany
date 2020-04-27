@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2020 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -107,12 +107,11 @@ extern "C" {
  */
 #define DOKAN_OPTION_DISABLE_OPLOCKS 1024
 /**
- * Whether to satisfy a single-entry, name-only directory search without
- * dispatching to the FindFiles callback, if there is an open file from which
- * the driver can just copy the normalized name. These searches are frequently
- * done inside of CreateFile calls on Windows 7.
+ * The advantage of the FCB GC approach is that it prevents filter drivers (Anti-virus)
+ * from exponentially slowing down procedures like zip file extraction due to
+ * repeatedly rebuilding state that they attach to the FCB header.
  */
-#define DOKAN_OPTION_OPTIMIZE_SINGLE_NAME_SEARCH__REMOVED__ 2048
+#define DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION 2048
 
 /** @} */
 

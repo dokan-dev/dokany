@@ -792,6 +792,17 @@ IsVolumeOpen(__in PDokanVCB Vcb, __in PFILE_OBJECT FileObject) {
   return FileObject != NULL && FileObject->FsContext == &Vcb->VolumeFileHeader;
 }
 
+NTSTATUS DokanGetVolumeMetrics(__in PIRP Irp, __in PDokanVCB Vcb) {
+  VOLUME_METRICS* outputBuffer;
+  if (!PREPARE_OUTPUT(Irp, outputBuffer, /*SetInformationOnFailure=*/TRUE)) {
+    return STATUS_BUFFER_TOO_SMALL;
+  }
+  DokanVCBLockRO(Vcb);
+  *outputBuffer = Vcb->VolumeMetrics;
+  DokanVCBUnlock(Vcb);
+  return STATUS_SUCCESS;
+}
+
 NTSTATUS
 DokanDispatchDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
 
@@ -877,6 +888,9 @@ Return Value:
       DDbgPrint("  IOCTL_EVENT_WRITE\n");
       status = DokanEventWrite(DeviceObject, Irp);
       break;
+
+    case IOCTL_GET_VOLUME_METRICS:
+      status = DokanGetVolumeMetrics(Irp, vcb);
 
     case IOCTL_KEEPALIVE:
 	  //Remove for Dokan 2.x.x

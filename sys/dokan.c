@@ -560,6 +560,16 @@ VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...) {
   }
 }
 
+VOID DokanCaptureBackTrace(__out PDokanBackTrace Trace) {
+  PVOID rawTrace[4];
+  USHORT count = RtlCaptureStackBackTrace(1, 4, rawTrace, NULL);
+  Trace->Address = (ULONG64)((count > 0) ? rawTrace[0] : 0);
+  Trace->ReturnAddresses =
+        (((count > 1) ? ((ULONG64)rawTrace[1] & 0xfffff) : 0) << 40)
+      | (((count > 2) ? ((ULONG64)rawTrace[2] & 0xfffff) : 0) << 20)
+      |  ((count > 3) ? ((ULONG64)rawTrace[3] & 0xfffff) : 0);
+}
+
 VOID DokanPrintNTStatus(NTSTATUS Status) {
   DDbgPrint("  status = 0x%x\n", Status);
 
@@ -1000,6 +1010,177 @@ void OplockDebugRecordCreateRequest(__in PDokanFCB Fcb,
 void OplockDebugRecordAtomicRequest(PDokanFCB Fcb) {
   OplockDebugRecordProcess(Fcb);
   InterlockedIncrement(&Fcb->OplockDebugInfo.AtomicRequestCount);
+}
+
+BOOLEAN DokanScheduleFcbForGarbageCollection(__in PDokanVCB Vcb,
+                                             __in PDokanFCB Fcb) {
+  DOKAN_INIT_LOGGER(logger, Vcb->Dcb->DeviceObject->DriverObject, 0);
+  if (Vcb->FcbGarbageCollectorThread == NULL) {
+    return FALSE;
+  }
+  if (Fcb->NextGarbageCollectableFcb.Flink != NULL) {
+    // This is probably not intentional but theoretically OK.
+    DokanLogInfo(&logger,
+                 L"Warning: scheduled an FCB for garbage collection when it is"
+                 L" already scheduled.");
+    return TRUE;
+  }
+  Fcb->GarbageCollectionGracePeriodPassed = FALSE;
+  InsertTailList(&Vcb->FcbGarbageList, &Fcb->NextGarbageCollectableFcb);
+  KeSetEvent(&Vcb->FcbGarbageListNotEmpty, IO_NO_INCREMENT, FALSE);
+  return TRUE;
+}
+
+VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb) {
+  if (Fcb->NextGarbageCollectableFcb.Flink != NULL) {
+    ++Fcb->Vcb->VolumeMetrics.FcbGarbageCollectionCancellations;
+    RemoveEntryList(&Fcb->NextGarbageCollectableFcb);
+    Fcb->NextGarbageCollectableFcb.Flink = NULL;
+    Fcb->GarbageCollectionGracePeriodPassed = FALSE;
+    DokanFCBFlagsClearBit(Fcb, DOKAN_DELETE_ON_CLOSE);
+    DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_DIRECTORY);
+  }
+}
+
+// Called with the VCB locked. Immediately deletes the FCBs that are ready to
+// delete. Returns how many are skipped due to having been scheduled too
+// recently. If Force is TRUE then all the scheduled ones are deleted, and the
+// return value is 0.
+ULONG DeleteFcbGarbageAndGetRemainingCount(__in PDokanVCB Vcb,
+                                           __in BOOLEAN Force) {
+  ULONG remainingCount = 0;
+  PLIST_ENTRY thisEntry = NULL;
+  PLIST_ENTRY nextEntry = NULL;
+  PDokanFCB nextFcb = NULL;
+  for (thisEntry = Vcb->FcbGarbageList.Flink;
+       thisEntry != &Vcb->FcbGarbageList; thisEntry = nextEntry) {
+    nextEntry = thisEntry->Flink;
+    nextFcb = CONTAINING_RECORD(thisEntry, DokanFCB,
+                                NextGarbageCollectableFcb);
+    // We want it to have been scheduled for at least one timer interval so
+    // that there is a guaranteed window of possible reuse, which achieves the
+    // performance gains we are aiming for with GC.
+    if (Force || nextFcb->GarbageCollectionGracePeriodPassed) {
+      RemoveEntryList(thisEntry);
+      DokanFCBLockRW(nextFcb);
+      DokanDeleteFcb(Vcb, nextFcb);
+    } else {
+      nextFcb->GarbageCollectionGracePeriodPassed = TRUE;
+      ++remainingCount;
+    }
+  }
+  ASSERT(!Force || remainingCount == 0);
+  // When an FCB gets deleted by a GC cycle already in progress at the time of
+  // its scheduling, there's no point in triggering a follow-up cycle for that
+  // one.
+  if (remainingCount == 0) {
+    KeClearEvent(&Vcb->FcbGarbageListNotEmpty);
+  }
+  return remainingCount;
+}
+
+BOOLEAN DokanForceFcbGarbageCollection(__in PDokanVCB Vcb) {
+  if (Vcb->FcbGarbageCollectorThread == NULL
+      || IsListEmpty(&Vcb->FcbGarbageList)) {
+    return FALSE;
+  }
+  ++Vcb->VolumeMetrics.ForcedFcbGarbageCollectionPasses;
+  DeleteFcbGarbageAndGetRemainingCount(Vcb, /*Force=*/TRUE);
+  return TRUE;
+}
+
+// Called when there are no pending garbage FCBs and we may need to wait
+// indefinitely for one to appear.
+NTSTATUS WaitForNewFcbGarbage(__in PDokanVCB Vcb) {
+  PVOID events[2];
+  events[0] = &Vcb->Dcb->ReleaseEvent;
+  events[1] = &Vcb->FcbGarbageListNotEmpty;
+  NTSTATUS status = KeWaitForMultipleObjects(2, events, WaitAny, Executive,
+                                             KernelMode, FALSE, NULL, NULL);
+  return status == STATUS_WAIT_1 ? STATUS_SUCCESS : STATUS_CANCELLED;
+}
+
+// Called when there are some pending garbage FCBs. This function keeps an eye
+// on them until they expire and then deletes them, returning when there are no
+// more pending ones.
+NTSTATUS AgeAndDeleteFcbGarbage(__in PDokanVCB Vcb, __in PKTIMER Timer) {
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  ULONG pendingCount = 0;
+  PVOID events[2];
+  BOOLEAN waited = FALSE;
+  events[0] = &Vcb->Dcb->ReleaseEvent;
+  events[1] = Timer;
+  ++Vcb->VolumeMetrics.NormalFcbGarbageCollectionCycles;
+  for (;;) {
+    // Get rid of any garbage that is ready to delete.
+    DokanVCBLockRW(Vcb);
+    ++Vcb->VolumeMetrics.NormalFcbGarbageCollectionPasses;
+    pendingCount = DeleteFcbGarbageAndGetRemainingCount(Vcb, /*Force=*/FALSE);
+    DokanVCBUnlock(Vcb);
+    // If we have cleared out all the garbage, return so the garbage collector
+    // will do an indefinite wait for new garbage. But we wait at least once on
+    // the GC interval timer to avoid having multiple no-op cycles in one
+    // interval.
+    if (pendingCount == 0 && waited) {
+      status = STATUS_SUCCESS;
+      break;
+    }
+    // If there are any entries that haven't aged long enough, age them using
+    // the timer until they are ready.
+    status = KeWaitForMultipleObjects(2, events, WaitAny, Executive, KernelMode,
+                                      FALSE, NULL, NULL);
+    waited = TRUE;
+    if (status != STATUS_WAIT_1) {
+      status = STATUS_CANCELLED;
+      break;
+    }
+  }
+  return status;
+}
+
+// The thread function for the dedicated FCB garbage collection thread.
+VOID FcbGarbageCollectorThread(__in PVOID pVcb) {
+  KTIMER timer;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  LARGE_INTEGER timeout = {0};
+  PDokanVCB Vcb = pVcb;
+  DOKAN_INIT_LOGGER(logger, Vcb->Dcb->DeviceObject->DriverObject, 0);
+  KeInitializeTimerEx(&timer, SynchronizationTimer);
+  KeSetTimerEx(&timer, timeout, Vcb->Dcb->FcbGarbageCollectionIntervalMs, NULL);
+  DokanLogInfo(&logger, L"Starting FCB garbage collector with %lu ms interval.",
+               Vcb->Dcb->FcbGarbageCollectionIntervalMs);
+  for (;;) {
+    status = WaitForNewFcbGarbage(Vcb);
+    if (status != STATUS_SUCCESS) {
+      break;
+    }
+    status = AgeAndDeleteFcbGarbage(Vcb, &timer);
+    if (status != STATUS_SUCCESS) {
+      break;
+    }
+  }
+  DokanLogInfo(&logger, L"Stopping FCB garbage collector.");
+  KeCancelTimer(&timer);
+}
+
+void DokanStartFcbGarbageCollector(PDokanVCB Vcb) {
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  HANDLE thread = NULL;
+  Vcb->FcbGarbageCollectorThread = NULL;
+  if (Vcb->Dcb->FcbGarbageCollectionIntervalMs == 0) {
+    return;
+  }
+  status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
+                                (PKSTART_ROUTINE)FcbGarbageCollectorThread,
+                                Vcb);
+  if (!NT_SUCCESS(status)) {
+    // Note: we will revert to shared_ptr-style deletion if the thread is NULL.
+    return;
+  }
+  ObReferenceObjectByHandle(thread, THREAD_ALL_ACCESS, NULL, KernelMode,
+                            (PVOID *)&Vcb->FcbGarbageCollectorThread, NULL);
+
+  ZwClose(thread);
 }
 
 PUNICODE_STRING DokanAllocDuplicateString(__in const UNICODE_STRING* Src) {

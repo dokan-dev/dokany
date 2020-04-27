@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2020 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -752,6 +752,10 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_DISABLE_OPLOCKS) {
     eventStart.Flags |= DOKAN_EVENT_DISABLE_OPLOCKS;
+  }
+  if (Instance->DokanOptions->Options &
+      DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION) {
+    eventStart.Flags |= DOKAN_EVENT_ENABLE_FCB_GC;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

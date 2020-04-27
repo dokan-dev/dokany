@@ -234,6 +234,11 @@ typedef struct _DokanBackTrace {
   ULONG64 ReturnAddresses;
 } DokanBackTrace, *PDokanBackTrace;
 
+// Captures a trace where Address is the full address of the call site
+// instruction after the DokanCaptureBackTrace call, and ReturnAddresses
+// indicates the 3 return addresses below that.
+VOID DokanCaptureBackTrace(__out PDokanBackTrace Trace);
+
 // make sure Identifier is the top of struct
 typedef struct _DokanDiskControlBlock {
 
@@ -305,6 +310,17 @@ typedef struct _DokanDiskControlBlock {
 
   // Whether any oplock functionality should be disabled.
   BOOLEAN OplocksDisabled;
+
+  // How often to garbage-collect FCBs. If this is 0, we use the historical
+  // default behavior of freeing them on the spot and in the current context
+  // when the FileCount reaches 0. If this is nonzero, then a background thread
+  // frees a list of FileCount == 0 FCBs at this interval, but requires them to
+  // have had FileCount == 0 for one whole interval before deleting them. The
+  // advantage of the GC approach is that it prevents filter drivers from
+  // exponentially slowing down procedures like zip file extraction due to
+  // repeatedly rebuilding state that they attach to the FCB header.
+  ULONG FcbGarbageCollectionIntervalMs;
+
 } DokanDCB, *PDokanDCB;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \
@@ -356,6 +372,11 @@ typedef struct _DokanVolumeControlBlock {
   // Whether keep-alive has been activated on this volume.
   BOOLEAN IsKeepaliveActive;
 
+  PKTHREAD FcbGarbageCollectorThread;
+  LIST_ENTRY FcbGarbageList;
+  KEVENT FcbGarbageListNotEmpty;
+
+  VOLUME_METRICS VolumeMetrics;
 } DokanVCB, *PDokanVCB;
 
 // Flags for volume
@@ -493,6 +514,17 @@ typedef struct _DokanFileControlBlock {
 
   // Info that is useful for troubleshooting oplock problems in a debugger.
   DokanOplockDebugInfo OplockDebugInfo;
+
+  // Used only when FCB garbage collection is enabled. This is the entry for
+  // this FCB in the VCB's list of FCBs that are ready for garbage collection.
+  // If it is in this list, then it is also in the usable FCB list. This is
+  // guarded by the VCB lock.
+  LIST_ENTRY NextGarbageCollectableFcb;
+
+  // Used only when FCB garbage collection is enabled, to ensure that the FCB
+  // has been scheduled for deletion long enough to actually delete it. This is
+  // owned by the VCB and guarded by the VCB lock.
+  BOOLEAN GarbageCollectionGracePeriodPassed;
 
 } DokanFCB, *PDokanFCB;
 
@@ -976,8 +1008,34 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 // should be called if the IRP for which the request was made is about to fail.
 VOID DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp);
 
+// Decrements the FileCount on the given Fcb, which either deletes it or
+// schedules it for garbage collection if the FileCount becomes 0.
 NTSTATUS
 DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
+
+// Starts the FCB garbage collector thread for the given volume. If the
+// Vcb->FcbGarbageCollectorThread is NULL after this then it could not be started.
+VOID DokanStartFcbGarbageCollector(PDokanVCB Vcb);
+
+// Schedules the given FCB for garbage collection, and returns whether
+// scheduling it was successful. Currently it would only fail if garbage
+// collection is not enabled. It must be called with the VCB locked RW.
+BOOLEAN DokanScheduleFcbForGarbageCollection(__in PDokanVCB Vcb,
+                                             __in PDokanFCB Fcb);
+
+// Cancels the scheduled garbage collection of the given FCB. This is a no-op if
+// collection was never scheduled. It must be called with the VCB locked RW.
+VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb);
+
+// Forces FCB garbage collection (if enabled) and returns whether anything was
+// deleted as a consequence. This must be called with the VCB locked RW.
+BOOLEAN DokanForceFcbGarbageCollection(__in PDokanVCB Vcb);
+
+// Deletes the given FCB with no questions asked. This should only be used as a
+// helper by e.g. the garbage collector, and not by an I/O handling function.
+// The VCB and FCB must both be locked RW when this is called. After it returns,
+// do not unlock the FCB.
+VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb);
 

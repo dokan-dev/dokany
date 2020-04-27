@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-  Copyright (C) 2017 Google, Inc.
+  Copyright (C) 2020 Google, Inc.
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
   http://dokan-dev.github.io
@@ -37,6 +37,12 @@ static const UNICODE_STRING notificationFileName =
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength) {
   PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
+
+  // Try again if garbage collection frees up space. This is a no-op when
+  // garbage collection is disabled.
+  if (fcb == NULL && DokanForceFcbGarbageCollection(Vcb)) {
+    fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
+  }
 
   if (fcb == NULL) {
     return NULL;
@@ -87,7 +93,7 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   InsertTailList(&Vcb->NextFCB, &fcb->NextFCB);
 
   InterlockedIncrement(&Vcb->FcbAllocated);
-
+  ++Vcb->VolumeMetrics.FcbAllocations;
   return fcb;
 }
 
@@ -152,6 +158,7 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
     // we already have FCB
   } else {
+    DokanCancelFcbGarbageCollection(fcb);
     // FileName (argument) is never used and must be freed
     ExFreePool(FileName);
   }
@@ -164,44 +171,73 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 NTSTATUS
 DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   DOKAN_INIT_LOGGER(logger, Vcb->DeviceObject->DriverObject, 0);
+  DokanBackTrace trace = {0};
   ASSERT(Vcb != NULL);
   ASSERT(Fcb != NULL);
+
+  // First try to make sure the FCB is good. We have had some BSODs trying to
+  // access fields in an invalid FCB before adding these checks.
+
+  if (GetIdentifierType(Vcb) != VCB) {
+    DokanCaptureBackTrace(&trace);
+    return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+        L"Freeing an FCB with an invalid VCB at %I64x:%I64x,"
+        L" identifier type: %x",
+        trace.Address, trace.ReturnAddresses, GetIdentifierType(Vcb));
+  }
+
+  // Hopefully if it passes the above check we can at least dereference it,
+  // although that's not necessarily true. If we can read 4 bytes at the
+  // address, we can determine if it's an invalid or already freed FCB.
+  if (GetIdentifierType(Fcb) != FCB) {
+    DokanCaptureBackTrace(&trace);
+    return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+        L"Freeing FCB that has wrong identifier type at %I64x:%I64x: %x",
+        trace.Address, trace.ReturnAddresses, GetIdentifierType(Fcb));
+  }
 
   ASSERT(Fcb->Vcb == Vcb);
 
   DokanVCBLockRW(Vcb);
   DokanFCBLockRW(Fcb);
 
-  if (InterlockedDecrement(&Fcb->FileCount) == 0) {
-    RemoveEntryList(&Fcb->NextFCB);
-    InitializeListHead(&Fcb->NextCCB);
-
-    DDbgPrint("  Free FCB:%p\n", Fcb);
-
-    ExFreePool(Fcb->FileName.Buffer);
-    Fcb->FileName.Buffer = NULL;
-    Fcb->FileName.Length = 0;
-    Fcb->FileName.MaximumLength = 0;
-
-    FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
-
-    FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-
-    Fcb->Identifier.Type = FREED_FCB;
-    DokanFCBUnlock(Fcb);
-    ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-    ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                            Fcb->AdvancedFCBHeader.Resource);
-    ExDeleteResourceLite(&Fcb->PagingIoResource);
-
-    InterlockedIncrement(&Vcb->FcbFreed);
-    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
+  if (InterlockedDecrement(&Fcb->FileCount) == 0 &&
+      !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
+    // We get here when garbage collection is disabled.
+    DokanDeleteFcb(Vcb, Fcb);
   } else {
     DokanFCBUnlock(Fcb);
   }
 
   DokanVCBUnlock(Vcb);
   return STATUS_SUCCESS;
+}
+
+VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
+  ++Vcb->VolumeMetrics.FcbDeletions;
+  RemoveEntryList(&Fcb->NextFCB);
+  InitializeListHead(&Fcb->NextCCB);
+
+  DDbgPrint("  Free FCB:%p\n", Fcb);
+
+  ExFreePool(Fcb->FileName.Buffer);
+  Fcb->FileName.Buffer = NULL;
+  Fcb->FileName.Length = 0;
+  Fcb->FileName.MaximumLength = 0;
+
+  FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
+
+  FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
+
+  Fcb->Identifier.Type = FREED_FCB;
+  DokanFCBUnlock(Fcb);
+  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
+  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
+                          Fcb->AdvancedFCBHeader.Resource);
+  ExDeleteResourceLite(&Fcb->PagingIoResource);
+
+  InterlockedIncrement(&Vcb->FcbFreed);
+  ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
 }
 
 // DokanAllocateCCB must be called with exlusive Fcb lock held.
