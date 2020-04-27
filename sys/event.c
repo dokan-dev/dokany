@@ -373,6 +373,12 @@ DokanCompleteIrp(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   PDokanVCB vcb;
   PEVENT_INFORMATION eventInfo;
 
+  // Dokan 1.x.x Library can send buffer under EVENT_INFO struct size:
+  // - IRP_MJ_QUERY_SECURITY sending STATUS_BUFFER_OVERFLOW
+  // - IRP_MJ_READ with negative read size
+  // The behavior was fixed since but adding the next line would break
+  // backward compatiblity.
+  // TODO 2.x.x - use GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo);
   eventInfo = (PEVENT_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
   ASSERT(eventInfo != NULL);
 
