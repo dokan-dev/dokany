@@ -902,7 +902,7 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                     sizeof(DOKAN_CONTROL));
       // Remove Kernel information
       // TODO create specific struct for userland
-      dokanControl[i].DeviceObject = NULL;
+      dokanControl[i].VolumeDeviceObject = NULL;
     }
 
     status = STATUS_SUCCESS;

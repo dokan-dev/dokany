@@ -579,14 +579,14 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  if (IsDeletePending(mountEntry->MountControl.DeviceObject)) {
+  if (IsDeletePending(mountEntry->MountControl.VolumeDeviceObject)) {
     DDbgPrint("Device is deleted\n") return STATUS_DEVICE_REMOVED;
   }
 
-  if (!IsMounted(mountEntry->MountControl.DeviceObject)) {
+  if (!IsMounted(mountEntry->MountControl.VolumeDeviceObject)) {
     DDbgPrint("Device is still not mounted, so an unmount not possible at this "
               "point\n") return STATUS_DEVICE_BUSY;
   }
 
-  return DokanEventRelease(mountEntry->MountControl.DeviceObject, Irp);
+  return DokanEventRelease(mountEntry->MountControl.VolumeDeviceObject, Irp);
 }

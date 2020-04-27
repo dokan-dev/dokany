@@ -802,7 +802,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   dokanControl.SessionId = dcb->SessionId;
   mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
   if (mountEntry != NULL) {
-    mountEntry->MountControl.DeviceObject = volDeviceObject;
+    mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
   } else {
     ExReleaseResourceLite(&dcb->Resource);
     return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
