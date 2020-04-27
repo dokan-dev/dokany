@@ -105,7 +105,7 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (!PREPARE_OUTPUT(Irp, version, /*SetInformationOnFailure=*/FALSE)) {
       break;
     }
-    *version = (ULONG)DOKAN_DRIVER_VERSION;
+    *version = (ULONG) DOKAN_DRIVER_VERSION;
     status = STATUS_SUCCESS;
   } break;
 
@@ -160,13 +160,11 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanDCB dcb;
   PDokanVCB vcb;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  ULONG outputLength = 0;
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_DEVICE_CONTROL);
 
   DDbgPrint("   => DokanDiskDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dcb = DeviceObject->DeviceExtension;
-  outputLength = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
   if (GetIdentifierType(dcb) != DCB) {
     PrintIdType(dcb);
     DDbgPrint("   Device is not dcb so go out here\n");
@@ -288,36 +286,31 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     break;
 
   case IOCTL_STORAGE_GET_HOTPLUG_INFO: {
-    PSTORAGE_HOTPLUG_INFO hotplugInfo;
     DDbgPrint("  IOCTL_STORAGE_GET_HOTPLUG_INFO\n");
-    if (outputLength < sizeof(STORAGE_HOTPLUG_INFO)) {
+    PSTORAGE_HOTPLUG_INFO hotplugInfo;
+    if (!PREPARE_OUTPUT(Irp, hotplugInfo, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
-      Irp->IoStatus.Information = 0;
       break;
     }
-    hotplugInfo = Irp->AssociatedIrp.SystemBuffer;
     hotplugInfo->Size = sizeof(STORAGE_HOTPLUG_INFO);
     hotplugInfo->MediaRemovable = 1;
     hotplugInfo->MediaHotplug = 1;
     hotplugInfo->DeviceHotplug = 1;
     hotplugInfo->WriteCacheEnableOverride = 0;
     status = STATUS_SUCCESS;
-    Irp->IoStatus.Information = sizeof(STORAGE_HOTPLUG_INFO);
   } break;
 
   case IOCTL_VOLUME_GET_GPT_ATTRIBUTES: {
     DDbgPrint("   IOCTL_VOLUME_GET_GPT_ATTRIBUTES\n");
     PVOLUME_GET_GPT_ATTRIBUTES_INFORMATION gptAttrInfo;
-    if (outputLength < sizeof(VOLUME_GET_GPT_ATTRIBUTES_INFORMATION)) {
+    if (!PREPARE_OUTPUT(Irp, gptAttrInfo, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
-      Irp->IoStatus.Information = 0;
       break;
     }
     // Set GPT read-only flag if device is not writable
-    gptAttrInfo = Irp->AssociatedIrp.SystemBuffer;
-    if (IS_DEVICE_READ_ONLY(DeviceObject))
+    if (IS_DEVICE_READ_ONLY(DeviceObject)) {
       gptAttrInfo->GptAttributes = GPT_BASIC_DATA_ATTRIBUTE_READ_ONLY;
-    Irp->IoStatus.Information = sizeof(VOLUME_GET_GPT_ATTRIBUTES_INFORMATION);
+    }
     status = STATUS_SUCCESS;
   } break;
 
