@@ -160,7 +160,6 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
-
     eventLength = safeEventLength.LowPart;
     eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
 
