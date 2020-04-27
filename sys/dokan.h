@@ -863,7 +863,8 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 
 DRIVER_DISPATCH DokanGetAccessToken;
 
-LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
+LONG
+DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char);
 
 LONG DokanStringChar(__in PWCHAR String, __in ULONG Length, __in WCHAR Char);
