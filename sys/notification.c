@@ -446,6 +446,15 @@ VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb) {
   DokanVCBUnlock(Vcb);
 }
 
+VOID DokanStopFcbGarbageCollectorThread(__in PDokanVCB Vcb) {
+  if (Vcb->FcbGarbageCollectorThread != NULL) {
+    KeWaitForSingleObject(Vcb->FcbGarbageCollectorThread, Executive, KernelMode,
+                          FALSE, NULL);
+    ObDereferenceObject(Vcb->FcbGarbageCollectorThread);
+    Vcb->FcbGarbageCollectorThread = NULL;
+  }
+}
+
 NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PDokanDCB dcb;
   PDokanVCB vcb;
@@ -502,6 +511,10 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DokanStopCheckThread(dcb);
   DokanStopEventNotificationThread(dcb);
 
+  // Note that the garbage collector thread also gets signalled to stop by
+  // DokanStopEventNotificationThread. TODO(drivefs-team): maybe seperate out
+  // the signal to stop.
+  DokanStopFcbGarbageCollectorThread(vcb);
   ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
   DokanCleanupAllChangeNotificationWaiters(vcb);

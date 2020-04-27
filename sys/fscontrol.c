@@ -759,6 +759,13 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   vcb->ResourceLogger.DriverObject = DriverObject;
   dcb->Vcb = vcb;
 
+  if (vcb->Dcb->FcbGarbageCollectionIntervalMs != 0) {
+    InitializeListHead(&vcb->FcbGarbageList);
+    KeInitializeEvent(&vcb->FcbGarbageListNotEmpty, SynchronizationEvent,
+                      FALSE);
+    DokanStartFcbGarbageCollector(vcb);
+  }
+
   InitializeListHead(&vcb->NextFCB);
 
   InitializeListHead(&vcb->DirNotifyList);
