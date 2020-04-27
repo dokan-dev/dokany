@@ -264,6 +264,7 @@ PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
   InsertTailList(&Fcb->NextCCB, &ccb->NextCCB);
 
   ccb->MountId = Dcb->MountId;
+  ccb->ProcessId = PsGetCurrentProcessId();
 
   InterlockedIncrement(&Fcb->Vcb->CcbAllocated);
   return ccb;

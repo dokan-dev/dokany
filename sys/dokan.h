@@ -707,6 +707,9 @@ typedef struct _DokanContextControlBlock {
   // the IRP_MJ_CREATE does not succeed. The flag is cleared when the oplock
   // request is backed out.
   BOOLEAN AtomicOplockRequestPending;
+
+  // The process that created the CCB, for debugging purposes.
+  HANDLE ProcessId;
 } DokanCCB, *PDokanCCB;
 
 //
