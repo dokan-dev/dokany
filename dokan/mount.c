@@ -280,9 +280,12 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   ZeroMemory(&buffer, sizeof(buffer));
   ZeroMemory(commanp, sizeof(commanp));
 
-  RegCreateKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY L"\\NetworkProvider",
-                 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
-                 &position);
+  if (RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                     DOKAN_NP_SERVICE_KEY L"\\NetworkProvider", 0, NULL,
+                     REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+                     &position) != ERROR_SUCCESS) {
+    return FALSE;
+  }
 
   RegSetValueEx(key, L"DeviceName", 0, REG_SZ, (BYTE *)DOKAN_NP_DEVICE_NAME,
                 (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
@@ -295,18 +298,27 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
 
   RegCloseKey(key);
 
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS,
+                   &key) != ERROR_SUCCESS) {
+    return FALSE;
+  }
+  
 
-  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
-                  &buffer_size);
+  if (RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
+                      &buffer_size) != ERROR_SUCCESS) {
+    return FALSE;
+  }
 
   wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
   wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
 
   if (wcsstr(buffer, commanp) == NULL) {
     wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), commanp);
-    RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
-                  (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR));
+    if (RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
+                      (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR))
+            != ERROR_SUCCESS) {
+      return FALSE;
+    }
   }
 
   RegCloseKey(key);
