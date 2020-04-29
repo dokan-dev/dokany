@@ -884,6 +884,7 @@ Return Value:
 
     case IOCTL_GET_VOLUME_METRICS:
       status = DokanGetVolumeMetrics(Irp, vcb);
+      break;
 
     case IOCTL_KEEPALIVE:
 	  //Remove for Dokan 2.x.x
@@ -906,6 +907,7 @@ Return Value:
     case IOCTL_GET_ACCESS_TOKEN:
       status = DokanGetAccessToken(DeviceObject, Irp);
       break;
+
     default: {
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           irpSp->Parameters.DeviceIoControl.IoControlCode);
