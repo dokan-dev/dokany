@@ -1545,6 +1545,14 @@ void ShowUsage() {
   // clang-format on
 }
 
+#define CHECK_CMD_ARG(commad, argc)                                            \
+  {                                                                            \
+    if (++command == argc) {                                                   \
+      fwprintf(stderr, L"Option is missing an argument.\n");                   \
+      return EXIT_FAILURE;                                                     \
+    }                                                                          \
+  }
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   int status;
   ULONG command;
@@ -1566,7 +1574,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   for (command = 1; command < argc; command++) {
     switch (towlower(argv[command][1])) {
     case L'r':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       wcscpy_s(RootDirectory, sizeof(RootDirectory) / sizeof(WCHAR),
                argv[command]);
       if (!wcslen(RootDirectory)) {
@@ -1577,12 +1585,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       DbgPrint(L"RootDirectory: %ls\n", RootDirectory);
       break;
     case L'l':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       wcscpy_s(MountPoint, sizeof(MountPoint) / sizeof(WCHAR), argv[command]);
       dokanOptions.MountPoint = MountPoint;
       break;
     case L't':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       dokanOptions.ThreadCount = (USHORT)_wtoi(argv[command]);
       break;
     case L'd':
@@ -1616,7 +1624,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       dokanOptions.Options |= DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION;
       break;
     case L'u':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
       dokanOptions.UNCName = UNCName;
       DbgPrint(L"UNC Name: %ls\n", UNCName);
@@ -1625,15 +1633,15 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       g_ImpersonateCallerUser = TRUE;
       break;
     case L'i':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       dokanOptions.Timeout = (ULONG)_wtol(argv[command]);
       break;
     case L'a':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       dokanOptions.AllocationUnitSize = (ULONG)_wtol(argv[command]);
       break;
     case L'k':
-      command++;
+      CHECK_CMD_ARG(command, argc)
       dokanOptions.SectorSize = (ULONG)_wtol(argv[command]);
       break;
     default:
