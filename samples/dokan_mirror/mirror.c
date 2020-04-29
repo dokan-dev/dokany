@@ -1637,7 +1637,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       dokanOptions.SectorSize = (ULONG)_wtol(argv[command]);
       break;
     default:
-      fwprintf(stderr, L"unknown command: %s\n", argv[command]);
+      fwprintf(stderr, L"unknown command: %ls\n", argv[command]);
       return EXIT_FAILURE;
     }
   }

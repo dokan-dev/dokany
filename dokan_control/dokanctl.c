@@ -77,7 +77,7 @@ int Unmount(LPCWSTR MountPoint) {
 int InstallDriver(LPCWSTR driverFullPath) {
   fprintf(stdout, "Installing driver...\n");
   if (GetFileAttributes(driverFullPath) == INVALID_FILE_ATTRIBUTES) {
-    fwprintf(stderr, L"Error the file '%s' does not exist.\n", driverFullPath);
+    fwprintf(stderr, L"Error the file '%ls' does not exist.\n", driverFullPath);
     return EXIT_FAILURE;
   }
 
@@ -92,12 +92,12 @@ int InstallDriver(LPCWSTR driverFullPath) {
 }
 
 int DeleteDokanService(LPCWSTR ServiceName) {
-  fwprintf(stdout, L"Removing '%s'...\n", ServiceName);
+  fwprintf(stdout, L"Removing '%ls'...\n", ServiceName);
   if (!DokanServiceDelete(ServiceName)) {
-    fwprintf(stderr, L"Error removing '%s'\n", ServiceName);
+    fwprintf(stderr, L"Error removing '%ls'\n", ServiceName);
     return EXIT_FAILURE;
   }
-  fwprintf(stdout, L"'%s' removed.\n", ServiceName);
+  fwprintf(stdout, L"'%ls' removed.\n", ServiceName);
   return EXIT_SUCCESS;
 }
 
@@ -131,7 +131,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
   ExpandEnvironmentStringsW(DOKAN_DRIVER_FULL_PATH, driverFullPath, MAX_PATH);
 
-  fwprintf(stdout, L"Driver path: '%s'\n", driverFullPath);
+  fwprintf(stdout, L"Driver path: '%ls'\n", driverFullPath);
 
   WCHAR option = GetOption(argc, argv, 1);
   if (option == L'\0' || option == L'?') {
@@ -208,9 +208,9 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       return EXIT_FAILURE;
     }
 
-    fwprintf(stdout, L"  Mount points: %d\n", nbRead);
+    fwprintf(stdout, L"  Mount points: %lu\n", nbRead);
     for (ULONG p = 0; p < nbRead; ++p)
-      fwprintf(stdout, L"  %u# MountPoint: %s - UNC: %s - DeviceName: %s\n", p,
+      fwprintf(stdout, L"  %u# MountPoint: %ls - UNC: %ls - DeviceName: %ls\n", p,
                dokanControl[p].MountPoint, dokanControl[p].UNCName,
                dokanControl[p].DeviceName);
     DokanReleaseMountPointList(dokanControl);
