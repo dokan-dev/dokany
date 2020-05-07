@@ -395,6 +395,76 @@ NTSTATUS DokanGetParentDir(__in const WCHAR *fileName, __out WCHAR **parentDir,
   return STATUS_SUCCESS;
 }
 
+/*
+ * When the mount point is a reparse point (not a drive letter) on <= Win10
+ * 1803, file names in FILE_OBJECTs initially have an 'unparsed' portion that is
+ * all uppercase. This function changes them to the right case by getting it
+ * from an undocumented extra create parameter. See:
+ * https://community.osr.com/discussion/287522
+ */
+void FixFileNameForReparseMountPoint(__in const UNICODE_STRING *MountPoint,
+                                     __in PIRP Irp) {
+
+  if (!g_FixFileNameForReparseMountPoint) {
+    return;
+  }
+
+  // Only Revert when reparse point is used
+  if (IsMountPointDriveLetter(MountPoint)) {
+    return;
+  }
+
+  PECP_LIST ecpList;
+  struct SYMLINK_ECP_CONTEXT *ecpContext;
+  // IopSymlinkECPGuid "73d5118a-88ba-439f-92f4-46d38952d250";
+  static const GUID iopSymlinkECPGuid = {
+      0x73d5118a,
+      0x88ba,
+      0x439f,
+      {0x92, 0xf4, 0x46, 0xd3, 0x89, 0x52, 0xd2, 0x50}};
+
+  if (!NT_SUCCESS(FsRtlGetEcpListFromIrp(Irp, &ecpList)) || !ecpList) {
+    return;
+  }
+  if (!NT_SUCCESS(FsRtlFindExtraCreateParameter(ecpList, &iopSymlinkECPGuid,
+                                                (void **)&ecpContext, 0))) {
+    return;
+  }
+  if (FsRtlIsEcpFromUserMode(ecpContext) ||
+      !ecpContext->FlagsMountPoint.MountPoint.MountPoint) {
+    return;
+  }
+  USHORT unparsedNameLength = ecpContext->UnparsedNameLength;
+  if (unparsedNameLength == 0) {
+    return;
+  }
+
+  PUNICODE_STRING FileName =
+      &IoGetCurrentIrpStackLocation(Irp)->FileObject->FileName;
+  USHORT fileNameLength = FileName->Length;
+  USHORT ecpNameLength = ecpContext->Name.Length;
+  if (unparsedNameLength > ecpNameLength ||
+      unparsedNameLength > fileNameLength) {
+    return;
+  }
+
+  PWSTR unparsedNameInFileObject = (PWSTR)RtlOffsetToPointer(
+      FileName->Buffer, fileNameLength - unparsedNameLength);
+  UNICODE_STRING unparsedNameInFileObjectUS =
+      DokanWrapUnicodeString(unparsedNameInFileObject, unparsedNameLength);
+
+  PWSTR unparsedNameInEcp = (PWSTR)RtlOffsetToPointer(
+      ecpContext->Name.Buffer, ecpNameLength - unparsedNameLength);
+  UNICODE_STRING unparsedNameInEcpUS =
+      DokanWrapUnicodeString(unparsedNameInEcp, unparsedNameLength);
+
+  if (RtlEqualUnicodeString(&unparsedNameInFileObjectUS, &unparsedNameInEcpUS,
+                            /*CaseInSensitive=*/TRUE)) {
+    RtlCopyMemory(unparsedNameInFileObject, unparsedNameInEcp,
+                  unparsedNameLength);
+  }
+}
+
 LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
                             __in WCHAR Char) {
   return DokanStringChar(UnicodeString->Buffer, UnicodeString->Length, Char);
@@ -584,6 +654,8 @@ Return Value:
     }
 
     dcb = vcb->Dcb;
+
+    FixFileNameForReparseMountPoint(dcb->MountPoint, Irp);
 
     BOOLEAN isNetworkFileSystem =
         (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);

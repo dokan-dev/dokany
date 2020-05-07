@@ -36,6 +36,7 @@ ULONG g_Debug = DOKAN_DEBUG_NONE;
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
+BOOLEAN g_FixFileNameForReparseMountPoint;
 
 NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 ULONG DokanMdlSafePriority = 0;
@@ -348,6 +349,11 @@ Return Value:
     ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
+
+  // Detect if we are running on a older version than NTDDI_WIN10_RS4
+  // needing to fix FileName during Reparse MountPoint.
+  g_FixFileNameForReparseMountPoint =
+      !RtlIsNtDdiVersionAvailable(0x0A000005);
 
   DDbgPrint("<== DriverEntry\n");
 

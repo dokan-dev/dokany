@@ -43,6 +43,7 @@ extern ULONG g_Debug;
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
+extern BOOLEAN g_FixFileNameForReparseMountPoint;
 
 // GetSystemRoutineAddress Function Pointer
 typedef NTKERNELAPI BOOLEAN DokanPtr_FsRtlCheckLockForOplockRequest(
@@ -782,6 +783,25 @@ typedef struct _DRIVER_EVENT_CONTEXT {
   PKEVENT Completed;
   EVENT_CONTEXT EventContext;
 } DRIVER_EVENT_CONTEXT, *PDRIVER_EVENT_CONTEXT;
+
+// WARN: Undocumented Microsoft struct.
+// Extra create parameters (ECPs) for Symbolic link.
+// Used to get correct casing name when reparse point is used.
+#pragma warning(disable : 4214)
+struct SYMLINK_ECP_CONTEXT {
+  USHORT UnparsedNameLength;
+  union {
+    USHORT Flags;
+    struct {
+      USHORT MountPoint : 1;
+    } MountPoint;
+  } FlagsMountPoint;
+  USHORT DeviceNameLength;
+  USHORT Zero;
+  struct SYMLINK_ECP_CONTEXT *Reparsed;
+  UNICODE_STRING Name;
+};
+#pragma warning(default : 4214)
 
 DRIVER_INITIALIZE DriverEntry;
 
