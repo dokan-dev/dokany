@@ -32,7 +32,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
 
-#define IOCTL_TEST                                                             \
+#define IOCTL_GET_VERSION                                                             \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_SET_DEBUG_MODE                                                   \

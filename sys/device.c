@@ -100,7 +100,7 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     status = DokanGetMountPointList(DeviceObject, Irp, dokanGlobal);
     break;
 
-  case IOCTL_TEST: {
+  case IOCTL_GET_VERSION: {
     ULONG* version;
     if (!PREPARE_OUTPUT(Irp, version, /*SetInformationOnFailure=*/FALSE)) {
       break;
