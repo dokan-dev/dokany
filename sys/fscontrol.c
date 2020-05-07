@@ -416,12 +416,16 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
         "Length: %i, Path: %wZ", pNotifyPath->CompletionFilter,
         pNotifyPath->Action, receivedBuffer.Length, &receivedBuffer);
     DokanFCBLockRO(fcb);
-    DokanNotifyReportChange0(fcb, &receivedBuffer,
-                             pNotifyPath->CompletionFilter,
-                             pNotifyPath->Action);
+    status = DokanNotifyReportChange0(
+        fcb, &receivedBuffer, pNotifyPath->CompletionFilter,
+        pNotifyPath->Action);
     DokanFCBUnlock(fcb);
-    status = STATUS_SUCCESS;
-  } break;
+    if (status == STATUS_OBJECT_NAME_INVALID) {
+      DokanCleanupAllChangeNotificationWaiters(fcb->Vcb);
+    }
+    break;
+  }
+
   case FSCTL_REQUEST_OPLOCK_LEVEL_1:
     DDbgPrint("    FSCTL_REQUEST_OPLOCK_LEVEL_1\n");
     status = DokanOplockRequest(pIrp);

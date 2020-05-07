@@ -996,11 +996,18 @@ NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb);
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
                              __in ULONG_PTR Info);
 
-VOID DokanNotifyReportChange0(__in PDokanFCB Fcb, __in PUNICODE_STRING FileName,
-                              __in ULONG FilterMatch, __in ULONG Action);
+// DokanNotifyReportChange* returns
+// - STATUS_OBJECT_NAME_INVALID if there appears to be an invalid name stored
+//   in the NotifyList.
+// - STATUS_INVALID_PARAMETER if the string passed in triggers an access
+//   violation.
+// - STATUS_SUCCESS otherwise.
+NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
+                                  __in PUNICODE_STRING FileName,
+                                  __in ULONG FilterMatch, __in ULONG Action);
 
-VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
-                             __in ULONG Action);
+NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
+                                 __in ULONG Action);
 
 // Ends all pending waits for directory change notifications.
 VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb);

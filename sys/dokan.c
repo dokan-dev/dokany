@@ -618,10 +618,10 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
   DokanPrintNTStatus(Status);
 }
 
-VOID DokanNotifyReportChange0(__in PDokanFCB Fcb,
-                              __in PUNICODE_STRING FileName,
-                              __in ULONG FilterMatch,
-                              __in ULONG Action) {
+NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
+                                  __in PUNICODE_STRING FileName,
+                                  __in ULONG FilterMatch,
+                                  __in ULONG Action) {
   USHORT nameOffset;
 
   DDbgPrint("==> DokanNotifyReportChange %wZ\n", FileName);
@@ -670,22 +670,41 @@ VOID DokanNotifyReportChange0(__in PDokanFCB Fcb,
       FileName, L'\\', (ULONG)nameOffset, 1));
   nameOffset *= sizeof(WCHAR); // Offset is in bytes
 
-  FsRtlNotifyFullReportChange(Fcb->Vcb->NotifySync, &Fcb->Vcb->DirNotifyList,
-                              (PSTRING)FileName, nameOffset,
-                              NULL, // StreamName
-                              NULL, // NormalizedParentName
-                              FilterMatch, Action,
-                              NULL); // TargetContext
-
+  __try {
+    FsRtlNotifyFullReportChange(Fcb->Vcb->NotifySync, &Fcb->Vcb->DirNotifyList,
+                                (PSTRING)FileName, nameOffset,
+                                NULL, // StreamName
+                                NULL, // NormalizedParentName
+                                FilterMatch, Action,
+                                NULL); // TargetContext
+  } __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
+              ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+    DOKAN_INIT_LOGGER(logger, Fcb->Vcb->Dcb->DriverObject, 0);
+    try {
+      // This case is attested in the wild but very rare. We don't know why it
+      // happens.
+      return DokanLogError(
+          &logger, STATUS_OBJECT_NAME_INVALID,
+          L"Access violation in file change notification for %wZ.", FileName);
+    } __except(GetExceptionCode() == STATUS_ACCESS_VIOLATION
+               ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+       // This is not a case we think ever happens, but we may as well not
+       // crash if it does.
+       return DokanLogError(
+            &logger, STATUS_INVALID_PARAMETER,
+            L"Access violation on the file name passed in a notification.");
+    }
+  }
   DDbgPrint("<== DokanNotifyReportChange\n");
+  return STATUS_SUCCESS;
 }
 
 // DokanNotifyReportChange should be called with the Fcb at least share-locked.
 // due to the ro access to the FileName field.
-VOID DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
-                             __in ULONG Action) {
+NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
+                                 __in ULONG Action) {
   ASSERT(Fcb != NULL);
-  DokanNotifyReportChange0(Fcb, &Fcb->FileName, FilterMatch, Action);
+  return DokanNotifyReportChange0(Fcb, &Fcb->FileName, FilterMatch, Action);
 }
 
 VOID PrintIdType(__in VOID *Id) {
