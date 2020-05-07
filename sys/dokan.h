@@ -56,22 +56,43 @@ extern DokanPtr_FsRtlCheckLockForOplockRequest
 extern DokanPtr_FsRtlAreThereWaitingFileLocks
     *DokanFsRtlAreThereWaitingFileLocks;
 
-#define DOKAN_GLOBAL_DEVICE_NAME L"\\Device\\Dokan_" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
-  L"\\DosDevices\\Global\\Dokan_" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME                                       \
-  L"\\Device\\DokanFs" DOKAN_MAJOR_API_VERSION
-#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME                                         \
-  L"\\Device\\DokanCdFs" DOKAN_MAJOR_API_VERSION
-
 #define DOKAN_DISK_DEVICE_NAME L"\\Device\\Volume"
 #define DOKAN_SYMBOLIC_LINK_NAME L"\\DosDevices\\Global\\Volume"
-#define DOKAN_NET_DEVICE_NAME                                                  \
-  L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NET_SYMBOLIC_LINK_NAME                                           \
-  L"\\DosDevices\\Global\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 
+#ifndef DOKAN_DEVICE_PREFIX_NAME
+#define DOKAN_DEVICE_PREFIX_NAME L"Dokan"
+#endif
+#ifndef DOKAN_GLOBAL_DEVICE_NAME
+#define DOKAN_GLOBAL_DEVICE_NAME \
+  L"\\Device\\" DOKAN_DEVICE_PREFIX_NAME L"_" DOKAN_MAJOR_API_VERSION
+#endif
+#ifndef DOKAN_GLOBAL_SYMBOLIC_LINK_NAME
+#define DOKAN_GLOBAL_SYMBOLIC_LINK_NAME                                        \
+  L"\\DosDevices\\Global\\" \
+    DOKAN_DEVICE_PREFIX_NAME L"_" DOKAN_MAJOR_API_VERSION
+#endif
+#ifndef DOKAN_GLOBAL_FS_DISK_DEVICE_NAME
+#define DOKAN_GLOBAL_FS_DISK_DEVICE_NAME                                       \
+  L"\\Device\\" DOKAN_DEVICE_PREFIX_NAME L"Fs" DOKAN_MAJOR_API_VERSION
+#endif
+#ifndef DOKAN_GLOBAL_FS_CD_DEVICE_NAME
+#define DOKAN_GLOBAL_FS_CD_DEVICE_NAME                                         \
+  L"\\Device\\" DOKAN_DEVICE_PREFIX_NAME L"CdFs" DOKAN_MAJOR_API_VERSION
+#endif
+#ifndef DOKAN_NET_DEVICE_NAME
+#define DOKAN_NET_DEVICE_NAME                                                  \
+  L"\\Device\\" DOKAN_DEVICE_PREFIX_NAME L"Redirector" DOKAN_MAJOR_API_VERSION
+#endif
+#ifndef DOKAN_NET_SYMBOLIC_LINK_NAME
+#define DOKAN_NET_SYMBOLIC_LINK_NAME                                           \
+  L"\\DosDevices\\Global\\" \
+    DOKAN_DEVICE_PREFIX_NAME L"Redirector" DOKAN_MAJOR_API_VERSION
+#endif
+
+#ifndef VOLUME_LABEL
 #define VOLUME_LABEL L"DOKAN"
+#endif
+
 // {D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
 #define DOKAN_BASE_GUID                                                        \
   {                                                                            \
@@ -332,7 +353,7 @@ typedef struct _DokanResourceDebugInfo {
   // A description of the call site in the code where the resource was
   // exclusively acquired. If it is not exclusively acquired currently, this is
   // NULL.
-  const char *ExclusiveLockSite;
+  const char* ExclusiveLockSite;
 
   // The thread in which the lock was exclusively acquired. If it is not
   // exclusively acquired currently, this is NULL.
