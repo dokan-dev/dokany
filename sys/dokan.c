@@ -200,6 +200,7 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
 }
 
 VOID InitMultiVersionResources() {
+  // Enable No-Execute Nonpaged Pool - POOL_NX_OPTIN
   ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
 
   if (RtlIsNtDdiVersionAvailable(NTDDI_WIN8)) {
