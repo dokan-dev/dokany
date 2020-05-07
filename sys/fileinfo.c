@@ -169,9 +169,26 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileStandardLinkInformation:
       DDbgPrint("  FileStandardLinkInformation\n");
       break;
-    case FileNetworkPhysicalNameInformation:
+    case FileNetworkPhysicalNameInformation: {
       DDbgPrint("  FileNetworkPhysicalNameInformation\n");
-      break;
+      // This info class is generally not worth passing to the DLL. It will be
+      // filled in with info that is accessible to the driver.
+
+      PFILE_NETWORK_PHYSICAL_NAME_INFORMATION netInfo;
+      if (!PREPARE_OUTPUT(Irp, netInfo, /*SetInformationOnFailure=*/FALSE)) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+
+      if (!AppendVarSizeOutputString(Irp, &netInfo->FileName, &fcb->FileName,
+                                     /*UpdateInformationOnFailure=*/FALSE,
+                                     /*FillSpaceWithPartialString=*/FALSE)) {
+        status = STATUS_BUFFER_OVERFLOW;
+        __leave;
+      }
+      status = STATUS_SUCCESS;
+      __leave;
+    }
     case FileRemoteProtocolInformation:
       DDbgPrint("  FileRemoteProtocolInformation\n");
       break;
