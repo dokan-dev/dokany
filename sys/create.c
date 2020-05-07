@@ -33,6 +33,9 @@ static const UNICODE_STRING keepAliveFileName =
 static const UNICODE_STRING notificationFileName =
     RTL_CONSTANT_STRING(DOKAN_NOTIFICATION_FILE_NAME);
 
+static const UNICODE_STRING systemVolumeInformationFileName =
+    RTL_CONSTANT_STRING(L"\\System Volume Information");
+
 // We must NOT call without VCB lock
 PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
                            __in ULONG FileNameLength) {
@@ -601,11 +604,8 @@ Return Value:
                   "create files before startup is finished.\n");
         if (fileObject->FileName.Length > 0) {
           DDbgPrint("  Verify if the system tries to access System Volume\n");
-          UNICODE_STRING systemVolume;
-          RtlInitUnicodeString(&systemVolume, L"\\System Volume Information");
-          BOOLEAN isSystemVolumeAccess =
-              StartsWith(&fileObject->FileName, &systemVolume);
-          if (isSystemVolumeAccess) {
+          if (StartsWith(&fileObject->FileName,
+                         &systemVolumeInformationFileName)) {
             DDbgPrint("  It's an access to System Volume, so don't return "
                       "SUCCESS. We don't have one.\n");
             status = STATUS_NO_SUCH_FILE;
