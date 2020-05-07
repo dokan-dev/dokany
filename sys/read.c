@@ -306,7 +306,7 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
   // available buffer size
   bufferLen = irpSp->Parameters.Read.Length;
 
-  DDbgPrint("  bufferLen %d, Event.BufferLen %d\n", bufferLen,
+  DDbgPrint("  bufferLen %lu, Event.BufferLen %lu\n", bufferLen,
             EventInfo->BufferLength);
 
   // buffer is not specified or short of length
