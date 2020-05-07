@@ -176,22 +176,29 @@ BOOLEAN ExtendOutputBySize(_Inout_ PIRP Irp, _In_ ULONG AdditionalSize,
 //
 // struct {
 //   ... fixed-size stuff ...
-//   WCHAR StrField[1];
+//   WCHAR Dest[1];
 // } StructType;
 //
-// This function populates StrField using the content from Str, leaving the rest
-// of the struct intact. It does not automatically null-terminate StrField if
-// Str is not null-terminated.
+// This function populates Dest using the content from Str, leaving the rest of
+// the struct intact. It does not automatically null-terminate Dest if Str is
+// not null-terminated. This function must only be used once for a given Dest
+// address.
 //
 // As a prerequisite, the IRP's output buffer must have been prepared for the
 // fixed size portion of the struct, via a call like
 // PrepareOutputWithSize(Irp, sizeof(StructType), ...);
 //
-// This function extends the output buffer as if by
-// ExtendOutputBySize(Irp, Str->Length, UpdateInformationOnFailure), returning
-// FALSE if it fails. If extending the buffer succeeds, this function populates
-// StrField from Str->Buffer.
-BOOLEAN AppendVarSizeOutputString(_Inout_ PIRP Irp, _In_ PUNICODE_STRING Str,
-                                  _In_ BOOLEAN UpdateInformationOnFailure);
+// This function extends the output buffer if necessary, as if by
+// ExtendOutputBySize, returning FALSE if it fails. If extending the buffer
+// succeeds, this function populates Dest from Str->Buffer.
+//
+// The FillSpaceWithPartialString flag enables the less frequently desired
+// behavior of copying the max possible amount of the string when the output
+// buffer can't fit the whole thing. A partial copy still counts as "failure"
+// for the return value and the updating of the Information value.
+BOOLEAN AppendVarSizeOutputString(_Inout_ PIRP Irp, _Inout_ PVOID Dest,
+                                  _In_ const UNICODE_STRING* Str,
+                                  _In_ BOOLEAN UpdateInformationOnFailure,
+                                  _In_ BOOLEAN FillSpaceWithPartialString);
 
 #endif

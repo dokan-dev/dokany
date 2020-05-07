@@ -157,25 +157,33 @@ BOOLEAN ExtendOutputBufferBySize(_Inout_ PIRP Irp, _In_ ULONG AdditionalSize,
   return TRUE;
 }
 
-BOOLEAN AppendVarSizeOutputString(_Inout_ PIRP Irp, _In_ PUNICODE_STRING Str,
-                                  _In_ BOOLEAN UpdateInformationOnFailure) {
+BOOLEAN AppendVarSizeOutputString(_Inout_ PIRP Irp, _Inout_ PVOID Dest,
+                                  _In_ const UNICODE_STRING* Str,
+                                  _In_ BOOLEAN UpdateInformationOnFailure,
+                                  _In_ BOOLEAN FillSpaceWithPartialString) {
   PCHAR buffer = GetOutputBuffer(Irp);
-  ULONG_PTR usedSize = Irp->IoStatus.Information;
-  if (usedSize < 1) {
-    // This is really misuse of the function.
+  ULONG_PTR allocatedSize = Irp->IoStatus.Information;
+  if ((PCHAR)Dest < buffer || (PCHAR)Dest > buffer + allocatedSize) {
+    // This is misuse of the function.
     return FALSE;
   }
   if (Str->Length == 0) {
-    RtlZeroMemory(buffer + usedSize - sizeof(WCHAR), sizeof(WCHAR));
     return TRUE;
   }
-  // Note: the subtraction of 1 WCHAR length is because the struct in the buffer
-  // ends with a 1-char placeholder field that was accounted for in the
-  // pre-extension usedSize.
-  if (!ExtendOutputBufferBySize(Irp, Str->Length - sizeof(WCHAR),
-                                UpdateInformationOnFailure)) {
-    return FALSE;
+  ULONG_PTR destOffset = (PCHAR)Dest - buffer;
+  ULONG_PTR remainingSize = allocatedSize - destOffset;
+  ULONG_PTR copySize = Str->Length;
+  if (remainingSize < copySize) {
+    ULONG additionalSize = (ULONG)(copySize - remainingSize);
+    if (!ExtendOutputBufferBySize(Irp, additionalSize,
+                                  UpdateInformationOnFailure)) {
+      if (FillSpaceWithPartialString) {
+        copySize = GetProvidedOutputSize(Irp) - destOffset;
+      } else {
+        return FALSE;
+      }
+    }
   }
-  RtlCopyMemory(buffer + usedSize - sizeof(WCHAR), Str->Buffer, Str->Length);
-  return TRUE;
+  RtlCopyMemory(Dest, Str->Buffer, copySize);
+  return copySize == Str->Length;
 }

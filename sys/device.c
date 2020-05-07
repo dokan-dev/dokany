@@ -378,8 +378,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     }
     mountdevName->NameLength = dcb->DiskDeviceName->Length;
-    if (AppendVarSizeOutputString(Irp, dcb->DiskDeviceName,
-                                  /*UpdateInformationOnFailure=*/FALSE)) {
+    if (AppendVarSizeOutputString(Irp, &mountdevName->Name, dcb->DiskDeviceName,
+                                  /*UpdateInformationOnFailure=*/FALSE,
+                                  /*FillSpaceWithPartialString=*/FALSE)) {
       status = STATUS_SUCCESS;
     } else {
       status = STATUS_BUFFER_OVERFLOW;
@@ -395,8 +396,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     uniqueId->UniqueIdLength = dcb->DiskDeviceName->Length;
-    if (AppendVarSizeOutputString(Irp, dcb->DiskDeviceName,
-                                  /*UpdateInformationOnFailure=*/FALSE)) {
+    if (AppendVarSizeOutputString(Irp, &uniqueId->UniqueId, dcb->DiskDeviceName,
+                                  /*UpdateInformationOnFailure=*/FALSE,
+                                  /*FillSpaceWithPartialString=*/FALSE)) {
       status = STATUS_SUCCESS;
     } else {
       status = STATUS_BUFFER_OVERFLOW;
@@ -434,8 +436,9 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // request from user mode.
     linkName->UseOnlyIfThereAreNoOtherLinks = FALSE;
     linkName->NameLength = dcb->MountPoint->Length;
-    if (!AppendVarSizeOutputString(Irp, dcb->MountPoint,
-                                   /*UpdateInformationOnFailure=*/FALSE)) {
+    if (!AppendVarSizeOutputString(Irp, &linkName->Name, dcb->MountPoint,
+                                   /*UpdateInformationOnFailure=*/FALSE,
+                                   /*FillSpaceWithPartialString=*/FALSE)) {
       DokanLogInfo(
           &logger,
           L"Could not fit the suggested name in the output buffer.");
