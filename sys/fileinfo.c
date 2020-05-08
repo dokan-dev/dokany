@@ -38,6 +38,8 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   // PAGED_CODE();
 
   __try {
+    Irp->IoStatus.Information = 0;
+
     DDbgPrint("==> DokanQueryInformation\n");
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
