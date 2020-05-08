@@ -33,6 +33,8 @@ DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
 
+    Irp->IoStatus.Information = 0;
+
     switch (irpSp->MinorFunction) {
     case IRP_MN_QUERY_REMOVE_DEVICE:
       DDbgPrint("  IRP_MN_QUERY_REMOVE_DEVICE\n");
