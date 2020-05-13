@@ -625,6 +625,22 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
   DokanPrintNTStatus(Status);
 }
 
+VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status) {
+  if (Irp == NULL) {
+    DDbgPrint("  Irp is NULL, so no complete required\n");
+    return;
+  }
+  if (Status == -1) {
+    DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
+    Status = STATUS_INVALID_PARAMETER;
+  }
+  if (Status != STATUS_PENDING) {
+    Irp->IoStatus.Status = Status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+  }
+  DokanPrintNTStatus(Status);
+}
+
 NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
                                   __in PUNICODE_STRING FileName,
                                   __in ULONG FilterMatch,

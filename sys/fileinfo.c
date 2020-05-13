@@ -39,7 +39,6 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   __try {
     Irp->IoStatus.Information = 0;
-
     DDbgPrint("==> DokanQueryInformation\n");
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
@@ -112,7 +111,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       PCHAR dest = (PCHAR)&nameInfo->FileName;
       nameInfo->FileNameLength = fileName->Length;
 
-      BOOL isNetworkDevice =
+      BOOLEAN isNetworkDevice =
           (vcb->Dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
       if (isNetworkDevice) {
         PUNICODE_STRING devicePath = vcb->Dcb->UNCName->Length
@@ -238,7 +237,10 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (fcb)
       DokanFCBUnlock(fcb);
 
-    DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
+    // Warning: there seems to be a verifier failure about using freed memory if
+    // we de-reference Irp in here when the status is pending. We are not sure
+    // why this would be.
+    DokanCompleteDispatchRoutine(Irp, status);
 
     DDbgPrint("<== DokanQueryInformation\n");
   }

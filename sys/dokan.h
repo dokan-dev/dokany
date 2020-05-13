@@ -1034,6 +1034,15 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp);
 NTSTATUS DokanCommonLockControl(__in PIRP Irp);
 
 NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb);
+
+// Use this instead of DokanCompleteIrpRequest, if the dispatch routine sets
+// Information as it goes (via PREPARE_OUTPUT etc.).
+VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status);
+
+// Used at the end of dispatch routines that don't set Information as they go.
+// We want to reduce the usage and maybe get rid of this one. Note that it only
+// completes the actual IRP in the minority case where there's a final status
+// that did not require a user mode call.
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
                              __in ULONG_PTR Info);
 
