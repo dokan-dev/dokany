@@ -178,7 +178,10 @@ BOOLEAN AppendVarSizeOutputString(_Inout_ PIRP Irp, _Inout_ PVOID Dest,
     if (!ExtendOutputBufferBySize(Irp, additionalSize,
                                   UpdateInformationOnFailure)) {
       if (FillSpaceWithPartialString) {
-        copySize = GetProvidedOutputSize(Irp) - destOffset;
+        ULONG providedSize = GetProvidedOutputSize(Irp);
+        // Only copy whole characters, like NTFS.
+        copySize = (providedSize - destOffset) & ~(ULONG_PTR)1;
+        Irp->IoStatus.Information = copySize + destOffset;
       } else {
         return FALSE;
       }
