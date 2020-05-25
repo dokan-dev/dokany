@@ -780,21 +780,6 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
 /**
- * \brief Unmount a Dokan device from a mount point
- *
- * Same as \ref DokanRemoveMountPoint
- * If Safe is \c TRUE, it will broadcast to all desktops and Shells
- * Safe should not be used during DLL_PROCESS_DETACH
- *
- * \see DokanRemoveMountPoint
- *
- * \param MountPoint Mount point to unmount ("Z", "Z:", "Z:\", "Z:\MyMountPoint").
- * \param Safe Process is not in DLL_PROCESS_DETACH state.
- * \return \c TRUE if device was unmounted or \c FALSE in case of failure or device not found.
- */
-BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe);
-
-/**
  * \brief Checks whether Name matches Expression
  *
  * Behave like \c FsRtlIsNameInExpression routine from <a href="https://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx">Microsoft</a>\n
