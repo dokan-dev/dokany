@@ -560,7 +560,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
   return TRUE;
 }
 
-BOOL DOKANAPI DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe) {
+BOOL DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe) {
   if (MountPoint != NULL) {
     size_t length = wcslen(MountPoint);
     if (length > 0) {
