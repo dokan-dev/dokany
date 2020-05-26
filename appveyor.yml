@@ -154,8 +154,8 @@
               Write-Host "MSYS2 already installed at $env:MSYS2_INST_DIR"
               return
             }
-            $msys2_tar_url = "http://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20190524.tar.xz"
-            $msys2_tar_sha256 = "168E156FA9F00D90A8445676C023C63BE6E82F71487F4E2688AB5CB13B345383"
+            $msys2_tar_url = "https://github.com/msys2/msys2-installer/releases/download/2020-05-22/msys2-base-x86_64-20200522.tar.xz"
+            $msys2_tar_sha256 = "deec23a772774d874b557bcc5dfb2a8a115224fb6a919f19062af108b6bf4735"
             $msys2_tar = "$env:TEMP\msys2-base-x86_64.tar.xz"
             Invoke-WebRequest $msys2_tar_url -OutFile $msys2_tar
             if ($(Get-FileHash -Algorithm SHA256 $msys2_tar).Hash -ne $msys2_tar_sha256) {
