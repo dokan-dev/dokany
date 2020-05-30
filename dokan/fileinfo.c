@@ -52,6 +52,7 @@ NTSTATUS
 DokanFillFileStandardInfo(PFILE_STANDARD_INFORMATION StandardInfo,
                           PBY_HANDLE_FILE_INFORMATION FileInfo,
                           PULONG RemainingLength,
+                          PDOKAN_FILE_INFO DokanFileInfo,
                           PDOKAN_INSTANCE DokanInstance) {
   if (*RemainingLength < sizeof(FILE_STANDARD_INFORMATION)) {
     return STATUS_BUFFER_OVERFLOW;
@@ -64,7 +65,7 @@ DokanFillFileStandardInfo(PFILE_STANDARD_INFORMATION StandardInfo,
   StandardInfo->EndOfFile.HighPart = FileInfo->nFileSizeHigh;
   StandardInfo->EndOfFile.LowPart = FileInfo->nFileSizeLow;
   StandardInfo->NumberOfLinks = FileInfo->nNumberOfLinks;
-  StandardInfo->DeletePending = FALSE;
+  StandardInfo->DeletePending = DokanFileInfo->DeleteOnClose;
   StandardInfo->Directory = FALSE;
 
   if (FileInfo->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
@@ -115,6 +116,7 @@ NTSTATUS
 DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
                      PBY_HANDLE_FILE_INFORMATION FileInfo,
                      PULONG RemainingLength, PEVENT_CONTEXT EventContext,
+                     PDOKAN_FILE_INFO DokanFileInfo,
                      PDOKAN_INSTANCE DokanInstance) {
   ULONG allRemainingLength = *RemainingLength;
 
@@ -127,7 +129,7 @@ DokanFillFileAllInfo(PFILE_ALL_INFORMATION AllInfo,
 
   // FileStandardInformation
   DokanFillFileStandardInfo(&AllInfo->StandardInformation, FileInfo,
-                            RemainingLength, DokanInstance);
+                            RemainingLength, DokanFileInfo, DokanInstance);
 
   // FileInternalInformation
   DokanFillInternalInfo(&AllInfo->InternalInformation, FileInfo,
@@ -479,14 +481,14 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       DbgPrint("\tFileStandardInformation\n");
       status = DokanFillFileStandardInfo(
           (PFILE_STANDARD_INFORMATION)eventInfo->Buffer, &byHandleFileInfo,
-          &remainingLength, DokanInstance);
+          &remainingLength, &fileInfo, DokanInstance);
       break;
 
     case FileAllInformation:
       DbgPrint("\tFileAllInformation\n");
       status = DokanFillFileAllInfo((PFILE_ALL_INFORMATION)eventInfo->Buffer,
                                     &byHandleFileInfo, &remainingLength,
-                                    EventContext, DokanInstance);
+                                    EventContext, &fileInfo, DokanInstance);
       break;
 
     case FileAlternateNameInformation:
