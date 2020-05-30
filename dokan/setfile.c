@@ -181,7 +181,7 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
   if (!DokanOperations->MoveFile)
     return STATUS_NOT_IMPLEMENTED;
 
-  if (renameInfo->FileName[0] != L'\\') {
+  if (renameInfo->FileName[0] != L'\\' && renameInfo->FileName[0] != L':') {
     ULONGLONG pos;
     for (pos = EventContext->Operation.SetFile.FileNameLength / sizeof(WCHAR);
          pos != 0; --pos) {

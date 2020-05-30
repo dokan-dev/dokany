@@ -957,7 +957,13 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
   PFILE_RENAME_INFO renameInfo = NULL;
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
-  GetFilePath(newFilePath, DOKAN_MAX_PATH, NewFileName);
+  if (wcslen(NewFileName) && NewFileName[0] != ':') {
+    GetFilePath(newFilePath, DOKAN_MAX_PATH, NewFileName);
+  } else {
+    // For a stream rename, FileRenameInfo expect the FileName param without the filename
+    // like :<stream name>:<stream type>
+    wcsncpy_s(newFilePath, DOKAN_MAX_PATH, NewFileName, wcslen(NewFileName));
+  }
 
   DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
   handle = (HANDLE)DokanFileInfo->Context;
