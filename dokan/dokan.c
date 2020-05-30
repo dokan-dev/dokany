@@ -161,9 +161,9 @@ void CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
   ULONG sectorSize = DokanOptions->SectorSize;
 
   if ((allocationUnitSize < 512 || allocationUnitSize > 65536 ||
-       (allocationUnitSize & (allocationUnitSize - 1)) != 0) // Is power of tow
+       (allocationUnitSize & (allocationUnitSize - 1)) != 0) // Is power of two
       || (sectorSize < 512 || sectorSize > 65536 ||
-          (sectorSize & (sectorSize - 1)))) { // Is power of tow
+          (sectorSize & (sectorSize - 1)))) { // Is power of two
     // Reset to default if values does not fit windows FAT/NTFS value
     // https://support.microsoft.com/en-us/kb/140365
     DokanOptions->SectorSize = DOKAN_DEFAULT_SECTOR_SIZE;
