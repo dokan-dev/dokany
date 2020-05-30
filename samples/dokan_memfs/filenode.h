@@ -46,6 +46,9 @@ struct security_informations : std::mutex {
   PSECURITY_DESCRIPTOR descriptor = nullptr;
   DWORD descriptor_size = 0;
 
+  security_informations() = default;
+  security_informations(const security_informations &) = delete;
+  security_informations &operator=(const security_informations &) = delete;
   ~security_informations() {
     if (descriptor) delete[] descriptor;
   }
