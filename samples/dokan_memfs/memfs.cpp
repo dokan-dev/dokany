@@ -64,28 +64,22 @@ void memfs::run() {
       break;
     case DOKAN_ERROR:
       throw std::runtime_error("Error");
-      break;
     case DOKAN_DRIVE_LETTER_ERROR:
       throw std::runtime_error("Bad Drive letter");
-      break;
     case DOKAN_DRIVER_INSTALL_ERROR:
       throw std::runtime_error("Can't install driver");
-      break;
     case DOKAN_START_ERROR:
       throw std::runtime_error("Driver something wrong");
-      break;
     case DOKAN_MOUNT_ERROR:
       throw std::runtime_error("Can't assign a drive letter");
-      break;
     case DOKAN_MOUNT_POINT_ERROR:
       throw std::runtime_error("Mount point error");
-      break;
     case DOKAN_VERSION_ERROR:
       throw std::runtime_error("Version error");
-      break;
-    default:
-      throw std::runtime_error("Unknown error");  // add error status
-      break;
+    default: {
+      spdlog::error(L"DokanMain failed with {}", status);
+      throw std::runtime_error("Unknown error"); // add error status
+    }
   }
 }
 

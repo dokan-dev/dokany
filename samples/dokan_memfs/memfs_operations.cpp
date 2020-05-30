@@ -734,7 +734,7 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
               memfs_helper::DataStreamNameStr.end(),
               std::begin(stream_data.cStreamName) + 1);
     stream_data.cStreamName[0] = ':';
-    stream_data.cStreamName[memfs_helper::DataStreamNameStr.length() + 1] = '\0';
+    stream_data.cStreamName[memfs_helper::DataStreamNameStr.length() + 1] = L'\0';
     stream_data.StreamSize.QuadPart = f->get_filesize();
     fill_findstreamdata(&stream_data, dokanfileinfo);
   } else if (streams.empty()) {
@@ -760,7 +760,7 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
         std::begin(stream_data.cStreamName) + stream_names.second.length() + 1);
     stream_data.cStreamName[0] = ':';
     stream_data.cStreamName[stream_names.second.length() +
-                            memfs_helper::DataStreamNameStr.length() + 1] = '\0';
+                            memfs_helper::DataStreamNameStr.length() + 1] = L'\0';
     stream_data.StreamSize.QuadPart = stream.second->get_filesize();
     spdlog::info(L"FindStreams: {} StreamName: {} Size: {:x}", filename_str,
                  stream_names.second, stream_data.StreamSize.QuadPart);
