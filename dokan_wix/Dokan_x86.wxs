@@ -255,6 +255,23 @@
                   <File Id="mirrorC" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                 </Component>
               </Directory>
+              <Directory Id="MEMFSDIR" Name="memfs">
+                <Component Id="SampleMemFSFilesComponent" Win64="no" Guid="{7E838450-25C6-4F58-A914-1EA60E507AC1}">
+                  <File Id="memfsEXE" Source="..\Win32\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
+                  <File Id="dokanMemFSDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
+                  <File Id="filenodeCPP" Source="..\samples\dokan_memfs\filenode.cpp" Name="filenode.cpp" KeyPath="no"/>
+                  <File Id="filenodeH" Source="..\samples\dokan_memfs\filenode.h" Name="filenode.h" KeyPath="no"/>
+                  <File Id="filenodesCPP" Source="..\samples\dokan_memfs\filenodes.cpp" Name="filenodes.cpp" KeyPath="no"/>
+                  <File Id="filenodesH" Source="..\samples\dokan_memfs\filenodes.h" Name="filenodes.h" KeyPath="no"/>
+                  <File Id="mainCPP" Source="..\samples\dokan_memfs\main.cpp" Name="main.cpp" KeyPath="no"/>
+                  <File Id="memfsCPP" Source="..\samples\dokan_memfs\memfs.cpp" Name="memfs.cpp" KeyPath="no"/>
+                  <File Id="memfsH" Source="..\samples\dokan_memfs\memfs.h" Name="memfs.h" KeyPath="no"/>
+                  <File Id="memfs_helperH" Source="..\samples\dokan_memfs\memfs_helper.h" Name="memfs_helper.h" KeyPath="no"/>
+                  <File Id="memfs_operationsCPP" Source="..\samples\dokan_memfs\memfs_operations.cpp" Name="memfs_operations.cpp" KeyPath="no"/>
+                  <File Id="memfs_operationsH" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
+                </Component>
+              </Directory>
               <Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
               </Directory>
             </Directory>
@@ -290,6 +307,7 @@
         <ComponentRef Id="IncludeFuseFilesComponent"/>
         <ComponentRef Id="LibFilesComponent"/>
         <ComponentRef Id="SampleMirrorFilesComponent"/>
+        <ComponentRef Id="SampleMemFSFilesComponent"/>
         <?if $(var.BuildCygwin)=true ?>
         <ComponentRef Id="SampleFuseMirrorCygwinComponent" />
         <?endif?>

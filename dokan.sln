@@ -15,6 +15,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_np", "dokan_np\dokan_
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_fuse", "dokan_fuse\dokan_fuse.vcxproj", "{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{05730645-41B5-4B84-9068-17193932E5AE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dokan_memfs", "samples\dokan_memfs\dokan_memfs.vcxproj", "{07E55DA5-7237-465A-8338-0B582452CC78}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM = Debug|ARM
@@ -127,9 +131,29 @@ Global
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Release|Win32.Build.0 = Release|Win32
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Release|x64.ActiveCfg = Release|x64
 		{4AF8149D-C526-4D38-A4BC-9FFA67EDF924}.Release|x64.Build.0 = Release|x64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|ARM.ActiveCfg = Debug|ARM
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|ARM.Build.0 = Debug|ARM
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|ARM64.Build.0 = Debug|ARM64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|Win32.ActiveCfg = Debug|Win32
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|Win32.Build.0 = Debug|Win32
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|x64.ActiveCfg = Debug|x64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Debug|x64.Build.0 = Debug|x64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|ARM.ActiveCfg = Release|ARM
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|ARM.Build.0 = Release|ARM
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|ARM64.ActiveCfg = Release|ARM64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|ARM64.Build.0 = Release|ARM64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|Win32.ActiveCfg = Release|Win32
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|Win32.Build.0 = Release|Win32
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|x64.ActiveCfg = Release|x64
+		{07E55DA5-7237-465A-8338-0B582452CC78}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DADCBCAD-4429-422E-9FA9-D8E538D0EF94} = {05730645-41B5-4B84-9068-17193932E5AE}
+		{07E55DA5-7237-465A-8338-0B582452CC78} = {05730645-41B5-4B84-9068-17193932E5AE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {285EC6E0-52A5-496A-BCD3-DC5FA161D0FC}

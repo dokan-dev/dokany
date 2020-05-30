@@ -1,0 +1,3 @@
+[submodule "samples/dokan_memory/spdlog"]
+	path = samples/dokan_memfs/spdlog
+	url = https://github.com/gabime/spdlog.git

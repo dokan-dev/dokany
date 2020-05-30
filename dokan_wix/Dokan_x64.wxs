@@ -254,6 +254,23 @@
                     <File Id="mirrorX86C" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
                   </Component>
                 </Directory>
+                <Directory Id="MEMFSX86DIR" Name="memfs">
+                  <Component Id="SampleMemFSFilesComponentX86" Win64="yes" Guid="{DC0CCB13-16C4-4B6A-A4E4-EF456E22CF10}">
+                    <File Id="memfsX86EXE" Source="..\Win32\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
+                    <File Id="dokanMemFSX86DLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                    <File Id="dokan_memfsX86vcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
+                    <File Id="filenodeX86CPP" Source="..\samples\dokan_memfs\filenode.cpp" Name="filenode.cpp" KeyPath="no"/>
+                    <File Id="filenodeX86H" Source="..\samples\dokan_memfs\filenode.h" Name="filenode.h" KeyPath="no"/>
+                    <File Id="filenodesX86CPP" Source="..\samples\dokan_memfs\filenodes.cpp" Name="filenodes.cpp" KeyPath="no"/>
+                    <File Id="filenodesX86H" Source="..\samples\dokan_memfs\filenodes.h" Name="filenodes.h" KeyPath="no"/>
+                    <File Id="mainX86CPP" Source="..\samples\dokan_memfs\main.cpp" Name="main.cpp" KeyPath="no"/>
+                    <File Id="memfsX86CPP" Source="..\samples\dokan_memfs\memfs.cpp" Name="memfs.cpp" KeyPath="no"/>
+                    <File Id="memfsX86H" Source="..\samples\dokan_memfs\memfs.h" Name="memfs.h" KeyPath="no"/>
+                    <File Id="memfs_helperX86H" Source="..\samples\dokan_memfs\memfs_helper.h" Name="memfs_helper.h" KeyPath="no"/>
+                    <File Id="memfs_operationsX86CPP" Source="..\samples\dokan_memfs\memfs_operations.cpp" Name="memfs_operations.cpp" KeyPath="no"/>
+                    <File Id="memfs_operationsX86H" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
+                  </Component>
+                </Directory>
                 <Directory Id="FUSEMIRRORX86DIR" Name="fuse_mirror">
                 </Directory>
               </Directory>
@@ -298,6 +315,23 @@
                   <File Id="dokanMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
                   <File Id="mirrorC" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
+                </Component>
+              </Directory>
+              <Directory Id="MEMFSDIR" Name="memfs">
+                <Component Id="SampleMemFSFilesComponent" Win64="yes" Guid="{DF735559-DE20-4FB2-8390-A2EB5F31706E}">
+                  <File Id="memfsEXE" Source="..\x64\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
+                  <File Id="dokanMemFSDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+                  <File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
+                  <File Id="filenodeCPP" Source="..\samples\dokan_memfs\filenode.cpp" Name="filenode.cpp" KeyPath="no"/>
+                  <File Id="filenodeH" Source="..\samples\dokan_memfs\filenode.h" Name="filenode.h" KeyPath="no"/>
+                  <File Id="filenodesCPP" Source="..\samples\dokan_memfs\filenodes.cpp" Name="filenodes.cpp" KeyPath="no"/>
+                  <File Id="filenodesH" Source="..\samples\dokan_memfs\filenodes.h" Name="filenodes.h" KeyPath="no"/>
+                  <File Id="mainCPP" Source="..\samples\dokan_memfs\main.cpp" Name="main.cpp" KeyPath="no"/>
+                  <File Id="memfsCPP" Source="..\samples\dokan_memfs\memfs.cpp" Name="memfs.cpp" KeyPath="no"/>
+                  <File Id="memfsH" Source="..\samples\dokan_memfs\memfs.h" Name="memfs.h" KeyPath="no"/>
+                  <File Id="memfs_helperH" Source="..\samples\dokan_memfs\memfs_helper.h" Name="memfs_helper.h" KeyPath="no"/>
+                  <File Id="memfs_operationsCPP" Source="..\samples\dokan_memfs\memfs_operations.cpp" Name="memfs_operations.cpp" KeyPath="no"/>
+                  <File Id="memfs_operationsH" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
                 </Component>
               </Directory>
               <Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
@@ -347,6 +381,8 @@
         <ComponentRef Id="LibX86FilesComponent"/>
         <ComponentRef Id="SampleMirrorFilesComponent"/>
         <ComponentRef Id="SampleMirrorFilesComponentX86"/>
+        <ComponentRef Id="SampleMemFSFilesComponent"/>
+        <ComponentRef Id="SampleMemFSFilesComponentX86"/>
         <?if $(var.BuildCygwin)=true ?>
         <ComponentRef Id="SampleFuseCygwinFilesComponentX86" />
         <ComponentRef Id="SampleFuseMirrorCygwinComponent" />

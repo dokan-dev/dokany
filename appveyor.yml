@@ -119,6 +119,7 @@
           Exec-External {& 7z x -y "$doxygen_zip"}
           cd $env:APPVEYOR_BUILD_FOLDER
         }
+    - git submodule update --init --recursive
     - ps: |
         if ($env:CONFIGURATION -eq "All") {
           function downloadIfOlderThanDays($url, $path, $days) {
@@ -350,9 +351,11 @@
       if ($env:CONFIGURATION -eq "FsTest") {
         Write-Host Running tests...
         $env:DokanLibrary1 = [System.Environment]::GetEnvironmentVariable("DokanLibrary1", "Machine")
+        $memfs = @("${env:DokanLibrary1}\sample\memfs\memfs.exe", "${env:DokanLibrary1}\x86\sample\memfs\memfs.exe")
         $mirrors = @("${env:DokanLibrary1}\sample\mirror\mirror.exe", "${env:DokanLibrary1}\x86\sample\mirror\mirror.exe")
 
         cd .\samples
+        .\memfs_test.ps1 -Memfs $memfs
         .\mirror_test.ps1 -Mirrors $mirrors
       }
   - ps: |
