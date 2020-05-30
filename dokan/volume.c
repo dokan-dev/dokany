@@ -242,6 +242,7 @@ DokanFsAttributeInformation(PEVENT_INFORMATION EventInfo,
   bytesToCopy = (ULONG)wcslen(fsName) * sizeof(WCHAR);
   if (remainingLength < bytesToCopy) {
     bytesToCopy = remainingLength;
+    status = STATUS_BUFFER_OVERFLOW;
   }
 
   attrInfo->FileSystemNameLength = bytesToCopy;
@@ -251,7 +252,7 @@ DokanFsAttributeInformation(PEVENT_INFORMATION EventInfo,
   EventInfo->BufferLength =
       EventContext->Operation.Volume.BufferLength - remainingLength;
 
-  return STATUS_SUCCESS;
+  return status;
 }
 
 NTSTATUS
