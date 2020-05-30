@@ -450,7 +450,6 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
   BOOLEAN isPagingIo = FALSE;
   BOOLEAN fcbLocked = FALSE;
-  PFILE_END_OF_FILE_INFORMATION pInfoEoF = NULL;
 
   vcb = DeviceObject->DeviceExtension;
 
@@ -486,11 +485,24 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     ASSERT(fcb != NULL);
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_SET_INFORMATION);
     switch (irpSp->Parameters.SetFile.FileInformationClass) {
-    case FileAllocationInformation:
+    case FileAllocationInformation: {
+      if ((fileObject->SectionObjectPointer != NULL) &&
+          (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
+
+        LARGE_INTEGER AllocationSize =
+            ((PFILE_ALLOCATION_INFORMATION)buffer)->AllocationSize;
+        if (AllocationSize.QuadPart <
+                fcb->AdvancedFCBHeader.AllocationSize.QuadPart &&
+            !MmCanFileBeTruncated(fileObject->SectionObjectPointer,
+                                  &AllocationSize)) {
+          status = STATUS_USER_MAPPED_FILE;
+          __leave;
+        }
+      }
       DDbgPrint(
           "  FileAllocationInformation %lld\n",
           ((PFILE_ALLOCATION_INFORMATION)buffer)->AllocationSize.QuadPart);
-      break;
+    } break;
     case FileBasicInformation:
       DDbgPrint("  FileBasicInformation\n");
       break;
@@ -499,11 +511,12 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     case FileDispositionInformationEx:
       DDbgPrint("  FileDispositionInformationEx\n");
       break;
-    case FileEndOfFileInformation:
+    case FileEndOfFileInformation: {
       if ((fileObject->SectionObjectPointer != NULL) &&
           (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
 
-        pInfoEoF = (PFILE_END_OF_FILE_INFORMATION)buffer;
+        PFILE_END_OF_FILE_INFORMATION pInfoEoF =
+            (PFILE_END_OF_FILE_INFORMATION)buffer;
 
         if (pInfoEoF->EndOfFile.QuadPart <
                 fcb->AdvancedFCBHeader.FileSize.QuadPart &&
@@ -525,7 +538,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       }
       DDbgPrint("  FileEndOfFileInformation %lld\n",
                 ((PFILE_END_OF_FILE_INFORMATION)buffer)->EndOfFile.QuadPart);
-      break;
+    } break;
     case FileLinkInformation:
       DDbgPrint("  FileLinkInformation\n");
       break;
