@@ -210,7 +210,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
 
     fwprintf(stdout, L"  Mount points: %lu\n", nbRead);
     for (ULONG p = 0; p < nbRead; ++p)
-      fwprintf(stdout, L"  %u# MountPoint: %ls - UNC: %ls - DeviceName: %ls\n", p,
+      fwprintf(stdout, L"  %lu# MountPoint: %ls - UNC: %ls - DeviceName: %ls\n", p,
                dokanControl[p].MountPoint, dokanControl[p].UNCName,
                dokanControl[p].DeviceName);
     DokanReleaseMountPointList(dokanControl);
