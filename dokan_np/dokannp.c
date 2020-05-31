@@ -550,7 +550,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   }
 
   DbgPrintW(
-      L"NPEnumResource: *lpcCount 0x%x, *lpBufferSize 0x%x, pCtx->index %d\n",
+      L"NPEnumResource: *lpcCount 0x%x, *lpBufferSize 0x%x, pCtx->index %lu\n",
       *Count, *BufferSize, pCtx->index);
 
   LPNETRESOURCE pNetResource = (LPNETRESOURCE)Buffer;
@@ -567,22 +567,18 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
   DWORD processId = GetCurrentProcessId();
   DWORD sessionId = 0;
-  BOOL  isBelongToCurrentSession = TRUE;
   ProcessIdToSessionId(processId, &sessionId);
-  DbgPrintW(L"NPEnumResource CurrentSesstionID:%d\n", sessionId);
-  DbgPrintW(L"NPEnumResource nbRead:%d\n", nbRead);
+  DbgPrintW(L"NPEnumResource CurrentSesstionID: %d\n", sessionId);
+  DbgPrintW(L"NPEnumResource nbRead: %d\n", nbRead);
 
   while (cEntriesCopied < *Count && pCtx->index < nbRead) {
-    DbgPrintW(L"NPEnumResource SesstionID:%d\n", dokanControl[pCtx->index].SessionId);
-    isBelongToCurrentSession = TRUE;
-    if (sessionId != dokanControl[pCtx->index].SessionId && -1 != dokanControl[pCtx->index].SessionId)
-    {
-      isBelongToCurrentSession = FALSE;
+    DbgPrintW(L"NPEnumResource SesstionID: %lu\n", dokanControl[pCtx->index].SessionId);
+    if (-1 != dokanControl[pCtx->index].SessionId && sessionId != dokanControl[pCtx->index].SessionId) {
       pCtx->index++;
       continue;
     }
     if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
-      DbgPrintW(L"NPEnumResource: end reached at index %d\n", pCtx->index);
+      DbgPrintW(L"NPEnumResource: end reached at index %lu\n", pCtx->index);
       break;
     }
 

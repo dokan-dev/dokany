@@ -877,6 +877,7 @@ PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead) {
   *nbRead = returnedLength / sizeof(DOKAN_CONTROL);
   results = malloc(returnedLength);
   if (results != NULL) {
+    ZeroMemory(results, returnedLength);
     for (ULONG i = 0; i < *nbRead; ++i) {
       if (!uncOnly || wcscmp(dokanControl[i].UNCName, L"") != 0)
         CopyMemory(&results[i], &dokanControl[i], sizeof(DOKAN_CONTROL));
