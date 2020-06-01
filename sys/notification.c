@@ -59,7 +59,7 @@ IOCTL_EVENT_INFO:
 */
 
 #include "dokan.h"
-#include "irp_buffer_helper.h"
+#include "util/irp_buffer_helper.h"
 
 VOID SetCommonEventContext(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext,
                            __in PIRP Irp, __in_opt PDokanCCB Ccb) {

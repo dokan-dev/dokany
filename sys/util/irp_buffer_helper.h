@@ -23,7 +23,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <ntifs.h>
 
-#include "public.h"
+#include "../public.h"
 
 ULONG GetProvidedInputSize(_In_ PIRP Irp);
 PVOID GetInputBuffer(_In_ PIRP Irp);

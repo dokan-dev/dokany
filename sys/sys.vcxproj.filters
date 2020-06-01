@@ -17,6 +17,12 @@
       <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
       <Extensions>inf;inv;inx;mof;mc;</Extensions>
     </Filter>
+    <Filter Include="Header Files\util">
+      <UniqueIdentifier>{c53075fc-b3b8-49c2-ac3d-d1e93402c45b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\util">
+      <UniqueIdentifier>{24ca4d2f-4f1d-436e-96cd-107aa2bf4be1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="access.c">
@@ -88,8 +94,8 @@
     <ClCompile Include="dokan_utility.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="irp_buffer_helper.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="util\irp_buffer_helper.c">
+      <Filter>Source Files\util</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -99,8 +105,8 @@
     <ClInclude Include="public.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="irp_buffer_helper.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="util\irp_buffer_helper.h">
+      <Filter>Header Files\util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
