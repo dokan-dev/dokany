@@ -23,8 +23,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 #include "util/str.h"
 
-#include "dokanfs_msg.h"
-
 static VOID InitMultiVersionResources();
 
 #ifdef ALLOC_PRAGMA
@@ -33,7 +31,6 @@ static VOID InitMultiVersionResources();
 #pragma alloc_text(PAGE, DokanUnload)
 #endif
 
-ULONG g_Debug = DOKAN_DEBUG_NONE;
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
@@ -41,7 +38,6 @@ BOOLEAN g_FixFileNameForReparseMountPoint;
 
 NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 ULONG DokanMdlSafePriority = 0;
-UNICODE_STRING FcbFileNameNull;
 
 FAST_IO_DISPATCH FastIoDispatch;
 FAST_IO_CHECK_IF_POSSIBLE DokanFastIoCheckIfPossible;
@@ -455,156 +451,6 @@ NTSTATUS DokanCheckOplock(
   return STATUS_SUCCESS;
 }
 
-#define PrintStatus(val, flag)                                                 \
-  if (val == flag)                                                             \
-  DDbgPrint("  status = " #flag "\n")
-
-#define DOKAN_LOG_MAX_CHAR_COUNT 2048
-#define DOKAN_LOG_MAX_PACKET_BYTES \
-    (ERROR_LOG_MAXIMUM_SIZE - sizeof(IO_ERROR_LOG_PACKET))
-#define DOKAN_LOG_MAX_PACKET_NONNULL_CHARS \
-    (DOKAN_LOG_MAX_PACKET_BYTES / sizeof(WCHAR) - 1)
-
-VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
-                        __in UCHAR MajorFunctionCode,
-                        __in NTSTATUS MessageId,
-                        __in NTSTATUS Status,
-                        __in LPCTSTR Format,
-                        __in va_list Args) {
-  NTSTATUS status = STATUS_SUCCESS;
-  PIO_ERROR_LOG_PACKET packet = NULL;
-  WCHAR *message = NULL;
-  size_t messageCapacity = DOKAN_LOG_MAX_CHAR_COUNT;
-  size_t messageCharCount = 0;
-  size_t messageCharsWritten = 0;
-  size_t packetCount = 0;
-  size_t i = 0;
-  UCHAR packetCharCount = 0;
-  UCHAR packetSize = 0;
-
-  __try {
-    message = DokanAlloc(sizeof(WCHAR) * messageCapacity);
-    if (message == NULL) {
-      DDbgPrint("Failed to allocate message of capacity %d\n", messageCapacity);
-      __leave;
-    }
-
-    status = RtlStringCchVPrintfW(message, messageCapacity, Format, Args);
-    if (status == STATUS_BUFFER_OVERFLOW) {
-      // In this case we want to at least log what we can fit.
-      DDbgPrint("Log message was larger than DOKAN_LOG_MAX_CHAR_COUNT."
-                " Format: %S\n", Format);
-    } else if (status != STATUS_SUCCESS) {
-      DDbgPrint("Failed to generate log message with format: %S; status: %x\n",
-                Format, status);
-      __leave;
-    }
-
-    status = RtlStringCchLengthW(message, messageCapacity, &messageCharCount);
-    if (status != STATUS_SUCCESS) {
-      DDbgPrint("Failed to determine message length, status: %x\n", status);
-      __leave;
-    }
-
-    packetCount = messageCharCount / DOKAN_LOG_MAX_PACKET_NONNULL_CHARS;
-    if (messageCharCount % DOKAN_LOG_MAX_PACKET_NONNULL_CHARS != 0) {
-      ++packetCount;
-    }
-
-    for (i = 0; i < packetCount; i++) {
-      packetCharCount = (UCHAR)min(messageCharCount - messageCharsWritten,
-                                   DOKAN_LOG_MAX_PACKET_NONNULL_CHARS);
-      packetSize =
-          sizeof(IO_ERROR_LOG_PACKET) + sizeof(WCHAR) * (packetCharCount + 1);
-      packet = IoAllocateErrorLogEntry(DriverObject, packetSize);
-      if (packet == NULL) {
-        DDbgPrint("Failed to allocate packet of size %d\n", packetSize);
-        __leave;
-      }
-      RtlZeroMemory(packet, packetSize);
-      packet->MajorFunctionCode = MajorFunctionCode;
-      packet->NumberOfStrings = 1;
-      packet->StringOffset =
-          (USHORT)((char *)&packet->DumpData[0] - (char *)packet);
-      packet->ErrorCode = MessageId;
-      packet->FinalStatus = Status;
-      RtlCopyMemory(&packet->DumpData[0], message + messageCharsWritten,
-                    sizeof(WCHAR) * packetCharCount);
-      IoWriteErrorLogEntry(packet); // Destroys packet.
-      packet = NULL;
-      messageCharsWritten += packetCharCount;
-    }
-  } __finally {
-    if (message != NULL) {
-      ExFreePool(message);
-    }
-  }
-}
-
-NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
-                       __in NTSTATUS Status,
-                       __in LPCTSTR Format,
-                       ...) {
-  if (g_Debug & DOKAN_DEBUG_DEFAULT) {
-    va_list args;
-    va_start(args, Format);
-    DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
-                       DOKANFS_ERROR_MSG, Status, Format, args);
-    va_end(args);
-  }
-  return Status;
-}
-
-VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...) {
-  if (g_Debug & DOKAN_DEBUG_DEFAULT) {
-    va_list args;
-    va_start(args, Format);
-    DokanPrintToSysLog(Logger->DriverObject, Logger->MajorFunctionCode,
-                       DOKANFS_INFO_MSG, STATUS_SUCCESS, Format, args);
-    va_end(args);
-  }
-}
-
-VOID DokanCaptureBackTrace(__out PDokanBackTrace Trace) {
-  PVOID rawTrace[4];
-  USHORT count = RtlCaptureStackBackTrace(1, 4, rawTrace, NULL);
-  Trace->Address = (ULONG64)((count > 0) ? rawTrace[0] : 0);
-  Trace->ReturnAddresses =
-        (((count > 1) ? ((ULONG64)rawTrace[1] & 0xfffff) : 0) << 40)
-      | (((count > 2) ? ((ULONG64)rawTrace[2] & 0xfffff) : 0) << 20)
-      |  ((count > 3) ? ((ULONG64)rawTrace[3] & 0xfffff) : 0);
-}
-
-VOID DokanPrintNTStatus(NTSTATUS Status) {
-  DDbgPrint("  status = 0x%x\n", Status);
-
-  PrintStatus(Status, STATUS_SUCCESS);
-  PrintStatus(Status, STATUS_PENDING);
-  PrintStatus(Status, STATUS_NO_MORE_FILES);
-  PrintStatus(Status, STATUS_END_OF_FILE);
-  PrintStatus(Status, STATUS_NO_SUCH_FILE);
-  PrintStatus(Status, STATUS_NOT_IMPLEMENTED);
-  PrintStatus(Status, STATUS_BUFFER_OVERFLOW);
-  PrintStatus(Status, STATUS_FILE_IS_A_DIRECTORY);
-  PrintStatus(Status, STATUS_SHARING_VIOLATION);
-  PrintStatus(Status, STATUS_OBJECT_NAME_INVALID);
-  PrintStatus(Status, STATUS_OBJECT_NAME_NOT_FOUND);
-  PrintStatus(Status, STATUS_OBJECT_NAME_COLLISION);
-  PrintStatus(Status, STATUS_OBJECT_PATH_INVALID);
-  PrintStatus(Status, STATUS_OBJECT_PATH_NOT_FOUND);
-  PrintStatus(Status, STATUS_OBJECT_PATH_SYNTAX_BAD);
-  PrintStatus(Status, STATUS_ACCESS_DENIED);
-  PrintStatus(Status, STATUS_ACCESS_VIOLATION);
-  PrintStatus(Status, STATUS_INVALID_PARAMETER);
-  PrintStatus(Status, STATUS_INVALID_USER_BUFFER);
-  PrintStatus(Status, STATUS_INVALID_HANDLE);
-  PrintStatus(Status, STATUS_INSUFFICIENT_RESOURCES);
-  PrintStatus(Status, STATUS_DEVICE_DOES_NOT_EXIST);
-  PrintStatus(Status, STATUS_INVALID_DEVICE_REQUEST);
-  PrintStatus(Status, STATUS_VOLUME_DISMOUNTED);
-  PrintStatus(Status, STATUS_NO_SUCH_DEVICE);
-}
-
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
                              __in ULONG_PTR Info) {
   if (Irp == NULL) {
@@ -726,33 +572,6 @@ NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
                                  __in ULONG Action) {
   ASSERT(Fcb != NULL);
   return DokanNotifyReportChange0(Fcb, &Fcb->FileName, FilterMatch, Action);
-}
-
-VOID PrintIdType(__in VOID *Id) {
-  if (Id == NULL) {
-    DDbgPrint("    IdType = NULL\n");
-    return;
-  }
-  switch (GetIdentifierType(Id)) {
-  case DGL:
-    DDbgPrint("    IdType = DGL\n");
-    break;
-  case DCB:
-    DDbgPrint("   IdType = DCB\n");
-    break;
-  case VCB:
-    DDbgPrint("   IdType = VCB\n");
-    break;
-  case FCB:
-    DDbgPrint("   IdType = FCB\n");
-    break;
-  case CCB:
-    DDbgPrint("   IdType = CCB\n");
-    break;
-  default:
-    DDbgPrint("   IdType = Unknown\n");
-    break;
-  }
 }
 
 BOOLEAN

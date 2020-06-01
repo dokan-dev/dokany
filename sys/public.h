@@ -398,12 +398,6 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_DISABLE_OPLOCKS 64
 #define DOKAN_EVENT_ENABLE_FCB_GC 128
 
-// Dokan debug log options
-#define DOKAN_DEBUG_NONE 0
-#define DOKAN_DEBUG_DEFAULT 1
-#define DOKAN_DEBUG_LOCK 2
-#define DOKAN_DEBUG_OPLOCKS 4
-
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
   ULONG Status;

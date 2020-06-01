@@ -34,12 +34,12 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntstrsafe.h>
 
 #include "public.h"
+#include "util/log.h"
 
 //
 // DEFINES
 //
 
-extern ULONG g_Debug;
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
@@ -127,21 +127,6 @@ extern ULONG DokanMdlSafePriority;
 
 #define DOKAN_KEEPALIVE_TIMEOUT_DEFAULT (1000 * 15) // in millisecond
 
-#define DDbgPrint(...)                                                         \
-  if (g_Debug & DOKAN_DEBUG_DEFAULT) {                                         \
-    KdPrintEx(                                                                 \
-        (DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[DokanFS] " __VA_ARGS__));  \
-  }
-
-extern UNICODE_STRING FcbFileNameNull;
-#define DokanPrintFileName(FileObject)                                         \
-  DDbgPrint("  FileName: %wZ FCB.FileName: %wZ\n", &FileObject->FileName,      \
-            FileObject->FsContext2                                             \
-                ? (((PDokanCCB)FileObject->FsContext2)->Fcb                    \
-                       ? &((PDokanCCB)FileObject->FsContext2)->Fcb->FileName   \
-                       : &FcbFileNameNull)                                     \
-                : &FcbFileNameNull)
-
 extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 #define DokanAllocateIrpEntry()                                                \
   ExAllocateFromNPagedLookasideList(&DokanIrpEntryLookasideList)
@@ -218,48 +203,6 @@ typedef struct _DOKAN_GLOBAL {
   LIST_ENTRY DeviceDeleteList;
   KEVENT KillDeleteDeviceEvent;
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
-
-typedef struct _DOKAN_LOGGER {
-
-  PDRIVER_OBJECT DriverObject;
-  UCHAR MajorFunctionCode;
-
-} DOKAN_LOGGER, *PDOKAN_LOGGER;
-
-#define DOKAN_INIT_LOGGER(logger, driverObject, majorFunctionCode)             \
-  DOKAN_LOGGER logger;                                                         \
-  logger.DriverObject = driverObject;                                          \
-  logger.MajorFunctionCode = majorFunctionCode;
-
-// Logs an error to the Windows event log, even in production, with the given
-// status, and returns the status passed in.
-NTSTATUS DokanLogError(__in PDOKAN_LOGGER Logger,
-                       __in NTSTATUS Status,
-                       __in LPCTSTR Format,
-                       ...);
-
-// Logs an informational message to the Windows event log, even in production.
-VOID DokanLogInfo(__in PDOKAN_LOGGER Logger, __in LPCTSTR Format, ...);
-
-// A compact stack trace that can be easily logged.
-typedef struct _DokanBackTrace {
-  // The full address of a point-of-reference instruction near where the logging
-  // occurs. One should be able to find this instruction in the disassembly of
-  // the driver by seeing the log message content aside from this value. This
-  // value then tells you the absolute address of that instruction at runtime.
-  ULONG64 Address;
-
-  // Three return addresses truncated to their lowest 20 bits. The lowest 20
-  // bits of this value is the most distant return address, the next 20 bits are
-  // the next frame up, etc. To find each of the 3 instructions referenced here,
-  // one replaces the lowest 20 bits of Ip.
-  ULONG64 ReturnAddresses;
-} DokanBackTrace, *PDokanBackTrace;
-
-// Captures a trace where Address is the full address of the call site
-// instruction after the DokanCaptureBackTrace call, and ReturnAddresses
-// indicates the 3 return addresses below that.
-VOID DokanCaptureBackTrace(__out PDokanBackTrace Trace);
 
 // make sure Identifier is the top of struct
 typedef struct _DokanDiskControlBlock {
@@ -1028,7 +971,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
-VOID DokanPrintNTStatus(NTSTATUS Status);
 
 NTSTATUS DokanOplockRequest(__in PIRP *pIrp);
 NTSTATUS DokanCommonLockControl(__in PIRP Irp);
@@ -1142,8 +1084,6 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
                                   __in PUNICODE_STRING DiskDeviceName,
                                   __in PUNICODE_STRING UNCName,
                                   __in BOOLEAN LockGlobal);
-
-VOID PrintIdType(__in VOID *Id);
 
 NTSTATUS
 DokanAllocateMdl(__in PIRP Irp, __in ULONG Length);

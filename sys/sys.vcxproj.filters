@@ -97,6 +97,9 @@
     <ClCompile Include="util\str.c">
       <Filter>Source Files\util</Filter>
     </ClCompile>
+    <ClCompile Include="util\log.c">
+      <Filter>Source Files\util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dokan.h">
@@ -109,6 +112,9 @@
       <Filter>Header Files\util</Filter>
     </ClInclude>
     <ClInclude Include="util\str.h">
+      <Filter>Header Files\util</Filter>
+    </ClInclude>
+    <ClInclude Include="util\log.h">
       <Filter>Header Files\util</Filter>
     </ClInclude>
   </ItemGroup>
@@ -129,5 +135,10 @@
     <CustomBuild Include="dokanfs_msg.mc">
       <Filter>Driver Files</Filter>
     </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="util\ntstatus_log.inc">
+      <Filter>Header Files\util</Filter>
+    </None>
   </ItemGroup>
 </Project>
