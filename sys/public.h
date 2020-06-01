@@ -115,6 +115,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DISK_FILE_SYSTEM 0
 #define DOKAN_NETWORK_FILE_SYSTEM 1
 
+// Special files that are tagged for specfic FS purpose when their FCB is init.
+// Note: This file names can no longer be used by userland FS correctly.
 #define DOKAN_KEEPALIVE_FILE_NAME L"\\__drive_fs_keepalive"
 #define DOKAN_NOTIFICATION_FILE_NAME L"\\drive_fs_notification"
 

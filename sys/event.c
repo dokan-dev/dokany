@@ -608,9 +608,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     startFailure = TRUE;
   }
 
-  if (DokanStringChar(eventStart->MountPoint,
+  if (DokanSearchStringChar(eventStart->MountPoint,
                         sizeof(eventStart->MountPoint), '\0') == -1 ||
-      DokanStringChar(eventStart->UNCName,
+      DokanSearchStringChar(eventStart->UNCName,
                         sizeof(eventStart->UNCName), '\0') == -1) {
     DokanLogInfo(&logger, L"MountPoint / UNCName provided are not null "
                           L"terminated in event start.");

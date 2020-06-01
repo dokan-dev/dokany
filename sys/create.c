@@ -254,20 +254,6 @@ void FixFileNameForReparseMountPoint(__in const UNICODE_STRING *MountPoint,
   }
 }
 
-LONG DokanUnicodeStringChar(__in PUNICODE_STRING UnicodeString,
-                            __in WCHAR Char) {
-  return DokanStringChar(UnicodeString->Buffer, UnicodeString->Length, Char);
-}
-
-LONG DokanStringChar(__in PWCHAR String, __in ULONG Length, __in WCHAR Char) {
-  for (ULONG i = 0; i < Length / sizeof(WCHAR); ++i) {
-    if (String[i] == Char) {
-      return i;
-    }
-  }
-  return -1;
-}
-
 VOID SetFileObjectForVCB(__in PFILE_OBJECT FileObject, __in PDokanVCB Vcb) {
   FileObject->SectionObjectPointer = &Vcb->SectionObjectPointers;
   FileObject->FsContext = &Vcb->VolumeFileHeader;
@@ -461,6 +447,8 @@ Return Value:
       if (IsDokanProcessFiles(fileObject->FileName)) {
         DDbgPrint("  Dokan Process file called before startup finished\n");
       } else {
+        // We want to always dispatch non-root opens so we don't have to
+        // special-case anything here, but it needs a lot of testing.
         DDbgPrint("  Here we only go in if some antivirus software tries to "
                   "create files before startup is finished.\n");
         if (fileObject->FileName.Length > 0) {
@@ -592,7 +580,7 @@ Return Value:
 
     // don't open file like stream
     if (!dcb->UseAltStream &&
-        DokanUnicodeStringChar(&fileObject->FileName, L':') != -1) {
+        DokanSearchUnicodeStringChar(&fileObject->FileName, L':') != -1) {
       DDbgPrint("    alternate stream\n");
       status = STATUS_INVALID_PARAMETER;
       info = 0;
@@ -1000,7 +988,8 @@ Return Value:
 
       if (!NT_SUCCESS(status)) {
 
-        DDbgPrint("   DokanCheckShareAccess failed with 0x%x\n", status);
+        DDbgPrint("   DokanCheckShareAccess failed with 0x%x %ls\n", status,
+                  DokanGetNTSTATUSStr(status));
 
         NTSTATUS OplockBreakStatus = STATUS_SUCCESS;
 
@@ -1042,8 +1031,8 @@ Return Value:
             //  we want to return that now.
             //
           } else if (!NT_SUCCESS(OplockBreakStatus)) {
-            DDbgPrint("   FsRtlOplockBreakH returned 0x%x\n",
-                      OplockBreakStatus);
+            DDbgPrint("   FsRtlOplockBreakH returned 0x%x %ls\n",
+                      OplockBreakStatus, DokanGetNTSTATUSStr(OplockBreakStatus));
             status = OplockBreakStatus;
             __leave;
 
@@ -1175,9 +1164,10 @@ Return Value:
       //
       if ((status != STATUS_SUCCESS) &&
           (status != STATUS_OPLOCK_BREAK_IN_PROGRESS)) {
-        DDbgPrint("   FsRtlOplockFsctrl failed with 0x%x, fcb = %p, "
-                  "fileCount = %lu\n",
-                  status, fcb, fcb->FileCount);
+        DDbgPrint(
+            "   FsRtlOplockFsctrl failed with 0x%x %ls, fcb = %p, "
+            "fileCount = %lu\n",
+            status, DokanGetNTSTATUSStr(status), fcb, fcb->FileCount);
 
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
@@ -1373,8 +1363,8 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
     }
     ccb->AtomicOplockRequestPending = FALSE;
   } else {
-    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x\n", ccb,
-              status);
+    DDbgPrint("   IRP_MJ_CREATE failed. Free CCB:%p. Status 0x%x %ls\n", ccb,
+              status, DokanGetNTSTATUSStr(status));
     DokanMaybeBackOutAtomicOplockRequest(ccb, irp);
     DokanFreeCCB(ccb);
     IoRemoveShareAccess(irpSp->FileObject, &fcb->ShareAccess);

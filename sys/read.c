@@ -339,16 +339,6 @@ VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
     IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
 
-  if (NT_SUCCESS(status)) {
-    DDbgPrint("  STATUS_SUCCESS\n");
-  } else if (status == STATUS_INSUFFICIENT_RESOURCES) {
-    DDbgPrint("  STATUS_INSUFFICIENT_RESOURCES\n");
-  } else if (status == STATUS_END_OF_FILE) {
-    DDbgPrint("  STATUS_END_OF_FILE\n");
-  } else {
-    DDbgPrint("  status = 0x%X\n", status);
-  }
-
   DokanCompleteIrpRequest(irp, status, readLength);
 
   DDbgPrint("<== DokanCompleteRead\n");

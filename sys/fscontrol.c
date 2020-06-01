@@ -314,7 +314,8 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       DokanVCBUnlock(Fcb->Vcb);
     }
 
-    DDbgPrint("    DokanOplockRequest return 0x%x\n", Status);
+    DDbgPrint("    DokanOplockRequest return 0x%x %ls\n", Status,
+              DokanGetNTSTATUSStr(Status));
   }
 
   return Status;
@@ -762,6 +763,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   vcb->DeviceObject = volDeviceObject;
   vcb->Dcb = dcb;
   vcb->ResourceLogger.DriverObject = DriverObject;
+  vcb->ValidFcbMask = 0xffffffffffffffff;
   dcb->Vcb = vcb;
 
   if (vcb->Dcb->FcbGarbageCollectionIntervalMs != 0) {

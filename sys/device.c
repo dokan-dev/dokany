@@ -766,7 +766,8 @@ DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("IoAcquireRemoveLock failed with %#x", status);
+    DDbgPrint("IoAcquireRemoveLock failed with %#x %ls", status,
+              DokanGetNTSTATUSStr(status));
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 

@@ -939,7 +939,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
                                 &deviceObject);       // DeviceObject
 
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateDevice returned 0x%x\n", status);
+    DDbgPrint("  IoCreateDevice returned 0x%x %ls\n", status,
+              DokanGetNTSTATUSStr(status));
     return status;
   }
   DDbgPrint("DokanGlobalDevice: %wZ created\n", &deviceName);
@@ -957,7 +958,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
                                 &fsDiskDeviceObject); // DeviceObject
 
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateDevice Disk FileSystem failed: 0x%x\n", status);
+    DDbgPrint("  IoCreateDevice Disk FileSystem failed: 0x%x %ls\n", status,
+              DokanGetNTSTATUSStr(status));
     IoDeleteDevice(deviceObject);
     return status;
   }
@@ -974,7 +976,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
                                 &fsCdDeviceObject); // DeviceObject
 
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateDevice Cd FileSystem failed: 0x%x\n", status);
+    DDbgPrint("  IoCreateDevice Cd FileSystem failed: 0x%x %ls\n", status,
+              DokanGetNTSTATUSStr(status));
     IoDeleteDevice(fsDiskDeviceObject);
     IoDeleteDevice(deviceObject);
     return status;
@@ -985,7 +988,8 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
   status = IoCreateSymbolicLink(&symbolicLinkName, &deviceName);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("  IoCreateSymbolicLink returned 0x%x\n", status);
+    DDbgPrint("  IoCreateSymbolicLink returned 0x%x %ls\n", status,
+              DokanGetNTSTATUSStr(status));
     IoDeleteDevice(fsDiskDeviceObject);
     IoDeleteDevice(fsCdDeviceObject);
     IoDeleteDevice(deviceObject);
@@ -1106,8 +1110,8 @@ VOID DokanCreateMountPointSysProc(__in PVOID pDcb) {
   }
   status = IoCreateSymbolicLink(Dcb->MountPoint, Dcb->DiskDeviceName);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("IoCreateSymbolicLink for mount point %wZ failed: 0x%X\n",
-              Dcb->MountPoint, status);
+    DDbgPrint("IoCreateSymbolicLink for mount point %wZ failed: 0x%X %ls\n",
+              Dcb->MountPoint, status, DokanGetNTSTATUSStr(status));
   }
 
   DDbgPrint("<= DokanCreateMountPointSysProc\n");

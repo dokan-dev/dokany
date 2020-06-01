@@ -169,7 +169,8 @@ DokanLookasideCreate(LOOKASIDE_LIST_EX *pCache, size_t cbElement) {
       pCache, NULL, NULL, NonPagedPool, 0, cbElement, TAG, 0);
 
   if (!NT_SUCCESS(Status)) {
-    DDbgPrint("ExInitializeLookasideListEx failed, Status (0x%x)", Status);
+    DDbgPrint("ExInitializeLookasideListEx failed, Status (0x%x) %ls\n", Status,
+              DokanGetNTSTATUSStr(Status));
     return FALSE;
   }
 
@@ -317,8 +318,8 @@ Return Value:
 
   if (!NT_SUCCESS(status)) {
     CleanupGlobalDiskDevice(dokanGlobal);
-    DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x\n",
-              status);
+    DDbgPrint("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x %ls\n",
+              status, DokanGetNTSTATUSStr(status));
     return status;
   }
 
@@ -498,7 +499,7 @@ NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
 
   // Alternate streams are supposed to use a different set of action
   // and filter values, but we do not expect the caller to be aware of this.
-  if (DokanUnicodeStringChar(FileName, L':') != -1) { //FileStream
+  if (DokanSearchUnicodeStringChar(FileName, L':') != -1) {  // FileStream
 
     //Convert file action to stream action
     switch (Action) {
