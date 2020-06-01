@@ -350,7 +350,6 @@
     <ClCompile Include="directory.c" />
     <ClCompile Include="dispatch.c" />
     <ClCompile Include="dokan.c" />
-    <ClCompile Include="dokan_utility.c" />
     <ClCompile Include="event.c" />
     <ClCompile Include="except.c" />
     <ClCompile Include="fileinfo.c" />
@@ -364,6 +363,7 @@
     <ClCompile Include="security.c" />
     <ClCompile Include="timeout.c" />
     <ClCompile Include="util\irp_buffer_helper.c" />
+    <ClCompile Include="util\str.c" />
     <ClCompile Include="volume.c" />
     <ClCompile Include="write.c" />
   </ItemGroup>
@@ -371,6 +371,7 @@
     <ClInclude Include="dokan.h" />
     <ClInclude Include="public.h" />
     <ClInclude Include="util\irp_buffer_helper.h" />
+    <ClInclude Include="util\str.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dokan.rc" />

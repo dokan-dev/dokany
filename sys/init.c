@@ -21,6 +21,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/str.h"
+
 #include <initguid.h>
 #include <mountmgr.h>
 #include <ntddstor.h>
@@ -30,28 +32,21 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #pragma alloc_text(PAGE, DokanDeleteDeviceObject)
 #endif
 
-static VOID FreeUnicodeString(PUNICODE_STRING UnicodeString) {
-  if (UnicodeString != NULL) {
-    ExFreePool(UnicodeString->Buffer);
-    ExFreePool(UnicodeString);
-  }
-}
-
 static VOID FreeDcbNames(__in PDokanDCB Dcb) {
   if (Dcb->MountPoint != NULL) {
-    FreeUnicodeString(Dcb->MountPoint);
+    DokanFreeUnicodeString(Dcb->MountPoint);
     Dcb->MountPoint = NULL;
   }
   if (Dcb->SymbolicLinkName != NULL) {
-    FreeUnicodeString(Dcb->SymbolicLinkName);
+    DokanFreeUnicodeString(Dcb->SymbolicLinkName);
     Dcb->SymbolicLinkName = NULL;
   }
   if (Dcb->DiskDeviceName != NULL) {
-    FreeUnicodeString(Dcb->DiskDeviceName);
+    DokanFreeUnicodeString(Dcb->DiskDeviceName);
     Dcb->DiskDeviceName = NULL;
   }
   if (Dcb->UNCName != NULL) {
-    FreeUnicodeString(Dcb->UNCName);
+    DokanFreeUnicodeString(Dcb->UNCName);
     Dcb->UNCName = NULL;
   }
 }
@@ -1044,33 +1039,6 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
   *DokanGlobal = dokanGlobal;
   return STATUS_SUCCESS;
-}
-
-PUNICODE_STRING
-DokanAllocateUnicodeString(__in PCWSTR String) {
-  PUNICODE_STRING unicode;
-  PWSTR buffer;
-  ULONG length;
-  unicode = DokanAlloc(sizeof(UNICODE_STRING));
-  if (unicode == NULL) {
-    return NULL;
-  }
-
-  length = (ULONG)(wcslen(String) + 1) * sizeof(WCHAR);
-  buffer = DokanAlloc(length);
-  if (buffer == NULL) {
-    ExFreePool(unicode);
-    return NULL;
-  }
-  RtlCopyMemory(buffer, String, length);
-  NTSTATUS result = RtlUnicodeStringInitEx(unicode, buffer, 0);
-  if (!NT_SUCCESS(result)) {
-    DDbgPrint("   DokanAllocateUnicodeString invalid string size received.\n");
-    ExFreePool(buffer);
-    ExFreePool(unicode);
-    return NULL;
-  }
-  return unicode;
 }
 
 KSTART_ROUTINE DokanRegisterUncProvider;

@@ -22,6 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 #include "util/irp_buffer_helper.h"
+#include "util/str.h"
 
 #include <mountdev.h>
 #include <mountmgr.h>

@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/str.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, DokanDispatchCreate)

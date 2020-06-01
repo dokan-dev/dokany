@@ -1150,38 +1150,6 @@ DokanAllocateMdl(__in PIRP Irp, __in ULONG Length);
 
 VOID DokanFreeMdl(__in PIRP Irp);
 
-// Duplicates the given null-terminated string into a new UNICODE_STRING.
-PUNICODE_STRING DokanAllocateUnicodeString(__in PCWSTR String);
-
-// Allocates a new UNICODE_STRING and then deep copies the given one into it.
-PUNICODE_STRING DokanAllocDuplicateString(__in const UNICODE_STRING* Src);
-
-// Performs a deep copy of a UNICODE_STRING, where the actual destination
-// UNICODE_STRING struct already exists. If the destination struct has a
-// buffer already allocated, this function deletes it.
-BOOLEAN DokanDuplicateUnicodeString(__out PUNICODE_STRING Dest,
-                                    __in const UNICODE_STRING* Src);
-
-// Wraps the given raw string as a UNICODE_STRING with no copying.
-inline UNICODE_STRING DokanWrapUnicodeString(__in WCHAR* Buffer,
-                                             __in USHORT Length) {
-  UNICODE_STRING result;
-  result.Buffer = Buffer;
-  result.Length = Length;
-  result.MaximumLength = Length;
-  return result;
-}
-
-BOOLEAN StartsWith(__in const UNICODE_STRING* Str,
-                   __in const UNICODE_STRING* Prefix);
-
-// Returns TRUE if the given string starts with "\DosDevices\"
-BOOLEAN StartsWithDosDevicesPrefix(__in const UNICODE_STRING* Str);
-
-// Returns TRUE if the given string is in the form "\DosDevices\C:" with any
-// drive letter.
-BOOLEAN IsMountPointDriveLetter(__in const UNICODE_STRING* MountPoint);
-
 ULONG PointerAlignSize(ULONG sizeInBytes);
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
@@ -1227,9 +1195,6 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanCCBFlagsIsSet DokanFCBFlagsIsSet
 #define DokanCCBFlagsSetBit DokanFCBFlagsSetBit
 #define DokanCCBFlagsClearBit DokanFCBFlagsClearBit
-
-ULONG DokanSearchWcharinUnicodeStringWithUlong(__in PUNICODE_STRING inputPUnicodeString, __in WCHAR targetWchar,
-	__in ULONG offsetPosition, __in int isIgnoreTargetWchar);
 
 // Logs the occurrence of the given type of IRP in the oplock debug info of the
 // FCB.

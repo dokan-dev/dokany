@@ -91,10 +91,10 @@
     <ClCompile Include="pnp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="dokan_utility.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="util\irp_buffer_helper.c">
+      <Filter>Source Files\util</Filter>
+    </ClCompile>
+    <ClCompile Include="util\str.c">
       <Filter>Source Files\util</Filter>
     </ClCompile>
   </ItemGroup>
@@ -106,6 +106,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="util\irp_buffer_helper.h">
+      <Filter>Header Files\util</Filter>
+    </ClInclude>
+    <ClInclude Include="util\str.h">
       <Filter>Header Files\util</Filter>
     </ClInclude>
   </ItemGroup>

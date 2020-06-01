@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/str.h"
 
 #include "dokanfs_msg.h"
 
@@ -41,9 +42,6 @@ BOOLEAN g_FixFileNameForReparseMountPoint;
 NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 ULONG DokanMdlSafePriority = 0;
 UNICODE_STRING FcbFileNameNull;
-
-static const UNICODE_STRING dosDevicesPrefix =
-    RTL_CONSTANT_STRING(L"\\DosDevices\\");
 
 FAST_IO_DISPATCH FastIoDispatch;
 FAST_IO_CHECK_IF_POSSIBLE DokanFastIoCheckIfPossible;
@@ -1223,73 +1221,4 @@ void DokanStartFcbGarbageCollector(PDokanVCB Vcb) {
                             (PVOID *)&Vcb->FcbGarbageCollectorThread, NULL);
 
   ZwClose(thread);
-}
-
-PUNICODE_STRING DokanAllocDuplicateString(__in const UNICODE_STRING* Src) {
-  PUNICODE_STRING result = DokanAllocZero(sizeof(UNICODE_STRING));
-  if (!result) {
-    return NULL;
-  }
-  if (!DokanDuplicateUnicodeString(result, Src)) {
-    ExFreePool(result);
-    return NULL;
-  }
-  return result;
-}
-
-BOOLEAN DokanDuplicateUnicodeString(__out UNICODE_STRING* Dest,
-                                    __in const UNICODE_STRING* Src) {
-  if (Dest->Buffer) {
-    ExFreePool(Dest->Buffer);
-  }
-  Dest->Buffer = DokanAlloc(Src->MaximumLength);
-  if (!Dest->Buffer) {
-    Dest->Length = 0;
-    Dest->MaximumLength = 0;
-    return FALSE;
-  }
-  Dest->MaximumLength = Src->MaximumLength;
-  Dest->Length = Src->Length;
-  RtlCopyMemory(Dest->Buffer, Src->Buffer, Dest->MaximumLength);
-  return TRUE;
-}
-
-BOOLEAN StartsWith(__in const UNICODE_STRING* Str,
-                   __in const UNICODE_STRING* Prefix) {
-  if (Prefix == NULL || Prefix->Length == 0) {
-    return TRUE;
-  }
-
-  if (Str == NULL || Prefix->Length > Str->Length) {
-    return FALSE;
-  }
-
-  LPCWSTR prefixToUse, stringToCompareTo;
-  prefixToUse = Prefix->Buffer;
-  stringToCompareTo = Str->Buffer;
-
-  while (*prefixToUse) {
-    if (*prefixToUse++ != *stringToCompareTo++)
-      return FALSE;
-  }
-
-  return TRUE;
-}
-
-BOOLEAN StartsWithDosDevicesPrefix(__in const UNICODE_STRING* Str) {
-  return StartsWith(Str, &dosDevicesPrefix);
-}
-
-BOOLEAN IsMountPointDriveLetter(__in const UNICODE_STRING* MountPoint) {
-  size_t colonIndex = dosDevicesPrefix.Length / sizeof(WCHAR) + 1;
-  size_t driveLetterLength = dosDevicesPrefix.Length + 2 * sizeof(WCHAR);
-  BOOLEAN nonTerminatedDriveLetterLength =
-      MountPoint->Length == driveLetterLength;
-  BOOLEAN nullTerminatedDriveLetterLength =
-      MountPoint->Length == driveLetterLength + sizeof(WCHAR)
-      && MountPoint->Buffer[colonIndex + 1] == L'\0';
-  // Note: the size range is for an optional null char.
-  return StartsWithDosDevicesPrefix(MountPoint)
-      && (nonTerminatedDriveLetterLength || nullTerminatedDriveLetterLength)
-      && MountPoint->Buffer[colonIndex] == L':';
 }
