@@ -334,6 +334,11 @@ typedef struct _DokanVolumeControlBlock {
   DokanResourceDebugInfo ResourceDebugInfo;
   DOKAN_LOGGER ResourceLogger;
 
+  // A mask that all Fcbs created for this volume match. We update this when we
+  // deal each one out. In practice, they all tend to have the same first 40
+  // bits on x64.
+  LONG64 ValidFcbMask;
+
   // Whether keep-alive has been activated on this volume.
   BOOLEAN IsKeepaliveActive;
 
@@ -1004,41 +1009,9 @@ NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
 // Ends all pending waits for directory change notifications.
 VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb);
 
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                           __in ULONG FileNameLength);
-
 // Backs out an atomic oplock request that was made in DokanDispatchCreate. This
 // should be called if the IRP for which the request was made is about to fail.
 VOID DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp);
-
-// Decrements the FileCount on the given Fcb, which either deletes it or
-// schedules it for garbage collection if the FileCount becomes 0.
-NTSTATUS
-DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
-
-// Starts the FCB garbage collector thread for the given volume. If the
-// Vcb->FcbGarbageCollectorThread is NULL after this then it could not be started.
-VOID DokanStartFcbGarbageCollector(PDokanVCB Vcb);
-
-// Schedules the given FCB for garbage collection, and returns whether
-// scheduling it was successful. Currently it would only fail if garbage
-// collection is not enabled. It must be called with the VCB locked RW.
-BOOLEAN DokanScheduleFcbForGarbageCollection(__in PDokanVCB Vcb,
-                                             __in PDokanFCB Fcb);
-
-// Cancels the scheduled garbage collection of the given FCB. This is a no-op if
-// collection was never scheduled. It must be called with the VCB locked RW.
-VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb);
-
-// Forces FCB garbage collection (if enabled) and returns whether anything was
-// deleted as a consequence. This must be called with the VCB locked RW.
-BOOLEAN DokanForceFcbGarbageCollection(__in PDokanVCB Vcb);
-
-// Deletes the given FCB with no questions asked. This should only be used as a
-// helper by e.g. the garbage collector, and not by an I/O handling function.
-// The VCB and FCB must both be locked RW when this is called. After it returns,
-// do not unlock the FCB.
-VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb);
 

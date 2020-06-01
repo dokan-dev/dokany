@@ -366,6 +366,7 @@
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
     <ClCompile Include="timeout.c" />
+    <ClCompile Include="util\fcb.c" />
     <ClCompile Include="util\irp_buffer_helper.c" />
     <ClCompile Include="util\log.c" />
     <ClCompile Include="util\str.c" />
@@ -375,6 +376,7 @@
   <ItemGroup>
     <ClInclude Include="dokan.h" />
     <ClInclude Include="public.h" />
+    <ClInclude Include="util\fcb.h" />
     <ClInclude Include="util\irp_buffer_helper.h" />
     <ClInclude Include="util\log.h" />
     <ClInclude Include="util\str.h" />

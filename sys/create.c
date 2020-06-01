@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/fcb.h"
 #include "util/str.h"
 
 #ifdef ALLOC_PRAGMA
@@ -28,221 +29,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #pragma alloc_text(PAGE, DokanCheckShareAccess)
 #endif
 
-static const UNICODE_STRING keepAliveFileName =
-    RTL_CONSTANT_STRING(DOKAN_KEEPALIVE_FILE_NAME);
-
-static const UNICODE_STRING notificationFileName =
-    RTL_CONSTANT_STRING(DOKAN_NOTIFICATION_FILE_NAME);
-
 static const UNICODE_STRING systemVolumeInformationFileName =
     RTL_CONSTANT_STRING(L"\\System Volume Information");
-
-// We must NOT call without VCB lock
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                           __in ULONG FileNameLength) {
-  PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
-
-  // Try again if garbage collection frees up space. This is a no-op when
-  // garbage collection is disabled.
-  if (fcb == NULL && DokanForceFcbGarbageCollection(Vcb)) {
-    fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
-  }
-
-  if (fcb == NULL) {
-    return NULL;
-  }
-
-  ASSERT(Vcb != NULL);
-
-  RtlZeroMemory(fcb, sizeof(DokanFCB));
-
-  fcb->AdvancedFCBHeader.Resource =
-      ExAllocateFromLookasideListEx(&g_DokanEResourceLookasideList);
-  if (fcb->AdvancedFCBHeader.Resource == NULL) {
-    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
-    return NULL;
-  }
-
-  fcb->Identifier.Type = FCB;
-  fcb->Identifier.Size = sizeof(DokanFCB);
-
-  fcb->Vcb = Vcb;
-
-  ExInitializeResourceLite(&fcb->PagingIoResource);
-  ExInitializeResourceLite(fcb->AdvancedFCBHeader.Resource);
-
-  ExInitializeFastMutex(&fcb->AdvancedFCBHeaderMutex);
-
-  FsRtlSetupAdvancedHeader(&fcb->AdvancedFCBHeader,
-                           &fcb->AdvancedFCBHeaderMutex);
-
-  // ValidDataLength not supported - initialize to 0x7fffffff / 0xffffffff
-  // If fcb->Header.IsFastIoPossible was set the Cache manager would send
-  // us a SetFilelnformation IRP to update this value
-  fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
-
-  fcb->AdvancedFCBHeader.PagingIoResource = &fcb->PagingIoResource;
-
-  fcb->AdvancedFCBHeader.AllocationSize.QuadPart = 4096;
-  fcb->AdvancedFCBHeader.FileSize.QuadPart = 4096;
-
-  fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
-  FsRtlInitializeOplock(DokanGetFcbOplock(fcb));
-
-  fcb->FileName.Buffer = FileName;
-  fcb->FileName.Length = (USHORT)FileNameLength;
-  fcb->FileName.MaximumLength = (USHORT)FileNameLength;
-
-  InitializeListHead(&fcb->NextCCB);
-  InsertTailList(&Vcb->NextFCB, &fcb->NextFCB);
-
-  InterlockedIncrement(&Vcb->FcbAllocated);
-  ++Vcb->VolumeMetrics.FcbAllocations;
-  return fcb;
-}
-
-PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                      __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
-  PLIST_ENTRY thisEntry, nextEntry, listHead;
-  PDokanFCB fcb = NULL;
-
-  UNICODE_STRING fn;
-
-  fn.Length = (USHORT)FileNameLength;
-  fn.MaximumLength = fn.Length + sizeof(WCHAR);
-  fn.Buffer = FileName;
-
-  DokanVCBLockRW(Vcb);
-
-  // search the FCB which is already allocated
-  // (being used now)
-  listHead = &Vcb->NextFCB;
-
-  for (thisEntry = listHead->Flink; thisEntry != listHead;
-       thisEntry = nextEntry) {
-
-    nextEntry = thisEntry->Flink;
-
-    fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
-              "for %ls\n",
-              &fcb->FileName, fcb->FileCount, FileName);
-    if (fcb->FileName.Length == FileNameLength // FileNameLength in bytes
-        && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
-      // we have the FCB which is already allocated and used
-      DDbgPrint("  Found existing FCB for %ls\n", FileName);
-      break;
-    }
-
-    fcb = NULL;
-  }
-
-  // we don't have FCB
-  if (fcb == NULL) {
-    DDbgPrint("  Allocate FCB for %ls\n", FileName);
-
-    fcb = DokanAllocateFCB(Vcb, FileName, FileNameLength);
-
-    // no memory?
-    if (fcb == NULL) {
-      DDbgPrint("    Was not able to get FCB for FileName %ls\n", FileName);
-      ExFreePool(FileName);
-      DokanVCBUnlock(Vcb);
-      return NULL;
-    }
-
-    ASSERT(fcb != NULL);
-    if (RtlEqualUnicodeString(&fcb->FileName, &keepAliveFileName, FALSE)) {
-      fcb->IsKeepalive = TRUE;
-      fcb->BlockUserModeDispatch = TRUE;
-    }
-    if (RtlEqualUnicodeString(&fcb->FileName, &notificationFileName, FALSE)) {
-      fcb->BlockUserModeDispatch = TRUE;
-    }
-
-    // we already have FCB
-  } else {
-    DokanCancelFcbGarbageCollection(fcb);
-    // FileName (argument) is never used and must be freed
-    ExFreePool(FileName);
-  }
-
-  InterlockedIncrement(&fcb->FileCount);
-  DokanVCBUnlock(Vcb);
-  return fcb;
-}
-
-NTSTATUS
-DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
-  DOKAN_INIT_LOGGER(logger, Vcb->DeviceObject->DriverObject, 0);
-  DokanBackTrace trace = {0};
-  ASSERT(Vcb != NULL);
-  ASSERT(Fcb != NULL);
-
-  // First try to make sure the FCB is good. We have had some BSODs trying to
-  // access fields in an invalid FCB before adding these checks.
-
-  if (GetIdentifierType(Vcb) != VCB) {
-    DokanCaptureBackTrace(&trace);
-    return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-        L"Freeing an FCB with an invalid VCB at %I64x:%I64x,"
-        L" identifier type: %x",
-        trace.Address, trace.ReturnAddresses, GetIdentifierType(Vcb));
-  }
-
-  // Hopefully if it passes the above check we can at least dereference it,
-  // although that's not necessarily true. If we can read 4 bytes at the
-  // address, we can determine if it's an invalid or already freed FCB.
-  if (GetIdentifierType(Fcb) != FCB) {
-    DokanCaptureBackTrace(&trace);
-    return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-        L"Freeing FCB that has wrong identifier type at %I64x:%I64x: %x",
-        trace.Address, trace.ReturnAddresses, GetIdentifierType(Fcb));
-  }
-
-  ASSERT(Fcb->Vcb == Vcb);
-
-  DokanVCBLockRW(Vcb);
-  DokanFCBLockRW(Fcb);
-
-  if (InterlockedDecrement(&Fcb->FileCount) == 0 &&
-      !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
-    // We get here when garbage collection is disabled.
-    DokanDeleteFcb(Vcb, Fcb);
-  } else {
-    DokanFCBUnlock(Fcb);
-  }
-
-  DokanVCBUnlock(Vcb);
-  return STATUS_SUCCESS;
-}
-
-VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
-  ++Vcb->VolumeMetrics.FcbDeletions;
-  RemoveEntryList(&Fcb->NextFCB);
-  InitializeListHead(&Fcb->NextCCB);
-
-  DDbgPrint("  Free FCB:%p\n", Fcb);
-
-  ExFreePool(Fcb->FileName.Buffer);
-  Fcb->FileName.Buffer = NULL;
-  Fcb->FileName.Length = 0;
-  Fcb->FileName.MaximumLength = 0;
-
-  FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
-
-  FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);
-
-  Fcb->Identifier.Type = FREED_FCB;
-  DokanFCBUnlock(Fcb);
-  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                          Fcb->AdvancedFCBHeader.Resource);
-  ExDeleteResourceLite(&Fcb->PagingIoResource);
-
-  InterlockedIncrement(&Vcb->FcbFreed);
-  ExFreeToLookasideListEx(&g_DokanFCBLookasideList, Fcb);
-}
 
 // DokanAllocateCCB must be called with exlusive Fcb lock held.
 PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb) {
@@ -487,8 +275,8 @@ VOID SetFileObjectForVCB(__in PFILE_OBJECT FileObject, __in PDokanVCB Vcb) {
 
 BOOL IsDokanProcessFiles(UNICODE_STRING FileName) {
   return (FileName.Length > 0 &&
-          (RtlEqualUnicodeString(&FileName, &keepAliveFileName, FALSE) ||
-           RtlEqualUnicodeString(&FileName, &notificationFileName, FALSE)));
+          (RtlEqualUnicodeString(&FileName, &g_KeepAliveFileName, FALSE) ||
+           RtlEqualUnicodeString(&FileName, &g_NotificationFileName, FALSE)));
 }
 
 NTSTATUS
