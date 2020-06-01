@@ -103,6 +103,9 @@
     <ClCompile Include="util\fcb.c">
       <Filter>Source Files\util</Filter>
     </ClCompile>
+    <ClCompile Include="util\mountmgr.c">
+      <Filter>Source Files\util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dokan.h">
@@ -121,6 +124,9 @@
       <Filter>Header Files\util</Filter>
     </ClInclude>
     <ClInclude Include="util\fcb.h">
+      <Filter>Header Files\util</Filter>
+    </ClInclude>
+    <ClInclude Include="util\mountmgr.h">
       <Filter>Header Files\util</Filter>
     </ClInclude>
   </ItemGroup>

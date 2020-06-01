@@ -391,14 +391,14 @@ typedef struct _EVENT_INFORMATION {
 } EVENT_INFORMATION, *PEVENT_INFORMATION;
 
 // Dokan mount options
-#define DOKAN_EVENT_ALTERNATIVE_STREAM_ON 1
-#define DOKAN_EVENT_WRITE_PROTECT 2
-#define DOKAN_EVENT_REMOVABLE 4
-#define DOKAN_EVENT_MOUNT_MANAGER 8
-#define DOKAN_EVENT_CURRENT_SESSION 16
-#define DOKAN_EVENT_FILELOCK_USER_MODE 32
-#define DOKAN_EVENT_DISABLE_OPLOCKS 64
-#define DOKAN_EVENT_ENABLE_FCB_GC 128
+#define DOKAN_EVENT_ALTERNATIVE_STREAM_ON                           1
+#define DOKAN_EVENT_WRITE_PROTECT                                   (1 << 1)
+#define DOKAN_EVENT_REMOVABLE                                       (1 << 2)
+#define DOKAN_EVENT_MOUNT_MANAGER                                   (1 << 3)
+#define DOKAN_EVENT_CURRENT_SESSION                                 (1 << 4)
+#define DOKAN_EVENT_FILELOCK_USER_MODE                              (1 << 5)
+#define DOKAN_EVENT_DISABLE_OPLOCKS                                 (1 << 6)
+#define DOKAN_EVENT_ENABLE_FCB_GC                                   (1 << 7)
 
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;

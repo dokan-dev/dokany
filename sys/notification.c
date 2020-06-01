@@ -562,10 +562,11 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
     dokanControl.MountPoint[13] = L':';
     dokanControl.MountPoint[14] = L'\0';
   } else {
-    if ((szMountPoint->Length / sizeof(WCHAR) + 12) > MAX_PATH) {
-      DDbgPrint("Montpoint Buffer has an invalid size\n");
+    if (szMountPoint->Length >
+        sizeof(dokanControl.MountPoint) - 12 * sizeof(WCHAR)) {
+      DDbgPrint("Mount point buffer has invalid size\n");
       return STATUS_BUFFER_OVERFLOW;
-	}
+    }
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }

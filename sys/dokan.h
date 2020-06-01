@@ -202,6 +202,12 @@ typedef struct _DOKAN_GLOBAL {
   LIST_ENTRY MountPointList;
   LIST_ENTRY DeviceDeleteList;
   KEVENT KillDeleteDeviceEvent;
+
+  // We try to avoid having race condition when switching the AutoMount flag of
+  // the MountManager. Yes, this only guarantee for dokan mount and it is still
+  // possible another process conflict with it but that the best we can do.
+  ERESOURCE MountManagerLock;
+
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
 // make sure Identifier is the top of struct
@@ -229,6 +235,9 @@ typedef struct _DokanDiskControlBlock {
 
   PUNICODE_STRING DiskDeviceName;
   PUNICODE_STRING SymbolicLinkName;
+  // MountManager assigned a persistent symbolic link name
+  // during IOCTL_MOUNTDEV_LINK_CREATED
+  PUNICODE_STRING PersistentSymbolicLinkName;
   PUNICODE_STRING MountPoint;
   PUNICODE_STRING UNCName;
   LPWSTR VolumeLabel;
@@ -971,10 +980,28 @@ VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
 VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
 
+// Create FSCTL_SET_REPARSE_POINT payload request aim to be sent with
+// SendDirectoryFsctl.
+PCHAR CreateSetReparsePointRequest(__in PUNICODE_STRING SymbolicLinkName,
+                                   __out PULONG Length);
+
+// Create FSCTL_DELETE_REPARSE_POINT payload request aim to be sent with
+// SendDirectoryFsctl.
+PCHAR CreateRemoveReparsePointRequest(__out PULONG Length);
+
+// Open a Directory path and send a FsControl with the input buffer.
+NTSTATUS SendDirectoryFsctl(__in PDEVICE_OBJECT DeviceObject,
+                            __in PUNICODE_STRING Path, __in ULONG Code,
+                            __in PCHAR Input, __in ULONG Length);
+
+// Run function as System user and wait that it returns.
+VOID RunAsSystem(_In_ PKSTART_ROUTINE StartRoutine, PVOID StartContext);
+
 NTSTATUS DokanOplockRequest(__in PIRP *pIrp);
 NTSTATUS DokanCommonLockControl(__in PIRP Irp);
 
-NTSTATUS DokanRegisterUncProviderSystem(PDokanDCB dcb);
+// Register the UNCName to system multiple UNC provider.
+VOID DokanRegisterUncProvider(__in PVOID pDcb);
 
 // Use this instead of DokanCompleteIrpRequest, if the dispatch routine sets
 // Information as it goes (via PREPARE_OUTPUT etc.).
@@ -1060,7 +1087,6 @@ VOID DokanFreeMdl(__in PIRP Irp);
 ULONG PointerAlignSize(ULONG sizeInBytes);
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
-NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
 

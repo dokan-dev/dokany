@@ -470,6 +470,12 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       DokanLogInfo(&logger, L"Link created when unmount is pending; ignoring.");
       break;
     }
+    if (!dcb->PersistentSymbolicLinkName &&
+        StartsWithVolumeGuidPrefix(&mountdevNameString)) {
+      dcb->PersistentSymbolicLinkName =
+          DokanAllocDuplicateString(&mountdevNameString);
+      break;
+    }
     if (!StartsWithDosDevicesPrefix(&mountdevNameString)) {
       DokanLogInfo(&logger, L"Link name is not under DosDevices; ignoring.");
       break;

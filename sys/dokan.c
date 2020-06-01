@@ -23,6 +23,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 #include "util/str.h"
 
+#include <mountmgr.h>
+
 static VOID InitMultiVersionResources();
 
 #ifdef ALLOC_PRAGMA
@@ -193,6 +195,7 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
   IoDeleteDevice(dokanGlobal->DeviceObject);
   ExDeleteResourceLite(&dokanGlobal->Resource);
+  ExDeleteResourceLite(&dokanGlobal->MountManagerLock);
 }
 
 VOID InitMultiVersionResources() {
@@ -870,4 +873,26 @@ void OplockDebugRecordCreateRequest(__in PDokanFCB Fcb,
 void OplockDebugRecordAtomicRequest(PDokanFCB Fcb) {
   OplockDebugRecordProcess(Fcb);
   InterlockedIncrement(&Fcb->OplockDebugInfo.AtomicRequestCount);
+}
+
+VOID RunAsSystem(_In_ PKSTART_ROUTINE StartRoutine, PVOID StartContext) {
+  HANDLE handle;
+  PKTHREAD thread;
+  OBJECT_ATTRIBUTES objectAttribs;
+
+  InitializeObjectAttributes(&objectAttribs, NULL, OBJ_KERNEL_HANDLE, NULL,
+                             NULL);
+  NTSTATUS status =
+      PsCreateSystemThread(&handle, THREAD_ALL_ACCESS, &objectAttribs, NULL,
+                           NULL, StartRoutine, StartContext);
+  if (!NT_SUCCESS(status)) {
+    DDbgPrint("PsCreateSystemThread failed: 0x%X %ls\n", status,
+              DokanGetNTSTATUSStr(status));
+  } else {
+    ObReferenceObjectByHandle(handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+                              &thread, NULL);
+    ZwClose(handle);
+    KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(thread);
+  }
 }

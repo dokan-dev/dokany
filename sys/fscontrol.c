@@ -22,12 +22,16 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 #include "util/fcb.h"
+#include "util/mountmgr.h"
 #include "util/irp_buffer_helper.h"
+#include "util/str.h"
+
 #include <wdmsec.h>
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, DokanOplockRequest)
 #endif
+#include <mountdev.h>
 
 const WCHAR* DokanGetOplockControlCodeName(ULONG FsControlCode) {
   switch (FsControlCode) {
@@ -694,6 +698,134 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
   return status;
 }
 
+// Returns TRUE if |dcb| type matches |DCB| and FALSE otherwise.
+BOOLEAN MatchDokanDCBType(__in PDokanDCB Dcb,
+                          __in PDOKAN_LOGGER Logger,
+                          __in BOOLEAN LogFailures) {
+  if (!Dcb) {
+    if (LogFailures) {
+      DokanLogInfo(Logger, L"There is no DCB.");
+    }
+    return FALSE;
+  }
+  PrintIdType(Dcb);
+  if (GetIdentifierType(Dcb) != DCB) {
+    if (LogFailures) {
+      DokanLogInfo(Logger, L"The DCB type is actually %x; expected %x.",
+                   GetIdentifierType(Dcb), DCB);
+    }
+    return FALSE;
+  }
+  return TRUE;
+}
+
+PCHAR CreateSetReparsePointRequest(PUNICODE_STRING SymbolicLinkName,
+                                   PULONG Length) {
+  DDbgPrint("==> CreateSetReparsePointRequest\n");
+  USHORT mountPointReparsePathLength =
+      SymbolicLinkName->Length + sizeof(WCHAR) /* "\\" */;
+  *Length =
+      FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) +
+      mountPointReparsePathLength + sizeof(WCHAR) + sizeof(WCHAR);
+  PREPARSE_DATA_BUFFER reparseData = DokanAllocZero(*Length);
+  if (!reparseData) {
+    DDbgPrint("  Failed to allocate reparseData buffer\n");
+    *Length = 0;
+    return NULL;
+  }
+
+  reparseData->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+  reparseData->ReparseDataLength =
+      (USHORT)(*Length) - REPARSE_DATA_BUFFER_HEADER_SIZE;
+  reparseData->MountPointReparseBuffer.SubstituteNameOffset = 0;
+  reparseData->MountPointReparseBuffer.SubstituteNameLength =
+      mountPointReparsePathLength;
+  reparseData->MountPointReparseBuffer.PrintNameOffset =
+      reparseData->MountPointReparseBuffer.SubstituteNameLength + sizeof(WCHAR);
+  reparseData->MountPointReparseBuffer.PrintNameLength = 0;
+  // SET_REPARSE expect a path ending with a backslash
+  // We add it manually to our PersistanteSymbolicLink: \??\Volume{GUID}
+  RtlCopyMemory(reparseData->MountPointReparseBuffer.PathBuffer,
+                SymbolicLinkName->Buffer, SymbolicLinkName->Length);
+  reparseData->MountPointReparseBuffer
+      .PathBuffer[mountPointReparsePathLength / sizeof(WCHAR) - 1] = L'\\';
+
+  DDbgPrint("<== CreateSetReparsePointRequest\n");
+  return (PCHAR)reparseData;
+}
+
+PCHAR CreateRemoveReparsePointRequest(PULONG Length) {
+  DDbgPrint("==> CreateRemoveReparsePointRequest\n");
+  *Length = REPARSE_GUID_DATA_BUFFER_HEADER_SIZE;
+  PREPARSE_DATA_BUFFER reparseData =
+      DokanAllocZero(sizeof(REPARSE_DATA_BUFFER));
+  if (!reparseData) {
+    DDbgPrint("  Failed to allocate reparseGuidData buffer\n");
+    *Length = 0;
+    return NULL;
+  }
+  reparseData->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+  DDbgPrint("<== CreateRemoveReparsePointRequest\n");
+  return (PCHAR)reparseData;
+}
+
+NTSTATUS SendDirectoryFsctl(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING Path,
+                            ULONG Code, PCHAR Input, ULONG Length) {
+  HANDLE handle = 0;
+  PUNICODE_STRING directoryStr = NULL;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject,
+                    IRP_MJ_FILE_SYSTEM_CONTROL);
+
+  DDbgPrint("==> SendDirectoryFsctl\n");
+
+  __try {
+    // Convert Dcb MountPoint \DosDevices\C:\foo to \??\C:\foo
+    directoryStr = ChangePrefix(Path, &g_DosDevicesPrefix, TRUE /*HasPrefix*/,
+                                &g_ObjectManagerPrefix);
+    if (!directoryStr) {
+      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                           L"  Failed to change prefix for %wZ\n", Path);
+    }
+
+    // Open the directory as \??\C:\foo
+    IO_STATUS_BLOCK ioStatusBlock;
+    OBJECT_ATTRIBUTES objectAttributes;
+    InitializeObjectAttributes(&objectAttributes, directoryStr,
+                               OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL,
+                               NULL);
+    DDbgPrint("  Open directory %wZ\n", directoryStr);
+    NTSTATUS result = ZwOpenFile(
+        &handle, FILE_WRITE_ATTRIBUTES, &objectAttributes, &ioStatusBlock,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        FILE_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT);
+    if (!NT_SUCCESS(result)) {
+      return DokanLogError(
+          &logger, result,
+          L"SendDirectoryFsctl - ZwOpenFile failed to open %wZ\n",
+          directoryStr);
+    }
+
+    result = ZwFsControlFile(handle, NULL, NULL, NULL, &ioStatusBlock, Code,
+                             Input, Length, NULL, 0);
+    if (!NT_SUCCESS(result)) {
+      return DokanLogError(
+          &logger, result,
+          L"SendDirectoryFsctl - ZwFsControlFile Code %X on %wZ failed\n", Code,
+          directoryStr);
+    }
+  } __finally {
+   if (directoryStr) {
+      DokanFreeUnicodeString(directoryStr);
+    }
+    if (handle) {
+      ZwClose(handle);
+    }
+  }
+
+  DDbgPrint("<== SendDirectoryFsctl\n");
+  return STATUS_SUCCESS;
+}
+
 NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   PDokanDCB dcb = NULL;
   PDokanVCB vcb = NULL;
@@ -824,18 +956,45 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   ExReleaseResourceLite(&dcb->Resource);
   DokanStartCheckThread(dcb);
 
+  BOOLEAN isDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
   // Create mount point for the volume
   if (dcb->UseMountManager) {
+    BOOLEAN autoMountStateBackup = TRUE;
+    if (!isDriveLetter) {
+      ExAcquireResourceExclusiveLite(&dcb->Global->MountManagerLock, TRUE);
+      // Query current AutoMount State to restore it afterward.
+      DokanQueryAutoMount(&autoMountStateBackup);
+      // In case of failure, we suppose it was Enabled.
+
+      // MountManager suggest workflow do not accept a path longer than
+      // a driver letter mount point so we cannot use it to suggest
+      // our directory mount point. We disable Mount Manager AutoMount
+      // for avoiding having a driver letter assign to our device
+      // for the time we create our own mount point.
+      if (autoMountStateBackup) {
+        DokanSendAutoMount(FALSE);
+      }
+    }
     status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
     if (!NT_SUCCESS(status)) {
       DokanLogError(&logger, status,
                     L"DokanSendVolumeArrivalNotification failed.");
     }
+    if (!isDriveLetter) {
+      // Restore previous AutoMount state.
+      if (autoMountStateBackup) {
+        DokanSendAutoMount(TRUE);
+      }
+      ExReleaseResourceLite(&dcb->Global->MountManagerLock);
+    }
   }
-  DokanCreateMountPoint(dcb);
+
+  if (isDriveLetter) {
+    DokanCreateMountPoint(dcb);
+  }
 
   if (isNetworkFileSystem) {
-    DokanRegisterUncProviderSystem(dcb);
+    RunAsSystem(DokanRegisterUncProvider, dcb);
   }
 
   DokanLogInfo(&logger, L"Mounting successfully done.");
@@ -893,7 +1052,6 @@ DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject,
       status = STATUS_INVALID_DEVICE_REQUEST;
       break;
     }
-
   } __finally {
     DokanCompleteIrpRequest(Irp, status, 0);
     DDbgPrint("<== DokanFileSystemControl\n");
