@@ -466,6 +466,11 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   if (result) {
     DbgPrintW(L"DeleteMountPoint %s success\n", MountPoint);
   } else {
+    if (GetLastError() == ERROR_NOT_A_REPARSE_POINT) {
+      // Not a failure for us as this happen when mount manager
+      // is used and reparse point is removed from kernel.
+      return TRUE;
+    }
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
                   NULL);
@@ -546,11 +551,10 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
   UNREFERENCED_PARAMETER(DokanOptions);
   if (MountPoint != NULL) {
     if (!IsMountPointDriveLetter(MountPoint)) {
-      // Unfortunately mount manager is not working as excepted and don't
-      // support mount folder on associated IOCTL, which breaks dokan (ghost
-      // drive, ...)
-      // In that case we cannot use mount manager ; doesn't this should be done
-      // kernel-mode too?
+      if (DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
+        return TRUE; // Kernel has already created the reparse point.
+      }
+      // Should it not also be moved to kernel ?
       return CreateMountPoint(MountPoint, DeviceName);
     } else {
       // Notify applications / explorer
@@ -578,12 +582,8 @@ BOOL DokanRemoveMountPointEx(LPCWSTR MountPoint, BOOL Safe) {
 
       if (SendGlobalReleaseIRP(mountPoint)) {
         if (!IsMountPointDriveLetter(MountPoint)) {
-          length = wcslen(mountPoint);
-          if (length + 1 < MAX_PATH) {
-            mountPoint[length] = L'\\';
-            mountPoint[length + 1] = L'\0';
-            return DeleteMountPoint(mountPoint);
-          }
+          wcscat_s(mountPoint, sizeof(mountPoint) / sizeof(WCHAR), L"\\");
+          return DeleteMountPoint(mountPoint);
         } else {
           // Notify applications / explorer
           DokanBroadcastLink(MountPoint[0], TRUE, Safe);
