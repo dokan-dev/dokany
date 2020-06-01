@@ -95,12 +95,14 @@ extern DokanPtr_FsRtlAreThereWaitingFileLocks
 #endif
 
 // {D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
+#ifndef DOKAN_BASE_GUID
 #define DOKAN_BASE_GUID                                                        \
   {                                                                            \
     0xd6cc17c5, 0x1734, 0x4085, {                                              \
       0xbc, 0xe7, 0x96, 0x4f, 0x1e, 0x9f, 0x5d, 0xe9                           \
     }                                                                          \
   }
+#endif
 
 #define TAG (ULONG)'AKOD'
 
