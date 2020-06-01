@@ -851,12 +851,12 @@ VOID DokanDeleteMountPoint(__in PDokanDCB Dcb) {
     if (Dcb->UseMountManager) {
       Dcb->UseMountManager = FALSE;  // To avoid recursive call
       if (IsMountPointDriveLetter(Dcb->MountPoint)) {
-        DokanLogInfo(
-            &logger,
-            L"Issuing a mount manager do-not-assign delete for device %wZ",
-            Dcb->DiskDeviceName);
-        // Deprecated logic to keep the original semantics intact when used.
-        DokanSendVolumeDeletePoints(Dcb->MountPoint, Dcb->DiskDeviceName);
+        DokanLogInfo(&logger,
+                     L"Issuing a clean mount manager delete for device %wZ",
+                     Dcb->DiskDeviceName);
+        // This is the correct way to do it. It makes the mount manager forget
+        // the volume rather than leaving a do-not-assign record.
+        DokanSendVolumeDeletePoints(NULL, Dcb->DiskDeviceName);
       } else if (Dcb->PersistentSymbolicLinkName) {
         // Remove the actual reparse point on our directory mount point.
         ULONG removeReparseInputlength = 0;
