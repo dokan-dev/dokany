@@ -14,7 +14,7 @@
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
-  version: 1.3.0-{build}
+  version: 1.4.0-{build}
   configuration:
   - All
   - SonarQube
@@ -197,11 +197,16 @@
         }
       
         Add-Type -assembly system.io.compression.filesystem
-        Exec-External {& choco install "msbuild-sonarqube-runner" -y }
-        
+
+        New-Item -Path "sonar-scanner" -ItemType "directory"
+        cd sonar-scanner
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         Exec-External { & 7z e .\build-wrapper-win-x86.zip }
+        Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/4.9.0.17385/sonar-scanner-msbuild-4.9.0.17385-net46.zip -OutFile .\sonar-scanner-msbuild.zip
+        Exec-External { & 7z x .\sonar-scanner-msbuild.zip }
         $env:Path += ";$((Get-Location).Path)"
+        cd ..
+
         .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
       }
 
