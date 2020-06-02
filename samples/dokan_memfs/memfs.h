@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include "filenodes.h"
 #include "memfs_operations.h"
 
-#include <winbase.h>
+#include <WinBase.h>
 #include <iostream>
 
 namespace memfs {

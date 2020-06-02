@@ -37,7 +37,8 @@ fs_filenodes::fs_filenodes() {
   PTOKEN_USER user_token = NULL;
   PTOKEN_GROUPS groups_token = NULL;
   HANDLE token_handle;
-  LPTSTR user_sid_str = NULL, group_sid_str = NULL;
+  LPTSTR user_sid_str = NULL;
+  LPTSTR group_sid_str = NULL;
 
   if (OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &token_handle) ==
       FALSE) {
@@ -234,17 +235,17 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
     // recurse remove sub folders/files
     auto files = list_folder(old_filename);
     for (const auto& file : files) {
-      const auto fileName = file->get_filename();
+      const auto sub_fileName = file->get_filename();
       auto newSubFileName =
           std::filesystem::path(new_filename)
-              .append(std::filesystem::path(fileName).filename().wstring())
+              .append(std::filesystem::path(sub_fileName).filename().wstring())
               .wstring();
-      auto n = move(fileName, newSubFileName, replace_if_existing);
+      auto n = move(sub_fileName, newSubFileName, replace_if_existing);
       if (n != STATUS_SUCCESS) {
         spdlog::warn(
             L"Move: Subfolder file move {} to {} replaceIfExisting {} failed: "
             L"{}",
-            fileName, newSubFileName, replace_if_existing, n);
+            sub_fileName, newSubFileName, replace_if_existing, n);
         return n;  // That's bad...we have not done a full move
       }
     }

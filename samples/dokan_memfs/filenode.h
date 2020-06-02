@@ -33,7 +33,7 @@ THE SOFTWARE.
 
 #include "memfs_helper.h"
 
-#include <winbase.h>
+#include <WinBase.h>
 #include <atomic>
 #include <filesystem>
 #include <mutex>
@@ -43,22 +43,18 @@ THE SOFTWARE.
 
 namespace memfs {
 struct security_informations : std::mutex {
-  PSECURITY_DESCRIPTOR descriptor = nullptr;
+  std::unique_ptr<byte[]> descriptor = nullptr;
   DWORD descriptor_size = 0;
 
   security_informations() = default;
   security_informations(const security_informations &) = delete;
   security_informations &operator=(const security_informations &) = delete;
-  ~security_informations() {
-    if (descriptor) delete[] descriptor;
-  }
 
   void SetDescriptor(PSECURITY_DESCRIPTOR securitydescriptor) {
-    if (descriptor) delete[] descriptor;
     if (!securitydescriptor) return;
     descriptor_size = GetSecurityDescriptorLength(securitydescriptor);
-    descriptor = new byte[descriptor_size];
-    memcpy(descriptor, securitydescriptor, descriptor_size);
+    descriptor = std::make_unique<byte[]>(descriptor_size);
+    memcpy(descriptor.get(), securitydescriptor, descriptor_size);
   }
 };
 
@@ -89,8 +85,8 @@ struct filetimes {
 // and the alternated has main_stream assigned to the main stream filenode.
 class filenode {
  public:
-  filenode(const std::wstring& filename, bool is_directory, DWORD file_attr,
-           PDOKAN_IO_SECURITY_CONTEXT security_context);
+  filenode(const std::wstring &filename, bool is_directory, DWORD file_attr,
+           const PDOKAN_IO_SECURITY_CONTEXT security_context);
 
   filenode(const filenode& f) = delete;
 

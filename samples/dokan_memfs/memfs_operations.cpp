@@ -39,8 +39,8 @@ namespace memfs {
 static const DWORD g_volumserial = 0x19831116;
 
 static NTSTATUS create_main_stream(
-    fs_filenodes* fs_filenodes, std::wstring filename,
-    std::pair<std::wstring, std::wstring> stream_names,
+    fs_filenodes* fs_filenodes, const std::wstring& filename,
+    const std::pair<std::wstring, std::wstring>& stream_names,
     DWORD file_attributes_and_flags,
     PDOKAN_IO_SECURITY_CONTEXT security_context) {
   // When creating a new a alternated stream, we need to be sure
@@ -58,7 +58,7 @@ static NTSTATUS create_main_stream(
 static NTSTATUS DOKAN_CALLBACK
 memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
                  ACCESS_MASK desiredaccess, ULONG fileattributes,
-                 ULONG shareaccess, ULONG createdisposition,
+                 ULONG /*shareaccess*/, ULONG createdisposition,
                  ULONG createoptions, PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   ACCESS_MASK generic_desiredaccess;
@@ -263,6 +263,10 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
         f->times.lastaccess = f->times.lastwrite = filetimes::get_currenttime();
         f->attributes = file_attributes_and_flags;
       } break;
+      default:
+        spdlog::info(L"CreateFile: {} Unknown CreationDisposition {}",
+                     filename_str, creation_disposition);
+        break;
     }
   }
 
@@ -292,7 +296,6 @@ static void DOKAN_CALLBACK memfs_cleanup(LPCWSTR filename,
 
 static void DOKAN_CALLBACK memfs_closeFile(LPCWSTR filename,
                                            PDOKAN_FILE_INFO dokanfileinfo) {
-  auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   // Here we should release all resources from the createfile context if we had.
   spdlog::info(L"CloseFile: {}", filename_str);
@@ -440,12 +443,6 @@ static NTSTATUS DOKAN_CALLBACK memfs_findfiles(LPCWSTR filename,
     fill_finddata(&findData, dokanfileinfo);
   }
   return STATUS_SUCCESS;
-}
-
-static NTSTATUS DOKAN_CALLBACK memfs_findfileswithpattern(
-    LPCWSTR pathname, LPCWSTR search_pattern, PFillFindData fill_finddata,
-    PDOKAN_FILE_INFO dokanfileinfo) {
-  return STATUS_NOT_IMPLEMENTED;
 }
 
 static NTSTATUS DOKAN_CALLBACK memfs_setfileattributes(
@@ -645,7 +642,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_getfilesecurity(
   // informations requested
   LPTSTR pStringBuffer = NULL;
   if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-          f->security.descriptor, SDDL_REVISION_1, *security_information,
+          f->security.descriptor.get(), SDDL_REVISION_1, *security_information,
           &pStringBuffer, NULL)) {
     return STATUS_NOT_IMPLEMENTED;
   }
@@ -698,7 +695,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_setfilesecurity(
       HeapAlloc(pHeap, 0, f->security.descriptor_size);
   if (!heapSecurityDescriptor) return STATUS_INSUFFICIENT_RESOURCES;
   // Copy our current descriptor into heap memory
-  memcpy(heapSecurityDescriptor, f->security.descriptor,
+  memcpy(heapSecurityDescriptor, f->security.descriptor.get(),
          f->security.descriptor_size);
 
   if (!SetPrivateObjectSecurity(*security_information, security_descriptor,

@@ -31,8 +31,9 @@ THE SOFTWARE.
 
 namespace memfs {
 filenode::filenode(const std::wstring& filename, bool is_directory,
-                   DWORD file_attr, PDOKAN_IO_SECURITY_CONTEXT security_context)
-    : _fileName(filename), is_directory(is_directory), attributes(file_attr) {
+                   DWORD file_attr,
+                   const PDOKAN_IO_SECURITY_CONTEXT security_context)
+    : is_directory(is_directory), attributes(file_attr), _fileName(filename) {
   // No lock need, FileNode is still not in a directory
   times.reset();
 
