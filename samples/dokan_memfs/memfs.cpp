@@ -76,10 +76,9 @@ void memfs::run() {
       throw std::runtime_error("Mount point error");
     case DOKAN_VERSION_ERROR:
       throw std::runtime_error("Version error");
-    default: {
+    default:
       spdlog::error(L"DokanMain failed with {}", status);
       throw std::runtime_error("Unknown error"); // add error status
-    }
   }
 }
 
