@@ -71,7 +71,7 @@ class memfs_helper {
   // second: alternated stream name: bar
   // If the filename do not contain an alternated stream, second is empty.
   static inline std::pair<std::wstring, std::wstring> GetStreamNames(
-      const std::wstring filename) {
+      const std::wstring& filename) {
     // real_fileName - foo or foo:bar
     const auto real_fileName =
         std::filesystem::path(filename).filename().wstring();

@@ -295,7 +295,7 @@ static void DOKAN_CALLBACK memfs_cleanup(LPCWSTR filename,
 }
 
 static void DOKAN_CALLBACK memfs_closeFile(LPCWSTR filename,
-                                           PDOKAN_FILE_INFO dokanfileinfo) {
+                                           PDOKAN_FILE_INFO /*dokanfileinfo*/) {
   auto filename_str = std::wstring(filename);
   // Here we should release all resources from the createfile context if we had.
   spdlog::info(L"CloseFile: {}", filename_str);
@@ -567,7 +567,6 @@ static NTSTATUS DOKAN_CALLBACK memfs_lockfile(LPCWSTR filename,
                                               LONGLONG byte_offset,
                                               LONGLONG length,
                                               PDOKAN_FILE_INFO dokanfileinfo) {
-  auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   spdlog::info(L"LockFile: {} ByteOffset {} Length {}", filename_str,
                byte_offset, length);
@@ -577,7 +576,6 @@ static NTSTATUS DOKAN_CALLBACK memfs_lockfile(LPCWSTR filename,
 static NTSTATUS DOKAN_CALLBACK
 memfs_unlockfile(LPCWSTR filename, LONGLONG byte_offset, LONGLONG length,
                  PDOKAN_FILE_INFO dokanfileinfo) {
-  auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   spdlog::info(L"UnlockFile: {} ByteOffset {} Length {}", filename_str,
                byte_offset, length);
@@ -598,7 +596,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_getvolumeinformation(
     LPWSTR volumename_buffer, DWORD volumename_size,
     LPDWORD volume_serialnumber, LPDWORD maximum_component_length,
     LPDWORD filesystem_flags, LPWSTR filesystem_name_buffer,
-    DWORD filesystem_name_size, PDOKAN_FILE_INFO dokanfileinfo) {
+    DWORD filesystem_name_size, PDOKAN_FILE_INFO /*dokanfileinfo*/) {
   spdlog::info(L"GetVolumeInformation");
   wcscpy_s(volumename_buffer, volumename_size, L"Dokan MemFS");
   *volume_serialnumber = g_volumserial;
@@ -611,12 +609,14 @@ static NTSTATUS DOKAN_CALLBACK memfs_getvolumeinformation(
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK memfs_mounted(PDOKAN_FILE_INFO dokanfileinfo) {
+static NTSTATUS DOKAN_CALLBACK
+memfs_mounted(PDOKAN_FILE_INFO /*dokanfileinfo*/) {
   spdlog::info(L"Mounted");
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK memfs_unmounted(PDOKAN_FILE_INFO dokanfileinfo) {
+static NTSTATUS DOKAN_CALLBACK
+memfs_unmounted(PDOKAN_FILE_INFO /*dokanfileinfo*/) {
   spdlog::info(L"Unmounted");
   return STATUS_SUCCESS;
 }
@@ -672,7 +672,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_getfilesecurity(
 
 static NTSTATUS DOKAN_CALLBACK memfs_setfilesecurity(
     LPCWSTR filename, PSECURITY_INFORMATION security_information,
-    PSECURITY_DESCRIPTOR security_descriptor, ULONG bufferlength,
+    PSECURITY_DESCRIPTOR security_descriptor, ULONG /*bufferlength*/,
     PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
