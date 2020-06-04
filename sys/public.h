@@ -456,8 +456,16 @@ typedef struct _DOKAN_CONTROL {
   WCHAR UNCName[64];
   /** Disk Device Name */
   WCHAR DeviceName[64];
-  /** Volume Device Object */
+#ifdef _MSC_VER
+  /**
+  * Volume Device Object. The value is always 0
+  * and should be removed from the public DOKAN_CONTROL.
+  * MinGW also do not support PVOID64 so we convert it to ULONG64 see #902.
+  */
   PVOID64 VolumeDeviceObject;
+#else
+  ULONG64 VolumeDeviceObject;
+#endif
   /** Session ID of calling process */
   ULONG SessionId;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
