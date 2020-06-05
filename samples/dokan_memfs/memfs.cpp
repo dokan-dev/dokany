@@ -41,7 +41,7 @@ void memfs::run() {
   if (debug_log) {
     dokan_options.Options |= DOKAN_OPTION_STDERR | DOKAN_OPTION_DEBUG;
   } else {
-    spdlog::set_level(spdlog::level::off);
+    spdlog::set_level(spdlog::level::err);
   }
   // Mount type
   if (network_drive) {
