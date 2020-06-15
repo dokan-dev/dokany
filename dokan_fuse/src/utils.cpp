@@ -176,18 +176,18 @@ static char *wchar_to_utf8(const wchar_t *str) {
   return res;
 }
 
-void utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen) {
+size_t utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen) {
   if (res == nullptr || maxlen == 0)
-    return;
+    return -1;
 
   size_t ln = convert_char(get_utf8, put_utf16, src, strlen(src) + 1,
                            nullptr); /* | raise_w32_error()*/
   ;
   if (ln <= 0 || ln / sizeof(wchar_t) > static_cast<size_t>(maxlen)) {
     *res = L'\0';
-    return;
+    return -1;
   }
-  convert_char(get_utf8, put_utf16, src, strlen(src) + 1,
+  return convert_char(get_utf8, put_utf16, src, strlen(src) + 1,
                res); /* | raise_w32_error()*/
   ;
 }

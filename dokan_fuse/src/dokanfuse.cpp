@@ -515,7 +515,9 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   }
 
   wchar_t mount[MAX_PATH + 1];
-  mbstowcs(mount, fs->ch->mountpoint.c_str(), MAX_PATH);
+  if (utf8_to_wchar_buf(fs->ch->mountpoint.c_str(), mount, MAX_PATH) == static_cast<size_t>(-1)) {
+    return -1;
+  }
 
   dokanOptions->Version = DOKAN_VERSION;
   dokanOptions->MountPoint = mount;
@@ -677,7 +679,9 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch) {
   // Unmount attached FUSE filesystem
   if (ch->ResolvedDokanRemoveMountPoint) {
     wchar_t wmountpoint[MAX_PATH + 1];
-    mbstowcs(wmountpoint, mountpoint, MAX_PATH);
+    if (utf8_to_wchar_buf(mountpoint, wmountpoint, MAX_PATH) == static_cast<size_t>(-1)) {
+      return;
+    }
     wchar_t &last = wmountpoint[wcslen(wmountpoint) - 1];
     if (last == L'\\' || last == L'/')
       last = L'\0';
