@@ -516,6 +516,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
 
   wchar_t mount[MAX_PATH + 1];
   if (utf8_to_wchar_buf(fs->ch->mountpoint.c_str(), mount, MAX_PATH) == static_cast<size_t>(-1)) {
+    free(dokanOptions);
     return -1;
   }
 
