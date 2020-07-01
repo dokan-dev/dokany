@@ -55,7 +55,7 @@ extern "C" {
  */
 /** @{ */
 
-/** The current Dokan version (ver 1.2.0). \ref DOKAN_OPTIONS.Version */
+/** The current Dokan version (140 means ver 1.4.0). \ref DOKAN_OPTIONS.Version */
 #define DOKAN_VERSION 140
 /** Minimum Dokan version (ver 1.1.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 110
