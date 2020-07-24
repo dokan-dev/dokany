@@ -128,7 +128,8 @@ VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
         EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 
   if (bufferAllocated)

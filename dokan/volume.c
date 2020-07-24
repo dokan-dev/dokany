@@ -365,6 +365,7 @@ VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
              EventContext->Operation.Volume.FsInformationClass);
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, NULL);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }

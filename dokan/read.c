@@ -61,6 +61,7 @@ VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
     }
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }

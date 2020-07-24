@@ -549,7 +549,8 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     // send directory info to driver
     eventInfo->BufferLength = 0;
     eventInfo->Status = STATUS_NOT_IMPLEMENTED;
-    SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+    SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+    ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
     free(eventInfo);
     return;
   }
@@ -565,7 +566,8 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     } else {
       eventInfo->BufferLength = 0;
       eventInfo->Status = STATUS_NO_MEMORY;
-      SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+      SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+      ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
       free(eventInfo);
       return;
     }
@@ -667,7 +669,8 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   openInfo->UserContext = fileInfo.Context;
 
   // send directory information to driver
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }
 

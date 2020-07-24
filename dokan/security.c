@@ -175,7 +175,8 @@ VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
     }
   }
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength, DokanInstance);
+  SendEventInformation(Handle, eventInfo, eventInfoLength);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }
 
@@ -214,6 +215,7 @@ VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
     eventInfo->BufferLength = 0;
   }
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength, DokanInstance);
+  SendEventInformation(Handle, eventInfo, eventInfoLength);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }

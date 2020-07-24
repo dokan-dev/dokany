@@ -95,6 +95,8 @@ typedef struct _DOKAN_OPEN_INFO {
   PLIST_ENTRY DirListHead;
   /** File streams list. Used by FindStreams */
   PLIST_ENTRY StreamListHead;
+  /** Used when dispatching the close once the OpenCount drops to 0 **/
+  LPWSTR FileName;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
 
 BOOL DokanStart(PDOKAN_INSTANCE Instance);
@@ -117,7 +119,7 @@ BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 
 VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
-                          ULONG EventLength, PDOKAN_INSTANCE DokanInstance);
+                          ULONG EventLength);
 
 ULONG DispatchGetEventInformationLength(ULONG bufferSize);
 
@@ -196,6 +198,7 @@ PDOKAN_OPEN_INFO
 GetDokanOpenInfo(PEVENT_CONTEXT EventInfomation, PDOKAN_INSTANCE DokanInstance);
 
 VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInfomation,
+                          PDOKAN_FILE_INFO FileInfo,
                           PDOKAN_INSTANCE DokanInstance);
 
 /**

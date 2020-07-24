@@ -526,14 +526,11 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
 }
 
 VOID SendEventInformation(HANDLE Handle, PEVENT_INFORMATION EventInfo,
-                          ULONG EventLength, PDOKAN_INSTANCE DokanInstance) {
+                          ULONG EventLength) {
   BOOL status;
   ULONG returnedLength;
 
   // DbgPrint("###EventInfo->Context %X\n", EventInfo->Context);
-  if (DokanInstance != NULL) {
-    ReleaseDokanOpenInfo(EventInfo, DokanInstance);
-  }
 
   // send event info to driver
   status = DeviceIoControl(Handle,           // Handle to device
@@ -642,8 +639,10 @@ GetDokanOpenInfo(PEVENT_CONTEXT EventContext, PDOKAN_INSTANCE DokanInstance) {
 }
 
 VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInformation,
+                          PDOKAN_FILE_INFO FileInfo,
                           PDOKAN_INSTANCE DokanInstance) {
   PDOKAN_OPEN_INFO openInfo;
+  LPWSTR fileNameForClose = NULL;
   EnterCriticalSection(&DokanInstance->CriticalSection);
 
   openInfo = (PDOKAN_OPEN_INFO)(UINT_PTR)EventInformation->Context;
@@ -660,11 +659,21 @@ VOID ReleaseDokanOpenInfo(PEVENT_INFORMATION EventInformation,
         free(openInfo->StreamListHead);
         openInfo->StreamListHead = NULL;
       }
+      if (openInfo->FileName) {
+        fileNameForClose = openInfo->FileName;
+      }
       free(openInfo);
       EventInformation->Context = 0;
     }
   }
   LeaveCriticalSection(&DokanInstance->CriticalSection);
+
+  if (fileNameForClose) {
+    if (DokanInstance->DokanOperations->CloseFile) {
+      DokanInstance->DokanOperations->CloseFile(fileNameForClose, FileInfo);
+    }
+    free(fileNameForClose);
+  }
 }
 
 // ask driver to release all pending IRP to prepare for Unmount.

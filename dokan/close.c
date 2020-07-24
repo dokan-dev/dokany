@@ -40,20 +40,15 @@ VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   DbgPrint("###Close %04d\n", openInfo != NULL ? openInfo->EventId : -1);
 
-  if (DokanInstance->DokanOperations->CloseFile) {
-    // ignore return value
-    DokanInstance->DokanOperations->CloseFile(
-        EventContext->Operation.Close.FileName, &fileInfo);
-  }
-
   // do not send it to the driver
   // SendEventInformation(Handle, eventInfo, length);
 
   if (openInfo != NULL) {
     EnterCriticalSection(&DokanInstance->CriticalSection);
+    openInfo->FileName = _wcsdup(EventContext->Operation.Close.FileName);
     openInfo->OpenCount--;
     LeaveCriticalSection(&DokanInstance->CriticalSection);
   }
-  ReleaseDokanOpenInfo(eventInfo, DokanInstance);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }

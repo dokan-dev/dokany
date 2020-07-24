@@ -56,7 +56,7 @@ VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
   if (openInfo != NULL)
     openInfo->UserContext = fileInfo.Context;
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo, DokanInstance);
-
+  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
+  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
   free(eventInfo);
 }
