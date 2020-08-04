@@ -87,7 +87,12 @@ extern "C" {
 #define DOKAN_OPTION_WRITE_PROTECT 8
 /** Use network drive - Dokan network provider needs to be installed */
 #define DOKAN_OPTION_NETWORK 16
-/** Use removable drive */
+/**
+ * Use removable drive
+ * Be aware that on some environments, the userland application will be denied
+ * to communicate with the drive which will result in a unwanted unmount.
+ * \see <a href="https://github.com/dokan-dev/dokany/issues/843">Issue #843</a>
+ */
 #define DOKAN_OPTION_REMOVABLE 32
 /** Use mount manager */
 #define DOKAN_OPTION_MOUNT_MANAGER 64
