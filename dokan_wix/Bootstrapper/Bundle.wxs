@@ -33,70 +33,9 @@
     <Variable Name="CommandLineArgument" bal:Overridable="yes"/>
     <Variable Name="DevFilesCheckbox" Type="numeric" Value="1"/>
 
-    <util:FileSearch Id="SearchSystem"
-                     Path="[SystemFolder]advapi32.dll"
-                     Variable="ADVAPIVERSION"
-                     Result="version"
-                     />
-
-    <util:FileSearch Id="SearchSystem2"
-                     Path="[SystemFolder]ucrtbase.dll"
-                     Variable="UCRTVERSION"
-                     Result="version"
-                     />
-
-    <util:FileSearch Id="SearchSystem3"
-                     Path="[WindowsFolder]System32\ucrtbase.dll"
-                     Variable="UCRTVERSION64"
-                     Result="version"
-                       />
-
-    <util:RegistrySearch Id="vcredist_2019_x86_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2019_x86_installed" Win64="no"/>
-    <util:RegistrySearch Id="vcredist_2019_x86_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2019_x86_version" Result="exists" Win64="no"/>
-    <util:RegistrySearch Id="vcredist_2019_x86_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_x86,v14" Value="Version" Variable="vcredist_2019_x86_versionnumber" Result="value" Win64="no"/>
-
-    <util:RegistrySearch Id="vcredist_2019_x64_check" Root="HKLM" Key="SOFTWARE\Microsoft\DevDiv\VC\Servicing\14.0\RuntimeMinimum" Value="Install" Variable="vcredist_2019_x64_installed" Win64="yes"/>
-    <util:RegistrySearch Id="vcredist_2019_x64_versioncheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2019_x64_version" Result="exists" Win64="yes"/>
-    <util:RegistrySearch Id="vcredist_2019_x64_versionnumbercheck" Root="HKLM" Key="SOFTWARE\Classes\Installer\Dependencies\Microsoft.VS.VC_RuntimeMinimumVSU_amd64,v14" Value="Version" Variable="vcredist_2019_x64_versionnumber" Result="value" Win64="yes"/>
-
     <bal:Condition Message="Installation failed because your version of Windows is not supported. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > v6.1 OR (VersionNT = v6.1 AND ServicePackLevel >= 1)]]></bal:Condition>
 
     <Chain>
-
-      <ExePackage Id="vcredist_2019_x86.exe"
-                  Name="vc_redist.x86.exe"
-                  InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  Protocol="netfx4"
-                  Compressed="$(var.Compressed)"
-                  Permanent="yes"
-                  DetectCondition="vcredist_2019_x86_installed AND vcredist_2019_x86_version AND vcredist_2019_x86_versionnumber &gt;= v$(var.VCRedistVersion)"
-                  PerMachine="yes"
-                  Vital="yes"
-                  Cache="no"
-                  SuppressSignatureVerification="yes"
-                  SourceFile="Redist\vcredist_2019\vc_redist.x86.exe"
-                  DownloadUrl="https://download.visualstudio.microsoft.com/download/pr/c8edbb87-c7ec-4500-a461-71e8912d25e9/99ba493d660597490cbb8b3211d2cae4/vc_redist.x86.exe"
-      />
-
-      <ExePackage Id="vcredist_2019_x64.exe"
-                  Name="vc_redist.x64.exe"
-                  InstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  RepairCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  UninstallCommand="/norestart /q /chainingpackage ADMINDEPLOYMENT"
-                  Protocol="netfx4"
-                  Compressed="$(var.Compressed)"
-                  Permanent="yes"
-                  InstallCondition="VersionNT64"
-                  DetectCondition="vcredist_2019_x64_installed AND vcredist_2019_x64_version AND vcredist_2019_x64_versionnumber &gt;= v$(var.VCRedistVersion)"
-                  PerMachine="yes"
-                  Vital="yes"
-                  Cache="yes"
-                  SuppressSignatureVerification="yes"
-                  SourceFile="Redist\vcredist_2019\vc_redist.x64.exe"
-                  DownloadUrl="https://download.visualstudio.microsoft.com/download/pr/9e04d214-5a9d-4515-9960-3d71398d98c3/1e1e62ab57bbb4bf5199e8ce88f040be/vc_redist.x64.exe"
-                  />
 
       <MsiPackage SourceFile="..\bin\x86\$(var.Configuration)\Dokan_x86.msi"
                   InstallCondition="NOT VersionNT64"
