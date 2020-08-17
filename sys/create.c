@@ -656,11 +656,9 @@ Return Value:
           fileName = NULL;
           __leave;
         }
-        fcb = DokanGetFCB(vcb, parentDir, parentDirLength,
-                          FlagOn(irpSp->Flags, caseInSensitive));
+        fcb = DokanGetFCB(vcb, parentDir, parentDirLength, caseInSensitive);
       } else {
-        fcb = DokanGetFCB(vcb, fileName, fileNameLength,
-                          FlagOn(irpSp->Flags, caseInSensitive));
+        fcb = DokanGetFCB(vcb, fileName, fileNameLength, caseInSensitive);
       }
       if (fcb == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
