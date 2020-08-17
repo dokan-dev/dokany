@@ -383,7 +383,7 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
   PVOID currentBuffer = EventInfo->Buffer;
   PVOID lastBuffer = currentBuffer;
   ULONG index = 0;
-
+  BOOL caseSensitive = FALSE;
   PWCHAR pattern = NULL;
 
   // search patten is specified
@@ -393,6 +393,9 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
         (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
         (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
   }
+
+  caseSensitive =
+      DokanInstance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE;
 
   listHead = FindDataList;
 
@@ -409,8 +412,8 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
               EventContext->Operation.Directory.FileIndex, index);
 
     // pattern is not specified or pattern match is ignore cases
-    if (!pattern ||
-        DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
+    if (!pattern || DokanIsNameInExpression(pattern, find->FindData.cFileName,
+                                            !caseSensitive)) {
 
       if (EventContext->Operation.Directory.FileIndex <= index) {
         // index+1 is very important, should use next entry index

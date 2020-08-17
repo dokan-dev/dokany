@@ -766,6 +766,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
       DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION) {
     eventStart.Flags |= DOKAN_EVENT_ENABLE_FCB_GC;
   }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE) {
+    eventStart.Flags |= DOKAN_EVENT_CASE_SENSITIVE;
+  }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
            Instance->MountPoint, sizeof(Instance->MountPoint));

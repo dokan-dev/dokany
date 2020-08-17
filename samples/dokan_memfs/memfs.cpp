@@ -36,7 +36,7 @@ void memfs::run() {
   DOKAN_OPTIONS dokan_options;
   ZeroMemory(&dokan_options, sizeof(DOKAN_OPTIONS));
   dokan_options.Version = DOKAN_VERSION;
-  dokan_options.Options = DOKAN_OPTION_ALT_STREAM;
+  dokan_options.Options = DOKAN_OPTION_ALT_STREAM | DOKAN_OPTION_CASE_SENSITIVE;
   dokan_options.MountPoint = mount_point;
   if (debug_log) {
     dokan_options.Options |= DOKAN_OPTION_STDERR | DOKAN_OPTION_DEBUG;

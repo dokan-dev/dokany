@@ -569,6 +569,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG sessionId = (ULONG)-1;
   BOOLEAN startFailure = FALSE;
   BOOLEAN isMountPointDriveLetter = FALSE;
+  BOOLEAN caseSensitive = FALSE;
 
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
@@ -678,6 +679,10 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     DDbgPrint("  FCB GC enabled\n");
     fcbGcEnabled = TRUE;
   }
+  if (eventStart->Flags & DOKAN_EVENT_CASE_SENSITIVE) {
+    DDbgPrint("  Case sensitive enabled\n");
+    caseSensitive = TRUE;
+  }
 
   KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
@@ -749,6 +754,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   dcb->OplocksDisabled = oplocksDisabled;
   dcb->FileLockInUserMode = fileLockUserMode;
   dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
+  dcb->CaseSensitive = caseSensitive;
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;

@@ -43,6 +43,7 @@ THE SOFTWARE.
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
+BOOL g_CaseSensitive;
 BOOL g_HasSeSecurityPrivilege;
 BOOL g_ImpersonateCallerUser;
 
@@ -315,6 +316,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
   MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
+
+  if (g_CaseSensitive)
+    fileAttributesAndFlags |= FILE_FLAG_POSIX_SEMANTICS;
 
   if (creationDisposition == CREATE_NEW) {
     DbgPrint(L"\tCREATE_NEW\n");
@@ -1330,10 +1334,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
     *VolumeSerialNumber = 0x19831116;
   if (MaximumComponentLength)
     *MaximumComponentLength = 255;
-  if (FileSystemFlags)
-    *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
-                       FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
+  if (FileSystemFlags) {
+    *FileSystemFlags = FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK |
                        FILE_PERSISTENT_ACLS | FILE_NAMED_STREAMS;
+    if (g_CaseSensitive)
+      *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES;
+  }
 
   volumeRoot[0] = RootDirectory[0];
   volumeRoot[1] = ':';
@@ -1533,6 +1539,7 @@ void ShowUsage() {
           "  /n (use network drive)\t\t\t Show device as network device.\n"
           "  /m (use removable drive)\t\t\t Show device as removable media.\n"
           "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
+          "  /b (case sensitive drive)\t\t\t Supports case-sensitive file names.\n"
           "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
           "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
           "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
@@ -1572,6 +1579,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   g_DebugMode = FALSE;
   g_UseStdErr = FALSE;
+  g_CaseSensitive = FALSE;
 
   ZeroMemory(&dokanOptions, sizeof(DOKAN_OPTIONS));
   dokanOptions.Version = DOKAN_VERSION;
@@ -1628,6 +1636,11 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'z':
       dokanOptions.Options |= DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION;
+      break;
+    case L'b':
+      // Only work when mirroring a folder with setCaseSensitiveInfo option enabled on win10
+      dokanOptions.Options |= DOKAN_OPTION_CASE_SENSITIVE;
+      g_CaseSensitive = TRUE;
       break;
     case L'u':
       CHECK_CMD_ARG(command, argc)

@@ -117,6 +117,13 @@ extern "C" {
  * repeatedly rebuilding state that they attach to the FCB header.
  */
 #define DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION 2048
+/**
+ * Enable Case sensitive path.
+ * By default all path are case insensitive.
+ * For case sensitive: \dir\File & \diR\file are different files
+ * but for case insensitive they are the same.
+ */
+#define DOKAN_OPTION_CASE_SENSITIVE 4096
 
 /** @} */
 

@@ -297,6 +297,18 @@ typedef struct _DokanDiskControlBlock {
   // repeatedly rebuilding state that they attach to the FCB header.
   ULONG FcbGarbageCollectionIntervalMs;
 
+  // CaseSenitive FileName: NTFS can look to be case-insensitive
+  // but in some situation it can also be case-sensitive :
+  // * NTFS keep the filename casing used during Create internally.
+  // * Open "MyFile" on NTFS can open "MYFILE" if it exists.
+  // * FILE_FLAG_POSIX_SEMANTICS (IRP_MJ_CREATE: SL_CASE_SENSITIVE)
+  //   can be used during Create to make the lookup case-sensitive.
+  // * Since Win10, NTFS can have specific directories
+  //   case-sensitive / insensitive, even if the device tags says otherwise.
+  // Dokan choose to support case-sensitive or case-insensitive filesystem
+  // but not those NTFS specific scenarios.
+  BOOLEAN CaseSensitive;
+
 } DokanDCB, *PDokanDCB;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \

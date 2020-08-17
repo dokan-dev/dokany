@@ -39,7 +39,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 // Return the FCB instance attached to the FileName if already present in the
 // VolumeControlBlock Fcb list.
 PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                      __in ULONG FileNameLength, BOOLEAN CaseSensitive);
+                      __in ULONG FileNameLength, BOOLEAN CaseInSensitive);
 
 // Starts the FCB garbage collector thread for the given volume. If the
 // Vcb->FcbGarbageCollectorThread is NULL after this then it could not be

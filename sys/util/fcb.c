@@ -92,7 +92,7 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 }
 
 PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                      __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
+                      __in ULONG FileNameLength, BOOLEAN CaseInSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PDokanFCB fcb = NULL;
 
@@ -115,10 +115,10 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
     DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
-              "for %ls\n",
-        &fcb->FileName, fcb->FileCount, FileName);
+              "for %ls CaseInSensitive %d\n",
+              &fcb->FileName, fcb->FileCount, FileName, CaseInSensitive);
     if (fcb->FileName.Length == FileNameLength  // FileNameLength in bytes
-        && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
+        && RtlEqualUnicodeString(&fn, &fcb->FileName, CaseInSensitive)) {
       // we have the FCB which is already allocated and used
       DDbgPrint("  Found existing FCB for %ls\n", FileName);
       break;
