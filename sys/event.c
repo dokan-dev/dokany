@@ -262,6 +262,7 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                         __in PEVENT_CONTEXT EventContext, __in ULONG Flags) {
   PDokanVCB vcb = DeviceObject->DeviceExtension;
   NTSTATUS status;
+  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
   DDbgPrint("==> DokanRegisterPendingIrp\n");
 
@@ -270,9 +271,24 @@ DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
     return STATUS_INVALID_PARAMETER;
   }
 
-  status = RegisterPendingIrpMain(DeviceObject, Irp, EventContext->SerialNumber,
-                                  &vcb->Dcb->PendingIrp, Flags, TRUE,
-                                  /*CurrentStatus=*/STATUS_SUCCESS);
+  // We check if we will have the space to sent the event before registering it
+  // to the pending IRPs. Write is an exception as it has a special workflow for
+  // large buffer that will request userland to allocate a specific buffer size
+  // that match it.
+  UCHAR majorIrpFunction = IoGetCurrentIrpStackLocation(Irp)->MajorFunction;
+  if (majorIrpFunction != IRP_MJ_WRITE &&
+      EventContext->Length > EVENT_CONTEXT_MAX_SIZE) {
+    InterlockedIncrement64(
+        (LONG64*)&vcb->VolumeMetrics.LargeIRPRegistrationCanceled);
+    status = DokanLogError(&logger, STATUS_INVALID_PARAMETER,
+                           L"Received a too large buffer to handle for Major "
+                           L"IRP %xh, canceling it.",
+                           majorIrpFunction);
+  } else {
+    status = RegisterPendingIrpMain(DeviceObject, Irp, EventContext->SerialNumber,
+                                    &vcb->Dcb->PendingIrp, Flags, TRUE,
+                                    /*CurrentStatus=*/STATUS_SUCCESS);
+  }
 
   if (status == STATUS_PENDING) {
     DokanEventNotification(&vcb->Dcb->NotifyEvent, EventContext);

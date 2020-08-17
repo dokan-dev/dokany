@@ -351,6 +351,9 @@ typedef struct _VOLUME_METRICS {
   ULONG64 FcbDeletions;
   // A "cancellation" is when a single FCB's garbage collection gets canceled.
   ULONG64 FcbGarbageCollectionCancellations;
+  // Number of IRPs with a too large buffer that could not be registered for
+  // being forward to userland.
+  ULONG64 LargeIRPRegistrationCanceled;
 } VOLUME_METRICS, *PVOLUME_METRICS;
 
 #define WRITE_MAX_SIZE                                                         \
