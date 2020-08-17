@@ -53,8 +53,14 @@ BOOLEAN DokanScheduleFcbForGarbageCollection(__in PDokanVCB Vcb,
                                              __in PDokanFCB Fcb);
 
 // Cancels the scheduled garbage collection of the given FCB. This is a no-op if
-// collection was never scheduled. It must be called with the VCB locked RW.
-VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb);
+// collection was never scheduled. It must be called with the VCB locked RW. The
+// NewFileName must be the same as the current Fcb->FileName but may be in a
+// different case. This is to prevent the case from being sticky if the user
+// abandons the use of one case representation and starts using a different one
+// within the GC interval. This function always deletes or transfers ownership
+// of NewFileName->Buffer.
+VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
+                                     _Inout_ PUNICODE_STRING NewFileName);
 
 // Forces FCB garbage collection (if enabled) and returns whether anything was
 // deleted as a consequence. This must be called with the VCB locked RW.
@@ -66,4 +72,4 @@ BOOLEAN DokanForceFcbGarbageCollection(__in PDokanVCB Vcb);
 // do not unlock the FCB.
 VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 
-#endif FCB_H_
+#endif  // FCB_H_
