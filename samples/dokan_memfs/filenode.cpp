@@ -46,7 +46,9 @@ filenode::filenode(const std::wstring& filename, bool is_directory,
 DWORD filenode::read(LPVOID buffer, DWORD bufferlength, LONGLONG offset) {
   std::lock_guard<std::mutex> lock(_data_mutex);
   if (static_cast<size_t>(offset + bufferlength) > _data.size())
-    bufferlength = static_cast<DWORD>(_data.size() - offset);
+    bufferlength = (_data.size() > static_cast<size_t>(offset))
+                       ? static_cast<DWORD>(_data.size() - offset)
+                       : 0;
   if (bufferlength)
     memcpy(buffer, &_data[static_cast<size_t>(offset)], bufferlength);
   spdlog::info(L"Read {} : BufferLength {} Offset {}", get_filename(),
