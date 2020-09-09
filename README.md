@@ -1,4 +1,5 @@
 # Dokany
+[![Github All Releases](https://img.shields.io/github/downloads/dokan-dev/dokany/total.svg)](https://github.com/dokan-dev/dokany/releases)
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dokany&metric=alert_status)](https://sonarcloud.io/dashboard?id=dokany)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/43afb600ca75462e94d9484c32090135)](https://www.codacy.com/app/Liryna/dokany?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=dokan-dev/dokany&amp;utm_campaign=Badge_Grade)
