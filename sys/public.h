@@ -400,9 +400,22 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_MOUNT_MANAGER                                   (1 << 3)
 #define DOKAN_EVENT_CURRENT_SESSION                                 (1 << 4)
 #define DOKAN_EVENT_FILELOCK_USER_MODE                              (1 << 5)
+// Whether any oplock functionality should be disabled.
 #define DOKAN_EVENT_DISABLE_OPLOCKS                                 (1 << 6)
 #define DOKAN_EVENT_ENABLE_FCB_GC                                   (1 << 7)
+// CaseSenitive FileName: NTFS can look to be case-insensitive
+// but in some situation it can also be case-sensitive :
+// * NTFS keep the filename casing used during Create internally.
+// * Open "MyFile" on NTFS can open "MYFILE" if it exists.
+// * FILE_FLAG_POSIX_SEMANTICS (IRP_MJ_CREATE: SL_CASE_SENSITIVE)
+//   can be used during Create to make the lookup case-sensitive.
+// * Since Win10, NTFS can have specific directories
+//   case-sensitive / insensitive, even if the device tags says otherwise.
+// Dokan choose to support case-sensitive or case-insensitive filesystem
+// but not those NTFS specific scenarios.
 #define DOKAN_EVENT_CASE_SENSITIVE                                  (1 << 8)
+// Enables unmounting of network drives via file explorer
+#define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                           (1 << 9)
 
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
@@ -472,6 +485,8 @@ typedef struct _DOKAN_CONTROL {
 #endif
   /** Session ID of calling process */
   ULONG SessionId;
+  /** Contains information about the flags on the mount */
+  ULONG MountOptions;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
 #endif // PUBLIC_H_

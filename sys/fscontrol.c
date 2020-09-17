@@ -164,7 +164,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  if (Dcb->OplocksDisabled) {
+  if (Dcb->MountOptions & DOKAN_EVENT_DISABLE_OPLOCKS) {
     return STATUS_NOT_SUPPORTED;
   }
 
@@ -221,7 +221,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       DokanFCBLockRW(Fcb);
       AcquiredFcb = TRUE;
 
-      if (!Dcb->FileLockInUserMode) {
+      if (!(Dcb->MountOptions & DOKAN_EVENT_FILELOCK_USER_MODE)) {
 
         if (FsRtlOplockIsSharedRequest(Irp)) {
           //
@@ -942,6 +942,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
   if (mountEntry != NULL) {
     mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
+    mountEntry->MountControl.MountOptions = dcb->MountOptions;
   } else {
     ExReleaseResourceLite(&dcb->Resource);
     return DokanLogError(&logger, STATUS_DEVICE_REMOVED,

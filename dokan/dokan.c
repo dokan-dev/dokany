@@ -762,6 +762,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_DISABLE_OPLOCKS) {
     eventStart.Flags |= DOKAN_EVENT_DISABLE_OPLOCKS;
   }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE) {
+    eventStart.Flags |= DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
+  }
   if (Instance->DokanOptions->Options &
       DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION) {
     eventStart.Flags |= DOKAN_EVENT_ENABLE_FCB_GC;

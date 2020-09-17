@@ -173,7 +173,7 @@ DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DokanFCBLockRW(fcb);
 
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_LOCK_CONTROL);
-    if (dcb->FileLockInUserMode) {
+    if (dcb->MountOptions & DOKAN_EVENT_FILELOCK_USER_MODE) {
 
       eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
       eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
