@@ -184,8 +184,8 @@ void fs_filenodes::remove(const std::shared_ptr<filenode>& f) {
   } else {
     // Is a main stream
     // Remove possible alternate stream
-    auto streams = f->get_streams();
-    for (const auto& stream : streams) remove(stream.first);
+    for (const auto& [stream_name, node] : f->get_streams())
+      remove(stream_name);
   }
 }
 
