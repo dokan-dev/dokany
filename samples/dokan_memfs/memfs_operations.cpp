@@ -165,9 +165,7 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
       // Remove non specific attributes.
       file_attributes_and_flags &= ~FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL;
       // FILE_ATTRIBUTE_NORMAL is override if any other attribute is set.
-      if (file_attributes_and_flags & FILE_ATTRIBUTE_NORMAL &&
-          (file_attributes_and_flags & (file_attributes_and_flags - 1)))
-        file_attributes_and_flags &= ~FILE_ATTRIBUTE_NORMAL;
+      file_attributes_and_flags &= ~FILE_ATTRIBUTE_NORMAL;
     }
 
     switch (creation_disposition) {
