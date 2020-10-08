@@ -176,7 +176,7 @@ VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
   RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
-VOID DokanFillIdExtBothDirInfo(PFILE_ID_EXTD_BOTH_DIR_INFORMATION Buffer,
+VOID DokanFillIdExtdBothDirInfo(PFILE_ID_EXTD_BOTH_DIR_INFORMATION Buffer,
                             PWIN32_FIND_DATAW FindData, ULONG Index,
                             PDOKAN_INSTANCE DokanInstance) {
   ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
@@ -323,7 +323,7 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
     DokanFillIdBothDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileIdExtdBothDirectoryInformation:
-    DokanFillIdExtBothDirInfo(Buffer, FindData, Index, DokanInstance);
+    DokanFillIdExtdBothDirInfo(Buffer, FindData, Index, DokanInstance);
     break;    
   default:
     break;

@@ -25,7 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 /*
  * DefaultGetFileSecurity build a sddl of the current process user
  * with authenticate user rights for context menu. (New Folder, ...)
- * TODO - Only calcul one time the user group sid
+ * TODO - Only calculate the user's group sid once
  */
 NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
                                 PSECURITY_INFORMATION SecurityInformation,
@@ -50,7 +50,7 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   DWORD returnLength;
   if (!GetTokenInformation(tokenHandle, TokenUser, buffer, sizeof(buffer),
                            &returnLength)) {
-    DbgPrint("  GetTokenInformaiton failed: %d\n", GetLastError());
+    DbgPrint("  GetTokenInformation failed: %d\n", GetLastError());
     CloseHandle(tokenHandle);
     return STATUS_NOT_IMPLEMENTED;
   }
@@ -64,7 +64,7 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
 
   if (!GetTokenInformation(tokenHandle, TokenGroups, buffer, sizeof(buffer),
                            &returnLength)) {
-    DbgPrint("  GetTokenInformaiton failed: %d\n", GetLastError());
+    DbgPrint("  GetTokenInformation failed: %d\n", GetLastError());
     CloseHandle(tokenHandle);
     return STATUS_NOT_IMPLEMENTED;
   }

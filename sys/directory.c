@@ -329,7 +329,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   // usable buffer size
   bufferLen = irpSp->Parameters.QueryDirectory.Length;
 
-  // DDbgPrint("  !!Returning DirecotyInfo!!\n");
+  // DDbgPrint("  !!Returning DirectoryInfo!!\n");
 
   // buffer is not specified or short of length
   if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {

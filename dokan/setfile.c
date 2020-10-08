@@ -283,7 +283,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     break;
 
   case FilePositionInformation:
-    // this case is dealed with by driver
+    // this case is dealt with by the driver
     status = STATUS_NOT_IMPLEMENTED;
     break;
 
