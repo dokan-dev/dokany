@@ -337,7 +337,7 @@ VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   fileInfo.ProcessId = EventContext->ProcessId;
   fileInfo.DokanOptions = DokanInstance->DokanOptions;
 
-  eventInfo->Status = STATUS_NOT_IMPLEMENTED;
+  eventInfo->Status = STATUS_INVALID_PARAMETER;
   eventInfo->BufferLength = 0;
 
   DbgPrint("###QueryVolumeInfo %04d\n",

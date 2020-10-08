@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Fixed
+- Library - Return STATUS_INVALID_PARAMETER where appropriate; fixes directory listings under WSL2.
+
 ## [1.4.0.1000] - 2020-01-06
 ### Added
 - MemFS - Add a new FS sample project: dokan_memfs. MemFS is a better example to debug and know the dokan driver/library feature supported and NTFS compliant. The FS pass most of WinFSTest and IFSTest. It looks to be stable enough to be included in the installer. It hasn't been test with real usage but it is expected to run without issue. MemFS is written in c++ and is under MIT license.

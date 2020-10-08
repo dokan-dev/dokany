@@ -94,19 +94,22 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   BOOLEAN DeleteFileFlag = FALSE;
   NTSTATUS result;
 
-  if (EventContext->Operation.SetFile.FileInformationClass ==
-      FileDispositionInformation) {
-
+  switch (EventContext->Operation.SetFile.FileInformationClass) {
+  case FileDispositionInformation: {
     PFILE_DISPOSITION_INFORMATION dispositionInfo =
         (PFILE_DISPOSITION_INFORMATION)(
             (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
     DeleteFileFlag = dispositionInfo->DeleteFile;
-  } else { //FileDispositionInformationEx
+  } break;
+  case FileDispositionInformationEx: {
     PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
         (PFILE_DISPOSITION_INFORMATION_EX)(
             (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
 
     DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
+  } break;
+  default:
+    return STATUS_INVALID_PARAMETER;
   }
 
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
@@ -233,7 +236,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   PDOKAN_OPEN_INFO openInfo;
   DOKAN_FILE_INFO fileInfo;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
   if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation

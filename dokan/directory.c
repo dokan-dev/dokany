@@ -551,7 +551,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
     // send directory info to driver
     eventInfo->BufferLength = 0;
-    eventInfo->Status = STATUS_NOT_IMPLEMENTED;
+    eventInfo->Status = STATUS_INVALID_PARAMETER;
     SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
     ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
     free(eventInfo);
