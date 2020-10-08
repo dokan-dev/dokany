@@ -41,14 +41,12 @@ DokanSetAllocationInformation(PEVENT_CONTEXT EventContext,
   // is less than the end-of-file position, the end-of-file position is
   // automatically
   // adjusted to match the allocation size.
-  NTSTATUS status;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
   if (DokanOperations->SetAllocationSize) {
     status = DokanOperations->SetAllocationSize(
         EventContext->Operation.SetFile.FileName,
         allocInfo->AllocationSize.QuadPart, FileInfo);
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
   }
 
   return status;
