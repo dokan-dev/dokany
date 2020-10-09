@@ -123,20 +123,20 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case FileDirectoryInformation:
     DDbgPrint("  FileDirectoryInformation\n");
     break;
-  case FileIdFullDirectoryInformation:
-    DDbgPrint("  FileIdFullDirectoryInformation\n");
-    break;
   case FileFullDirectoryInformation:
     DDbgPrint("  FileFullDirectoryInformation\n");
-    break;
-  case FileNamesInformation:
-    DDbgPrint("  FileNamesInformation\n");
     break;
   case FileBothDirectoryInformation:
     DDbgPrint("  FileBothDirectoryInformation\n");
     break;
+  case FileNamesInformation:
+    DDbgPrint("  FileNamesInformation\n");
+    break;
   case FileIdBothDirectoryInformation:
     DDbgPrint("  FileIdBothDirectoryInformation\n");
+    break;
+  case FileIdFullDirectoryInformation:
+    DDbgPrint("  FileIdFullDirectoryInformation\n");
     break;
   default:
     DDbgPrint("  unknown FileInfoClass %d\n",

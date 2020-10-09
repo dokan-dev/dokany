@@ -540,11 +540,11 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   // check whether this is handled FileInfoClass
   if (fileInfoClass != FileDirectoryInformation &&
-      fileInfoClass != FileIdFullDirectoryInformation &&
       fileInfoClass != FileFullDirectoryInformation &&
+      fileInfoClass != FileBothDirectoryInformation &&
       fileInfoClass != FileNamesInformation &&
       fileInfoClass != FileIdBothDirectoryInformation &&
-      fileInfoClass != FileBothDirectoryInformation &&
+      fileInfoClass != FileIdFullDirectoryInformation &&
       fileInfoClass != FileIdExtdBothDirectoryInformation) {
 
     DbgPrint("not suported type %d\n", fileInfoClass);
