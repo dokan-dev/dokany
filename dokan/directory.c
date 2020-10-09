@@ -176,6 +176,40 @@ VOID DokanFillIdBothDirInfo(PFILE_ID_BOTH_DIR_INFORMATION Buffer,
   RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
 }
 
+VOID DokanFillIdExtdDirInfo(PFILE_ID_EXTD_DIR_INFO Buffer,
+                            PWIN32_FIND_DATAW FindData, ULONG Index,
+                            PDOKAN_INSTANCE DokanInstance) {
+  ULONG nameBytes = (ULONG)wcslen(FindData->cFileName) * sizeof(WCHAR);
+
+  Buffer->FileIndex = Index;
+  Buffer->FileAttributes = FindData->dwFileAttributes;
+  Buffer->FileNameLength = nameBytes;
+
+  Buffer->EndOfFile.HighPart = FindData->nFileSizeHigh;
+  Buffer->EndOfFile.LowPart = FindData->nFileSizeLow;
+  Buffer->AllocationSize.HighPart = FindData->nFileSizeHigh;
+  Buffer->AllocationSize.LowPart = FindData->nFileSizeLow;
+  ALIGN_ALLOCATION_SIZE(&Buffer->AllocationSize, DokanInstance->DokanOptions);
+
+  Buffer->CreationTime.HighPart = FindData->ftCreationTime.dwHighDateTime;
+  Buffer->CreationTime.LowPart = FindData->ftCreationTime.dwLowDateTime;
+
+  Buffer->LastAccessTime.HighPart = FindData->ftLastAccessTime.dwHighDateTime;
+  Buffer->LastAccessTime.LowPart = FindData->ftLastAccessTime.dwLowDateTime;
+
+  Buffer->LastWriteTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->LastWriteTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
+
+  Buffer->ChangeTime.HighPart = FindData->ftLastWriteTime.dwHighDateTime;
+  Buffer->ChangeTime.LowPart = FindData->ftLastWriteTime.dwLowDateTime;
+
+  Buffer->EaSize = 0;
+  Buffer->ReparsePointTag = 0;
+  RtlFillMemory(&Buffer->FileId.Identifier, sizeof Buffer->FileId.Identifier, 0);
+
+  RtlCopyMemory(Buffer->FileName, FindData->cFileName, nameBytes);
+}
+
 VOID DokanFillIdExtdBothDirInfo(PFILE_ID_EXTD_BOTH_DIR_INFORMATION Buffer,
                             PWIN32_FIND_DATAW FindData, ULONG Index,
                             PDOKAN_INSTANCE DokanInstance) {
@@ -285,6 +319,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
   case FileIdBothDirectoryInformation:
     thisEntrySize += sizeof(FILE_ID_BOTH_DIR_INFORMATION);
     break;
+  case FileIdExtdDirectoryInformation:
+    thisEntrySize += sizeof(FILE_ID_EXTD_DIR_INFO);
+    break;
   case FileIdExtdBothDirectoryInformation:
     thisEntrySize += sizeof(FILE_ID_EXTD_BOTH_DIR_INFORMATION);
     break;
@@ -321,6 +358,9 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
     break;
   case FileIdBothDirectoryInformation:
     DokanFillIdBothDirInfo(Buffer, FindData, Index, DokanInstance);
+    break;
+  case FileIdExtdDirectoryInformation:
+    DokanFillIdExtdDirInfo(Buffer, FindData, Index, DokanInstance);
     break;
   case FileIdExtdBothDirectoryInformation:
     DokanFillIdExtdBothDirInfo(Buffer, FindData, Index, DokanInstance);
@@ -545,6 +585,7 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       fileInfoClass != FileNamesInformation &&
       fileInfoClass != FileIdBothDirectoryInformation &&
       fileInfoClass != FileIdFullDirectoryInformation &&
+      fileInfoClass != FileIdExtdDirectoryInformation &&
       fileInfoClass != FileIdExtdBothDirectoryInformation) {
 
     DbgPrint("not suported type %d\n", fileInfoClass);

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- Kernel/Library - Added support for FileIdExtdDirectoryInformation; fixes directory listings under WSL2.
 ### Fixed
 - Library - Return STATUS_INVALID_PARAMETER where appropriate; fixes directory listings under WSL2.
 
