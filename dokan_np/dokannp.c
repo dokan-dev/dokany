@@ -225,7 +225,35 @@ DWORD APIENTRY NPAddConnection3(__in HWND WndOwner,
 
 DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
   DbgPrintW(L"NpCancelConnection %s %d\n", Name, Force);
-  return WN_SUCCESS;
+
+  ULONG nbRead = 0;
+  WCHAR dosDevice[] = L"\\DosDevices\\C:";
+  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
+  if (dokanControl == NULL) {
+    DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
+    return WN_NOT_CONNECTED;
+  }
+
+  dosDevice[12] = Name[0];
+
+  for (unsigned int i = 0; i < nbRead; ++i) {
+    if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
+      if (dokanControl[i].MountOptions & DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
+        DokanReleaseMountPointList(dokanControl);
+        if (DokanRemoveMountPoint(Name)) {
+          DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint succeeded\n");
+          return WN_SUCCESS;
+        } else {
+          DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint failed\n");
+          return WN_BAD_VALUE;
+        }
+      }
+    }
+  }
+
+  DbgPrintW(L"NpCancelConnection Disconnect was ignored\n");
+
+  return WN_NO_ERROR;
 }
 
 DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,

@@ -448,7 +448,7 @@ NTSTATUS DokanCheckOplock(
   ASSERT(Fcb->Vcb != NULL);
   ASSERT(Fcb->Vcb->Dcb != NULL);
   if (Fcb->Vcb != NULL && Fcb->Vcb->Dcb != NULL &&
-      !Fcb->Vcb->Dcb->OplocksDisabled) {
+      !(Fcb->Vcb->Dcb->MountOptions & DOKAN_EVENT_DISABLE_OPLOCKS)) {
     return FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, Context,
                             CompletionRoutine, PostIrpRoutine);
   }

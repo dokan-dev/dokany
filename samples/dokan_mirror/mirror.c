@@ -1549,7 +1549,8 @@ void ShowUsage() {
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
           "  /e Disable OpLocks\t\t\t\t Disable OpLocks kernel operations. Otherwise Dokan will take care of it.\n"
           "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
-          "  /z Enabled FCB GC. Might speed up on env with filter drivers (Anti-virus) slowing down the system.\n\n"
+          "  /z Enabled FCB GC. Might speed up on env with filter drivers (Anti-virus) slowing down the system.\n"
+          "  /x (network unmount)\t\t\t Allows unmounting network drive from file explorer\n\n"
           "Examples:\n"
           "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
           "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
@@ -1636,6 +1637,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'z':
       dokanOptions.Options |= DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION;
+      break;
+    case L'x':
+      dokanOptions.Options |= DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE;
       break;
     case L'b':
       // Only work when mirroring a folder with setCaseSensitiveInfo option enabled on win10

@@ -54,6 +54,7 @@ class memfs {
   bool removable_drive = false;
   bool current_session = false;
   bool debug_log = false;
+  bool enable_network_unmount = false;
   ULONG timeout = 0;
 
   // FileSystem context runtime

@@ -49,6 +49,9 @@ void memfs::run() {
     if (unc_name[0]) {
       dokan_options.UNCName = unc_name;
     }
+    if (enable_network_unmount) {
+      dokan_options.Options |= DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE;
+    }
   } else if (removable_drive) {
     dokan_options.Options |= DOKAN_OPTION_REMOVABLE;
   } else {

@@ -579,13 +579,10 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG deviceNamePos;
   BOOLEAN useMountManager = FALSE;
   BOOLEAN mountGlobally = TRUE;
-  BOOLEAN fileLockUserMode = FALSE;
-  BOOLEAN oplocksDisabled = FALSE;
   BOOLEAN fcbGcEnabled = FALSE;
   ULONG sessionId = (ULONG)-1;
   BOOLEAN startFailure = FALSE;
   BOOLEAN isMountPointDriveLetter = FALSE;
-  BOOLEAN caseSensitive = FALSE;
 
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
@@ -683,12 +680,10 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   if (eventStart->Flags & DOKAN_EVENT_FILELOCK_USER_MODE) {
     DDbgPrint("  FileLock in User Mode\n");
-    fileLockUserMode = TRUE;
   }
 
   if (eventStart->Flags & DOKAN_EVENT_DISABLE_OPLOCKS) {
     DDbgPrint("  OpLocks disabled\n");
-    oplocksDisabled = TRUE;
   }
 
   if (eventStart->Flags & DOKAN_EVENT_ENABLE_FCB_GC) {
@@ -697,7 +692,9 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   }
   if (eventStart->Flags & DOKAN_EVENT_CASE_SENSITIVE) {
     DDbgPrint("  Case sensitive enabled\n");
-    caseSensitive = TRUE;
+  }
+  if (eventStart->Flags & DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
+    DDbgPrint("  Network unmount enabled\n");
   }
 
   KeEnterCriticalRegion();
@@ -716,6 +713,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
                      eventStart->MountPoint);
   }
   dokanControl.SessionId = sessionId;
+  dokanControl.MountOptions = eventStart->Flags;
 
   DDbgPrint("  Checking for MountPoint %ls \n", dokanControl.MountPoint);
   PMOUNT_ENTRY foundEntry = FindMountEntry(dokanGlobal, &dokanControl, FALSE);
@@ -767,10 +765,8 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   isMountPointDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
 
-  dcb->OplocksDisabled = oplocksDisabled;
-  dcb->FileLockInUserMode = fileLockUserMode;
   dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
-  dcb->CaseSensitive = caseSensitive;
+  dcb->MountOptions = eventStart->Flags;
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;

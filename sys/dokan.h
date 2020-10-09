@@ -264,7 +264,6 @@ typedef struct _DokanDiskControlBlock {
   USHORT UseAltStream;
   USHORT UseMountManager;
   USHORT MountGlobally;
-  USHORT FileLockInUserMode;
 
   // to make a unique id for pending IRP
   ULONG SerialNumber;
@@ -284,9 +283,6 @@ typedef struct _DokanDiskControlBlock {
   // point yet.
   BOOLEAN MountPointDetermined;
 
-  // Whether any oplock functionality should be disabled.
-  BOOLEAN OplocksDisabled;
-
   // How often to garbage-collect FCBs. If this is 0, we use the historical
   // default behavior of freeing them on the spot and in the current context
   // when the FileCount reaches 0. If this is nonzero, then a background thread
@@ -297,17 +293,9 @@ typedef struct _DokanDiskControlBlock {
   // repeatedly rebuilding state that they attach to the FCB header.
   ULONG FcbGarbageCollectionIntervalMs;
 
-  // CaseSenitive FileName: NTFS can look to be case-insensitive
-  // but in some situation it can also be case-sensitive :
-  // * NTFS keep the filename casing used during Create internally.
-  // * Open "MyFile" on NTFS can open "MYFILE" if it exists.
-  // * FILE_FLAG_POSIX_SEMANTICS (IRP_MJ_CREATE: SL_CASE_SENSITIVE)
-  //   can be used during Create to make the lookup case-sensitive.
-  // * Since Win10, NTFS can have specific directories
-  //   case-sensitive / insensitive, even if the device tags says otherwise.
-  // Dokan choose to support case-sensitive or case-insensitive filesystem
-  // but not those NTFS specific scenarios.
-  BOOLEAN CaseSensitive;
+  // Contains mount options from user space. See DOKAN_EVENT_* in public.h
+  // for possible values.
+  ULONG MountOptions;
 
 } DokanDCB, *PDokanDCB;
 

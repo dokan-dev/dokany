@@ -588,7 +588,7 @@ Return Value:
       __leave;
     }
 
-    caseInSensitive = !dcb->CaseSensitive;
+    caseInSensitive = !(dcb->MountOptions & DOKAN_EVENT_CASE_SENSITIVE);
 
     // this memory is freed by DokanGetFCB if needed
     // "+ sizeof(WCHAR)" is for the last NULL character
