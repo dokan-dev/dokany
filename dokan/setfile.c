@@ -41,14 +41,12 @@ DokanSetAllocationInformation(PEVENT_CONTEXT EventContext,
   // is less than the end-of-file position, the end-of-file position is
   // automatically
   // adjusted to match the allocation size.
-  NTSTATUS status;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
   if (DokanOperations->SetAllocationSize) {
     status = DokanOperations->SetAllocationSize(
         EventContext->Operation.SetFile.FileName,
         allocInfo->AllocationSize.QuadPart, FileInfo);
-  } else {
-    status = STATUS_NOT_IMPLEMENTED;
   }
 
   return status;
@@ -96,19 +94,22 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   BOOLEAN DeleteFileFlag = FALSE;
   NTSTATUS result;
 
-  if (EventContext->Operation.SetFile.FileInformationClass ==
-      FileDispositionInformation) {
-
+  switch (EventContext->Operation.SetFile.FileInformationClass) {
+  case FileDispositionInformation: {
     PFILE_DISPOSITION_INFORMATION dispositionInfo =
         (PFILE_DISPOSITION_INFORMATION)(
             (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
     DeleteFileFlag = dispositionInfo->DeleteFile;
-  } else { //FileDispositionInformationEx
+  } break;
+  case FileDispositionInformationEx: {
     PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
         (PFILE_DISPOSITION_INFORMATION_EX)(
             (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
 
     DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
+  } break;
+  default:
+    return STATUS_INVALID_PARAMETER;
   }
 
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
@@ -235,7 +236,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   PEVENT_INFORMATION eventInfo;
   PDOKAN_OPEN_INFO openInfo;
   DOKAN_FILE_INFO fileInfo;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
   if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation
@@ -283,7 +284,7 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
     break;
 
   case FilePositionInformation:
-    // this case is dealed with by driver
+    // this case is dealt with by the driver
     status = STATUS_NOT_IMPLEMENTED;
     break;
 

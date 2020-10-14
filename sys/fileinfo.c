@@ -231,7 +231,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     RtlCopyMemory(eventContext->Operation.File.FileName, fcb->FileName.Buffer,
                   fcb->FileName.Length);
 
-    // register this IRP to pending IPR list
+    // register this IRP to pending IRP list
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {

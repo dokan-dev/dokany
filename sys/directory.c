@@ -123,20 +123,26 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   case FileDirectoryInformation:
     DDbgPrint("  FileDirectoryInformation\n");
     break;
-  case FileIdFullDirectoryInformation:
-    DDbgPrint("  FileIdFullDirectoryInformation\n");
-    break;
   case FileFullDirectoryInformation:
     DDbgPrint("  FileFullDirectoryInformation\n");
-    break;
-  case FileNamesInformation:
-    DDbgPrint("  FileNamesInformation\n");
     break;
   case FileBothDirectoryInformation:
     DDbgPrint("  FileBothDirectoryInformation\n");
     break;
+  case FileNamesInformation:
+    DDbgPrint("  FileNamesInformation\n");
+    break;
   case FileIdBothDirectoryInformation:
     DDbgPrint("  FileIdBothDirectoryInformation\n");
+    break;
+  case FileIdFullDirectoryInformation:
+    DDbgPrint("  FileIdFullDirectoryInformation\n");
+    break;
+  case FileIdExtdDirectoryInformation:
+    DDbgPrint("  FileIdExtdDirectoryInformation\n");
+    break;
+  case FileIdExtdBothDirectoryInformation:
+    DDbgPrint("  FileIdExtdBothDirectoryInformation\n");
     break;
   default:
     DDbgPrint("  unknown FileInfoClass %d\n",
@@ -329,7 +335,7 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
   // usable buffer size
   bufferLen = irpSp->Parameters.QueryDirectory.Length;
 
-  // DDbgPrint("  !!Returning DirecotyInfo!!\n");
+  // DDbgPrint("  !!Returning DirectoryInfo!!\n");
 
   // buffer is not specified or short of length
   if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
