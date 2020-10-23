@@ -329,6 +329,8 @@ static NTSTATUS DOKAN_CALLBACK memfs_writefile(LPCWSTR filename, LPCVOID buffer,
 
   auto file_size = f->get_filesize();
 
+  // An Offset -1 is like the file was opened with FILE_APPEND_DATA
+  // and we need to write at the end of the file.
   if (offset == -1) offset = file_size;
 
   if (dokanfileinfo->PagingIo) {
