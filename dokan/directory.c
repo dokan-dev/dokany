@@ -24,12 +24,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "list.h"
 
-#ifdef _MSC_VER
-#if _MSC_VER < 1300 // VC6
-typedef ULONG ULONG_PTR;
-#endif
-#endif
-
 /**
 * \struct DOKAN_FIND_DATA
 * \brief Dokan find file list
