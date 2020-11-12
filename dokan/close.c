@@ -39,9 +39,10 @@ VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
   eventInfo->Status = STATUS_SUCCESS; // return success at any case
 
   DbgPrint("###Close %04d\n", openInfo != NULL ? openInfo->EventId : -1);
-
-  // do not send it to the driver
-  // SendEventInformation(Handle, eventInfo, length);
+  
+  // Driver has simply notifying us of the Close request which he has
+  // already completed at this stage. Driver is not expecting us
+  // to reply from this so there is no need to send an EVENT_INFORMATION.
 
   if (openInfo != NULL) {
     EnterCriticalSection(&DokanInstance->CriticalSection);
