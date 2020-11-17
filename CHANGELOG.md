@@ -5,9 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased]
 ### Added
-- Kernel/Library - Added support for FileIdExtdDirectoryInformation; fixes directory listings under WSL2.
+- Kernel/Library - Added support for `FileIdExtdDirectoryInformation`. Fixes directory listings under WSL2.
 ### Fixed
-- Library - Return STATUS_INVALID_PARAMETER where appropriate; fixes directory listings under WSL2.
+- Library - Return `STATUS_INVALID_PARAMETER` where appropriate. Fixes directory listings under WSL2.
 
 ## [1.4.0.1000] - 2020-01-06
 ### Added
