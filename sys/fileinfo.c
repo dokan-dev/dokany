@@ -277,7 +277,7 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   // available buffer size
   bufferLen = irpSp->Parameters.QueryFile.Length;
 
-  // buffer is not specifed or short of size
+  // buffer is not specified or short of size
   if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
     info = 0;
     status = STATUS_INSUFFICIENT_RESOURCES;

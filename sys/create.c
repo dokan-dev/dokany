@@ -613,7 +613,7 @@ Return Value:
                         (needBackSlashAfterRelatedFile ? sizeof(WCHAR) : 0),
                     fileObject->FileName.Buffer, fileObject->FileName.Length);
     } else {
-      // if related file object is not specifed, copy the file name of file
+      // if related file object is not specified, copy the file name of file
       // object
       RtlCopyMemory(fileName, fileObject->FileName.Buffer,
                     fileObject->FileName.Length);

@@ -161,7 +161,7 @@ VOID DispatchCreate(HANDLE Handle, // This handle is not for a file. It is for
   origOptions = options;
 
   // to open directory
-  // even if this flag is not specifed,
+  // even if this flag is not specified,
   // there is a case to open a directory
   if (options & FILE_DIRECTORY_FILE) {
     // DbgPrint("FILE_DIRECTORY_FILE\n");
