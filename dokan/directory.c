@@ -405,8 +405,8 @@ VOID ClearFindData(PLIST_ENTRY ListHead) {
   }
 }
 
-// add entry which matches the pattern specifed in EventContext
-// to the buffer specifed in EventInfo
+// add entry which matches the pattern specified in EventContext
+// to the buffer specified in EventInfo
 //
 LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
                 PLIST_ENTRY FindDataList, BOOLEAN PatternCheck,
