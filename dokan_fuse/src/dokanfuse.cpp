@@ -505,12 +505,16 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   if (fs->conf.mountManager)
     dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
   else {
-    dokanOptions->Options |=
-        fs->conf.networkDrive ? DOKAN_OPTION_NETWORK : DOKAN_OPTION_REMOVABLE;
-    wchar_t uncName[MAX_PATH + 1];
-    if (fs->conf.networkDrive && fs->conf.uncname) {
-      mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
-      dokanOptions->UNCName = uncName;
+    if (fs->conf.removableDrive) {
+      dokanOptions->Options |= DOKAN_OPTION_REMOVABLE;
+    }
+    if (fs->conf.networkDrive) {
+      dokanOptions->Options |= DOKAN_OPTION_NETWORK;
+      wchar_t uncName[MAX_PATH + 1];
+      if (fs->conf.networkDrive && fs->conf.uncname) {
+        mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
+        dokanOptions->UNCName = uncName;
+      }
     }
   }
 
@@ -607,6 +611,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("sector_size=%lu", sectorSize, 0),
     FUSE_LIB_OPT("-n", networkDrive, 1),
     FUSE_LIB_OPT("-m", mountManager, 1),
+    FUSE_LIB_OPT("-p", removableDrive, 1),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -624,6 +629,7 @@ static void fuse_lib_help(void) {
       "    -o sector_size=M       set sector size\n"
       "    -n                     use network drive\n"
       "    -m                     use mount manager\n"
+      "    -p                     use removable drive\n"
       "\n");
 }
 
