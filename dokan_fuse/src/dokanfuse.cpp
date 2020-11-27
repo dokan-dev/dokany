@@ -471,7 +471,7 @@ static DOKAN_OPERATIONS dokanOperations = {
     GetVolumeInformation,
     FuseMounted,
     FuseUnmounted,
-    nullptr, // FuseGetFileSecurity
+    nullptr, // GetFileSecurity
     nullptr, // SetFileSecurity
 };
 
