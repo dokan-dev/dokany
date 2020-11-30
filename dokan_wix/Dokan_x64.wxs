@@ -97,8 +97,6 @@
 
     <CustomAction Id='CheckForRebootPending' Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
 
-    <CustomAction Id='CheckForUCRT' Error="Installation failed because the Universal C Runtime is not installed. Please run Windows Update and install all required Windows updates. You can download the UCRT separately from here: https://support.microsoft.com/en-us/kb/2999226" />
-
     <CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
     <CustomAction Id="SetFolderValue"
