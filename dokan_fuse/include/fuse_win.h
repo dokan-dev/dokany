@@ -24,7 +24,7 @@
 #endif
 
 #ifndef DEFAULT_FUSE_FILESYSTEM_NAME
-#define DEFAULT_FUSE_FILESYSTEM_NAME "Dokan user-level file system"
+#define DEFAULT_FUSE_FILESYSTEM_NAME "NTFS"
 #endif
 
 #ifdef __cplusplus
