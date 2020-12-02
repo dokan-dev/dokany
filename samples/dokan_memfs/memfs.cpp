@@ -57,6 +57,12 @@ void memfs::run() {
   } else {
     dokan_options.Options |= DOKAN_OPTION_MOUNT_MANAGER;
   }
+  
+  if (current_session
+      && (dokan_options.Options & DOKAN_OPTION_MOUNT_MANAGER) == 0) {
+    dokan_options.Options |= DOKAN_OPTION_CURRENT_SESSION;
+  }
+  
   dokan_options.ThreadCount = thread_number;
   dokan_options.Timeout = timeout;
   dokan_options.GlobalContext = reinterpret_cast<ULONG64>(fs_filenodes.get());
