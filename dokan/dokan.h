@@ -607,6 +607,10 @@ typedef struct _DOKAN_OPERATIONS {
   * Before these methods are called, \ref ZwCreateFile may not be called.
   * (ditto \ref CloseFile and \ref Cleanup)
   *
+  * VolumeName length can be anything that fit in the provided buffer.
+  * But some Windows component expect it to be no longer than 32 characters
+  * that why it is recommended to set a value under this limit.
+  *
   * FileSystemName could be anything up to 10 characters.
   * But Windows check few feature availability based on file system name.
   * For this, it is recommended to set NTFS or FAT here.
