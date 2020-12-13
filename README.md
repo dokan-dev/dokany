@@ -119,4 +119,5 @@ Detect defects and report them on
 [GitHub issue tracker](https://github.com/dokan-dev/dokany/issues).
 
 Ask and answer questions on
+[Github Discussions](https://github.com/dokan-dev/dokany/discussions).
 [Google discussion group](https://groups.google.com/forum/#!forum/dokan).
