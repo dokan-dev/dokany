@@ -53,15 +53,8 @@ You can obtain source files from https://dokan-dev.github.io
 
 ## Environment
 Dokan works on
- * Windows Server 2019
- * Windows Server 2016
- * Windows 10
- * Windows Server 2012 R2
- * Windows 8.1
- * Windows Server 2012
- * Windows 8
- * Windows Server 2008 R2 SP1
- * Windows 7 SP1
+ * Windows Server 2019 / 2016 / 2012 (R2) / 2008 R2 SP1
+ * Windows 10 / 8.1 / 8 / 7 SP1
  
 Platform
  * x86
