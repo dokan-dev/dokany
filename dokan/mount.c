@@ -532,7 +532,7 @@ void DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved, BOOL safe) {
   params.dbcv_flags = 0;
 
   if (BroadcastSystemMessage(
-          BSF_NOHANG | BSF_FORCEIFHUNG | BSF_NOTIMEOUTIFNOTHUNG, &receipients,
+          BSF_NOHANG | BSF_FORCEIFHUNG, &receipients,
           WM_DEVICECHANGE, device_event, (LPARAM)&params) <= 0) {
 
     DbgPrint("DokanBroadcastLink: BroadcastSystemMessage failed - %d\n",
