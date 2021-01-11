@@ -280,7 +280,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   StringCbPrintfW(keepalive_path, sizeof(keepalive_path), L"\\\\?%s%s",
                   instance->DeviceName, DOKAN_KEEPALIVE_FILE_NAME);
   HANDLE keepalive_handle =
-      CreateFile(keepalive_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+      CreateFile(keepalive_path, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
   if (keepalive_handle == INVALID_HANDLE_VALUE) {
     // We don't consider this a fatal error because the keepalive handle is only
     // needed for abnormal termination cases anyway.
@@ -407,7 +407,7 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
   while (status) {
 
     device = CreateFile(rawDeviceName,                 // lpFileName
-                   GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+                   GENERIC_READ,       // dwDesiredAccess
                    FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
                    NULL,                               // lpSecurityAttributes
                    OPEN_EXISTING,                      // dwCreationDistribution
