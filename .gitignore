@@ -55,3 +55,4 @@ ReleasePS
 /setup.inf
 /setup.rpt
 *.bak
+*.log
