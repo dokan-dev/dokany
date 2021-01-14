@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [1.4.1.1000] - 2021-01-14
 ### Added
 - Kernel/Library - Added support for `FileIdExtdDirectoryInformation`. Fixes directory listings under WSL2.
 - Kernel/Library - Add `DOKAN_OPTION_CASE_SENSITIVE` mount option.
@@ -11,12 +11,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - FUSE - Add removable drive option and use local drive as default type now.
 
 ### Changed
-- Library - C++ redistributable dependencies is fully removed for the next release.
+- Library - C++ redistributable dependencies is fully removed for this release.
 - Installer - Remove no longer needed dependency to KB2999226 (VC Redist).
 - Kernel - Change `DOKAN_CONTROL.VolumeDeviceObject` to `ULONG64` for other compiler than MSVC.
 - FUSE - Change default filesystem name to NTFS.
 
 ### Fixed
+- Library - Reduce desired access rights for loop device handle and keepalive handle. Avoid some antivirus incompatibility.
+- Library - No longer wait for apps to answer `BroadcastSystemMessage` during mount.
 - Library - Return `STATUS_INVALID_PARAMETER` where appropriate. Fixes directory listings under WSL2.
 - FUSE - Incorrect convertion for MountPoint using chinese characters.
 - MemFS - Fix out of range read when the offset is bigger than the buffer.
