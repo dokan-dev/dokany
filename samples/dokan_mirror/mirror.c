@@ -267,17 +267,16 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   // be opened.
   fileAttr = GetFileAttributes(filePath);
 
-  if (fileAttr != INVALID_FILE_ATTRIBUTES
-    && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
-      if (!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
-        DokanFileInfo->IsDirectory = TRUE;
-        // Needed by FindFirstFile to list files in it
-        // TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
-        ShareAccess |= FILE_SHARE_READ;
-      } else { // FILE_NON_DIRECTORY_FILE - Cannot open a dir as a file
-        DbgPrint(L"\tCannot open a dir as a file\n");
-        return STATUS_FILE_IS_A_DIRECTORY;
-      }
+  if (fileAttr != INVALID_FILE_ATTRIBUTES &&
+      fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
+    if (CreateOptions & FILE_NON_DIRECTORY_FILE) {
+      DbgPrint(L"\tCannot open a dir as a file\n");
+      return STATUS_FILE_IS_A_DIRECTORY;
+    }
+    DokanFileInfo->IsDirectory = TRUE;
+    // Needed by FindFirstFile to list files in it
+    // TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
+    ShareAccess |= FILE_SHARE_READ;
   }
 
   DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
