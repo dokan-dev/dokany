@@ -187,7 +187,7 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
     ULONGLONG pos;
     for (pos = EventContext->Operation.SetFile.FileNameLength / sizeof(WCHAR);
          pos != 0; --pos) {
-      if (EventContext->Operation.SetFile.FileName[pos] == '\\')
+      if (EventContext->Operation.SetFile.FileName[pos] == L'\\')
         break;
     }
     newName = (WCHAR *)malloc((pos + 1) * sizeof(WCHAR) +
@@ -201,11 +201,23 @@ DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
     RtlCopyMemory((PCHAR)newName + (pos + 1) * sizeof(WCHAR),
                   renameInfo->FileName, renameInfo->FileNameLength);
   } else {
-    newName = (WCHAR *)malloc(renameInfo->FileNameLength + sizeof(WCHAR));
+    // When the drive is networked shared, there a possibility to have a double \ at start.
+    ULONGLONG pos;
+    for (pos = 0; pos + 1 < renameInfo->FileNameLength / sizeof(WCHAR) &&
+                  renameInfo->FileName[pos] == L'\\' &&
+                  renameInfo->FileName[pos + 1] == L'\\';
+         ++pos)
+      ;
+    ULONGLONG skipLength = pos * sizeof(WCHAR);
+
+    newName = (WCHAR *)malloc(renameInfo->FileNameLength + sizeof(WCHAR) -
+                              skipLength);
     if (newName == NULL)
       return STATUS_INSUFFICIENT_RESOURCES;
-    ZeroMemory(newName, renameInfo->FileNameLength + sizeof(WCHAR));
-    RtlCopyMemory(newName, renameInfo->FileName, renameInfo->FileNameLength);
+    ZeroMemory(newName,
+               renameInfo->FileNameLength + sizeof(WCHAR) - skipLength);
+    RtlCopyMemory(newName, renameInfo->FileName + pos,
+                  renameInfo->FileNameLength - skipLength);
   }
 
   status =
