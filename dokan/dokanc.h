@@ -147,21 +147,62 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
 
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 
+/**
+ * \brief Output the debug logs to StdErr or not.
+ *
+ * Note: By default they are sent to the debugger.
+ */
 VOID DOKANAPI DokanUseStdErr(BOOL Status);
 
+/**
+ * \brief Enable or not the debug logs for the Library.
+ */
 VOID DOKANAPI DokanDebugMode(BOOL Status);
 
+/**
+ * \brief Create an start a Windows service.
+ * 
+ * Note: This is only used by dokanctl to install the Dokan driver.
+ */
 BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
                                   LPCWSTR ServiceFullPath);
 
+/**
+ * \brief Stop and delete a Windows service.
+ *
+ * Note: This is only used by dokanctl to remove the Dokan driver.
+ */
 BOOL DOKANAPI DokanServiceDelete(LPCWSTR ServiceName);
 
+/**
+ * \brief Install dokan network provider.
+ *
+ * Note: This is only used by dokanctl.
+ */
 BOOL DOKANAPI DokanNetworkProviderInstall();
 
+/**
+ * \brief Uninstall dokan network provider.
+ *
+ * Note: This is only used by dokanctl.
+ */
 BOOL DOKANAPI DokanNetworkProviderUninstall();
 
+/**
+ * \brief Change the current debug log level in the driver.
+ * 
+ * See DOKAN_DEBUG_* in util/log.h of the driver folder
+ * for the different options.
+ */
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode);
 
+/**
+ * \brief Force the driver to cleanup mount points
+ *
+ * During a dirty unmount, it is possible that the driver
+ * keeps the used mount point active. The function forces the driver
+ * to remove them from the system for being again available for a new mount.
+ */
 BOOL DOKANAPI DokanMountPointsCleanUp();
 
 #ifdef __cplusplus
