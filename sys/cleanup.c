@@ -210,7 +210,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
                             FILE_ACTION_MODIFIED);
   }
 
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE) && status == STATUS_SUCCESS) {
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
       DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                               FILE_ACTION_REMOVED);
@@ -226,7 +226,7 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   (VOID) FsRtlFastUnlockAll(&fcb->FileLock, fileObject,
                             IoGetRequestorProcess(irp), NULL);
 
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY) && status == STATUS_SUCCESS) {
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
