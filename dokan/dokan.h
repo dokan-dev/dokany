@@ -275,6 +275,8 @@ typedef struct _DOKAN_OPERATIONS {
   * Cleanup request before \ref CloseFile is called.
   *
   * When DOKAN_FILE_INFO.DeleteOnClose is \c TRUE, the file in Cleanup must be deleted.
+  * The function cannot fail therefore the filesystem need to ensure ahead
+  * that a the delete can safely happen during Cleanup. 
   * See DeleteFile documentation for explanation.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
