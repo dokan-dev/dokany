@@ -838,7 +838,7 @@ NTSTATUS DokanMountVolume(__in PDEVICE_OBJECT DiskDevice, __in PIRP Irp) {
   NTSTATUS status = STATUS_UNRECOGNIZED_VOLUME;
 
   DOKAN_INIT_LOGGER(logger, DriverObject, IRP_MJ_FILE_SYSTEM_CONTROL);
-  DokanLogInfo(&logger, L"Mounting disk device.");
+  DDbgPrint("Mounting disk device.");
 
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dcb = irpSp->Parameters.MountVolume.DeviceObject->DeviceExtension;
