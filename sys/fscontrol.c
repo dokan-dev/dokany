@@ -704,15 +704,15 @@ BOOLEAN MatchDokanDCBType(__in PDokanDCB Dcb,
                           __in BOOLEAN LogFailures) {
   if (!Dcb) {
     if (LogFailures) {
-      DokanLogInfo(Logger, L"There is no DCB.");
+      DDbgPrint(L"There is no DCB.");
     }
     return FALSE;
   }
   PrintIdType(Dcb);
   if (GetIdentifierType(Dcb) != DCB) {
     if (LogFailures) {
-      DokanLogInfo(Logger, L"The DCB type is actually %x; expected %x.",
-                   GetIdentifierType(Dcb), DCB);
+      DDbgPrint(L"The DCB type is actually %x; expected %x.",
+                GetIdentifierType(Dcb), DCB);
     }
     return FALSE;
   }
