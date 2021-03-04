@@ -461,10 +461,6 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
     DDbgPrint("  Irp is NULL, so no complete required\n");
     return;
   }
-  if (Status == -1) {
-    DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
-    Status = STATUS_INVALID_PARAMETER;
-  }
   if (Status != STATUS_PENDING) {
     Irp->IoStatus.Status = Status;
     Irp->IoStatus.Information = Info;
@@ -477,10 +473,6 @@ VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status) {
   if (Irp == NULL) {
     DDbgPrint("  Irp is NULL, so no complete required\n");
     return;
-  }
-  if (Status == -1) {
-    DDbgPrint("  Status is -1 which is not valid NTSTATUS\n");
-    Status = STATUS_INVALID_PARAMETER;
   }
   if (Status != STATUS_PENDING) {
     Irp->IoStatus.Status = Status;
