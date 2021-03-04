@@ -838,9 +838,6 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 NTSTATUS
 DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
-NTSTATUS
-QueryDeviceRelations(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
-
 DRIVER_UNLOAD DokanUnload;
 
 DRIVER_CANCEL DokanEventCancelRoutine;
