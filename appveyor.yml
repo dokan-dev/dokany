@@ -205,6 +205,7 @@
         Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/5.0.4.24009/sonar-scanner-msbuild-5.0.4.24009-net46.zip -OutFile .\sonar-scanner-msbuild.zip
         Exec-External { & 7z x .\sonar-scanner-msbuild.zip }
         $env:Path = "$((Get-Location).Path);" + $env:Path
+        $env:JAVA_HOME = "C:\Program Files\Java\jdk15"
         cd ..
 
         .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
