@@ -204,7 +204,7 @@
         Exec-External { & 7z e .\build-wrapper-win-x86.zip }
         Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/5.0.4.24009/sonar-scanner-msbuild-5.0.4.24009-net46.zip -OutFile .\sonar-scanner-msbuild.zip
         Exec-External { & 7z x .\sonar-scanner-msbuild.zip }
-        $env:Path += ";$((Get-Location).Path)"
+        $env:Path = "$((Get-Location).Path);" + $env:Path
         cd ..
 
         .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
@@ -221,7 +221,7 @@
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
-        $env:Path = $env:Path + ";C:\Program Files (x86)\WiX Toolset v3.11;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
+        $env:Path += ";C:\Program Files (x86)\WiX Toolset v3.11;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
         $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\signtool.exe"
