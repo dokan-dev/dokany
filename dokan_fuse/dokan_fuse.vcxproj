@@ -595,7 +595,6 @@
     <ClInclude Include="include\fuse_opt.h" />
     <ClInclude Include="include\fuse_sem_fix.h" />
     <ClInclude Include="include\fuse_win.h" />
-    <ClInclude Include="include\ScopeGuard.h" />
     <ClInclude Include="include\utils.h" />
     <ClCompile Include="src\fuse_helpers.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>

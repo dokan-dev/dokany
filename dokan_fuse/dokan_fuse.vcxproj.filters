@@ -36,9 +36,6 @@
     <ClInclude Include="include\fusemain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\ScopeGuard.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
