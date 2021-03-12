@@ -732,7 +732,7 @@ void fuse_exit(struct fuse *f) {
   if (f == nullptr || !f->ch.get() || f->ch->mountpoint.empty())
     return;
   // Unmount attached FUSE filesystem
-  f->ch->ResolvedDokanUnmount(f->ch->mountpoint.at(0)); // Ugly :(
+  fuse_unmount(f->ch->mountpoint.c_str(), f->ch.get());
 }
 
 void fuse_destroy(struct fuse *f) { delete f; }
