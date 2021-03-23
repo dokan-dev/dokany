@@ -33,6 +33,9 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <winbase.h>
 
+// Enable Long Paths on Windows 10 version 1607 and later by changing
+// the OS configuration (see Microsoft own documentation for the steps)
+// and rebuild the mirror with the following line uncommented.
 //#define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
 //dirty but should be enough
