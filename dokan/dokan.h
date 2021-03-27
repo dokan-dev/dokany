@@ -107,11 +107,6 @@ extern "C" {
  */
 #define DOKAN_OPTION_ENABLE_NOTIFICATION_API 512
 /**
- * Whether to disable any oplock support on the volume.
- * Regular range locks are enabled regardless.
- */
-#define DOKAN_OPTION_DISABLE_OPLOCKS 1024
-/**
  * The advantage of the FCB GC approach is that it prevents filter drivers (Anti-virus)
  * from exponentially slowing down procedures like zip file extraction due to
  * repeatedly rebuilding state that they attach to the FCB header.

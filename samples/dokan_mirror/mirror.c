@@ -1549,7 +1549,6 @@ void ShowUsage() {
           "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
-          "  /e Disable OpLocks\t\t\t\t Disable OpLocks kernel operations. Otherwise Dokan will take care of it.\n"
           "  /i Timeout in Milliseconds (ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
           "  /z Enabled FCB GCt\t\t\t\t Might speed up on env with filter drivers (Anti-virus) slowing down the system.\n"
           "  /x Network unmount\t\t\t\t Allows unmounting network drive from file explorer\n\n"
@@ -1633,9 +1632,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'f':
       dokanOptions.Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
-      break;
-    case L'e':
-      dokanOptions.Options |= DOKAN_OPTION_DISABLE_OPLOCKS;
       break;
     case L'z':
       dokanOptions.Options |= DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION;

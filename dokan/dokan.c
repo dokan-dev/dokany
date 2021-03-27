@@ -755,9 +755,6 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   if (Instance->DokanOptions->Options & DOKAN_OPTION_FILELOCK_USER_MODE) {
     eventStart.Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
   }
-  if (Instance->DokanOptions->Options & DOKAN_OPTION_DISABLE_OPLOCKS) {
-    eventStart.Flags |= DOKAN_EVENT_DISABLE_OPLOCKS;
-  }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE) {
     eventStart.Flags |= DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
   }
