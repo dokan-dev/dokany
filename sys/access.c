@@ -38,19 +38,17 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG outBufferLen;
   PACCESS_STATE accessState = NULL;
 
-  DDbgPrint("==> DokanGetAccessToken\n");
   vcb = DeviceObject->DeviceExtension;
 
   __try {
 
     if (Irp->RequestorMode != UserMode) {
-      DDbgPrint("  needs to be called from user-mode\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Needs to be called from user-mode");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     if (GetIdentifierType(vcb) != VCB) {
-      DDbgPrint("  GetIdentifierType != VCB\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
@@ -59,7 +57,7 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
     if (outBufferLen != sizeof(EVENT_INFORMATION)) {
-      DDbgPrint("  wrong output buffer length\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Wrong output buffer length");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
@@ -93,14 +91,14 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     hasLock = FALSE;
 
     if (accessState == NULL) {
-      DDbgPrint("  can't find pending Irp: %d\n", eventInfo->SerialNumber);
+      DOKAN_LOG_FINE_IRP(Irp, "Can't find pending Irp: %ld", eventInfo->SerialNumber);
       __leave;
     }
 
     accessToken =
         SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
     if (accessToken == NULL) {
-      DDbgPrint("  accessToken == NULL\n");
+      DOKAN_LOG_FINE_IRP(Irp, "AccessToken == NULL");
       __leave;
     }
     // NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
@@ -108,8 +106,8 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
                                    *SeTokenObjectType, KernelMode, &handle);
     if (!NT_SUCCESS(status)) {
-      DDbgPrint("  ObOpenObjectByPointer failed: 0x%x %ls\n", status,
-                DokanGetNTSTATUSStr(status));
+      DOKAN_LOG_FINE_IRP(Irp, "ObOpenObjectByPointer failed: 0x%x %s", status,
+                       DokanGetNTSTATUSStr(status));
       __leave;
     }
 
@@ -122,6 +120,5 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
       KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
     }
   }
-  DDbgPrint("<== DokanGetAccessToken\n");
   return status;
 }

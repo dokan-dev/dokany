@@ -41,24 +41,26 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   __try {
 
-    DDbgPrint("==> DokanWrite\n");
-
+    DOKAN_LOG_BEGIN_MJ(Irp);
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
-
+    DOKAN_LOG_FINE_IRP(
+        Irp,
+        "FileObject=%p MdlAddress=%p UserBuffer=%p Length=%ld ByteOffset=%I64u",
+        fileObject, Irp->MdlAddress, Irp->UserBuffer,
+        irpSp->Parameters.Write.Length,
+        irpSp->Parameters.Write.ByteOffset.QuadPart);
     //
     //  If this is a zero length write then return SUCCESS immediately.
     //
 
     if (irpSp->Parameters.Write.Length == 0) {
-      DDbgPrint("  Parameters.Write.Length == 0\n");
       Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
       __leave;
     }
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_DEVICE_REQUEST;
       __leave;
     }
@@ -66,13 +68,12 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     vcb = DeviceObject->DeviceExtension;
 
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
+    DOKAN_INIT_LOGGER(logger, vcb->DeviceObject->DriverObject, IRP_MJ_WRITE);
 
     ccb = fileObject->FsContext2;
     ASSERT(ccb != NULL);
@@ -87,15 +88,12 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     if (Irp->MdlAddress) {
-      DDbgPrint("  use MdlAddress\n");
       buffer = MmGetSystemAddressForMdlNormalSafe(Irp->MdlAddress);
     } else {
-      DDbgPrint("  use UserBuffer\n");
       buffer = Irp->UserBuffer;
     }
 
     if (buffer == NULL) {
-      DDbgPrint("  buffer == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
@@ -134,7 +132,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     // Cannot write at end of the file when using paging IO
     if (writeToEoF && isPagingIo) {
-      DDbgPrint("  writeToEoF & isPagingIo\n");
+      DOKAN_LOG_FINE_IRP(Irp, "WriteToEoF & isPagingIo");
       Irp->IoStatus.Information = 0;
       status = STATUS_SUCCESS;
       __leave;
@@ -152,7 +150,6 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (safeEventLength.HighPart != 0 ||
         safeEventLength.QuadPart <
             sizeof(EVENT_CONTEXT) + fcb->FileName.Length) {
-      DOKAN_INIT_LOGGER(logger, vcb->DeviceObject->DriverObject, IRP_MJ_WRITE);
       DokanLogError(&logger,
                     STATUS_INVALID_PARAMETER,
                     L"Write with unsupported total size: %I64u",
@@ -178,15 +175,15 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = eventContext;
 
     if (isPagingIo) {
-      DDbgPrint("  Paging IO\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Paging IO");
       eventContext->FileFlags |= DOKAN_PAGING_IO;
     }
     if (isSynchronousIo) {
-      DDbgPrint("  Synchronous IO\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Synchronous IO");
       eventContext->FileFlags |= DOKAN_SYNCHRONOUS_IO;
     }
     if (isNonCached) {
-      DDbgPrint("  Nocache\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Nocache");
       eventContext->FileFlags |= DOKAN_NOCACHE;
     }
 
@@ -196,7 +193,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (writeToEoF) {
       eventContext->FileFlags |= DOKAN_WRITE_TO_END_OF_FILE;
-      DDbgPrint("  WriteOffset = end of file\n");
+      DOKAN_LOG_FINE_IRP(Irp, "WriteOffset = end of file");
     }
 
     if (isSynchronousIo &&
@@ -234,11 +231,6 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // returns it to user-mode using pending event.
     if (eventLength <= EVENT_CONTEXT_MAX_SIZE) {
 
-      DDbgPrint("   Offset %d:%d, Length %d\n",
-                irpSp->Parameters.Write.ByteOffset.HighPart,
-                irpSp->Parameters.Write.ByteOffset.LowPart,
-                irpSp->Parameters.Write.Length);
-
       // EventContext is no longer needed, clear it
       Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
 
@@ -257,7 +249,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         //
         if (status != STATUS_SUCCESS) {
           if (status == STATUS_PENDING) {
-            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+            DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
           } else {
             DokanFreeEventContext(eventContext);
           }
@@ -286,11 +278,6 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         __leave;
       }
 
-      DDbgPrint("   Offset %d:%d, Length %d (request)\n",
-                irpSp->Parameters.Write.ByteOffset.HighPart,
-                irpSp->Parameters.Write.ByteOffset.LowPart,
-                irpSp->Parameters.Write.Length);
-
       // copies from beginning of EventContext to the end of file name
       RtlCopyMemory(requestContext, eventContext,
                     eventContext->Operation.Write.BufferOffset);
@@ -314,7 +301,7 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         //
         if (status != STATUS_SUCCESS) {
           if (status == STATUS_PENDING) {
-            DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+            DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
           } else {
             DokanFreeEventContext(requestContext);
             Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
@@ -331,10 +318,8 @@ DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } __finally {
     if (fcbLocked)
       DokanFCBUnlock(fcb);
-
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanWrite\n");
   }
 
   return status;
@@ -350,14 +335,13 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
   PFILE_OBJECT fileObject;
   BOOLEAN isPagingIo = FALSE;
 
-
+  irp = IrpEntry->Irp;
+  irpSp = IrpEntry->IrpSp;
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
 
-  DDbgPrint("==> DokanCompleteWrite %wZ\n", &fileObject->FileName);
-
-  irp = IrpEntry->Irp;
-  irpSp = IrpEntry->IrpSp;
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
 
   isPagingIo = (irp->Flags & IRP_PAGING_IO);
 
@@ -409,12 +393,11 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
       // update current byte offset only when synchronous IO and not paging IO
       fileObject->CurrentByteOffset.QuadPart =
           EventInfo->Operation.Write.CurrentByteOffset.QuadPart;
-      DDbgPrint("  Updated CurrentByteOffset %I64d\n",
-                fileObject->CurrentByteOffset.QuadPart);
+      DOKAN_LOG_FINE_IRP(irp, "Updated CurrentByteOffset %I64d",
+                         fileObject->CurrentByteOffset.QuadPart);
     }
   }
 
+  DOKAN_LOG_END_MJ(irp, irp->IoStatus.Status, irp->IoStatus.Information);
   DokanCompleteIrpRequest(irp, irp->IoStatus.Status, irp->IoStatus.Information);
-
-  DDbgPrint("<== DokanCompleteWrite\n");
 }

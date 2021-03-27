@@ -39,37 +39,34 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG flags = 0;
 
   __try {
-    DDbgPrint("==> DokanQuerySecurity\n");
+    DOKAN_LOG_BEGIN_MJ(Irp);
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB) {
-      DbgPrint("    DeviceExtension != VCB\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Invalid extension type");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
     dcb = vcb->Dcb;
 
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
-
     ccb = fileObject->FsContext2;
     if (ccb == NULL) {
-      DDbgPrint("    ccb == NULL\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Ccb == NULL");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
     fcb = ccb->Fcb;
     if (fcb == NULL) {
-      DDbgPrint("    fcb == NULL\n");
+      DOKAN_LOG_FINE_IRP(Irp, "FCB == NULL");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
@@ -78,19 +75,19 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     securityInfo = &irpSp->Parameters.QuerySecurity.SecurityInformation;
 
     if (*securityInfo & OWNER_SECURITY_INFORMATION) {
-      DDbgPrint("    OWNER_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "OWNER_SECURITY_INFORMATION");
     }
     if (*securityInfo & GROUP_SECURITY_INFORMATION) {
-      DDbgPrint("    GROUP_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "GROUP_SECURITY_INFORMATION");
     }
     if (*securityInfo & DACL_SECURITY_INFORMATION) {
-      DDbgPrint("    DACL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "DACL_SECURITY_INFORMATION");
     }
     if (*securityInfo & SACL_SECURITY_INFORMATION) {
-      DDbgPrint("    SACL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "SACL_SECURITY_INFORMATION");
     }
     if (*securityInfo & LABEL_SECURITY_INFORMATION) {
-      DDbgPrint("    LABEL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "LABEL_SECURITY_INFORMATION");
     }
 
     DokanFCBLockRO(fcb);
@@ -129,9 +126,8 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (fcb)
       DokanFCBUnlock(fcb);
 
+    DOKAN_LOG_END_MJ(Irp, status, info);
     DokanCompleteIrpRequest(Irp, status, info);
-
-    DDbgPrint("<== DokanQuerySecurity\n");
   }
 
   return status;
@@ -148,10 +144,13 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
 
-  DDbgPrint("==> DokanCompleteQuerySecurity\n");
-
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
+  fileObject = IrpEntry->FileObject;
+  ASSERT(fileObject != NULL);
+
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
 
   if (irp->MdlAddress) {
     buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
@@ -165,7 +164,7 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
             EventInfo->Buffer, EventInfo->BufferLength,
             irpSp->Parameters.QuerySecurity.SecurityInformation)) {
       // No valid security descriptor to return.
-      DDbgPrint(" Security Descriptor is not valid.\n");
+      DOKAN_LOG_FINE_IRP(irp, "Security Descriptor is not valid.");
       info = 0;
       status = STATUS_INVALID_PARAMETER;
     } else {
@@ -189,19 +188,15 @@ VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
     IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
 
-  fileObject = IrpEntry->FileObject;
-  ASSERT(fileObject != NULL);
-
   ccb = fileObject->FsContext2;
   if (ccb != NULL) {
     ccb->UserContext = EventInfo->Context;
   } else {
-    DDbgPrint("  ccb == NULL\n");
+    DOKAN_LOG_FINE_IRP(irp, "Ccb == NULL");
   }
 
+  DOKAN_LOG_END_MJ(irp, status, info);
   DokanCompleteIrpRequest(irp, status, info);
-
-  DDbgPrint("<== DokanCompleteQuerySecurity\n");
 }
 
 NTSTATUS
@@ -221,36 +216,33 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
 
   __try {
-    DDbgPrint("==> DokanSetSecurity\n");
+    DOKAN_LOG_BEGIN_MJ(Irp);
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB) {
-      DbgPrint("    DeviceExtension != VCB\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
     dcb = vcb->Dcb;
 
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
-
     ccb = fileObject->FsContext2;
     if (ccb == NULL) {
-      DDbgPrint("    ccb == NULL\n");
+      DOKAN_LOG_FINE_IRP(Irp, "ccb == NULL");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
     fcb = ccb->Fcb;
     if (fcb == NULL) {
+      DOKAN_LOG_FINE_IRP(Irp, "FCB == NULL");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
@@ -259,19 +251,19 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     securityInfo = &irpSp->Parameters.SetSecurity.SecurityInformation;
 
     if (*securityInfo & OWNER_SECURITY_INFORMATION) {
-      DDbgPrint("    OWNER_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "OWNER_SECURITY_INFORMATION");
     }
     if (*securityInfo & GROUP_SECURITY_INFORMATION) {
-      DDbgPrint("    GROUP_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "GROUP_SECURITY_INFORMATION");
     }
     if (*securityInfo & DACL_SECURITY_INFORMATION) {
-      DDbgPrint("    DACL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "DACL_SECURITY_INFORMATION");
     }
     if (*securityInfo & SACL_SECURITY_INFORMATION) {
-      DDbgPrint("    SACL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "SACL_SECURITY_INFORMATION");
     }
     if (*securityInfo & LABEL_SECURITY_INFORMATION) {
-      DDbgPrint("    LABEL_SECURITY_INFORMATION\n");
+      DOKAN_LOG_FINE_IRP(Irp, "LABEL_SECURITY_INFORMATION");
     }
 
     securityDescriptor = irpSp->Parameters.SetSecurity.SecurityDescriptor;
@@ -286,7 +278,7 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
       // TODO: Handle this case like DispatchWrite.
-      DDbgPrint("    SecurityDescriptor is too big: %d (limit %d)\n",
+      DOKAN_LOG_FINE_IRP(Irp, "SecurityDescriptor is too big: %d (limit %d)",
                 eventLength, EVENT_CONTEXT_MAX_SIZE);
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
@@ -321,9 +313,8 @@ DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (fcb)
       DokanFCBUnlock(fcb);
 
+    DOKAN_LOG_END_MJ(Irp, status, info);
     DokanCompleteIrpRequest(Irp, status, info);
-
-    DDbgPrint("<== DokanSetSecurity\n");
   }
 
   return status;
@@ -337,14 +328,12 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
 
-
-  DDbgPrint("==> DokanCompleteSetSecurity\n");
-
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
-
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
 
   ccb = fileObject->FsContext2;
   if (ccb != NULL) {
@@ -352,7 +341,7 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
   } else {
-    DDbgPrint("  ccb == NULL\n");
+    DOKAN_LOG_FINE_IRP(irp, "Ccb == NULL");
   }
 
   if (fcb && NT_SUCCESS(EventInfo->Status)) {
@@ -362,7 +351,6 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
     DokanFCBUnlock(fcb);
   }
 
+  DOKAN_LOG_END_MJ(irp, EventInfo->Status, 0);
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
-
-  DDbgPrint("<== DokanCompleteSetSecurity\n");
 }

@@ -47,7 +47,7 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
   RtlCopyMemory(buffer, String, length);
   NTSTATUS result = RtlUnicodeStringInitEx(unicode, buffer, 0);
   if (!NT_SUCCESS(result)) {
-    DDbgPrint("   DokanAllocateUnicodeString invalid string size received.\n");
+    DOKAN_LOG("Invalid string size received.");
     ExFreePool(buffer);
     ExFreePool(unicode);
     return NULL;
@@ -130,7 +130,7 @@ PUNICODE_STRING ChangePrefix(const UNICODE_STRING* Str,
 
   startWithPrefix = StartsWith(Str, Prefix);
   if (!startWithPrefix && HasPrefix) {
-    DDbgPrint("%wZ do not start with Prefix %wZ\n", Str, Prefix);
+    DOKAN_LOG_("\"%wZ\" do not start with Prefix \"%wZ\"", Str, Prefix);
     return NULL;
   }
 
@@ -141,14 +141,14 @@ PUNICODE_STRING ChangePrefix(const UNICODE_STRING* Str,
   }
   newStr = DokanAllocZero(sizeof(UNICODE_STRING));
   if (!newStr) {
-    DDbgPrint("  Failed to allocate unicode_string\n");
+    DOKAN_LOG("Failed to allocate unicode_string");
     return NULL;
   }
   newStr->Length = 0;
   newStr->MaximumLength = length;
   newStr->Buffer = DokanAllocZero(length);
   if (!newStr->Buffer) {
-    DDbgPrint("  Failed to allocate unicode_string buffer\n");
+    DOKAN_LOG("Failed to allocate unicode_string buffer");
     ExFreePool(newStr);
     return NULL;
   }

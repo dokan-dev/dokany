@@ -92,11 +92,13 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   return fcb;
 }
 
-PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
+PDokanFCB DokanGetFCB(__in PIRP Irp, __in PDokanVCB Vcb, __in PWCHAR FileName,
                       __in ULONG FileNameLength, BOOLEAN CaseInSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PDokanFCB fcb = NULL;
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
+
+  UNREFERENCED_PARAMETER(Irp);
 
   DokanVCBLockRW(Vcb);
 
@@ -110,13 +112,12 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DDbgPrint("  DokanGetFCB has entry FileName: %wZ FileCount: %lu. Looking "
-              "for %ls CaseInSensitive %d\n",
-              &fcb->FileName, fcb->FileCount, FileName, CaseInSensitive);
+    DOKAN_LOG_FINE_IRP(Irp, "Has entry FCB=%p FileName=\"%wZ\" FileCount: %lu CaseInSensitive: %d",
+                  fcb, &fcb->FileName, fcb->FileCount, CaseInSensitive);
     if (fcb->FileName.Length == FileNameLength  // FileNameLength in bytes
         && RtlEqualUnicodeString(&fn, &fcb->FileName, CaseInSensitive)) {
       // we have the FCB which is already allocated and used
-      DDbgPrint("  Found existing FCB for %ls\n", FileName);
+      DOKAN_LOG_FINE_IRP(Irp, "Found existing FCB=%p", fcb);
       break;
     }
 
@@ -125,13 +126,12 @@ PDokanFCB DokanGetFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
 
   // we don't have FCB
   if (fcb == NULL) {
-    DDbgPrint("  Allocate FCB for %ls\n", FileName);
-
+    DOKAN_LOG_FINE_IRP(Irp, "No matching FCB found.");
     fcb = DokanAllocateFCB(Vcb, FileName, FileNameLength);
 
     // no memory?
     if (fcb == NULL) {
-      DDbgPrint("    Was not able to get FCB for FileName %ls\n", FileName);
+      DOKAN_LOG_FINE_IRP(Irp, "Failed to allocate FCB");
       ExFreePool(FileName);
       DokanVCBUnlock(Vcb);
       return NULL;
@@ -216,7 +216,7 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   RemoveEntryList(&Fcb->NextFCB);
   InitializeListHead(&Fcb->NextCCB);
 
-  DDbgPrint("  Free FCB:%p\n", Fcb);
+  DOKAN_LOG_("Free FCB:%p", Fcb);
 
   ExFreePool(Fcb->FileName.Buffer);
   Fcb->FileName.Buffer = NULL;

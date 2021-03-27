@@ -32,35 +32,98 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern ULONG g_Debug;
 
 #ifdef _DEBUG
-#define DDbgPrint(...)                                                        \
-  if (g_Debug) {                                                              \
-    KdPrintEx(                                                                \
-        (DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[DokanFS] " __VA_ARGS__)); \
+
+// Stringify variable name
+#define STR(x) #x
+
+// Main print function which should not be used directly.
+#define DDbgPrint(...) \
+  KdPrintEx((DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, __VA_ARGS__));
+
+// Debug print header that should always be used by the print function.
+#define DOKAN_LOG_HEADER "[dokan1][" __FUNCTION__ "][%d]"
+
+// Internal formating log function.
+#define DOKAN_LOG_INTERNAL(Format, ...) \
+  DDbgPrint(DOKAN_LOG_HEADER Format "\n", KeGetCurrentIrql(), __VA_ARGS__)
+
+// Default log function.
+#define DOKAN_LOG(Format) \
+  DDbgPrint(DOKAN_LOG_HEADER ": " Format "\n", KeGetCurrentIrql())
+
+// Default log function with variable params.
+#define DOKAN_LOG_(Format, ...) DOKAN_LOG_INTERNAL(": " Format, __VA_ARGS__)
+
+// Logging function that should be used in an Irp context.
+#define DOKAN_LOG_FINE_IRP(Irp, Format, ...) \
+  DOKAN_LOG_INTERNAL("[%p]: " Format, Irp, __VA_ARGS__)
+
+// Log the Irp FSCTL or IOCTL Control code.
+#define DOKAN_LOG_IOCTL(Irp, ControlCode, format, ...)                        \
+  DOKAN_LOG_INTERNAL("[%p][%s]: " format, Irp, DokanGetIoctlStr(ControlCode), \
+                     __VA_ARGS__)
+
+// Log the whole Irp informations.
+#define DOKAN_LOG_MJ_IRP(Irp, IrpSp, Format, ...)                           \
+  DOKAN_LOG_INTERNAL(                                                       \
+      "[%p][%s][%s][%s][%lu]: " Format, Irp,                                \
+      DokanGetIdTypeStr(IrpSp->DeviceObject->DeviceExtension),              \
+      DokanGetMajorFunctionStr(IrpSp->MajorFunction),                       \
+      DokanGetMinorFunctionStr(IrpSp->MajorFunction, IrpSp->MinorFunction), \
+      IoGetRequestorProcessId(Irp), __VA_ARGS__)
+
+// Log the Irp at dispatch time.
+#define DOKAN_LOG_BEGIN_MJ(Irp) \
+  DOKAN_LOG_MJ_IRP(Irp, IoGetCurrentIrpStackLocation(Irp), "Begin")
+
+// Log the Irp on exit of the dispatch.
+#define DOKAN_LOG_END_MJ(Irp, Status, Information)                            \
+  {                                                                           \
+    if (Irp) {                                                                \
+      DOKAN_LOG_FINE_IRP(Irp, "End - %s Information=%llx",                    \
+                         DokanGetNTSTATUSStr(Status), (ULONG_PTR)Information) \
+    } else {                                                                  \
+      DOKAN_LOG_FINE_IRP(Irp, "End - Irp not completed %s",                   \
+                         DokanGetNTSTATUSStr(Status))                         \
+    }                                                                         \
   }
 
-// Print NTSTATUS hex value and the define string.
-VOID DokanPrintNTStatus(NTSTATUS Status);
-
 // Return the NTSTATUS define string name.
-PWCHAR DokanGetNTSTATUSStr(NTSTATUS Status);
+PCHAR DokanGetNTSTATUSStr(NTSTATUS Status);
+// Return Identifier Type string name.
+PCHAR DokanGetIdTypeStr(__in VOID *Id);
+// Return IRP Major function string name.
+PCHAR DokanGetMajorFunctionStr(UCHAR MajorFunction);
+// Return IRP Minor function string name.
+PCHAR DokanGetMinorFunctionStr(UCHAR MajorFunction, UCHAR MinorFunction);
+// Return File Information class string name.
+PCHAR DokanGetFileInformationClassStr(
+    FILE_INFORMATION_CLASS FileInformationClass);
+// Return Fs Information class string name.
+PCHAR DokanGetFsInformationClassStr(FS_INFORMATION_CLASS FsInformationClass);
+// Return NtCreateFile Information string name.
+PCHAR DokanGetCreateInformationStr(ULONG Information);
+
 #else
 // Nullify debug print on release.
 #define DDbgPrint(...)
-#define DokanPrintNTStatus(s)
+#define DOKAN_LOG_(f, ...)
+#define DOKAN_LOG(f)
+#define DOKAN_LOG_FINE_IRP(i, f, ...)
+#define DOKAN_LOG_IOCTL(i, c, f, ...)
+#define DOKAN_LOG_BEGIN_MJ(i)
+#define DOKAN_LOG_END_MJ(i, s, info)
+#define DokanGetIdTypeStr(i)
+#define DokanGetNTSTATUSStr(s)
+#define DokanGetMajorFunctionStr(major)
+#define DokanGetMinorFunctionStr(major, minor)
+#define DokanGetFileInformationClassStr(f)
+#define DokanGetFsInformationClassStr(f)
+#define DokanGetCreateInformationStr(i)
 #endif
 
-extern UNICODE_STRING FcbFileNameNull;
-#define DokanPrintFileName(FileObject)                                       \
-  DDbgPrint("  FileName: %wZ FCB.FileName: %wZ\n", &FileObject->FileName,    \
-            FileObject->FsContext2                                           \
-                ? (((PDokanCCB)FileObject->FsContext2)->Fcb                  \
-                       ? &((PDokanCCB)FileObject->FsContext2)->Fcb->FileName \
-                       : &FcbFileNameNull)                                   \
-                : &FcbFileNameNull)
-
-
-// Print VCB or DCB Identifier Type
-VOID PrintIdType(__in VOID *Id);
+// Return IOCTL string name.
+PCHAR DokanGetIoctlStr(ULONG ControlCode);
 
 typedef struct _DOKAN_LOGGER {
   PDRIVER_OBJECT DriverObject;

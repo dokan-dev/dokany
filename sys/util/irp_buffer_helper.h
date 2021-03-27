@@ -43,7 +43,7 @@ PVOID GetInputBuffer(_In_ PIRP Irp);
     if (!(Buffer)) {                                                         \
       Exit((Irp), (Status), (InformationSize));                              \
     } else if (SizeCompare((Buffer), irpBufferLen)) {                        \
-      DDbgPrint("  Invalid Input Buffer length\n");                          \
+      DOKAN_LOG("Invalid Input Buffer length");                              \
       (Buffer) = NULL;                                                       \
       Exit((Irp), (Status), (InformationSize));                              \
     }                                                                        \

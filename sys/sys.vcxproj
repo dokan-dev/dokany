@@ -427,6 +427,7 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <None Include="util\ioctl.inc" />
     <None Include="util\ntstatus_log.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

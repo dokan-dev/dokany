@@ -34,25 +34,22 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ULONG eventLength;
 
   __try {
-    DDbgPrint("==> DokanFlush\n");
-
+    DOKAN_LOG_BEGIN_MJ(Irp);
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_SUCCESS;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
       status = STATUS_SUCCESS;
       __leave;
     }
-
-    DokanPrintFileName(fileObject);
 
     ccb = fileObject->FsContext2;
     ASSERT(ccb != NULL);
@@ -71,7 +68,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     eventContext->Context = ccb->UserContext;
-    DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
+    DOKAN_LOG_FINE_IRP(Irp, "Get Context %X", (ULONG)ccb->UserContext);
 
     // copy file name to be flushed
     eventContext->Operation.Flush.FileNameLength = fcb->FileName.Length;
@@ -79,7 +76,6 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                   fcb->FileName.Length);
 
     CcUninitializeCacheMap(fileObject, NULL, NULL);
-    // fileObject->Flags &= FO_CLEANUP_COMPLETE;
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
     status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
@@ -91,7 +87,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     //
     if (status != STATUS_SUCCESS) {
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
       } else {
         DokanFreeEventContext(eventContext);
       }
@@ -104,10 +100,8 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } __finally {
     if (fcb)
       DokanFCBUnlock(fcb);
-
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanFlush\n");
   }
 
   return status;
@@ -122,17 +116,17 @@ VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
 
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
-
-  DDbgPrint("==> DokanCompleteFlush\n");
-
   fileObject = irpSp->FileObject;
+
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
+
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
+  DOKAN_LOG_FINE_IRP(irp, "Set Context %X", (ULONG)ccb->UserContext);
 
+  DOKAN_LOG_END_MJ(irp, EventInfo->Status, 0);
   DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
-
-  DDbgPrint("<== DokanCompleteFlush\n");
 }

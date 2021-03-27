@@ -54,30 +54,26 @@ Return Value:
 
   __try {
 
-    DDbgPrint("==> DokanCleanup\n");
+    DOKAN_LOG_BEGIN_MJ(Irp);
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
-
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", irpSp->FileObject);
 
     // Cleanup must be success in any case
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_SUCCESS;
       __leave;
     }
 
     vcb = DeviceObject->DeviceExtension;
     if (vcb == NULL) {
-      DDbgPrint("  No device extension\n");
       status = STATUS_SUCCESS;
       __leave;
     }
 
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
       status = STATUS_SUCCESS;
       __leave;
     }
@@ -115,7 +111,7 @@ Return Value:
       __leave;
     }
 
-    FlushFcb(fcb, fileObject);
+    FlushFcb(Irp, fcb, fileObject);
 
     DokanFCBLockRW(fcb);
 
@@ -132,7 +128,6 @@ Return Value:
 
     eventContext->Context = ccb->UserContext;
     eventContext->FileFlags |= DokanCCBFlagsGet(ccb);
-    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
     // copy the filename to EventContext from ccb
     eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
@@ -150,7 +145,7 @@ Return Value:
     //
     if (status != STATUS_SUCCESS) {
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
       } else {
         DokanFreeEventContext(eventContext);
       }
@@ -161,10 +156,8 @@ Return Value:
     status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
 
   } __finally {
-
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanCleanup\n");
   }
 
   return status;
@@ -180,10 +173,11 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   PDokanVCB vcb;
   PFILE_OBJECT fileObject;
 
-  DDbgPrint("==> DokanCompleteCleanup\n");
-
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
+
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", irpSp->FileObject);
 
   fileObject = IrpEntry->FileObject;
   ASSERT(fileObject != NULL);
@@ -192,7 +186,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
@@ -230,7 +223,6 @@ VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
     FsRtlNotifyCleanup(vcb->NotifySync, &vcb->DirNotifyList, ccb);
   }
 
+  DOKAN_LOG_END_MJ(irp, status, 0);
   DokanCompleteIrpRequest(irp, status, 0);
-
-  DDbgPrint("<== DokanCompleteCleanup\n");
 }

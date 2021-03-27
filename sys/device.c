@@ -29,50 +29,17 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntddvol.h>
 #include <storduid.h>
 
-VOID PrintUnknownDeviceIoctlCode(__in ULONG IoctlCode) {
-  PCHAR baseCodeStr = "unknown";
-  ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(IoctlCode);
-  ULONG functionCode = (IoctlCode & (~0xffffc003)) >> 2;
-
-  DDbgPrint("   Unknown Code 0x%x\n", IoctlCode);
-
-  switch (baseCode) {
-  case IOCTL_STORAGE_BASE:
-    baseCodeStr = "IOCTL_STORAGE_BASE";
-    break;
-  case IOCTL_DISK_BASE:
-    baseCodeStr = "IOCTL_DISK_BASE";
-    break;
-  case IOCTL_VOLUME_BASE:
-    baseCodeStr = "IOCTL_VOLUME_BASE";
-    break;
-  case MOUNTDEVCONTROLTYPE:
-    baseCodeStr = "MOUNTDEVCONTROLTYPE";
-    break;
-  case MOUNTMGRCONTROLTYPE:
-    baseCodeStr = "MOUNTMGRCONTROLTYPE";
-    break;
-  default:
-    break;
-  }
-  UNREFERENCED_PARAMETER(functionCode);
-  DDbgPrint("   BaseCode: 0x%x(%s) FunctionCode 0x%x(%d)\n", baseCode,
-            baseCodeStr, functionCode, functionCode);
-}
-
 NTSTATUS
 GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PIO_STACK_LOCATION irpSp;
   PDOKAN_GLOBAL dokanGlobal;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
-  DDbgPrint("   => DokanGlobalDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dokanGlobal = DeviceObject->DeviceExtension;
 
   switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_EVENT_START:
-    DDbgPrint("  IOCTL_EVENT_START\n");
     status = DokanEventStart(DeviceObject, Irp);
     break;
 
@@ -81,11 +48,10 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     GET_IRP_BUFFER_OR_BREAK(Irp, pDebug)
     g_Debug = *pDebug;
     status = STATUS_SUCCESS;
-    DDbgPrint("  IOCTL_SET_DEBUG_MODE: %d\n", g_Debug);
+    DOKAN_LOG_FINE_IRP(Irp, "Set debug mode: %d", g_Debug);
   } break;
 
   case IOCTL_EVENT_RELEASE:
-    DDbgPrint("  IOCTL_EVENT_RELEASE\n");
     status = DokanGlobalEventRelease(DeviceObject, Irp);
     break;
 
@@ -111,13 +77,10 @@ GlobalDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   default:
-    PrintUnknownDeviceIoctlCode(
-        irpSp->Parameters.DeviceIoControl.IoControlCode);
     status = STATUS_INVALID_PARAMETER;
     break;
   }
 
-  DDbgPrint("   <= DokanGlobalDeviceControl\n");
   return status;
 }
 
@@ -163,31 +126,28 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_DEVICE_CONTROL);
 
-  DDbgPrint("   => DokanDiskDeviceControl\n");
   irpSp = IoGetCurrentIrpStackLocation(Irp);
   dcb = DeviceObject->DeviceExtension;
   if (GetIdentifierType(dcb) != DCB) {
-    PrintIdType(dcb);
-    DDbgPrint("   Device is not dcb so go out here\n");
+    DOKAN_LOG_FINE_IRP(Irp, "Device is not dcb so go out here");
     return STATUS_INVALID_PARAMETER;
   }
 
   if (IsDeletePending(DeviceObject)) {
-    DDbgPrint("   Device object is pending for delete valid anymore\n");
+    DOKAN_LOG_FINE_IRP(Irp, "Device object is pending for delete valid anymore");
     return STATUS_DEVICE_REMOVED;
   }
 
   vcb = dcb->Vcb;
   if (IsUnmountPendingVcb(vcb)) {
-    DDbgPrint("   Volume is unmounted so ignore dcb requests\n");
+    DOKAN_LOG_FINE_IRP(Irp, "Volume is unmounted so ignore dcb requests");
     return STATUS_NO_SUCH_DEVICE;
   }
 
-  DDbgPrint("   DiskDeviceControl Device name %wZ \n", dcb->DiskDeviceName);
+  DOKAN_LOG_FINE_IRP(Irp, "Device name \"%wZ\"", dcb->DiskDeviceName);
 
   switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_DISK_GET_DRIVE_GEOMETRY: {
-    DDbgPrint("  IOCTL_DISK_GET_DRIVE_GEOMETRY\n");
     PDISK_GEOMETRY diskGeometry;
     if (!PREPARE_OUTPUT(Irp, diskGeometry,
                         /*SetInformationOnFailure=*/FALSE)) {
@@ -199,7 +159,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_GET_LENGTH_INFO: {
-    DDbgPrint("  IOCTL_DISK_GET_LENGTH_INFO\n");
     PGET_LENGTH_INFORMATION getLengthInfo;
     if (!PREPARE_OUTPUT(Irp, getLengthInfo,
                         /*SetInformationOnFailure=*/FALSE)) {
@@ -212,7 +171,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_GET_DRIVE_LAYOUT: {
-    DDbgPrint("  IOCTL_DISK_GET_DRIVE_LAYOUT\n");
     PDRIVE_LAYOUT_INFORMATION layout;
     if (!PREPARE_OUTPUT(Irp, layout,  /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -225,7 +183,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_GET_DRIVE_LAYOUT_EX: {
-    DDbgPrint("  IOCTL_DISK_GET_DRIVE_LAYOUT_EX\n");
     PDRIVE_LAYOUT_INFORMATION_EX layoutEx;
     if (!PREPARE_OUTPUT(Irp, layoutEx, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -239,7 +196,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_GET_PARTITION_INFO: {
-    DDbgPrint("  IOCTL_DISK_GET_PARTITION_INFO\n");
     PPARTITION_INFORMATION partitionInfo;
     if (!PREPARE_OUTPUT(Irp, partitionInfo,
                         /*SetInformationOnFailure=*/FALSE)) {
@@ -251,7 +207,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_GET_PARTITION_INFO_EX: {
-    DDbgPrint("  IOCTL_DISK_GET_PARTITION_INFO_EX\n");
     PPARTITION_INFORMATION_EX partitionInfo;
     if (!PREPARE_OUTPUT(Irp, partitionInfo,
                         /*SetInformationOnFailure=*/FALSE)) {
@@ -263,31 +218,19 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_DISK_IS_WRITABLE:
-    DDbgPrint("  IOCTL_DISK_IS_WRITABLE\n");
     status = IS_DEVICE_READ_ONLY(DeviceObject) ? STATUS_MEDIA_WRITE_PROTECTED
                                                : STATUS_SUCCESS;
     break;
 
   case IOCTL_DISK_MEDIA_REMOVAL:
-    DDbgPrint("  IOCTL_DISK_MEDIA_REMOVAL\n");
     status = STATUS_SUCCESS;
     break;
 
   case IOCTL_STORAGE_MEDIA_REMOVAL:
-    DDbgPrint("  IOCTL_STORAGE_MEDIA_REMOVAL\n");
     status = STATUS_SUCCESS;
     break;
 
-  case IOCTL_DISK_SET_PARTITION_INFO:
-    DDbgPrint("  IOCTL_DISK_SET_PARTITION_INFO\n");
-    break;
-
-  case IOCTL_DISK_VERIFY:
-    DDbgPrint("  IOCTL_DISK_VERIFY\n");
-    break;
-
   case IOCTL_STORAGE_GET_HOTPLUG_INFO: {
-    DDbgPrint("  IOCTL_STORAGE_GET_HOTPLUG_INFO\n");
     PSTORAGE_HOTPLUG_INFO hotplugInfo;
     if (!PREPARE_OUTPUT(Irp, hotplugInfo, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -302,7 +245,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_VOLUME_GET_GPT_ATTRIBUTES: {
-    DDbgPrint("   IOCTL_VOLUME_GET_GPT_ATTRIBUTES\n");
     PVOLUME_GET_GPT_ATTRIBUTES_INFORMATION gptAttrInfo;
     if (!PREPARE_OUTPUT(Irp, gptAttrInfo, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -317,62 +259,58 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   case IOCTL_STORAGE_CHECK_VERIFY:
   case IOCTL_DISK_CHECK_VERIFY:
-    DDbgPrint("  IOCTL_STORAGE_CHECK_VERIFY\n");
     status = STATUS_SUCCESS;
     break;
 
   case IOCTL_STORAGE_CHECK_VERIFY2:
-    DDbgPrint("  IOCTL_STORAGE_CHECK_VERIFY2\n");
     status = STATUS_SUCCESS;
     break;
 
-  case IOCTL_STORAGE_QUERY_PROPERTY:
-    DDbgPrint("  IOCTL_STORAGE_QUERY_PROPERTY\n");
-
+  case IOCTL_STORAGE_QUERY_PROPERTY: {
     PSTORAGE_PROPERTY_QUERY query = NULL;
     GET_IRP_BUFFER_OR_BREAK(Irp, query)
 
     if (query->QueryType == PropertyExistsQuery) {
       if (query->PropertyId == StorageDeviceUniqueIdProperty) {
-        DDbgPrint("    PropertyExistsQuery StorageDeviceUniqueIdProperty\n");
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyExistsQuery StorageDeviceUniqueIdProperty");
 
         PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage = NULL;
         GET_IRP_BUFFER_OR_BREAK(Irp, storage)
 
         status = STATUS_SUCCESS;
       } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
-        DDbgPrint("    PropertyExistsQuery StorageDeviceWriteCacheProperty\n");
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyExistsQuery StorageDeviceWriteCacheProperty");
         status = STATUS_NOT_IMPLEMENTED;
       } else {
-        DDbgPrint("    PropertyExistsQuery Unknown %d\n", query->PropertyId);
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyExistsQuery Unknown %d", query->PropertyId);
         status = STATUS_NOT_IMPLEMENTED;
       }
     } else if (query->QueryType == PropertyStandardQuery) {
       if (query->PropertyId == StorageDeviceProperty) {
-        DDbgPrint("    PropertyStandardQuery StorageDeviceProperty\n");
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyStandardQuery StorageDeviceProperty");
 
         PSTORAGE_DEVICE_DESCRIPTOR storage = NULL;
         GET_IRP_BUFFER_OR_BREAK(Irp, storage)
 
         status = STATUS_SUCCESS;
       } else if (query->PropertyId == StorageAdapterProperty) {
-        DDbgPrint("    PropertyStandardQuery StorageAdapterProperty\n");
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyStandardQuery StorageAdapterProperty");
         status = STATUS_NOT_IMPLEMENTED;
       } else {
-        DDbgPrint("    PropertyStandardQuery Unknown %d\n", query->PropertyId);
+        DOKAN_LOG_FINE_IRP(Irp, "PropertyStandardQuery Unknown %d", query->PropertyId);
         status = STATUS_ACCESS_DENIED;
       }
     } else {
-      DDbgPrint("    Unknown query type %d\n", query->QueryType);
+      DOKAN_LOG_FINE_IRP(Irp, "Unknown query type %d", query->QueryType);
       status = STATUS_ACCESS_DENIED;
     }
     break;
+  }
 
   case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME: {
     // Note: GetVolumeNameForVolumeMountPoint, which wraps this function, may
     // return an error even if this returns success, if it doesn't match the
     // Mount Manager's cached data.
-    DDbgPrint("   IOCTL_MOUNTDEV_QUERY_DEVICE_NAME\n");
     PMOUNTDEV_NAME mountdevName;
     if (!PREPARE_OUTPUT(Irp, mountdevName, /*SetInformationOnFailure=*/TRUE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -389,7 +327,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_MOUNTDEV_QUERY_UNIQUE_ID: {
-    DDbgPrint("   IOCTL_MOUNTDEV_QUERY_UNIQUE_ID\n");
     PMOUNTDEV_UNIQUE_ID uniqueId;
     if (!PREPARE_OUTPUT(Irp, uniqueId, /*SetInformationOnFailure=*/TRUE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -410,7 +347,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Invoked when the mount manager is considering assigning a drive letter
     // to a newly mounted volume. This lets us make a non-binding request for a
     // certain drive letter before assignment happens.
-    DDbgPrint("   IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME\n");
 
     PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
     if (!PREPARE_OUTPUT(Irp, linkName, /*SetInformationOnFailure=*/TRUE)) {
@@ -425,10 +361,10 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       break;
     }
     if (!IsMountPointDriveLetter(dcb->MountPoint)) {
-      DokanLogInfo(
-          &logger,
-          L"Not suggesting link name due to non-drive-letter mount point: %wZ",
-          dcb->MountPoint);
+      DokanLogInfo(&logger,
+                   L"Not suggesting link name due to non-drive-letter mount "
+                   L"point: \"%wZ\"",
+                   dcb->MountPoint);
       status = STATUS_NOT_FOUND;
       break;
     }
@@ -446,7 +382,7 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_BUFFER_OVERFLOW;
       break;
     }
-    DokanLogInfo(&logger, L"Returning suggested name: %wZ", dcb->MountPoint);
+    DokanLogInfo(&logger, L"Returning suggested name: \"%wZ\"", dcb->MountPoint);
     status = STATUS_SUCCESS;
   } break;
 
@@ -454,14 +390,13 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // Invoked when a mount point gets assigned by the mount manager. Usually it
     // is the one we asked for, but not always; therefore we have to update the
     // data structures that are thus far presuming it's the one we asked for.
-    DDbgPrint("   IOCTL_MOUNTDEV_LINK_CREATED\n");
 
     PMOUNTDEV_NAME mountdevName = NULL;
     GET_IRP_MOUNTDEV_NAME_OR_BREAK(Irp, mountdevName)
     UNICODE_STRING mountdevNameString =
         DokanWrapUnicodeString(mountdevName->Name, mountdevName->NameLength);
     status = STATUS_SUCCESS;
-    DokanLogInfo(&logger, L"Link created: %wZ", &mountdevNameString);
+    DokanLogInfo(&logger, L"Link created: \"%wZ\"", &mountdevNameString);
     if (mountdevName->NameLength == 0) {
       DokanLogInfo(&logger, L"Link created with empty name; ignoring.");
       break;
@@ -518,14 +453,13 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     // the case even for most edge cases like termination of the mounting
     // process. However, it can be triggered due to external deletion of the
     // mount point, in which case we trigger the actual unmounting from here.
-    DDbgPrint("   IOCTL_MOUNTDEV_LINK_DELETED\n");
 
     PMOUNTDEV_NAME mountdevName = NULL;
     GET_IRP_MOUNTDEV_NAME_OR_BREAK(Irp, mountdevName)
     UNICODE_STRING mountdevNameString =
         DokanWrapUnicodeString(mountdevName->Name, mountdevName->NameLength);
     status = STATUS_SUCCESS;
-    DokanLogInfo(&logger, L"Link deleted: %wZ", &mountdevNameString);
+    DokanLogInfo(&logger, L"Link deleted: \"%wZ\"", &mountdevNameString);
     if (!dcb->UseMountManager) {
       DokanLogInfo(
           &logger,
@@ -544,39 +478,14 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
                                /*CaseInsensitive=*/FALSE)) {
       DokanLogInfo(
           &logger,
-          L"Ignoring deletion because device has different mount point: %wZ",
+          L"Ignoring deletion because device has different mount point: \"%wZ\"",
           dcb->MountPoint);
       break;
     }
     status = DokanEventRelease(vcb->DeviceObject, Irp);
   } break;
 
-  case IOCTL_MOUNTDEV_QUERY_STABLE_GUID:
-    DDbgPrint("   IOCTL_MOUNTDEV_QUERY_STABLE_GUID\n");
-    break;
-  case IOCTL_VOLUME_ONLINE:
-    DDbgPrint("   IOCTL_VOLUME_ONLINE\n");
-    status = STATUS_SUCCESS;
-    break;
-  case IOCTL_VOLUME_OFFLINE:
-    DDbgPrint("   IOCTL_VOLUME_OFFLINE\n");
-    status = STATUS_SUCCESS;
-    break;
-  case IOCTL_VOLUME_READ_PLEX:
-    DDbgPrint("   IOCTL_VOLUME_READ_PLEX\n");
-    break;
-  case IOCTL_VOLUME_PHYSICAL_TO_LOGICAL:
-    DDbgPrint("   IOCTL_VOLUME_PHYSICAL_TO_LOGICAL\n");
-    break;
-  case IOCTL_VOLUME_IS_CLUSTERED:
-    DDbgPrint("   IOCTL_VOLUME_IS_CLUSTERED\n");
-    break;
-  case IOCTL_VOLUME_PREPARE_FOR_CRITICAL_IO:
-    DDbgPrint("   IOCTL_VOLUME_PREPARE_FOR_CRITICAL_IO\n");
-    break;
-
   case IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS: {
-    DDbgPrint("   IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS\n");
     PVOLUME_DISK_EXTENTS volume;
     if (!PREPARE_OUTPUT(Irp, volume, /*SetInformationOnFailure=*/FALSE)) {
       status = STATUS_INVALID_PARAMETER;
@@ -587,7 +496,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_STORAGE_EJECT_MEDIA: {
-    DDbgPrint("   IOCTL_STORAGE_EJECT_MEDIA\n");
     DokanUnmount(dcb);
     status = STATUS_SUCCESS;
   } break;
@@ -608,13 +516,12 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       if (irpSp->Parameters.DeviceIoControl.IoControlCode ==
           IOCTL_REDIR_QUERY_PATH) {
         PQUERY_PATH_REQUEST pathReq;
-        DDbgPrint("  IOCTL_REDIR_QUERY_PATH\n");
 
         GET_IRP_BUFFER_OR_BREAK(Irp, pathReq);
 
-        DDbgPrint("   PathNameLength = %d\n", pathReq->PathNameLength);
-        DDbgPrint("   SecurityContext = %p\n", pathReq->SecurityContext);
-        DDbgPrint("   FilePathName = %.*ls\n",
+        DOKAN_LOG_FINE_IRP(Irp, "PathNameLength = %d", pathReq->PathNameLength);
+        DOKAN_LOG_FINE_IRP(Irp, "SecurityContext = %p", pathReq->SecurityContext);
+        DOKAN_LOG_FINE_IRP(Irp, "FilePathName = %.*ls",
                   (unsigned int)(pathReq->PathNameLength / sizeof(WCHAR)),
                   pathReq->FilePathName);
 
@@ -627,15 +534,14 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         }
       } else {
         PQUERY_PATH_REQUEST_EX pathReqEx;
-        DDbgPrint("  IOCTL_REDIR_QUERY_PATH_EX\n");
 
         GET_IRP_BUFFER_OR_BREAK(Irp, pathReqEx);
 
-        DDbgPrint("   pSecurityContext = %p\n", pathReqEx->pSecurityContext);
-        DDbgPrint("   EaLength = %d\n", pathReqEx->EaLength);
-        DDbgPrint("   pEaBuffer = %p\n", pathReqEx->pEaBuffer);
-        DDbgPrint("   PathNameLength = %d\n", pathReqEx->PathName.Length);
-        DDbgPrint("   FilePathName = %*ls\n",
+        DOKAN_LOG_FINE_IRP(Irp, "pSecurityContext = %p", pathReqEx->pSecurityContext);
+        DOKAN_LOG_FINE_IRP(Irp, "EaLength = %d", pathReqEx->EaLength);
+        DOKAN_LOG_FINE_IRP(Irp, "pEaBuffer = %p", pathReqEx->pEaBuffer);
+        DOKAN_LOG_FINE_IRP(Irp, "PathNameLength = %d", pathReqEx->PathName.Length);
+        DOKAN_LOG_FINE_IRP(Irp, "FilePathName = %*ls",
                   (unsigned int)(pathReqEx->PathName.Length / sizeof(WCHAR)),
                   pathReqEx->PathName.Buffer);
 
@@ -688,9 +594,8 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_SUCCESS;
     }
   } break;
-  case IOCTL_STORAGE_GET_MEDIA_TYPES_EX: {
-    DDbgPrint("  IOCTL_STORAGE_GET_MEDIA_TYPES_EX\n");
 
+  case IOCTL_STORAGE_GET_MEDIA_TYPES_EX: {
     PGET_MEDIA_TYPES mediaTypes = NULL;
     PDEVICE_MEDIA_INFO mediaInfo = NULL; //&mediaTypes->MediaInfo[0];
 
@@ -728,7 +633,6 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   case IOCTL_STORAGE_GET_DEVICE_NUMBER: {
-    DDbgPrint("  IOCTL_STORAGE_GET_DEVICE_NUMBER\n");
     PSTORAGE_DEVICE_NUMBER deviceNumber;
     if (!PREPARE_OUTPUT(Irp, deviceNumber, /*SetInformationOnFailure=*/TRUE)) {
       status = STATUS_BUFFER_TOO_SMALL;
@@ -747,38 +651,34 @@ DiskDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } break;
 
   default:
-    PrintUnknownDeviceIoctlCode(
-        irpSp->Parameters.DeviceIoControl.IoControlCode);
     status = STATUS_INVALID_DEVICE_REQUEST;
     break;
   }
-  DDbgPrint("   <= DokanDiskDeviceControl\n");
+
   return status;
 }
 
 NTSTATUS
 DiskDeviceControlWithLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-
   PDokanDCB dcb;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
   dcb = DeviceObject->DeviceExtension;
 
   if (GetIdentifierType(dcb) != DCB) {
-    PrintIdType(dcb);
-    DDbgPrint("   Device is not dcb so go out here\n");
+    DOKAN_LOG_FINE_IRP(Irp, "Device is not dcb so go out here");
     return STATUS_INVALID_PARAMETER;
   }
 
   status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("IoAcquireRemoveLock failed with %#x %ls", status,
-              DokanGetNTSTATUSStr(status));
+    DOKAN_LOG_FINE_IRP(Irp, "IoAcquireRemoveLock failed with %#x %s", status,
+                       DokanGetNTSTATUSStr(status));
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (IsDeletePending(DeviceObject)) {
-    DDbgPrint("Device is deleted, so go out here \n");
+    DOKAN_LOG_FINE_IRP(Irp, "Device is deleted, so go out here");
     IoReleaseRemoveLock(&dcb->RemoveLock, Irp);
     return STATUS_NO_SUCH_DEVICE;
   }
@@ -844,12 +744,9 @@ Return Value:
 
     controlCode = irpSp->Parameters.DeviceIoControl.IoControlCode;
 
-    if (controlCode != IOCTL_EVENT_WAIT && controlCode != IOCTL_EVENT_INFO &&
-        controlCode != IOCTL_KEEPALIVE) {
-
-      DDbgPrint("==> DokanDispatchIoControl\n");
-      DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-      DDbgPrint("  IoControlCode: %lx\n", controlCode);
+    if (controlCode != IOCTL_EVENT_WAIT && controlCode != IOCTL_EVENT_INFO) {
+      DOKAN_LOG_BEGIN_MJ(Irp);
+      DOKAN_LOG_IOCTL(Irp, controlCode, "DeviceControl");
     }
 
     if (DeviceObject->DriverObject == NULL ||
@@ -859,7 +756,6 @@ Return Value:
     }
 
     vcb = DeviceObject->DeviceExtension;
-    PrintIdType(vcb);
     if (GetIdentifierType(vcb) == DGL) {
       status = GlobalDeviceControl(DeviceObject, Irp);
       __leave;
@@ -872,24 +768,20 @@ Return Value:
     }
     dcb = vcb->Dcb;
 
-    switch (irpSp->Parameters.DeviceIoControl.IoControlCode) {
+    switch (controlCode) {
     case IOCTL_EVENT_WAIT:
-      DDbgPrint("  IOCTL_EVENT_WAIT\n");
       status = DokanRegisterPendingIrpForEvent(DeviceObject, Irp);
       break;
 
     case IOCTL_EVENT_INFO:
-      // DDbgPrint("  IOCTL_EVENT_INFO\n");
       status = DokanCompleteIrp(DeviceObject, Irp);
       break;
 
     case IOCTL_EVENT_RELEASE:
-      DDbgPrint("  IOCTL_EVENT_RELEASE\n");
       status = DokanEventRelease(DeviceObject, Irp);
       break;
 
     case IOCTL_EVENT_WRITE:
-      DDbgPrint("  IOCTL_EVENT_WRITE\n");
       status = DokanEventWrite(DeviceObject, Irp);
       break;
 
@@ -899,14 +791,12 @@ Return Value:
 
     case IOCTL_KEEPALIVE:
 	  //Remove for Dokan 2.x.x
-      DDbgPrint("  IOCTL_KEEPALIVE\n");
       if (IsFlagOn(vcb->Flags, VCB_MOUNTED)) {
         ExEnterCriticalRegionAndAcquireResourceExclusive(&dcb->Resource);
         DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT_DEFAULT);
         ExReleaseResourceAndLeaveCriticalRegion(&dcb->Resource);
         status = STATUS_SUCCESS;
       } else {
-        DDbgPrint(" device is not mounted\n");
         status = STATUS_INSUFFICIENT_RESOURCES;
       }
       break;
@@ -933,11 +823,6 @@ Return Value:
         status = DiskDeviceControlWithLock(dcb->DeviceObject, Irp);
       }
 
-      if (status == STATUS_NOT_IMPLEMENTED) {
-        PrintUnknownDeviceIoctlCode(
-            irpSp->Parameters.DeviceIoControl.IoControlCode);
-      }
-
       // Device control functions are only supposed to work on a volume handle.
       // Some win32 functions, like GetVolumePathName, rely on these operations
       // failing for file/directory handles. On the other hand, dokan issues its
@@ -952,19 +837,15 @@ Return Value:
 
   } __finally {
 
+    if (controlCode != IOCTL_EVENT_WAIT && controlCode != IOCTL_EVENT_INFO) {
+      DOKAN_LOG_END_MJ(Irp, status, Irp->IoStatus.Information);
+    }
     if (status != STATUS_PENDING) {
       if (IsDeletePending(DeviceObject)) {
-        DDbgPrint("  DeviceObject is invalid, so prevent BSOD");
+        DOKAN_LOG_FINE_IRP(Irp, "DeviceObject is invalid, so prevent BSOD");
         status = STATUS_DEVICE_REMOVED;
       }
       DokanCompleteIrpRequest(Irp, status, Irp->IoStatus.Information);
-    }
-
-    if (controlCode != IOCTL_EVENT_WAIT && controlCode != IOCTL_EVENT_INFO &&
-        controlCode != IOCTL_KEEPALIVE) {
-
-      DokanPrintNTStatus(status);
-      DDbgPrint("<== DokanDispatchIoControl\n");
     }
   }
 

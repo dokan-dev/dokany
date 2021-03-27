@@ -862,7 +862,8 @@ DRIVER_DISPATCH DokanResetPendingIrpTimeout;
 DRIVER_DISPATCH DokanGetAccessToken;
 
 NTSTATUS
-DokanCheckShareAccess(_In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
+DokanCheckShareAccess(_In_ PIRP Irp, _In_ PFILE_OBJECT FileObject,
+                      _In_ PDokanFCB FcbOrDcb,
                       _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);
 
 NTSTATUS
@@ -977,20 +978,21 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __out PDokanDCB *Dcb);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
-VOID DokanDeleteDeviceObject(__in PDokanDCB Dcb);
-VOID DokanDeleteMountPoint(__in PDokanDCB Dcb);
+VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb);
+VOID DokanDeleteMountPoint(__in PIRP Irp, __in PDokanDCB Dcb);
 
 // Create FSCTL_SET_REPARSE_POINT payload request aim to be sent with
 // SendDirectoryFsctl.
-PCHAR CreateSetReparsePointRequest(__in PUNICODE_STRING SymbolicLinkName,
+PCHAR CreateSetReparsePointRequest(__in PIRP Irp,
+                                   __in PUNICODE_STRING SymbolicLinkName,
                                    __out PULONG Length);
 
 // Create FSCTL_DELETE_REPARSE_POINT payload request aim to be sent with
 // SendDirectoryFsctl.
-PCHAR CreateRemoveReparsePointRequest(__out PULONG Length);
+PCHAR CreateRemoveReparsePointRequest(__in PIRP Irp, __out PULONG Length);
 
 // Open a Directory path and send a FsControl with the input buffer.
-NTSTATUS SendDirectoryFsctl(__in PDEVICE_OBJECT DeviceObject,
+NTSTATUS SendDirectoryFsctl(__in PIRP Irp, __in PDEVICE_OBJECT DeviceObject,
                             __in PUNICODE_STRING Path, __in ULONG Code,
                             __in PCHAR Input, __in ULONG Length);
 
@@ -1034,10 +1036,10 @@ VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb);
 // should be called if the IRP for which the request was made is about to fail.
 VOID DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp);
 
-PDokanCCB DokanAllocateCCB(__in PDokanDCB Dcb, __in PDokanFCB Fcb);
+PDokanCCB DokanAllocateCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in PDokanFCB Fcb);
 
 NTSTATUS
-DokanFreeCCB(__in PDokanCCB Ccb);
+DokanFreeCCB(__in PIRP Irp, __in PDokanCCB Ccb);
 
 NTSTATUS
 DokanStartCheckThread(__in PDokanDCB Dcb);
@@ -1045,7 +1047,7 @@ DokanStartCheckThread(__in PDokanDCB Dcb);
 VOID DokanStopCheckThread(__in PDokanDCB Dcb);
 
 BOOLEAN
-DokanCheckCCB(__in PDokanDCB Dcb, __in_opt PDokanCCB Ccb);
+DokanCheckCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in_opt PDokanCCB Ccb);
 
 VOID DokanInitIrpList(__in PIRP_LIST IrpList);
 
@@ -1088,7 +1090,8 @@ ULONG PointerAlignSize(ULONG sizeInBytes);
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 
-VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject);
+VOID FlushFcb(__in PIRP Irp, __in PDokanFCB fcb,
+              __in_opt PFILE_OBJECT fileObject);
 
 PDEVICE_ENTRY
 FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);

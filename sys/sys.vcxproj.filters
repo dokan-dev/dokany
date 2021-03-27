@@ -149,5 +149,8 @@
     <None Include="util\ntstatus_log.inc">
       <Filter>Header Files\util</Filter>
     </None>
+    <None Include="util\ioctl.inc">
+      <Filter>Header Files\util</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -39,27 +39,24 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   // PAGED_CODE();
 
   __try {
+    DOKAN_LOG_BEGIN_MJ(Irp);
     Irp->IoStatus.Information = 0;
-    DDbgPrint("==> DokanQueryInformation\n");
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
     infoClass = irpSp->Parameters.QueryFile.FileInformationClass;
 
-    DDbgPrint("  FileInfoClass %d\n", infoClass);
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p InfoClass=%s ", fileObject,
+                  DokanGetFileInformationClassStr(infoClass));
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
-    DokanPrintFileName(fileObject);
-
     vcb = DeviceObject->DeviceExtension;
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
@@ -73,38 +70,11 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_QUERY_INFORMATION);    
     DokanFCBLockRO(fcb);
     switch (infoClass) {
-    case FileBasicInformation:
-      DDbgPrint("  FileBasicInformation\n");
-      break;
-    case FileInternalInformation:
-      DDbgPrint("  FileInternalInformation\n");
-      break;
-    case FileEaInformation:
-      DDbgPrint("  FileEaInformation\n");
-      break;
-    case FileStandardInformation:
-      DDbgPrint("  FileStandardInformation\n");
-      break;
-    case FileAllInformation:
-      DDbgPrint("  FileAllInformation\n");
-      break;
-    case FileAlternateNameInformation:
-      DDbgPrint("  FileAlternateNameInformation\n");
-      break;
-    case FileAttributeTagInformation:
-      DDbgPrint("  FileAttributeTagInformation\n");
-      break;
-    case FileCompressionInformation:
-      DDbgPrint("  FileCompressionInformation\n");
-      break;
     case FileNormalizedNameInformation:
-      DDbgPrint("  FileNormalizedNameInformation\n");
     case FileNameInformation: {
-      DDbgPrint("  FileNameInformation\n");
-
       PFILE_NAME_INFORMATION nameInfo;
       if (!PREPARE_OUTPUT(Irp, nameInfo, /*SetInformationOnFailure=*/FALSE)) {
-        status = STATUS_BUFFER_OVERFLOW;
+        status = STATUS_BUFFER_TOO_SMALL;
         __leave;
       }
 
@@ -138,12 +108,7 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_SUCCESS;
       __leave;
     } break;
-    case FileNetworkOpenInformation:
-      DDbgPrint("  FileNetworkOpenInformation\n");
-      break;
     case FilePositionInformation: {
-      DDbgPrint("  FilePositionInformation\n");
-
       PFILE_POSITION_INFORMATION posInfo;
       if (!PREPARE_OUTPUT(Irp, posInfo, /*SetInformationOnFailure=*/FALSE)) {
         status = STATUS_INFO_LENGTH_MISMATCH;
@@ -161,18 +126,13 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       __leave;
     } break;
     case FileStreamInformation:
-      DDbgPrint("  FileStreamInformation\n");
       if (!vcb->Dcb->UseAltStream) {
-        DDbgPrint("    alternate stream disabled\n");
+        DOKAN_LOG_FINE_IRP(Irp, "Alternate stream disabled");
         status = STATUS_NOT_IMPLEMENTED;
         __leave;
       }
       break;
-    case FileStandardLinkInformation:
-      DDbgPrint("  FileStandardLinkInformation\n");
-      break;
     case FileNetworkPhysicalNameInformation: {
-      DDbgPrint("  FileNetworkPhysicalNameInformation\n");
       // This info class is generally not worth passing to the DLL. It will be
       // filled in with info that is accessible to the driver.
 
@@ -191,12 +151,8 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = STATUS_SUCCESS;
       __leave;
     }
-    case FileRemoteProtocolInformation:
-      DDbgPrint("  FileRemoteProtocolInformation\n");
-      break;
     default:
-      DDbgPrint("  unknown type:%d\n", infoClass);
-      break;
+      DOKAN_LOG_FINE_IRP(Irp, "Unsupported FileInfoClass %x", infoClass);
     }
 
     if (fcb->BlockUserModeDispatch) {
@@ -238,12 +194,11 @@ DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     if (fcb)
       DokanFCBUnlock(fcb);
 
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     // Warning: there seems to be a verifier failure about using freed memory if
     // we de-reference Irp in here when the status is pending. We are not sure
     // why this would be.
     DokanCompleteDispatchRoutine(Irp, status);
-
-    DDbgPrint("<== DokanQueryInformation\n");
   }
 
   return status;
@@ -259,17 +214,17 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
   PVOID buffer = NULL;
   PDokanCCB ccb;
 
-  DDbgPrint("==> DokanCompleteQueryInformation\n");
-
   irp = IrpEntry->Irp;
   irpSp = IrpEntry->IrpSp;
+
+  DOKAN_LOG_BEGIN_MJ(irp);
+  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", irpSp->FileObject);
 
   ccb = IrpEntry->FileObject->FsContext2;
 
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
   // where we shold copy FileInfo to
   buffer = irp->AssociatedIrp.SystemBuffer;
@@ -341,50 +296,51 @@ VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
       InterlockedExchange64(&header->AllocationSize.QuadPart, allocationSize);
       InterlockedExchange64(&header->FileSize.QuadPart, fileSize);
 
-      DDbgPrint("  AllocationSize: %llu, EndOfFile: %llu\n", allocationSize,
-                fileSize);
+      DOKAN_LOG_FINE_IRP(irp, "AllocationSize: %llu, EndOfFile: %llu\n",
+                         allocationSize, fileSize);
     }
   }
 
+  DOKAN_LOG_END_MJ(irp, status, info);
   DokanCompleteIrpRequest(irp, status, info);
-
-  DDbgPrint("<== DokanCompleteQueryInformation\n");
 }
 
-VOID FlushFcb(__in PDokanFCB fcb, __in_opt PFILE_OBJECT fileObject) {
+VOID FlushFcb(__in PIRP Irp, __in PDokanFCB Fcb,
+              __in_opt PFILE_OBJECT FileObject) {
+  UNREFERENCED_PARAMETER(Irp);
 
-  if (fcb == NULL) {
+  if (Fcb == NULL) {
     return;
   }
 
-  if (fcb->SectionObjectPointers.ImageSectionObject != NULL) {
-    DDbgPrint("  MmFlushImageSection FileName: %wZ FileCount: %lu.\n",
-              &fcb->FileName, fcb->FileCount);
-    MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForWrite);
-    DDbgPrint("  MmFlushImageSection done FileName: %wZ FileCount: %lu.\n",
-              &fcb->FileName, fcb->FileCount);
+  if (Fcb->SectionObjectPointers.ImageSectionObject != NULL) {
+    DOKAN_LOG_FINE_IRP(Irp, "MmFlushImageSection FCB=%p FileCount=%lu.", Fcb,
+                  Fcb->FileCount);
+    MmFlushImageSection(&Fcb->SectionObjectPointers, MmFlushForWrite);
+    DOKAN_LOG_FINE_IRP(Irp, "MmFlushImageSection done FCB=%p FileCount=%lu.", Fcb,
+                  Fcb->FileCount);
   }
 
-  if (fcb->SectionObjectPointers.DataSectionObject != NULL) {
-    DDbgPrint("  CcFlushCache FileName: %wZ FileCount: %lu.\n", &fcb->FileName,
-              fcb->FileCount);
+  if (Fcb->SectionObjectPointers.DataSectionObject != NULL) {
+    DOKAN_LOG_FINE_IRP(Irp, "CcFlushCache FCB=%p FileCount=%lu.", Fcb,
+                  Fcb->FileCount);
 
-    CcFlushCache(&fcb->SectionObjectPointers, NULL, 0, NULL);
+    CcFlushCache(&Fcb->SectionObjectPointers, NULL, 0, NULL);
 
-    DokanPagingIoLockRW(fcb);
-    DokanPagingIoUnlock(fcb);
+    DokanPagingIoLockRW(Fcb);
+    DokanPagingIoUnlock(Fcb);
 
-    CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
-    if (fileObject != NULL) {
-      CcUninitializeCacheMap(fileObject, NULL, NULL);
+    CcPurgeCacheSection(&Fcb->SectionObjectPointers, NULL, 0, FALSE);
+    if (FileObject != NULL) {
+      DOKAN_LOG_FINE_IRP(Irp, "CcUninitializeCacheMap FileObject=%p", FileObject);
+      CcUninitializeCacheMap(FileObject, NULL, NULL);
     }
-
-    DDbgPrint("  CcFlushCache done FileName: %wZ FileCount: %lu.\n",
-              &fcb->FileName, fcb->FileCount);
+    DOKAN_LOG_FINE_IRP(Irp, "CcFlushCache done FCB=%p FileCount=%lu.", Fcb,
+                  Fcb->FileCount);
   }
 }
 
-VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
+VOID FlushAllCachedFcb(__in PIRP Irp, __in PDokanFCB fcbRelatedTo,
                        __in_opt PFILE_OBJECT fileObject) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PDokanFCB fcb = NULL;
@@ -393,12 +349,11 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
     return;
   }
 
-  DDbgPrint("  FlushAllCachedFcb\n");
-
   if (!DokanFCBFlagsIsSet(fcbRelatedTo, DOKAN_FILE_DIRECTORY)) {
-    DDbgPrint("  FlushAllCachedFcb file passed in. Flush only this file %wZ.\n",
-              &fcbRelatedTo->FileName);
-    FlushFcb(fcbRelatedTo, fileObject);
+    DOKAN_LOG_FINE_IRP(Irp,
+                  "FlushAllCachedFcb file passed in. Flush only: FCB=%p FileObject=%p.",
+                  fcbRelatedTo, fileObject);
+    FlushFcb(Irp, fcbRelatedTo, fileObject);
     return;
   }
 
@@ -408,24 +363,23 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
-
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
 
     if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-      DDbgPrint("  FlushAllCachedFcb %wZ is directory so skip it.\n",
-                &fcb->FileName);
+      DOKAN_LOG_FINE_IRP(Irp, "FCB=%p is directory so skip it.",
+                    fcb);
       continue;
     }
 
-    DDbgPrint("  FlushAllCachedFcb check %wZ if is related to %wZ\n",
-              &fcb->FileName, &fcbRelatedTo->FileName);
+    DOKAN_LOG_FINE_IRP(Irp, "Check \"%wZ\" if is related to \"%wZ\"", &fcb->FileName,
+                  &fcbRelatedTo->FileName);
 
     if (StartsWith(&fcb->FileName, &fcbRelatedTo->FileName)) {
-      DDbgPrint("  FlushAllCachedFcb flush %wZ if flush is possible.\n",
-                &fcb->FileName);
-      FlushFcb(fcb, NULL);
+      DOKAN_LOG_FINE_IRP(Irp, "Flush \"%wZ\" if it is possible.",
+                    &fcb->FileName);
+      FlushFcb(Irp, fcb, NULL);
     }
 
     fcb = NULL;
@@ -433,7 +387,7 @@ VOID FlushAllCachedFcb(__in PDokanFCB fcbRelatedTo,
 
   DokanVCBUnlock(fcbRelatedTo->Vcb);
 
-  DDbgPrint("  FlushAllCachedFcb finished\n");
+  DOKAN_LOG_FINE_IRP(Irp, "Finished");
 }
 
 NTSTATUS
@@ -455,28 +409,25 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   vcb = DeviceObject->DeviceExtension;
 
   __try {
-    DDbgPrint("==> DokanSetInformationn\n");
-
+    DOKAN_LOG_BEGIN_MJ(Irp);
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
-
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p InfoClass=%s", fileObject,
+                  DokanGetFileInformationClassStr(
+                      irpSp->Parameters.SetFile.FileInformationClass));
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject == NULL\n");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     ccb = (PDokanCCB)fileObject->FsContext2;
     ASSERT(ccb != NULL);
-
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
 
     buffer = Irp->AssociatedIrp.SystemBuffer;
 
@@ -499,19 +450,11 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           status = STATUS_USER_MAPPED_FILE;
           __leave;
         }
-      }
-      DDbgPrint(
-          "  FileAllocationInformation %lld\n",
+        DOKAN_LOG_FINE_IRP(
+            Irp, "AllocationSize %lld",
           ((PFILE_ALLOCATION_INFORMATION)buffer)->AllocationSize.QuadPart);
+      }
     } break;
-    case FileBasicInformation:
-      DDbgPrint("  FileBasicInformation\n");
-      break;
-    case FileDispositionInformation:
-      DDbgPrint("  FileDispositionInformation\n");
-    case FileDispositionInformationEx:
-      DDbgPrint("  FileDispositionInformationEx\n");
-      break;
     case FileEndOfFileInformation: {
       if ((fileObject->SectionObjectPointer != NULL) &&
           (fileObject->SectionObjectPointer->DataSectionObject != NULL)) {
@@ -537,19 +480,17 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
           CcPurgeCacheSection(&fcb->SectionObjectPointers, NULL, 0, FALSE);
         }
       }
-      DDbgPrint("  FileEndOfFileInformation %lld\n",
+      DOKAN_LOG_FINE_IRP(
+          Irp, "EndOfFile %lld",
                 ((PFILE_END_OF_FILE_INFORMATION)buffer)->EndOfFile.QuadPart);
     } break;
-    case FileLinkInformation:
-      DDbgPrint("  FileLinkInformation\n");
-      break;
     case FilePositionInformation: {
       PFILE_POSITION_INFORMATION posInfo;
 
       posInfo = (PFILE_POSITION_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
       ASSERT(posInfo != NULL);
 
-      DDbgPrint("  FilePositionInformation %lld\n",
+      DOKAN_LOG_FINE_IRP(Irp, "FilePositionInformation %lld",
                 posInfo->CurrentByteOffset.QuadPart);
       fileObject->CurrentByteOffset = posInfo->CurrentByteOffset;
 
@@ -559,27 +500,21 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     } break;
     case FileRenameInformation:
     case FileRenameInformationEx:
-      DDbgPrint("  FileRenameInformation\n");
       /* Flush any opened files before doing a rename
        * of the parent directory or the specific file
        */
       targetFileObject = irpSp->Parameters.SetFile.FileObject;
       if (targetFileObject) {
-        DDbgPrint("  FileRenameInformation targetFileObject specified so "
-                  "perform flush\n");
+        DOKAN_LOG_FINE_IRP(Irp, "TargetFileObject specified so perform flush");
         PDokanCCB targetCcb = (PDokanCCB)targetFileObject->FsContext2;
         ASSERT(targetCcb != NULL);
-        FlushAllCachedFcb(targetCcb->Fcb, targetFileObject);
+        FlushAllCachedFcb(Irp, targetCcb->Fcb, targetFileObject);
       }
-      FlushAllCachedFcb(fcb, fileObject);
-      break;
-    case FileValidDataLengthInformation:
-      DDbgPrint("  FileValidDataLengthInformation\n");
+      FlushAllCachedFcb(Irp, fcb, fileObject);
       break;
     default:
-      DDbgPrint("  unknown type:%d\n",
-                irpSp->Parameters.SetFile.FileInformationClass);
-      break;
+      DOKAN_LOG_FINE_IRP(Irp, "Unsupported FileInfoClass %x",
+                         irpSp->Parameters.SetFile.FileInformationClass);
     }
 
     //
@@ -593,7 +528,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
     if (irpSp->Parameters.SetFile.Length > MAXULONG - eventLength) {
-      DDbgPrint("  Invalid SetFile Length received\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Invalid SetFile Length received");
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;
     }
@@ -601,9 +536,10 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     targetFileObject = irpSp->Parameters.SetFile.FileObject;
     if (targetFileObject) {
-      DDbgPrint("  FileObject Specified %wZ\n", &(targetFileObject->FileName));
+      DOKAN_LOG_FINE_IRP(Irp, "FileObject Specified %p \"%wZ\"", targetFileObject,
+                    &(targetFileObject->FileName));
       if (targetFileObject->FileName.Length > MAXULONG - eventLength) {
-        DDbgPrint("  Invalid FileObject FileName Length received\n");
+        DOKAN_LOG_FINE_IRP(Irp, "Invalid FileObject FileName Length received");
         status = STATUS_INSUFFICIENT_RESOURCES;
         __leave;
       }
@@ -669,9 +605,10 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
         // FILE_RENAME_INFO's file name by
         // FileObject's file name. The buffer size is already adjusted.
 
-        DDbgPrint("  renameContext->FileNameLength %d\n",
-                  renameContext->FileNameLength);
-        DDbgPrint("  renameContext->FileName %ws\n", renameContext->FileName);
+        DOKAN_LOG_FINE_IRP(Irp, "RenameContext->FileNameLength %d",
+                      renameContext->FileNameLength);
+        DOKAN_LOG_FINE_IRP(Irp, "RenameContext->FileName %ws",
+                      renameContext->FileName);
         RtlZeroMemory(renameContext->FileName, renameContext->FileNameLength);
 
         PFILE_OBJECT parentFileObject = targetFileObject->RelatedFileObject;
@@ -696,8 +633,9 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
       if (irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformation
 		  || irpSp->Parameters.SetFile.FileInformationClass == FileRenameInformationEx) {
-        DDbgPrint("   rename: %wZ => %ls, FileCount = %u\n", fcb->FileName,
-                  renameContext->FileName, (ULONG)fcb->FileCount);
+        DOKAN_LOG_FINE_IRP(Irp, "Rename: \"%wZ\" => \"%ls\", Fcb=%p FileCount = %u",
+                      fcb->FileName, renameContext->FileName, fcb,
+                      (ULONG)fcb->FileCount);
       }
     }
 
@@ -715,7 +653,7 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     //
     if (status != STATUS_SUCCESS) {
       if (status == STATUS_PENDING) {
-        DDbgPrint("   FsRtlCheckOplock returned STATUS_PENDING\n");
+        DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
       } else {
         DokanFreeEventContext(eventContext);
       }
@@ -728,10 +666,8 @@ DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   } __finally {
     if (fcbLocked)
       DokanFCBUnlock(fcb);
-
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanSetInformation\n");
   }
 
   return status;
@@ -782,25 +718,23 @@ BOOLEAN IsInSameDirectory(PUNICODE_STRING fileName1,
 
 VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
                                  __in PEVENT_INFORMATION EventInfo) {
-  PIRP irp;
-  PIO_STACK_LOCATION irpSp;
-  NTSTATUS status;
+  PIRP irp = NULL;
+  PIO_STACK_LOCATION irpSp = NULL;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   ULONG info = 0;
   PDokanCCB ccb;
   PDokanFCB fcb = NULL;
   UNICODE_STRING oldFileName;
   BOOLEAN fcbLocked = FALSE;
   BOOLEAN vcbLocked = FALSE;
-
   FILE_INFORMATION_CLASS infoClass;
-  irp = IrpEntry->Irp;
-  status = EventInfo->Status;
 
   __try {
 
-    DDbgPrint("==> DokanCompleteSetInformation\n");
-
+    irp = IrpEntry->Irp;
     irpSp = IrpEntry->IrpSp;
+    status = EventInfo->Status;
+    DOKAN_LOG_BEGIN_MJ(irp);
 
     ccb = IrpEntry->FileObject->FsContext2;
     ASSERT(ccb != NULL);
@@ -814,6 +748,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
     info = EventInfo->BufferLength;
 
     infoClass = irpSp->Parameters.SetFile.FileInformationClass;
+    DOKAN_LOG_FINE_IRP(irp, "FileObject=%p infoClass=%s", irpSp->FileObject,
+                  DokanGetFileInformationClassStr(infoClass));
 
     // Note that we do not acquire the resource for paging file
     // operations in order to avoid deadlock with Mm
@@ -842,19 +778,19 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
           if (!MmFlushImageSection(&fcb->SectionObjectPointers,
                                    MmFlushForDelete)) {
-            DDbgPrint("  Cannot delete user mapped image\n");
+            DOKAN_LOG_FINE_IRP(irp, "Cannot delete user mapped image");
             status = STATUS_CANNOT_DELETE;
           } else {
             DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
             DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-            DDbgPrint("   FileObject->DeletePending = TRUE\n");
+            DOKAN_LOG_FINE_IRP(irp, "FileObject->DeletePending = TRUE");
             IrpEntry->FileObject->DeletePending = TRUE;
           }
 
         } else {
           DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
           DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
-          DDbgPrint("   FileObject->DeletePending = FALSE\n");
+          DOKAN_LOG_FINE_IRP(irp, "FileObject->DeletePending = FALSE");
           IrpEntry->FileObject->DeletePending = FALSE;
         }
       }
@@ -886,7 +822,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
         fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
         fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;
-        DDbgPrint("   rename also done on fcb %wZ \n", &fcb->FileName);
+        DOKAN_LOG_FINE_IRP(irp, "Fcb=%p renamed \"%wZ\"", fcb , &fcb->FileName);
       }
     }
 
@@ -928,13 +864,8 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         // DokanNotifyReportChange(vcb, ccb, FILE_NOTIFY_CHANGE_FILE_NAME,
         // FILE_ACTION_ADDED);
         break;
-      case FilePositionInformation:
-        // this is never used
-        break;
       case FileRenameInformationEx:
       case FileRenameInformation: {
-        DDbgPrint("  DokanCompleteSetInformation Report FileRenameInformation");
-
         if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
           DokanNotifyReportChange0(fcb, &oldFileName,
                                    DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
@@ -965,10 +896,6 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
         DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
                                 FILE_ACTION_MODIFIED);
         break;
-      default:
-        DDbgPrint("  unknown type:%d\n",
-                  irpSp->Parameters.SetFile.FileInformationClass);
-        break;
       }
     }
 
@@ -980,8 +907,7 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
       DokanVCBUnlock(fcb->Vcb);
     }
 
+    DOKAN_LOG_END_MJ(irp, status, info);
     DokanCompleteIrpRequest(irp, status, info);
-
-    DDbgPrint("<== DokanCompleteSetInformation\n");
   }
 }

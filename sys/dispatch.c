@@ -24,77 +24,77 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 NTSTATUS
 DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  BOOLEAN AtIrqlPassiveLevel = FALSE;
-  BOOLEAN IsTopLevelIrp = FALSE;
-  NTSTATUS Status = STATUS_UNSUCCESSFUL;
+  BOOLEAN atIrqlPassiveLevel = FALSE;
+  BOOLEAN isTopLevelIrp = FALSE;
+  NTSTATUS status = STATUS_UNSUCCESSFUL;
 
   __try {
 
     __try {
 
-      AtIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
+      atIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
 
-      if (AtIrqlPassiveLevel) {
+      if (atIrqlPassiveLevel) {
         FsRtlEnterFileSystem();
       }
 
       if (!IoGetTopLevelIrp()) {
-        IsTopLevelIrp = TRUE;
+        isTopLevelIrp = TRUE;
         IoSetTopLevelIrp(Irp);
       }
 
-      Status = DokanDispatchRequest(DeviceObject, Irp);
+      status = DokanDispatchRequest(DeviceObject, Irp);
 
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
 
-      Status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
+      status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
     }
 
   } __finally {
 
-    if (IsTopLevelIrp) {
+    if (isTopLevelIrp) {
       IoSetTopLevelIrp(NULL);
     }
 
-    if (AtIrqlPassiveLevel) {
+    if (atIrqlPassiveLevel) {
       FsRtlExitFileSystem();
     }
   }
 
-  return Status;
+  return status;
 }
 
 VOID
 DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
                      __in PIRP_ENTRY IrpEntry,
                      __in NTSTATUS Status) {
-  BOOLEAN AtIrqlPassiveLevel = FALSE;
-  BOOLEAN IsTopLevelIrp = FALSE;
-  PIRP Irp = IrpEntry->Irp;
+  BOOLEAN atIrqlPassiveLevel = FALSE;
+  BOOLEAN isTopLevelIrp = FALSE;
+  PIRP irp = IrpEntry->Irp;
   PEVENT_INFORMATION eventInfo = NULL;
 
   __try {
 
     __try {
 
-      AtIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
+      atIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
 
-      if (AtIrqlPassiveLevel) {
+      if (atIrqlPassiveLevel) {
         FsRtlEnterFileSystem();
       }
 
       if (!IoGetTopLevelIrp()) {
-        IsTopLevelIrp = TRUE;
-        IoSetTopLevelIrp(Irp);
+        isTopLevelIrp = TRUE;
+        IoSetTopLevelIrp(irp);
       }
 
       eventInfo = DokanAllocZero(sizeof(EVENT_INFORMATION));
       eventInfo->Status = Status;
       DokanCompleteCreate(IrpEntry, eventInfo);
 
-    } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
+    } __except (DokanExceptionFilter(irp, GetExceptionInformation())) {
 
-      DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
+      DokanExceptionHandler(DeviceObject, irp, GetExceptionCode());
     }
 
   } __finally {
@@ -103,11 +103,11 @@ DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
       ExFreePool(eventInfo);
     }
 
-    if (IsTopLevelIrp) {
+    if (isTopLevelIrp) {
       IoSetTopLevelIrp(NULL);
     }
 
-    if (AtIrqlPassiveLevel) {
+    if (atIrqlPassiveLevel) {
       FsRtlExitFileSystem();
     }
   }
@@ -124,8 +124,10 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       irpSp->MajorFunction != IRP_MJ_CLEANUP &&
       irpSp->MajorFunction != IRP_MJ_CLOSE) {
     if (IsUnmountPending(DeviceObject)) {
-      DDbgPrint("  Volume is not mounted so return STATUS_NO_SUCH_DEVICE\n");
+      DOKAN_LOG_BEGIN_MJ(Irp);
+      DOKAN_LOG_FINE_IRP(Irp, "Volume is not mounted so return STATUS_NO_SUCH_DEVICE");
       NTSTATUS status = STATUS_NO_SUCH_DEVICE;
+      DOKAN_LOG_END_MJ(Irp, status, 0);
       DokanCompleteIrpRequest(Irp, status, 0);
       return status;
     }
@@ -145,7 +147,9 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
          irpSp->Parameters.FileSystemControl.FsControlCode ==
              FSCTL_MARK_VOLUME_DIRTY)) {
 
-      DDbgPrint("    Media is write protected\n");
+      DOKAN_LOG_BEGIN_MJ(Irp);
+      DOKAN_LOG_FINE_IRP(Irp, "Media is write protected");
+      DOKAN_LOG_END_MJ(Irp, STATUS_MEDIA_WRITE_PROTECTED, 0);
       DokanCompleteIrpRequest(Irp, STATUS_MEDIA_WRITE_PROTECTED, 0);
       return STATUS_MEDIA_WRITE_PROTECTED;
     }
@@ -209,9 +213,8 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     return DokanDispatchSetSecurity(DeviceObject, Irp);
 
   default:
-    DDbgPrint("DokanDispatchRequest: Unexpected major function: %xh\n",
-              irpSp->MajorFunction);
-
+    DOKAN_LOG_BEGIN_MJ(Irp);
+    DOKAN_LOG_END_MJ(Irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
     DokanCompleteIrpRequest(Irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
 
     return STATUS_DRIVER_INTERNAL_ERROR;

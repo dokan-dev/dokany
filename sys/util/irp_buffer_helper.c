@@ -46,6 +46,8 @@ ULONG GetProvidedOutputSize(_In_ PIRP Irp) {
       return irpSp->Parameters.QueryFile.Length;
     case IRP_MJ_QUERY_SECURITY:
       return irpSp->Parameters.QuerySecurity.Length;
+    case IRP_MJ_QUERY_VOLUME_INFORMATION:
+      return irpSp->Parameters.QueryVolume.Length;
     default:
       return 0;
   }

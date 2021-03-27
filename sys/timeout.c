@@ -33,14 +33,13 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   PDokanVCB vcb = Dcb->Vcb;
   ULONG deviceNamePos;
 
-  DDbgPrint("==> DokanUnmount\n");
+  DOKAN_LOG("Start");
 
   eventLength = sizeof(EVENT_CONTEXT);
   eventContext = AllocateEventContextRaw(eventLength);
 
   if (eventContext == NULL) {
-    ; // STATUS_INSUFFICIENT_RESOURCES;
-    DDbgPrint(" Not able to allocate eventContext.\n");
+    DOKAN_LOG("Not able to allocate eventContext.");
     if (vcb) {
       DokanEventRelease(vcb->DeviceObject, NULL);
     }
@@ -64,8 +63,8 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
                         sizeof(WCHAR),
                     &(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
-  DDbgPrint("  Send Unmount to Service : %ws\n",
-            eventContext->Operation.Unmount.DeviceName);
+  DOKAN_LOG_("Send Unmount to Service : %ws",
+            eventContext->Operation.Unmount.DeviceName)
 
   DokanEventNotification(&Dcb->Global->NotifyService, eventContext);
 
@@ -83,40 +82,31 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
     ExFreePool(completedEvent);
   }
 
-  DDbgPrint("<== DokanUnmount\n");
+  DOKAN_LOG("End");
 }
 
 VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
   LARGE_INTEGER tickCount;
   PDokanVCB vcb;
 
-  // DDbgPrint("==> DokanCheckKeepAlive\n");
-
   KeEnterCriticalRegion();
   KeQueryTickCount(&tickCount);
   ExAcquireResourceSharedLite(&Dcb->Resource, TRUE);
 
   if (Dcb->TickCount.QuadPart < tickCount.QuadPart) {
-
     vcb = Dcb->Vcb;
-
     ExReleaseResourceLite(&Dcb->Resource);
-
-    DDbgPrint("  Timeout reached so perform an umount\n");
-
+    DOKAN_LOG("Timeout reached so perform an umount");
     if (IsUnmountPendingVcb(vcb)) {
-      DDbgPrint("  Volume is not mounted\n");
+      DOKAN_LOG("Volume is not mounted");
       KeLeaveCriticalRegion();
       return;
     }
     DokanUnmount(Dcb);
-
   } else {
     ExReleaseResourceLite(&Dcb->Resource);
   }
-
   KeLeaveCriticalRegion();
-  // DDbgPrint("<== DokanCheckKeepAlive\n");
 }
 
 NTSTATUS
@@ -131,7 +121,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   PDokanVCB vcb = Dcb->Vcb;
   DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
 
-  DDbgPrint("==> ReleaseTimeoutPendingIRP\n");
+  DOKAN_LOG("Start");
   InitializeListHead(&completeList);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
@@ -140,7 +130,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   // when IRP queue is empty, there is nothing to do
   if (IsListEmpty(&Dcb->PendingIrp.ListHead)) {
     KeReleaseSpinLock(&Dcb->PendingIrp.ListLock, oldIrql);
-    DDbgPrint("  IrpQueue is Empty\n");
+    DOKAN_LOG("IrpQueue is Empty");
     return STATUS_SUCCESS;
   }
 
@@ -168,7 +158,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     RemoveEntryList(thisEntry);
 
-    DDbgPrint(" timeout Irp #%X\n", irpEntry->SerialNumber);
+    DOKAN_LOG_("Timeout Irp %p", irpEntry->SerialNumber);
 
     irp = irpEntry->Irp;
 
@@ -229,8 +219,6 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
     DokanFreeIrpEntry(irpEntry);
   }
 
-  DDbgPrint("<== ReleaseTimeoutPendingIRP\n");
-
   if (shouldUnmount) {
     // This avoids a race condition where the app terminates before activating
     // the keepalive handle. In that case, we unmount the file system as soon
@@ -242,6 +230,9 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
         L" activated.");
     DokanUnmount(Dcb);
   }
+
+  DOKAN_LOG("End");
+
   return STATUS_SUCCESS;
 }
 
@@ -255,7 +246,7 @@ DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
   PEVENT_INFORMATION eventInfo = NULL;
   ULONG timeout; // in milisecond
 
-  DDbgPrint("==> ResetPendingIrpTimeout\n");
+  DOKAN_LOG_BEGIN_MJ(Irp);
 
   GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo)
 
@@ -289,7 +280,7 @@ DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
     break;
   }
   KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
-  DDbgPrint("<== ResetPendingIrpTimeout\n");
+  DOKAN_LOG_END_MJ(Irp, STATUS_SUCCESS, 0);
   return STATUS_SUCCESS;
 }
 
@@ -314,7 +305,7 @@ Routine Description:
   PDokanDCB Dcb = pDcb;
   DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
 
-  DDbgPrint("==> DokanTimeoutThread\n");
+  DOKAN_LOG("Start");
 
   KeInitializeTimerEx(&timer, SynchronizationTimer);
 
@@ -333,7 +324,7 @@ Routine Description:
                                       KernelMode, FALSE, NULL, NULL);
 
     if (!NT_SUCCESS(status) || status == STATUS_WAIT_0) {
-      DDbgPrint("  DokanTimeoutThread catched KillEvent\n");
+      DOKAN_LOG("DokanTimeoutThread catched KillEvent");
       // KillEvent or something error is occurred
       waitObj = FALSE;
     } else {
@@ -358,7 +349,7 @@ Routine Description:
 
   KeCancelTimer(&timer);
 
-  DDbgPrint("<== DokanTimeoutThread\n");
+  DOKAN_LOG("Stop");
 
   PsTerminateSystemThread(STATUS_SUCCESS);
 }
@@ -376,12 +367,11 @@ Routine Description:
   NTSTATUS status;
   HANDLE thread;
 
-  DDbgPrint("==> DokanStartCheckThread\n");
-
   status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
                                 (PKSTART_ROUTINE)DokanTimeoutThread, Dcb);
 
   if (!NT_SUCCESS(status)) {
+    DOKAN_LOG("Failed to create Thread");
     return status;
   }
 
@@ -389,8 +379,6 @@ Routine Description:
                             (PVOID *)&Dcb->TimeoutThread, NULL);
 
   ZwClose(thread);
-
-  DDbgPrint("<== DokanStartCheckThread\n");
 
   return STATUS_SUCCESS;
 }
@@ -404,19 +392,16 @@ Routine Description:
 
 --*/
 {
-  DDbgPrint("==> DokanStopCheckThread\n");
-
+  DOKAN_LOG("Stopping Thread");
   if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
-    DDbgPrint("Waiting for Timeout thread to terminate.\n");
+    DOKAN_LOG("Waiting for thread to terminate");
     ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
     KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
                           NULL);
-    DDbgPrint("Timeout thread successfully terminated.\n");
+    DOKAN_LOG("Thread successfully terminated");
     ObDereferenceObject(Dcb->TimeoutThread);
     Dcb->TimeoutThread = NULL;
   }
-
-  DDbgPrint("<== DokanStopCheckThread\n");
 }
 
 VOID DokanUpdateTimeout(__out PLARGE_INTEGER TickCount, __in ULONG Timeout) {

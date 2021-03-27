@@ -55,29 +55,25 @@ Return Value:
 
   __try {
 
-    DDbgPrint("==> DokanClose\n");
+    DOKAN_LOG_BEGIN_MJ(Irp);
 
     irpSp = IoGetCurrentIrpStackLocation(Irp);
     fileObject = irpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", irpSp->FileObject);
 
     if (fileObject == NULL) {
-      DDbgPrint("  fileObject is NULL\n");
       status = STATUS_SUCCESS;
       __leave;
     }
 
-    DDbgPrint("  ProcessId %lu\n", IoGetRequestorProcessId(Irp));
-    DokanPrintFileName(fileObject);
-
     vcb = DeviceObject->DeviceExtension;
     if (vcb == NULL) {
-      DDbgPrint("  No device extension\n");
       status = STATUS_SUCCESS;
       __leave;
     }
 
     if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(vcb->Dcb, fileObject->FsContext2)) {
+        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
 
       if (fileObject->FsContext2) {
         ccb = fileObject->FsContext2;
@@ -86,9 +82,8 @@ Return Value:
         fcb = ccb->Fcb;
         ASSERT(fcb != NULL);
 
-        DDbgPrint("   Free CCB:%p\n", ccb);
         DokanFCBLockRW(fcb);
-        DokanFreeCCB(ccb);
+        DokanFreeCCB(Irp, ccb);
         DokanFCBUnlock(fcb);
 
         DokanFreeFCB(vcb, fcb);
@@ -109,9 +104,9 @@ Return Value:
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
     DokanFCBLockRW(fcb);
     if (fcb->BlockUserModeDispatch) {
-      DokanLogInfo(&logger, L"Closed file with user mode dispatch blocked: %wZ",
+      DokanLogInfo(&logger, L"Closed file with user mode dispatch blocked: \"%wZ\"",
                    &fcb->FileName);
-      DokanFreeCCB(ccb);
+      DokanFreeCCB(Irp, ccb);
       DokanFCBUnlock(fcb);
       DokanFreeFCB(vcb, fcb);
       status = STATUS_SUCCESS;
@@ -123,9 +118,8 @@ Return Value:
 
     if (eventContext == NULL) {
       // status = STATUS_INSUFFICIENT_RESOURCES;
-      DDbgPrint("   eventContext == NULL\n");
-      DDbgPrint("   Free CCB:%p\n", ccb);
-      DokanFreeCCB(ccb);
+      DOKAN_LOG_FINE_IRP(Irp, "EventContext == NULL");
+      DokanFreeCCB(Irp, ccb);
       DokanFCBUnlock(fcb);
       DokanFreeFCB(vcb, fcb);
       status = STATUS_SUCCESS;
@@ -133,15 +127,14 @@ Return Value:
     }
 
     eventContext->Context = ccb->UserContext;
-    DDbgPrint("   UserContext:%X\n", (ULONG)ccb->UserContext);
+    DOKAN_LOG_FINE_IRP(Irp, "UserContext:%X", (ULONG)ccb->UserContext);
 
     // copy the file name to be closed
     eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
     RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer,
                   fcb->FileName.Length);
 
-    DDbgPrint("   Free CCB:%p\n", ccb);
-    DokanFreeCCB(ccb);
+    DokanFreeCCB(Irp, ccb);
     DokanFCBUnlock(fcb);
     DokanFreeFCB(vcb, fcb);
 
@@ -156,10 +149,8 @@ Return Value:
     status = STATUS_SUCCESS;
 
   } __finally {
-
+    DOKAN_LOG_END_MJ(Irp, status, 0);
     DokanCompleteIrpRequest(Irp, status, 0);
-
-    DDbgPrint("<== DokanClose\n");
   }
 
   return status;

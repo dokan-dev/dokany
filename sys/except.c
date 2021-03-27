@@ -26,27 +26,27 @@ NTSTATUS
 DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer) {
   UNREFERENCED_PARAMETER(Irp);
 
-  NTSTATUS Status = EXCEPTION_CONTINUE_SEARCH;
-  NTSTATUS ExceptionCode;
-  PEXCEPTION_RECORD ExceptRecord;
+  NTSTATUS status = EXCEPTION_CONTINUE_SEARCH;
+  NTSTATUS exceptionCode;
+  PEXCEPTION_RECORD exceptRecord;
 
-  ExceptRecord = ExceptionPointer->ExceptionRecord;
-  ExceptionCode = ExceptRecord->ExceptionCode;
+  exceptRecord = ExceptionPointer->ExceptionRecord;
+  exceptionCode = exceptRecord->ExceptionCode;
 
-  DbgPrint("-------------------------------------------------------------\n");
-  DbgPrint("Exception happends in Dokan (code %xh):\n", ExceptionCode);
-  DbgPrint(".exr %p;.cxr %p;\n", ExceptionPointer->ExceptionRecord,
+  DOKAN_LOG("-------------------------------------------------------------");
+  DOKAN_LOG_("Exception happends in Dokan (code %xh):", exceptionCode);
+  DOKAN_LOG_(".exr %p;.cxr %p;", ExceptionPointer->ExceptionRecord,
            ExceptionPointer->ContextRecord);
-  DbgPrint("-------------------------------------------------------------\n");
+  DOKAN_LOG("-------------------------------------------------------------");
 
-  if (FsRtlIsNtstatusExpected(ExceptionCode)) {
+  if (FsRtlIsNtstatusExpected(exceptionCode)) {
     //
     // If the exception is expected execute our handler
     //
 
-    DDbgPrint("DokanExceptionFilter: Catching exception %xh\n", ExceptionCode);
+    DOKAN_LOG_("DokanExceptionFilter: Catching exception %xh", exceptionCode);
 
-    Status = EXCEPTION_EXECUTE_HANDLER;
+    status = EXCEPTION_EXECUTE_HANDLER;
 
   } else {
 
@@ -54,21 +54,20 @@ DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer) {
     // Continue search for an higher level exception handler
     //
 
-    DDbgPrint("DokanExceptionFilter: Passing on exception %#x\n",
-              ExceptionCode);
+    DOKAN_LOG_("DokanExceptionFilter: Passing on exception %#x", exceptionCode);
 
-    Status = EXCEPTION_CONTINUE_SEARCH;
+    status = EXCEPTION_CONTINUE_SEARCH;
   }
 
-  return Status;
+  return status;
 }
 
 NTSTATUS
 DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                       __in NTSTATUS ExceptionCode) {
-  NTSTATUS Status;
+  NTSTATUS status;
 
-  Status = ExceptionCode;
+  status = ExceptionCode;
 
   if (Irp) {
 
@@ -79,26 +78,26 @@ DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
     Vcb = (PDokanVCB)DeviceObject->DeviceExtension;
 
     if (NULL == Vcb) {
-      Status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_PARAMETER;
     } else if (Vcb->Identifier.Type != VCB) {
-      Status = STATUS_INVALID_PARAMETER;
+      status = STATUS_INVALID_PARAMETER;
     } else if (IsUnmountPendingVcb(Vcb)) {
-      Status = STATUS_NO_SUCH_DEVICE;
+      status = STATUS_NO_SUCH_DEVICE;
     }
 
-    if (Status == STATUS_PENDING) {
+    if (status == STATUS_PENDING) {
       goto errorout;
     }
 
-    DokanCompleteIrpRequest(Irp, Status, 0);
+    DokanCompleteIrpRequest(Irp, status, 0);
   }
 
   else {
 
-    Status = STATUS_INVALID_PARAMETER;
+    status = STATUS_INVALID_PARAMETER;
   }
 
 errorout:
 
-  return Status;
+  return status;
 }

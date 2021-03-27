@@ -87,8 +87,7 @@ AllocateEventContextRaw(__in ULONG EventContextLength) {
 
   if (EventContextLength < sizeof(EVENT_CONTEXT) ||
       EventContextLength > MAXULONG - sizeof(DRIVER_EVENT_CONTEXT)) {
-    DDbgPrint(
-        " AllocateEventContextRaw invalid EventContextLength requested.\n");
+    DOKAN_LOG("Invalid EventContextLength requested.");
     return NULL;
   }
 
@@ -364,11 +363,11 @@ VOID NotificationThread(__in PVOID pDcb) {
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
 
-  DDbgPrint("==> NotificationThread\n");
+  DOKAN_LOG("Start");
 
   waitBlock = DokanAlloc(sizeof(KWAIT_BLOCK) * 6);
   if (waitBlock == NULL) {
-    DDbgPrint("  Can't allocate WAIT_BLOCK\n");
+    DOKAN_LOG("Can't allocate WAIT_BLOCK");
     return;
   }
   events[0] = &Dcb->ReleaseEvent;
@@ -395,7 +394,7 @@ VOID NotificationThread(__in PVOID pDcb) {
   } while (status != STATUS_WAIT_0);
 
   ExFreePool(waitBlock);
-  DDbgPrint("<== NotificationThread\n");
+  DOKAN_LOG("Stop");
 }
 
 NTSTATUS
@@ -403,14 +402,13 @@ DokanStartEventNotificationThread(__in PDokanDCB Dcb) {
   NTSTATUS status;
   HANDLE thread;
 
-  DDbgPrint("==> DokanStartEventNotificationThread\n");
-
   KeResetEvent(&Dcb->ReleaseEvent);
 
   status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
                                 (PKSTART_ROUTINE)NotificationThread, Dcb);
 
   if (!NT_SUCCESS(status)) {
+    DOKAN_LOG_("Failed to create Thread %s", DokanGetNTSTATUSStr(status));
     return status;
   }
 
@@ -419,27 +417,23 @@ DokanStartEventNotificationThread(__in PDokanDCB Dcb) {
 
   ZwClose(thread);
 
-  DDbgPrint("<== DokanStartEventNotificationThread\n");
-
   return STATUS_SUCCESS;
 }
 
 VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
-  DDbgPrint("==> DokanStopEventNotificationThread\n");
-
+  DOKAN_LOG("Stopping Thread");
   if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
       Dcb->EventNotificationThread) {
-    DDbgPrint("Waiting for Notify thread to terminate.\n");
+    DOKAN_LOG("Waiting for thread to terminate");
     ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
     if (Dcb->EventNotificationThread) {
       KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
                             FALSE, NULL);
-      DDbgPrint("Notify thread successfully terminated.\n");
+      DOKAN_LOG("Thread successfully terminated");
       ObDereferenceObject(Dcb->EventNotificationThread);
       Dcb->EventNotificationThread = NULL;
     }
   }
-  DDbgPrint("<== DokanStopEventNotificationThread\n");
 }
 
 VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb) {
@@ -500,13 +494,13 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   // as first delete the mountpoint
   // in case of MountManager some request because of delete
   // must be handled properly
-  DokanDeleteMountPoint(dcb);
+  DokanDeleteMountPoint(Irp, dcb);
 
   // then mark the device for unmount pending
   SetLongFlag(vcb->Flags, VCB_DISMOUNT_PENDING);
   SetLongFlag(dcb->Flags, DCB_DELETE_PENDING);
 
-  DokanLogInfo(&logger, L"Starting unmount for device %wZ",
+  DokanLogInfo(&logger, L"Starting unmount for device \"%wZ\"",
                         dcb->DiskDeviceName);
 
   ReleasePendingIrp(&dcb->PendingIrp);
@@ -524,7 +518,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   DokanCleanupAllChangeNotificationWaiters(vcb);
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, Irp);
 
-  DokanDeleteDeviceObject(dcb);
+  DokanDeleteDeviceObject(Irp, dcb);
 
   DokanLogInfo(&logger, L"Finished event release.");
 
@@ -537,10 +531,10 @@ ULONG GetCurrentSessionId(__in PIRP Irp) {
 
   status = IoGetRequestorSessionId(Irp, &sessionNumber);
   if (!NT_SUCCESS(status)) {
-    DDbgPrint("   IoGetRequestorSessionId failed\n");
+    DOKAN_LOG_FINE_IRP(Irp, "Failed %s", DokanGetNTSTATUSStr(status));
     return (ULONG)-1;
   }
-  DDbgPrint("   GetCurrentSessionId %lu\n", sessionNumber);
+  DOKAN_LOG_FINE_IRP(Irp, "%lu", sessionNumber);
   return sessionNumber;
 }
 
@@ -568,7 +562,7 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   } else {
     if (szMountPoint->Length >
         sizeof(dokanControl.MountPoint) - 12 * sizeof(WCHAR)) {
-      DDbgPrint("Mount point buffer has invalid size\n");
+      DOKAN_LOG_FINE_IRP(Irp, "Mount point buffer has invalid size");
       return STATUS_BUFFER_OVERFLOW;
     }
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
@@ -579,18 +573,22 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   mountEntry = FindMountEntry(dokanGlobal, &dokanControl, TRUE);
   if (mountEntry == NULL) {
     dokanControl.SessionId = (ULONG)-1;
-    DDbgPrint("Cannot found device associated to mount point %ws\n",
-              dokanControl.MountPoint);
+    DOKAN_LOG_FINE_IRP(Irp, "Cannot found device associated to mount point %ws",
+                  dokanControl.MountPoint);
     return STATUS_BUFFER_TOO_SMALL;
   }
 
   if (IsDeletePending(mountEntry->MountControl.VolumeDeviceObject)) {
-    DDbgPrint("Device is deleted\n") return STATUS_DEVICE_REMOVED;
+    DOKAN_LOG_FINE_IRP(Irp, "Device is deleted");
+    return STATUS_DEVICE_REMOVED;
   }
 
   if (!IsMounted(mountEntry->MountControl.VolumeDeviceObject)) {
-    DDbgPrint("Device is still not mounted, so an unmount not possible at this "
-              "point\n") return STATUS_DEVICE_BUSY;
+    DOKAN_LOG_FINE_IRP(
+        Irp,
+        "Device is still not mounted, so an unmount not possible at this "
+        "point");
+    return STATUS_DEVICE_BUSY;
   }
 
   return DokanEventRelease(mountEntry->MountControl.VolumeDeviceObject, Irp);
