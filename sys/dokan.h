@@ -283,6 +283,11 @@ typedef struct _DokanDiskControlBlock {
   // point yet.
   BOOLEAN MountPointDetermined;
 
+  // Allow I/O requests to be conveyed to user mode in batches, rather than
+  // strictly one for each DeviceIoControl that the DLL issues to fetch a
+  // request.
+  BOOLEAN AllowIpcBatching;
+
   // How often to garbage-collect FCBs. If this is 0, we use the historical
   // default behavior of freeing them on the spot and in the current context
   // when the FileCount reaches 0. If this is nonzero, then a background thread

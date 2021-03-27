@@ -116,8 +116,6 @@ AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
     return NULL;
   }
   SetCommonEventContext(Dcb, eventContext, Irp, Ccb);
-  eventContext->SerialNumber = InterlockedIncrement((LONG *)&Dcb->SerialNumber);
-
   return eventContext;
 }
 
@@ -237,121 +235,126 @@ VOID RetryIrps(__in PIRP_LIST PendingRetryIrp) {
   }
 }
 
-VOID NotificationLoop(__in PIRP_LIST PendingIrp, __in PIRP_LIST NotifyEvent) {
-  PDRIVER_EVENT_CONTEXT driverEventContext;
-  PLIST_ENTRY listHead;
-  PIRP_ENTRY irpEntry;
-  LIST_ENTRY completeList;
-  KIRQL irpIrql;
-  KIRQL notifyIrql;
-  PIRP irp;
-  ULONG eventLen;
-  ULONG bufferLen;
-  PVOID buffer;
+// Called whenever we detect that we are ready to send some I/O traffic to the
+// user mode DLL/service. The user mode component fetches work from the kernel
+// by doing DeviceIoControl(IOCTL_EVENT_WAIT, buffer, size) invocations in one
+// or more loops, depending on how it is configured. Each pending
+// DeviceIoControl becomes an IRP in PendingIoctls.
+//
+// When the driver receives an incoming I/O request (e.g. from an app) that it
+// can't process without involving the user mode code, that becomes an element
+// in WorkQueue. Under heavy load, WorkQueue may reach a size of 2 to 10 or more
+// in between each IOCTL from the DLL/service, but traditionally each IOCTL only
+// pulls one request out of the queue, which is inefficient. If AllowBatching is
+// TRUE then each pending IOCTL can get its buffer packed with concatenated
+// WorkQueue items.
+//
+// This function consumes the actual lists as well, to the extent that it is
+// able to send out work items, so it is expected that the WorkQueue items are
+// also in another list where they can later be looked up at completion time.
+VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
+                      __in BOOLEAN AllowBatching) {
+  PDRIVER_EVENT_CONTEXT workItem = NULL;
+  PLIST_ENTRY workItemListEntry = NULL;
+  PLIST_ENTRY currentIoctlListEntry = NULL;
+  PIRP_ENTRY currentIoctlIrpEntry = NULL;
+  LIST_ENTRY completedIoctls;
+  KIRQL pendingIoctlsIrql;
+  KIRQL workQueueIrql;
+  PIRP currentIoctl = NULL;
+  ULONG workItemBytes = 0;
+  ULONG currentIoctlBufferBytesRemaining = 0;
+  PCHAR currentIoctlBuffer = NULL;
 
-  DDbgPrint("=> NotificationLoop\n");
-
-  InitializeListHead(&completeList);
+  InitializeListHead(&completedIoctls);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-  DDbgPrint("Try acquire SpinLock...\n");
-  KeAcquireSpinLock(&PendingIrp->ListLock, &irpIrql);
-  DDbgPrint("SpinLock irp Acquired\n");
-  KeAcquireSpinLock(&NotifyEvent->ListLock, &notifyIrql);
-  DDbgPrint("SpinLock notify Acquired\n");
-
-  while (!IsListEmpty(&PendingIrp->ListHead) &&
-         !IsListEmpty(&NotifyEvent->ListHead)) {
-
-    listHead = RemoveHeadList(&NotifyEvent->ListHead);
-
-    driverEventContext =
-        CONTAINING_RECORD(listHead, DRIVER_EVENT_CONTEXT, ListEntry);
-
-    listHead = RemoveHeadList(&PendingIrp->ListHead);
-    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-
-    eventLen = driverEventContext->EventContext.Length;
-
-    // ensure this eventIrp is not cancelled
-    irp = irpEntry->Irp;
-
-    if (irp == NULL) {
-      // this IRP has already been canceled
-      DDbgPrint("Irp canceled\n");
-      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-      DokanFreeIrpEntry(irpEntry);
-      // push back
-      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
-      continue;
-    }
-
-    if (IoSetCancelRoutine(irp, NULL) == NULL) {
-      DDbgPrint("IoSetCancelRoutine return NULL\n");
-      // Cancel routine will run as soon as we release the lock
-      InitializeListHead(&irpEntry->ListEntry);
-      irpEntry->CancelRoutineFreeMemory = TRUE;
-      // push back
-      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
-      continue;
-    }
-
-    // available size that is used for event notification
-    bufferLen = irpEntry->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
-    // buffer that is used to inform Event
-    buffer = irp->AssociatedIrp.SystemBuffer;
-
-    // buffer is not specified or short of length
-    if (bufferLen == 0 || buffer == NULL || bufferLen < eventLen) {
-      DDbgPrint("EventNotice : STATUS_INSUFFICIENT_RESOURCES\n");
-      DDbgPrint("  bufferLen: %d, eventLen: %d\n", bufferLen, eventLen);
-      // push back
-      InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
-      // marks as STATUS_INSUFFICIENT_RESOURCES
-      irpEntry->SerialNumber = 0;
-    } else {
-      // let's copy EVENT_CONTEXT
-      RtlCopyMemory(buffer, &driverEventContext->EventContext, eventLen);
-      // save event length
-      irpEntry->SerialNumber = eventLen;
-
-      if (driverEventContext->Completed) {
-        KeSetEvent(driverEventContext->Completed, IO_NO_INCREMENT, FALSE);
+  KeAcquireSpinLock(&PendingIoctls->ListLock, &pendingIoctlsIrql);
+  KeAcquireSpinLock(&WorkQueue->ListLock, &workQueueIrql);
+  while (!IsListEmpty(&WorkQueue->ListHead)) {
+    if (!AllowBatching || currentIoctl == NULL) {
+      if (IsListEmpty(&PendingIoctls->ListHead)) {
+        break;
       }
-      ExFreePool(driverEventContext);
+      currentIoctlListEntry = RemoveHeadList(&PendingIoctls->ListHead);
+      currentIoctlIrpEntry = CONTAINING_RECORD(currentIoctlListEntry, IRP_ENTRY,
+                                               ListEntry);
+      currentIoctl = currentIoctlIrpEntry->Irp;
+      InsertTailList(&completedIoctls, &currentIoctlIrpEntry->ListEntry);
+      // The buffer we are sending back to user mode for this IOCTL_EVENT_WAIT.
+      currentIoctlBuffer = (PCHAR)currentIoctl->AssociatedIrp.SystemBuffer;
+      currentIoctlBufferBytesRemaining = currentIoctlIrpEntry
+          ->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
+
+      // Ensure this IRP is not cancelled.
+      if (currentIoctl == NULL) {
+        ASSERT(currentIoctlIrpEntry->CancelRoutineFreeMemory == FALSE);
+        DokanFreeIrpEntry(currentIoctlIrpEntry);
+        continue;
+      }
+      if (IoSetCancelRoutine(currentIoctl, NULL) == NULL) {
+        // Cancel routine will run as soon as we release the lock
+        InitializeListHead(&currentIoctlIrpEntry->ListEntry);
+        currentIoctlIrpEntry->CancelRoutineFreeMemory = TRUE;
+        currentIoctl = NULL;
+        continue;
+      }
+      // The serial number gets re-purposed as the amount of the DLL's buffer
+      // that has been filled, for historical reasons. We increment this while
+      // filling the buffer below, unless nothing fits in it; then we send
+      // an error to the DLL.
+      currentIoctlIrpEntry->SerialNumber = 0;
     }
-    InsertTailList(&completeList, &irpEntry->ListEntry);
+
+    workItemListEntry = RemoveHeadList(&WorkQueue->ListHead);
+    workItem = CONTAINING_RECORD(workItemListEntry, DRIVER_EVENT_CONTEXT,
+                                 ListEntry);
+    workItemBytes = workItem->EventContext.Length;
+    // Buffer is not specified or short of length (this may mean we filled the
+    // space in one of the DLL's buffers in batch mode). Put the IRP back in
+    // the work queue; it will have to go in a different buffer.
+    if (currentIoctlBuffer == NULL
+        || currentIoctlBufferBytesRemaining < workItemBytes) {
+      InsertTailList(&WorkQueue->ListHead, &workItem->ListEntry);
+      currentIoctl = NULL;
+      continue;
+    }
+    // Send the work item back in the response to the current IOCTL.
+    RtlCopyMemory(currentIoctlBuffer, &workItem->EventContext, workItemBytes);
+    currentIoctlBufferBytesRemaining -= workItemBytes;
+    currentIoctlBuffer += workItemBytes;
+    currentIoctlIrpEntry->SerialNumber += workItemBytes;
+    if (workItem->Completed) {
+      KeSetEvent(workItem->Completed, IO_NO_INCREMENT, FALSE);
+    }
+    ExFreePool(workItem);
   }
 
-  DDbgPrint("Clear Events...\n");
-  KeClearEvent(&NotifyEvent->NotEmpty);
-  DDbgPrint("Notify event cleared\n");
-  KeClearEvent(&PendingIrp->NotEmpty);
-  DDbgPrint("Pending event cleared\n");
+  KeClearEvent(&WorkQueue->NotEmpty);
+  KeClearEvent(&PendingIoctls->NotEmpty);
+  KeReleaseSpinLock(&WorkQueue->ListLock, workQueueIrql);
+  KeReleaseSpinLock(&PendingIoctls->ListLock, pendingIoctlsIrql);
 
-  DDbgPrint("Release SpinLock...\n");
-  KeReleaseSpinLock(&NotifyEvent->ListLock, notifyIrql);
-  DDbgPrint("SpinLock notify Released\n");
-  KeReleaseSpinLock(&PendingIrp->ListLock, irpIrql);
-  DDbgPrint("SpinLock irp Released\n");
-
-  while (!IsListEmpty(&completeList)) {
-    listHead = RemoveHeadList(&completeList);
-    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->Irp;
-    if (irpEntry->SerialNumber == 0) {
-      irp->IoStatus.Information = 0;
-      irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+  // Go through the motions of making the appropriate DeviceIoControl requests
+  // from the DLL/service actually finish.
+  while (!IsListEmpty(&completedIoctls)) {
+    currentIoctlListEntry = RemoveHeadList(&completedIoctls);
+    currentIoctlIrpEntry = CONTAINING_RECORD(currentIoctlListEntry, IRP_ENTRY,
+                                             ListEntry);
+    currentIoctl = currentIoctlIrpEntry->Irp;
+    if (currentIoctlIrpEntry->SerialNumber == 0) {
+      currentIoctl->IoStatus.Information = 0;
+      currentIoctl->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
     } else {
-      irp->IoStatus.Information = irpEntry->SerialNumber;
-      irp->IoStatus.Status = STATUS_SUCCESS;
+      // This is not the serial number but the aomunt of data written to the
+      // DLL's return buffer.
+      currentIoctl->IoStatus.Information = currentIoctlIrpEntry->SerialNumber;
+      currentIoctl->IoStatus.Status = STATUS_SUCCESS;
     }
-    DokanFreeIrpEntry(irpEntry);
-    DokanCompleteIrpRequest(irp, irp->IoStatus.Status,
-                            irp->IoStatus.Information);
+    DokanFreeIrpEntry(currentIoctlIrpEntry);
+    DokanCompleteIrpRequest(currentIoctl, currentIoctl->IoStatus.Status,
+                            currentIoctl->IoStatus.Information);
   }
-
-  DDbgPrint("<= NotificationLoop\n");
 }
 
 KSTART_ROUTINE NotificationThread;
@@ -380,10 +383,11 @@ VOID NotificationThread(__in PVOID pDcb) {
 
     if (status != STATUS_WAIT_0) {
       if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
-        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent);
+        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent,
+                         Dcb->AllowIpcBatching);
       } else if (status == STATUS_WAIT_0 + 3 || status == STATUS_WAIT_0 + 4) {
         NotificationLoop(&Dcb->Global->PendingService,
-                         &Dcb->Global->NotifyService);
+                         &Dcb->Global->NotifyService, Dcb->AllowIpcBatching);
       } else {
         RetryIrps(&Dcb->PendingRetryIrp);
       }
