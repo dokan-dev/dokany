@@ -88,9 +88,6 @@
     <ClCompile Include="dispatch.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pnp.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="util\irp_buffer_helper.c">
       <Filter>Source Files\util</Filter>
     </ClCompile>

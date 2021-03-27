@@ -122,8 +122,7 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   if (irpSp->MajorFunction != IRP_MJ_FILE_SYSTEM_CONTROL &&
       irpSp->MajorFunction != IRP_MJ_SHUTDOWN &&
       irpSp->MajorFunction != IRP_MJ_CLEANUP &&
-      irpSp->MajorFunction != IRP_MJ_CLOSE &&
-      irpSp->MajorFunction != IRP_MJ_PNP) {
+      irpSp->MajorFunction != IRP_MJ_CLOSE) {
     if (IsUnmountPending(DeviceObject)) {
       DDbgPrint("  Volume is not mounted so return STATUS_NO_SUCH_DEVICE\n");
       NTSTATUS status = STATUS_NO_SUCH_DEVICE;
@@ -208,9 +207,6 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   case IRP_MJ_SET_SECURITY:
     return DokanDispatchSetSecurity(DeviceObject, Irp);
-
-  case IRP_MJ_PNP:
-    return DokanDispatchPnp(DeviceObject, Irp);
 
   default:
     DDbgPrint("DokanDispatchRequest: Unexpected major function: %xh\n",

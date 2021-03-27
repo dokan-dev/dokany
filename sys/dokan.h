@@ -774,8 +774,7 @@ __drv_dispatchType(IRP_MJ_CREATE) __drv_dispatchType(IRP_MJ_CLOSE)
                     IRP_MJ_SET_INFORMATION)
                     __drv_dispatchType(IRP_MJ_QUERY_VOLUME_INFORMATION)
                         __drv_dispatchType(IRP_MJ_SET_VOLUME_INFORMATION)
-                            __drv_dispatchType(
-                                IRP_MJ_SHUTDOWN) __drv_dispatchType(IRP_MJ_PNP)
+                            __drv_dispatchType(IRP_MJ_SHUTDOWN)
                                 __drv_dispatchType(IRP_MJ_LOCK_CONTROL)
                                     __drv_dispatchType(IRP_MJ_QUERY_SECURITY)
                                         __drv_dispatchType(
@@ -834,9 +833,6 @@ DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
 DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
-
-NTSTATUS
-DokanDispatchPnp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 DRIVER_UNLOAD DokanUnload;
 

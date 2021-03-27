@@ -279,7 +279,6 @@ Return Value:
   DriverObject->MajorFunction[IRP_MJ_FLUSH_BUFFERS] = DokanBuildRequest;
 
   DriverObject->MajorFunction[IRP_MJ_SHUTDOWN] = DokanBuildRequest;
-  DriverObject->MajorFunction[IRP_MJ_PNP] = DokanBuildRequest;
 
   DriverObject->MajorFunction[IRP_MJ_LOCK_CONTROL] = DokanBuildRequest;
 
