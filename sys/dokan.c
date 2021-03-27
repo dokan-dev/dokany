@@ -444,14 +444,8 @@ NTSTATUS DokanCheckOplock(
     __in_opt PVOID Context,
     __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
     __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine) {
-  ASSERT(Fcb->Vcb != NULL);
-  ASSERT(Fcb->Vcb->Dcb != NULL);
-  if (Fcb->Vcb != NULL && Fcb->Vcb->Dcb != NULL &&
-      !(Fcb->Vcb->Dcb->MountOptions & DOKAN_EVENT_DISABLE_OPLOCKS)) {
-    return FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, Context,
-                            CompletionRoutine, PostIrpRoutine);
-  }
-  return STATUS_SUCCESS;
+  return FsRtlCheckOplock(DokanGetFcbOplock(Fcb), Irp, Context,
+                          CompletionRoutine, PostIrpRoutine);
 }
 
 VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,

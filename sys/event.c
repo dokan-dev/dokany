@@ -682,10 +682,6 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     DDbgPrint("  FileLock in User Mode\n");
   }
 
-  if (eventStart->Flags & DOKAN_EVENT_DISABLE_OPLOCKS) {
-    DDbgPrint("  OpLocks disabled\n");
-  }
-
   if (eventStart->Flags & DOKAN_EVENT_ENABLE_FCB_GC) {
     DDbgPrint("  FCB GC enabled\n");
     fcbGcEnabled = TRUE;

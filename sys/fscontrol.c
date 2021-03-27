@@ -164,10 +164,6 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  if (Dcb->MountOptions & DOKAN_EVENT_DISABLE_OPLOCKS) {
-    return STATUS_NOT_SUPPORTED;
-  }
-
   //
   //  Get the input & output buffer lengths and pointers.
   //

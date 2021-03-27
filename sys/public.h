@@ -400,8 +400,7 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_MOUNT_MANAGER                                   (1 << 3)
 #define DOKAN_EVENT_CURRENT_SESSION                                 (1 << 4)
 #define DOKAN_EVENT_FILELOCK_USER_MODE                              (1 << 5)
-// Whether any oplock functionality should be disabled.
-#define DOKAN_EVENT_DISABLE_OPLOCKS                                 (1 << 6)
+// No longer used option (1 << 6)
 #define DOKAN_EVENT_ENABLE_FCB_GC                                   (1 << 7)
 // CaseSenitive FileName: NTFS can look to be case-insensitive
 // but in some situation it can also be case-sensitive :
