@@ -248,8 +248,10 @@ Return Value:
   InitializeListHead(&g_DokanLogEntryList.Log);
   ExInitializeResourceLite(&g_DokanLogEntryList.Resource);
 
+#ifdef DEBUG_
   DOKAN_LOG_("ver.%x, %s %s", DOKAN_DRIVER_VERSION, __DATE__,
             __TIME__);
+#endif
 
   status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
