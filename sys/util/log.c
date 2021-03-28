@@ -29,6 +29,21 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "../dokanfs_msg.h"
 
 ULONG g_Debug = DOKAN_DEBUG_DEFAULT;
+// Has any mount since startup has requested to cache driver logs. It is only at
+// this moment that we will start to record global logs.
+BOOLEAN g_DokanDriverLogCacheEnabled = FALSE;
+// Number of current Dokan Volume having Drive log caching enabled.
+LONG g_DokanVcbDriverLogCacheCount = 0;
+DOKAN_LOG_CACHE g_DokanLogEntryList;
+
+VOID PopDokanLogEntry(_In_ PDokanVCB Vcb);
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, PushDokanLogEntry)
+#pragma alloc_text(PAGE, PopDokanLogEntry)
+#pragma alloc_text(PAGE, CleanDokanLogEntry)
+#endif
+
+#define DOKAN_LOG_MAX_ENTRY_CACHED 1024
 
 #define DOKAN_LOG_MAX_CHAR_COUNT 2048
 #define DOKAN_LOG_MAX_PACKET_BYTES \
@@ -55,13 +70,13 @@ static VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
 
   __try {
   	if (KeGetCurrentIrql() > PASSIVE_LEVEL) {
-      DOKAN_LOG("Event viewer logging called at a too high IRQL");
+      DOKAN_LOG_("Event viewer logging called at a too high IRQL\n");
       __leave;
     }
   	
     message = DokanAlloc(sizeof(WCHAR) * messageCapacity);
     if (message == NULL) {
-      DOKAN_LOG_("Failed to allocate message of capacity %zu",
+      DOKAN_LOG_("Failed to allocate message of capacity %d",
                  messageCapacity);
       __leave;
     }
@@ -153,7 +168,6 @@ VOID DokanCaptureBackTrace(__out PDokanBackTrace Trace) {
   case x:           \
     return #x;
 
-#ifdef _DEBUG
 PCHAR DokanGetNTSTATUSStr(NTSTATUS Status) {
   switch (Status) {
 #include "ntstatus_log.inc"
@@ -468,7 +482,6 @@ PCHAR DokanGetCreateInformationStr(ULONG Information) {
   }
   return "Unknown";
 }
-#endif
 
 PCHAR DokanGetIoctlStr(ULONG ControlCode) {
   switch (ControlCode) {
@@ -489,4 +502,163 @@ PCHAR DokanGetIoctlStr(ULONG ControlCode) {
 #include "ioctl.inc"
   }
   return "Unknown";
+}
+
+VOID PushDokanLogEntry(_In_opt_ PIRP Irp, _In_ PCSTR Format, ...) {
+  PDOKAN_LOG_ENTRY logEntry;
+  PDokanVCB vcb = NULL;
+
+  PAGED_CODE();
+
+  // Is that a global log or a Vcb log that has driver log disptached
+  // enabled ?
+  if (Irp) {
+    PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
+    if (irpSp->DeviceObject != NULL &&
+        irpSp->DeviceObject->DeviceExtension != NULL &&
+        GetIdentifierType(irpSp->DeviceObject->DeviceExtension) == VCB) {
+      vcb = irpSp->DeviceObject->DeviceExtension;
+      if (vcb->Dcb && !vcb->Dcb->DispatchDriverLogs) {
+        return;
+      }
+    }
+  }
+
+  __try {
+    DokanResourceLockRW(&(g_DokanLogEntryList.Resource));
+    if (g_DokanLogEntryList.NumberOfCachedEntries >=
+        DOKAN_LOG_MAX_ENTRY_CACHED) {
+      ASSERT(!IsListEmpty(&g_DokanLogEntryList.Log));
+      PLIST_ENTRY listEntry = g_DokanLogEntryList.Log.Flink;
+      RemoveEntryList(listEntry);
+      logEntry = CONTAINING_RECORD(listEntry, DOKAN_LOG_ENTRY, ListEntry);
+      ExFreePool(logEntry);
+      --g_DokanLogEntryList.NumberOfCachedEntries;
+    }
+
+    logEntry =
+        DokanAllocZero(sizeof(DOKAN_LOG_ENTRY) + DOKAN_LOG_MAX_CHAR_COUNT);
+    if (!logEntry) {
+      DOKAN_NO_CACHE_LOG("Failed to allocate DOKAN_LOG_ENTRY");
+      __leave;
+    }
+    InitializeListHead(&logEntry->ListEntry);
+    logEntry->Vcb = vcb;
+
+    PSTR ppszDestEnd = NULL;
+    va_list args;
+    va_start(args, Format);
+    NTSTATUS status =
+        RtlStringCchVPrintfExA(logEntry->Log.Message, DOKAN_LOG_MAX_CHAR_COUNT,
+                               &ppszDestEnd, NULL, 0, Format, args);
+    logEntry->Log.MessageLength = (ULONG)(ppszDestEnd - logEntry->Log.Message);
+    va_end(args);
+    if (status != STATUS_SUCCESS && status != STATUS_BUFFER_OVERFLOW) {
+      ExFreePool(logEntry);
+      __leave;
+    }
+
+    ++g_DokanLogEntryList.NumberOfCachedEntries;
+    InsertTailList(&g_DokanLogEntryList.Log, &logEntry->ListEntry);
+
+    if (vcb && vcb->Dcb) {
+      PopDokanLogEntry(vcb);
+    }
+  } __finally {
+    DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
+  }
+}
+
+// Dispatch global and specific Vcb log messages from global
+// log entry cache list to userland.
+// Need to be called with g_DokanLogEntryList Lock RW.
+VOID PopDokanLogEntry(_In_ PDokanVCB Vcb) {
+  PLIST_ENTRY listEntry;
+  PLIST_ENTRY nextListEntry;
+  PDOKAN_LOG_ENTRY logEntry;
+  PDOKAN_LOG_MESSAGE dokanLogString;
+  ULONG messageFullSize;
+
+  PAGED_CODE();
+
+  listEntry = g_DokanLogEntryList.Log.Flink;
+  while (listEntry != &(g_DokanLogEntryList.Log)) {
+    logEntry = CONTAINING_RECORD(listEntry, DOKAN_LOG_ENTRY, ListEntry);
+
+    // Only Pop global and the Vcb logs.
+    if (logEntry->Vcb != NULL && logEntry->Vcb != Vcb) {
+      listEntry = listEntry->Flink;
+      continue;
+    }
+
+    messageFullSize = logEntry->Log.MessageLength +
+                      FIELD_OFFSET(DOKAN_LOG_MESSAGE, Message[0]);
+    PEVENT_CONTEXT eventContext =
+        AllocateEventContextRaw(sizeof(EVENT_CONTEXT) + messageFullSize);
+    if (!eventContext) {
+      return;
+    }
+    eventContext->MountId = Vcb->Dcb->MountId;
+    eventContext->MajorFunction = DOKAN_IRP_LOG_MESSAGE;
+    dokanLogString = (PDOKAN_LOG_MESSAGE)((PCHAR)(PCHAR)eventContext +
+                                          sizeof(EVENT_CONTEXT));
+    RtlCopyMemory(dokanLogString, &logEntry->Log, messageFullSize);
+    DokanEventNotification(&Vcb->Dcb->NotifyEvent, eventContext);
+
+    nextListEntry = listEntry->Flink;
+    RemoveEntryList(listEntry);
+    ExFreePool(logEntry);
+    --g_DokanLogEntryList.NumberOfCachedEntries;
+    listEntry = nextListEntry;
+  }
+}
+
+// Is it a global log (NULL IRP) and we have the global cache enabled or it is a
+// volume log (Valid IRP) with an active volume having the cache log enabled.
+BOOLEAN IsLogCacheEnabled(PIRP Irp) {
+  return (!Irp && g_DokanDriverLogCacheEnabled) ||
+         (Irp && g_DokanVcbDriverLogCacheCount);
+}
+
+VOID IncrementVcbLogCacheCount() {
+  InterlockedIncrement(&g_DokanVcbDriverLogCacheCount);
+  if (!g_DokanDriverLogCacheEnabled) {
+    g_DokanDriverLogCacheEnabled = TRUE;
+  }
+}
+
+VOID CleanDokanLogEntry(_In_ PVOID Vcb) {
+  PLIST_ENTRY listEntry;
+  PLIST_ENTRY nextListEntry;
+  PDOKAN_LOG_ENTRY logEntry;
+  PDokanVCB vcb = Vcb;
+
+  PAGED_CODE();
+
+  if (!vcb->Dcb->DispatchDriverLogs) {
+    return;
+  }
+
+  InterlockedDecrement(&g_DokanVcbDriverLogCacheCount);
+
+  __try {
+    DokanResourceLockRW(&(g_DokanLogEntryList.Resource));
+    listEntry = g_DokanLogEntryList.Log.Flink;
+    while (listEntry != &(g_DokanLogEntryList.Log)) {
+      logEntry = CONTAINING_RECORD(listEntry, DOKAN_LOG_ENTRY, ListEntry);
+
+      if (logEntry->Vcb != Vcb) {
+        listEntry = listEntry->Flink;
+        continue;
+      }
+
+      nextListEntry = listEntry->Flink;
+      RemoveEntryList(listEntry);
+      ExFreePool(logEntry);
+      --g_DokanLogEntryList.NumberOfCachedEntries;
+      listEntry = nextListEntry;
+    }
+  } __finally {
+    DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
+  }
 }

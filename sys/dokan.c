@@ -244,6 +244,10 @@ Return Value:
 
   UNREFERENCED_PARAMETER(RegistryPath);
 
+  // Initialize log entry list first before any log.
+  InitializeListHead(&g_DokanLogEntryList.Log);
+  ExInitializeResourceLite(&g_DokanLogEntryList.Resource);
+
   DOKAN_LOG_("ver.%x, %s %s", DOKAN_DRIVER_VERSION, __DATE__,
             __TIME__);
 
@@ -464,13 +468,12 @@ VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status) {
   }
 }
 
-NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
+NTSTATUS DokanNotifyReportChange0(__in PIRP Irp,
+                                  __in PDokanFCB Fcb,
                                   __in PUNICODE_STRING FileName,
                                   __in ULONG FilterMatch,
                                   __in ULONG Action) {
   USHORT nameOffset;
-
-  DOKAN_LOG_("FCB=%p FileName=\"%wZ\"", Fcb, FileName);
 
   ASSERT(Fcb != NULL);
   ASSERT(FileName != NULL);
@@ -541,16 +544,21 @@ NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
             L"Access violation on the file name passed in a notification.");
     }
   }
-  DOKAN_LOG_("FCB=%p Success", Fcb);
+  DOKAN_LOG_FINE_IRP(Irp,
+                     "FCB=%p NameOffset=%x FilterMatch=%x Action=%x Success",
+                     Fcb, nameOffset, FilterMatch, Action);
   return STATUS_SUCCESS;
 }
 
 // DokanNotifyReportChange should be called with the Fcb at least share-locked.
 // due to the ro access to the FileName field.
-NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
+NTSTATUS DokanNotifyReportChange(__in PIRP Irp,
+                                 __in PDokanFCB Fcb,
+                                 __in ULONG FilterMatch,
                                  __in ULONG Action) {
   ASSERT(Fcb != NULL);
-  return DokanNotifyReportChange0(Fcb, &Fcb->FileName, FilterMatch, Action);
+  return DokanNotifyReportChange0(Irp, Fcb, &Fcb->FileName, FilterMatch,
+                                  Action);
 }
 
 BOOLEAN

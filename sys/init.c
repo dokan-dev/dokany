@@ -1163,6 +1163,8 @@ VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb) {
     DOKAN_LOG_FINE_IRP(Irp, "CCB allocated: %d", vcb->CcbAllocated);
     DOKAN_LOG_FINE_IRP(Irp, "CCB     freed: %d", vcb->CcbFreed);
 
+    CleanDokanLogEntry(vcb);
+
     DokanLogInfo(&logger, L"Deleting volume device object.");
     volumeDeviceObject = vcb->DeviceObject;
   }

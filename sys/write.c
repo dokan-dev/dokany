@@ -369,7 +369,7 @@ VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
         DokanFCBLockRO(fcb);
       }
 
-      DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
+      DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SIZE,
                               FILE_ACTION_MODIFIED);
 
       if (!isPagingIo) {

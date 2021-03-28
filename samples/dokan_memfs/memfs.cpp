@@ -40,6 +40,9 @@ void memfs::run() {
   dokan_options.MountPoint = mount_point;
   if (debug_log) {
     dokan_options.Options |= DOKAN_OPTION_STDERR | DOKAN_OPTION_DEBUG;
+    if (dispatch_driver_logs) {
+      dokan_options.Options |= DOKAN_OPTION_DISPATCH_DRIVER_LOGS;
+    }
   } else {
     spdlog::set_level(spdlog::level::err);
   }

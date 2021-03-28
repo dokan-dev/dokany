@@ -346,7 +346,7 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
 
   if (fcb && NT_SUCCESS(EventInfo->Status)) {
     DokanFCBLockRO(fcb);
-    DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SECURITY,
+    DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SECURITY,
                             FILE_ACTION_MODIFIED);
     DokanFCBUnlock(fcb);
   }

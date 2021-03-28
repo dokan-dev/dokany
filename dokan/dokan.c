@@ -47,6 +47,26 @@ VOID DOKANAPI DokanUseStdErr(BOOL Status) { g_UseStdErr = Status; }
 
 VOID DOKANAPI DokanDebugMode(BOOL Status) { g_DebugMode = Status; }
 
+VOID DispatchDriverLogs(HANDLE Handle, PEVENT_CONTEXT EventContext,
+                        PDOKAN_INSTANCE DokanInstance) {
+  UNREFERENCED_PARAMETER(Handle);
+  UNREFERENCED_PARAMETER(DokanInstance);
+
+  PDOKAN_LOG_MESSAGE log_message =
+      (PDOKAN_LOG_MESSAGE)((PCHAR)EventContext + sizeof(EVENT_CONTEXT));
+  if (log_message->MessageLength) {
+    ULONG paquet_size = FIELD_OFFSET(DOKAN_LOG_MESSAGE, Message[0]) +
+                        log_message->MessageLength;
+    if (((PCHAR)log_message + paquet_size) <=
+        ((PCHAR)EventContext + EventContext->Length)) {
+      DbgPrint("DriverLog: %.*s\n", log_message->MessageLength,
+               log_message->Message);
+    } else {
+      DbgPrint("Invalid driver log message received.\n");
+    }
+  }
+}
+
 PDOKAN_INSTANCE
 NewDokanInstance() {
   PDOKAN_INSTANCE instance = (PDOKAN_INSTANCE)malloc(sizeof(DOKAN_INSTANCE));
@@ -503,6 +523,8 @@ UINT WINAPI DokanLoop(PVOID pDokanInstance) {
       case IRP_MJ_SET_SECURITY:
         DispatchSetSecurity(device, context, DokanInstance);
         break;
+      case DOKAN_IRP_LOG_MESSAGE:
+        DispatchDriverLogs(device, context, DokanInstance);
       default:
         break;
       }
@@ -764,6 +786,9 @@ BOOL DokanStart(PDOKAN_INSTANCE Instance) {
   }
   if (Instance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE) {
     eventStart.Flags |= DOKAN_EVENT_CASE_SENSITIVE;
+  }
+  if (Instance->DokanOptions->Options & DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
+    eventStart.Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

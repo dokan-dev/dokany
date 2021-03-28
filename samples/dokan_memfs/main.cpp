@@ -40,7 +40,8 @@ void show_usage() {
                 "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
                 "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
                 "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
-                "  /x (network unmount)\t\t\t Allows unmounting network drive from file explorer\n"
+                "  /x (network unmount)\t\t\t\t Allows unmounting network drive from file explorer\n"
+                "  /e Enable Driver Logs\t\t\t\t Forward Kernel logs to userland.\n\n"
                 "Examples:\n"
                 "\tmemfs.exe \t\t\t# Mount as a local filesystem into a drive of letter M:\\.\n"
                 "\tmemfs.exe /l P:\t\t\t# Mount as a local filesystem into a drive of letter P:\\.\n"
@@ -69,6 +70,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
         dokan_memfs->debug_log = true;
       } else if (arg == L"/x") {
         dokan_memfs->enable_network_unmount = true;
+      } else if (arg == L"/e") {
+        dokan_memfs->dispatch_driver_logs = true;
       } else {
         if (i + 1 >= argc) {
           show_usage();

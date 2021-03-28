@@ -831,71 +831,75 @@ VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
 
     if (NT_SUCCESS(status)) {
       switch (irpSp->Parameters.SetFile.FileInformationClass) {
-      case FileAllocationInformation:
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                FILE_ACTION_MODIFIED);
-        break;
-      case FileBasicInformation:
-        DokanNotifyReportChange(
-            fcb,
-            FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_LAST_WRITE |
-                FILE_NOTIFY_CHANGE_LAST_ACCESS | FILE_NOTIFY_CHANGE_CREATION,
-            FILE_ACTION_MODIFIED);
-        break;
-      case FileDispositionInformation:
-      case FileDispositionInformationEx:
-        if (IrpEntry->FileObject->DeletePending) {
-          if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-            DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
-                                    FILE_ACTION_REMOVED);
-          } else {
-            DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
-                                    FILE_ACTION_REMOVED);
+        case FileAllocationInformation:
+          DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                                  FILE_ACTION_MODIFIED);
+          break;
+        case FileBasicInformation:
+          DokanNotifyReportChange(
+              irp, fcb,
+              FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_LAST_WRITE |
+                  FILE_NOTIFY_CHANGE_LAST_ACCESS | FILE_NOTIFY_CHANGE_CREATION,
+              FILE_ACTION_MODIFIED);
+          break;
+        case FileDispositionInformation:
+        case FileDispositionInformationEx:
+          if (IrpEntry->FileObject->DeletePending) {
+            if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+              DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
+                                      FILE_ACTION_REMOVED);
+            } else {
+              DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+                                      FILE_ACTION_REMOVED);
+            }
           }
-        }
-        break;
-      case FileEndOfFileInformation:
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                FILE_ACTION_MODIFIED);
-        break;
-      case FileLinkInformation:
-        // TODO: should check whether this is a directory
-        // TODO: should notify new link name
-        // DokanNotifyReportChange(vcb, ccb, FILE_NOTIFY_CHANGE_FILE_NAME,
-        // FILE_ACTION_ADDED);
-        break;
-      case FileRenameInformationEx:
-      case FileRenameInformation: {
-        if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
-          DokanNotifyReportChange0(fcb, &oldFileName,
-                                   DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                       ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                       : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                   FILE_ACTION_RENAMED_OLD_NAME);
-          DokanNotifyReportChange(fcb,
-                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                      ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                      : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                  FILE_ACTION_RENAMED_NEW_NAME);
-        } else {
-          DokanNotifyReportChange0(fcb, &oldFileName,
-                                   DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                       ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                       : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                   FILE_ACTION_REMOVED);
-          DokanNotifyReportChange(fcb,
-                                  DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                                      ? FILE_NOTIFY_CHANGE_DIR_NAME
-                                      : FILE_NOTIFY_CHANGE_FILE_NAME,
-                                  FILE_ACTION_ADDED);
-        }
-        // free old file name
-        ExFreePool(oldFileName.Buffer);
-      } break;
-      case FileValidDataLengthInformation:
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                FILE_ACTION_MODIFIED);
-        break;
+          break;
+        case FileEndOfFileInformation:
+          DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                                  FILE_ACTION_MODIFIED);
+          break;
+        case FileLinkInformation:
+          // TODO: should check whether this is a directory
+          // TODO: should notify new link name
+          // DokanNotifyReportChange(vcb, ccb, FILE_NOTIFY_CHANGE_FILE_NAME,
+          // FILE_ACTION_ADDED);
+          break;
+        case FileRenameInformationEx:
+        case FileRenameInformation: {
+          if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
+            DokanNotifyReportChange0(
+                irp, fcb, &oldFileName,
+                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                    ? FILE_NOTIFY_CHANGE_DIR_NAME
+                    : FILE_NOTIFY_CHANGE_FILE_NAME,
+                FILE_ACTION_RENAMED_OLD_NAME);
+            DokanNotifyReportChange(
+                irp, fcb,
+                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                    ? FILE_NOTIFY_CHANGE_DIR_NAME
+                    : FILE_NOTIFY_CHANGE_FILE_NAME,
+                FILE_ACTION_RENAMED_NEW_NAME);
+          } else {
+            DokanNotifyReportChange0(
+                irp, fcb, &oldFileName,
+                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                    ? FILE_NOTIFY_CHANGE_DIR_NAME
+                    : FILE_NOTIFY_CHANGE_FILE_NAME,
+                FILE_ACTION_REMOVED);
+            DokanNotifyReportChange(
+                irp, fcb,
+                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                    ? FILE_NOTIFY_CHANGE_DIR_NAME
+                    : FILE_NOTIFY_CHANGE_FILE_NAME,
+                FILE_ACTION_ADDED);
+          }
+          // free old file name
+          ExFreePool(oldFileName.Buffer);
+        } break;
+        case FileValidDataLengthInformation:
+          DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                                  FILE_ACTION_MODIFIED);
+          break;
       }
     }
 

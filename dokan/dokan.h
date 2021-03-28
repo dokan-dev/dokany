@@ -121,6 +121,12 @@ extern "C" {
 #define DOKAN_OPTION_CASE_SENSITIVE 4096
 /** Allows unmounting of network drive via explorer */
 #define DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE 8192
+/**
+ * Forward the kernel driver global and volume logs to the userland.
+ * 
+ * This option is expected to be slow until IpcBatching is available on v2.x.x
+ */
+#define DOKAN_OPTION_DISPATCH_DRIVER_LOGS 16384
 
 /** @} */
 

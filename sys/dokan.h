@@ -283,6 +283,8 @@ typedef struct _DokanDiskControlBlock {
   // point yet.
   BOOLEAN MountPointDetermined;
 
+  // Whether to dispatch the driver logs to userland.
+  BOOLEAN DispatchDriverLogs;
   // Allow I/O requests to be conveyed to user mode in batches, rather than
   // strictly one for each DeviceIoControl that the DLL issues to fetch a
   // request.
@@ -1022,11 +1024,15 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
 // - STATUS_INVALID_PARAMETER if the string passed in triggers an access
 //   violation.
 // - STATUS_SUCCESS otherwise.
-NTSTATUS DokanNotifyReportChange0(__in PDokanFCB Fcb,
+NTSTATUS DokanNotifyReportChange0(__in PIRP Irp, 
+                                  __in PDokanFCB Fcb,
                                   __in PUNICODE_STRING FileName,
-                                  __in ULONG FilterMatch, __in ULONG Action);
+                                  __in ULONG FilterMatch,
+                                  __in ULONG Action);
 
-NTSTATUS DokanNotifyReportChange(__in PDokanFCB Fcb, __in ULONG FilterMatch,
+NTSTATUS DokanNotifyReportChange(__in PIRP Irp,
+                                 __in PDokanFCB Fcb,
+                                 __in ULONG FilterMatch,
                                  __in ULONG Action);
 
 // Ends all pending waits for directory change notifications.

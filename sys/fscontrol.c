@@ -386,9 +386,9 @@ DokanUserFsRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
                   pNotifyPath->CompletionFilter, pNotifyPath->Action,
                   receivedBuffer.Length, &receivedBuffer);
     DokanFCBLockRO(fcb);
-    status = DokanNotifyReportChange0(
-        fcb, &receivedBuffer, pNotifyPath->CompletionFilter,
-        pNotifyPath->Action);
+    status = DokanNotifyReportChange0(*pIrp, fcb, &receivedBuffer,
+                                      pNotifyPath->CompletionFilter,
+                                      pNotifyPath->Action);
     DokanFCBUnlock(fcb);
     if (status == STATUS_OBJECT_NAME_INVALID) {
       DokanCleanupAllChangeNotificationWaiters(fcb->Vcb);

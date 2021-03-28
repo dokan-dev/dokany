@@ -1338,10 +1338,10 @@ VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
   if (NT_SUCCESS(status)) {
     if (info == FILE_CREATED) {
       if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
+        DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
                                 FILE_ACTION_ADDED);
       } else {
-        DokanNotifyReportChange(fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+        DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
                                 FILE_ACTION_ADDED);
       }
     }

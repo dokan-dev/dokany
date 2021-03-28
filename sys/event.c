@@ -848,6 +848,13 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
   dcb->MountOptions = eventStart->Flags;
+  dcb->DispatchDriverLogs =
+      (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
+  if (dcb->DispatchDriverLogs) {
+    DOKAN_LOG("DISPATCH LOG ENABLED");
+    IncrementVcbLogCacheCount();
+  }
+
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;

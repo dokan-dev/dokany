@@ -33,28 +33,27 @@ DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer) {
   exceptRecord = ExceptionPointer->ExceptionRecord;
   exceptionCode = exceptRecord->ExceptionCode;
 
-  DOKAN_LOG("-------------------------------------------------------------");
-  DOKAN_LOG_("Exception happends in Dokan (code %xh):", exceptionCode);
-  DOKAN_LOG_(".exr %p;.cxr %p;", ExceptionPointer->ExceptionRecord,
+  DbgPrint("-------------------------------------------------------------\n");
+  DbgPrint("Exception happends in Dokan (code %xh):\n", exceptionCode);
+  DbgPrint(".exr %p;.cxr %p;\n", ExceptionPointer->ExceptionRecord,
            ExceptionPointer->ContextRecord);
-  DOKAN_LOG("-------------------------------------------------------------");
+  DbgPrint("-------------------------------------------------------------\n");
 
   if (FsRtlIsNtstatusExpected(exceptionCode)) {
     //
     // If the exception is expected execute our handler
     //
 
-    DOKAN_LOG_("DokanExceptionFilter: Catching exception %xh", exceptionCode);
+    DbgPrint("DokanExceptionFilter: Catching exception %xh\n", exceptionCode);
 
     status = EXCEPTION_EXECUTE_HANDLER;
 
   } else {
-
     //
     // Continue search for an higher level exception handler
     //
 
-    DOKAN_LOG_("DokanExceptionFilter: Passing on exception %#x", exceptionCode);
+    DbgPrint("DokanExceptionFilter: Passing on exception %#x\n", exceptionCode);
 
     status = EXCEPTION_CONTINUE_SEARCH;
   }

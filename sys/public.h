@@ -414,7 +414,8 @@ typedef struct _EVENT_INFORMATION {
 // but not those NTFS specific scenarios.
 #define DOKAN_EVENT_CASE_SENSITIVE                                  (1 << 8)
 // Enables unmounting of network drives via file explorer
-#define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                           (1 << 9)
+#define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                          (1 << 9)
+#define DOKAN_EVENT_DISPATCH_DRIVER_LOGS                            (1 << 10)
 
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
@@ -487,5 +488,15 @@ typedef struct _DOKAN_CONTROL {
   /** Contains information about the flags on the mount */
   ULONG MountOptions;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
+
+// Dokan Major IRP values dispatched to userland for custom request with
+// EVENT_CONTEXT.
+#define DOKAN_IRP_LOG_MESSAGE 0x20
+
+// Driver log message disptached during DOKAN_IRP_LOG_MESSAGE event.
+typedef struct _DOKAN_LOG_MESSAGE {
+  ULONG MessageLength;
+  CHAR Message[1];
+} DOKAN_LOG_MESSAGE, *PDOKAN_LOG_MESSAGE;
 
 #endif // PUBLIC_H_
