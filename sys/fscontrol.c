@@ -190,7 +190,7 @@ NTSTATUS DokanOplockRequest(__in PIRP *pIrp) {
       DokanFCBLockRW(fcb);
       acquiredFcb = TRUE;
 
-      if (!(dcb->MountOptions & DOKAN_EVENT_FILELOCK_USER_MODE)) {
+      if (!dcb->FileLockInUserMode) {
 
         if (FsRtlOplockIsSharedRequest(irp)) {
           //

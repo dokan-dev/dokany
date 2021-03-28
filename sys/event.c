@@ -663,6 +663,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   ULONG deviceNamePos;
   BOOLEAN useMountManager = FALSE;
   BOOLEAN mountGlobally = TRUE;
+  BOOLEAN fileLockUserMode = FALSE;
   BOOLEAN fcbGcEnabled = FALSE;
   ULONG sessionId = (ULONG)-1;
   BOOLEAN startFailure = FALSE;
@@ -763,6 +764,7 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 
   if (eventStart->Flags & DOKAN_EVENT_FILELOCK_USER_MODE) {
     DOKAN_LOG_FINE_IRP(Irp, "FileLock in User Mode");
+    fileLockUserMode = TRUE;
   }
 
   if (eventStart->Flags & DOKAN_EVENT_ENABLE_FCB_GC) {
@@ -850,11 +852,12 @@ DokanEventStart(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   dcb->MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
       (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
+
   if (dcb->DispatchDriverLogs) {
-    DOKAN_LOG("DISPATCH LOG ENABLED");
     IncrementVcbLogCacheCount();
   }
 
+  dcb->FileLockInUserMode = fileLockUserMode;
   driverInfo->DeviceNumber = dokanGlobal->MountId;
   driverInfo->MountId = dokanGlobal->MountId;
   driverInfo->Status = DOKAN_MOUNTED;
