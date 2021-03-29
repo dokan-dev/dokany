@@ -304,19 +304,19 @@ NTSTATUS
 DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PVOID buffer;
-  FS_INFORMATION_CLASS FsInformationClass;
+  FS_INFORMATION_CLASS fsInformationClass;
 
   if (!RequestContext->Vcb) {
     return STATUS_INVALID_PARAMETER;
   }
 
   buffer = RequestContext->Irp->AssociatedIrp.SystemBuffer;
-  FsInformationClass =
+  fsInformationClass =
       RequestContext->IrpSp->Parameters.SetVolume.FsInformationClass;
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p FsInfoClass=%s",
                      RequestContext->IrpSp->FileObject,
-                     DokanGetFsInformationClassStr(FsInformationClass));
-  switch (FsInformationClass) {
+                     DokanGetFsInformationClassStr(fsInformationClass));
+  switch (fsInformationClass) {
     case FileFsLabelInformation: {
       if (sizeof(FILE_FS_LABEL_INFORMATION) >
           RequestContext->IrpSp->Parameters.SetVolume.Length) {
@@ -346,7 +346,7 @@ DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
     }
     default:
       DOKAN_LOG_FINE_IRP(RequestContext, "Unsupported FsInfoClass %x",
-                         FsInformationClass);
+                         fsInformationClass);
   }
 
   return status;
