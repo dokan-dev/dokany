@@ -1109,7 +1109,6 @@ VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
 
   UNREFERENCED_PARAMETER(RequestContext);
 
-  ASSERT(GetIdentifierType(Dcb) == DCB);
   vcb = Dcb->Vcb;
 
   if (Dcb->SymbolicLinkName == NULL) {

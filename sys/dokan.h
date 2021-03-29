@@ -790,22 +790,32 @@ struct SYMLINK_ECP_CONTEXT {
 
 DRIVER_INITIALIZE DriverEntry;
 
-__drv_dispatchType(IRP_MJ_CREATE) __drv_dispatchType(IRP_MJ_CLOSE)
-    __drv_dispatchType(IRP_MJ_READ) __drv_dispatchType(IRP_MJ_WRITE)
-        __drv_dispatchType(IRP_MJ_FLUSH_BUFFERS) __drv_dispatchType(
-            IRP_MJ_CLEANUP) __drv_dispatchType(IRP_MJ_DEVICE_CONTROL)
-            __drv_dispatchType(IRP_MJ_FILE_SYSTEM_CONTROL) __drv_dispatchType(
-                IRP_MJ_DIRECTORY_CONTROL)
-                __drv_dispatchType(IRP_MJ_QUERY_INFORMATION) __drv_dispatchType(
-                    IRP_MJ_SET_INFORMATION)
-                    __drv_dispatchType(IRP_MJ_QUERY_VOLUME_INFORMATION)
-                        __drv_dispatchType(IRP_MJ_SET_VOLUME_INFORMATION)
-                            __drv_dispatchType(IRP_MJ_SHUTDOWN)
-                                __drv_dispatchType(IRP_MJ_LOCK_CONTROL)
-                                    __drv_dispatchType(IRP_MJ_QUERY_SECURITY)
-                                        __drv_dispatchType(
-                                            IRP_MJ_SET_SECURITY) NTSTATUS
-    DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+// Redefine wdm DRIVER_DISPATCH with APC_LEVEL max level
+_Function_class_(DRIVER_DISPATCH)
+_IRQL_requires_max_(APC_LEVEL)
+_IRQL_requires_same_
+typedef NTSTATUS DOKAN_DISPATCH(_In_ struct _DEVICE_OBJECT *DeviceObject,
+                   _Inout_ struct _IRP *Irp);
+// clang-format off
+_Dispatch_type_(IRP_MJ_CREATE)
+_Dispatch_type_(IRP_MJ_CLOSE)
+_Dispatch_type_(IRP_MJ_READ)
+_Dispatch_type_(IRP_MJ_WRITE)
+_Dispatch_type_(IRP_MJ_FLUSH_BUFFERS)
+_Dispatch_type_(IRP_MJ_CLEANUP)
+_Dispatch_type_(IRP_MJ_DEVICE_CONTROL)
+_Dispatch_type_(IRP_MJ_FILE_SYSTEM_CONTROL)
+_Dispatch_type_(IRP_MJ_DIRECTORY_CONTROL)
+_Dispatch_type_(IRP_MJ_QUERY_INFORMATION)
+_Dispatch_type_(IRP_MJ_SET_INFORMATION)
+_Dispatch_type_(IRP_MJ_QUERY_VOLUME_INFORMATION)
+_Dispatch_type_(IRP_MJ_SET_VOLUME_INFORMATION)
+_Dispatch_type_(IRP_MJ_SHUTDOWN)
+_Dispatch_type_(IRP_MJ_LOCK_CONTROL)
+_Dispatch_type_(IRP_MJ_QUERY_SECURITY)
+_Dispatch_type_(IRP_MJ_SET_SECURITY)
+DOKAN_DISPATCH DokanBuildRequest;
+// clang-format on
 
 // Build a REQUEST_CONTEXT that holds the Irp, IrpSp and other device
 // information that will be passed during all the context of the request. This

@@ -22,21 +22,13 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-NTSTATUS
-DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  BOOLEAN atIrqlPassiveLevel = FALSE;
+NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN isTopLevelIrp = FALSE;
   NTSTATUS status = STATUS_UNSUCCESSFUL;
 
-  __try {
+  FsRtlEnterFileSystem();
 
     __try {
-
-      atIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
-
-      if (atIrqlPassiveLevel) {
-        FsRtlEnterFileSystem();
-      }
 
       if (!IoGetTopLevelIrp()) {
         isTopLevelIrp = TRUE;
@@ -46,41 +38,26 @@ DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       status = DokanDispatchRequest(DeviceObject, Irp);
 
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
-
       status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
     }
-
-  } __finally {
 
     if (isTopLevelIrp) {
       IoSetTopLevelIrp(NULL);
     }
 
-    if (atIrqlPassiveLevel) {
       FsRtlExitFileSystem();
-    }
-  }
 
   return status;
 }
 
-VOID
-DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
+VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                      __in NTSTATUS Status) {
-  BOOLEAN atIrqlPassiveLevel = FALSE;
   BOOLEAN isTopLevelIrp = FALSE;
   PEVENT_INFORMATION eventInfo = NULL;
 
-  __try {
-
-    __try {
-
-      atIrqlPassiveLevel = (KeGetCurrentIrql() == PASSIVE_LEVEL);
-
-      if (atIrqlPassiveLevel) {
         FsRtlEnterFileSystem();
-      }
 
+  __try {
       if (!IoGetTopLevelIrp()) {
         isTopLevelIrp = TRUE;
         IoSetTopLevelIrp(RequestContext->Irp);
@@ -98,8 +75,6 @@ DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                             GetExceptionCode());
     }
 
-  } __finally {
-
     if (eventInfo != NULL) {
       ExFreePool(eventInfo);
     }
@@ -108,11 +83,8 @@ DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
       IoSetTopLevelIrp(NULL);
     }
 
-    if (atIrqlPassiveLevel) {
       FsRtlExitFileSystem();
     }
-  }
-}
 
 NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
                                   _In_ PIRP Irp,
