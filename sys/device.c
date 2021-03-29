@@ -731,6 +731,10 @@ IsVolumeOpen(__in PDokanVCB Vcb, __in PFILE_OBJECT FileObject) {
 }
 
 NTSTATUS DokanGetVolumeMetrics(__in PREQUEST_CONTEXT RequestContext) {
+  // TODO(adrienj): Remove the check when moving to FSCTL only.
+  if (RequestContext->Vcb == NULL) {
+    return STATUS_INVALID_PARAMETER;
+  }
   VOLUME_METRICS* outputBuffer;
   if (!PREPARE_OUTPUT(RequestContext->Irp, outputBuffer,
                       /*SetInformationOnFailure=*/TRUE)) {

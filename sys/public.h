@@ -34,42 +34,67 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #define IOCTL_GET_VERSION                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_VERSION \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_SET_DEBUG_MODE                                                   \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SET_DEBUG_MODE \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_WAIT                                                       \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_WAIT \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_INFO                                                       \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_INFO \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_RELEASE                                                    \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_RELEASE \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_START                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_START \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_WRITE                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x806, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_WRITE \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x806, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
 
 #define IOCTL_KEEPALIVE                                                        \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x809, METHOD_NEITHER, FILE_ANY_ACCESS)
+// No IOCTL version as this is now deprecated
 
 #define IOCTL_SERVICE_WAIT                                                     \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_SERVICE_WAIT \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_RESET_TIMEOUT                                                    \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80B, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_RESET_TIMEOUT \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80B, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_GET_ACCESS_TOKEN                                                 \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80C, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_ACCESS_TOKEN \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80C, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_EVENT_MOUNTPOINT_LIST                                            \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80D, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_EVENT_MOUNTPOINT_LIST \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80D, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_MOUNTPOINT_CLEANUP                                               \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_MOUNTPOINT_CLEANUP                                               \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 // DeviceIoControl code to send to a keepalive handle to activate it (see the
 // documentation for the keepalive flags in the DokanFCB struct).
@@ -84,6 +109,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 // volume.
 #define IOCTL_GET_VOLUME_METRICS                                               \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_GET_VOLUME_METRICS \
+  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define DRIVER_FUNC_INSTALL 0x01
 #define DRIVER_FUNC_REMOVE 0x02

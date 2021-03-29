@@ -288,17 +288,16 @@ NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
 }
 
 NTSTATUS
-DokanUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext);
+
+NTSTATUS
+DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   PFILE_OBJECT fileObject = NULL;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
                     IRP_MJ_FILE_SYSTEM_CONTROL);
 
-  DOKAN_LOG_IOCTL(RequestContext,
-      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode,
-      "FileObject=%p", RequestContext->IrpSp->FileObject)
   switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
     case FSCTL_ACTIVATE_KEEPALIVE: {
       fileObject = RequestContext->IrpSp->FileObject;
@@ -371,8 +370,8 @@ DokanUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
                          pNotifyPath->CompletionFilter, pNotifyPath->Action,
                          receivedBuffer.Length, &receivedBuffer);
       DokanFCBLockRO(fcb);
-      status = DokanNotifyReportChange0(RequestContext, fcb, &receivedBuffer,
-                                        pNotifyPath->CompletionFilter,
+      NTSTATUS status = DokanNotifyReportChange0(
+          RequestContext, fcb, &receivedBuffer, pNotifyPath->CompletionFilter,
                                         pNotifyPath->Action);
       DokanFCBUnlock(fcb);
       if (status == STATUS_OBJECT_NAME_INVALID) {
@@ -400,11 +399,104 @@ DokanUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
     case FSCTL_GET_REPARSE_POINT:
       return STATUS_NOT_A_REPARSE_POINT;
   }
+  // TODO(someone): Find if there is a way to send FSCTL to Disk type for DokanRedirector
+  if (RequestContext->Dcb && RequestContext->Dcb->VolumeDeviceType ==
+                                 FILE_DEVICE_NETWORK_FILE_SYSTEM) {
+    NTSTATUS status = DokanDiskUserFsRequest(RequestContext);
+    if (status != STATUS_INVALID_DEVICE_REQUEST) {
+      return status;
+    }
+  }
   DOKAN_LOG_FINE_IRP(
       RequestContext, "Unsupported FsControlCode %x",
       RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode);
-  return status;
+  return STATUS_INVALID_DEVICE_REQUEST;
 }
+
+NTSTATUS
+DokanGlobalUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
+  switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
+    case FSCTL_EVENT_START:
+      return DokanEventStart(RequestContext);
+
+    case FSCTL_SET_DEBUG_MODE: {
+      PULONG pDebug = NULL;
+      GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, pDebug)
+      g_Debug = *pDebug;
+      DOKAN_LOG_FINE_IRP(RequestContext, "Set debug mode: %d", g_Debug);
+      return STATUS_SUCCESS;
+    };
+
+    case FSCTL_EVENT_RELEASE:
+      return DokanGlobalEventRelease(RequestContext);
+
+    case FSCTL_EVENT_MOUNTPOINT_LIST:
+      return DokanGetMountPointList(RequestContext);
+
+    case FSCTL_GET_VERSION: {
+      ULONG *version;
+      if (!PREPARE_OUTPUT(RequestContext->Irp, version,
+                          /*SetInformationOnFailure=*/FALSE)) {
+        return STATUS_BUFFER_TOO_SMALL;
+      }
+      *version = (ULONG)DOKAN_DRIVER_VERSION;
+      return STATUS_SUCCESS;
+    };
+
+    case FSCTL_MOUNTPOINT_CLEANUP:
+      RemoveSessionDevices(RequestContext, GetCurrentSessionId(RequestContext));
+      return STATUS_SUCCESS;
+  }
+  DOKAN_LOG_FINE_IRP(
+      RequestContext, "Unsupported FsControlCode %x",
+      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode);
+  return STATUS_INVALID_DEVICE_REQUEST;
+}
+
+NTSTATUS
+DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
+  REQUEST_CONTEXT requestContext = *RequestContext;
+  // TODO(adrienj): Fake the request target the Vcb until we migrate the
+  // following function to expected being called to a Dcb.
+  requestContext.Vcb = requestContext.Dcb->Vcb;
+  switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
+    case FSCTL_EVENT_WAIT:
+      return DokanRegisterPendingIrpForEvent(&requestContext);
+    case FSCTL_EVENT_INFO:
+      return DokanCompleteIrp(&requestContext);
+    case FSCTL_EVENT_RELEASE:
+      return DokanEventRelease(&requestContext, requestContext.Vcb->DeviceObject);
+    case FSCTL_EVENT_WRITE:
+      return DokanEventWrite(&requestContext);
+    case FSCTL_GET_VOLUME_METRICS:
+      return DokanGetVolumeMetrics(&requestContext);
+    case FSCTL_RESET_TIMEOUT:
+      return DokanResetPendingIrpTimeout(&requestContext);
+    case FSCTL_GET_ACCESS_TOKEN:
+      return DokanGetAccessToken(&requestContext);
+  }
+  DOKAN_LOG_FINE_IRP(
+      RequestContext, "Unsupported FsControlCode %x",
+      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode);
+  return STATUS_INVALID_DEVICE_REQUEST;
+}
+
+NTSTATUS
+DokanUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
+  DOKAN_LOG_IOCTL(
+      RequestContext,
+      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode,
+      "FileObject=%p", RequestContext->IrpSp->FileObject)
+  if (RequestContext->DokanGlobal) {
+    return DokanGlobalUserFsRequest(RequestContext);
+  } else if (RequestContext->Vcb) {
+    return DokanVolumeUserFsRequest(RequestContext);
+  } else if (RequestContext->Dcb) {
+    return DokanDiskUserFsRequest(RequestContext);
+  }
+  return STATUS_INVALID_DEVICE_REQUEST;
+}
+
 
 // Returns TRUE if |dcb| type matches |DCB| and FALSE otherwise.
 BOOLEAN MatchDokanDCBType(__in PREQUEST_CONTEXT RequestContext,

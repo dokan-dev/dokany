@@ -94,7 +94,8 @@ NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
   RequestContext->Irp = Irp;
   RequestContext->Irp->IoStatus.Information = 0;
   RequestContext->IrpSp = IoGetCurrentIrpStackLocation(Irp);
-  if (RequestContext->IrpSp->MajorFunction != IRP_MJ_FILE_SYSTEM_CONTROL &&
+  if (!(RequestContext->IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&
+        RequestContext->IrpSp->MinorFunction == IRP_MN_MOUNT_VOLUME) &&
       RequestContext->DeviceObject) {
     switch (GetIdentifierType(DeviceObject->DeviceExtension)) {
       case DGL:

@@ -934,6 +934,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext);
 NTSTATUS
 DokanEventWrite(__in PREQUEST_CONTEXT RequestContext);
 
+NTSTATUS DokanGetVolumeMetrics(__in PREQUEST_CONTEXT RequestContext);
+
 PEVENT_CONTEXT
 AllocateEventContextRaw(__in ULONG EventContextLength);
 

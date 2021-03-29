@@ -144,7 +144,13 @@ VOID IncrementVcbLogCacheCount();
 #define DOKAN_DENIED_LOG_EVENT(IrpSp)                                      \
   (IrpSp->MajorFunction == IRP_MJ_DEVICE_CONTROL &&                        \
    (IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_WAIT || \
-    IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_INFO))
+    IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_INFO)) || \
+      (IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&                 \
+       IrpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&                     \
+       (IrpSp->Parameters.FileSystemControl.FsControlCode ==                 \
+            IOCTL_EVENT_WAIT ||                                              \
+        IrpSp->Parameters.FileSystemControl.FsControlCode ==                 \
+            IOCTL_EVENT_INFO))
 
 // Log the Irp FSCTL or IOCTL Control code.
 #define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)          \
@@ -170,17 +176,19 @@ VOID IncrementVcbLogCacheCount();
                    RequestContext->ProcessId)
 
 // Log the Irp on exit of the dispatch.
-#define DOKAN_LOG_END_MJ(RequestContext, Status)                       \
-  {                                                                    \
-    if (RequestContext->DoNotComplete) {                               \
-      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s", \
-                         DokanGetNTSTATUSStr(Status));                 \
-    } else {                                                           \
-      DOKAN_LOG_FINE_IRP(RequestContext, "End - %s Information=%llx",  \
-                         DokanGetNTSTATUSStr(Status),                  \
-                         RequestContext->Irp->IoStatus.Information);   \
-    }                                                                  \
-    DokanCompleteIrpRequest(RequestContext->Irp, Status);              \
+#define DOKAN_LOG_END_MJ(RequestContext, Status)                               \
+  {                                                                            \
+    if (RequestContext->DoNotComplete) {                                       \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s",         \
+                         DokanGetNTSTATUSStr(Status));                         \
+    } else {                                                                   \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - %s Information=%llx",          \
+                         DokanGetNTSTATUSStr(Status),                          \
+                         RequestContext->Irp->IoStatus.Information);           \
+    }                                                                          \
+    if (!RequestContext->DoNotComplete) {                                      \
+      DokanCompleteIrpRequest(RequestContext->Irp, Status);                    \
+    }                                                                          \
   }
 
 // Return the NTSTATUS define string name.

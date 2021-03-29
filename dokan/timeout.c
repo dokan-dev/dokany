@@ -59,7 +59,7 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
   eventInfo->Operation.ResetTimeout.Timeout = Timeout;
   GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH);
   status = SendToDevice(rawDeviceName,
-      IOCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
+      FSCTL_RESET_TIMEOUT, eventInfo, eventInfoSize, NULL, 0, &returnedLength);
   free(eventInfo);
   return status;
 }

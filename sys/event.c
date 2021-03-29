@@ -335,6 +335,11 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
 
 NTSTATUS
 DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext) {
+  // TODO(adrienj): Remove the check when moving to FSCTL only.
+  if (RequestContext->Vcb == NULL) {
+    return STATUS_INVALID_PARAMETER;
+  }
+
   if (IsUnmountPendingVcb(RequestContext->Vcb)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Volume is dismounted");
     return STATUS_NO_SUCH_DEVICE;
@@ -493,6 +498,10 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   buffer = (PCHAR)RequestContext->Irp->AssociatedIrp.SystemBuffer;
   ASSERT(buffer != NULL);
 
+  // TODO(adrienj): Remove the check when moving to FSCTL only.
+  if (RequestContext->Vcb == NULL) {
+    return STATUS_INVALID_PARAMETER;
+  }
   if (IsUnmountPendingVcb(RequestContext->Vcb)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted");
     return STATUS_NO_SUCH_DEVICE;

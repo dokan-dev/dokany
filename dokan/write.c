@@ -32,7 +32,7 @@ BOOL SendWriteRequest(_In_ HANDLE Handle, _In_ PEVENT_INFORMATION EventInfo,
   DbgPrint("SendWriteRequest\n");
 
   status = DeviceIoControl(Handle,            // Handle to device
-                           IOCTL_EVENT_WRITE, // IO Control code
+                           FSCTL_EVENT_WRITE, // IO Control code
                            EventInfo,         // Input Buffer to driver.
                            EventLength,     // Length of input buffer in bytes.
                            Buffer,          // Output Buffer from driver.

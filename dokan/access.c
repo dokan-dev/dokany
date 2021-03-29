@@ -64,7 +64,7 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
   GetRawDeviceName(instance->DeviceName, rawDeviceName, MAX_PATH);
   status = SendToDevice(
       rawDeviceName,
-      IOCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
+      FSCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
       eventInfoSize, &returnedLength);
   if (status) {
     handle = eventInfo->Operation.AccessToken.Handle;

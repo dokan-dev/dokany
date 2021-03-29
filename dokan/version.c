@@ -29,7 +29,7 @@ ULONG DOKANAPI DokanDriverVersion() {
   ULONG version = 0;
   ULONG ret = 0;
 
-  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, IOCTL_GET_VERSION,
+  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_GET_VERSION,
                    NULL,          // InputBuffer
                    0,             // InputLength
                    &version,      // OutputBuffer
