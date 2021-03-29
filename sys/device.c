@@ -71,6 +71,9 @@ GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
 
   default:
     status = STATUS_INVALID_PARAMETER;
+    DOKAN_LOG_FINE_IRP(
+        RequestContext, "Unsupported IoControlCode %x",
+        RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
     break;
   }
 
@@ -683,6 +686,9 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
     default:
       status = STATUS_INVALID_DEVICE_REQUEST;
+      DOKAN_LOG_FINE_IRP(
+          RequestContext, "Unsupported IoControlCode %x",
+          RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
       break;
   }
 
@@ -785,6 +791,18 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
       status = DokanGetAccessToken(RequestContext);
       break;
     default: {
+      // TODO: The early check fails some IFSTEST (Network) should make
+      // an exception for them. Disabling the volume open check for now.
+      // Device control functions are only supposed to work on a volume handle.
+      // Some win32 functions, like GetVolumePathName, rely on these operations
+      // failing for file/directory handles. On the other hand, dokan issues its
+      // custom operations on non-volume handles, so we can't do this check at
+      // the top.
+      /*if (!IsVolumeOpen(RequestContext->Vcb,
+                        RequestContext->IrpSp->FileObject)) {
+        status = STATUS_INVALID_PARAMETER;
+        break;
+      }*/
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
       status = STATUS_NOT_IMPLEMENTED;
@@ -798,13 +816,10 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
         status = DiskDeviceControlWithLock(RequestContext,
                                            RequestContext->Dcb->DeviceObject);
       }
-      // Device control functions are only supposed to work on a volume handle.
-      // Some win32 functions, like GetVolumePathName, rely on these operations
-      // failing for file/directory handles. On the other hand, dokan issues its
-      // custom operations on non-volume handles, so we can't do this check at
-      // the top.
-      if (!IsVolumeOpen(RequestContext->Vcb, RequestContext->IrpSp->FileObject)) {
-        status = STATUS_INVALID_PARAMETER;
+      if (status == STATUS_NOT_IMPLEMENTED) {
+        DOKAN_LOG_FINE_IRP(
+            RequestContext, "Unsupported IoControlCode %x",
+            RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
       }
     } break;
   }  // switch IoControlCode
