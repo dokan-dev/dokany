@@ -88,7 +88,8 @@ DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
       goto errorout;
     }
 
-    DokanCompleteIrpRequest(Irp, status, 0);
+    Irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(Irp, status);
   }
 
   else {

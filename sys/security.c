@@ -23,317 +23,240 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  PIO_STACK_LOCATION irpSp;
+DokanDispatchQuerySecurity(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PFILE_OBJECT fileObject;
-  ULONG info = 0;
   ULONG bufferLength;
   PSECURITY_INFORMATION securityInfo;
   PDokanFCB fcb = NULL;
-  PDokanDCB dcb;
-  PDokanVCB vcb;
   PDokanCCB ccb;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
-  ULONG flags = 0;
 
-  __try {
-    DOKAN_LOG_BEGIN_MJ(Irp);
+  fileObject = RequestContext->IrpSp->FileObject;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    fileObject = irpSp->FileObject;
-    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
-
-    if (fileObject == NULL) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    vcb = DeviceObject->DeviceExtension;
-    if (GetIdentifierType(vcb) != VCB) {
-      DOKAN_LOG_FINE_IRP(Irp, "Invalid extension type");
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-    dcb = vcb->Dcb;
-
-    ccb = fileObject->FsContext2;
-    if (ccb == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "Ccb == NULL");
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-    fcb = ccb->Fcb;
-    if (fcb == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "FCB == NULL");
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-
-    bufferLength = irpSp->Parameters.QuerySecurity.Length;
-    securityInfo = &irpSp->Parameters.QuerySecurity.SecurityInformation;
-
-    if (*securityInfo & OWNER_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "OWNER_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & GROUP_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "GROUP_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & DACL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "DACL_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & SACL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "SACL_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & LABEL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "LABEL_SECURITY_INFORMATION");
-    }
-
-    DokanFCBLockRO(fcb);
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-    eventContext = AllocateEventContext(dcb, Irp, eventLength, ccb);
-
-    if (eventContext == NULL) {
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-
-    if (Irp->UserBuffer != NULL && bufferLength > 0) {
-      // make a MDL for UserBuffer that can be used later on another thread
-      // context
-      if (Irp->MdlAddress == NULL) {
-        status = DokanAllocateMdl(Irp, bufferLength);
-        if (!NT_SUCCESS(status)) {
-          DokanFreeEventContext(eventContext);
-          __leave;
-        }
-        flags = DOKAN_MDL_ALLOCATED;
-      }
-    }
-
-    eventContext->Context = ccb->UserContext;
-    eventContext->Operation.Security.SecurityInformation = *securityInfo;
-    eventContext->Operation.Security.BufferLength = bufferLength;
-
-    eventContext->Operation.Security.FileNameLength = fcb->FileName.Length;
-    RtlCopyMemory(eventContext->Operation.Security.FileName,
-                  fcb->FileName.Buffer, fcb->FileName.Length);
-
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
-
-  } __finally {
-    if (fcb)
-      DokanFCBUnlock(fcb);
-
-    DOKAN_LOG_END_MJ(Irp, status, info);
-    DokanCompleteIrpRequest(Irp, status, info);
+  if (fileObject == NULL || !RequestContext->Vcb ||
+      !DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
+    return STATUS_INVALID_PARAMETER;
   }
 
-  return status;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
+
+  fcb = ccb->Fcb;
+  if (fcb == NULL) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "FCB == NULL");
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  bufferLength = RequestContext->IrpSp->Parameters.QuerySecurity.Length;
+  securityInfo =
+      &RequestContext->IrpSp->Parameters.QuerySecurity.SecurityInformation;
+
+  if (*securityInfo & OWNER_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "OWNER_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & GROUP_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "GROUP_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & DACL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "DACL_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & SACL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "SACL_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & LABEL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "LABEL_SECURITY_INFORMATION");
+  }
+
+  DokanFCBLockRO(fcb);
+  eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+  eventContext =
+      AllocateEventContext(RequestContext, sizeof(EVENT_CONTEXT), ccb);
+
+  if (eventContext == NULL) {
+  	DokanFCBUnlock(fcb);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  if (RequestContext->Irp->UserBuffer != NULL && bufferLength > 0) {
+    // make a MDL for UserBuffer that can be used later on another thread
+    // context
+    if (RequestContext->Irp->MdlAddress == NULL) {
+      status = DokanAllocateMdl(RequestContext, bufferLength);
+      if (!NT_SUCCESS(status)) {
+        DokanFreeEventContext(eventContext);
+        DokanFCBUnlock(fcb);
+        return status;
+      }
+      RequestContext->Flags = DOKAN_MDL_ALLOCATED;
+    }
+  }
+
+  eventContext->Context = ccb->UserContext;
+  eventContext->Operation.Security.SecurityInformation = *securityInfo;
+  eventContext->Operation.Security.BufferLength = bufferLength;
+
+  eventContext->Operation.Security.FileNameLength = fcb->FileName.Length;
+  RtlCopyMemory(eventContext->Operation.Security.FileName,
+                fcb->FileName.Buffer, fcb->FileName.Length);
+  DokanFCBUnlock(fcb);
+  return DokanRegisterPendingIrp(RequestContext, eventContext);
 }
 
-VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteQuerySecurity(__in PREQUEST_CONTEXT RequestContext,
                                 __in PEVENT_INFORMATION EventInfo) {
-  PIRP irp;
-  PIO_STACK_LOCATION irpSp;
-  NTSTATUS status;
   PVOID buffer = NULL;
   ULONG bufferLength;
-  ULONG info = 0;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
 
-  irp = IrpEntry->Irp;
-  irpSp = IrpEntry->IrpSp;
-  fileObject = IrpEntry->FileObject;
+  fileObject = RequestContext->IrpSp->FileObject;
   ASSERT(fileObject != NULL);
 
-  DOKAN_LOG_BEGIN_MJ(irp);
-  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-  if (irp->MdlAddress) {
-    buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
+  if (RequestContext->Irp->MdlAddress) {
+    buffer =
+        MmGetSystemAddressForMdlNormalSafe(RequestContext->Irp->MdlAddress);
   }
 
-  bufferLength = irpSp->Parameters.QuerySecurity.Length;
+  bufferLength = RequestContext->IrpSp->Parameters.QuerySecurity.Length;
 
   if (EventInfo->Status == STATUS_SUCCESS &&
       EventInfo->BufferLength <= bufferLength && buffer != NULL) {
     if (!RtlValidRelativeSecurityDescriptor(
             EventInfo->Buffer, EventInfo->BufferLength,
-            irpSp->Parameters.QuerySecurity.SecurityInformation)) {
+            RequestContext->IrpSp->Parameters.QuerySecurity
+                .SecurityInformation)) {
       // No valid security descriptor to return.
-      DOKAN_LOG_FINE_IRP(irp, "Security Descriptor is not valid.");
-      info = 0;
-      status = STATUS_INVALID_PARAMETER;
+      DOKAN_LOG_FINE_IRP(RequestContext, "Security Descriptor is not valid.");
+      RequestContext->Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
     } else {
       RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-      info = EventInfo->BufferLength;
-      status = STATUS_SUCCESS;
+      RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+      RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
     }
   } else if (EventInfo->Status == STATUS_BUFFER_OVERFLOW ||
              (EventInfo->Status == STATUS_SUCCESS &&
               bufferLength < EventInfo->BufferLength)) {
-    info = EventInfo->BufferLength;
-    status = STATUS_BUFFER_OVERFLOW;
+    RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+    RequestContext->Irp->IoStatus.Status = STATUS_BUFFER_OVERFLOW;
 
   } else {
-    info = 0;
-    status = EventInfo->Status;
+    RequestContext->Irp->IoStatus.Status = EventInfo->Status;
   }
 
-  if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
-    DokanFreeMdl(irp);
-    IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+  if (RequestContext->Flags & DOKAN_MDL_ALLOCATED) {
+    DokanFreeMdl(RequestContext->Irp);
+    RequestContext->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
 
   ccb = fileObject->FsContext2;
   if (ccb != NULL) {
     ccb->UserContext = EventInfo->Context;
   } else {
-    DOKAN_LOG_FINE_IRP(irp, "Ccb == NULL");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Ccb == NULL");
   }
-
-  DOKAN_LOG_END_MJ(irp, status, info);
-  DokanCompleteIrpRequest(irp, status, info);
 }
 
 NTSTATUS
-DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  PIO_STACK_LOCATION irpSp;
-  PDokanVCB vcb;
-  PDokanDCB dcb;
+DokanDispatchSetSecurity(__in PREQUEST_CONTEXT RequestContext) {
   PDokanCCB ccb;
   PDokanFCB fcb = NULL;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PFILE_OBJECT fileObject;
-  ULONG info = 0;
   PSECURITY_INFORMATION securityInfo;
   PSECURITY_DESCRIPTOR securityDescriptor;
   ULONG securityDescLength;
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
 
-  __try {
-    DOKAN_LOG_BEGIN_MJ(Irp);
+  fileObject = RequestContext->IrpSp->FileObject;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    fileObject = irpSp->FileObject;
-    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
-
-    if (fileObject == NULL) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    vcb = DeviceObject->DeviceExtension;
-    if (GetIdentifierType(vcb) != VCB) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-    dcb = vcb->Dcb;
-
-    ccb = fileObject->FsContext2;
-    if (ccb == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "ccb == NULL");
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-    fcb = ccb->Fcb;
-    if (fcb == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "FCB == NULL");
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-    DokanFCBLockRO(fcb);
-
-    securityInfo = &irpSp->Parameters.SetSecurity.SecurityInformation;
-
-    if (*securityInfo & OWNER_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "OWNER_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & GROUP_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "GROUP_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & DACL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "DACL_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & SACL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "SACL_SECURITY_INFORMATION");
-    }
-    if (*securityInfo & LABEL_SECURITY_INFORMATION) {
-      DOKAN_LOG_FINE_IRP(Irp, "LABEL_SECURITY_INFORMATION");
-    }
-
-    securityDescriptor = irpSp->Parameters.SetSecurity.SecurityDescriptor;
-
-    // Assumes the parameter is self relative SD.
-    securityDescLength = RtlLengthSecurityDescriptor(securityDescriptor);
-
-    // PSECURITY_DESCRIPTOR has to be aligned to a 4-byte boundary for use with win32 functions.
-    // So we add 3 bytes here, to make sure we have extra room to align BufferOffset.
-    eventLength =
-        sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length + 3;
-
-    if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
-      // TODO: Handle this case like DispatchWrite.
-      DOKAN_LOG_FINE_IRP(Irp, "SecurityDescriptor is too big: %d (limit %d)",
-                eventLength, EVENT_CONTEXT_MAX_SIZE);
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-
-    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
-
-    if (eventContext == NULL) {
-      status = STATUS_INSUFFICIENT_RESOURCES;
-      __leave;
-    }
-    eventContext->Context = ccb->UserContext;
-    eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
-    eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
-
-    // Align BufferOffset by adding 3, then zeroing the last 2 bits.
-    eventContext->Operation.SetSecurity.BufferOffset =
-        (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-         fcb->FileName.Length + sizeof(WCHAR) + 3) & ~0x03;
-
-    RtlCopyMemory((PCHAR)eventContext +
-                      eventContext->Operation.SetSecurity.BufferOffset,
-                  securityDescriptor, securityDescLength);
-
-    eventContext->Operation.SetSecurity.FileNameLength = fcb->FileName.Length;
-    RtlCopyMemory(eventContext->Operation.SetSecurity.FileName,
-                  fcb->FileName.Buffer, fcb->FileName.Length);
-
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
-
-  } __finally {
-    if (fcb)
-      DokanFCBUnlock(fcb);
-
-    DOKAN_LOG_END_MJ(Irp, status, info);
-    DokanCompleteIrpRequest(Irp, status, info);
+  if (fileObject == NULL || !RequestContext->Vcb ||
+      !DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
+    return STATUS_INVALID_PARAMETER;
   }
 
-  return status;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
+
+  fcb = ccb->Fcb;
+  if (fcb == NULL) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "FCB == NULL");
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  securityInfo =
+      &RequestContext->IrpSp->Parameters.SetSecurity.SecurityInformation;
+
+  if (*securityInfo & OWNER_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "OWNER_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & GROUP_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "GROUP_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & DACL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "DACL_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & SACL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "SACL_SECURITY_INFORMATION");
+  }
+  if (*securityInfo & LABEL_SECURITY_INFORMATION) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "LABEL_SECURITY_INFORMATION");
+  }
+
+  securityDescriptor =
+      RequestContext->IrpSp->Parameters.SetSecurity.SecurityDescriptor;
+
+  // Assumes the parameter is self relative SD.
+  securityDescLength = RtlLengthSecurityDescriptor(securityDescriptor);
+
+  // PSECURITY_DESCRIPTOR has to be aligned to a 4-byte boundary for use with
+  // win32 functions. So we add 3 bytes here, to make sure we have extra room to
+  // align BufferOffset.
+  eventLength = sizeof(EVENT_CONTEXT) + securityDescLength + 3;
+
+  if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
+    // TODO: Handle this case like DispatchWrite.
+    DOKAN_LOG_FINE_IRP(RequestContext, "SecurityDescriptor is too big: %d (limit %d)",
+                       eventLength, EVENT_CONTEXT_MAX_SIZE);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
+
+  if (eventContext == NULL) {
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+  eventContext->Context = ccb->UserContext;
+  eventContext->Operation.SetSecurity.SecurityInformation = *securityInfo;
+  eventContext->Operation.SetSecurity.BufferLength = securityDescLength;
+
+  // Align BufferOffset by adding 3, then zeroing the last 2 bits.
+  eventContext->Operation.SetSecurity.BufferOffset =
+      (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
+       sizeof(WCHAR) + 3) &
+      ~0x03;
+  RtlCopyMemory(
+      (PCHAR)eventContext + eventContext->Operation.SetSecurity.BufferOffset,
+      securityDescriptor, securityDescLength);
+
+  return DokanRegisterPendingIrp(RequestContext, eventContext);
 }
 
-VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteSetSecurity(__in PREQUEST_CONTEXT RequestContext,
                               __in PEVENT_INFORMATION EventInfo) {
-  PIRP irp;
-  PIO_STACK_LOCATION irpSp;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
 
-  irp = IrpEntry->Irp;
-  irpSp = IrpEntry->IrpSp;
-  fileObject = IrpEntry->FileObject;
+  fileObject = RequestContext->IrpSp->FileObject;
   ASSERT(fileObject != NULL);
-  DOKAN_LOG_BEGIN_MJ(irp);
-  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
+
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
   ccb = fileObject->FsContext2;
   if (ccb != NULL) {
@@ -341,16 +264,15 @@ VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
   } else {
-    DOKAN_LOG_FINE_IRP(irp, "Ccb == NULL");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Ccb == NULL");
   }
 
   if (fcb && NT_SUCCESS(EventInfo->Status)) {
     DokanFCBLockRO(fcb);
-    DokanNotifyReportChange(irp, fcb, FILE_NOTIFY_CHANGE_SECURITY,
+    DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SECURITY,
                             FILE_ACTION_MODIFIED);
     DokanFCBUnlock(fcb);
   }
 
-  DOKAN_LOG_END_MJ(irp, EventInfo->Status, 0);
-  DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
+  RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }

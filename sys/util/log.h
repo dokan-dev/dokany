@@ -48,7 +48,8 @@ typedef struct _DOKAN_LOG_CACHE {
 extern DOKAN_LOG_CACHE g_DokanLogEntryList;
 
 // Push log into the global log entry cache list.
-VOID PushDokanLogEntry(_In_opt_ PIRP Irp, _In_ PCSTR Format, ...);
+VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext,
+                       _In_ PCSTR Format, ...);
 
 // Remove all logs attached to a specific volume from the global cache.
 VOID CleanDokanLogEntry(_In_ PVOID Vcb);
@@ -56,7 +57,7 @@ VOID CleanDokanLogEntry(_In_ PVOID Vcb);
 // Whether the IRP log should be cached.
 // Used as an early check to unnecessary avoid computing the arguments when it
 // is not needed.
-BOOLEAN IsLogCacheEnabled(PIRP Irp);
+BOOLEAN IsLogCacheEnabled(_In_opt_ PVOID RequestContext);
 
 // Increment the active Volume having the cache log enabled and active the
 // global caching if not already.
@@ -76,29 +77,29 @@ VOID IncrementVcbLogCacheCount();
 #define DokanQuerySystemTime KeQuerySystemTime
 #endif
 
-#define DOKAN_PUSH_LOG(Irp, Format, ...)                                    \
-  {                                                                         \
-    LARGE_INTEGER SysTime;                                                  \
-    LARGE_INTEGER LocalTime;                                                \
-    TIME_FIELDS TimeFields;                                                 \
-    DokanQuerySystemTime(&SysTime);                                         \
-    ExSystemTimeToLocalTime(&SysTime, &LocalTime);                          \
-    RtlTimeToTimeFields(&LocalTime, &TimeFields);                           \
-    PushDokanLogEntry(Irp, "[%02d:%02d:%02d.%03d]" Format, TimeFields.Hour, \
-                      TimeFields.Minute, TimeFields.Second,                 \
-                      TimeFields.Milliseconds, __VA_ARGS__);                \
+#define DOKAN_PUSH_LOG(RequestContext, Format, ...)                          \
+  {                                                                          \
+    LARGE_INTEGER SysTime;                                                   \
+    LARGE_INTEGER LocalTime;                                                 \
+    TIME_FIELDS TimeFields;                                                  \
+    DokanQuerySystemTime(&SysTime);                                          \
+    ExSystemTimeToLocalTime(&SysTime, &LocalTime);                           \
+    RtlTimeToTimeFields(&LocalTime, &TimeFields);                            \
+    PushDokanLogEntry(RequestContext, "[%02d:%02d:%02d.%03d]" Format,        \
+                      TimeFields.Hour, TimeFields.Minute, TimeFields.Second, \
+                      TimeFields.Milliseconds, __VA_ARGS__);                 \
   }
 
 // Log and push to the cache the log message
-#define DOKAN_CACHED_LOG(Irp, Format, ...)                  \
-  {                                                         \
-    KIRQL Kirql = KeGetCurrentIrql();                       \
-    if (g_Debug) {                                          \
-      DDbgPrint("[%d]" Format, Kirql, __VA_ARGS__)          \
-    }                                                       \
-    if (Kirql == PASSIVE_LEVEL && IsLogCacheEnabled(Irp)) { \
-      DOKAN_PUSH_LOG(Irp, Format, __VA_ARGS__)              \
-    }                                                       \
+#define DOKAN_CACHED_LOG(RequestContext, Format, ...)                  \
+  {                                                                    \
+    KIRQL Kirql = KeGetCurrentIrql();                                  \
+    if (g_Debug) {                                                     \
+      DDbgPrint("[%d]" Format, Kirql, __VA_ARGS__)                     \
+    }                                                                  \
+    if (Kirql == PASSIVE_LEVEL && IsLogCacheEnabled(RequestContext)) { \
+      DOKAN_PUSH_LOG(RequestContext, Format, __VA_ARGS__)              \
+    }                                                                  \
   }
 
 // Log without caching the message. Must be only used for logging during the log
@@ -114,48 +115,72 @@ VOID IncrementVcbLogCacheCount();
 #define DOKAN_LOG_HEADER "[" __FUNCTION__ "]"
 
 // Internal formating log function.
-#define DOKAN_LOG_INTERNAL(Irp, Format, ...) \
-  DOKAN_CACHED_LOG(Irp, DOKAN_LOG_HEADER Format, __VA_ARGS__)
+#define DOKAN_LOG_INTERNAL(RequestContext, Format, ...)                    \
+  if (!RequestContext || !RequestContext->DoNotLogActivity) {              \
+    DOKAN_CACHED_LOG(RequestContext, DOKAN_LOG_HEADER Format, __VA_ARGS__) \
+  }
 
 // Default log function.
-#define DOKAN_LOG(Format) DOKAN_CACHED_LOG(NULL, DOKAN_LOG_HEADER ": " Format)
+#define DOKAN_LOG(Format)                                           \
+  {                                                                 \
+    PREQUEST_CONTEXT dRequestContext = NULL;                        \
+    DOKAN_CACHED_LOG(dRequestContext, DOKAN_LOG_HEADER ": " Format) \
+  }
 
 // Default log function with variable params.
-#define DOKAN_LOG_(Format, ...) \
-  DOKAN_LOG_INTERNAL(NULL, ": " Format, __VA_ARGS__)
+#define DOKAN_LOG_(Format, ...)                                   \
+  {                                                               \
+    PREQUEST_CONTEXT dRequestContext = NULL;                      \
+    DOKAN_LOG_INTERNAL(dRequestContext, ": " Format, __VA_ARGS__) \
+  }
 
 // Logging function that should be used in an Irp context.
-#define DOKAN_LOG_FINE_IRP(Irp, Format, ...) \
-  DOKAN_LOG_INTERNAL(Irp, "[%p]: " Format, Irp, __VA_ARGS__)
+#define DOKAN_LOG_FINE_IRP(RequestContext, Format, ...) \
+  DOKAN_LOG_INTERNAL(RequestContext, "[%p]: " Format,   \
+                     (RequestContext ? RequestContext->Irp : 0), __VA_ARGS__)
+
+// Only allow logging events that are not Wait & Info to avoid unnecessary log
+// flood
+#define DOKAN_DENIED_LOG_EVENT(IrpSp)                                      \
+  (IrpSp->MajorFunction == IRP_MJ_DEVICE_CONTROL &&                        \
+   (IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_WAIT || \
+    IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_INFO))
 
 // Log the Irp FSCTL or IOCTL Control code.
-#define DOKAN_LOG_IOCTL(Irp, ControlCode, format, ...) \
-  DOKAN_LOG_INTERNAL(Irp, "[%p][%s]: " format, Irp,    \
-                     DokanGetIoctlStr(ControlCode), __VA_ARGS__)
+#define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)          \
+  if (!RequestContext->DoNotLogActivity) {                                 \
+    DOKAN_LOG_INTERNAL(RequestContext, "[%p][%s]: " format,                \
+                       RequestContext->Irp, DokanGetIoctlStr(ControlCode), \
+                       __VA_ARGS__)                                        \
+  }
 
 // Log the whole Irp informations.
-#define DOKAN_LOG_MJ_IRP(Irp, IrpSp, Format, ...)                           \
-  DOKAN_LOG_INTERNAL(                                                       \
-      Irp, "[%p][%s][%s][%s][%lu]: " Format, Irp,                           \
-      DokanGetIdTypeStr(IrpSp->DeviceObject->DeviceExtension),              \
-      DokanGetMajorFunctionStr(IrpSp->MajorFunction),                       \
-      DokanGetMinorFunctionStr(IrpSp->MajorFunction, IrpSp->MinorFunction), \
-      IoGetRequestorProcessId(Irp), __VA_ARGS__)
+#define DOKAN_LOG_MJ_IRP(RequestContext, Format, ...)                   \
+  DOKAN_LOG_INTERNAL(                                                   \
+      RequestContext, "[%p][%s][%s][%s]: " Format, RequestContext->Irp, \
+      DokanGetIdTypeStr(RequestContext->DeviceObject->DeviceExtension), \
+      DokanGetMajorFunctionStr(RequestContext->IrpSp->MajorFunction),   \
+      DokanGetMinorFunctionStr(RequestContext->IrpSp->MajorFunction,    \
+                               RequestContext->IrpSp->MinorFunction),   \
+      __VA_ARGS__)
 
 // Log the Irp at dispatch time.
-#define DOKAN_LOG_BEGIN_MJ(Irp) \
-  DOKAN_LOG_MJ_IRP(Irp, IoGetCurrentIrpStackLocation(Irp), "Begin")
+#define DOKAN_LOG_BEGIN_MJ(RequestContext)                \
+  DOKAN_LOG_MJ_IRP(RequestContext, "Begin ProcessId=%lu", \
+                   RequestContext->ProcessId)
 
 // Log the Irp on exit of the dispatch.
-#define DOKAN_LOG_END_MJ(Irp, Status, Information)                            \
-  {                                                                           \
-    if (Irp) {                                                                \
-      DOKAN_LOG_FINE_IRP(Irp, "End - %s Information=%llx",                    \
-                         DokanGetNTSTATUSStr(Status), (ULONG_PTR)Information) \
-    } else {                                                                  \
-      DOKAN_LOG_FINE_IRP(Irp, "End - Irp not completed %s",                   \
-                         DokanGetNTSTATUSStr(Status))                         \
-    }                                                                         \
+#define DOKAN_LOG_END_MJ(RequestContext, Status)                       \
+  {                                                                    \
+    if (RequestContext->DoNotComplete) {                               \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s", \
+                         DokanGetNTSTATUSStr(Status));                 \
+    } else {                                                           \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - %s Information=%llx",  \
+                         DokanGetNTSTATUSStr(Status),                  \
+                         RequestContext->Irp->IoStatus.Information);   \
+    }                                                                  \
+    DokanCompleteIrpRequest(RequestContext->Irp, Status);              \
   }
 
 // Return the NTSTATUS define string name.
@@ -172,7 +197,7 @@ PCHAR DokanGetFileInformationClassStr(
 // Return Fs Information class string name.
 PCHAR DokanGetFsInformationClassStr(FS_INFORMATION_CLASS FsInformationClass);
 // Return NtCreateFile Information string name.
-PCHAR DokanGetCreateInformationStr(ULONG Information);
+PCHAR DokanGetCreateInformationStr(ULONG_PTR Information);
 
 // Return IOCTL string name.
 PCHAR DokanGetIoctlStr(ULONG ControlCode);

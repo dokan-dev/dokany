@@ -565,33 +565,29 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
 }
 
 NTSTATUS
-DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                       __in PDOKAN_GLOBAL dokanGlobal) {
-  UNREFERENCED_PARAMETER(DeviceObject);
-  PIO_STACK_LOCATION irpSp = NULL;
+DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PLIST_ENTRY listEntry;
   PMOUNT_ENTRY mountEntry;
   PDOKAN_CONTROL dokanControl;
   int i = 0;
 
-  irpSp = IoGetCurrentIrpStackLocation(Irp);
-
   try {
-    ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
-
-    Irp->IoStatus.Information = 0;
-    dokanControl = (PDOKAN_CONTROL)Irp->AssociatedIrp.SystemBuffer;
-    for (listEntry = dokanGlobal->MountPointList.Flink;
-         listEntry != &dokanGlobal->MountPointList;
+    ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
+                                   TRUE);
+    dokanControl =
+        (PDOKAN_CONTROL)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+    for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
+         listEntry != &RequestContext->DokanGlobal->MountPointList;
          listEntry = listEntry->Flink, ++i) {
-      if (irpSp->Parameters.DeviceIoControl.OutputBufferLength <
+      if (RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength <
           (sizeof(DOKAN_CONTROL) * (i + 1))) {
         status = STATUS_BUFFER_OVERFLOW;
         __leave;
       }
 
-      Irp->IoStatus.Information = sizeof(DOKAN_CONTROL) * (i + 1);
+      RequestContext->Irp->IoStatus.Information =
+          sizeof(DOKAN_CONTROL) * (i + 1);
       mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
       RtlCopyMemory(&dokanControl[i], &mountEntry->MountControl,
                     sizeof(DOKAN_CONTROL));
@@ -602,7 +598,7 @@ DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
 
     status = STATUS_SUCCESS;
   } finally {
-    ExReleaseResourceLite(&dokanGlobal->Resource);
+    ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
   }
 
   return status;
@@ -833,7 +829,8 @@ VOID DokanDeleteMountPointSysProc(__in PVOID pDcb) {
   }
 }
 
-VOID DokanDeleteMountPoint(__in PIRP Irp, __in PDokanDCB Dcb) {
+VOID DokanDeleteMountPoint(__in_opt PREQUEST_CONTEXT RequestContext,
+                           __in PDokanDCB Dcb) {
   DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
   if (Dcb->MountPoint != NULL && Dcb->MountPoint->Length > 0) {
     if (Dcb->UseMountManager) {
@@ -848,10 +845,10 @@ VOID DokanDeleteMountPoint(__in PIRP Irp, __in PDokanDCB Dcb) {
       } else if (Dcb->PersistentSymbolicLinkName) {
         // Remove the actual reparse point on our directory mount point.
         ULONG removeReparseInputlength = 0;
-        PCHAR removeReparseInput =
-            CreateRemoveReparsePointRequest(Irp, &removeReparseInputlength);
+        PCHAR removeReparseInput = CreateRemoveReparsePointRequest(
+            RequestContext, &removeReparseInputlength);
         if (removeReparseInput) {
-          SendDirectoryFsctl(Irp, Dcb->DeviceObject, Dcb->MountPoint,
+          SendDirectoryFsctl(RequestContext, Dcb->MountPoint,
                              FSCTL_DELETE_REPARSE_POINT, removeReparseInput,
                              removeReparseInputlength);
           ExFreePool(removeReparseInput);
@@ -1101,7 +1098,8 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
   return status;
 }
 
-VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb) {
+VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
+                             __in PDokanDCB Dcb) {
   PDokanVCB vcb;
   DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry = NULL;
@@ -1109,7 +1107,7 @@ VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb) {
 
   PAGED_CODE();
 
-  UNREFERENCED_PARAMETER(Irp);
+  UNREFERENCED_PARAMETER(RequestContext);
 
   ASSERT(GetIdentifierType(Dcb) == DCB);
   vcb = Dcb->Vcb;
@@ -1133,7 +1131,7 @@ VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb) {
     DokanLogInfo(&logger, L"Removing mount entry.");
     RemoveMountEntry(Dcb->Global, mountEntry);
   } else {
-    DOKAN_LOG_FINE_IRP(Irp, "Cannot found associated mount entry.");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found associated mount entry.");
   }
 
   if (Dcb->MountedDeviceInterfaceName.Buffer != NULL) {
@@ -1158,10 +1156,10 @@ VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb) {
   PDEVICE_OBJECT volumeDeviceObject = NULL;
 
   if (vcb != NULL) {
-    DOKAN_LOG_FINE_IRP(Irp, "FCB allocated: %d", vcb->FcbAllocated);
-    DOKAN_LOG_FINE_IRP(Irp, "FCB     freed: %d", vcb->FcbFreed);
-    DOKAN_LOG_FINE_IRP(Irp, "CCB allocated: %d", vcb->CcbAllocated);
-    DOKAN_LOG_FINE_IRP(Irp, "CCB     freed: %d", vcb->CcbFreed);
+    DOKAN_LOG_FINE_IRP(RequestContext, "FCB allocated: %d", vcb->FcbAllocated);
+    DOKAN_LOG_FINE_IRP(RequestContext, "FCB     freed: %d", vcb->FcbFreed);
+    DOKAN_LOG_FINE_IRP(RequestContext, "CCB allocated: %d", vcb->CcbAllocated);
+    DOKAN_LOG_FINE_IRP(RequestContext, "CCB     freed: %d", vcb->CcbFreed);
 
     CleanDokanLogEntry(vcb);
 

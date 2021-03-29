@@ -61,22 +61,19 @@ IOCTL_EVENT_INFO:
 #include "dokan.h"
 #include "util/irp_buffer_helper.h"
 
-VOID SetCommonEventContext(__in PDokanDCB Dcb, __in PEVENT_CONTEXT EventContext,
-                           __in PIRP Irp, __in_opt PDokanCCB Ccb) {
-  PIO_STACK_LOCATION irpSp;
-
-  irpSp = IoGetCurrentIrpStackLocation(Irp);
-
-  EventContext->MountId = Dcb->MountId;
-  EventContext->MajorFunction = irpSp->MajorFunction;
-  EventContext->MinorFunction = irpSp->MinorFunction;
-  EventContext->Flags = irpSp->Flags;
+VOID SetCommonEventContext(__in PREQUEST_CONTEXT RequestContext,
+                           __in PEVENT_CONTEXT EventContext,
+                           __in_opt PDokanCCB Ccb) {
+  EventContext->MountId = RequestContext->Dcb->MountId;
+  EventContext->MajorFunction = RequestContext->IrpSp->MajorFunction;
+  EventContext->MinorFunction = RequestContext->IrpSp->MinorFunction;
+  EventContext->Flags = RequestContext->IrpSp->Flags;
 
   if (Ccb) {
     EventContext->FileFlags = DokanCCBFlagsGet(Ccb);
   }
 
-  EventContext->ProcessId = IoGetRequestorProcessId(Irp);
+  EventContext->ProcessId = RequestContext->ProcessId;
 }
 
 PEVENT_CONTEXT
@@ -107,14 +104,14 @@ AllocateEventContextRaw(__in ULONG EventContextLength) {
 }
 
 PEVENT_CONTEXT
-AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
+AllocateEventContext(__in PREQUEST_CONTEXT RequestContext,
                      __in ULONG EventContextLength, __in_opt PDokanCCB Ccb) {
   PEVENT_CONTEXT eventContext;
   eventContext = AllocateEventContextRaw(EventContextLength);
   if (eventContext == NULL) {
     return NULL;
   }
-  SetCommonEventContext(Dcb, eventContext, Irp, Ccb);
+  SetCommonEventContext(RequestContext, eventContext, Ccb);
   return eventContext;
 }
 
@@ -160,7 +157,7 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
   while (!IsListEmpty(&Source->ListHead)) {
     listHead = RemoveHeadList(&Source->ListHead);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->Irp;
+    irp = irpEntry->RequestContext.Irp;
     if (irp == NULL) {
       // this IRP has already been canceled
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
@@ -191,9 +188,10 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->Irp;
+    irp = irpEntry->RequestContext.Irp;
     DokanFreeIrpEntry(irpEntry);
-    DokanCompleteIrpRequest(irp, STATUS_CANCELLED, 0);
+    irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(irp, STATUS_CANCELLED);
   }
 }
 
@@ -227,8 +225,8 @@ VOID RetryIrps(__in PIRP_LIST PendingRetryIrp) {
   while (!IsListEmpty(&retryList)) {
     listHead = RemoveHeadList(&retryList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->Irp;
-    deviceObject = irpEntry->IrpSp->DeviceObject;
+    irp = irpEntry->RequestContext.Irp;
+    deviceObject = irpEntry->RequestContext.DeviceObject;
     DokanFreeIrpEntry(irpEntry);
     DokanBuildRequest(deviceObject, irp);
   }
@@ -278,12 +276,12 @@ VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
       currentIoctlListEntry = RemoveHeadList(&PendingIoctls->ListHead);
       currentIoctlIrpEntry = CONTAINING_RECORD(currentIoctlListEntry, IRP_ENTRY,
                                                ListEntry);
-      currentIoctl = currentIoctlIrpEntry->Irp;
+      currentIoctl = currentIoctlIrpEntry->RequestContext.Irp;
       InsertTailList(&completedIoctls, &currentIoctlIrpEntry->ListEntry);
       // The buffer we are sending back to user mode for this IOCTL_EVENT_WAIT.
       currentIoctlBuffer = (PCHAR)currentIoctl->AssociatedIrp.SystemBuffer;
-      currentIoctlBufferBytesRemaining = currentIoctlIrpEntry
-          ->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
+      currentIoctlBufferBytesRemaining = currentIoctlIrpEntry->RequestContext.IrpSp->Parameters
+              .DeviceIoControl.OutputBufferLength;
 
       // Ensure this IRP is not cancelled.
       if (currentIoctl == NULL) {
@@ -340,7 +338,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
     currentIoctlListEntry = RemoveHeadList(&completedIoctls);
     currentIoctlIrpEntry = CONTAINING_RECORD(currentIoctlListEntry, IRP_ENTRY,
                                              ListEntry);
-    currentIoctl = currentIoctlIrpEntry->Irp;
+    currentIoctl = currentIoctlIrpEntry->RequestContext.Irp;
     if (currentIoctlIrpEntry->SerialNumber == 0) {
       currentIoctl->IoStatus.Information = 0;
       currentIoctl->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -351,8 +349,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
       currentIoctl->IoStatus.Status = STATUS_SUCCESS;
     }
     DokanFreeIrpEntry(currentIoctlIrpEntry);
-    DokanCompleteIrpRequest(currentIoctl, currentIoctl->IoStatus.Status,
-                            currentIoctl->IoStatus.Information);
+    DokanCompleteIrpRequest(currentIoctl, currentIoctl->IoStatus.Status);
   }
 }
 
@@ -453,7 +450,8 @@ VOID DokanStopFcbGarbageCollectorThread(__in PDokanVCB Vcb) {
   }
 }
 
-NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
+                           __in PDEVICE_OBJECT DeviceObject) {
   PDokanDCB dcb;
   PDokanVCB vcb;
   NTSTATUS status = STATUS_SUCCESS;
@@ -485,7 +483,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     return STATUS_SUCCESS;
   }
 
-  status = IoAcquireRemoveLock(&dcb->RemoveLock, Irp);
+  status = IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext);
   if (!NT_SUCCESS(status)) {
     DokanLogError(&logger, status, L"IoAcquireRemoveLock failed in release.");
     return STATUS_DEVICE_REMOVED;
@@ -494,7 +492,7 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   // as first delete the mountpoint
   // in case of MountManager some request because of delete
   // must be handled properly
-  DokanDeleteMountPoint(Irp, dcb);
+  DokanDeleteMountPoint(RequestContext, dcb);
 
   // then mark the device for unmount pending
   SetLongFlag(vcb->Flags, VCB_DISMOUNT_PENDING);
@@ -516,41 +514,35 @@ NTSTATUS DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
   DokanCleanupAllChangeNotificationWaiters(vcb);
-  IoReleaseRemoveLockAndWait(&dcb->RemoveLock, Irp);
+  IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext);
 
-  DokanDeleteDeviceObject(Irp, dcb);
+  DokanDeleteDeviceObject(RequestContext, dcb);
 
   DokanLogInfo(&logger, L"Finished event release.");
 
   return status;
 }
 
-ULONG GetCurrentSessionId(__in PIRP Irp) {
+ULONG GetCurrentSessionId(__in PREQUEST_CONTEXT RequestContext) {
   ULONG sessionNumber;
   NTSTATUS status;
 
-  status = IoGetRequestorSessionId(Irp, &sessionNumber);
+  status = IoGetRequestorSessionId(RequestContext->Irp, &sessionNumber);
   if (!NT_SUCCESS(status)) {
-    DOKAN_LOG_FINE_IRP(Irp, "Failed %s", DokanGetNTSTATUSStr(status));
+    DOKAN_LOG_FINE_IRP(RequestContext, "Failed %s",
+                       DokanGetNTSTATUSStr(status));
     return (ULONG)-1;
   }
-  DOKAN_LOG_FINE_IRP(Irp, "%lu", sessionNumber);
+  DOKAN_LOG_FINE_IRP(RequestContext, "%lu", sessionNumber);
   return sessionNumber;
 }
 
-NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
-                                 __in PIRP Irp) {
-  PDOKAN_GLOBAL dokanGlobal;
+NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint;
   DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry;
 
-  dokanGlobal = DeviceObject->DeviceExtension;
-  if (GetIdentifierType(dokanGlobal) != DGL) {
-    return STATUS_INVALID_PARAMETER;
-  }
-
-  GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(Irp, szMountPoint)
+  GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(RequestContext->Irp, szMountPoint)
 
   RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
@@ -562,34 +554,35 @@ NTSTATUS DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject,
   } else {
     if (szMountPoint->Length >
         sizeof(dokanControl.MountPoint) - 12 * sizeof(WCHAR)) {
-      DOKAN_LOG_FINE_IRP(Irp, "Mount point buffer has invalid size");
+      DOKAN_LOG_FINE_IRP(RequestContext, "Mount point buffer has invalid size");
       return STATUS_BUFFER_OVERFLOW;
     }
     RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }
 
-  dokanControl.SessionId = GetCurrentSessionId(Irp);
-  mountEntry = FindMountEntry(dokanGlobal, &dokanControl, TRUE);
+  dokanControl.SessionId = GetCurrentSessionId(RequestContext);
+  mountEntry = FindMountEntry(RequestContext->DokanGlobal, &dokanControl, TRUE);
   if (mountEntry == NULL) {
     dokanControl.SessionId = (ULONG)-1;
-    DOKAN_LOG_FINE_IRP(Irp, "Cannot found device associated to mount point %ws",
+    DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found device associated to mount point %ws",
                   dokanControl.MountPoint);
     return STATUS_BUFFER_TOO_SMALL;
   }
 
   if (IsDeletePending(mountEntry->MountControl.VolumeDeviceObject)) {
-    DOKAN_LOG_FINE_IRP(Irp, "Device is deleted");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");
     return STATUS_DEVICE_REMOVED;
   }
 
   if (!IsMounted(mountEntry->MountControl.VolumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(
-        Irp,
+        RequestContext,
         "Device is still not mounted, so an unmount not possible at this "
         "point");
     return STATUS_DEVICE_BUSY;
   }
 
-  return DokanEventRelease(mountEntry->MountControl.VolumeDeviceObject, Irp);
+  return DokanEventRelease(RequestContext,
+                           mountEntry->MountControl.VolumeDeviceObject);
 }

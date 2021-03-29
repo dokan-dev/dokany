@@ -23,59 +23,37 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanQueryDirectory(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp);
+DokanNotifyChangeDirectory(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+DokanDispatchDirectoryControl(__in PREQUEST_CONTEXT RequestContext) {
   PFILE_OBJECT fileObject;
-  PIO_STACK_LOCATION irpSp;
-  PDokanVCB vcb;
 
-  __try {
-    DOKAN_LOG_BEGIN_MJ(Irp);
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    fileObject = irpSp->FileObject;
-    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", irpSp->FileObject);
+  fileObject = RequestContext->IrpSp->FileObject;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-    if (fileObject == NULL) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    vcb = DeviceObject->DeviceExtension;
-    if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    if (irpSp->MinorFunction == IRP_MN_QUERY_DIRECTORY) {
-      status = DokanQueryDirectory(DeviceObject, Irp);
-
-    } else if (irpSp->MinorFunction == IRP_MN_NOTIFY_CHANGE_DIRECTORY) {
-      status = DokanNotifyChangeDirectory(DeviceObject, &Irp);
-    } else {
-      DOKAN_LOG_FINE_IRP(Irp, "Invalid minor function");
-      status = STATUS_INVALID_PARAMETER;
-    }
-
-  } __finally {
-    DOKAN_LOG_END_MJ(Irp, status, 0);
-    DokanCompleteIrpRequest(Irp, status, 0);
+  if (fileObject == NULL || !RequestContext->Vcb ||
+      !DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
+    return STATUS_INVALID_PARAMETER;
   }
 
-  return status;
+  switch (RequestContext->IrpSp->MinorFunction) {
+    case IRP_MN_QUERY_DIRECTORY:
+      return DokanQueryDirectory(RequestContext);
+    case IRP_MN_NOTIFY_CHANGE_DIRECTORY:
+      return DokanNotifyChangeDirectory(RequestContext);
+  }
+  DOKAN_LOG_FINE_IRP(RequestContext, "Unsupported MinorFunction %x",
+                     RequestContext->IrpSp->MinorFunction);
+  return STATUS_INVALID_PARAMETER;
 }
 
 NTSTATUS
-DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanQueryDirectory(__in PREQUEST_CONTEXT RequestContext) {
   PFILE_OBJECT fileObject;
-  PIO_STACK_LOCATION irpSp;
-  PDokanVCB vcb;
   PDokanCCB ccb;
   PDokanFCB fcb;
   NTSTATUS status;
@@ -83,13 +61,10 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   PEVENT_CONTEXT eventContext;
   ULONG index;
   BOOLEAN initial;
-  ULONG flags = 0;
 
-  irpSp = IoGetCurrentIrpStackLocation(Irp);
-  fileObject = irpSp->FileObject;
+  fileObject = RequestContext->IrpSp->FileObject;
 
-  vcb = DeviceObject->DeviceExtension;
-  if (GetIdentifierType(vcb) != VCB) {
+  if (!RequestContext->Vcb) {
     return STATUS_INVALID_PARAMETER;
   }
 
@@ -99,25 +74,28 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   }
   ASSERT(ccb != NULL);
 
-  if (irpSp->Flags & SL_INDEX_SPECIFIED) {
-    DOKAN_LOG_FINE_IRP(Irp, "Index specified %d",
-              irpSp->Parameters.QueryDirectory.FileIndex);
+  if (RequestContext->IrpSp->Flags & SL_INDEX_SPECIFIED) {
+    DOKAN_LOG_FINE_IRP(
+        RequestContext, "Index specified %d",
+        RequestContext->IrpSp->Parameters.QueryDirectory.FileIndex);
   }
-  if (irpSp->Flags & SL_RETURN_SINGLE_ENTRY) {
-    DOKAN_LOG_FINE_IRP(Irp, "Return single entry");
+  if (RequestContext->IrpSp->Flags & SL_RETURN_SINGLE_ENTRY) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Return single entry");
   }
-  if (irpSp->Flags & SL_RESTART_SCAN) {
-    DOKAN_LOG_FINE_IRP(Irp, "Restart scan");
+  if (RequestContext->IrpSp->Flags & SL_RESTART_SCAN) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Restart scan");
   }
-  if (irpSp->Parameters.QueryDirectory.FileName) {
-    DOKAN_LOG_FINE_IRP(Irp, "Pattern=\"%wZ\"",
-                  irpSp->Parameters.QueryDirectory.FileName);
+  if (RequestContext->IrpSp->Parameters.QueryDirectory.FileName) {
+    DOKAN_LOG_FINE_IRP(
+        RequestContext, "Pattern=\"%wZ\"",
+        RequestContext->IrpSp->Parameters.QueryDirectory.FileName);
   }
 
-  DOKAN_LOG_FINE_IRP(
-      Irp, "FileObject=%p FileInformationClass=%s", fileObject,
-      DokanGetFileInformationClassStr(
-          irpSp->Parameters.QueryDirectory.FileInformationClass));
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p FileInformationClass=%s",
+                     fileObject,
+                     DokanGetFileInformationClassStr(
+                         RequestContext->IrpSp->Parameters.QueryDirectory
+                             .FileInformationClass));
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
@@ -125,12 +103,14 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   OplockDebugRecordMajorFunction(fcb, IRP_MJ_DIRECTORY_CONTROL);
 
   // make a MDL for UserBuffer that can be used later on another thread context
-  if (Irp->MdlAddress == NULL) {
-    status = DokanAllocateMdl(Irp, irpSp->Parameters.QueryDirectory.Length);
+  if (RequestContext->Irp->MdlAddress == NULL) {
+    status = DokanAllocateMdl(
+        RequestContext,
+        RequestContext->IrpSp->Parameters.QueryDirectory.Length);
     if (!NT_SUCCESS(status)) {
       return status;
     }
-    flags = DOKAN_MDL_ALLOCATED;
+    RequestContext->Flags = DOKAN_MDL_ALLOCATED;
   }
 
   DokanFCBLockRO(fcb);
@@ -143,16 +123,15 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
   // this is an initial query
   if (initial) {
-    DOKAN_LOG_FINE_IRP(Irp, "Initial query");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Initial query");
     // and search pattern is provided
-    if (irpSp->Parameters.QueryDirectory.FileName) {
+    if (RequestContext->IrpSp->Parameters.QueryDirectory.FileName) {
       // free current search pattern stored in CCB
-      if (ccb->SearchPattern)
-        ExFreePool(ccb->SearchPattern);
+      if (ccb->SearchPattern) ExFreePool(ccb->SearchPattern);
 
       // the size of search pattern
       ccb->SearchPatternLength =
-          irpSp->Parameters.QueryDirectory.FileName->Length;
+          RequestContext->IrpSp->Parameters.QueryDirectory.FileName->Length;
       ccb->SearchPattern =
           DokanAllocZero(ccb->SearchPatternLength + sizeof(WCHAR));
 
@@ -162,9 +141,10 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
       }
 
       // copy provided search pattern to CCB
-      RtlCopyMemory(ccb->SearchPattern,
-                    irpSp->Parameters.QueryDirectory.FileName->Buffer,
-                    ccb->SearchPatternLength);
+      RtlCopyMemory(
+          ccb->SearchPattern,
+          RequestContext->IrpSp->Parameters.QueryDirectory.FileName->Buffer,
+          ccb->SearchPatternLength);
 
     } else {
       DokanCCBFlagsSetBit(ccb, DOKAN_DIR_MATCH_ALL);
@@ -176,7 +156,7 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     eventLength += ccb->SearchPatternLength;
   }
 
-  eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+  eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
 
   if (eventContext == NULL) {
     DokanFCBUnlock(fcb);
@@ -190,25 +170,26 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
   // this time, 'index'th entry should be returned
   index = 0;
 
-  if (irpSp->Flags & SL_INDEX_SPECIFIED) {
-    index = irpSp->Parameters.QueryDirectory.FileIndex;
-    DOKAN_LOG_FINE_IRP(Irp, "Using FileIndex %d", index);
+  if (RequestContext->IrpSp->Flags & SL_INDEX_SPECIFIED) {
+    index = RequestContext->IrpSp->Parameters.QueryDirectory.FileIndex;
+    DOKAN_LOG_FINE_IRP(RequestContext, "Using FileIndex %d", index);
 
-  } else if (FlagOn(irpSp->Flags, SL_RESTART_SCAN)) {
-    DOKAN_LOG_FINE_IRP(Irp, "SL_RESTART_SCAN");
+  } else if (FlagOn(RequestContext->IrpSp->Flags, SL_RESTART_SCAN)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "SL_RESTART_SCAN");
     index = 0;
 
   } else {
     index = (ULONG)ccb->Context;
-    DOKAN_LOG_FINE_IRP(Irp, "ccb->Context %d", index);
+    DOKAN_LOG_FINE_IRP(RequestContext, "ccb->Context %d", index);
   }
 
   eventContext->Operation.Directory.FileInformationClass =
-      irpSp->Parameters.QueryDirectory.FileInformationClass;
+      RequestContext->IrpSp->Parameters.QueryDirectory.FileInformationClass;
   eventContext->Operation.Directory.BufferLength =
-      irpSp->Parameters.QueryDirectory.Length; // length of buffer
+      RequestContext->IrpSp->Parameters.QueryDirectory
+          .Length;  // length of buffer
   eventContext->Operation.Directory.FileIndex =
-      index; // directory index which should be returned this time
+      index;  // directory index which should be returned this time
 
   // copying file name(directory name)
   eventContext->Operation.Directory.DirectoryNameLength = fcb->FileName.Length;
@@ -231,28 +212,25 @@ DokanQueryDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
 
     RtlCopyMemory(searchBuffer, ccb->SearchPattern, ccb->SearchPatternLength);
 
-    DOKAN_LOG_FINE_IRP(Irp, "ccb->SearchPattern %ws", ccb->SearchPattern);
+    DOKAN_LOG_FINE_IRP(RequestContext, "ccb->SearchPattern %ws",
+                       ccb->SearchPattern);
   }
 
-  status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, flags);
+  status = DokanRegisterPendingIrp(RequestContext, eventContext);
 
   return status;
 }
 
 NTSTATUS
-DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
+DokanNotifyChangeDirectory(__in PREQUEST_CONTEXT RequestContext) {
   PDokanCCB ccb;
   PDokanFCB fcb;
   PFILE_OBJECT fileObject;
-  PIO_STACK_LOCATION irpSp;
-  PDokanVCB vcb;
 
-  irpSp = IoGetCurrentIrpStackLocation(*pIrp);
-  fileObject = irpSp->FileObject;
-  DOKAN_LOG_FINE_IRP(*pIrp, "FileObject=%p", fileObject);
+  fileObject = RequestContext->IrpSp->FileObject;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-  vcb = DeviceObject->DeviceExtension;
-  if (GetIdentifierType(vcb) != VCB) {
+  if (!RequestContext->Vcb) {
     return STATUS_INVALID_PARAMETER;
   }
 
@@ -268,54 +246,49 @@ DokanNotifyChangeDirectory(__in PDEVICE_OBJECT DeviceObject, __in PIRP *pIrp) {
 
   DokanFCBLockRO(fcb);
   FsRtlNotifyFullChangeDirectory(
-      vcb->NotifySync, &vcb->DirNotifyList, ccb, (PSTRING)&fcb->FileName,
-      (irpSp->Flags & SL_WATCH_TREE) ? TRUE : FALSE, FALSE,
-      irpSp->Parameters.NotifyDirectory.CompletionFilter, *pIrp, NULL, NULL);
+      RequestContext->Vcb->NotifySync, &RequestContext->Vcb->DirNotifyList, ccb,
+      (PSTRING)&fcb->FileName,
+      (RequestContext->IrpSp->Flags & SL_WATCH_TREE) ? TRUE : FALSE, FALSE,
+      RequestContext->IrpSp->Parameters.NotifyDirectory.CompletionFilter,
+      RequestContext->Irp, NULL, NULL);
   DokanFCBUnlock(fcb);
 
   // FsRtlNotifyFullChangeDirectory has now completed the IRP and it is unsafe
   // to access or complete the IRP.
-  *pIrp = NULL;
+  RequestContext->DoNotComplete = TRUE;
 
   return STATUS_PENDING;
 }
 
-VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteDirectoryControl(__in PREQUEST_CONTEXT RequestContext,
                                    __in PEVENT_INFORMATION EventInfo) {
-  PIRP irp;
-  PIO_STACK_LOCATION irpSp;
-  NTSTATUS status = STATUS_SUCCESS;
-  ULONG info = 0;
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
 
-  irp = IrpEntry->Irp;
-  irpSp = IrpEntry->IrpSp;
-
-  DOKAN_LOG_BEGIN_MJ(irp);
-  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", irpSp->FileObject);
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p",
+                     RequestContext->IrpSp->FileObject);
 
   // buffer pointer which points DirecotryInfo
-  if (irp->MdlAddress) {
+  if (RequestContext->Irp->MdlAddress) {
     // DDbgPrint("   use MDL Address\n");
-    buffer = MmGetSystemAddressForMdlNormalSafe(irp->MdlAddress);
+    buffer =
+        MmGetSystemAddressForMdlNormalSafe(RequestContext->Irp->MdlAddress);
   } else {
     // DDbgPrint("   use UserBuffer\n");
-    buffer = irp->UserBuffer;
+    buffer = RequestContext->Irp->UserBuffer;
   }
   // usable buffer size
-  bufferLen = irpSp->Parameters.QueryDirectory.Length;
+  bufferLen = RequestContext->IrpSp->Parameters.QueryDirectory.Length;
 
   // DDbgPrint("  !!Returning DirectoryInfo!!\n");
 
   // buffer is not specified or short of length
   if (bufferLen == 0 || buffer == NULL || bufferLen < EventInfo->BufferLength) {
-    info = 0;
-    status = STATUS_INSUFFICIENT_RESOURCES;
+    RequestContext->Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
 
   } else {
 
-    PDokanCCB ccb = IrpEntry->FileObject->FsContext2;
+    PDokanCCB ccb = RequestContext->IrpSp->FileObject->FsContext2;
     // ULONG     orgLen = irpSp->Parameters.QueryDirectory.Length;
 
     //
@@ -327,11 +300,11 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     // DDbgPrint("   copy DirectoryInfo\n");
     RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
-    DOKAN_LOG_FINE_IRP(irp, "EventInfo->Directory.Index = %lu",
+    DOKAN_LOG_FINE_IRP(RequestContext, "EventInfo->Directory.Index = %lu",
                   EventInfo->Operation.Directory.Index);
-    DOKAN_LOG_FINE_IRP(irp, "EventInfo->BufferLength = % lu",
+    DOKAN_LOG_FINE_IRP(RequestContext, "EventInfo->BufferLength = % lu",
                   EventInfo->BufferLength);
-    DOKAN_LOG_FINE_IRP(irp, "EventInfo->Status = % x(% lu)", EventInfo->Status,
+    DOKAN_LOG_FINE_IRP(RequestContext, "EventInfo->Status = % x(% lu)", EventInfo->Status,
                   EventInfo->Status);
 
     // update index which specified n-th directory entry is returned
@@ -344,16 +317,12 @@ VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
     // written bytes
     // irpSp->Parameters.QueryDirectory.Length = EventInfo->BufferLength;
 
-    status = EventInfo->Status;
-
-    info = EventInfo->BufferLength;
+    RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+    RequestContext->Irp->IoStatus.Status = EventInfo->Status;
   }
 
-  if (IrpEntry->Flags & DOKAN_MDL_ALLOCATED) {
-    DokanFreeMdl(irp);
-    IrpEntry->Flags &= ~DOKAN_MDL_ALLOCATED;
+  if (RequestContext->Flags & DOKAN_MDL_ALLOCATED) {
+    DokanFreeMdl(RequestContext->Irp);
+    RequestContext->Flags &= ~DOKAN_MDL_ALLOCATED;
   }
-
-  DOKAN_LOG_END_MJ(irp, status, info);
-  DokanCompleteIrpRequest(irp, status, info);
 }

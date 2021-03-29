@@ -470,7 +470,7 @@ PCHAR DokanGetIdTypeStr(__in VOID *Id) {
   return "Unknown";
 }
 
-PCHAR DokanGetCreateInformationStr(ULONG Information) {
+PCHAR DokanGetCreateInformationStr(ULONG_PTR Information) {
   // List imported from wdm.h
   switch (Information) {
     CASE_STR(FILE_SUPERSEDED)
@@ -504,24 +504,17 @@ PCHAR DokanGetIoctlStr(ULONG ControlCode) {
   return "Unknown";
 }
 
-VOID PushDokanLogEntry(_In_opt_ PIRP Irp, _In_ PCSTR Format, ...) {
+VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
+  PREQUEST_CONTEXT requestContext = RequestContext;
   PDOKAN_LOG_ENTRY logEntry;
-  PDokanVCB vcb = NULL;
 
   PAGED_CODE();
 
   // Is that a global log or a Vcb log that has driver log disptached
   // enabled ?
-  if (Irp) {
-    PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
-    if (irpSp->DeviceObject != NULL &&
-        irpSp->DeviceObject->DeviceExtension != NULL &&
-        GetIdentifierType(irpSp->DeviceObject->DeviceExtension) == VCB) {
-      vcb = irpSp->DeviceObject->DeviceExtension;
-      if (vcb->Dcb && !vcb->Dcb->DispatchDriverLogs) {
-        return;
-      }
-    }
+  if (requestContext && requestContext->Vcb && requestContext->Vcb->Dcb &&
+      !requestContext->Vcb->Dcb->DispatchDriverLogs) {
+    return;
   }
 
   __try {
@@ -543,7 +536,9 @@ VOID PushDokanLogEntry(_In_opt_ PIRP Irp, _In_ PCSTR Format, ...) {
       __leave;
     }
     InitializeListHead(&logEntry->ListEntry);
-    logEntry->Vcb = vcb;
+    if (requestContext) {
+      logEntry->Vcb = requestContext->Vcb;
+    }
 
     PSTR ppszDestEnd = NULL;
     va_list args;
@@ -561,8 +556,8 @@ VOID PushDokanLogEntry(_In_opt_ PIRP Irp, _In_ PCSTR Format, ...) {
     ++g_DokanLogEntryList.NumberOfCachedEntries;
     InsertTailList(&g_DokanLogEntryList.Log, &logEntry->ListEntry);
 
-    if (vcb && vcb->Dcb) {
-      PopDokanLogEntry(vcb);
+    if (requestContext && requestContext->Vcb && requestContext->Vcb->Dcb) {
+      PopDokanLogEntry(requestContext->Vcb);
     }
   } __finally {
     DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
@@ -615,9 +610,9 @@ VOID PopDokanLogEntry(_In_ PDokanVCB Vcb) {
 
 // Is it a global log (NULL IRP) and we have the global cache enabled or it is a
 // volume log (Valid IRP) with an active volume having the cache log enabled.
-BOOLEAN IsLogCacheEnabled(PIRP Irp) {
-  return (!Irp && g_DokanDriverLogCacheEnabled) ||
-         (Irp && g_DokanVcbDriverLogCacheCount);
+BOOLEAN IsLogCacheEnabled(_In_opt_ PVOID RequestContext) {
+  return (!RequestContext && g_DokanDriverLogCacheEnabled) ||
+         (RequestContext && g_DokanVcbDriverLogCacheCount);
 }
 
 VOID IncrementVcbLogCacheCount() {

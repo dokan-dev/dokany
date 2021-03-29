@@ -403,13 +403,16 @@ Return Value:
 }
 
 NTSTATUS
-DokanDispatchShutdown(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  UNREFERENCED_PARAMETER(DeviceObject);
-
+DokanDispatchShutdown(__in PREQUEST_CONTEXT RequestContext) {
   // PAGED_CODE();
-  DOKAN_LOG_BEGIN_MJ(Irp);
-  DOKAN_LOG_END_MJ(Irp, STATUS_SUCCESS, 0);
-  DokanCompleteIrpRequest(Irp, STATUS_SUCCESS, 0);
+
+  UNREFERENCED_PARAMETER(RequestContext);
+
+  // A driver does not receive an IRP_MJ_SHUTDOWN request for a device
+  // object unless it registers to do so with either
+  // IoRegisterShutdownNotification or
+  // IoRegisterLastChanceShutdownNotification. We do not call those
+  // functions and therefore should not get the IRP
 
   return STATUS_SUCCESS;
 }
@@ -448,33 +451,17 @@ NTSTATUS DokanCheckOplock(
                           CompletionRoutine, PostIrpRoutine);
 }
 
-VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
-                             __in ULONG_PTR Info) {
-  if (Irp == NULL) {
-    return;
-  }
-  if (Status != STATUS_PENDING) {
-    Irp->IoStatus.Status = Status;
-    Irp->IoStatus.Information = Info;
-    IoCompleteRequest(Irp, IO_NO_INCREMENT);
-  }
-}
-
-VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status) {
-  if (Irp == NULL) {
-    return;
-  }
+VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status) {
   if (Status != STATUS_PENDING) {
     Irp->IoStatus.Status = Status;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
   }
 }
 
-NTSTATUS DokanNotifyReportChange0(__in PIRP Irp,
+NTSTATUS DokanNotifyReportChange0(__in PREQUEST_CONTEXT RequestContext,
                                   __in PDokanFCB Fcb,
                                   __in PUNICODE_STRING FileName,
-                                  __in ULONG FilterMatch,
-                                  __in ULONG Action) {
+                                  __in ULONG FilterMatch, __in ULONG Action) {
   USHORT nameOffset;
 
   ASSERT(Fcb != NULL);
@@ -484,19 +471,19 @@ NTSTATUS DokanNotifyReportChange0(__in PIRP Irp,
   // and filter values, but we do not expect the caller to be aware of this.
   if (DokanSearchUnicodeStringChar(FileName, L':') != -1) {  // FileStream
 
-    //Convert file action to stream action
+    // Convert file action to stream action
     switch (Action) {
-    case FILE_ACTION_ADDED:
-      Action = FILE_ACTION_ADDED_STREAM;
-      break;
-    case FILE_ACTION_REMOVED:
-      Action = FILE_ACTION_REMOVED_STREAM;
-      break;
-    case FILE_ACTION_MODIFIED:
-      Action = FILE_ACTION_MODIFIED_STREAM;
-      break;
-    default:
-      break;
+      case FILE_ACTION_ADDED:
+        Action = FILE_ACTION_ADDED_STREAM;
+        break;
+      case FILE_ACTION_REMOVED:
+        Action = FILE_ACTION_REMOVED_STREAM;
+        break;
+      case FILE_ACTION_MODIFIED:
+        Action = FILE_ACTION_MODIFIED_STREAM;
+        break;
+      default:
+        break;
     }
 
     // Convert file flag to stream flag
@@ -519,34 +506,37 @@ NTSTATUS DokanNotifyReportChange0(__in PIRP Irp,
   // search the last "\" and then calculate the Offset in bytes
   nameOffset = (USHORT)(DokanSearchWcharinUnicodeStringWithUlong(
       FileName, L'\\', (ULONG)nameOffset, 1));
-  nameOffset *= sizeof(WCHAR); // Offset is in bytes
+  nameOffset *= sizeof(WCHAR);  // Offset is in bytes
 
   __try {
     FsRtlNotifyFullReportChange(Fcb->Vcb->NotifySync, &Fcb->Vcb->DirNotifyList,
                                 (PSTRING)FileName, nameOffset,
-                                NULL, // StreamName
-                                NULL, // NormalizedParentName
+                                NULL,  // StreamName
+                                NULL,  // NormalizedParentName
                                 FilterMatch, Action,
-                                NULL); // TargetContext
+                                NULL);  // TargetContext
   } __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
-              ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+                  ? EXCEPTION_EXECUTE_HANDLER
+                  : EXCEPTION_CONTINUE_SEARCH) {
     DOKAN_INIT_LOGGER(logger, Fcb->Vcb->Dcb->DriverObject, 0);
     try {
       // This case is attested in the wild but very rare. We don't know why it
       // happens.
       return DokanLogError(
           &logger, STATUS_OBJECT_NAME_INVALID,
-          L"Access violation in file change notification for \"%wZ\".", FileName);
-    } __except(GetExceptionCode() == STATUS_ACCESS_VIOLATION
-               ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
-       // This is not a case we think ever happens, but we may as well not
-       // crash if it does.
-       return DokanLogError(
-            &logger, STATUS_INVALID_PARAMETER,
-            L"Access violation on the file name passed in a notification.");
+          L"Access violation in file change notification for \"%wZ\".",
+          FileName);
+    } __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
+                    ? EXCEPTION_EXECUTE_HANDLER
+                    : EXCEPTION_CONTINUE_SEARCH) {
+      // This is not a case we think ever happens, but we may as well not
+      // crash if it does.
+      return DokanLogError(
+          &logger, STATUS_INVALID_PARAMETER,
+          L"Access violation on the file name passed in a notification.");
     }
   }
-  DOKAN_LOG_FINE_IRP(Irp,
+  DOKAN_LOG_FINE_IRP(RequestContext,
                      "FCB=%p NameOffset=%x FilterMatch=%x Action=%x Success",
                      Fcb, nameOffset, FilterMatch, Action);
   return STATUS_SUCCESS;
@@ -554,40 +544,39 @@ NTSTATUS DokanNotifyReportChange0(__in PIRP Irp,
 
 // DokanNotifyReportChange should be called with the Fcb at least share-locked.
 // due to the ro access to the FileName field.
-NTSTATUS DokanNotifyReportChange(__in PIRP Irp,
+NTSTATUS DokanNotifyReportChange(__in PREQUEST_CONTEXT RequestContext,
                                  __in PDokanFCB Fcb,
                                  __in ULONG FilterMatch,
                                  __in ULONG Action) {
   ASSERT(Fcb != NULL);
-  return DokanNotifyReportChange0(Irp, Fcb, &Fcb->FileName, FilterMatch,
+  return DokanNotifyReportChange0(RequestContext, Fcb, &Fcb->FileName,
+                                  FilterMatch,
                                   Action);
 }
 
 BOOLEAN
-DokanCheckCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in_opt PDokanCCB Ccb) {
-  PDokanVCB vcb;
+DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext,
+              __in_opt PDokanCCB Ccb) {
+  UNREFERENCED_PARAMETER(RequestContext);
 
-  UNREFERENCED_PARAMETER(Irp);
-
-  ASSERT(Dcb != NULL);
-  if (GetIdentifierType(Dcb) != DCB) {
+  ASSERT(RequestContext->Dcb != NULL);
+  if (!RequestContext->Dcb) {
     return FALSE;
   }
 
   if (Ccb == NULL) {
-    DOKAN_LOG_FINE_IRP(Irp,  "Ccb is NULL");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Ccb is NULL");
     return FALSE;
   }
 
-  if (Ccb->MountId != Dcb->MountId) {
-    DOKAN_LOG_FINE_IRP(Irp, "MountId is different: Ccb=%d Dcb=%d", Ccb->MountId,
-                  Dcb->MountId);
+  if (Ccb->MountId != RequestContext->Dcb->MountId) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "MountId is different: Ccb=%d Dcb=%d",
+                       Ccb->MountId, RequestContext->Dcb->MountId);
     return FALSE;
   }
 
-  vcb = Dcb->Vcb;
-  if (!vcb || IsUnmountPendingVcb(vcb)) {
-    DOKAN_LOG_FINE_IRP(Irp, "Not mounted");
+  if (!RequestContext->Vcb || IsUnmountPendingVcb(RequestContext->Vcb)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Not mounted");
     return FALSE;
   }
 
@@ -595,21 +584,24 @@ DokanCheckCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in_opt PDokanCCB Ccb) {
 }
 
 NTSTATUS
-DokanAllocateMdl(__in PIRP Irp, __in ULONG Length) {
-  if (Irp->MdlAddress == NULL) {
-    Irp->MdlAddress = IoAllocateMdl(Irp->UserBuffer, Length, FALSE, FALSE, Irp);
+DokanAllocateMdl(__in PREQUEST_CONTEXT RequestContext, __in ULONG Length) {
+  if (RequestContext->Irp->MdlAddress == NULL) {
+    RequestContext->Irp->MdlAddress =
+        IoAllocateMdl(RequestContext->Irp->UserBuffer, Length, FALSE, FALSE,
+                      RequestContext->Irp);
 
-    if (Irp->MdlAddress == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "IoAllocateMdl returned NULL");
+    if (RequestContext->Irp->MdlAddress == NULL) {
+      DOKAN_LOG_FINE_IRP(RequestContext, "IoAllocateMdl returned NULL");
       return STATUS_INSUFFICIENT_RESOURCES;
     }
     __try {
-      MmProbeAndLockPages(Irp->MdlAddress, Irp->RequestorMode, IoWriteAccess);
+      MmProbeAndLockPages(RequestContext->Irp->MdlAddress,
+                          RequestContext->Irp->RequestorMode, IoWriteAccess);
 
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-      DOKAN_LOG_FINE_IRP(Irp, "MmProveAndLockPages error");
-      IoFreeMdl(Irp->MdlAddress);
-      Irp->MdlAddress = NULL;
+      DOKAN_LOG_FINE_IRP(RequestContext, "MmProveAndLockPages error");
+      IoFreeMdl(RequestContext->Irp->MdlAddress);
+      RequestContext->Irp->MdlAddress = NULL;
       return STATUS_INSUFFICIENT_RESOURCES;
     }
   }

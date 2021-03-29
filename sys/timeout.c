@@ -24,7 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/irp_buffer_helper.h"
 #include "util/str.h"
 
-VOID DokanUnmount(__in PDokanDCB Dcb) {
+VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) {
   ULONG eventLength;
   PEVENT_CONTEXT eventContext;
   PDRIVER_EVENT_CONTEXT driverEventContext;
@@ -41,7 +41,7 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   if (eventContext == NULL) {
     DOKAN_LOG("Not able to allocate eventContext.");
     if (vcb) {
-      DokanEventRelease(vcb->DeviceObject, NULL);
+      DokanEventRelease(RequestContext, vcb->DeviceObject);
     }
     return;
   }
@@ -75,7 +75,7 @@ VOID DokanUnmount(__in PDokanDCB Dcb) {
   }
 
   if (vcb) {
-    DokanEventRelease(vcb->DeviceObject, NULL);
+    DokanEventRelease(RequestContext, vcb->DeviceObject);
   }
 
   if (completedEvent) {
@@ -102,7 +102,7 @@ VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
       KeLeaveCriticalRegion();
       return;
     }
-    DokanUnmount(Dcb);
+    DokanUnmount(NULL, Dcb);
   } else {
     ExReleaseResourceLite(&Dcb->Resource);
   }
@@ -160,13 +160,13 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     DOKAN_LOG_("Timeout Irp %p", irpEntry->SerialNumber);
 
-    irp = irpEntry->Irp;
+    irp = irpEntry->RequestContext.Irp;
 
     // Create IRPs are special in that this routine is always their place of
     // effective cancellation. So we only care about races with the cancel
     // routine for other IRPs (which can be effectively canceled in either
     // place).
-    if (irpEntry->IrpSp->MajorFunction != IRP_MJ_CREATE) {
+    if (irpEntry->RequestContext.IrpSp->MajorFunction != IRP_MJ_CREATE) {
       if (irp == NULL) {
         // Already canceled previously.
         ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
@@ -196,11 +196,11 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->Irp;
-    PIO_STACK_LOCATION irpSp = irpEntry->IrpSp;
+    irp = irpEntry->RequestContext.Irp;
+    PIO_STACK_LOCATION irpSp = irpEntry->RequestContext.IrpSp;
     if (irpSp->MajorFunction == IRP_MJ_CREATE) {
       BOOLEAN canceled = (irpEntry->TickCount.QuadPart == 0);
-      PFILE_OBJECT fileObject = irpEntry->FileObject;
+      PFILE_OBJECT fileObject = irpEntry->RequestContext.IrpSp->FileObject;
       if (fileObject != NULL) {
         PDokanCCB ccb = fileObject->FsContext2;
         if (ccb != NULL) {
@@ -210,11 +210,11 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
                             : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
         }
       }
-      DokanCancelCreateIrp(
-          Dcb->DeviceObject, irpEntry,
+      DokanCancelCreateIrp(&irpEntry->RequestContext,
           canceled ? STATUS_CANCELLED : STATUS_INSUFFICIENT_RESOURCES);
     } else {
-      DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+      irp->IoStatus.Information = 0;
+      DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES);
     }
     DokanFreeIrpEntry(irpEntry);
   }
@@ -228,7 +228,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
         &logger,
         L"Unmounting due to operation timeout before keepalive handle was"
         L" activated.");
-    DokanUnmount(Dcb);
+    DokanUnmount(NULL, Dcb);
   }
 
   DOKAN_LOG("End");
@@ -237,33 +237,25 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 }
 
 NTSTATUS
-DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
-                            _Inout_ PIRP Irp) {
+DokanResetPendingIrpTimeout(__in PREQUEST_CONTEXT RequestContext) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
-  PDokanVCB vcb;
   PEVENT_INFORMATION eventInfo = NULL;
   ULONG timeout; // in milisecond
 
-  DOKAN_LOG_BEGIN_MJ(Irp);
-
-  GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo)
+  GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, eventInfo)
 
   timeout = eventInfo->Operation.ResetTimeout.Timeout;
   if (DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX < timeout) {
     timeout = DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX;
   }
 
-  vcb = DeviceObject->DeviceExtension;
-  if (GetIdentifierType(vcb) != VCB) {
-    return STATUS_INVALID_PARAMETER;
-  }
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-  KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
+  KeAcquireSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, &oldIrql);
 
   // search corresponding IRP through pending IRP list
-  listHead = &vcb->Dcb->PendingIrp.ListHead;
+  listHead = &RequestContext->Dcb->PendingIrp.ListHead;
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
@@ -279,8 +271,7 @@ DokanResetPendingIrpTimeout(__in PDEVICE_OBJECT DeviceObject,
     DokanUpdateTimeout(&irpEntry->TickCount, timeout);
     break;
   }
-  KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
-  DOKAN_LOG_END_MJ(Irp, STATUS_SUCCESS, 0);
+  KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
   return STATUS_SUCCESS;
 }
 

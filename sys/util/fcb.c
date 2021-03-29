@@ -92,19 +92,19 @@ PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
   return fcb;
 }
 
-PDokanFCB DokanGetFCB(__in PIRP Irp, __in PDokanVCB Vcb, __in PWCHAR FileName,
-                      __in ULONG FileNameLength, BOOLEAN CaseInSensitive) {
+PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext, __in PWCHAR FileName,
+                      __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PDokanFCB fcb = NULL;
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
 
-  UNREFERENCED_PARAMETER(Irp);
+  UNREFERENCED_PARAMETER(RequestContext);
 
-  DokanVCBLockRW(Vcb);
+  DokanVCBLockRW(RequestContext->Vcb);
 
   // search the FCB which is already allocated
   // (being used now)
-  listHead = &Vcb->NextFCB;
+  listHead = &RequestContext->Vcb->NextFCB;
 
   for (thisEntry = listHead->Flink; thisEntry != listHead;
        thisEntry = nextEntry) {
@@ -112,12 +112,12 @@ PDokanFCB DokanGetFCB(__in PIRP Irp, __in PDokanVCB Vcb, __in PWCHAR FileName,
     nextEntry = thisEntry->Flink;
 
     fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DOKAN_LOG_FINE_IRP(Irp, "Has entry FCB=%p FileName=\"%wZ\" FileCount: %lu CaseInSensitive: %d",
-                  fcb, &fcb->FileName, fcb->FileCount, CaseInSensitive);
+    DOKAN_LOG_FINE_IRP(RequestContext, "Has entry FCB=%p FileName=\"%wZ\" FileCount: %lu", fcb,
+                  &fcb->FileName, fcb->FileCount);
     if (fcb->FileName.Length == FileNameLength  // FileNameLength in bytes
-        && RtlEqualUnicodeString(&fn, &fcb->FileName, CaseInSensitive)) {
+        && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
       // we have the FCB which is already allocated and used
-      DOKAN_LOG_FINE_IRP(Irp, "Found existing FCB=%p", fcb);
+      DOKAN_LOG_FINE_IRP(RequestContext, "Found existing FCB=%p", fcb);
       break;
     }
 
@@ -126,14 +126,14 @@ PDokanFCB DokanGetFCB(__in PIRP Irp, __in PDokanVCB Vcb, __in PWCHAR FileName,
 
   // we don't have FCB
   if (fcb == NULL) {
-    DOKAN_LOG_FINE_IRP(Irp, "No matching FCB found.");
-    fcb = DokanAllocateFCB(Vcb, FileName, FileNameLength);
+    DOKAN_LOG_FINE_IRP(RequestContext, "No matching FCB found.");
+    fcb = DokanAllocateFCB(RequestContext->Vcb, FileName, FileNameLength);
 
     // no memory?
     if (fcb == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "Failed to allocate FCB");
+      DOKAN_LOG_FINE_IRP(RequestContext, "Failed to allocate FCB");
       ExFreePool(FileName);
-      DokanVCBUnlock(Vcb);
+      DokanVCBUnlock(RequestContext->Vcb);
       return NULL;
     }
 
@@ -152,7 +152,7 @@ PDokanFCB DokanGetFCB(__in PIRP Irp, __in PDokanVCB Vcb, __in PWCHAR FileName,
   }
 
   InterlockedIncrement(&fcb->FileCount);
-  DokanVCBUnlock(Vcb);
+  DokanVCBUnlock(RequestContext->Vcb);
   return fcb;
 }
 

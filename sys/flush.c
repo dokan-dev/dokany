@@ -23,30 +23,20 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 
 NTSTATUS
-DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
-  PIO_STACK_LOCATION irpSp;
+DokanDispatchFlush(__in PREQUEST_CONTEXT RequestContext) {
   PFILE_OBJECT fileObject;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
   PDokanFCB fcb = NULL;
   PDokanCCB ccb;
-  PDokanVCB vcb;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
 
   __try {
-    DOKAN_LOG_BEGIN_MJ(Irp);
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    fileObject = irpSp->FileObject;
-    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", fileObject);
+    fileObject = RequestContext->IrpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-    if (fileObject == NULL) {
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
-    vcb = DeviceObject->DeviceExtension;
-    if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
+    if (fileObject == NULL || !RequestContext->Vcb ||
+        !DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
       status = STATUS_SUCCESS;
       __leave;
     }
@@ -60,7 +50,8 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     DokanFCBLockRO(fcb);
 
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
+    eventContext =
+        AllocateEventContext(RequestContext, sizeof(EVENT_CONTEXT), ccb);
 
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
@@ -68,7 +59,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     eventContext->Context = ccb->UserContext;
-    DOKAN_LOG_FINE_IRP(Irp, "Get Context %X", (ULONG)ccb->UserContext);
+    DOKAN_LOG_FINE_IRP(RequestContext, "Get Context %X", (ULONG)ccb->UserContext);
 
     // copy file name to be flushed
     eventContext->Operation.Flush.FileNameLength = fcb->FileName.Length;
@@ -78,7 +69,8 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     CcUninitializeCacheMap(fileObject, NULL, NULL);
 
     // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-    status = DokanCheckOplock(fcb, Irp, eventContext, DokanOplockComplete,
+    status = DokanCheckOplock(fcb, RequestContext->Irp, eventContext,
+                              DokanOplockComplete,
                               DokanPrePostIrp);
 
     //
@@ -87,7 +79,7 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     //
     if (status != STATUS_SUCCESS) {
       if (status == STATUS_PENDING) {
-        DOKAN_LOG_FINE_IRP(Irp, "FsRtlCheckOplock returned STATUS_PENDING");
+        DOKAN_LOG_FINE_IRP(RequestContext, "FsRtlCheckOplock returned STATUS_PENDING");
       } else {
         DokanFreeEventContext(eventContext);
       }
@@ -95,38 +87,30 @@ DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
     }
 
     // register this IRP to waiting IRP list and make it pending status
-    status = DokanRegisterPendingIrp(DeviceObject, Irp, eventContext, 0);
+    status = DokanRegisterPendingIrp(RequestContext, eventContext);
 
   } __finally {
     if (fcb)
       DokanFCBUnlock(fcb);
-    DOKAN_LOG_END_MJ(Irp, status, 0);
-    DokanCompleteIrpRequest(Irp, status, 0);
   }
 
   return status;
 }
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteFlush(__in PREQUEST_CONTEXT RequestContext,
                         __in PEVENT_INFORMATION EventInfo) {
-  PIRP irp;
-  PIO_STACK_LOCATION irpSp;
   PDokanCCB ccb;
   PFILE_OBJECT fileObject;
 
-  irp = IrpEntry->Irp;
-  irpSp = IrpEntry->IrpSp;
-  fileObject = irpSp->FileObject;
+  fileObject = RequestContext->IrpSp->FileObject;
 
-  DOKAN_LOG_BEGIN_MJ(irp);
-  DOKAN_LOG_FINE_IRP(irp, "FileObject=%p", fileObject);
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
   ccb = fileObject->FsContext2;
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  DOKAN_LOG_FINE_IRP(irp, "Set Context %X", (ULONG)ccb->UserContext);
+  DOKAN_LOG_FINE_IRP(RequestContext, "Set Context %X", (ULONG)ccb->UserContext);
 
-  DOKAN_LOG_END_MJ(irp, EventInfo->Status, 0);
-  DokanCompleteIrpRequest(irp, EventInfo->Status, 0);
+  RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }

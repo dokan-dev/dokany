@@ -721,17 +721,35 @@ NTSTATUS DokanCheckOplock(
     __in_opt POPLOCK_WAIT_COMPLETE_ROUTINE CompletionRoutine,
     __in_opt POPLOCK_FS_PREPOST_IRP PostIrpRoutine);
 
+typedef struct _REQUEST_CONTEXT {
+  PDEVICE_OBJECT DeviceObject;
+  ULONG ProcessId;
+
+  // Following variables are set depending the type of DeviceObject Type.
+  // Note: For Vcb, Dcb will also be set to Vcb->Dcb.
+  PDOKAN_GLOBAL DokanGlobal;
+  PDokanDCB Dcb;
+  PDokanVCB Vcb;
+
+  PIRP Irp;
+  PIO_STACK_LOCATION IrpSp;
+  ULONG Flags;
+
+  // The IRP was already recompleted by a FsRtl function or we lost ownership.
+  BOOLEAN DoNotComplete;
+
+  // Nullify any logging activity for this request.
+  BOOLEAN DoNotLogActivity;
+} REQUEST_CONTEXT, *PREQUEST_CONTEXT;
+
 // IRP list which has pending status
 // this structure is also used to store event notification IRP
 typedef struct _IRP_ENTRY {
   LIST_ENTRY ListEntry;
   ULONG SerialNumber;
-  PIRP Irp;
-  PIO_STACK_LOCATION IrpSp;
-  PFILE_OBJECT FileObject;
+  REQUEST_CONTEXT RequestContext;
   BOOLEAN CancelRoutineFreeMemory;
   NTSTATUS AsyncStatus;
-  ULONG Flags;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
 } IRP_ENTRY, *PIRP_ENTRY;
@@ -789,58 +807,64 @@ __drv_dispatchType(IRP_MJ_CREATE) __drv_dispatchType(IRP_MJ_CLOSE)
                                             IRP_MJ_SET_SECURITY) NTSTATUS
     DokanBuildRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
-NTSTATUS
-DokanDispatchClose(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+// Build a REQUEST_CONTEXT that holds the Irp, IrpSp and other device
+// information that will be passed during all the context of the request. This
+// avoids having us getting incorrect value (like IrpSp) after the IRP gets
+// canceled or we lose the ownership.
+NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
+                                  _In_ PIRP Irp,
+                                  _Outptr_ PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchCreate(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchClose(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchRead(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchCreate(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchWrite(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchRead(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchFlush(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchWrite(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchQueryInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchFlush(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchSetInformation(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchQueryVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
-                                    __in PIRP Irp);
+DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchSetVolumeInformation(__in PDEVICE_OBJECT DeviceObject,
-                                  __in PIRP Irp);
+DokanDispatchQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchDirectoryControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchFileSystemControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchDirectoryControl(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchDeviceControl(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchFileSystemControl(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchLock(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchDeviceControl(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchCleanup(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchLock(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchShutdown(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchCleanup(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchQuerySecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchShutdown(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchSetSecurity(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchQuerySecurity(__in PREQUEST_CONTEXT RequestContext);
+
+NTSTATUS
+DokanDispatchSetSecurity(__in PREQUEST_CONTEXT RequestContext);
 
 DRIVER_UNLOAD DokanUnload;
 
@@ -854,33 +878,38 @@ VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp);
 
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp);
 
-DRIVER_DISPATCH DokanRegisterPendingIrpForEvent;
+NTSTATUS
+DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext);
 
-DRIVER_DISPATCH DokanRegisterPendingIrpForService;
-
-DRIVER_DISPATCH DokanCompleteIrp;
-
-DRIVER_DISPATCH DokanResetPendingIrpTimeout;
-
-DRIVER_DISPATCH DokanGetAccessToken;
+// Currently not used
+NTSTATUS
+DokanRegisterPendingIrpForService(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanCheckShareAccess(_In_ PIRP Irp, _In_ PFILE_OBJECT FileObject,
-                      _In_ PDokanFCB FcbOrDcb,
+DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext);
+
+NTSTATUS DokanResetPendingIrpTimeout(__in PREQUEST_CONTEXT RequestContext);
+
+NTSTATUS
+DokanGetAccessToken(__in PREQUEST_CONTEXT RequestContext);
+
+NTSTATUS
+DokanCheckShareAccess(_In_ PREQUEST_CONTEXT RequestContext,
+                      _In_ PFILE_OBJECT FileObject, _In_ PDokanFCB FcbOrDcb,
                       _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess);
 
 NTSTATUS
-DokanGetMountPointList(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                       __in PDOKAN_GLOBAL dokanGlobal);
+DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
 DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
 
 NTSTATUS
-DokanEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
+                  __in PDEVICE_OBJECT DeviceObject);
 
 NTSTATUS
-DokanGlobalEventRelease(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
 DokanExceptionFilter(__in PIRP Irp, __in PEXCEPTION_POINTERS ExceptionPointer);
@@ -889,76 +918,72 @@ NTSTATUS
 DokanExceptionHandler(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
                       __in NTSTATUS ExceptionCode);
 
-DRIVER_DISPATCH DokanEventStart;
+NTSTATUS
+DokanEventStart(__in PREQUEST_CONTEXT RequestContext);
 
-DRIVER_DISPATCH DokanEventWrite;
+NTSTATUS
+DokanEventWrite(__in PREQUEST_CONTEXT RequestContext);
 
 PEVENT_CONTEXT
 AllocateEventContextRaw(__in ULONG EventContextLength);
 
 PEVENT_CONTEXT
-AllocateEventContext(__in PDokanDCB Dcb, __in PIRP Irp,
+AllocateEventContext(__in PREQUEST_CONTEXT RequestContext,
                      __in ULONG EventContextLength, __in_opt PDokanCCB Ccb);
 
 VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext);
 
 NTSTATUS
-DokanRegisterPendingIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
-                        __in PEVENT_CONTEXT EventContext, __in ULONG Flags);
+DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
+                        __in PEVENT_CONTEXT EventContext);
 
-VOID
-DokanRegisterPendingRetryIrp(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext);
 
-VOID
-DokanRegisterAsyncCreateFailure(__in PDEVICE_OBJECT DeviceObject,
-                                __in PIRP Irp,
-                                __in NTSTATUS Status);
+VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
+                                     __in NTSTATUS Status);
 
 VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
-VOID DokanCompleteDirectoryControl(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteDirectoryControl(__in PREQUEST_CONTEXT RequestContext,
                                    __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteRead(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteRead(__in PREQUEST_CONTEXT RequestContext,
                        __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteWrite(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteWrite(__in PREQUEST_CONTEXT RequestContext,
                         __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteQueryInformation(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
                                    __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteSetInformation(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
                                  __in PEVENT_INFORMATION EventInfo);
 
 // Invokes DokanCompleteCreate safely to time out an IRP_MJ_CREATE from a thread
 // that is not already in the context of a file system request.
-VOID
-DokanCancelCreateIrp(__in PDEVICE_OBJECT DeviceObject,
-                     __in PIRP_ENTRY IrpEntry,
-                     __in NTSTATUS Status);
+VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
+                          __in NTSTATUS Status);
 
-VOID DokanCompleteCreate(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteCreate(__in PREQUEST_CONTEXT RequestContext,
                          __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteCleanup(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteCleanup(__in PREQUEST_CONTEXT RequestContext,
                           __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteLock(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteLock(__in PREQUEST_CONTEXT RequestContext,
                        __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteQueryVolumeInformation(__in PIRP_ENTRY IrpEntry,
-                                         __in PEVENT_INFORMATION EventInfo,
-                                         __in PDEVICE_OBJECT DeviceObject);
+VOID DokanCompleteQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext,
+                                         __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteFlush(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteFlush(__in PREQUEST_CONTEXT RequestContext,
                         __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteQuerySecurity(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteQuerySecurity(__in PREQUEST_CONTEXT RequestContext,
                                 __in PEVENT_INFORMATION EventInfo);
 
-VOID DokanCompleteSetSecurity(__in PIRP_ENTRY IrpEntry,
+VOID DokanCompleteSetSecurity(__in PREQUEST_CONTEXT RequestContext,
                               __in PEVENT_INFORMATION EventInfo);
 
 VOID DokanNoOpRelease(__in PVOID Fcb);
@@ -981,43 +1006,40 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __out PDokanDCB *Dcb);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
-VOID DokanDeleteDeviceObject(__in PIRP Irp, __in PDokanDCB Dcb);
-VOID DokanDeleteMountPoint(__in PIRP Irp, __in PDokanDCB Dcb);
+VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
+                             __in PDokanDCB Dcb);
+VOID DokanDeleteMountPoint(__in_opt PREQUEST_CONTEXT RequestContext,
+                           __in PDokanDCB Dcb);
 
 // Create FSCTL_SET_REPARSE_POINT payload request aim to be sent with
 // SendDirectoryFsctl.
-PCHAR CreateSetReparsePointRequest(__in PIRP Irp,
+PCHAR CreateSetReparsePointRequest(__in PREQUEST_CONTEXT RequestContext,
                                    __in PUNICODE_STRING SymbolicLinkName,
                                    __out PULONG Length);
 
 // Create FSCTL_DELETE_REPARSE_POINT payload request aim to be sent with
 // SendDirectoryFsctl.
-PCHAR CreateRemoveReparsePointRequest(__in PIRP Irp, __out PULONG Length);
+PCHAR CreateRemoveReparsePointRequest(__in_opt PREQUEST_CONTEXT RequestContext,
+                                      __out PULONG Length);
 
 // Open a Directory path and send a FsControl with the input buffer.
-NTSTATUS SendDirectoryFsctl(__in PIRP Irp, __in PDEVICE_OBJECT DeviceObject,
+NTSTATUS SendDirectoryFsctl(__in_opt PREQUEST_CONTEXT RequestContext,
                             __in PUNICODE_STRING Path, __in ULONG Code,
                             __in PCHAR Input, __in ULONG Length);
 
 // Run function as System user and wait that it returns.
 VOID RunAsSystem(_In_ PKSTART_ROUTINE StartRoutine, PVOID StartContext);
 
-NTSTATUS DokanOplockRequest(__in PIRP *pIrp);
-NTSTATUS DokanCommonLockControl(__in PIRP Irp);
+NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext);
+NTSTATUS DokanCommonLockControl(__in PREQUEST_CONTEXT RequestContext);
 
 // Register the UNCName to system multiple UNC provider.
 VOID DokanRegisterUncProvider(__in PVOID pDcb);
 
-// Use this instead of DokanCompleteIrpRequest, if the dispatch routine sets
-// Information as it goes (via PREPARE_OUTPUT etc.).
-VOID DokanCompleteDispatchRoutine(__in PIRP Irp, __in NTSTATUS Status);
-
-// Used at the end of dispatch routines that don't set Information as they go.
-// We want to reduce the usage and maybe get rid of this one. Note that it only
-// completes the actual IRP in the minority case where there's a final status
-// that did not require a user mode call.
-VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
-                             __in ULONG_PTR Info);
+// Complete the IRP. This can happen at the end of the dispatch routines if
+// dispatch to userland is not needed or only happen after we received the
+// answer from userland.
+VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status);
 
 // DokanNotifyReportChange* returns
 // - STATUS_OBJECT_NAME_INVALID if there appears to be an invalid name stored
@@ -1025,13 +1047,13 @@ VOID DokanCompleteIrpRequest(__in PIRP Irp, __in NTSTATUS Status,
 // - STATUS_INVALID_PARAMETER if the string passed in triggers an access
 //   violation.
 // - STATUS_SUCCESS otherwise.
-NTSTATUS DokanNotifyReportChange0(__in PIRP Irp, 
+NTSTATUS DokanNotifyReportChange0(__in PREQUEST_CONTEXT RequestContext,
                                   __in PDokanFCB Fcb,
                                   __in PUNICODE_STRING FileName,
                                   __in ULONG FilterMatch,
                                   __in ULONG Action);
 
-NTSTATUS DokanNotifyReportChange(__in PIRP Irp,
+NTSTATUS DokanNotifyReportChange(__in PREQUEST_CONTEXT RequestContext,
                                  __in PDokanFCB Fcb,
                                  __in ULONG FilterMatch,
                                  __in ULONG Action);
@@ -1043,10 +1065,10 @@ VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb);
 // should be called if the IRP for which the request was made is about to fail.
 VOID DokanMaybeBackOutAtomicOplockRequest(__in PDokanCCB Ccb, __in PIRP Irp);
 
-PDokanCCB DokanAllocateCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in PDokanFCB Fcb);
+PDokanCCB DokanAllocateCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb);
 
 NTSTATUS
-DokanFreeCCB(__in PIRP Irp, __in PDokanCCB Ccb);
+DokanFreeCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB Ccb);
 
 NTSTATUS
 DokanStartCheckThread(__in PDokanDCB Dcb);
@@ -1054,7 +1076,7 @@ DokanStartCheckThread(__in PDokanDCB Dcb);
 VOID DokanStopCheckThread(__in PDokanDCB Dcb);
 
 BOOLEAN
-DokanCheckCCB(__in PIRP Irp, __in PDokanDCB Dcb, __in_opt PDokanCCB Ccb);
+DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext, __in_opt PDokanCCB Ccb);
 
 VOID DokanInitIrpList(__in PIRP_LIST IrpList);
 
@@ -1065,7 +1087,7 @@ VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb);
 
 VOID DokanUpdateTimeout(__out PLARGE_INTEGER KickCount, __in ULONG Timeout);
 
-VOID DokanUnmount(__in PDokanDCB Dcb);
+VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb);
 
 BOOLEAN IsUnmountPending(__in PDEVICE_OBJECT DeviceObject);
 
@@ -1088,8 +1110,8 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
                                   __in PUNICODE_STRING UNCName,
                                   __in BOOLEAN LockGlobal);
 
-NTSTATUS
-DokanAllocateMdl(__in PIRP Irp, __in ULONG Length);
+NTSTATUS DokanAllocateMdl(__in PREQUEST_CONTEXT RequestContext,
+                          __in ULONG Length);
 
 VOID DokanFreeMdl(__in PIRP Irp);
 
@@ -1097,7 +1119,7 @@ ULONG PointerAlignSize(ULONG sizeInBytes);
 
 VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 
-VOID FlushFcb(__in PIRP Irp, __in PDokanFCB fcb,
+VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB fcb,
               __in_opt PFILE_OBJECT fileObject);
 
 PDEVICE_ENTRY
@@ -1105,9 +1127,10 @@ FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);
 
 BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint);
 
-ULONG GetCurrentSessionId(__in PIRP Irp);
+ULONG GetCurrentSessionId(__in PREQUEST_CONTEXT RequestContext);
 
-VOID RemoveSessionDevices(__in PDOKAN_GLOBAL dokanGlobal, __in ULONG sessionId);
+VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
+                          __in ULONG sessionId);
 
 static UNICODE_STRING sddl = RTL_CONSTANT_STRING(
     L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)");

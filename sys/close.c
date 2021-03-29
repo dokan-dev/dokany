@@ -24,7 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/fcb.h"
 
 NTSTATUS
-DokanDispatchClose(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp)
+DokanDispatchClose(__in PREQUEST_CONTEXT RequestContext)
 
 /*++
 
@@ -43,115 +43,85 @@ Return Value:
 
 --*/
 {
-  PDokanVCB vcb;
-  PIO_STACK_LOCATION irpSp;
-  NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;
   PEVENT_CONTEXT eventContext;
   ULONG eventLength;
   PDokanFCB fcb;
-  DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, IRP_MJ_CLOSE);
+  DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
+                    IRP_MJ_CLOSE);
 
-  __try {
+  fileObject = RequestContext->IrpSp->FileObject;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-    DOKAN_LOG_BEGIN_MJ(Irp);
+  if (fileObject == NULL || RequestContext->Vcb == NULL ||
+      !fileObject->FsContext2) {
+    return STATUS_SUCCESS;
+  }
 
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    fileObject = irpSp->FileObject;
-    DOKAN_LOG_FINE_IRP(Irp, "FileObject=%p", irpSp->FileObject);
-
-    if (fileObject == NULL) {
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
-    vcb = DeviceObject->DeviceExtension;
-    if (vcb == NULL) {
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
-    if (GetIdentifierType(vcb) != VCB ||
-        !DokanCheckCCB(Irp, vcb->Dcb, fileObject->FsContext2)) {
-
-      if (fileObject->FsContext2) {
-        ccb = fileObject->FsContext2;
-        ASSERT(ccb != NULL);
-
-        fcb = ccb->Fcb;
-        ASSERT(fcb != NULL);
-
-        DokanFCBLockRW(fcb);
-        DokanFreeCCB(Irp, ccb);
-        DokanFCBUnlock(fcb);
-
-        DokanFreeFCB(vcb, fcb);
-
-        fileObject->FsContext2 = NULL;
-      }
-
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
+  if (!DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
     ccb = fileObject->FsContext2;
     ASSERT(ccb != NULL);
 
     fcb = ccb->Fcb;
     ASSERT(fcb != NULL);
 
-    OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
     DokanFCBLockRW(fcb);
-    if (fcb->BlockUserModeDispatch) {
-      DokanLogInfo(&logger, L"Closed file with user mode dispatch blocked: \"%wZ\"",
-                   &fcb->FileName);
-      DokanFreeCCB(Irp, ccb);
-      DokanFCBUnlock(fcb);
-      DokanFreeFCB(vcb, fcb);
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
-    eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-    eventContext = AllocateEventContext(vcb->Dcb, Irp, eventLength, ccb);
-
-    if (eventContext == NULL) {
-      // status = STATUS_INSUFFICIENT_RESOURCES;
-      DOKAN_LOG_FINE_IRP(Irp, "EventContext == NULL");
-      DokanFreeCCB(Irp, ccb);
-      DokanFCBUnlock(fcb);
-      DokanFreeFCB(vcb, fcb);
-      status = STATUS_SUCCESS;
-      __leave;
-    }
-
-    eventContext->Context = ccb->UserContext;
-    DOKAN_LOG_FINE_IRP(Irp, "UserContext:%X", (ULONG)ccb->UserContext);
-
-    // copy the file name to be closed
-    eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
-    RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer,
-                  fcb->FileName.Length);
-
-    DokanFreeCCB(Irp, ccb);
+    DokanFreeCCB(RequestContext, ccb);
     DokanFCBUnlock(fcb);
-    DokanFreeFCB(vcb, fcb);
 
-    // Close can not be pending status
-    // don't register this IRP
-    // status = DokanRegisterPendingIrp(DeviceObject, Irp,
-    // eventContext->SerialNumber, 0);
+    DokanFreeFCB(RequestContext->Vcb, fcb);
 
-    // inform it to user-mode
-    DokanEventNotification(&vcb->Dcb->NotifyEvent, eventContext);
-
-    status = STATUS_SUCCESS;
-
-  } __finally {
-    DOKAN_LOG_END_MJ(Irp, status, 0);
-    DokanCompleteIrpRequest(Irp, status, 0);
+    fileObject->FsContext2 = NULL;
+    return STATUS_SUCCESS;
   }
 
-  return status;
+  ccb = fileObject->FsContext2;
+  ASSERT(ccb != NULL);
+
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
+
+  OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
+  DokanFCBLockRW(fcb);
+  if (fcb->BlockUserModeDispatch) {
+    DokanLogInfo(&logger,
+                 L"Closed file with user mode dispatch blocked: \"%wZ\"",
+                 &fcb->FileName);
+    DokanFreeCCB(RequestContext, ccb);
+    DokanFCBUnlock(fcb);
+    DokanFreeFCB(RequestContext->Vcb, fcb);
+    return STATUS_SUCCESS;
+  }
+
+  eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
+  eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
+
+  if (eventContext == NULL) {
+    // status = STATUS_INSUFFICIENT_RESOURCES;
+    DOKAN_LOG_FINE_IRP(RequestContext, "EventContext == NULL");
+    DokanFreeCCB(RequestContext, ccb);
+    DokanFCBUnlock(fcb);
+    DokanFreeFCB(RequestContext->Vcb, fcb);
+    return STATUS_SUCCESS;
+  }
+
+  eventContext->Context = ccb->UserContext;
+  DOKAN_LOG_FINE_IRP(RequestContext, "UserContext:%X", (ULONG)ccb->UserContext);
+
+  // copy the file name to be closed
+  eventContext->Operation.Close.FileNameLength = fcb->FileName.Length;
+  RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer,
+                fcb->FileName.Length);
+
+  DokanFreeCCB(RequestContext, ccb);
+  DokanFCBUnlock(fcb);
+  DokanFreeFCB(RequestContext->Vcb, fcb);
+
+  // Close can not be pending status don't register this IRP
+
+  // inform it to user-mode
+  DokanEventNotification(&RequestContext->Dcb->NotifyEvent, eventContext);
+
+  return STATUS_SUCCESS;
 }

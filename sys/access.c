@@ -24,50 +24,41 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/irp_buffer_helper.h"
 
 NTSTATUS
-DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
+DokanGetAccessToken(__in PREQUEST_CONTEXT RequestContext) {
   KIRQL oldIrql = 0;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
-  PDokanVCB vcb;
   PEVENT_INFORMATION eventInfo = NULL;
   PACCESS_TOKEN accessToken;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  PIO_STACK_LOCATION irpSp = NULL;
   HANDLE handle;
   BOOLEAN hasLock = FALSE;
   ULONG outBufferLen;
   PACCESS_STATE accessState = NULL;
 
-  vcb = DeviceObject->DeviceExtension;
-
   __try {
 
-    if (Irp->RequestorMode != UserMode) {
-      DOKAN_LOG_FINE_IRP(Irp, "Needs to be called from user-mode");
+    if (RequestContext->Irp->RequestorMode != UserMode) {
+      DOKAN_LOG_FINE_IRP(RequestContext, "Needs to be called from user-mode");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
-    if (GetIdentifierType(vcb) != VCB) {
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    GET_IRP_BUFFER_OR_LEAVE(Irp, eventInfo)
-    irpSp = IoGetCurrentIrpStackLocation(Irp);
-    outBufferLen = irpSp->Parameters.DeviceIoControl.OutputBufferLength;
+    GET_IRP_BUFFER_OR_LEAVE(RequestContext->Irp, eventInfo)
+    outBufferLen =
+        RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
     if (outBufferLen != sizeof(EVENT_INFORMATION)) {
-      DOKAN_LOG_FINE_IRP(Irp, "Wrong output buffer length");
+      DOKAN_LOG_FINE_IRP(RequestContext, "Wrong output buffer length");
       status = STATUS_INVALID_PARAMETER;
       __leave;
     }
 
     ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-    KeAcquireSpinLock(&vcb->Dcb->PendingIrp.ListLock, &oldIrql);
+    KeAcquireSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, &oldIrql);
     hasLock = TRUE;
 
     // search corresponding IRP through pending IRP list
-    listHead = &vcb->Dcb->PendingIrp.ListHead;
+    listHead = &RequestContext->Dcb->PendingIrp.ListHead;
 
     for (thisEntry = listHead->Flink; thisEntry != listHead;
          thisEntry = nextEntry) {
@@ -81,24 +72,24 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
       }
 
       // this irp must be IRP_MJ_CREATE
-      if (irpEntry->IrpSp->Parameters.Create.SecurityContext) {
-        accessState =
-            irpEntry->IrpSp->Parameters.Create.SecurityContext->AccessState;
+      if (irpEntry->RequestContext.IrpSp->Parameters.Create.SecurityContext) {
+        accessState = irpEntry->RequestContext.IrpSp->Parameters.Create
+                          .SecurityContext->AccessState;
       }
       break;
     }
-    KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+    KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
     hasLock = FALSE;
 
     if (accessState == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "Can't find pending Irp: %ld", eventInfo->SerialNumber);
+      DOKAN_LOG_FINE_IRP(RequestContext, "Can't find pending Irp: %ld", eventInfo->SerialNumber);
       __leave;
     }
 
     accessToken =
         SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
     if (accessToken == NULL) {
-      DOKAN_LOG_FINE_IRP(Irp, "AccessToken == NULL");
+      DOKAN_LOG_FINE_IRP(RequestContext, "AccessToken == NULL");
       __leave;
     }
     // NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
@@ -106,18 +97,18 @@ DokanGetAccessToken(__in PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
                                    *SeTokenObjectType, KernelMode, &handle);
     if (!NT_SUCCESS(status)) {
-      DOKAN_LOG_FINE_IRP(Irp, "ObOpenObjectByPointer failed: 0x%x %s", status,
+      DOKAN_LOG_FINE_IRP(RequestContext, "ObOpenObjectByPointer failed: 0x%x %s", status,
                        DokanGetNTSTATUSStr(status));
       __leave;
     }
 
     eventInfo->Operation.AccessToken.Handle = handle;
-    Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
+    RequestContext->Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
     status = STATUS_SUCCESS;
 
   } __finally {
     if (hasLock) {
-      KeReleaseSpinLock(&vcb->Dcb->PendingIrp.ListLock, oldIrql);
+      KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
     }
   }
   return status;
