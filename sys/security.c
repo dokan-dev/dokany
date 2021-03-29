@@ -24,7 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 NTSTATUS
 DokanDispatchQuerySecurity(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject;
   ULONG bufferLength;
   PSECURITY_INFORMATION securityInfo;

@@ -31,7 +31,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 NTSTATUS
 GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
   case IOCTL_EVENT_START:
@@ -119,7 +119,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
                   __in PDEVICE_OBJECT DeviceObject) {
   PDokanDCB dcb;
   PDokanVCB vcb;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
                     IRP_MJ_DEVICE_CONTROL);
 
@@ -288,11 +288,11 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
           DOKAN_LOG_FINE_IRP(
               RequestContext,
               "PropertyExistsQuery StorageDeviceWriteCacheProperty");
-          status = STATUS_NOT_IMPLEMENTED;
+          status = STATUS_NOT_SUPPORTED;
         } else {
           DOKAN_LOG_FINE_IRP(RequestContext, "PropertyExistsQuery Unknown %d",
                              query->PropertyId);
-          status = STATUS_NOT_IMPLEMENTED;
+          status = STATUS_NOT_SUPPORTED;
         }
       } else if (query->QueryType == PropertyStandardQuery) {
         if (query->PropertyId == StorageDeviceProperty) {
@@ -306,7 +306,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
         } else if (query->PropertyId == StorageAdapterProperty) {
           DOKAN_LOG_FINE_IRP(RequestContext,
                              "PropertyStandardQuery StorageAdapterProperty");
-          status = STATUS_NOT_IMPLEMENTED;
+          status = STATUS_NOT_SUPPORTED;
         } else {
           DOKAN_LOG_FINE_IRP(RequestContext, "PropertyStandardQuery Unknown %d",
                              query->PropertyId);
@@ -685,7 +685,6 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
     } break;
 
     default:
-      status = STATUS_INVALID_DEVICE_REQUEST;
       DOKAN_LOG_FINE_IRP(
           RequestContext, "Unsupported IoControlCode %x",
           RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
@@ -701,7 +700,7 @@ NTSTATUS
 DiskDeviceControlWithLock(__in PREQUEST_CONTEXT RequestContext,
                           __in PDEVICE_OBJECT DeviceObject) {
   PDokanDCB dcb;
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   dcb = DeviceObject->DeviceExtension;
 
@@ -805,7 +804,6 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
       }*/
       ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
           RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
-      status = STATUS_NOT_IMPLEMENTED;
       // In case of IOCTL_STORAGE_BASE or IOCTL_DISK_BASE OR
       // FILE_DEVICE_NETWORK_FILE_SYSTEM or MOUNTDEVCONTROLTYPE ioctl type, pass
       // to DiskDeviceControl to avoid code duplication
@@ -815,8 +813,7 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
           baseCode == MOUNTDEVCONTROLTYPE) {
         status = DiskDeviceControlWithLock(RequestContext,
                                            RequestContext->Dcb->DeviceObject);
-      }
-      if (status == STATUS_NOT_IMPLEMENTED) {
+      } else {
         DOKAN_LOG_FINE_IRP(
             RequestContext, "Unsupported IoControlCode %x",
             RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);

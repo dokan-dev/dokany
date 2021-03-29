@@ -26,7 +26,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 NTSTATUS
 DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject;
   FILE_INFORMATION_CLASS infoClass;
   PDokanCCB ccb;
@@ -119,7 +119,7 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
     case FileStreamInformation:
       if (!RequestContext->Dcb->UseAltStream) {
         DOKAN_LOG_FINE_IRP(RequestContext, "Alternate stream disabled");
-        status = STATUS_NOT_IMPLEMENTED;
+        status = STATUS_INVALID_PARAMETER;
         __leave;
       }
       break;
