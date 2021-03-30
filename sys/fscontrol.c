@@ -578,6 +578,7 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
   UNREFERENCED_PARAMETER(RequestContext);
   HANDLE handle = 0;
   PUNICODE_STRING directoryStr = NULL;
+  NTSTATUS status = STATUS_SUCCESS;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
                     IRP_MJ_FILE_SYSTEM_CONTROL);
 
@@ -586,8 +587,10 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
     directoryStr = ChangePrefix(Path, &g_DosDevicesPrefix, TRUE /*HasPrefix*/,
                                 &g_ObjectManagerPrefix);
     if (!directoryStr) {
-      return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
-                           L"Failed to change prefix for \"%wZ\"\n", Path);
+      status = STATUS_INVALID_PARAMETER;
+      DokanLogError(&logger, status, L"Failed to change prefix for \"%wZ\"\n",
+                    Path);
+      __leave;
     }
 
     // Open the directory as \??\C:\foo
@@ -597,24 +600,25 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
                                OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL,
                                NULL);
     DOKAN_LOG_FINE_IRP(RequestContext, "Open directory \"%wZ\"", directoryStr);
-    NTSTATUS result = ZwOpenFile(
-        &handle, FILE_WRITE_ATTRIBUTES, &objectAttributes, &ioStatusBlock,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        FILE_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT);
-    if (!NT_SUCCESS(result)) {
-      return DokanLogError(
-          &logger, result,
+    status = ZwOpenFile(&handle, FILE_WRITE_ATTRIBUTES, &objectAttributes,
+                        &ioStatusBlock,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                        FILE_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT);
+    if (!NT_SUCCESS(status)) {
+      DokanLogError(&logger, status,
           L"SendDirectoryFsctl - ZwOpenFile failed to open\"%wZ\"\n",
           directoryStr);
+      __leave;
     }
 
-    result = ZwFsControlFile(handle, NULL, NULL, NULL, &ioStatusBlock, Code,
+    status = ZwFsControlFile(handle, NULL, NULL, NULL, &ioStatusBlock, Code,
                              Input, Length, NULL, 0);
-    if (!NT_SUCCESS(result)) {
-      return DokanLogError(
-          &logger, result,
-          L"SendDirectoryFsctl - ZwFsControlFile Code %X on \"%wZ\" failed\n", Code,
-          directoryStr);
+    if (!NT_SUCCESS(status)) {
+      DokanLogError(
+          &logger, status,
+          L"SendDirectoryFsctl - ZwFsControlFile Code %X on \"%wZ\" failed\n",
+          Code, directoryStr);
+      __leave;
     }
   } __finally {
    if (directoryStr) {
@@ -626,7 +630,7 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
   }
 
   DOKAN_LOG_FINE_IRP(RequestContext, "Success");
-  return STATUS_SUCCESS;
+  return status;
 }
 
 // TODO(adrienj): Change DDbgPrint in this function to DokanLogInfo when we will
