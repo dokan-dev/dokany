@@ -192,6 +192,7 @@ void CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
                        PDOKAN_OPERATIONS DokanOperations) {
+  HANDLE device;
   HANDLE threadIds[DOKAN_MAX_THREAD];
   HANDLE legacyKeepAliveThreadIds = NULL;
   BOOL keepalive_active = FALSE;
@@ -234,6 +235,22 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     DokanOptions->ThreadCount = DOKAN_MAX_THREAD;
   }
 
+  device = CreateFile(DOKAN_GLOBAL_DEVICE_NAME,           // lpFileName
+                      GENERIC_READ | GENERIC_WRITE,       // dwDesiredAccess
+                      FILE_SHARE_READ | FILE_SHARE_WRITE, // dwShareMode
+                      NULL,          // lpSecurityAttributes
+                      OPEN_EXISTING, // dwCreationDistribution
+                      0,             // dwFlagsAndAttributes
+                      NULL           // hTemplateFile
+  );
+
+  if (device == INVALID_HANDLE_VALUE) {
+    DokanDbgPrintW(L"Dokan Error: CreateFile Failed %s: %d\n",
+                   DOKAN_GLOBAL_DEVICE_NAME, GetLastError());
+    return DOKAN_DRIVER_INSTALL_ERROR;
+  }
+
+  DbgPrint("Global device opened\n");
   instance = NewDokanInstance();
   instance->DokanOptions = DokanOptions;
   instance->DokanOperations = DokanOperations;
@@ -244,6 +261,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
     if (IsMountPointDriveLetter(instance->MountPoint)
       && !CheckDriveLetterAvailability(instance->MountPoint[0])) {
         DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
+        CloseHandle(device);
 
         EnterCriticalSection(&g_InstanceCriticalSection);
         RemoveTailList(&g_InstanceList);
@@ -258,6 +276,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   }
 
   if (!DokanStart(instance)) {
+    CloseHandle(device);
     return DOKAN_START_ERROR;
   }
 
@@ -273,6 +292,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   if (!DokanMount(instance->MountPoint, instance->DeviceName, DokanOptions)) {
     SendReleaseIRP(instance->DeviceName);
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
+    CloseHandle(device);
     return DOKAN_MOUNT_ERROR;
   }
 
@@ -348,6 +368,7 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
   // a no-op.
   if (keepalive_handle != INVALID_HANDLE_VALUE)
     CloseHandle(keepalive_handle);
+  CloseHandle(device);
 
   if (DokanOperations->Unmounted) {
     DOKAN_FILE_INFO fileInfo;
