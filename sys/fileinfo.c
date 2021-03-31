@@ -375,7 +375,7 @@ VOID FlushAllCachedFcb(__in PREQUEST_CONTEXT RequestContext,
 NTSTATUS
 DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
 
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_PARAMETER;
   PVOID buffer;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb;

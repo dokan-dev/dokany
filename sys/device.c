@@ -753,7 +753,7 @@ NTSTATUS DokanGetVolumeMetrics(__in PREQUEST_CONTEXT RequestContext) {
 
 NTSTATUS
 VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
     case IOCTL_EVENT_WAIT:
