@@ -26,9 +26,9 @@ NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   BOOLEAN isTopLevelIrp = FALSE;
   NTSTATUS status = STATUS_UNSUCCESSFUL;
 
-  FsRtlEnterFileSystem();
-
+  __try {
     __try {
+      FsRtlEnterFileSystem();
 
       if (!IoGetTopLevelIrp()) {
         isTopLevelIrp = TRUE;
@@ -40,24 +40,26 @@ NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
       status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
     }
-
+  } __finally {
     if (isTopLevelIrp) {
       IoSetTopLevelIrp(NULL);
     }
 
-      FsRtlExitFileSystem();
+    FsRtlExitFileSystem();
+  }
 
   return status;
 }
 
 VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
-                     __in NTSTATUS Status) {
+                          __in NTSTATUS Status) {
   BOOLEAN isTopLevelIrp = FALSE;
   PEVENT_INFORMATION eventInfo = NULL;
 
-        FsRtlEnterFileSystem();
-
   __try {
+    __try {
+      FsRtlEnterFileSystem();
+
       if (!IoGetTopLevelIrp()) {
         isTopLevelIrp = TRUE;
         IoSetTopLevelIrp(RequestContext->Irp);
@@ -74,7 +76,7 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
       DokanExceptionHandler(RequestContext->DeviceObject, RequestContext->Irp,
                             GetExceptionCode());
     }
-
+  } __finally {
     if (eventInfo != NULL) {
       ExFreePool(eventInfo);
     }
@@ -83,8 +85,9 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
       IoSetTopLevelIrp(NULL);
     }
 
-      FsRtlExitFileSystem();
-    }
+    FsRtlExitFileSystem();
+  }
+}
 
 NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
                                   _In_ PIRP Irp,
