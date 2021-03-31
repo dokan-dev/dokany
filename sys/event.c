@@ -671,7 +671,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_LOG_FINE_IRP(RequestContext, "Event start");
 
   // We just use eventStart variable for his type size calculation here
-  GET_IRP_BUFFER(RequestContext->Irp, eventStart)
+  GET_IRP_BUFFER(RequestContext->Irp, eventStart);
 
   outBufferLen =
       RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
@@ -948,7 +948,7 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
   PEVENT_INFORMATION eventInfo = NULL;
   PIRP writeIrp;
 
-  GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, eventInfo)
+  GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, eventInfo);
 
   DOKAN_LOG_FINE_IRP(RequestContext, "EventInfo #%X", eventInfo->SerialNumber);
 

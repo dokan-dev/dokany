@@ -44,7 +44,7 @@ DokanGetAccessToken(__in PREQUEST_CONTEXT RequestContext) {
       __leave;
     }
 
-    GET_IRP_BUFFER_OR_LEAVE(RequestContext->Irp, eventInfo)
+    GET_IRP_BUFFER_OR_LEAVE(RequestContext->Irp, eventInfo);
     outBufferLen =
         RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
     if (outBufferLen != sizeof(EVENT_INFORMATION)) {

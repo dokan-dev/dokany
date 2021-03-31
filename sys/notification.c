@@ -542,7 +542,8 @@ NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry;
 
-  GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(RequestContext->Irp, szMountPoint)
+  GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(RequestContext->Irp,
+                                                szMountPoint);
 
   RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
   RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,

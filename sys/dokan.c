@@ -358,7 +358,7 @@ Return Value:
       !RtlIsNtDdiVersionAvailable(0x0A000005);
 
   DOKAN_LOG_("%s FixFileNameForReparseMountPoint=%d",
-             DokanGetNTSTATUSStr(status), g_FixFileNameForReparseMountPoint)
+             DokanGetNTSTATUSStr(status), g_FixFileNameForReparseMountPoint);
 
   return (status);
 }

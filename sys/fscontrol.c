@@ -148,7 +148,7 @@ NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
     //
     //  Check for a minimum length on the input and ouput buffers.
     //
-    GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, inputBuffer)
+    GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, inputBuffer);
     // Use OutputBuffer only for buffer size check
     if (outputBufferLength < sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)) {
       return STATUS_BUFFER_TOO_SMALL;
@@ -343,7 +343,8 @@ DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
 
     case FSCTL_NOTIFY_PATH: {
       PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = NULL;
-      GET_IRP_NOTIFY_PATH_INTERMEDIATE_OR_RETURN(RequestContext->Irp, pNotifyPath)
+      GET_IRP_NOTIFY_PATH_INTERMEDIATE_OR_RETURN(RequestContext->Irp,
+                                                 pNotifyPath);
 
       fileObject = RequestContext->IrpSp->FileObject;
       if (fileObject == NULL) {
@@ -421,7 +422,7 @@ DokanGlobalUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
 
     case FSCTL_SET_DEBUG_MODE: {
       PULONG pDebug = NULL;
-      GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, pDebug)
+      GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, pDebug);
       g_Debug = *pDebug;
       DOKAN_LOG_FINE_IRP(RequestContext, "Set debug mode: %d", g_Debug);
       return STATUS_SUCCESS;
@@ -486,7 +487,7 @@ DokanUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_LOG_IOCTL(
       RequestContext,
       RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode,
-      "FileObject=%p", RequestContext->IrpSp->FileObject)
+      "FileObject=%p", RequestContext->IrpSp->FileObject);
   if (RequestContext->DokanGlobal) {
     return DokanGlobalUserFsRequest(RequestContext);
   } else if (RequestContext->Vcb) {
@@ -572,8 +573,7 @@ PCHAR CreateRemoveReparsePointRequest(PREQUEST_CONTEXT RequestContext,
 }
 
 NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
-                            PUNICODE_STRING Path, ULONG Code,
-                            PCHAR Input,
+                            PUNICODE_STRING Path, ULONG Code, PCHAR Input,
                             ULONG Length) {
   UNREFERENCED_PARAMETER(RequestContext);
   HANDLE handle = 0;

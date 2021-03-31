@@ -64,7 +64,7 @@ VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) 
                     &(Dcb->SymbolicLinkName->Buffer[deviceNamePos]));
 
   DOKAN_LOG_("Send Unmount to Service : %ws",
-            eventContext->Operation.Unmount.DeviceName)
+             eventContext->Operation.Unmount.DeviceName);
 
   DokanEventNotification(&Dcb->Global->NotifyService, eventContext);
 
@@ -244,7 +244,7 @@ DokanResetPendingIrpTimeout(__in PREQUEST_CONTEXT RequestContext) {
   PEVENT_INFORMATION eventInfo = NULL;
   ULONG timeout; // in milisecond
 
-  GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, eventInfo)
+  GET_IRP_BUFFER_OR_RETURN(RequestContext->Irp, eventInfo);
 
   timeout = eventInfo->Operation.ResetTimeout.Timeout;
   if (DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX < timeout) {

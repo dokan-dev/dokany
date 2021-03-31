@@ -40,7 +40,7 @@ GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
 
   case IOCTL_SET_DEBUG_MODE: {
     PULONG pDebug = NULL;
-    GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, pDebug)
+    GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, pDebug);
     g_Debug = *pDebug;
     status = STATUS_SUCCESS;
     DOKAN_LOG_FINE_IRP(RequestContext, "Set debug mode: %d", g_Debug);
@@ -272,7 +272,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
     case IOCTL_STORAGE_QUERY_PROPERTY: {
       PSTORAGE_PROPERTY_QUERY query = NULL;
-      GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, query)
+      GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, query);
 
       if (query->QueryType == PropertyExistsQuery) {
         if (query->PropertyId == StorageDeviceUniqueIdProperty) {
@@ -281,7 +281,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
               "PropertyExistsQuery StorageDeviceUniqueIdProperty");
 
           PSTORAGE_DEVICE_UNIQUE_IDENTIFIER storage = NULL;
-          GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, storage)
+          GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, storage);
 
           status = STATUS_SUCCESS;
         } else if (query->PropertyId == StorageDeviceWriteCacheProperty) {
@@ -300,7 +300,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
                              "PropertyStandardQuery StorageDeviceProperty");
 
           PSTORAGE_DEVICE_DESCRIPTOR storage = NULL;
-          GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, storage)
+          GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, storage);
 
           status = STATUS_SUCCESS;
         } else if (query->PropertyId == StorageAdapterProperty) {
@@ -412,7 +412,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // for.
 
       PMOUNTDEV_NAME mountdevName = NULL;
-      GET_IRP_MOUNTDEV_NAME_OR_BREAK(RequestContext->Irp, mountdevName)
+      GET_IRP_MOUNTDEV_NAME_OR_BREAK(RequestContext->Irp, mountdevName);
       UNICODE_STRING mountdevNameString =
           DokanWrapUnicodeString(mountdevName->Name, mountdevName->NameLength);
       status = STATUS_SUCCESS;
@@ -476,7 +476,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // mount point, in which case we trigger the actual unmounting from here.
 
       PMOUNTDEV_NAME mountdevName = NULL;
-      GET_IRP_MOUNTDEV_NAME_OR_BREAK(RequestContext->Irp, mountdevName)
+      GET_IRP_MOUNTDEV_NAME_OR_BREAK(RequestContext->Irp, mountdevName);
       UNICODE_STRING mountdevNameString =
           DokanWrapUnicodeString(mountdevName->Name, mountdevName->NameLength);
       status = STATUS_SUCCESS;
