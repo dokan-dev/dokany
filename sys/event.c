@@ -219,9 +219,20 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
 
-  // DDbgPrint("  Lock IrpList.ListLock\n");
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
   KeAcquireSpinLock(&IrpList->ListLock, &oldIrql);
+
+  // Second unmount check with list lock acquired to ensure the device is
+  // not being unmount. Once DokanEventRelease has set the unmount-pending flag
+  // and canceled all IRPs, any IRP added to those list will never be completed
+  // and canceled.
+  if (RequestContext->Vcb && CheckMount &&
+      IsUnmountPendingVcb(RequestContext->Vcb)) {
+    KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
+    DokanFreeIrpEntry(irpEntry);
+    return STATUS_NO_SUCH_DEVICE;
+  }
+
   if (EventContext) {
     EventContext->SerialNumber =
         InterlockedIncrement((LONG*)&RequestContext->Dcb->SerialNumber);
@@ -235,11 +246,8 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
 
   if (RequestContext->Irp->Cancel) {
     if (IoSetCancelRoutine(RequestContext->Irp, NULL) != NULL) {
-      // DDbgPrint("  Release IrpList.ListLock %d\n", __LINE__);
       KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
-
       DokanFreeIrpEntry(irpEntry);
-
       return STATUS_CANCELLED;
     }
   }
@@ -256,7 +264,6 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
 
   KeSetEvent(&IrpList->NotEmpty, IO_NO_INCREMENT, FALSE);
 
-  // DDbgPrint("  Release IrpList.ListLock\n");
   KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
 
   return STATUS_PENDING;
@@ -338,11 +345,6 @@ DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext) {
   // TODO(adrienj): Remove the check when moving to FSCTL only.
   if (RequestContext->Vcb == NULL) {
     return STATUS_INVALID_PARAMETER;
-  }
-
-  if (IsUnmountPendingVcb(RequestContext->Vcb)) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Volume is dismounted");
-    return STATUS_NO_SUCH_DEVICE;
   }
 
   // DDbgPrint("DokanRegisterPendingIrpForEvent\n");
