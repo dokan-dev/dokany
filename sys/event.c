@@ -56,18 +56,18 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   KIRQL oldIrql;
   PIRP_ENTRY irpEntry;
   ULONG serialNumber = 0;
-
   REQUEST_CONTEXT requestContext;
-  NTSTATUS status =
-      DokanBuildRequestContext(DeviceObject, Irp, &requestContext);
+  NTSTATUS status;
+
+  // Release the cancel spinlock
+  IoReleaseCancelSpinLock(Irp->CancelIrql);
+
+  status = DokanBuildRequestContext(DeviceObject, Irp, &requestContext);
   if (!NT_SUCCESS(status)) {
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
     return;
   }
-
-  // Release the cancel spinlock
-  IoReleaseCancelSpinLock(Irp->CancelIrql);
 
   irpEntry = Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY];
 
