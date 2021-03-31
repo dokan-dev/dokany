@@ -44,6 +44,7 @@ VOID DokanCreateIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
     Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
     InterlockedAnd64(&irpEntry->TickCount.QuadPart, 0);
     irpEntry->AsyncStatus = STATUS_CANCELLED;
+    irpEntry->RequestContext.ForcedCanceled = TRUE;
     PDokanVCB vcb = DeviceObject->DeviceExtension;
     PDokanDCB dcb = vcb->Dcb;
     KeSetEvent(&dcb->ForceTimeoutEvent, 0, FALSE);

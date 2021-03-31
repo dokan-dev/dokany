@@ -758,6 +758,10 @@ typedef struct _REQUEST_CONTEXT {
 
   // Nullify any logging activity for this request.
   BOOLEAN DoNotLogActivity;
+
+  // The IRP is forced timeout for being properly canceled.
+  // See DokanCreateIrpCancelRoutine.
+  BOOLEAN ForcedCanceled;
 } REQUEST_CONTEXT, *PREQUEST_CONTEXT;
 
 // IRP list which has pending status

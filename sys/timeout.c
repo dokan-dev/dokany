@@ -162,11 +162,11 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     irp = irpEntry->RequestContext.Irp;
 
-    // Create IRPs are special in that this routine is always their place of
-    // effective cancellation. So we only care about races with the cancel
-    // routine for other IRPs (which can be effectively canceled in either
-    // place).
-    if (irpEntry->RequestContext.IrpSp->MajorFunction != IRP_MJ_CREATE) {
+    // Create IRPs (ForcedCanceled) are special in that this routine is always
+    // their place of effective cancellation. So we only care about races with
+    // the cancel routine for other IRPs (which can be effectively canceled in
+    // either place).
+    if (!irpEntry->RequestContext.ForcedCanceled) {
       if (irp == NULL) {
         // Already canceled previously.
         ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
@@ -179,6 +179,10 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
         irpEntry->CancelRoutineFreeMemory = TRUE;
         continue;
       }
+    } else {
+      // Cleanup ForcedCanceled IRP of the attached CancelRoutine before
+      // Completion.
+      IoSetCancelRoutine(irp, NULL);
     }
 
     // Prevent possible future runs of the cancel routine from doing anything.
