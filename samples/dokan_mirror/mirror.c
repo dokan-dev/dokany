@@ -1402,11 +1402,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
     PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
-
-  DWORD SectorsPerCluster;
-  DWORD BytesPerSector;
-  DWORD NumberOfFreeClusters;
-  DWORD TotalNumberOfClusters;
   WCHAR DriveLetter[3] = {'C', ':', 0};
   PWCHAR RootPathName;
 
@@ -1417,14 +1412,13 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     RootPathName = DriveLetter;
   }
 
-  GetDiskFreeSpace(RootPathName, &SectorsPerCluster, &BytesPerSector,
-                   &NumberOfFreeClusters, &TotalNumberOfClusters);
-  *FreeBytesAvailable =
-      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * NumberOfFreeClusters;
-  *TotalNumberOfFreeBytes =
-      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * NumberOfFreeClusters;
-  *TotalNumberOfBytes =
-      ((ULONGLONG)SectorsPerCluster) * BytesPerSector * TotalNumberOfClusters;
+  if (!GetDiskFreeSpaceExW(RootPathName, (PULARGE_INTEGER)FreeBytesAvailable,
+                           (PULARGE_INTEGER)TotalNumberOfBytes,
+                           (PULARGE_INTEGER)TotalNumberOfFreeBytes)) {
+    DWORD error = GetLastError();
+    DbgPrint(L"GetDiskFreeSpaceEx failed for path %ws", RootPathName);
+    return DokanNtStatusFromWin32(error);
+  }
   return STATUS_SUCCESS;
 }
 
