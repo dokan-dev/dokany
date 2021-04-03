@@ -23,7 +23,7 @@
 
   image:
     - Visual Studio 2019
-    #- Visual Studio 2017
+    - Visual Studio 2017
     - Visual Studio 2015
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
@@ -67,7 +67,7 @@
         if ($env:CONFIGURATION -eq "FsTest") {
           & verifier /standard /driver dokan1.sys
           Write-Host "Before reboot"
-          Start-Sleep -s 2
+          Start-Sleep -s 30 # Wait appveyor to be ready https://github.com/appveyor/ci/issues/3650
           Restart-Computer
           Start-Sleep -s 240 # will reboot before this is finished and proceed with next build step
           Write-Host "Did not reboot for some reason, trying Restart-Computer -Force"
