@@ -122,17 +122,17 @@ VOID IncrementVcbLogCacheCount();
 
 // Default log function.
 #define DOKAN_LOG(Format)                                           \
-  {                                                                 \
+  do {                                                              \
     PREQUEST_CONTEXT dRequestContext = NULL;                        \
     DOKAN_CACHED_LOG(dRequestContext, DOKAN_LOG_HEADER ": " Format) \
-  }
+  } while (0)
 
 // Default log function with variable params.
 #define DOKAN_LOG_(Format, ...)                                   \
-  {                                                               \
+  do {                                                            \
     PREQUEST_CONTEXT dRequestContext = NULL;                      \
     DOKAN_LOG_INTERNAL(dRequestContext, ": " Format, __VA_ARGS__) \
-  }
+  } while (0)
 
 // Logging function that should be used in an Irp context.
 #define DOKAN_LOG_FINE_IRP(RequestContext, Format, ...) \
@@ -154,11 +154,13 @@ VOID IncrementVcbLogCacheCount();
 
 // Log the Irp FSCTL or IOCTL Control code.
 #define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)          \
+  do {                                                                       \
   if (!RequestContext->DoNotLogActivity) {                                 \
     DOKAN_LOG_INTERNAL(RequestContext, "[%p][%s]: " format,                \
                        RequestContext->Irp, DokanGetIoctlStr(ControlCode), \
                        __VA_ARGS__)                                        \
-  }
+    }                                                                        \
+  } while (0)
 
 // Log the whole Irp informations.
 #define DOKAN_LOG_MJ_IRP(RequestContext, Format, ...)                   \
@@ -177,7 +179,7 @@ VOID IncrementVcbLogCacheCount();
 
 // Log the Irp on exit of the dispatch.
 #define DOKAN_LOG_END_MJ(RequestContext, Status)                               \
-  {                                                                            \
+  do {                                                                   \
     if (RequestContext->DoNotComplete) {                                       \
       DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s",         \
                          DokanGetNTSTATUSStr(Status));                         \
@@ -189,7 +191,7 @@ VOID IncrementVcbLogCacheCount();
     if (!RequestContext->DoNotComplete) {                                      \
       DokanCompleteIrpRequest(RequestContext->Irp, Status);                    \
     }                                                                          \
-  }
+  } while (0)
 
 // Return the NTSTATUS define string name.
 PCHAR DokanGetNTSTATUSStr(NTSTATUS Status);
