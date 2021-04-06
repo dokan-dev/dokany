@@ -183,12 +183,12 @@ VOID IncrementVcbLogCacheCount();
     if (RequestContext->DoNotComplete) {                                       \
       DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s",         \
                          DokanGetNTSTATUSStr(Status));                         \
+    } else if (Status == STATUS_PENDING) {                               \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp is marked pending"); \
     } else {                                                                   \
       DOKAN_LOG_FINE_IRP(RequestContext, "End - %s Information=%llx",          \
                          DokanGetNTSTATUSStr(Status),                          \
                          RequestContext->Irp->IoStatus.Information);           \
-    }                                                                          \
-    if (!RequestContext->DoNotComplete) {                                      \
       DokanCompleteIrpRequest(RequestContext->Irp, Status);                    \
     }                                                                          \
   } while (0)
