@@ -141,50 +141,50 @@ VOID IncrementVcbLogCacheCount();
 
 // Only allow logging events that are not Wait & Info to avoid unnecessary log
 // flood
-#define DOKAN_DENIED_LOG_EVENT(IrpSp)                                      \
-  (IrpSp->MajorFunction == IRP_MJ_DEVICE_CONTROL &&                        \
-   (IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_WAIT || \
-    IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_INFO)) || \
-      (IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&                 \
-       IrpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&                     \
-       (IrpSp->Parameters.FileSystemControl.FsControlCode ==                 \
-            IOCTL_EVENT_WAIT ||                                              \
-        IrpSp->Parameters.FileSystemControl.FsControlCode ==                 \
+#define DOKAN_DENIED_LOG_EVENT(IrpSp)                                          \
+  (IrpSp->MajorFunction == IRP_MJ_DEVICE_CONTROL &&                            \
+   (IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_WAIT ||     \
+    IrpSp->Parameters.DeviceIoControl.IoControlCode == IOCTL_EVENT_INFO)) ||   \
+      (IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&                   \
+       IrpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&                       \
+       (IrpSp->Parameters.FileSystemControl.FsControlCode ==                   \
+            IOCTL_EVENT_WAIT ||                                                \
+        IrpSp->Parameters.FileSystemControl.FsControlCode ==                   \
             IOCTL_EVENT_INFO))
 
 // Log the Irp FSCTL or IOCTL Control code.
-#define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)          \
-  do {                                                                       \
-  if (!RequestContext->DoNotLogActivity) {                                 \
-    DOKAN_LOG_INTERNAL(RequestContext, "[%p][%s]: " format,                \
-                       RequestContext->Irp, DokanGetIoctlStr(ControlCode), \
-                       __VA_ARGS__)                                        \
-    }                                                                        \
+#define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)              \
+  do {                                                                         \
+    if (!RequestContext->DoNotLogActivity) {                                   \
+      DOKAN_LOG_INTERNAL(RequestContext, "[%p][%s]: " format,                  \
+                         RequestContext->Irp, DokanGetIoctlStr(ControlCode),   \
+                         __VA_ARGS__)                                          \
+    }                                                                          \
   } while (0)
 
 // Log the whole Irp informations.
-#define DOKAN_LOG_MJ_IRP(RequestContext, Format, ...)                   \
-  DOKAN_LOG_INTERNAL(                                                   \
-      RequestContext, "[%p][%s][%s][%s]: " Format, RequestContext->Irp, \
-      DokanGetIdTypeStr(RequestContext->DeviceObject->DeviceExtension), \
-      DokanGetMajorFunctionStr(RequestContext->IrpSp->MajorFunction),   \
-      DokanGetMinorFunctionStr(RequestContext->IrpSp->MajorFunction,    \
-                               RequestContext->IrpSp->MinorFunction),   \
+#define DOKAN_LOG_MJ_IRP(RequestContext, Format, ...)                          \
+  DOKAN_LOG_INTERNAL(                                                          \
+      RequestContext, "[%p][%s][%s][%s]: " Format, RequestContext->Irp,        \
+      DokanGetIdTypeStr(RequestContext->DeviceObject->DeviceExtension),        \
+      DokanGetMajorFunctionStr(RequestContext->IrpSp->MajorFunction),          \
+      DokanGetMinorFunctionStr(RequestContext->IrpSp->MajorFunction,           \
+                               RequestContext->IrpSp->MinorFunction),          \
       __VA_ARGS__)
 
 // Log the Irp at dispatch time.
-#define DOKAN_LOG_BEGIN_MJ(RequestContext)                \
-  DOKAN_LOG_MJ_IRP(RequestContext, "Begin ProcessId=%lu", \
+#define DOKAN_LOG_BEGIN_MJ(RequestContext)                                     \
+  DOKAN_LOG_MJ_IRP(RequestContext, "Begin ProcessId=%lu",                      \
                    RequestContext->ProcessId)
 
 // Log the Irp on exit of the dispatch.
 #define DOKAN_LOG_END_MJ(RequestContext, Status)                               \
-  do {                                                                   \
+  do {                                                                         \
     if (RequestContext->DoNotComplete) {                                       \
       DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp not completed %s",         \
                          DokanGetNTSTATUSStr(Status));                         \
-    } else if (Status == STATUS_PENDING) {                               \
-      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp is marked pending"); \
+    } else if (Status == STATUS_PENDING) {                                     \
+      DOKAN_LOG_FINE_IRP(RequestContext, "End - Irp is marked pending");       \
     } else {                                                                   \
       DOKAN_LOG_FINE_IRP(RequestContext, "End - %s Information=%llx",          \
                          DokanGetNTSTATUSStr(Status),                          \
