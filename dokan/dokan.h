@@ -395,7 +395,6 @@ typedef struct _DOKAN_OPERATIONS {
   * Same as \ref DOKAN_OPERATIONS.FindFiles but with a search pattern.\n
   * The search pattern is a Windows MS-DOS-style expression.
   * It can contain wild cards and extended characters or none of them. See \ref DokanIsNameInExpression.
-  * 
   *
   * \param PathName Path requested by the Kernel on the FileSystem.
   * \param SearchPattern Search pattern.
