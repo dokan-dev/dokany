@@ -3,6 +3,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+- Kernel - Add AllowIpcBatching option. [Looking for help to implement in the library.](https://github.com/dokan-dev/dokany/issues/981)
+- Kernel - Allow kernel driver logs to be dispatched to userland.
+- Kernel/Library - Add an option to use FSCTL Event type instead of IOCTL with dwDesiredAccess nullified.
+
+### Changed
+- Kernel - Remove legacy -1 status value conversion.
+- Kernel - Remove unused QueryDeviceRelations.
+- Kernel - Convert `DokanLogInfo` to `DDbgPrint` temporarily in `DokanMountVolume` until we have a better logging solution.
+- Kernel - Remove unused PNP IRP.
+- Kernel/Library - Removing `DOKAN_EVENT_DISABLE_OPLOCKS` flag.
+- Kernel - Centralize Irp Completion & Logging (Begin / End) and wrap request information into a `RequestContext`.
+- Mirror - Use `GetDiskFreeSpaceEx` to support larger volume space.
+- Kernel - Remove legacy mount service IOCTL code.
+
+### Fixed
+- Library - Fix rename with double `\` for drive network shared.
+- FUSE - Reuse `fuse_unmount` during `fuse_exit` to trigger `fuse_loop` to exit after Driver unmount the drive.
+- Kernel - Fix a very rare race condition that make library fail to detect unmount.
+- Kernel - Release CancelRoutine during Create timeout.
+
 ## [1.4.1.1000] - 2021-01-14
 ### Added
 - Kernel/Library - Added support for `FileIdExtdDirectoryInformation`. Fixes directory listings under WSL2.
