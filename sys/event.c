@@ -348,27 +348,12 @@ DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  // DDbgPrint("DokanRegisterPendingIrpForEvent\n");
   RequestContext->Vcb->HasEventWait = TRUE;
 
   return RegisterPendingIrpMain(RequestContext,
                                 NULL,  // EventContext
                                 &RequestContext->Dcb->PendingEvent,
                                 TRUE,
-                                /*CurrentStatus=*/STATUS_SUCCESS);
-}
-
-NTSTATUS
-DokanRegisterPendingIrpForService(__in PREQUEST_CONTEXT RequestContext) {
-  if (!RequestContext->DokanGlobal) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "IdentifierType is not DGL");
-    return STATUS_INVALID_PARAMETER;
-  }
-
-  return RegisterPendingIrpMain(RequestContext,
-                                NULL,  // EventContext
-                                &RequestContext->DokanGlobal->PendingService,
-                                FALSE,
                                 /*CurrentStatus=*/STATUS_SUCCESS);
 }
 
@@ -537,8 +522,11 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     RemoveEntryList(thisEntry);
     InsertTailList(&completeList, thisEntry);
     // We break until 2.x.x - See function head comment
+__pragma(warning(push))
+__pragma(warning(disable : 4127))
     if (1 == 1)
         break;
+__pragma(warning(pop))
     offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
                                eventInfo);
     // Everything through offset - 1 must be readable by the completion function
@@ -971,10 +959,6 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
     irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
 
     // check whehter this is corresponding IRP
-
-    // DDbgPrint("SerialNumber irpEntry %X eventInfo %X\n",
-    // irpEntry->SerialNumber, eventInfo->SerialNumber);
-
     if (irpEntry->SerialNumber != eventInfo->SerialNumber) {
       continue;
     }
@@ -1014,9 +998,6 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
       status = STATUS_INSUFFICIENT_RESOURCES;
     } else {
       PVOID buffer;
-      // DDbgPrint("  EventWrite CopyMemory\n");
-      // DDbgPrint("  EventLength %d, BufLength %d\n", eventContext->Length,
-      //            eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength);
       if (RequestContext->Irp->MdlAddress)
         buffer =
             MmGetSystemAddressForMdlNormalSafe(RequestContext->Irp->MdlAddress);

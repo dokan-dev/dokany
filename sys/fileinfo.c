@@ -167,8 +167,6 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     eventContext->Context = ccb->UserContext;
-    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
-
     eventContext->Operation.File.FileInformationClass = infoClass;
 
     // bytes length which is able to be returned

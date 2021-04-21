@@ -159,7 +159,6 @@ DokanDispatchWrite(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     eventContext->Context = ccb->UserContext;
-    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
     // When the length is bigger than usual event notitfication buffer,
     // saves pointer in DiverContext to copy EventContext after allocating
@@ -343,7 +342,6 @@ VOID DokanCompleteWrite(__in PREQUEST_CONTEXT RequestContext,
   ASSERT(fcb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
   RequestContext->Irp->IoStatus.Status = EventInfo->Status;
   RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;

@@ -219,7 +219,6 @@ DokanDispatchQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
     if (ccb) {
       eventContext->Context = ccb->UserContext;
       eventContext->FileFlags = DokanCCBFlagsGet(ccb);
-      // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
     }
 
     eventContext->Operation.Volume.FsInformationClass =

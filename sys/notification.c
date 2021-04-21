@@ -28,13 +28,7 @@ DokanStartEventNotificationThread
         # PendingEvent has pending IPRs (IOCTL_EVENT_WAIT)
     # NotifyEvent has IO events (ex.IRP_MJ_READ)
     # notify NotifyEvent using PendingEvent in this loop
-        NotificationLoop(&Dcb->PendingEvent,
-                                              &Dcb->NotifyEvent);
-
-    # PendingService has service events (ex. Unmount notification)
-        # NotifyService has pending IRPs (IOCTL_SERVICE_WAIT)
-    NotificationLoop(Dcb->Global->PendingService,
-                          &Dcb->Global->NotifyService);
+        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent);
 
 IOCTL_EVENT_RELEASE:
 DokanStopEventNotificationThread
@@ -129,8 +123,6 @@ VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
   InitializeListHead(&driverEventContext->ListEntry);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-
-  // DDbgPrint("DokanEventNotification\n");
 
   ExInterlockedInsertTailList(&NotifyEvent->ListHead,
                               &driverEventContext->ListEntry,
@@ -355,7 +347,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
 
 KSTART_ROUTINE NotificationThread;
 VOID NotificationThread(__in PVOID pDcb) {
-  PKEVENT events[6];
+  PKEVENT events[4];
   PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
@@ -370,20 +362,15 @@ VOID NotificationThread(__in PVOID pDcb) {
   events[0] = &Dcb->ReleaseEvent;
   events[1] = &Dcb->NotifyEvent.NotEmpty;
   events[2] = &Dcb->PendingEvent.NotEmpty;
-  events[3] = &Dcb->Global->PendingService.NotEmpty;
-  events[4] = &Dcb->Global->NotifyService.NotEmpty;
-  events[5] = &Dcb->PendingRetryIrp.NotEmpty;
+  events[3] = &Dcb->PendingRetryIrp.NotEmpty;
   do {
-    status = KeWaitForMultipleObjects(6, events, WaitAny, Executive, KernelMode,
+    status = KeWaitForMultipleObjects(4, events, WaitAny, Executive, KernelMode,
                                       FALSE, NULL, waitBlock);
 
     if (status != STATUS_WAIT_0) {
       if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
         NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent,
                          Dcb->AllowIpcBatching);
-      } else if (status == STATUS_WAIT_0 + 3 || status == STATUS_WAIT_0 + 4) {
-        NotificationLoop(&Dcb->Global->PendingService,
-                         &Dcb->Global->NotifyService, Dcb->AllowIpcBatching);
       } else {
         RetryIrps(&Dcb->PendingRetryIrp);
       }

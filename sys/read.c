@@ -176,7 +176,6 @@ Return Value:
     }
 
     eventContext->Context = ccb->UserContext;
-    // DDbgPrint("   get Context %X\n", (ULONG)ccb->UserContext);
 
     if (isPagingIo) {
       DOKAN_LOG_FINE_IRP(RequestContext, "Paging IO");
@@ -264,15 +263,12 @@ VOID DokanCompleteRead(__in PREQUEST_CONTEXT RequestContext,
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
-  // DDbgPrint("   set Context %X\n", (ULONG)ccb->UserContext);
 
   // buffer which is used to copy Read info
   if (RequestContext->Irp->MdlAddress) {
-    // DDbgPrint("   use MDL Address\n");
     buffer =
         MmGetSystemAddressForMdlNormalSafe(RequestContext->Irp->MdlAddress);
   } else {
-    // DDbgPrint("   use UserBuffer\n");
     buffer = RequestContext->Irp->UserBuffer;
   }
 

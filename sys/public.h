@@ -71,11 +71,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x809, METHOD_NEITHER, FILE_ANY_ACCESS)
 // No IOCTL version as this is now deprecated
 
-#define IOCTL_SERVICE_WAIT                                                     \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define FSCTL_SERVICE_WAIT \
-  CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
 #define IOCTL_RESET_TIMEOUT                                                    \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x80B, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_RESET_TIMEOUT \
