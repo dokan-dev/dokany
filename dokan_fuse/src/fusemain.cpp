@@ -45,7 +45,7 @@ static __thread impl_chain_link *cur_impl_chain_link = NULL;
 impl_chain_guard::impl_chain_guard(impl_fuse_context *ctx, int caller_pid) {
   link.call_ctx_.pid = caller_pid;
   link.call_ctx_.private_data = ctx->user_data_;
-  link.call_ctx_.fuse = static_cast<struct fuse *>(static_cast<void *>(ctx)); // Hack, really...
+  link.call_ctx_.fuse = ctx->fuse_;
 
   link.prev_link_ = cur_impl_chain_link;
 
@@ -69,13 +69,14 @@ struct fuse_context *fuse_get_context(void) {
 ///////////////////////////////////////////////////////////////////////////////////////
 ////// FUSE bridge
 ///////////////////////////////////////////////////////////////////////////////////////
-impl_fuse_context::impl_fuse_context(const struct fuse_operations *ops,
+impl_fuse_context::impl_fuse_context(fuse *fuse,
+                                     const struct fuse_operations *ops,
                                      void *user_data, bool debug,
                                      unsigned int filemask,
                                      unsigned int dirmask, const char *fsname,
                                      const char *volname, const char *uncname)
-    : ops_(*ops), user_data_(user_data), debug_(debug), filemask_(filemask),
-      dirmask_(dirmask), fsname_(fsname),
+    : ops_(*ops), user_data_(user_data), fuse_(fuse), debug_(debug),
+      filemask_(filemask), dirmask_(dirmask), fsname_(fsname),
       volname_(volname), uncname_(uncname) // Use current user data
 {
   // Reset connection info

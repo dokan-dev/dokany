@@ -490,9 +490,9 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   if (fileumask == 0)
     fileumask = umask;
 
-  impl_fuse_context impl(&fs->ops, fs->user_data, fs->conf.debug != 0,
-                         fileumask, dirumask, fs->conf.fsname,
-                         fs->conf.volname, fs->conf.uncname);
+  impl_fuse_context impl(fs, &fs->ops, fs->user_data, fs->conf.debug != 0,
+                         fileumask, dirumask, fs->conf.fsname, fs->conf.volname,
+                         fs->conf.uncname);
 
   // Parse Dokan options
   PDOKAN_OPTIONS dokanOptions = static_cast<PDOKAN_OPTIONS>(malloc(sizeof(DOKAN_OPTIONS)));

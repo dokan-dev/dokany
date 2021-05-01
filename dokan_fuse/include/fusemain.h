@@ -75,6 +75,7 @@ class impl_fuse_context
 	struct fuse_operations ops_;
 	fuse_conn_info conn_info_;
 	void *user_data_;
+	fuse *fuse_;
 	bool debug_;
 
 	unsigned int filemask_;
@@ -83,9 +84,10 @@ class impl_fuse_context
 
 	impl_file_locks file_locks;
 public:
-	impl_fuse_context(const struct fuse_operations *ops, void *user_data, 
-		bool debug, unsigned int filemask, unsigned int dirmask,
-		const char *fsname, const char *volname, const char *uncname);
+	impl_fuse_context(fuse *fuse, const struct fuse_operations *ops,
+			void *user_data, bool debug, unsigned int filemask,
+			unsigned int dirmask, const char *fsname,
+			const char *volname, const char *uncname);
 
 	bool debug() const {return debug_;}
 
