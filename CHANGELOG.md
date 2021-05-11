@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Centralize Irp Completion & Logging (Begin / End) and wrap request information into a `RequestContext`.
 - Mirror - Use `GetDiskFreeSpaceEx` to support larger volume space.
 - Kernel - Remove legacy mount service IOCTL code.
+- FUSE - Return a valid fuse instance during `fuse_get_context`.
 
 ### Fixed
 - Library - Fix rename with double `\` for drive network shared.
