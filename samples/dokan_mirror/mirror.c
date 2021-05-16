@@ -1,7 +1,7 @@
 /*
   Dokan : user-mode file system library for Windows
 
-  Copyright (C) 2020 Google, Inc.
+  Copyright (C) 2020 - 2021 Google, Inc.
   Copyright (C) 2015 - 2019 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
   Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
 
@@ -36,7 +36,7 @@ THE SOFTWARE.
 // Enable Long Paths on Windows 10 version 1607 and later by changing
 // the OS configuration (see Microsoft own documentation for the steps)
 // and rebuild the mirror with the following line uncommented.
-//#define WIN10_ENABLE_LONG_PATH
+#define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
 //dirty but should be enough
 #define DOKAN_MAX_PATH 32768
