@@ -624,6 +624,7 @@ Return Value:
       RtlCopyMemory((PCHAR)fileName + relatedFileName->Length +
                         (needBackSlashAfterRelatedFile ? sizeof(WCHAR) : 0),
                     fileObject->FileName.Buffer, fileObject->FileName.Length);
+      DOKAN_LOG_FINE_IRP(RequestContext, "Absolute FileName=\"%ls\"", fileName);
     } else {
       // if related file object is not specified, copy the file name of file
       // object
