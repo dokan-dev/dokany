@@ -24,6 +24,39 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/irp_buffer_helper.h"
 #include "util/str.h"
 
+NTSTATUS FillNameInformation(__in PREQUEST_CONTEXT RequestContext,
+                             __in PDokanFCB Fcb,
+                             __in PFILE_NAME_INFORMATION NameInfo) {
+  PUNICODE_STRING fileName = &Fcb->FileName;
+  PCHAR dest = (PCHAR)&NameInfo->FileName;
+  NameInfo->FileNameLength = fileName->Length;
+
+#if NON_DOKANCC_FUNCTIONS
+  BOOLEAN isNetworkDevice = (RequestContext->Dcb->VolumeDeviceType ==
+                             FILE_DEVICE_NETWORK_FILE_SYSTEM);
+  if (isNetworkDevice) {
+    PUNICODE_STRING devicePath = RequestContext->Dcb->UNCName->Length
+                                     ? RequestContext->Dcb->UNCName
+                                     : RequestContext->Dcb->DiskDeviceName;
+    NameInfo->FileNameLength += devicePath->Length;
+
+    if (!AppendVarSizeOutputString(RequestContext->Irp, dest, devicePath,
+                                   /*UpdateInformationOnFailure=*/FALSE,
+                                   /*FillSpaceWithPartialString=*/TRUE)) {
+      return STATUS_BUFFER_OVERFLOW;
+    }
+    dest += devicePath->Length;
+  }
+#endif
+
+  if (!AppendVarSizeOutputString(RequestContext->Irp, dest, fileName,
+                                 /*UpdateInformationOnFailure=*/FALSE,
+                                 /*FillSpaceWithPartialString=*/TRUE)) {
+    return STATUS_BUFFER_OVERFLOW;
+  }
+  return STATUS_SUCCESS;
+}
+
 NTSTATUS
 DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
@@ -59,6 +92,14 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
     OplockDebugRecordMajorFunction(fcb, IRP_MJ_QUERY_INFORMATION);
     DokanFCBLockRO(fcb);
     switch (infoClass) {
+    case FileAllInformation: {
+      PFILE_ALL_INFORMATION allInfo;
+      if (!PREPARE_OUTPUT(RequestContext->Irp, allInfo,
+                          /*SetInformationOnFailure=*/FALSE)) {
+        status = STATUS_BUFFER_TOO_SMALL;
+        __leave;
+      }
+    } break;
     case FileNormalizedNameInformation:
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
@@ -68,34 +109,7 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
         __leave;
       }
 
-      PUNICODE_STRING fileName = &fcb->FileName;
-      PCHAR dest = (PCHAR)&nameInfo->FileName;
-      nameInfo->FileNameLength = fileName->Length;
-
-      BOOLEAN isNetworkDevice = (RequestContext->Dcb->VolumeDeviceType ==
-                                 FILE_DEVICE_NETWORK_FILE_SYSTEM);
-      if (isNetworkDevice) {
-        PUNICODE_STRING devicePath = RequestContext->Dcb->UNCName->Length
-                                         ? RequestContext->Dcb->UNCName
-                                         : RequestContext->Dcb->DiskDeviceName;
-        nameInfo->FileNameLength += devicePath->Length;
-
-        if (!AppendVarSizeOutputString(RequestContext->Irp, dest, devicePath,
-                                       /*UpdateInformationOnFailure=*/FALSE,
-                                       /*FillSpaceWithPartialString=*/TRUE)) {
-          status = STATUS_BUFFER_OVERFLOW;
-          __leave;
-        }
-        dest += devicePath->Length;
-      }
-
-      if (!AppendVarSizeOutputString(RequestContext->Irp, dest, fileName,
-                                     /*UpdateInformationOnFailure=*/FALSE,
-                                     /*FillSpaceWithPartialString=*/TRUE)) {
-        status = STATUS_BUFFER_OVERFLOW;
-        __leave;
-      }
-      status = STATUS_SUCCESS;
+      status = FillNameInformation(RequestContext, fcb, nameInfo);
       __leave;
     } break;
     case FilePositionInformation: {
@@ -153,12 +167,8 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
       __leave;
     }
 
-    // if it is not treadted in swich case
-
-    // calculate the length of EVENT_CONTEXT
-    // sum of it's size and file name length
+    // If the request is not handled by the switch case we send it to userland.
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-
     eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
 
     if (eventContext == NULL) {
@@ -253,6 +263,11 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
 
         allInfo->PositionInformation.CurrentByteOffset =
             RequestContext->IrpSp->FileObject->CurrentByteOffset;
+
+        DokanFCBLockRO(ccb->Fcb);
+        RequestContext->Irp->IoStatus.Status = FillNameInformation(
+            RequestContext, ccb->Fcb, &allInfo->NameInformation);
+        DokanFCBUnlock(ccb->Fcb);
 
       } else if (RequestContext->IrpSp->Parameters.QueryFile
                      .FileInformationClass ==
