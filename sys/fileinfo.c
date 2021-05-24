@@ -31,7 +31,6 @@ NTSTATUS FillNameInformation(__in PREQUEST_CONTEXT RequestContext,
   PCHAR dest = (PCHAR)&NameInfo->FileName;
   NameInfo->FileNameLength = fileName->Length;
 
-#if NON_DOKANCC_FUNCTIONS
   BOOLEAN isNetworkDevice = (RequestContext->Dcb->VolumeDeviceType ==
                              FILE_DEVICE_NETWORK_FILE_SYSTEM);
   if (isNetworkDevice) {
@@ -47,7 +46,6 @@ NTSTATUS FillNameInformation(__in PREQUEST_CONTEXT RequestContext,
     }
     dest += devicePath->Length;
   }
-#endif
 
   if (!AppendVarSizeOutputString(RequestContext->Irp, dest, fileName,
                                  /*UpdateInformationOnFailure=*/FALSE,
