@@ -159,71 +159,27 @@ DokanSetEndOfFileInformation(PEVENT_CONTEXT EventContext,
 }
 
 NTSTATUS
-DokanSetLinkInformation(PEVENT_CONTEXT EventContext, PDOKAN_FILE_INFO FileInfo,
-                        PDOKAN_OPERATIONS DokanOperations) {
-  UNREFERENCED_PARAMETER(EventContext);
-  UNREFERENCED_PARAMETER(FileInfo);
-  UNREFERENCED_PARAMETER(DokanOperations);
-  // PDOKAN_LINK_INFORMATION linkInfo =
-  // (PDOKAN_LINK_INFORMATION)((PCHAR)EventContext +
-  // EventContext->Operation.SetFile.BufferOffset);
-
-  return STATUS_NOT_IMPLEMENTED;
-}
-
-NTSTATUS
 DokanSetRenameInformation(PEVENT_CONTEXT EventContext,
                           PDOKAN_FILE_INFO FileInfo,
                           PDOKAN_OPERATIONS DokanOperations) {
   PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
       (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  WCHAR *newName = NULL;
+  PWCHAR newFileName = NULL;
 
   if (!DokanOperations->MoveFile)
     return STATUS_NOT_IMPLEMENTED;
 
-  if (renameInfo->FileName[0] != L'\\' && renameInfo->FileName[0] != L':') {
-    ULONGLONG pos;
-    for (pos = EventContext->Operation.SetFile.FileNameLength / sizeof(WCHAR);
-         pos != 0; --pos) {
-      if (EventContext->Operation.SetFile.FileName[pos] == L'\\')
-        break;
-    }
-    newName = (WCHAR *)malloc((pos + 1) * sizeof(WCHAR) +
-                              renameInfo->FileNameLength + sizeof(WCHAR));
-    if (newName == NULL)
-      return STATUS_INSUFFICIENT_RESOURCES;
-    ZeroMemory(newName, (pos + 1) * sizeof(WCHAR) + renameInfo->FileNameLength +
-                            sizeof(WCHAR));
-    RtlCopyMemory(newName, EventContext->Operation.SetFile.FileName,
-                  (pos + 1) * sizeof(WCHAR));
-    RtlCopyMemory((PCHAR)newName + (pos + 1) * sizeof(WCHAR),
-                  renameInfo->FileName, renameInfo->FileNameLength);
-  } else {
-    // When the drive is networked shared, there a possibility to have a double \ at start.
-    ULONGLONG pos;
-    for (pos = 0; pos + 1 < renameInfo->FileNameLength / sizeof(WCHAR) &&
-                  renameInfo->FileName[pos] == L'\\' &&
-                  renameInfo->FileName[pos + 1] == L'\\';
-         ++pos)
-      ;
-    ULONGLONG skipLength = pos * sizeof(WCHAR);
+  newFileName = (PWCHAR)malloc(renameInfo->FileNameLength + sizeof(WCHAR));
+  if (newFileName == NULL)
+    return STATUS_INSUFFICIENT_RESOURCES;
+  RtlCopyMemory(newFileName, renameInfo->FileName, renameInfo->FileNameLength);
+  newFileName[renameInfo->FileNameLength / sizeof(WCHAR)] = L'\0';
 
-    newName = (WCHAR *)malloc(renameInfo->FileNameLength + sizeof(WCHAR) -
-                              skipLength);
-    if (newName == NULL)
-      return STATUS_INSUFFICIENT_RESOURCES;
-    ZeroMemory(newName,
-               renameInfo->FileNameLength + sizeof(WCHAR) - skipLength);
-    RtlCopyMemory(newName, renameInfo->FileName + pos,
-                  renameInfo->FileNameLength - skipLength);
-  }
-
-  status =
-      DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
-                                newName, renameInfo->ReplaceIfExists, FileInfo);
-  free(newName);
+  status = DokanOperations->MoveFile(EventContext->Operation.SetFile.FileName,
+                                     newFileName, renameInfo->ReplaceIfExists,
+                                     FileInfo);
+  free(newFileName);
   return status;
 }
 
@@ -288,11 +244,6 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
   case FileEndOfFileInformation:
     status = DokanSetEndOfFileInformation(EventContext, &fileInfo,
                                           DokanInstance->DokanOperations);
-    break;
-
-  case FileLinkInformation:
-    status = DokanSetLinkInformation(EventContext, &fileInfo,
-                                     DokanInstance->DokanOperations);
     break;
 
   case FilePositionInformation:
