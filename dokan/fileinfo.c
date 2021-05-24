@@ -245,29 +245,6 @@ DokanFillNetworkOpenInfo(PFILE_NETWORK_OPEN_INFORMATION NetInfo,
 }
 
 NTSTATUS
-DokanFillNetworkPhysicalNameInfo(
-    PFILE_NETWORK_PHYSICAL_NAME_INFORMATION NetInfo,
-    PBY_HANDLE_FILE_INFORMATION FileInfo, PULONG RemainingLength,
-    PEVENT_CONTEXT EventContext) {
-  if (*RemainingLength < sizeof(FILE_NETWORK_PHYSICAL_NAME_INFORMATION) +
-                             EventContext->Operation.File.FileNameLength) {
-    return STATUS_BUFFER_OVERFLOW;
-  }
-
-  UNREFERENCED_PARAMETER(FileInfo);
-
-  NetInfo->FileNameLength = EventContext->Operation.File.FileNameLength;
-  CopyMemory(NetInfo->FileName, EventContext->Operation.File.FileName,
-             EventContext->Operation.File.FileNameLength);
-
-  *RemainingLength -=
-      FIELD_OFFSET(FILE_NETWORK_PHYSICAL_NAME_INFORMATION, FileName[0]);
-  *RemainingLength -= NetInfo->FileNameLength;
-
-  return STATUS_SUCCESS;
-}
-
-NTSTATUS
 DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
                 PBY_HANDLE_FILE_INFORMATION FileInfo, PULONG RemainingLength) {
   if (*RemainingLength < sizeof(FILE_ID_INFORMATION)) {
@@ -538,12 +515,6 @@ VOID DispatchQueryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       status = DokanFindStreams((PFILE_STREAM_INFORMATION)eventInfo->Buffer,
                                 &fileInfo, EventContext, DokanInstance,
                                 &remainingLength);
-      break;
-    case FileNetworkPhysicalNameInformation:
-      DbgPrint("FileNetworkPhysicalNameInformation\n");
-      status = DokanFillNetworkPhysicalNameInfo(
-          (PFILE_NETWORK_PHYSICAL_NAME_INFORMATION)eventInfo->Buffer,
-          &byHandleFileInfo, &remainingLength, EventContext);
       break;
     default: {
       status = STATUS_INVALID_PARAMETER;

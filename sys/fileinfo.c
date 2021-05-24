@@ -138,27 +138,6 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
         __leave;
       }
       break;
-    case FileNetworkPhysicalNameInformation: {
-      // This info class is generally not worth passing to the DLL. It will be
-      // filled in with info that is accessible to the driver.
-
-      PFILE_NETWORK_PHYSICAL_NAME_INFORMATION netInfo;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, netInfo,
-                          /*SetInformationOnFailure=*/FALSE)) {
-        status = STATUS_BUFFER_OVERFLOW;
-        __leave;
-      }
-
-      if (!AppendVarSizeOutputString(RequestContext->Irp, &netInfo->FileName,
-                                     &fcb->FileName,
-                                     /*UpdateInformationOnFailure=*/FALSE,
-                                     /*FillSpaceWithPartialString=*/FALSE)) {
-        status = STATUS_BUFFER_OVERFLOW;
-        __leave;
-      }
-      status = STATUS_SUCCESS;
-      __leave;
-    }
     default:
       DOKAN_LOG_FINE_IRP(RequestContext, "Unsupported FileInfoClass %x", infoClass);
     }
