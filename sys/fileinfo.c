@@ -94,7 +94,9 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
     switch (infoClass) {
     case FileAllInformation: {
       PFILE_ALL_INFORMATION allInfo;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, allInfo,
+      if (!PrepareOutputHelper(
+              RequestContext->Irp, &allInfo,
+              FIELD_OFFSET(FILE_ALL_INFORMATION, NameInformation.FileName),
                           /*SetInformationOnFailure=*/FALSE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         __leave;
@@ -103,7 +105,8 @@ DokanDispatchQueryInformation(__in PREQUEST_CONTEXT RequestContext) {
     case FileNormalizedNameInformation:
     case FileNameInformation: {
       PFILE_NAME_INFORMATION nameInfo;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, nameInfo,
+      if (!PrepareOutputHelper(RequestContext->Irp, &nameInfo,
+                               FIELD_OFFSET(FILE_NAME_INFORMATION, FileName),
                           /*SetInformationOnFailure=*/FALSE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         __leave;

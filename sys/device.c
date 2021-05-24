@@ -325,7 +325,8 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // return an error even if this returns success, if it doesn't match the
       // Mount Manager's cached data.
       PMOUNTDEV_NAME mountdevName;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, mountdevName,
+      if (!PrepareOutputHelper(RequestContext->Irp, &mountdevName,
+                               FIELD_OFFSET(MOUNTDEV_NAME, Name),
                           /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
@@ -343,7 +344,8 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
     case IOCTL_MOUNTDEV_QUERY_UNIQUE_ID: {
       PMOUNTDEV_UNIQUE_ID uniqueId;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, uniqueId,
+      if (!PrepareOutputHelper(RequestContext->Irp, &uniqueId,
+                               FIELD_OFFSET(MOUNTDEV_UNIQUE_ID, UniqueId),
                           /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
@@ -366,7 +368,8 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // a certain drive letter before assignment happens.
 
       PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
-      if (!PREPARE_OUTPUT(RequestContext->Irp, linkName,
+      if (!PrepareOutputHelper(RequestContext->Irp, &linkName,
+                               FIELD_OFFSET(MOUNTDEV_SUGGESTED_LINK_NAME, Name),
                           /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
