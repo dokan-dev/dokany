@@ -14,7 +14,7 @@
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
-  version: 1.4.1-{build}
+  version: 1.5.0-{build}
   configuration:
   - All
   - SonarQube
