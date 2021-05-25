@@ -4,12 +4,16 @@ $ErrorActionPreference = "Stop"
 
 Add-VisualStudio-Path
 
+# This powershell script need SIGNTOOL and EV_CERTTHUMBPRINT env variable set
+# SIGNTOOL - Signtool path
+# EV_CERTTHUMBPRINT - EV Sign certificat thumb print
+
 Write-Host Set Dokan version ...
 if (!(Test-Path -Path .\dokan_wix\SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe)) {
 	Exec-External { msbuild .\dokan_wix\SetAssemblyVersion.sln /p:Configuration=Release /p:Platform="Any CPU" /t:rebuild }
 }
 Exec-External { .\dokan_wix\SetAssemblyVersion\bin\Release\SetAssemblyVersion CHANGELOG.md .\dokan_wix\version.xml . }
-Write-Host Build dokan done !
+Write-Host Build dokan version done !
 
 Exec-External { .\scripts\build.ps1 }
 
