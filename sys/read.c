@@ -168,8 +168,7 @@ Return Value:
     fcbLocked = TRUE;
     // length of EventContext is sum of file name length and itself
     eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-    eventContext =
-        AllocateEventContext(RequestContext, sizeof(EVENT_CONTEXT), ccb);
+    eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
     if (eventContext == NULL) {
       status = STATUS_INSUFFICIENT_RESOURCES;
       __leave;

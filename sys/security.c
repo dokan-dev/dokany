@@ -72,8 +72,7 @@ DokanDispatchQuerySecurity(__in PREQUEST_CONTEXT RequestContext) {
 
   DokanFCBLockRO(fcb);
   eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
-  eventContext =
-      AllocateEventContext(RequestContext, sizeof(EVENT_CONTEXT), ccb);
+  eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
 
   if (eventContext == NULL) {
   	DokanFCBUnlock(fcb);
@@ -217,7 +216,8 @@ DokanDispatchSetSecurity(__in PREQUEST_CONTEXT RequestContext) {
   // PSECURITY_DESCRIPTOR has to be aligned to a 4-byte boundary for use with
   // win32 functions. So we add 3 bytes here, to make sure we have extra room to
   // align BufferOffset.
-  eventLength = sizeof(EVENT_CONTEXT) + securityDescLength + 3;
+  eventLength =
+      sizeof(EVENT_CONTEXT) + securityDescLength + fcb->FileName.Length + 3;
 
   if (EVENT_CONTEXT_MAX_SIZE < eventLength) {
     // TODO: Handle this case like DispatchWrite.
@@ -238,11 +238,14 @@ DokanDispatchSetSecurity(__in PREQUEST_CONTEXT RequestContext) {
   // Align BufferOffset by adding 3, then zeroing the last 2 bits.
   eventContext->Operation.SetSecurity.BufferOffset =
       (FIELD_OFFSET(EVENT_CONTEXT, Operation.SetSecurity.FileName[0]) +
-       sizeof(WCHAR) + 3) &
+       fcb->FileName.Length + sizeof(WCHAR) + 3) &
       ~0x03;
   RtlCopyMemory(
       (PCHAR)eventContext + eventContext->Operation.SetSecurity.BufferOffset,
       securityDescriptor, securityDescLength);
+  eventContext->Operation.SetSecurity.FileNameLength = fcb->FileName.Length;
+  RtlCopyMemory(eventContext->Operation.SetSecurity.FileName,
+                fcb->FileName.Buffer, fcb->FileName.Length);
 
   return DokanRegisterPendingIrp(RequestContext, eventContext);
 }
