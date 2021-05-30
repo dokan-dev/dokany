@@ -36,7 +36,7 @@ PVOID GetInputBuffer(_In_ PIRP Irp);
 
 #define GET_IRP_GENERIC_BUFFER_EX(Irp, Buffer, SizeCompare, Exit, Status,    \
                                   InformationSize)                           \
-  do {                                                                       \
+  {                                                                          \
     ULONG irpBufferLen = GetProvidedInputSize(Irp);                          \
     (Buffer) = GetInputBuffer(Irp);                                          \
     ASSERT((Buffer) != NULL);                                                \
@@ -47,7 +47,7 @@ PVOID GetInputBuffer(_In_ PIRP Irp);
       (Buffer) = NULL;                                                       \
       Exit((Irp), (Status), (InformationSize));                              \
     }                                                                        \
-  } while (0)
+  }
 
 #define GET_IRP_GENERIC_BUFFER(Irp, Buffer, CompareSize) \
   GET_IRP_GENERIC_BUFFER_EX(Irp, Buffer, CompareSize, DOKAN_EXIT_NONE, 0, 0)
