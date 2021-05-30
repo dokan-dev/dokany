@@ -1,7 +1,7 @@
 -
   environment:
     AccessTokenDokanDoc:
-      secure: 1JpCwgUIFUddCeF/nvSRQxb309YpVnHvN/Sd5DLRQCQPTSv/YZVv7CspelmBGSua
+      secure: Omu2AD4ooK5Owx+v4XS3VPuWc0xJyZXGZlgv4ipJqmt0wY2LN7bzev8y3OLHsARU
     SonarQubeToken:
       secure: /gni/fn6VjMyw7qdAvkHuB2h3NoRFdXNqlQSAvqiYsuODhOPDkGGX/yNeOP5F2On
     global:
