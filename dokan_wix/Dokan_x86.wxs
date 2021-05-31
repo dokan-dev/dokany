@@ -45,20 +45,11 @@
     <Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
     <Property Id="INSTALLDEVFILES" Value="0" />
 
-    <Property Id="WIN7KB3033929GDRINSTALLED" Secure="yes">
-      <DirectorySearch Id="searchSystem3" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="WINTRUSTGDR_FileSearch"
-                    Name="wintrust.dll"
-                    MinVersion="6.1.7601.18740"
-                    MaxVersion="6.1.7601.22000"/>
-      </DirectorySearch>
-    </Property>
-
-    <Property Id="WIN7KB3033929LDRINSTALLED" Secure="yes">
+    <Property Id="WIN7KB4474419INSTALLED" Secure="yes">
       <DirectorySearch Id="searchSystem4" Path="[SystemFolder]" Depth="0">
-        <FileSearch Id="WINTRUSTLDR_FileSearch"
+        <FileSearch Id="WINTRUST_FileSearch"
                     Name="wintrust.dll"
-                    MinVersion="6.1.7601.22947"/>
+                    MinVersion="6.1.7601.24381"/>
       </DirectorySearch>
     </Property>
 
@@ -90,7 +81,7 @@
 
     <Condition Message="Installation failed because the 32-bit version of Dokan cannot be installed on a 64-bit version of Windows."><![CDATA[Installed OR NOT VersionNT64]]></Condition>
     <Condition Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND ServicePackLevel >= 1)]]></Condition>
-    <Condition Message="Installation failed because Microsoft patch KB3033929 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/3033929"><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND (WIN7KB3033929GDRINSTALLED OR WIN7KB3033929LDRINSTALLED))]]></Condition>
+	<Condition Message="Installation failed because Microsoft patch KB4474419 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/4474419"><![CDATA[Installed OR VersionNT > 601 OR (VersionNT = 601 AND WIN7KB4474419INSTALLED)]]></Condition>
 
     <Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 
