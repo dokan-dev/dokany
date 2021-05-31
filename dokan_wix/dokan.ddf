@@ -12,23 +12,43 @@
 .Set Compress=on
 .Set CabinetNameTemplate=Dokan.cab
 .Set DiskDirectory1=dokan_wix
-.Set DestinationDir=x64
+.Set DestinationDir=Release\x64
 x64\Release\Driver\sys\dokan.inf
 x64\Release\Driver\sys\dokan1.sys
 x64\Release\Driver\sys\dokan1.cat
 x64\Release\Driver\dokan1.pdb
-.Set DestinationDir=x86
+.Set DestinationDir=Release\x86
 Win32\Release\Driver\sys\dokan.inf
 Win32\Release\Driver\sys\dokan1.sys
 Win32\Release\Driver\sys\dokan1.cat
 Win32\Release\Driver\dokan1.pdb
-.Set DestinationDir=ARM
+.Set DestinationDir=Release\ARM
 ARM\Release\Driver\sys\dokan.inf
 ARM\Release\Driver\sys\dokan1.sys
 ARM\Release\Driver\sys\dokan1.cat
 ARM\Release\Driver\dokan1.pdb
-.Set DestinationDir=ARM64
+.Set DestinationDir=Release\ARM64
 ARM64\Release\Driver\sys\dokan.inf
 ARM64\Release\Driver\sys\dokan1.sys
 ARM64\Release\Driver\sys\dokan1.cat
 ARM64\Release\Driver\dokan1.pdb
+.Set DestinationDir=Debug\x64
+x64\Debug\Driver\sys\dokan.inf
+x64\Debug\Driver\sys\dokan1.sys
+x64\Debug\Driver\sys\dokan1.cat
+x64\Debug\Driver\dokan1.pdb
+.Set DestinationDir=Debug\x86
+Win32\Debug\Driver\sys\dokan.inf
+Win32\Debug\Driver\sys\dokan1.sys
+Win32\Debug\Driver\sys\dokan1.cat
+Win32\Debug\Driver\dokan1.pdb
+.Set DestinationDir=Debug\ARM
+ARM\Debug\Driver\sys\dokan.inf
+ARM\Debug\Driver\sys\dokan1.sys
+ARM\Debug\Driver\sys\dokan1.cat
+ARM\Debug\Driver\dokan1.pdb
+.Set DestinationDir=Debug\ARM64
+ARM64\Debug\Driver\sys\dokan.inf
+ARM64\Debug\Driver\sys\dokan1.sys
+ARM64\Debug\Driver\sys\dokan1.cat
+ARM64\Debug\Driver\dokan1.pdb
