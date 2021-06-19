@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Added
+
+### Changed
+- Installer - Add Debug drivers in cab for submission (Driver signature)
+
+### Fixed
+
 ## [1.5.0.3000] - 2021-05-31
 ### Changed
 - Installer - Add Win7 KB4474419 requirements (replace previous KB3033929).
@@ -533,6 +541,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.5.0.3000...master
 [1.5.0.3000]: https://github.com/dokan-dev/dokany/compare/v1.5.0.2000...v1.5.0.3000
 [1.5.0.2000]: https://github.com/dokan-dev/dokany/compare/v1.5.0.1000...v1.5.0.2000
 [1.5.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.4.1.1000...v1.5.0.1000
