@@ -199,7 +199,7 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
         if (f) return STATUS_OBJECT_NAME_COLLISION;
       } break;
       case CREATE_NEW: {
-        spdlog::info(L"CreateFile: {} CREATE_ALWAYS", filename_str);
+        spdlog::info(L"CreateFile: {} CREATE_NEW", filename_str);
         /*
          * Creates a new file, only if it does not already exist.
          */
