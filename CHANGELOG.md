@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Installer - Add Debug drivers in cab for submission (Driver signature)
 
 ### Fixed
+- Memfs - Invalid create disposition log type.
 
 ## [1.5.0.3000] - 2021-05-31
 ### Changed
