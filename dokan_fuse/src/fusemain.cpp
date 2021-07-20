@@ -298,6 +298,9 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
   if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {// Special entries
     stat.st_mode |= S_IFDIR; // TODO: fill directory params here!!!
   }
+  else if (stbuf != nullptr) {
+    memcpy(&stat, stbuf, sizeof(FUSE_STAT));
+  }
   else if (ctx->ops_.getattr) {
     CHECKED(ctx->ops_.getattr((dirname + name).c_str(), &stat));
   }
