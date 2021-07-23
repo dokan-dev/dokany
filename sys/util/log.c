@@ -18,6 +18,9 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Tmp fix for unresolve external symbol vswprintf build error on last WDK.
+#define _NO_CRT_STDIO_INLINE
+
 #include "../dokan.h"
 #include "log.h"
 
