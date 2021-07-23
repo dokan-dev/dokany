@@ -162,6 +162,10 @@
           
           New-Item -Force -Type Directory $env:MSYS2_CACHE
           $unix_msys2_cache = (Exec-External {& $env:MSYS2_INST_DIR\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
+          
+          # Update keyring to fix possible package signatures we faced in the past.
+          bash "pacman -Sy --noconfirm --cache `"$unix_msys2_cache`" msys2-keyring"
+          
           # We run the upgrade three times, because MSYS2 cannot upgrade itself without restarting
           # TODO: detect if restart is necessary and only run as many times as needed.
           #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
