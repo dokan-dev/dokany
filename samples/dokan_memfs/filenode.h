@@ -42,6 +42,8 @@ THE SOFTWARE.
 #include <unordered_map>
 
 namespace memfs {
+
+// Safe class wrapping a Win32 Security Descriptor
 struct security_informations : std::mutex {
   std::unique_ptr<byte[]> descriptor = nullptr;
   DWORD descriptor_size = 0;
