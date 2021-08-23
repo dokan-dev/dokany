@@ -60,6 +60,8 @@ struct security_informations : std::mutex {
   }
 };
 
+// Contains file time metadata from a node
+// The information can safely be accessed from any thread.
 struct filetimes {
   void reset() {
     lastaccess = lastwrite = creation = get_currenttime();
