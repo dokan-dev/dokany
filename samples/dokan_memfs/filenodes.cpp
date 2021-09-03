@@ -40,30 +40,27 @@ fs_filenodes::fs_filenodes() {
   LPTSTR user_sid_str = NULL;
   LPTSTR group_sid_str = NULL;
 
+  // Build default root filenode SecurityDescriptor
   if (OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &token_handle) ==
       FALSE) {
     throw std::runtime_error("Failed init root resources");
   }
-
   DWORD return_length;
   if (!GetTokenInformation(token_handle, TokenUser, buffer, sizeof(buffer),
                            &return_length)) {
     CloseHandle(token_handle);
     throw std::runtime_error("Failed init root resources");
   }
-
   user_token = (PTOKEN_USER)buffer;
   if (!ConvertSidToStringSid(user_token->User.Sid, &user_sid_str)) {
     CloseHandle(token_handle);
     throw std::runtime_error("Failed init root resources");
   }
-
   if (!GetTokenInformation(token_handle, TokenGroups, buffer, sizeof(buffer),
                            &return_length)) {
     CloseHandle(token_handle);
     throw std::runtime_error("Failed init root resources");
   }
-
   groups_token = (PTOKEN_GROUPS)buffer;
   if (groups_token->GroupCount > 0) {
     if (!ConvertSidToStringSid(groups_token->Groups[0].Sid, &group_sid_str)) {
@@ -71,21 +68,18 @@ fs_filenodes::fs_filenodes() {
       throw std::runtime_error("Failed init root resources");
     }
     swprintf_s(buffer, 1024, L"O:%lsG:%ls", user_sid_str, group_sid_str);
-  } else
+  } else {
     swprintf_s(buffer, 1024, L"O:%ls", user_sid_str);
-
+  }
   LocalFree(user_sid_str);
   LocalFree(group_sid_str);
   CloseHandle(token_handle);
-
   swprintf_s(final_buffer, 2048, L"%lsD:PAI(A;OICI;FA;;;AU)", buffer);
-
   PSECURITY_DESCRIPTOR security_descriptor = NULL;
   ULONG size = 0;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
           final_buffer, SDDL_REVISION_1, &security_descriptor, &size))
     throw std::runtime_error("Failed init root resources");
-
   auto fileNode = std::make_shared<filenode>(L"\\", true,
                                              FILE_ATTRIBUTE_DIRECTORY, nullptr);
   fileNode->security.SetDescriptor(security_descriptor);
