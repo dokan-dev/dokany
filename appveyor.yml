@@ -243,8 +243,11 @@
 
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
 
+        # Flip the config to Debug for a Debug build and installer
+        $BuildConfig=Release
+
         cd ${env:APPVEYOR_BUILD_FOLDER}
-        Exec-External {& .\scripts\build.ps1 -Configurations Release }
+        Exec-External {& .\scripts\build.ps1 -Configurations $BuildConfig }
         .\cert\dokan-sign.ps1
 
         cd dokan_wix
@@ -256,7 +259,7 @@
         "Dokan_WiX.sln",
         "/m",
         "/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll",
-        "/p:Configuration=Release",
+        "/p:Configuration=${BuildConfig}",
         "/p:Platform=${Platform}")
 
         Exec-External {& $buildCmd $buildArgs}
@@ -266,7 +269,7 @@
         Write-Host Build archive done !
 
         Write-Host Upload Artifact...
-        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
+        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\${BuildConfig}\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\dokan.zip" -FileName ("dokan-" + $installer_version + ".zip")
         Write-Host Artifact uploaded!
       }
