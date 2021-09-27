@@ -261,8 +261,13 @@
 
         Exec-External {& $buildCmd $buildArgs}
 
+        Write-Host Build archive ...
+        Exec-External { 7z a -tzip dokan.zip ..\Win32 ..\x64 ..\ARM ..\ARM64 }
+        Write-Host Build archive done !
+
         Write-Host Upload Artifact...
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\Release\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
+        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\dokan.zip" -FileName ("dokan-" + $installer_version + ".zip")
         Write-Host Artifact uploaded!
       }
 
