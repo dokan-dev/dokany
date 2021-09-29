@@ -244,7 +244,7 @@
         & .\SetAssemblyVersion\bin\Release\SetAssemblyVersion ..\CHANGELOG.md version.xml ..\
 
         # Flip the config to Debug for a Debug build and installer
-        $BuildConfig=Release
+        $BuildConfig="Release"
 
         cd ${env:APPVEYOR_BUILD_FOLDER}
         Exec-External {& .\scripts\build.ps1 -Configurations $BuildConfig }
