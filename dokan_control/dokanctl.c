@@ -48,7 +48,6 @@ int ShowUsage() {
           "Example:\n"
           "  /u M                : Unmount M: drive\n"
           "  /u C:\\mount\\dokan   : Unmount mount point C:\\mount\\dokan\n"
-          "  /u 1                : Unmount mount point 1\n"
           "  /i d                : Install driver\n"
           "  /i n                : Install network provider\n"
           "  /r d                : Remove driver\n"
