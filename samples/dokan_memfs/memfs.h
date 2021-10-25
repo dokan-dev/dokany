@@ -43,7 +43,7 @@ class memfs {
   memfs() = default;
   // Start the memory filesystem and block until unmount.
   void run();
-  // Unmount the device when destructor is called
+  // Unmount the device when destructor is called.
   virtual ~memfs();
 
   // FileSystem mount options
@@ -58,7 +58,7 @@ class memfs {
   bool dispatch_driver_logs = false;
   ULONG timeout = 0;
 
-  // FileSystem context runtime
+  // Memory FileSystem runtime context.
   std::unique_ptr<fs_filenodes> fs_filenodes;
 };
 }  // namespace memfs
