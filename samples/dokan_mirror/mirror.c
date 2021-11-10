@@ -81,6 +81,7 @@ static void DbgPrint(LPCWSTR format, ...) {
 static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
+static WCHAR VolumeName[MAX_PATH + 1] = L"DOKAN";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -1330,7 +1331,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   WCHAR volumeRoot[4];
   DWORD fsFlags = 0;
 
-  wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"DOKAN");
+  wcscpy_s(VolumeNameBuffer, VolumeNameSize, VolumeName);
 
   if (VolumeSerialNumber)
     *VolumeSerialNumber = 0x19831116;
@@ -1546,7 +1547,8 @@ void ShowUsage() {
           "  /i Timeout in Milliseconds (ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
           "  /z Enabled FCB GCt\t\t\t\t Might speed up on env with filter drivers (Anti-virus) slowing down the system.\n"
           "  /x Network unmount\t\t\t\t Allows unmounting network drive from file explorer.\n"
-          "  /e Enable Driver Logs\t\t\t\t Forward Driver logs to userland.\n\n"
+          "  /e Enable Driver Logs\t\t\t\t Forward Driver logs to userland.\n"
+          "  /v Volume name\t\t\t\t Personalize the volume name.\n\n"
           "Examples:\n"
           "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
           "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
@@ -1647,6 +1649,11 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
       dokanOptions.UNCName = UNCName;
       DbgPrint(L"UNC Name: %ls\n", UNCName);
+      break;
+    case L'v':
+      CHECK_CMD_ARG(command, argc)
+      wcscpy_s(VolumeName, sizeof(VolumeName) / sizeof(WCHAR), argv[command]);
+      DbgPrint(L"Volume Name: %ls\n", VolumeName);
       break;
     case L'p':
       g_ImpersonateCallerUser = TRUE;
