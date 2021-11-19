@@ -419,7 +419,7 @@ ULONG PopulateRenameEventInformations(__in PREQUEST_CONTEXT RequestContext,
       RtlCopyMemory(renameContext->FileName + fcbFileNamePos,
                     renameInfo->FileName, renameInfoFileNameLength);
     }
-  } else if (renameInfo->RootDirectory == NULL) {
+  } else if (renameInfo->RootDirectory == NULL || !RootDirectoryFcb) {
     // Fully qualified rename: TargetFileObject hold the full path
     // destination
     fileNameLength = targetFileObject->FileName.Length;
@@ -433,7 +433,6 @@ ULONG PopulateRenameEventInformations(__in PREQUEST_CONTEXT RequestContext,
     // TargetFileObject->RelatedFileObject is possible but not enough in some
     // cases.
     // Note: FASTFAT does not support this type of rename but NTFS does.
-    ASSERT(RootDirectoryFcb != NULL);
     PUNICODE_STRING rootFileName = &RootDirectoryFcb->FileName;
     BOOLEAN addSeparator =
         rootFileName->Buffer[rootFileName->Length / sizeof(WCHAR) - 1] != L'\\';
@@ -618,20 +617,21 @@ DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
         }
         // TODO(adrienj): Create a helper to get FCB directly from FsContext2
         PDokanCCB rootDirectoryCcb = (PDokanCCB)rootDirObject->FsContext2;
-        ASSERT(rootDirectoryCcb != NULL);
-        rootDirectoryFcb = (PDokanFCB)rootDirectoryCcb->Fcb;
-        ASSERT(rootDirectoryFcb != NULL);
-        DokanFCBLockRO(rootDirectoryFcb);
-        rootDirectoryFcbLocked = TRUE;
-        DOKAN_LOG_FINE_IRP(RequestContext, "RootDirectory FCB %p \"%wZ\"",
-                           rootDirectoryFcb, rootDirectoryFcb->FileName);
-        // NTFS does not seem to support relative stream rename. In our case we
-        // do our best but having a FileName without the base is clearly
-        // invalid.
-        if (renameInfo->FileNameLength >= sizeof(WCHAR) &&
-            renameInfo->FileName[0] == L':') {
-          status = STATUS_INVALID_PARAMETER;
-          __leave;
+        if (DokanCheckCCB(RequestContext, rootDirectoryCcb)) {
+          rootDirectoryFcb = (PDokanFCB)rootDirectoryCcb->Fcb;
+          ASSERT(rootDirectoryFcb != NULL);
+          DokanFCBLockRO(rootDirectoryFcb);
+          rootDirectoryFcbLocked = TRUE;
+          DOKAN_LOG_FINE_IRP(RequestContext, "RootDirectory FCB %p \"%wZ\"",
+                             rootDirectoryFcb, rootDirectoryFcb->FileName);
+          // NTFS does not seem to support relative stream rename. In our case
+          // we do our best but having a FileName without the base is clearly
+          // invalid.
+          if (renameInfo->FileNameLength >= sizeof(WCHAR) &&
+              renameInfo->FileName[0] == L':') {
+            status = STATUS_INVALID_PARAMETER;
+            __leave;
+          }
         }
       }
       // This is a dry run just to get the needed size to AllocateEventContext
