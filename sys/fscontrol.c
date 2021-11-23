@@ -579,6 +579,7 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
   HANDLE handle = 0;
   PUNICODE_STRING directoryStr = NULL;
   NTSTATUS status = STATUS_SUCCESS;
+  PIRP topLevelIrp = NULL;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
                     IRP_MJ_FILE_SYSTEM_CONTROL);
 
@@ -591,6 +592,11 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
       DokanLogError(&logger, status, L"Failed to change prefix for \"%wZ\"\n",
                     Path);
       __leave;
+    }
+
+    if (RequestContext->IsTopLevelIrp) {
+      topLevelIrp = IoGetTopLevelIrp();
+      IoSetTopLevelIrp(NULL);
     }
 
     // Open the directory as \??\C:\foo
@@ -621,11 +627,14 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
       __leave;
     }
   } __finally {
-   if (directoryStr) {
+    if (directoryStr) {
       DokanFreeUnicodeString(directoryStr);
     }
     if (handle) {
       ZwClose(handle);
+    }
+    if (topLevelIrp) {
+      IoSetTopLevelIrp(topLevelIrp);
     }
   }
 

@@ -35,7 +35,7 @@ NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
         IoSetTopLevelIrp(Irp);
       }
 
-      status = DokanDispatchRequest(DeviceObject, Irp);
+      status = DokanDispatchRequest(DeviceObject, Irp, isTopLevelIrp);
 
     } __except (DokanExceptionFilter(Irp, GetExceptionInformation())) {
       status = DokanExceptionHandler(DeviceObject, Irp, GetExceptionCode());
@@ -90,7 +90,7 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
 }
 
 NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
-                                  _In_ PIRP Irp,
+                                  _In_ PIRP Irp, BOOLEAN IsTopLevelIrp,
                                   _Outptr_ PREQUEST_CONTEXT RequestContext) {
   RtlZeroMemory(RequestContext, sizeof(REQUEST_CONTEXT));
   RequestContext->DeviceObject = DeviceObject;
@@ -119,15 +119,18 @@ NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
   RequestContext->DoNotLogActivity =
       DOKAN_DENIED_LOG_EVENT(RequestContext->IrpSp);
   RequestContext->ProcessId = IoGetRequestorProcessId(RequestContext->Irp);
+  RequestContext->IsTopLevelIrp = IsTopLevelIrp;
   return STATUS_SUCCESS;
 }
 
 NTSTATUS
-DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp) {
+DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
+                     BOOLEAN IsTopLevelIrp) {
   NTSTATUS status = STATUS_DRIVER_INTERNAL_ERROR;
   REQUEST_CONTEXT requestContext;
 
-  NTSTATUS buildRequestStatus = DokanBuildRequestContext(DeviceObject, Irp, &requestContext);
+  NTSTATUS buildRequestStatus = DokanBuildRequestContext(
+      DeviceObject, Irp, IsTopLevelIrp, &requestContext);
   if (!NT_SUCCESS(buildRequestStatus)) {
     return buildRequestStatus;
   }

@@ -63,7 +63,8 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   // Release the cancel spinlock
   IoReleaseCancelSpinLock(Irp->CancelIrql);
 
-  status = DokanBuildRequestContext(DeviceObject, Irp, &requestContext);
+  status = DokanBuildRequestContext(DeviceObject, Irp, /*IsTopLevelIrp=*/FALSE,
+                                    &requestContext);
   if (!NT_SUCCESS(status)) {
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
@@ -143,8 +144,8 @@ None.
   PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
 
   REQUEST_CONTEXT requestContext;
-  NTSTATUS status =
-      DokanBuildRequestContext(irpSp->DeviceObject, Irp, &requestContext);
+  NTSTATUS status = DokanBuildRequestContext(
+      irpSp->DeviceObject, Irp, /*IsTopLevelIrp=*/FALSE, &requestContext);
   if (!NT_SUCCESS(status)) {
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
@@ -175,7 +176,8 @@ VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
   UNREFERENCED_PARAMETER(Context);
   PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
   REQUEST_CONTEXT requestContext;
-  DokanBuildRequestContext(irpSp->DeviceObject, Irp, &requestContext);
+  DokanBuildRequestContext(irpSp->DeviceObject, Irp, /*IsTopLevelIrp=*/FALSE,
+                           &requestContext);
   DOKAN_LOG_FINE_IRP((&requestContext), "Mark Irp pending");
   IoMarkIrpPending(Irp);
 }

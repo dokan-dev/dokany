@@ -332,7 +332,8 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
 VOID DokanRetryCreateAfterOplockBreak(__in PVOID Context, __in PIRP Irp) {
   REQUEST_CONTEXT requestContext;
   NTSTATUS status =
-      DokanBuildRequestContext((PDEVICE_OBJECT)Context, Irp, &requestContext);
+      DokanBuildRequestContext((PDEVICE_OBJECT)Context, Irp,
+                               /*IsTopLevelIrp=*/FALSE, &requestContext);
   if (!NT_SUCCESS(status)) {
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
@@ -765,7 +766,6 @@ Return Value:
                 &RequestContext->IrpSp->Parameters.Create.SecurityContext
                      ->AccessState->SubjectSecurityContext,
                 IoGetFileObjectGenericMapping(), PagedPool) == STATUS_SUCCESS) {
-
           securityDescriptorSize = PointerAlignSize(
               RtlLengthSecurityDescriptor(newFileSecurityDescriptor));
         } else {

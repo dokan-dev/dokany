@@ -762,6 +762,9 @@ typedef struct _REQUEST_CONTEXT {
   // The IRP is forced timeout for being properly canceled.
   // See DokanCreateIrpCancelRoutine.
   BOOLEAN ForcedCanceled;
+
+  // Whether if we are the top-level IRP.
+  BOOLEAN IsTopLevelIrp;
 } REQUEST_CONTEXT, *PREQUEST_CONTEXT;
 
 // IRP list which has pending status
@@ -844,7 +847,7 @@ DOKAN_DISPATCH DokanBuildRequest;
 // avoids having us getting incorrect value (like IrpSp) after the IRP gets
 // canceled or we lose the ownership.
 NTSTATUS DokanBuildRequestContext(_In_ PDEVICE_OBJECT DeviceObject,
-                                  _In_ PIRP Irp,
+                                  _In_ PIRP Irp, BOOLEAN IsTopLevelIrp,
                                   _Outptr_ PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
@@ -934,7 +937,8 @@ NTSTATUS
 DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
-DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp);
+DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
+                     BOOLEAN IsTopLevelIrp);
 
 NTSTATUS
 DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
