@@ -951,7 +951,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   DokanLogInfo(&logger, L"Finished event start with status %d and flags: %I32x",
                driverInfo->Status, driverInfoFlags);
   DOKAN_LOG_FINE_IRP(RequestContext,
-                     "Finished event start with status %d",
+                     "Finished event start with status %d and flags: %I32x",
                      driverInfo->Status, driverInfoFlags);
   return RequestContext->Irp->IoStatus.Status;
 }
