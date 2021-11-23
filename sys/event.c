@@ -653,6 +653,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   ULONG sessionId = (ULONG)-1;
   BOOLEAN startFailure = FALSE;
   BOOLEAN isMountPointDriveLetter = FALSE;
+  ULONG driverInfoFlags = 0;
 
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject, 0);
 
@@ -821,7 +822,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       RequestContext->DokanGlobal->MountId, eventStart->MountPoint,
       eventStart->UNCName, sessionId, baseGuidString,
       RequestContext->DokanGlobal, deviceType, deviceCharacteristics,
-      mountGlobally, useMountManager, &dcb);
+      mountGlobally, useMountManager, &dcb, &dokanControl);
 
   if (!NT_SUCCESS(status)) {
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
@@ -831,15 +832,27 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
-  isMountPointDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
-
   dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
   dcb->MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
       (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
+  isMountPointDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
 
   if (dcb->DispatchDriverLogs) {
     IncrementVcbLogCacheCount();
+  }
+
+  PMOUNT_ENTRY mountEntry =
+      InsertMountEntry(RequestContext->DokanGlobal, &dokanControl, FALSE);
+  if (mountEntry != NULL) {
+    DokanLogInfo(&logger, L"Inserted new mount entry.");
+  } else {
+    ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
+    KeLeaveCriticalRegion();
+    ExFreePool(eventStart);
+    ExFreePool(baseGuidString);
+    return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
+                         L"Failed to allocate new mount entry.");
   }
 
   dcb->FileLockInUserMode = fileLockUserMode;
@@ -912,6 +925,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
           DokanLogError(&logger, status,
                         L"Failed to set reparse point on MountPoint \"%wZ\"",
                         dcb->MountPoint);
+          driverInfo->Status = DOKAN_START_FAILED;
+          driverInfoFlags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED |
+                               DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED;
         }
       }
     }
@@ -923,8 +939,18 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   ExFreePool(eventStart);
   ExFreePool(baseGuidString);
 
-  DokanLogInfo(&logger, L"Finished event start successfully");
+  if (driverInfoFlags & DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
+    DokanEventRelease(RequestContext,
+                      mountEntry->MountControl.VolumeDeviceObject);
+    driverInfo->DeviceNumber = 0;
+    driverInfo->MountId = 0;
+  }
 
+  DokanLogInfo(&logger, L"Finished event start with status %d and flags: %I32x",
+               driverInfo->Status, driverInfoFlags);
+  DOKAN_LOG_FINE_IRP(RequestContext,
+                     "Finished event start with status %d",
+                     driverInfo->Status, driverInfoFlags);
   return RequestContext->Irp->IoStatus.Status;
 }
 

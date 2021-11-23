@@ -882,18 +882,18 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
                       __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
-                      __out PDokanDCB *Dcb) {
+                      __out PDokanDCB *Dcb, __out PDOKAN_CONTROL DokanControl) {
   WCHAR *diskDeviceNameBuf = NULL;
   WCHAR *symbolicLinkNameBuf = NULL;
   WCHAR *mountPointBuf = NULL;
   PDEVICE_OBJECT diskDeviceObject = NULL;
   PDokanDCB dcb = NULL;
   UNICODE_STRING diskDeviceName;
-  BOOLEAN isNetworkFileSystem = (DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
-  PDOKAN_CONTROL dokanControl = NULL;
+  BOOLEAN isNetworkFileSystem = FALSE;
   NTSTATUS status = STATUS_SUCCESS;
   DOKAN_INIT_LOGGER(logger, DriverObject, 0);
 
+  isNetworkFileSystem = (DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
   __try {
     DokanLogInfo(&logger,
                  L"Creating disk device; mount point = %s; mount ID = %ul",
@@ -902,9 +902,8 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     symbolicLinkNameBuf =
         DokanAllocZero(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
     mountPointBuf = DokanAllocZero(MAXIMUM_FILENAME_LENGTH * sizeof(WCHAR));
-    dokanControl = DokanAllocZero(sizeof(DOKAN_CONTROL));
     if (diskDeviceNameBuf == NULL || symbolicLinkNameBuf == NULL ||
-        mountPointBuf == NULL || dokanControl == NULL) {
+        mountPointBuf == NULL) {
       status = DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
           L"Could not allocate buffers while creating disk device.");
       __leave;
@@ -975,6 +974,7 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     dcb = diskDeviceObject->DeviceExtension;
     *Dcb = dcb;
     dcb->DeviceObject = diskDeviceObject;
+    dcb->DriverObject = DriverObject;
     dcb->Global = DokanGlobal;
 
     dcb->Identifier.Type = DCB;
@@ -1068,22 +1068,21 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
     ObReferenceObject(diskDeviceObject);
 
-    // Save to the global mounted list
-    RtlZeroMemory(dokanControl, sizeof(DOKAN_CONTROL));
-    RtlStringCchCopyW(dokanControl->DeviceName,
-                      sizeof(dokanControl->DeviceName) / sizeof(WCHAR),
+    // Prepare the DOKAN_CONTROL struct that the caller will add to the mount
+    // list.
+    RtlZeroMemory(DokanControl, sizeof(DOKAN_CONTROL));
+    RtlStringCchCopyW(DokanControl->DeviceName,
+                      sizeof(DokanControl->DeviceName) / sizeof(WCHAR),
                       diskDeviceNameBuf);
-    RtlStringCchCopyW(dokanControl->MountPoint,
-                      sizeof(dokanControl->MountPoint) / sizeof(WCHAR),
+    RtlStringCchCopyW(DokanControl->MountPoint,
+                      sizeof(DokanControl->MountPoint) / sizeof(WCHAR),
                       mountPointBuf);
     if (UNCName != NULL) {
-      RtlStringCchCopyW(dokanControl->UNCName,
-                        sizeof(dokanControl->UNCName) / sizeof(WCHAR), UNCName);
+      RtlStringCchCopyW(DokanControl->UNCName,
+                        sizeof(DokanControl->UNCName) / sizeof(WCHAR), UNCName);
     }
-    dokanControl->Type = DeviceType;
-    dokanControl->SessionId = dcb->SessionId;
-
-    InsertMountEntry(DokanGlobal, dokanControl, FALSE);
+    DokanControl->Type = DeviceType;
+    DokanControl->SessionId = dcb->SessionId;
   } __finally {
     if (diskDeviceNameBuf)
       ExFreePool(diskDeviceNameBuf);
@@ -1091,8 +1090,6 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
       ExFreePool(symbolicLinkNameBuf);
     if (mountPointBuf)
       ExFreePool(mountPointBuf);
-    if (dokanControl)
-      ExFreePool(dokanControl);
   }
 
   return status;

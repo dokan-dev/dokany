@@ -439,6 +439,36 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                          (1 << 9)
 #define DOKAN_EVENT_DISPATCH_DRIVER_LOGS                            (1 << 10)
 
+// Non-exclusive bits that can be set in EVENT_DRIVER_INFO.Flags for the driver
+// to send back extra info about what happened during a mount attempt, whether
+// or not it succeeded.
+
+// The volume arrival notification did not trigger mounting as expected, so an
+// explicit request was made to the mount manager.
+#define DOKAN_DRIVER_INFO_MOUNT_FORCED 1
+
+// Dokan did not specify a preferred drive letter in response to the suggested
+// link name query from the mount manager. This happens if we know the preferred
+// drive letter is in use, and want the mount manager to select one.
+#define DOKAN_DRIVER_INFO_AUTO_ASSIGN_REQUESTED 2
+
+// Dokan unmounted and then reused the preferred drive letter, because it was
+// determined to be another dokan drive owned by the same Windows user.
+#define DOKAN_DRIVER_INFO_OLD_DRIVE_UNMOUNTED 4
+
+// Dokan determined that the preferred drive letter was in use by a dokan drive
+// owned by a different Windows user. If this is set, then
+// DOKAN_DRIVER_INFO_AUTO_ASSIGNED is also set.
+#define DOKAN_DRIVER_INFO_OLD_DRIVE_LEFT_MOUNTED 8
+
+// The dokan driver is returning a mount response to the DLL before the mount
+// manager has actually assigned a drive letter. We are not sure if this ever
+// happens; if so, it should be very rare.
+#define DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED 16
+
+// Dokan failed to set the reparse point for the mount point folder provided.
+#define DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED 32
+
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
   ULONG Status;
