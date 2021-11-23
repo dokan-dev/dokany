@@ -853,6 +853,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
     ExFreePool(baseGuidString);
+    DokanDeleteDeviceObject(RequestContext, dcb);
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate new mount entry.");
   }
