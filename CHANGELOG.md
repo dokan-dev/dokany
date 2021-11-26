@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.5.1.1000]
+## [1.5.1.1000] - 2021-11-26
 ### Added
 Mirror - Add an option to personalize the volume name.
 
@@ -549,7 +549,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
-[Unreleased]: https://github.com/dokan-dev/dokany/compare/v1.5.0.3000...v1.5.1.1000
+[1.5.1.1000]: https://github.com/dokan-dev/dokany/compare/v1.5.0.3000...v1.5.1.1000
 [1.5.0.3000]: https://github.com/dokan-dev/dokany/compare/v1.5.0.2000...v1.5.0.3000
 [1.5.0.2000]: https://github.com/dokan-dev/dokany/compare/v1.5.0.1000...v1.5.0.2000
 [1.5.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.4.1.1000...v1.5.0.1000
