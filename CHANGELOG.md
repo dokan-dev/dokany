@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [1.5.1.1000] - 2021-11-26
 ### Added
-Mirror - Add an option to personalize the volume name.
+- Mirror - Add an option to personalize the volume name.
 
 ### Changed
 - Installer - Add Debug drivers in cab for submission (Driver signature).
@@ -14,10 +14,10 @@ Mirror - Add an option to personalize the volume name.
 ### Fixed
 - Memfs - Invalid create disposition log type.
 - FUSE - Use `stbuf` in `readdir` callback.
-- Kernel - Fix relative rename with Volume device as RootDirectory BSOD.
+- Kernel - Fix relative rename with Volume device as `RootDirectory` BSOD.
 - Kernel - Return a mount failure and cleanup the devices when the driver fails to set the mount point folder reparse point.
 - Kernel - Reset top-level IRP when creating / deleting reparse points.
-- Kernel - Delete device on InsertMountEntry failure.
+- Kernel - Delete device on `InsertMountEntry` failure.
 
 ## [1.5.0.3000] - 2021-05-31
 ### Changed
