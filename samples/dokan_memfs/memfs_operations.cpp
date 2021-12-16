@@ -48,8 +48,9 @@ static NTSTATUS create_main_stream(
   auto main_stream_name = memfs_helper::GetFileName(filename, stream_names);
   if (!fs_filenodes->find(main_stream_name)) {
     spdlog::info(L"create_main_stream: we create the maing stream {}", main_stream_name);
-    auto n = fs_filenodes->add(std::make_shared<filenode>(
-        main_stream_name, false, file_attributes_and_flags, security_context));
+    auto n = fs_filenodes->add(std::make_shared<filenode>(main_stream_name, false,
+                                   file_attributes_and_flags, security_context),
+        {});
     if (n != STATUS_SUCCESS) return n;
   }
   return STATUS_SUCCESS;
@@ -110,7 +111,7 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
 
       auto newfileNode = std::make_shared<filenode>(
           filename_str, true, FILE_ATTRIBUTE_DIRECTORY, security_context);
-      return filenodes->add(newfileNode);
+      return filenodes->add(newfileNode, stream_names);
     }
 
     if (f && !f->is_directory) return STATUS_NOT_A_DIRECTORY;
@@ -187,8 +188,11 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
           if (n != STATUS_SUCCESS) return n;
         }
 
-        auto n = filenodes->add(std::make_shared<filenode>(
-            filename_str, false, file_attributes_and_flags, security_context));
+        auto n =
+            filenodes->add(std::make_shared<filenode>(filename_str, false,
+                                                      file_attributes_and_flags,
+                                                      security_context),
+                           stream_names);
         if (n != STATUS_SUCCESS) return n;
 
         /*
@@ -214,8 +218,10 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
           if (n != STATUS_SUCCESS) return n;
         }
 
-        auto n = filenodes->add(std::make_shared<filenode>(
-            filename_str, false, file_attributes_and_flags, security_context));
+        auto n = filenodes->add(std::make_shared<filenode>(filename_str, false,
+                                                      file_attributes_and_flags,
+                                                      security_context),
+                           stream_names);
         if (n != STATUS_SUCCESS) return n;
       } break;
       case OPEN_ALWAYS: {
@@ -227,7 +233,8 @@ memfs_createfile(LPCWSTR filename, PDOKAN_IO_SECURITY_CONTEXT security_context,
         if (!f) {
           auto n = filenodes->add(std::make_shared<filenode>(
               filename_str, false, file_attributes_and_flags,
-              security_context));
+                                 security_context),
+                             stream_names);
           if (n != STATUS_SUCCESS) return n;
         } else {
           if (desiredaccess & FILE_EXECUTE) {

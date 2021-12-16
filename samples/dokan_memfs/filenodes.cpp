@@ -89,7 +89,8 @@ fs_filenodes::fs_filenodes() {
   _directoryPaths.emplace(L"\\", std::set<std::shared_ptr<filenode>>());
 }
 
-NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode>& f) {
+NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
+                  std::optional<std::pair<std::wstring, std::wstring>> stream_names) {
   std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
 
   if (f->fileindex == 0)  // previous init
@@ -105,15 +106,18 @@ NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode>& f) {
     return STATUS_OBJECT_PATH_NOT_FOUND;
   }
 
-  auto stream_names = memfs_helper::GetStreamNames(filename);
-  if (!stream_names.second.empty()) {
+  if (!stream_names.has_value())
+    stream_names = memfs_helper::GetStreamNames(filename);
+  if (!stream_names.value().second.empty()) {
+    auto &stream_names_value = stream_names.value();
     spdlog::info(
         L"Add file: {} is an alternate stream {} and has {} as main stream",
-        filename, stream_names.second, stream_names.first);
+        filename, stream_names_value.second, stream_names_value.first);
     auto main_stream_name =
-        memfs_helper::GetFileName(filename, stream_names);
+        memfs_helper::GetFileName(filename, stream_names_value);
     auto main_f = find(main_stream_name);
-    if (!main_f) return STATUS_OBJECT_PATH_NOT_FOUND;
+    if (!main_f)
+      return STATUS_OBJECT_PATH_NOT_FOUND;
     main_f->add_stream(f);
     f->main_stream = main_f;
     f->fileindex = main_f->fileindex;
@@ -222,7 +226,7 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
 
   // Move fileNode
   // 1 - by removing current not with oldName as key
-  add(f);
+  add(f, {});
 
   // 2 - If fileNode is a Dir we move content to destination
   if (f->is_directory) {

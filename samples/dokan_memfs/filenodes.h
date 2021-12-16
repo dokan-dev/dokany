@@ -33,6 +33,7 @@ THE SOFTWARE.
 #include <memory>
 #include <mutex>
 
+#include <optional>
 #include <iostream>
 #include <set>
 #include <unordered_map>
@@ -47,7 +48,10 @@ class fs_filenodes {
 
   // Add a new filenode to the filesystem hierarchy.
   // The file will directly be visible on the filesystem.
-  NTSTATUS add(const std::shared_ptr<filenode>& filenode);
+  // An already processed GetStreamNames can optional be provided
+  NTSTATUS
+  add(const std::shared_ptr<filenode> &filenode,
+      std::optional<std::pair<std::wstring, std::wstring>> stream_names);
 
   // Return the filenode linked to the filename if present.
   std::shared_ptr<filenode> find(const std::wstring& filename);
