@@ -186,7 +186,7 @@ NTSTATUS
 RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
                        __in_opt PEVENT_CONTEXT EventContext,
                        __in PIRP_LIST IrpList, __in ULONG CheckMount,
-                       __in NTSTATUS CurrentStatus) {
+                       __in NTSTATUS CurrentStatus, __in BOOLEAN SetEvent) {
   PIRP_ENTRY irpEntry;
   KIRQL oldIrql;
 
@@ -265,7 +265,9 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] =
       irpEntry;
 
-  KeSetEvent(&IrpList->NotEmpty, IO_NO_INCREMENT, FALSE);
+  if (SetEvent) {
+    KeSetEvent(&IrpList->NotEmpty, IO_NO_INCREMENT, FALSE);
+  }
 
   KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
 
@@ -300,7 +302,8 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
   } else {
     status = RegisterPendingIrpMain(RequestContext, EventContext,
                                     &RequestContext->Dcb->PendingIrp, TRUE,
-                                    /*CurrentStatus=*/STATUS_SUCCESS);
+                                    /*CurrentStatus=*/STATUS_SUCCESS,
+                                    /*SetEvent=*/FALSE);
   }
 
   if (status == STATUS_PENDING) {
@@ -329,7 +332,8 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext) {
   RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
                          &RequestContext->Dcb->PendingRetryIrp,
                          /*CheckMount=*/TRUE,
-                         /*CurrentStatus=*/STATUS_SUCCESS);
+                         /*CurrentStatus=*/STATUS_SUCCESS,
+                         /*SetEvent=*/TRUE);
 }
 
 VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
@@ -339,7 +343,7 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
   }
   RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
                          &RequestContext->Dcb->PendingIrp,
-                         /*CheckMount=*/TRUE, Status);
+                         /*CheckMount=*/TRUE, Status, /*SetEvent=*/FALSE);
   KeSetEvent(&RequestContext->Dcb->ForceTimeoutEvent, 0, FALSE);
 }
 
@@ -356,7 +360,8 @@ DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext) {
                                 NULL,  // EventContext
                                 &RequestContext->Dcb->PendingEvent,
                                 TRUE,
-                                /*CurrentStatus=*/STATUS_SUCCESS);
+                                /*CurrentStatus=*/STATUS_SUCCESS,
+                                /*SetEvent=*/TRUE);
 }
 
 void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
