@@ -45,7 +45,8 @@ static NTSTATUS create_main_stream(
     PDOKAN_IO_SECURITY_CONTEXT security_context) {
   // When creating a new a alternated stream, we need to be sure
   // the main stream exist otherwise we create it.
-  auto main_stream_name = memfs_helper::GetFileName(filename, stream_names);
+  auto main_stream_name =
+      memfs_helper::GetFileNameStreamLess(filename, stream_names);
   if (!fs_filenodes->find(main_stream_name)) {
     spdlog::info(L"create_main_stream: we create the maing stream {}", main_stream_name);
     auto n = fs_filenodes->add(std::make_shared<filenode>(main_stream_name, false,
@@ -429,11 +430,12 @@ static NTSTATUS DOKAN_CALLBACK memfs_findfiles(LPCWSTR filename,
   ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
   for (const auto& f : files) {
     if (f->main_stream) continue; // Do not list File Streams
-    const auto fileNodeName = f->get_filename();
-    auto fileName = std::filesystem::path(fileNodeName).filename().wstring();
-    if (fileName.length() > MAX_PATH) continue;
-    std::copy(fileName.begin(), fileName.end(), std::begin(findData.cFileName));
-    findData.cFileName[fileName.length()] = '\0';
+    const auto fileNodeName = memfs_helper::GetFileName(f->get_filename());
+    if (fileNodeName.size() > MAX_PATH)
+      continue;
+    std::copy(fileNodeName.begin(), fileNodeName.end(),
+              std::begin(findData.cFileName));
+    findData.cFileName[fileNodeName.length()] = '\0';
     findData.dwFileAttributes = f->attributes;
     memfs_helper::LlongToFileTime(f->times.creation, findData.ftCreationTime);
     memfs_helper::LlongToFileTime(f->times.lastaccess,
@@ -539,7 +541,8 @@ static NTSTATUS DOKAN_CALLBACK memfs_movefile(LPCWSTR filename,
     // We removed the stream type and now need to concat the filename and the
     // new stream name
     auto stream_names = memfs_helper::GetStreamNames(filename_str);
-    new_filename_str = memfs_helper::GetFileName(filename, stream_names) +
+    new_filename_str =
+        memfs_helper::GetFileNameStreamLess(filename, stream_names) +
                        L":" + new_stream_names.second;
   }
   spdlog::info(L"MoveFile: after {} to {}", filename_str, new_filename_str);
@@ -738,33 +741,34 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
               memfs_helper::DataStreamNameStr.end(),
               std::begin(stream_data.cStreamName) + 1);
     stream_data.cStreamName[0] = ':';
-    stream_data.cStreamName[memfs_helper::DataStreamNameStr.length() + 1] = L'\0';
+    stream_data.cStreamName[memfs_helper::DataStreamNameStr.length() + 1] =
+        L'\0';
     stream_data.StreamSize.QuadPart = f->get_filesize();
     fill_findstreamdata(&stream_data, dokanfileinfo);
   } else if (streams.empty()) {
     // The node is a directory without any alternate streams
     return STATUS_END_OF_FILE;
   }
-
   // Add the alternated stream attached
   // for \foo:bar we need to return in the form of bar:$DATA
-  for (const auto& stream : streams) {
+  for (const auto &stream : streams) {
     auto stream_names = memfs_helper::GetStreamNames(stream.first);
-    if (stream_names.second.length() + memfs_helper::DataStreamNameStr.length() +
-            1 >
+    if (stream_names.second.length() +
+            memfs_helper::DataStreamNameStr.length() + 1 >
         sizeof(stream_data.cStreamName))
       continue;
     // Copy the filename foo
     std::copy(stream_names.second.begin(), stream_names.second.end(),
               std::begin(stream_data.cStreamName) + 1);
     // Concat :$DATA
-    std::copy(
-        memfs_helper::DataStreamNameStr.begin(),
-        memfs_helper::DataStreamNameStr.end(),
-        std::begin(stream_data.cStreamName) + stream_names.second.length() + 1);
+    std::copy(memfs_helper::DataStreamNameStr.begin(),
+              memfs_helper::DataStreamNameStr.end(),
+              std::begin(stream_data.cStreamName) +
+                  stream_names.second.length() + 1);
     stream_data.cStreamName[0] = ':';
     stream_data.cStreamName[stream_names.second.length() +
-                            memfs_helper::DataStreamNameStr.length() + 1] = L'\0';
+                            memfs_helper::DataStreamNameStr.length() + 1] =
+        L'\0';
     stream_data.StreamSize.QuadPart = stream.second->get_filesize();
     spdlog::info(L"FindStreams: {} StreamName: {} Size: {:x}", filename_str,
                  stream_names.second, stream_data.StreamSize.QuadPart);

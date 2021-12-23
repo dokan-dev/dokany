@@ -36,6 +36,18 @@ namespace memfs {
 // Memfs helpers
 class memfs_helper {
  public:
+   static inline std::wstring GetFileName(const std::wstring &path) {
+     std::size_t x = path.find_last_of('\\');
+     return path.substr(x + 1);
+   }
+
+  static inline std::wstring GetParentPath(const std::wstring& path) {
+    std::size_t x = path.find_last_of('\\');
+    if (x == 0)
+      return L"\\";
+    return path.substr(0, x);
+  }
+
   static inline LONGLONG FileTimeToLlong(const FILETIME& f) {
     return DDwLowHighToLlong(f.dwLowDateTime, f.dwHighDateTime);
   }
@@ -73,8 +85,7 @@ class memfs_helper {
   static inline std::pair<std::wstring, std::wstring> GetStreamNames(
       const std::wstring& filename) {
     // real_fileName - foo or foo:bar
-    const auto real_fileName =
-        std::filesystem::path(filename).filename().wstring();
+    const auto real_fileName = memfs_helper::GetFileName(filename);
     auto stream_pos = real_fileName.find(L":");
     // foo does not have alternated stream, return an empty alternated stream.
     if (stream_pos == std::string::npos)
@@ -93,13 +104,11 @@ class memfs_helper {
 
   // Return the filename without any stream informations.
   // <filename>:<stream name>:<stream type>
-  static inline std::wstring GetFileName(
+  static inline std::wstring GetFileNameStreamLess(
       const std::wstring& filename,
       const std::pair<std::wstring, std::wstring>& stream_names) {
-    auto file_name =
-        std::filesystem::path(filename).parent_path().wstring();
+    auto file_name = memfs_helper::GetParentPath(filename);
     if (file_name != L"\\") {
-      // std::filesystem::path(filename).parent_path()
       // return \ when filename is at root.
       file_name += L"\\";
     }

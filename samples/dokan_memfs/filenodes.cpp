@@ -96,8 +96,7 @@ NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
   if (f->fileindex == 0)  // previous init
     f->fileindex = _fs_fileindex_count++;
   const auto filename = f->get_filename();
-  const auto parent_path =
-      std::filesystem::path(filename).parent_path().wstring();
+  const auto parent_path = memfs_helper::GetParentPath(filename);
 
   // Does target folder exist
   if (!_directoryPaths.count(parent_path)) {
@@ -114,7 +113,7 @@ NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
         L"Add file: {} is an alternate stream {} and has {} as main stream",
         filename, stream_names_value.second, stream_names_value.first);
     auto main_stream_name =
-        memfs_helper::GetFileName(filename, stream_names_value);
+        memfs_helper::GetFileNameStreamLess(filename, stream_names_value);
     auto main_f = find(main_stream_name);
     if (!main_f)
       return STATUS_OBJECT_PATH_NOT_FOUND;
@@ -128,8 +127,11 @@ NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
     _directoryPaths.emplace(filename, std::set<std::shared_ptr<filenode>>());
 
   // Add our file to the fileNodes and directoryPaths
+  auto previous_f = _filenodes[filename];
   _filenodes[filename] = f;
   _directoryPaths[parent_path].insert(f);
+  if (previous_f)
+    _directoryPaths[parent_path].erase(previous_f);
 
   spdlog::info(L"Add file: {} in folder: {}", filename, parent_path);
   return STATUS_SUCCESS;
@@ -163,7 +165,7 @@ void fs_filenodes::remove(const std::shared_ptr<filenode>& f) {
 
   // Remove node from fileNodes and directoryPaths
   _filenodes.erase(fileName);
-  _directoryPaths[std::filesystem::path(fileName).parent_path()].erase(f);
+  _directoryPaths[memfs_helper::GetParentPath(fileName)].erase(f);
 
   // if it was a directory we need to remove it from directoryPaths
   if (f->is_directory) {
@@ -206,8 +208,7 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
   if (new_f && (f->is_directory || new_f->is_directory))
     return STATUS_ACCESS_DENIED;
 
-  auto newParent_path =
-      std::filesystem::path(new_filename).parent_path().wstring();
+  auto newParent_path = memfs_helper::GetParentPath(new_filename);
 
   std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
   if (!_directoryPaths.count(newParent_path)) {
@@ -221,7 +222,7 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
 
   // Update current node with new data
   const auto fileName = f->get_filename();
-  auto oldParentPath = std::filesystem::path(fileName).parent_path();
+  auto oldParentPath = memfs_helper::GetParentPath(fileName);
   f->set_filename(new_filename);
 
   // Move fileNode
@@ -234,10 +235,9 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
     auto files = list_folder(old_filename);
     for (const auto& file : files) {
       const auto sub_fileName = file->get_filename();
-      auto newSubFileName =
-          std::filesystem::path(new_filename)
-              .append(std::filesystem::path(sub_fileName).filename().wstring())
-              .wstring();
+      auto newSubFileName = std::filesystem::path(new_filename)
+                                .append(memfs_helper::GetFileName(sub_fileName))
+                                .wstring();
       auto n = move(sub_fileName, newSubFileName, replace_if_existing);
       if (n != STATUS_SUCCESS) {
         spdlog::warn(
