@@ -350,6 +350,8 @@
     <ClCompile Include="create.c" />
     <ClCompile Include="directory.c" />
     <ClCompile Include="dokan.c" />
+    <ClCompile Include="dokan_pool.c" />
+    <ClCompile Include="dokan_vector.c" />
     <ClCompile Include="fileinfo.c" />
     <ClCompile Include="flush.c" />
     <ClCompile Include="lock.c" />
@@ -367,6 +369,8 @@
     <ClInclude Include="dokan.h" />
     <ClInclude Include="dokanc.h" />
     <ClInclude Include="dokani.h" />
+    <ClInclude Include="dokan_pool.h" />
+    <ClInclude Include="dokan_vector.h" />
     <ClInclude Include="list.h" />
     <ClInclude Include="fileinfo.h" />
     <ClInclude Include="resource.h" />

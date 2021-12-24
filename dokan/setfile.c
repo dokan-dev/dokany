@@ -199,51 +199,55 @@ DokanSetValidDataLengthInformation(PEVENT_CONTEXT EventContext,
                                        FileInfo);
 }
 
-VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                            PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  DOKAN_FILE_INFO fileInfo;
+VOID DispatchSetInformation(PDOKAN_IO_EVENT IoEvent) {
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
+  ULONG fileInformationClass =
+      IoEvent->EventContext->Operation.SetFile.FileInformationClass;
 
-  if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation
-	  || EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
-    PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
-        (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
-    sizeOfEventInfo =
-        DispatchGetEventInformationLength(renameInfo->FileNameLength);
+  if (fileInformationClass == FileRenameInformation ||
+      fileInformationClass == FileRenameInformationEx) {
+    PDOKAN_RENAME_INFORMATION renameInfo =
+        (PDOKAN_RENAME_INFORMATION)((PCHAR)IoEvent->EventContext +
+                                    IoEvent->EventContext->Operation.SetFile
+                                        .BufferOffset);
+    CreateDispatchCommon(IoEvent, renameInfo->FileNameLength);
+  } else {
+    CreateDispatchCommon(IoEvent, 0);
   }
 
-  CheckFileName(EventContext->Operation.SetFile.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.SetFile.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  DbgPrint(
+      "###SetFileInfo file handle = 0x%p, eventID = %04d, FileInformationClass "
+      "= %d, event Info = 0x%p\n",
+      IoEvent->DokanOpenInfo,
+      IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId : -1,
+      fileInformationClass, IoEvent);
 
-  DbgPrint("###SetFileInfo %04d  %d\n",
-           openInfo != NULL ? openInfo->EventId : -1,
-           EventContext->Operation.SetFile.FileInformationClass);
-
-  switch (EventContext->Operation.SetFile.FileInformationClass) {
+  switch (fileInformationClass) {
   case FileAllocationInformation:
-    status = DokanSetAllocationInformation(EventContext, &fileInfo,
-                                           DokanInstance->DokanOperations);
+    status =
+        DokanSetAllocationInformation(IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                                      IoEvent->DokanInstance->DokanOperations);
     break;
 
   case FileBasicInformation:
-    status = DokanSetBasicInformation(EventContext, &fileInfo,
-                                      DokanInstance->DokanOperations);
+    status =
+        DokanSetBasicInformation(IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                                      IoEvent->DokanInstance->DokanOperations);
     break;
 
   case FileDispositionInformation:
   case FileDispositionInformationEx:
-    status = DokanSetDispositionInformation(EventContext, &fileInfo,
-                                            DokanInstance->DokanOperations);
+    status = DokanSetDispositionInformation(
+        IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                                       IoEvent->DokanInstance->DokanOperations);
     break;
 
   case FileEndOfFileInformation:
-    status = DokanSetEndOfFileInformation(EventContext, &fileInfo,
-                                          DokanInstance->DokanOperations);
+    status = DokanSetEndOfFileInformation(
+        IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                                     IoEvent->DokanInstance->DokanOperations);
     break;
 
   case FilePositionInformation:
@@ -253,43 +257,43 @@ VOID DispatchSetInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
 
   case FileRenameInformation:
   case FileRenameInformationEx:
-    status = DokanSetRenameInformation(EventContext, &fileInfo,
-                                       DokanInstance->DokanOperations);
+    status = DokanSetRenameInformation(IoEvent->EventContext,
+                                       &IoEvent->DokanFileInfo,
+                                       IoEvent->DokanInstance->DokanOperations);
     break;
 
   case FileValidDataLengthInformation:
-    status = DokanSetValidDataLengthInformation(EventContext, &fileInfo,
-                                                DokanInstance->DokanOperations);
+    status = DokanSetValidDataLengthInformation(
+        IoEvent->EventContext, &IoEvent->DokanFileInfo,
+        IoEvent->DokanInstance->DokanOperations);
     break;
   default:
-    DbgPrint("  unknown FileInformationClass %d\n",
-             EventContext->Operation.SetFile.FileInformationClass);
+    DbgPrint("  unknown FileInformationClass %d\n", fileInformationClass);
     break;
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-  eventInfo->BufferLength = 0;
-  eventInfo->Status = status;
+  IoEvent->EventResult->BufferLength = 0;
+  IoEvent->EventResult->Status = status;
 
   if (status == STATUS_SUCCESS) {
-    if (EventContext->Operation.SetFile.FileInformationClass == FileDispositionInformation ||
-        EventContext->Operation.SetFile.FileInformationClass == FileDispositionInformationEx) {
-      eventInfo->Operation.Delete.DeleteOnClose = fileInfo.DeleteOnClose;
-      DbgPrint("  dispositionInfo->DeleteFile = %d\n", fileInfo.DeleteOnClose);
-    } else if (EventContext->Operation.SetFile.FileInformationClass == FileRenameInformation ||
-               EventContext->Operation.SetFile.FileInformationClass == FileRenameInformationEx) {
-      PDOKAN_RENAME_INFORMATION renameInfo = (PDOKAN_RENAME_INFORMATION)(
-          (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
-      eventInfo->BufferLength = renameInfo->FileNameLength;
-      CopyMemory(eventInfo->Buffer, renameInfo->FileName,
+    if (fileInformationClass == FileDispositionInformation ||
+        fileInformationClass == FileDispositionInformationEx) {
+      IoEvent->EventResult->Operation.Delete.DeleteOnClose =
+          IoEvent->DokanFileInfo.DeleteOnClose;
+      DbgPrint("  dispositionInfo->DeleteFile = %d\n", IoEvent->DokanFileInfo.DeleteOnClose);
+    } else if (fileInformationClass == FileRenameInformation ||
+               fileInformationClass == FileRenameInformationEx) {
+      PDOKAN_RENAME_INFORMATION renameInfo =
+          (PDOKAN_RENAME_INFORMATION)((PCHAR)IoEvent->EventContext +
+                                      IoEvent->EventContext->Operation.SetFile
+                                          .BufferOffset);
+      IoEvent->EventResult->BufferLength = renameInfo->FileNameLength;
+      CopyMemory(IoEvent->EventResult->Buffer, renameInfo->FileName,
                  renameInfo->FileNameLength);
     }
   }
 
   DbgPrint("\tDispatchSetInformation result =  %lx\n", status);
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

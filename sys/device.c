@@ -759,12 +759,6 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
-    case IOCTL_EVENT_WAIT:
-      status = DokanRegisterPendingIrpForEvent(RequestContext);
-      break;
-    case IOCTL_EVENT_INFO:
-      status = DokanCompleteIrp(RequestContext);
-      break;
     case IOCTL_EVENT_RELEASE:
       status = DokanEventRelease(RequestContext, RequestContext->DeviceObject);
       break;
@@ -774,18 +768,6 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
     case IOCTL_GET_VOLUME_METRICS:
       status = DokanGetVolumeMetrics(RequestContext);
       break;
-    case IOCTL_KEEPALIVE: {
-      //Remove for Dokan 2.x.x
-      if (!IsFlagOn(RequestContext->Vcb->Flags, VCB_MOUNTED)) {
-        status = STATUS_INSUFFICIENT_RESOURCES;
-      }
-      ExEnterCriticalRegionAndAcquireResourceExclusive(
-          &RequestContext->Dcb->Resource);
-      DokanUpdateTimeout(&RequestContext->Dcb->TickCount,
-                         DOKAN_KEEPALIVE_TIMEOUT_DEFAULT);
-      ExReleaseResourceAndLeaveCriticalRegion(&RequestContext->Dcb->Resource);
-      status = STATUS_SUCCESS;
-    } break;
     case IOCTL_RESET_TIMEOUT:
       status = DokanResetPendingIrpTimeout(RequestContext);
       break;

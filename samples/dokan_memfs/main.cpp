@@ -93,8 +93,10 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
         }
       }
     }
+    DokanInit();
     // Start the memory filesystem
     dokan_memfs->run();
+    DokanShutdown();
   } catch (const std::exception& ex) {
     spdlog::error("dokan_memfs failure: {}", ex.what());
     return 1;

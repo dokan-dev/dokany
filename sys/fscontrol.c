@@ -454,6 +454,98 @@ DokanGlobalUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   return STATUS_INVALID_DEVICE_REQUEST;
 }
 
+NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
+                    __in PIRP_LIST NotifyEvent) {
+  PDRIVER_EVENT_CONTEXT workItem = NULL;
+  PDRIVER_EVENT_CONTEXT alreadySeenWorkItem = NULL;
+  PLIST_ENTRY workItemListEntry = NULL;
+  KIRQL workQueueIrql;
+  ULONG workItemBytes = 0;
+  ULONG currentIoctlBufferBytesRemaining =
+      RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
+  PCHAR currentIoctlBuffer =
+      (PCHAR)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  KeAcquireSpinLock(&NotifyEvent->ListLock, &workQueueIrql);
+  while (!IsListEmpty(&NotifyEvent->ListHead)) {
+    workItemListEntry = RemoveHeadList(&NotifyEvent->ListHead);
+    workItem =
+        CONTAINING_RECORD(workItemListEntry, DRIVER_EVENT_CONTEXT, ListEntry);
+    workItemBytes = workItem->EventContext.Length;
+    // Buffer is not specified or short of length (this may mean we filled the
+    // space in one of the DLL's buffers in batch mode). Put the IRP back in
+    // the work queue; it will have to go in a different buffer.
+    if (currentIoctlBufferBytesRemaining < workItemBytes) {
+      InsertTailList(&NotifyEvent->ListHead, &workItem->ListEntry);
+      if (alreadySeenWorkItem == workItem) {
+        // We have reached the end of the list
+        break;
+      }
+      alreadySeenWorkItem = workItem;
+      continue;
+    }
+    // Send the work item back in the response to the current IOCTL.
+    RtlCopyMemory(currentIoctlBuffer, &workItem->EventContext, workItemBytes);
+    currentIoctlBufferBytesRemaining -= workItemBytes;
+    currentIoctlBuffer += workItemBytes;
+    RequestContext->Irp->IoStatus.Information += workItemBytes;
+    ExFreePool(workItem);
+    if (!RequestContext->Dcb->AllowIpcBatching) {
+      // If there is still pending items we need to reflag the queue for when we come back
+      if (!IsListEmpty(&NotifyEvent->ListHead) &&
+          !KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
+        KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
+                      &RequestContext->Dcb->NotifyIrpEventQueueList);
+      }
+      break;
+    }
+  }
+  KeReleaseSpinLock(&NotifyEvent->ListLock, workQueueIrql);
+
+  RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
+  return RequestContext->Irp->IoStatus.Status;
+}
+
+
+NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
+  NTSTATUS status = DokanCompleteIrp(RequestContext);
+  if (status != STATUS_BUFFER_TOO_SMALL && status != STATUS_SUCCESS) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Failed to process IRP");
+    return status;
+  }
+  if (RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength <
+      sizeof(EVENT_CONTEXT)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "No output buffer provided");
+    return status;
+  }
+  RequestContext->Vcb->HasEventWait = TRUE;
+
+  PEVENT_INFORMATION eventInfo =
+      (PEVENT_INFORMATION)(RequestContext->Irp->AssociatedIrp.SystemBuffer);
+
+  ULONG waitTimeoutMs =
+      status == STATUS_BUFFER_TOO_SMALL ? 0 : eventInfo->PullEventTimeoutMs;
+  PLIST_ENTRY listEntry;
+  LARGE_INTEGER timeout;
+  KeQuerySystemTime(&timeout);
+  timeout.QuadPart += waitTimeoutMs * 1000; // Ms to 100 nano
+
+  ULONG result =
+      KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode,
+                      TRUE, waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
+  if (result == STATUS_TIMEOUT) {
+    return STATUS_SUCCESS;
+  }
+  // Were we awake due to the device being unmount ?
+  if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted");
+    return STATUS_NO_SUCH_DEVICE;
+  }
+
+  return PullEvents(RequestContext, &RequestContext->Dcb->NotifyEvent);
+}
+
 NTSTATUS
 DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   REQUEST_CONTEXT requestContext = *RequestContext;
@@ -461,10 +553,8 @@ DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   // following function to expected being called to a Dcb.
   requestContext.Vcb = requestContext.Dcb->Vcb;
   switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
-    case FSCTL_EVENT_WAIT:
-      return DokanRegisterPendingIrpForEvent(&requestContext);
-    case FSCTL_EVENT_INFO:
-      return DokanCompleteIrp(&requestContext);
+    case FSCTL_EVENT_PROCESS_N_PULL:
+      return DokanProcessAndPullEvents(&requestContext);
     case FSCTL_EVENT_RELEASE:
       return DokanEventRelease(&requestContext, requestContext.Vcb->DeviceObject);
     case FSCTL_EVENT_WRITE:
@@ -772,9 +862,6 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   ExReleaseResourceLite(&dcb->Resource);
 
   // Start check thread
-  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-  DokanUpdateTimeout(&dcb->TickCount, DOKAN_KEEPALIVE_TIMEOUT_DEFAULT * 3);
-  ExReleaseResourceLite(&dcb->Resource);
   DokanStartCheckThread(dcb);
 
   BOOLEAN isDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);

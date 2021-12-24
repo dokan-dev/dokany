@@ -1454,7 +1454,10 @@ NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
 
 NTSTATUS DOKAN_CALLBACK
 MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
+                  PVOID FindStreamContext,
                   PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DokanFileInfo);
+
   WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE hFind;
   WIN32_FIND_STREAM_DATA findData;
@@ -1473,16 +1476,27 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
     return DokanNtStatusFromWin32(error);
   }
 
-  FillFindStreamData(&findData, DokanFileInfo);
-  count++;
-
-  while (FindNextStreamW(hFind, &findData) != 0) {
-    FillFindStreamData(&findData, DokanFileInfo);
+  BOOL bufferFull = FillFindStreamData(&findData, FindStreamContext);
+  if (bufferFull) {
     count++;
+    while (FindNextStreamW(hFind, &findData) != 0) {
+      bufferFull = FillFindStreamData(&findData, FindStreamContext);
+      if (!bufferFull)
+        break;
+      count++;
+    }
   }
 
   error = GetLastError();
   FindClose(hFind);
+
+  if (!bufferFull) {
+    DbgPrint(L"\tFindStreams returned %d entries in %s with "
+             L"STATUS_BUFFER_OVERFLOW\n\n",
+             count, filePath);
+    // https://msdn.microsoft.com/en-us/library/windows/hardware/ff540364(v=vs.85).aspx
+    return STATUS_BUFFER_OVERFLOW;
+  }
 
   if (error != ERROR_HANDLE_EOF) {
     DbgPrint(L"\tFindNextStreamW error. Error is %u\n\n", error);
@@ -1530,7 +1544,7 @@ void ShowUsage() {
   fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
           "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
-          "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
+          "  /t Single thread (ex. /t 5)\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
           "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
           "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
           "  /n (use network drive)\t\t\t Show device as network device.\n"
@@ -1582,7 +1596,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
   ZeroMemory(&dokanOptions, sizeof(DOKAN_OPTIONS));
   dokanOptions.Version = DOKAN_VERSION;
-  dokanOptions.ThreadCount = 0; // use default
 
   for (command = 1; command < argc; command++) {
     switch (towlower(argv[command][1])) {
@@ -1602,9 +1615,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       wcscpy_s(MountPoint, sizeof(MountPoint) / sizeof(WCHAR), argv[command]);
       dokanOptions.MountPoint = MountPoint;
       break;
-    case L't':
-      CHECK_CMD_ARG(command, argc)
-      dokanOptions.ThreadCount = (USHORT)_wtoi(argv[command]);
+     case L't':
+      dokanOptions.SingleThread = TRUE;
       break;
     case L'd':
       g_DebugMode = TRUE;
@@ -1629,9 +1641,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'f':
       dokanOptions.Options |= DOKAN_OPTION_FILELOCK_USER_MODE;
-      break;
-    case L'z':
-      dokanOptions.Options |= DOKAN_OPTION_ENABLE_FCB_GARBAGE_COLLECTION;
       break;
     case L'x':
       dokanOptions.Options |= DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE;
@@ -1760,7 +1769,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations.FindStreams = MirrorFindStreams;
   dokanOperations.Mounted = MirrorMounted;
 
+  DokanInit();
   status = DokanMain(&dokanOptions, &dokanOperations);
+  DokanShutdown();
   switch (status) {
   case DOKAN_SUCCESS:
     fprintf(stderr, "Success\n");

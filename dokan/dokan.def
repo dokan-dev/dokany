@@ -27,3 +27,5 @@ DokanNotifyDelete
 DokanNotifyUpdate
 DokanNotifyXAttrUpdate
 DokanNotifyRename
+DokanInit
+DokanShutdown

@@ -306,8 +306,10 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
                                     /*SetEvent=*/FALSE);
   }
 
+
   if (status == STATUS_PENDING) {
-    DokanEventNotification(&RequestContext->Dcb->NotifyEvent, EventContext);
+    DokanEventNotification(RequestContext, &RequestContext->Dcb->NotifyEvent,
+                           EventContext);
   } else {
     DokanFreeEventContext(EventContext);
   }
@@ -345,23 +347,6 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
                          &RequestContext->Dcb->PendingIrp,
                          /*CheckMount=*/TRUE, Status, /*SetEvent=*/FALSE);
   KeSetEvent(&RequestContext->Dcb->ForceTimeoutEvent, 0, FALSE);
-}
-
-NTSTATUS
-DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext) {
-  // TODO(adrienj): Remove the check when moving to FSCTL only.
-  if (RequestContext->Vcb == NULL) {
-    return STATUS_INVALID_PARAMETER;
-  }
-
-  RequestContext->Vcb->HasEventWait = TRUE;
-
-  return RegisterPendingIrpMain(RequestContext,
-                                NULL,  // EventContext
-                                &RequestContext->Dcb->PendingEvent,
-                                TRUE,
-                                /*CurrentStatus=*/STATUS_SUCCESS,
-                                /*SetEvent=*/TRUE);
 }
 
 void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
@@ -454,9 +439,9 @@ GetEventInfoSize(__in ULONG MajorFunction, __in PEVENT_INFORMATION EventInfo) {
     // used length is a value not specified in the struct.
     return sizeof(EVENT_INFORMATION);
   }
-  return max(sizeof(EVENT_INFORMATION),
-             sizeof(EVENT_INFORMATION) - sizeof(EventInfo->Buffer)
-                 + EventInfo->BufferLength);
+  return max((ULONG)sizeof(EVENT_INFORMATION),
+             FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]) +
+                 (ULONG)EventInfo->BufferLength);
 }
 
 // When user-mode file system application returns EventInformation,
@@ -477,22 +462,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   ULONG bufferLength = 0;
   PCHAR buffer = NULL;
 
-  bufferLength =
-      RequestContext->IrpSp->Parameters.DeviceIoControl.InputBufferLength;
-  // Dokan 1.x.x Library can send buffer under EVENT_INFO struct size:
-  // - IRP_MJ_QUERY_SECURITY sending STATUS_BUFFER_OVERFLOW
-  // - IRP_MJ_READ with negative read size
-  // The behavior was fixed since but adding the next line would break
-  // backward compatiblity.
-  // TODO 2.x.x - use GET_IRP_BUFFER_OR_RETURN(Irp, eventInfo);
-  /*if (bufferLength < sizeof(EVENT_INFORMATION)) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Wrong input buffer length");
-    return STATUS_BUFFER_TOO_SMALL;
-  }*/
-
-  buffer = (PCHAR)RequestContext->Irp->AssociatedIrp.SystemBuffer;
-  ASSERT(buffer != NULL);
-
   // TODO(adrienj): Remove the check when moving to FSCTL only.
   if (RequestContext->Vcb == NULL) {
     return STATUS_INVALID_PARAMETER;
@@ -501,6 +470,16 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted");
     return STATUS_NO_SUCH_DEVICE;
   }
+
+  bufferLength =
+      RequestContext->IrpSp->Parameters.DeviceIoControl.InputBufferLength;
+  if (bufferLength < sizeof(EVENT_INFORMATION)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Wrong input buffer length");
+    return STATUS_BUFFER_TOO_SMALL;
+  }
+
+  buffer = (PCHAR)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+  ASSERT(buffer != NULL);
 
   InitializeListHead(&completeList);
 
@@ -528,12 +507,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     }
     RemoveEntryList(thisEntry);
     InsertTailList(&completeList, thisEntry);
-    // We break until 2.x.x - See function head comment
-__pragma(warning(push))
-__pragma(warning(disable : 4127))
-    if (1 == 1)
-        break;
-__pragma(warning(pop))
     offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
                                eventInfo);
     // Everything through offset - 1 must be readable by the completion function
@@ -656,7 +629,6 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   BOOLEAN useMountManager = FALSE;
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
-  BOOLEAN fcbGcEnabled = FALSE;
   ULONG sessionId = (ULONG)-1;
   BOOLEAN startFailure = FALSE;
   BOOLEAN isMountPointDriveLetter = FALSE;
@@ -755,11 +727,6 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     fileLockUserMode = TRUE;
   }
 
-  if (eventStart->Flags & DOKAN_EVENT_ENABLE_FCB_GC) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "FCB GC enabled\n");
-    fcbGcEnabled = TRUE;
-  }
-
   if (eventStart->Flags & DOKAN_EVENT_CASE_SENSITIVE) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Case sensitive enabled\n");
   }
@@ -839,10 +806,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
-  dcb->FcbGarbageCollectionIntervalMs = fcbGcEnabled ? 2000 : 0;
+  dcb->FcbGarbageCollectionIntervalMs = 2000;
   dcb->MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
       (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
+  dcb->AllowIpcBatching =
+      (eventStart->Flags & DOKAN_EVENT_ALLOW_IPC_BATCHING) != 0;
   isMountPointDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
 
   if (dcb->DispatchDriverLogs) {

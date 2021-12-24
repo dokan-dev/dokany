@@ -127,95 +127,90 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   return STATUS_SUCCESS;
 }
 
-VOID DispatchQuerySecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                           PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchQuerySecurity(PDOKAN_IO_EVENT IoEvent) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   ULONG lengthNeeded = 0;
-  ULONG eventInfoLength = DispatchGetEventInformationLength(
-      EventContext->Operation.Security.BufferLength);
 
-  CheckFileName(EventContext->Operation.Security.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.Security.FileName);
 
-  eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent,
+                       IoEvent->EventContext->Operation.Security.BufferLength);
 
-  DbgPrint("###GetFileSecurity %04d\n",
-           openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###GetFileSecurity file handle = 0x%p, eventID = %04d, event Info "
+           "= 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  if (DokanInstance->DokanOperations->GetFileSecurity) {
-    status = DokanInstance->DokanOperations->GetFileSecurity(
-        EventContext->Operation.Security.FileName,
-        &EventContext->Operation.Security.SecurityInformation,
-        &eventInfo->Buffer, EventContext->Operation.Security.BufferLength,
-        &lengthNeeded, &fileInfo);
+  if (IoEvent->DokanInstance->DokanOperations->GetFileSecurity) {
+    status = IoEvent->DokanInstance->DokanOperations->GetFileSecurity(
+        IoEvent->EventContext->Operation.Security.FileName,
+        &IoEvent->EventContext->Operation.Security.SecurityInformation,
+        &IoEvent->EventResult->Buffer,
+        IoEvent->EventContext->Operation.Security.BufferLength, &lengthNeeded,
+        &IoEvent->DokanFileInfo);
   }
 
   if (status == STATUS_NOT_IMPLEMENTED) {
     status = DefaultGetFileSecurity(
-        EventContext->Operation.Security.FileName,
-        &EventContext->Operation.Security.SecurityInformation,
-        &eventInfo->Buffer, EventContext->Operation.Security.BufferLength,
-        &lengthNeeded, &fileInfo);
+        IoEvent->EventContext->Operation.Security.FileName,
+        &IoEvent->EventContext->Operation.Security.SecurityInformation,
+        &IoEvent->EventResult->Buffer,
+        IoEvent->EventContext->Operation.Security.BufferLength, &lengthNeeded,
+        &IoEvent->DokanFileInfo);
   }
 
-  eventInfo->Status = status;
+  IoEvent->EventResult->Status = status;
 
   if (status != STATUS_SUCCESS && status != STATUS_BUFFER_OVERFLOW) {
-    eventInfo->BufferLength = 0;
+    IoEvent->EventResult->BufferLength = 0;
   } else {
-    eventInfo->BufferLength = lengthNeeded;
+    IoEvent->EventResult->BufferLength = lengthNeeded;
 
-    if (EventContext->Operation.Security.BufferLength < lengthNeeded) {
+    if (IoEvent->EventContext->Operation.Security.BufferLength < lengthNeeded) {
       // Filesystem Application should return STATUS_BUFFER_OVERFLOW in this
       // case.
-      eventInfo->Status = STATUS_BUFFER_OVERFLOW;
+      IoEvent->EventResult->Status = STATUS_BUFFER_OVERFLOW;
     }
   }
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }
 
-VOID DispatchSetSecurity(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                         PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchSetSecurity(PDOKAN_IO_EVENT IoEvent) {
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
   PSECURITY_DESCRIPTOR securityDescriptor;
-  ULONG eventInfoLength = DispatchGetEventInformationLength(0);
 
-  CheckFileName(EventContext->Operation.SetSecurity.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.SetSecurity.FileName);
 
-  eventInfo = DispatchCommon(EventContext, eventInfoLength, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent, 0);
 
-  DbgPrint("###SetSecurity %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint(
+      "###SetSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+      IoEvent->DokanOpenInfo,
+      IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId : -1,
+      IoEvent);
 
   securityDescriptor =
-      (PCHAR)EventContext + EventContext->Operation.SetSecurity.BufferOffset;
+      (PCHAR)IoEvent->EventContext +
+      IoEvent->EventContext->Operation.SetSecurity.BufferOffset;
 
-  if (DokanInstance->DokanOperations->SetFileSecurity) {
-    status = DokanInstance->DokanOperations->SetFileSecurity(
-        EventContext->Operation.SetSecurity.FileName,
-        &EventContext->Operation.SetSecurity.SecurityInformation,
-        securityDescriptor, EventContext->Operation.SetSecurity.BufferLength,
-        &fileInfo);
+  if (IoEvent->DokanInstance->DokanOperations->SetFileSecurity) {
+    status = IoEvent->DokanInstance->DokanOperations->SetFileSecurity(
+        IoEvent->EventContext->Operation.SetSecurity.FileName,
+        &IoEvent->EventContext->Operation.SetSecurity.SecurityInformation,
+        securityDescriptor,
+        IoEvent->EventContext->Operation.SetSecurity.BufferLength, &IoEvent->DokanFileInfo);
   }
 
   if (status != STATUS_SUCCESS) {
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
-    eventInfo->BufferLength = 0;
+    IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
+    IoEvent->EventResult->BufferLength = 0;
   } else {
-    eventInfo->Status = STATUS_SUCCESS;
-    eventInfo->BufferLength = 0;
+    IoEvent->EventResult->Status = STATUS_SUCCESS;
+    IoEvent->EventResult->BufferLength = 0;
   }
 
-  SendEventInformation(Handle, eventInfo, eventInfoLength);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

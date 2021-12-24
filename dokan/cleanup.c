@@ -22,32 +22,25 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 
-VOID DispatchCleanup(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                     PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
+VOID DispatchCleanup(PDOKAN_IO_EVENT IoEvent) {
+  CheckFileName(IoEvent->EventContext->Operation.Cleanup.FileName);
 
-  CheckFileName(EventContext->Operation.Cleanup.FileName);
+  CreateDispatchCommon(IoEvent, 0);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  IoEvent->EventResult->Status = STATUS_SUCCESS; // return success at any case
 
-  eventInfo->Status = STATUS_SUCCESS; // return success at any case
+  DbgPrint("###Cleanup file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  DbgPrint("###Cleanup %04d\n", openInfo != NULL ? openInfo->EventId : -1);
-
-  if (DokanInstance->DokanOperations->Cleanup) {
+  if (IoEvent->DokanInstance->DokanOperations->Cleanup) {
     // ignore return value
-    DokanInstance->DokanOperations->Cleanup(
-        EventContext->Operation.Cleanup.FileName, &fileInfo);
+    IoEvent->DokanInstance->DokanOperations->Cleanup(
+        IoEvent->EventContext->Operation.Cleanup.FileName,
+        &IoEvent->DokanFileInfo);
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

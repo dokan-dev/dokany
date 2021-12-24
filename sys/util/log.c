@@ -39,7 +39,7 @@ BOOLEAN g_DokanDriverLogCacheEnabled = FALSE;
 LONG g_DokanVcbDriverLogCacheCount = 0;
 DOKAN_LOG_CACHE g_DokanLogEntryList;
 
-VOID PopDokanLogEntry(_In_ PDokanVCB Vcb);
+VOID PopDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PDokanVCB Vcb);
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, PushDokanLogEntry)
 #pragma alloc_text(PAGE, PopDokanLogEntry)
@@ -336,8 +336,6 @@ PCHAR DokanGetMinorFunctionStr(UCHAR MajorFunction, UCHAR MinorFunction) {
       switch (MinorFunction) {
         CASE_STR(IOCTL_GET_VERSION)
         CASE_STR(IOCTL_SET_DEBUG_MODE)
-        CASE_STR(IOCTL_EVENT_WAIT)
-        CASE_STR(IOCTL_EVENT_INFO)
         CASE_STR(IOCTL_EVENT_RELEASE)
         CASE_STR(IOCTL_EVENT_START)
         CASE_STR(IOCTL_EVENT_WRITE)
@@ -491,10 +489,6 @@ PCHAR DokanGetIoctlStr(ULONG ControlCode) {
     CASE_STR(FSCTL_GET_VERSION)
     CASE_STR(IOCTL_SET_DEBUG_MODE)
     CASE_STR(FSCTL_SET_DEBUG_MODE)
-    CASE_STR(IOCTL_EVENT_WAIT)
-    CASE_STR(FSCTL_EVENT_WAIT)
-    CASE_STR(IOCTL_EVENT_INFO)
-    CASE_STR(FSCTL_EVENT_INFO)
     CASE_STR(IOCTL_EVENT_RELEASE)
     CASE_STR(FSCTL_EVENT_RELEASE)
     CASE_STR(IOCTL_EVENT_START)
@@ -513,6 +507,7 @@ PCHAR DokanGetIoctlStr(ULONG ControlCode) {
     CASE_STR(FSCTL_GET_VOLUME_METRICS)
     CASE_STR(IOCTL_MOUNTPOINT_CLEANUP)
     CASE_STR(FSCTL_MOUNTPOINT_CLEANUP)
+    CASE_STR(FSCTL_EVENT_PROCESS_N_PULL)
 #include "ioctl.inc"
   }
   return "Unknown";
@@ -571,7 +566,7 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
     InsertTailList(&g_DokanLogEntryList.Log, &logEntry->ListEntry);
 
     if (requestContext && requestContext->Vcb && requestContext->Vcb->Dcb) {
-      PopDokanLogEntry(requestContext->Vcb);
+      PopDokanLogEntry(requestContext, requestContext->Vcb);
     }
   } __finally {
     DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
@@ -581,7 +576,7 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
 // Dispatch global and specific Vcb log messages from global
 // log entry cache list to userland.
 // Need to be called with g_DokanLogEntryList Lock RW.
-VOID PopDokanLogEntry(_In_ PDokanVCB Vcb) {
+VOID PopDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PDokanVCB Vcb) {
   PLIST_ENTRY listEntry;
   PLIST_ENTRY nextListEntry;
   PDOKAN_LOG_ENTRY logEntry;
@@ -612,7 +607,10 @@ VOID PopDokanLogEntry(_In_ PDokanVCB Vcb) {
     dokanLogString = (PDOKAN_LOG_MESSAGE)((PCHAR)(PCHAR)eventContext +
                                           sizeof(EVENT_CONTEXT));
     RtlCopyMemory(dokanLogString, &logEntry->Log, messageFullSize);
-    DokanEventNotification(&Vcb->Dcb->NotifyEvent, eventContext);
+    if (RequestContext) {
+      DokanEventNotification(RequestContext, &Vcb->Dcb->NotifyEvent,
+                             eventContext);
+    }
 
     nextListEntry = listEntry->Flink;
     RemoveEntryList(listEntry);

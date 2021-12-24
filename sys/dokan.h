@@ -225,10 +225,12 @@ typedef struct _DokanDiskControlBlock {
 
   PVOID Vcb;
 
-  // the list of waiting Event
+  // Pending IRPs
   IRP_LIST PendingIrp;
-  IRP_LIST PendingEvent;
+  // Pending IRPs waiting to be dispatched to userland
   IRP_LIST NotifyEvent;
+  LIST_ENTRY NotifyIrpEventQueueList;
+  KQUEUE NotifyIrpEventQueue;
   // IRPs that need to be retried in kernel mode, e.g. due to oplock breaks
   // asynchronously requested on an earlier try. These are IRPs that have never
   // yet been dispatched to user mode. The IRPs are supposed to be added here at
@@ -913,13 +915,6 @@ VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp);
 VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp);
 
 NTSTATUS
-DokanRegisterPendingIrpForEvent(__in PREQUEST_CONTEXT RequestContext);
-
-// Currently not used
-NTSTATUS
-DokanRegisterPendingIrpForService(__in PREQUEST_CONTEXT RequestContext);
-
-NTSTATUS
 DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS DokanResetPendingIrpTimeout(__in PREQUEST_CONTEXT RequestContext);
@@ -979,7 +974,8 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext);
 VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
                                      __in NTSTATUS Status);
 
-VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
+VOID DokanEventNotification(__in PREQUEST_CONTEXT RequestContext,
+                            __in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext);
 
 VOID DokanCompleteDirectoryControl(__in PREQUEST_CONTEXT RequestContext,

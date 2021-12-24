@@ -21,35 +21,25 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 /*
-
-IOCTL_EVENT_START:
-DokanStartEventNotificationThread
-  NotificationThread
-        # PendingEvent has pending IPRs (IOCTL_EVENT_WAIT)
-    # NotifyEvent has IO events (ex.IRP_MJ_READ)
-    # notify NotifyEvent using PendingEvent in this loop
-        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent);
-
-IOCTL_EVENT_RELEASE:
-DokanStopEventNotificationThread
-
 IRP_MJ_READ:
 DokanDispatchRead
   DokanRegisterPendingIrp
     # add IRP_MJ_READ to PendingIrp list
-    DokanRegisterPendingIrpMain(PendingIrp)
-        # put MJ_READ event into NotifyEvent
+    RegisterPendingIrpMain(PendingIrp)
+    # put MJ_READ event into NotifyEvent
     DokanEventNotification(NotifyEvent, EventContext)
 
-IOCTL_EVENT_WAIT:
-  DokanRegisterPendingIrpForEvent
-    # add this irp to PendingEvent list
-    DokanRegisterPendingIrpMain(PendingEvent)
+FSCTL_EVENT_PROCESS_N_PULL:
+  DokanProcessAndPullEvents
+    # Pull the previously registered event
+    PullEvents(NotifyEvent)
 
-IOCTL_EVENT_INFO:
-  DokanCompleteIrp
-    DokanCompleteRead
-
+FSCTL_EVENT_PROCESS_N_PULL:
+  DokanProcessAndPullEvents
+    # Complete the IRP process by userland
+    DokanCompleteIrp
+    # Pull the new registered event
+    PullEvents(NotifyEvent)
 */
 
 #include "dokan.h"
@@ -115,7 +105,8 @@ VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext) {
   ExFreePool(driverEventContext);
 }
 
-VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
+VOID DokanEventNotification(__in PREQUEST_CONTEXT RequestContext,
+                            __in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext) {
   PDRIVER_EVENT_CONTEXT driverEventContext =
       CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
@@ -124,11 +115,14 @@ VOID DokanEventNotification(__in PIRP_LIST NotifyEvent,
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
 
-  ExInterlockedInsertTailList(&NotifyEvent->ListHead,
-                              &driverEventContext->ListEntry,
-                              &NotifyEvent->ListLock);
-
-  KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
+  KIRQL oldIrql;
+  KeAcquireSpinLock(&NotifyEvent->ListLock, &oldIrql);
+  InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+  if (!KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
+    KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
+                  &RequestContext->Dcb->NotifyIrpEventQueueList);
+  }
+  KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
 }
 
 // Moves the contents of the given Source list to Dest, discarding IRPs that
@@ -347,7 +341,7 @@ VOID NotificationLoop(__in PIRP_LIST PendingIoctls, __in PIRP_LIST WorkQueue,
 
 KSTART_ROUTINE NotificationThread;
 VOID NotificationThread(__in PVOID pDcb) {
-  PKEVENT events[4];
+  PKEVENT events[2];
   PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
@@ -360,20 +354,12 @@ VOID NotificationThread(__in PVOID pDcb) {
     return;
   }
   events[0] = &Dcb->ReleaseEvent;
-  events[1] = &Dcb->NotifyEvent.NotEmpty;
-  events[2] = &Dcb->PendingEvent.NotEmpty;
-  events[3] = &Dcb->PendingRetryIrp.NotEmpty;
+  events[1] = &Dcb->PendingRetryIrp.NotEmpty;
   do {
-    status = KeWaitForMultipleObjects(4, events, WaitAny, Executive, KernelMode,
+    status = KeWaitForMultipleObjects(2, events, WaitAny, Executive, KernelMode,
                                       FALSE, NULL, waitBlock);
-
-    if (status != STATUS_WAIT_0) {
-      if (status == STATUS_WAIT_1 || status == STATUS_WAIT_2) {
-        NotificationLoop(&Dcb->PendingEvent, &Dcb->NotifyEvent,
-                         Dcb->AllowIpcBatching);
-      } else {
-        RetryIrps(&Dcb->PendingRetryIrp);
-      }
+    if (status == STATUS_WAIT_1) {
+      RetryIrps(&Dcb->PendingRetryIrp);
     }
   } while (status != STATUS_WAIT_0);
 
@@ -489,10 +475,10 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
                         dcb->DiskDeviceName);
 
   ReleasePendingIrp(&dcb->PendingIrp);
-  ReleasePendingIrp(&dcb->PendingEvent);
   ReleasePendingIrp(&dcb->PendingRetryIrp);
   DokanStopCheckThread(dcb);
   DokanStopEventNotificationThread(dcb);
+  KeRundownQueue(&dcb->NotifyIrpEventQueue);
 
   // Note that the garbage collector thread also gets signalled to stop by
   // DokanStopEventNotificationThread. TODO(drivefs-team): maybe seperate out

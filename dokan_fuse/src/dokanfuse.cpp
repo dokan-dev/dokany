@@ -526,7 +526,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
 
   dokanOptions->Version = DOKAN_VERSION;
   dokanOptions->MountPoint = mount;
-  dokanOptions->ThreadCount = mt ? FUSE_THREAD_COUNT : 1;
+  dokanOptions->SingleThread = !mt;
   dokanOptions->Timeout = fs->conf.timeoutInSec * 1000;
   dokanOptions->AllocationUnitSize = fs->conf.allocationUnitSize;
   dokanOptions->SectorSize = fs->conf.sectorSize;
@@ -565,6 +565,10 @@ bool fuse_chan::init() {
   if (!ResolvedDokanVersion || ResolvedDokanVersion() < DOKAN_VERSION)
     return false;
 
+  ResolvedDokanInit =
+      reinterpret_cast<DokanInitType>(GetProcAddress(dokanDll, "DokanInit"));
+  ResolvedDokanShutdown = reinterpret_cast<DokanShutdownType>(
+      GetProcAddress(dokanDll, "DokanShutdown"));
   ResolvedDokanMain = reinterpret_cast<DokanMainType>(GetProcAddress(dokanDll, "DokanMain"));
   ResolvedDokanUnmount =
       reinterpret_cast<DokanUnmountType>(GetProcAddress(dokanDll, "DokanUnmount"));
@@ -574,12 +578,15 @@ bool fuse_chan::init() {
   if (!ResolvedDokanMain || !ResolvedDokanUnmount ||
       !ResolvedDokanRemoveMountPoint)
     return false;
+  ResolvedDokanInit();
   return true;
 }
 
 fuse_chan::~fuse_chan() {
-  if (dokanDll)
+  if (dokanDll) {
+    ResolvedDokanShutdown();
     FreeLibrary(dokanDll);
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

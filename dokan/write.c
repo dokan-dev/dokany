@@ -21,117 +21,99 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include "dokan_pool.h"
 
-BOOL SendWriteRequest(_In_ HANDLE Handle, _In_ PEVENT_INFORMATION EventInfo,
-                      _In_ ULONG EventLength, _Out_ PVOID Buffer, _In_ ULONG BufferLength, 
-                      _Out_ ULONG *ReturnedLengthOutPointer, _Out_ DWORD *LastError) {
+#include <assert.h>
 
-  BOOL status;
-  ULONG returnedLength;
 
-  DbgPrint("SendWriteRequest\n");
-
-  status = DeviceIoControl(Handle,            // Handle to device
-                           FSCTL_EVENT_WRITE, // IO Control code
-                           EventInfo,         // Input Buffer to driver.
-                           EventLength,     // Length of input buffer in bytes.
-                           Buffer,          // Output Buffer from driver.
-                           BufferLength,    // Length of output buffer in bytes.
-                           &returnedLength, // Bytes placed in buffer.
-                           NULL             // synchronous call
-                           );
-
-  if (!status) {
-    DWORD errorCode = GetLastError();
-    DbgPrint("Ioctl failed with code %d\n", errorCode);
-	*LastError = errorCode;
+DWORD SendWriteRequest(PDOKAN_IO_EVENT IoEvent, ULONG WriteEventContextLength) {
+  DWORD WrittenLength = 0;
+  DOKAN_IO_BATCH *writeIoBatch =
+      malloc((SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
+             WriteEventContextLength);
+  if (!writeIoBatch) {
+    DokanDbgPrintW(L"Dokan Error: Failed to allocate IO event buffer.\n");
+    return ERROR_NO_SYSTEM_RESOURCES;
   }
-  else {
-	*LastError = 0;
+  ZeroMemory(writeIoBatch, (SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
+                               WriteEventContextLength);
+  writeIoBatch->DokanInstance = IoEvent->DokanInstance;
+  PushIoBatchBuffer(IoEvent->IoBatch);
+  IoEvent->IoBatch = writeIoBatch;
+  IoEvent->EventContext = IoEvent->IoBatch->EventContext;
+
+  if (!DeviceIoControl(
+      IoEvent->DokanInstance->Device, // Handle to device
+      FSCTL_EVENT_WRITE,              // IO Control code
+      IoEvent->EventResult,           // Input Buffer to driver.
+      IoEvent->EventResultSize,       // Length of input buffer in bytes.
+      &writeIoBatch->EventContext[0], // Output Buffer from driver.
+      WriteEventContextLength,        // Length of output buffer in bytes.
+      &WrittenLength,                 // Bytes placed in buffer.
+      NULL                            // asynchronous call
+          )) {
+    return GetLastError();
   }
-
-  *ReturnedLengthOutPointer = returnedLength;
-
-  DbgPrint("SendWriteRequest got %d bytes\n", returnedLength);
-
-  return status;
+  return 0;
 }
 
-VOID DispatchWrite(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
   ULONG writtenLength = 0;
   NTSTATUS status;
-  DOKAN_FILE_INFO fileInfo;
-  BOOL bufferAllocated = FALSE;
-  ULONG returnedLength = 0;
-  BOOL SendWriteRequestStatus = TRUE;	// otherwise DokanInstance->DokanOperations->WriteFile cannot be called
-  DWORD SendWriteRequestLastError = 0;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent, 0);
+
+  CheckFileName(IoEvent->EventContext->Operation.Write.FileName);
+
+  DbgPrint(
+      "###WriteFile file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+      IoEvent->DokanOpenInfo,
+      IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId : -1,
+      IoEvent);
 
   // Since driver requested bigger memory,
   // allocate enough memory and send it to driver
-  if (EventContext->Operation.Write.RequestLength > 0) {
-    ULONG contextLength = EventContext->Operation.Write.RequestLength;
-    PEVENT_CONTEXT contextBuf = (PEVENT_CONTEXT)malloc(contextLength);
-    if (contextBuf == NULL) {
-      free(eventInfo);
+  if (IoEvent->EventContext->Operation.Write.RequestLength > 0) {
+    DWORD error = SendWriteRequest(IoEvent, IoEvent->EventContext->Operation.Write.RequestLength);
+    if (error != ERROR_SUCCESS) {
+      if (error == ERROR_OPERATION_ABORTED) {
+        IoEvent->EventResult->Status = STATUS_CANCELLED;
+        DbgPrint(
+            "WriteFile Error : User should already canceled the operation. "
+            "Return STATUS_CANCELLED. \n");
+      } else {
+        IoEvent->EventResult->Status = DokanNtStatusFromWin32(error);
+        DbgPrint("Unknown SendWriteRequest Error : LastError from "
+                 "SendWriteRequest = %lu. \nUnknown SendWriteRequest error : "
+                 "EventContext had been destoryed. Status = %X. \n",
+                 error, IoEvent->EventResult->Status);
+      }
+      EventCompletion(IoEvent);
       return;
     }
-
-	SendWriteRequestStatus = SendWriteRequest(Handle, eventInfo, sizeOfEventInfo, contextBuf,
-                     contextLength, &returnedLength, &SendWriteRequestLastError);
-    EventContext = contextBuf;
-    bufferAllocated = TRUE;
   }
 
-  CheckFileName(EventContext->Operation.Write.FileName);
-
-  DbgPrint("###WriteFile %04d\n", openInfo != NULL ? openInfo->EventId : -1);
-
-  if (!SendWriteRequestStatus) {
-	  if (SendWriteRequestLastError == ERROR_OPERATION_ABORTED) {
-		  status = STATUS_CANCELLED;
-		  DbgPrint("WriteFile Error : User should already canceled the operation. Return STATUS_CANCELLED. \n");
-	  }
-	  else {
-		  status = DokanNtStatusFromWin32(SendWriteRequestLastError);
-		  DbgPrint("Unknown SendWriteRequest Error : LastError from SendWriteRequest = %lu. \nUnknown SendWriteRequest error : EventContext had been destoryed. Status = %X. \n", SendWriteRequestLastError, status);
-	  }
-  }
-  else {
-	  // for the case SendWriteRequest success
-	  if (DokanInstance->DokanOperations->WriteFile) {
-		  status = DokanInstance->DokanOperations->WriteFile(
-			  EventContext->Operation.Write.FileName,
-			  (PCHAR)EventContext + EventContext->Operation.Write.BufferOffset,
-			  EventContext->Operation.Write.BufferLength, &writtenLength,
-			  EventContext->Operation.Write.ByteOffset.QuadPart, &fileInfo);
-	  }
-	  else {
-		  status = STATUS_NOT_IMPLEMENTED;
-	  }
+  // for the case SendWriteRequest success
+  if (IoEvent->DokanInstance->DokanOperations->WriteFile) {
+    status = IoEvent->DokanInstance->DokanOperations->WriteFile(
+        IoEvent->EventContext->Operation.Write.FileName,
+        (PCHAR)IoEvent->EventContext +
+            IoEvent->EventContext->Operation.Write.BufferOffset,
+        IoEvent->EventContext->Operation.Write.BufferLength, &writtenLength,
+        IoEvent->EventContext->Operation.Write.ByteOffset.QuadPart, &IoEvent->DokanFileInfo);
+  } else {
+    status = STATUS_NOT_IMPLEMENTED;
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-  eventInfo->Status = status;
-  eventInfo->BufferLength = 0;
+  IoEvent->EventResult->Status = status;
+  IoEvent->EventResult->BufferLength = 0;
 
   if (status == STATUS_SUCCESS) {
-    eventInfo->BufferLength = writtenLength;
-    eventInfo->Operation.Write.CurrentByteOffset.QuadPart =
-        EventContext->Operation.Write.ByteOffset.QuadPart + writtenLength;
+    IoEvent->EventResult->BufferLength = writtenLength;
+    IoEvent->EventResult->Operation.Write.CurrentByteOffset.QuadPart =
+        IoEvent->EventContext->Operation.Write.ByteOffset.QuadPart +
+        writtenLength;
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
-
-  if (bufferAllocated)
-    free(EventContext);
+  EventCompletion(IoEvent);
 }

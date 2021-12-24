@@ -121,7 +121,7 @@ Return Value:
   // Close can not be pending status don't register this IRP
 
   // inform it to user-mode
-  DokanEventNotification(&RequestContext->Dcb->NotifyEvent, eventContext);
+  DokanEventNotification(RequestContext, &RequestContext->Dcb->NotifyEvent, eventContext);
 
   return STATUS_SUCCESS;
 }

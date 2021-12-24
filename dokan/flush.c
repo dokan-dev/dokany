@@ -22,41 +22,32 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 
-VOID DispatchFlush(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  DOKAN_FILE_INFO fileInfo;
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchFlush(PDOKAN_IO_EVENT IoEvent) {
   NTSTATUS status;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
-  CheckFileName(EventContext->Operation.Flush.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.Flush.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent, 0);
 
-  DbgPrint("###Flush %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###Flush file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  if (DokanInstance->DokanOperations->FlushFileBuffers) {
-
-    status = DokanInstance->DokanOperations->FlushFileBuffers(
-        EventContext->Operation.Flush.FileName, &fileInfo);
-
+  if (IoEvent->DokanInstance->DokanOperations->FlushFileBuffers) {
+    status = IoEvent->DokanInstance->DokanOperations->FlushFileBuffers(
+        IoEvent->EventContext->Operation.Flush.FileName, &IoEvent->DokanFileInfo);
   } else {
     status = STATUS_NOT_IMPLEMENTED;
   }
 
   if (status == STATUS_NOT_IMPLEMENTED) {
-    eventInfo->Status = STATUS_SUCCESS;
+    IoEvent->EventResult->Status = STATUS_SUCCESS;
   } else {
-    eventInfo->Status =
+    IoEvent->EventResult->Status =
         status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

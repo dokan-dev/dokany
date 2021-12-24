@@ -722,13 +722,14 @@ static NTSTATUS DOKAN_CALLBACK memfs_setfilesecurity(
 
 static NTSTATUS DOKAN_CALLBACK
 memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
-                  PDOKAN_FILE_INFO dokanfileinfo) {
+                  PVOID findstreamcontext, PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   spdlog::info(L"FindStreams: {}", filename_str);
   auto f = filenodes->find(filename_str);
 
-  if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
+  if (!f)
+    return STATUS_OBJECT_NAME_NOT_FOUND;
 
   auto streams = f->get_streams();
 
@@ -744,11 +745,14 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
     stream_data.cStreamName[memfs_helper::DataStreamNameStr.length() + 1] =
         L'\0';
     stream_data.StreamSize.QuadPart = f->get_filesize();
-    fill_findstreamdata(&stream_data, dokanfileinfo);
+    if (!fill_findstreamdata(&stream_data, findstreamcontext)) {
+      return STATUS_BUFFER_OVERFLOW;
+    }
   } else if (streams.empty()) {
     // The node is a directory without any alternate streams
     return STATUS_END_OF_FILE;
   }
+
   // Add the alternated stream attached
   // for \foo:bar we need to return in the form of bar:$DATA
   for (const auto &stream : streams) {
@@ -772,7 +776,9 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
     stream_data.StreamSize.QuadPart = stream.second->get_filesize();
     spdlog::info(L"FindStreams: {} StreamName: {} Size: {:x}", filename_str,
                  stream_names.second, stream_data.StreamSize.QuadPart);
-    fill_findstreamdata(&stream_data, dokanfileinfo);
+    if (!fill_findstreamdata(&stream_data, findstreamcontext)) {
+      return STATUS_BUFFER_OVERFLOW;
+    }
   }
   return STATUS_SUCCESS;
 }

@@ -995,9 +995,11 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 
     // initialize Event and Event queue
     DokanInitIrpList(&dcb->PendingIrp);
-    DokanInitIrpList(&dcb->PendingEvent);
     DokanInitIrpList(&dcb->NotifyEvent);
     DokanInitIrpList(&dcb->PendingRetryIrp);
+    RtlZeroMemory(&dcb->NotifyIrpEventQueueList, sizeof(LIST_ENTRY));
+    InitializeListHead(&dcb->NotifyIrpEventQueueList);
+    KeInitializeQueue(&dcb->NotifyIrpEventQueue, 0);
 
     KeInitializeEvent(&dcb->ReleaseEvent, NotificationEvent, FALSE);
     ExInitializeResourceLite(&dcb->Resource);

@@ -22,46 +22,43 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokani.h"
 
-VOID DispatchRead(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                  PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchRead(PDOKAN_IO_EVENT IoEvent) {
   ULONG readLength = 0;
   NTSTATUS status = STATUS_NOT_IMPLEMENTED;
-  DOKAN_FILE_INFO fileInfo;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
-      EventContext->Operation.Read.BufferLength);
 
-  CheckFileName(EventContext->Operation.Read.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.Read.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent,
+                       IoEvent->EventContext->Operation.Read.BufferLength);
 
-  DbgPrint("###Read %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###Read file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  if (DokanInstance->DokanOperations->ReadFile) {
-    status = DokanInstance->DokanOperations->ReadFile(
-        EventContext->Operation.Read.FileName, eventInfo->Buffer,
-        EventContext->Operation.Read.BufferLength, &readLength,
-        EventContext->Operation.Read.ByteOffset.QuadPart, &fileInfo);
+  if (IoEvent->DokanInstance->DokanOperations->ReadFile) {
+    status = IoEvent->DokanInstance->DokanOperations->ReadFile(
+        IoEvent->EventContext->Operation.Read.FileName,
+        IoEvent->EventResult->Buffer,
+        IoEvent->EventContext->Operation.Read.BufferLength, &readLength,
+        IoEvent->EventContext->Operation.Read.ByteOffset.QuadPart,
+        &IoEvent->DokanFileInfo);
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-  eventInfo->BufferLength = 0;
-  eventInfo->Status = status;
+  IoEvent->EventResult->BufferLength = 0;
+  IoEvent->EventResult->Status = status;
 
   if (status == STATUS_SUCCESS) {
     if (readLength == 0) {
-      eventInfo->Status = STATUS_END_OF_FILE;
+      IoEvent->EventResult->Status = STATUS_END_OF_FILE;
     } else {
-      eventInfo->BufferLength = readLength;
-      eventInfo->Operation.Read.CurrentByteOffset.QuadPart =
-          EventContext->Operation.Read.ByteOffset.QuadPart + readLength;
+      IoEvent->EventResult->BufferLength = readLength;
+      IoEvent->EventResult->Operation.Read.CurrentByteOffset.QuadPart =
+          IoEvent->EventContext->Operation.Read.ByteOffset.QuadPart +
+          readLength;
     }
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

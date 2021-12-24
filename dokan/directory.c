@@ -23,6 +23,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 #include "list.h"
+#include "dokan_pool.h"
+
+#include <assert.h>
 
 /**
 * \struct DOKAN_FIND_DATA
@@ -368,113 +371,72 @@ DokanFillDirectoryInformation(FILE_INFORMATION_CLASS DirectoryInfo,
   return thisEntrySize;
 }
 
-int DokanFillFileDataEx(PWIN32_FIND_DATAW FindData, PDOKAN_FILE_INFO FileInfo,
-                        BOOLEAN InsertTail) {
-  PLIST_ENTRY listHead =
-      ((PDOKAN_OPEN_INFO)(UINT_PTR)FileInfo->DokanContext)->DirListHead;
-  PDOKAN_FIND_DATA findData;
-
-  findData = (PDOKAN_FIND_DATA)malloc(sizeof(DOKAN_FIND_DATA));
-  if (findData == NULL) {
-    return 0;
-  }
-  ZeroMemory(findData, sizeof(DOKAN_FIND_DATA));
-  InitializeListHead(&findData->ListEntry);
-
-  findData->FindData = *FindData;
-
-  if (InsertTail)
-    InsertTailList(listHead, &findData->ListEntry);
-  else
-    InsertHeadList(listHead, &findData->ListEntry);
+int WINAPI DokanFillFileData(PWIN32_FIND_DATAW FindData,
+                             PDOKAN_FILE_INFO FileInfo) {
+  assert(FileInfo->ProcessingContext);
+  PDOKAN_VECTOR dirList = (PDOKAN_VECTOR )FileInfo->ProcessingContext;
+  DokanVector_PushBack(dirList, FindData);
   return 0;
 }
 
-int WINAPI DokanFillFileData(PWIN32_FIND_DATAW FindData,
-                             PDOKAN_FILE_INFO FileInfo) {
-  return DokanFillFileDataEx(FindData, FileInfo, TRUE);
-}
-
-VOID ClearFindData(PLIST_ENTRY ListHead) {
-  // free all list entries
-  while (!IsListEmpty(ListHead)) {
-    PLIST_ENTRY entry = RemoveHeadList(ListHead);
-    PDOKAN_FIND_DATA find =
-        CONTAINING_RECORD(entry, DOKAN_FIND_DATA, ListEntry);
-    free(find);
-  }
-}
-
-// add entry which matches the pattern specified in EventContext
-// to the buffer specified in EventInfo
+// add entry which matches the pattern specifed in EventContext
+// to the buffer specifed in EventInfo
 //
-LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
-                PLIST_ENTRY FindDataList, BOOLEAN PatternCheck,
-                PDOKAN_INSTANCE DokanInstance) {
-  PLIST_ENTRY thisEntry, listHead, nextEntry;
-
-  ULONG lengthRemaining = EventInfo->BufferLength;
-  PVOID currentBuffer = EventInfo->Buffer;
+LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
+  ULONG lengthRemaining =
+      IoEvent->EventContext->Operation.Directory.BufferLength;
+  PVOID currentBuffer = IoEvent->EventResult->Buffer;
   PVOID lastBuffer = currentBuffer;
   ULONG index = 0;
-  BOOL caseSensitive = FALSE;
+  BOOL patternCheck = FALSE;
   PWCHAR pattern = NULL;
+  BOOL bufferOverFlow = FALSE;
 
-  // search patten is specified
-  if (PatternCheck &&
-      EventContext->Operation.Directory.SearchPatternLength != 0) {
-    pattern = (PWCHAR)(
-        (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
-        (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
+  if (IoEvent->EventContext->Operation.Directory.SearchPatternLength > 0) {
+    pattern = (PWCHAR)((SIZE_T)&IoEvent->EventContext->Operation.Directory
+                           .SearchPatternBase[0] +
+                       (SIZE_T)IoEvent->EventContext->Operation.Directory
+                           .SearchPatternOffset);
   }
 
-  caseSensitive =
-      DokanInstance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE;
+  if (pattern && wcscmp(pattern, L"*") != 0 &&
+      !IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
+    patternCheck = TRUE;
+  }
 
-  listHead = FindDataList;
-
-  for (thisEntry = listHead->Flink; thisEntry != listHead;
-       thisEntry = nextEntry) {
-
-    PDOKAN_FIND_DATA find;
-    nextEntry = thisEntry->Flink;
-
-    find = CONTAINING_RECORD(thisEntry, DOKAN_FIND_DATA, ListEntry);
-
+  for (size_t i = 0; i < DokanVector_GetCount(DirList); ++i) {
+    PDOKAN_FIND_DATA find = (PDOKAN_FIND_DATA)DokanVector_GetItem(DirList, i);
     DbgPrintW(L"FileMatch? : %s (%s,%d,%d)\n", find->FindData.cFileName,
               (pattern ? pattern : L"null"),
-              EventContext->Operation.Directory.FileIndex, index);
+              IoEvent->EventContext->Operation.Directory.FileIndex, index);
 
     // pattern is not specified or pattern match is ignore cases
-    if (!pattern || DokanIsNameInExpression(pattern, find->FindData.cFileName,
-                                            !caseSensitive)) {
-
-      if (EventContext->Operation.Directory.FileIndex <= index) {
+    if (!patternCheck ||
+        DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
+      if (IoEvent->EventContext->Operation.Directory.FileIndex <= index) {
         // index+1 is very important, should use next entry index
         ULONG entrySize = DokanFillDirectoryInformation(
-            EventContext->Operation.Directory.FileInformationClass,
+            IoEvent->EventContext->Operation.Directory.FileInformationClass,
             currentBuffer, &lengthRemaining, &find->FindData, index + 1,
-            DokanInstance);
+            IoEvent->DokanInstance);
         // buffer is full
-        if (entrySize == 0)
+        if (entrySize == 0) {
+          bufferOverFlow = TRUE;
           break;
-
+        }
         // pointer of the current last entry
         lastBuffer = currentBuffer;
-
         // end if needs to return single entry
-        if (EventContext->Flags & SL_RETURN_SINGLE_ENTRY) {
+        if (IoEvent->EventContext->Flags & SL_RETURN_SINGLE_ENTRY) {
+
           DbgPrint("  =>return single entry\n");
           index++;
           break;
         }
-
         DbgPrint("  =>return\n");
-
         // the offset of next entry
         ((PFILE_BOTH_DIR_INFORMATION)currentBuffer)->NextEntryOffset =
             entrySize;
-
         // next buffer position
         currentBuffer = (PCHAR)currentBuffer + entrySize;
       }
@@ -484,93 +446,174 @@ LONG MatchFiles(PEVENT_CONTEXT EventContext, PEVENT_INFORMATION EventInfo,
 
   // Since next of the last entry doesn't exist, clear next offset
   ((PFILE_BOTH_DIR_INFORMATION)lastBuffer)->NextEntryOffset = 0;
-
   // acctualy used length of buffer
-  EventInfo->BufferLength =
-      EventContext->Operation.Directory.BufferLength - lengthRemaining;
-
-  if (index <= EventContext->Operation.Directory.FileIndex) {
-
-    if (thisEntry != listHead)
+  IoEvent->EventResult->BufferLength =
+      IoEvent->EventContext->Operation.Directory.BufferLength -
+      lengthRemaining;
+  if (index <= IoEvent->EventContext->Operation.Directory.FileIndex) {
+    if (bufferOverFlow)
       return -2; // BUFFER_OVERFLOW
-
-    return -1; // NO_MORE_FILES
+    return -1;   // NO_MORE_FILES
   }
-
   return index;
 }
 
-VOID AddMissingCurrentAndParentFolder(PEVENT_CONTEXT EventContext,
-                                      PLIST_ENTRY FindDataList,
-                                      PDOKAN_FILE_INFO fileInfo) {
-  PLIST_ENTRY thisEntry, listHead, nextEntry;
+VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent) {
   PWCHAR pattern = NULL;
   BOOLEAN currentFolder = FALSE, parentFolder = FALSE;
   WIN32_FIND_DATAW findData;
   FILETIME systime;
+  PDOKAN_VECTOR dirList = (PDOKAN_VECTOR)IoEvent->DokanFileInfo.ProcessingContext;
 
-  if (EventContext->Operation.Directory.SearchPatternLength != 0) {
-    pattern = (PWCHAR)(
-        (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
-        (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
+  assert(dirList);
+  if (IoEvent->EventContext->Operation.Directory.SearchPatternLength != 0) {
+    pattern = (PWCHAR)((SIZE_T)&IoEvent->EventContext->Operation.Directory
+                           .SearchPatternBase[0] +
+                       (SIZE_T)IoEvent->EventContext->Operation.Directory
+                           .SearchPatternOffset);
   }
 
-  if (wcscmp(EventContext->Operation.Directory.DirectoryName, L"\\") == 0 ||
-      (pattern != NULL && wcscmp(pattern, L"*") != 0))
+  if (wcscmp(IoEvent->EventContext->Operation.Directory.DirectoryName,
+             L"\\") == 0 ||
+      (pattern != NULL && wcscmp(pattern, L"*") != 0)) {
     return;
+  }
 
-  listHead = FindDataList;
-  for (thisEntry = listHead->Flink; thisEntry != listHead;
-       thisEntry = nextEntry) {
-
-    PDOKAN_FIND_DATA find;
-    nextEntry = thisEntry->Flink;
-
-    find = CONTAINING_RECORD(thisEntry, DOKAN_FIND_DATA, ListEntry);
-
-    if (wcscmp(find->FindData.cFileName, L".") == 0)
+  for (size_t i = 0;
+       (!currentFolder || !parentFolder) && i < DokanVector_GetCount(dirList);
+       ++i) {
+    PDOKAN_FIND_DATA find = (PDOKAN_FIND_DATA)DokanVector_GetItem(dirList, i);
+    if (wcscmp(find->FindData.cFileName, L".") == 0) {
       currentFolder = TRUE;
-    if (wcscmp(find->FindData.cFileName, L"..") == 0)
+    }
+
+    if (wcscmp(find->FindData.cFileName, L"..") == 0) {
       parentFolder = TRUE;
-    if (currentFolder == TRUE && parentFolder == TRUE)
-      return; // folders are already there
+    }
   }
 
-  GetSystemTimeAsFileTime(&systime);
-  ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
-  findData.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
-  findData.ftCreationTime = systime;
-  findData.ftLastAccessTime = systime;
-  findData.ftLastWriteTime = systime;
-  // Folders times should be the real current and parent folder times...
-  if (!parentFolder) {
-    findData.cFileName[0] = '.';
-    findData.cFileName[1] = '.';
-    DokanFillFileDataEx(&findData, fileInfo, FALSE);
-  }
-
-  if (!currentFolder) {
-    findData.cFileName[0] = '.';
-    findData.cFileName[1] = '\0';
-    DokanFillFileDataEx(&findData, fileInfo, FALSE);
+  if (!currentFolder || !parentFolder) {
+    GetSystemTimeAsFileTime(&systime);
+    ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
+    findData.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+    findData.ftCreationTime = systime;
+    findData.ftLastAccessTime = systime;
+    findData.ftLastWriteTime = systime;
+    // Folders times should be the real current and parent folder times...
+    // TODO: Should it be PushFront ?
+    if (!parentFolder) {
+      findData.cFileName[0] = '.';
+      findData.cFileName[1] = '.';
+      // NULL written during ZeroMemory()
+      DokanVector_PushBack(dirList, &findData);
+    }
+    if (!currentFolder) {
+      findData.cFileName[0] = '.';
+      findData.cFileName[1] = '\0';
+      DokanVector_PushBack(dirList, &findData);
+    }
   }
 }
 
-VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                                  PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
+NTSTATUS WriteDirectoryResults(PDOKAN_IO_EVENT EventInfo,
+                               PDOKAN_VECTOR dirList) {
+  // If this function is called then so far everything should be good
+  assert(EventInfo->EventResult->Status == STATUS_SUCCESS);
+  // Write the file info to the output buffer
+  int index = MatchFiles(EventInfo, dirList);
+  DbgPrint("WriteDirectoryResults() New directory index is %d.\n", index);
+  // there is no matched file
+  if (index < 0) {
+    if (index == -1) {
+      if (EventInfo->EventContext->Operation.Directory.FileIndex == 0) {
+        DbgPrint("  STATUS_NO_SUCH_FILE\n");
+        EventInfo->EventResult->Status = STATUS_NO_SUCH_FILE;
+      } else {
+
+        DbgPrint("  STATUS_NO_MORE_FILES\n");
+        EventInfo->EventResult->Status = STATUS_NO_MORE_FILES;
+      }
+    } else if (index == -2) {
+      DbgPrint("  STATUS_BUFFER_OVERFLOW\n");
+      EventInfo->EventResult->Status = STATUS_BUFFER_OVERFLOW;
+    }
+    EventInfo->EventResult->Operation.Directory.Index =
+        EventInfo->EventContext->Operation.Directory.FileIndex;
+  } else {
+    DbgPrint("index to %d\n", index);
+    EventInfo->EventResult->Operation.Directory.Index = index;
+  }
+  return EventInfo->EventResult->Status;
+}
+
+VOID EndFindFilesCommon(PDOKAN_IO_EVENT IoEvent, NTSTATUS Status) {
+  PDOKAN_VECTOR dirList =
+      (PDOKAN_VECTOR)IoEvent->DokanFileInfo.ProcessingContext;
+  PDOKAN_VECTOR oldDirList = NULL;
+
+  assert(IoEvent->EventResult->BufferLength == 0);
+  assert(IoEvent->DokanFileInfo.ProcessingContext);
+
+  // STATUS_PENDING should not be passed to this function
+  if (Status == STATUS_PENDING) {
+    DbgPrint("Dokan Error: EndFindFilesCommon() failed because STATUS_PENDING "
+             "was supplied for ResultStatus.\n");
+    Status = STATUS_INTERNAL_ERROR;
+  }
+
+  if (Status == STATUS_SUCCESS) {
+    AddMissingCurrentAndParentFolder(IoEvent);
+    Status = WriteDirectoryResults(IoEvent, dirList);
+    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    {
+      if (IoEvent->DokanOpenInfo->DirList != dirList) {
+        oldDirList = IoEvent->DokanOpenInfo->DirList;
+        IoEvent->DokanOpenInfo->DirList = dirList;
+      } else {
+        // They should never point to the same object
+        DbgPrint("Dokan Warning: EndFindFilesCommon() "
+                 "EventInfo->DokanOpenInfo->DirList == dirList\n");
+      }
+      if (IoEvent->DokanOpenInfo->DirListSearchPattern) {
+
+        free(IoEvent->DokanOpenInfo->DirListSearchPattern);
+        IoEvent->DokanOpenInfo->DirListSearchPattern = NULL;
+      }
+      if (IoEvent->EventContext->Operation.Directory
+              .SearchPatternLength > 0) {
+        IoEvent->DokanOpenInfo->DirListSearchPattern =
+            _wcsdup((PWCHAR)((SIZE_T)&IoEvent->EventContext->Operation.Directory
+                                 .SearchPatternBase[0] +
+                             (SIZE_T)IoEvent->EventContext->Operation.Directory
+                                 .SearchPatternOffset));
+      }
+    }
+    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    if (oldDirList) {
+      PushDirectoryList(oldDirList);
+    }
+  } else {
+    PushDirectoryList(dirList);
+  }
+  IoEvent->DokanFileInfo.ProcessingContext = NULL;
+  IoEvent->EventResult->Status = Status;
+  EventCompletion(IoEvent);
+}
+
+VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
+  PWCHAR searchPattern = NULL;
   NTSTATUS status = STATUS_SUCCESS;
-  ULONG fileInfoClass = EventContext->Operation.Directory.FileInformationClass;
-  BOOLEAN patternCheck = TRUE;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
-      EventContext->Operation.Directory.BufferLength);
+  ULONG fileInfoClass =
+      IoEvent->EventContext->Operation.Directory.FileInformationClass;
+  BOOL forceScan = FALSE;
 
-  CheckFileName(EventContext->Operation.Directory.DirectoryName);
+   DbgPrint(
+      "###FindFiles file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+      IoEvent->DokanOpenInfo,
+      IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId : -1,
+      IoEvent);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CheckFileName(IoEvent->EventContext->Operation.Directory.DirectoryName);
 
   // check whether this is handled FileInfoClass
   if (fileInfoClass != FileDirectoryInformation &&
@@ -581,135 +624,92 @@ VOID DispatchDirectoryInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
       fileInfoClass != FileIdFullDirectoryInformation &&
       fileInfoClass != FileIdExtdDirectoryInformation &&
       fileInfoClass != FileIdExtdBothDirectoryInformation) {
-
-    DbgPrint("not suported type %d\n", fileInfoClass);
-
+    DbgPrint("Dokan Information: Unsupported file information class %d\n",
+             fileInfoClass);
     // send directory info to driver
-    eventInfo->BufferLength = 0;
-    eventInfo->Status = STATUS_INVALID_PARAMETER;
-    SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-    ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-    free(eventInfo);
+    IoEvent->EventResult->BufferLength = 0;
+    IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
+    EventCompletion(IoEvent);
     return;
   }
 
-  // IMPORTANT!!
-  // this buffer length is fixed in MatchFiles function
-  eventInfo->BufferLength = EventContext->Operation.Directory.BufferLength;
+  CreateDispatchCommon(IoEvent,
+                       IoEvent->EventContext->Operation.Directory.BufferLength);
 
-  if (openInfo->DirListHead == NULL) {
-    openInfo->DirListHead = malloc(sizeof(LIST_ENTRY));
-    if (openInfo->DirListHead != NULL) {
-      InitializeListHead(openInfo->DirListHead);
-    } else {
-      eventInfo->BufferLength = 0;
-      eventInfo->Status = STATUS_NO_MEMORY;
-      SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-      ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-      free(eventInfo);
-      return;
-    }
+  IoEvent->EventResult->Operation.Directory.Index =
+      IoEvent->EventContext->Operation.Directory.FileIndex;
+
+  if (IoEvent->EventContext->Operation.Directory.SearchPatternLength > 0) {
+    searchPattern = (PWCHAR)((SIZE_T)&IoEvent->EventContext->Operation.Directory
+                                 .SearchPatternBase[0] +
+                             (SIZE_T)IoEvent->EventContext->Operation.Directory
+                                 .SearchPatternOffset);
   }
 
-  if (EventContext->Operation.Directory.FileIndex == 0) {
-    ClearFindData(openInfo->DirListHead);
-  }
-
-  if (IsListEmpty(openInfo->DirListHead)) {
-
-    DbgPrint("###FindFiles %04d\n", openInfo->EventId);
-
-    // if user defined FindFilesWithPattern
-    if (DokanInstance->DokanOperations->FindFilesWithPattern) {
-      LPCWSTR pattern = L"*";
-
-      // if search pattern is specified
-      if (EventContext->Operation.Directory.SearchPatternLength != 0) {
-        pattern = (PWCHAR)(
-            (SIZE_T)&EventContext->Operation.Directory.SearchPatternBase[0] +
-            (SIZE_T)EventContext->Operation.Directory.SearchPatternOffset);
-      }
-
-      patternCheck = FALSE; // do not recheck pattern later in MatchFiles
-
-      status = DokanInstance->DokanOperations->FindFilesWithPattern(
-          EventContext->Operation.Directory.DirectoryName, pattern,
-          DokanFillFileData, &fileInfo);
-
-    } else {
-      status = STATUS_NOT_IMPLEMENTED;
+  EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  {
+    if (IoEvent->DokanOpenInfo->DirList == NULL) {
+      forceScan = TRUE;
+    } else if (searchPattern && IoEvent->DokanOpenInfo->DirListSearchPattern) {
+      forceScan = wcscmp(searchPattern,
+                         IoEvent->DokanOpenInfo->DirListSearchPattern) != 0
+                      ? TRUE
+                      : FALSE;
+    } else if (searchPattern) {
+      forceScan = wcscmp(searchPattern, L"*") != 0 ? TRUE : FALSE;
+    } else if (IoEvent->DokanOpenInfo->DirListSearchPattern) {
+      forceScan =
+          wcscmp(IoEvent->DokanOpenInfo->DirListSearchPattern, L"*") != 0
+              ? TRUE
+              : FALSE;
     }
-
-    if (status == STATUS_NOT_IMPLEMENTED &&
-        DokanInstance->DokanOperations->FindFiles) {
-
-      patternCheck = TRUE; // do pattern check later in MachFiles
-
-      // call FileSystem specifeid callback routine
-      status = DokanInstance->DokanOperations->FindFiles(
-          EventContext->Operation.Directory.DirectoryName, DokanFillFileData,
-          &fileInfo);
+    // In FastFat SL_INDEX_SPECIFIED overrides SL_RESTART_SCAN
+    forceScan =
+        (forceScan || (!(IoEvent->EventContext->Flags & SL_INDEX_SPECIFIED) &&
+                       (IoEvent->EventContext->Flags & SL_RESTART_SCAN)))
+            ? TRUE
+            : FALSE;
+    if (!forceScan) {
+      status = WriteDirectoryResults(IoEvent, IoEvent->DokanOpenInfo->DirList);
     }
   }
+  LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
 
-  if (status != STATUS_SUCCESS) {
+  if (!forceScan) {
+    IoEvent->EventResult->Status = status;
+    EventCompletion(IoEvent);
+    return;
+  }
 
-    if (EventContext->Operation.Directory.FileIndex == 0) {
-      DbgPrint("  STATUS_NO_SUCH_FILE\n");
-      eventInfo->Status = STATUS_NO_SUCH_FILE;
-    } else {
-      DbgPrint("  STATUS_NO_MORE_FILES\n");
-      eventInfo->Status = STATUS_NO_MORE_FILES;
-    }
+  IoEvent->DokanFileInfo.ProcessingContext = PopDirectoryList();
+  if (!IoEvent->DokanFileInfo.ProcessingContext) {
+    DbgPrint(
+        "Dokan Error: Failed to allocate memory for a new directory list.\n");
+    IoEvent->EventResult->Status = STATUS_NO_MEMORY;
+    EventCompletion(IoEvent);
+    return;
+  }
 
-    eventInfo->BufferLength = 0;
-    eventInfo->Operation.Directory.Index =
-        EventContext->Operation.Directory.FileIndex;
-    // free all of list entries
-    ClearFindData(openInfo->DirListHead);
+  if ((IoEvent->EventContext->Operation.Directory.SearchPatternLength == 0 ||
+       !IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) &&
+      IoEvent->DokanInstance->DokanOperations->FindFiles) {
+    status = IoEvent->DokanInstance->DokanOperations->FindFiles(
+        IoEvent->EventContext->Operation.Directory.DirectoryName,
+        DokanFillFileData, &IoEvent->DokanFileInfo);
+    EndFindFilesCommon(IoEvent, status);
+
+  } else if (IoEvent->EventContext->Operation.Directory.SearchPatternLength !=
+                 0 &&
+             IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
+    status = IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
+        IoEvent->EventContext->Operation.Directory.DirectoryName,
+        searchPattern ? searchPattern : L"*", DokanFillFileData,
+        &IoEvent->DokanFileInfo);
+    EndFindFilesCommon(IoEvent, status);
   } else {
-    LONG index;
-    eventInfo->Status = STATUS_SUCCESS;
-
-    AddMissingCurrentAndParentFolder(EventContext, openInfo->DirListHead,
-                                     &fileInfo);
-
-    DbgPrint("index from %d\n", EventContext->Operation.Directory.FileIndex);
-    // extract entries that match search pattern from FindFiles result
-    index = MatchFiles(EventContext, eventInfo, openInfo->DirListHead,
-                       patternCheck, DokanInstance);
-
-    // there is no matched file
-    if (index < 0) {
-      eventInfo->BufferLength = 0;
-      eventInfo->Operation.Directory.Index =
-          EventContext->Operation.Directory.FileIndex;
-      if (index == -1) {
-        if (EventContext->Operation.Directory.FileIndex == 0) {
-          DbgPrint("  STATUS_NO_SUCH_FILE\n");
-          eventInfo->Status = STATUS_NO_SUCH_FILE;
-        } else {
-          DbgPrint("  STATUS_NO_MORE_FILES\n");
-          eventInfo->Status = STATUS_NO_MORE_FILES;
-        }
-      } else {
-        DbgPrint("  STATUS_BUFFER_OVERFLOW\n");
-        eventInfo->Status = STATUS_BUFFER_OVERFLOW;
-      }
-      ClearFindData(openInfo->DirListHead);
-    } else {
-      DbgPrint("index to %d\n", index);
-      eventInfo->Operation.Directory.Index = index;
-    }
+    IoEvent->EventResult->Status = STATUS_NOT_IMPLEMENTED;
+    EventCompletion(IoEvent);
   }
-
-  // information for FileSystem
-  openInfo->UserContext = fileInfo.Context;
-
-  // send directory information to driver
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
 }
 
 #define DOS_STAR (L'<')

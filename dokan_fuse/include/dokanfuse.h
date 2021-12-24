@@ -54,9 +54,13 @@ struct fuse_chan
 	//This method dynamically loads DOKAN functions
 	bool init();
 
+	typedef VOID (__stdcall *DokanInitType)();
+	typedef VOID(__stdcall *DokanShutdownType)();
 	typedef int (__stdcall *DokanMainType)(PDOKAN_OPTIONS,PDOKAN_OPERATIONS);
 	typedef BOOL (__stdcall *DokanUnmountType)(WCHAR DriveLetter);
 	typedef BOOL (__stdcall *DokanRemoveMountPointType)(LPCWSTR MountPoint);
+	DokanInitType ResolvedDokanInit = nullptr;
+	DokanShutdownType ResolvedDokanShutdown = nullptr;
 	DokanMainType ResolvedDokanMain = nullptr;
 	DokanUnmountType ResolvedDokanUnmount = nullptr;
 	DokanRemoveMountPointType ResolvedDokanRemoveMountPoint = nullptr;

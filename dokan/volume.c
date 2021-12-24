@@ -311,61 +311,44 @@ DokanFsFullSizeInformation(PEVENT_INFORMATION EventInfo,
   return STATUS_SUCCESS;
 }
 
-VOID DispatchQueryVolumeInformation(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                                    PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(
-      EventContext->Operation.Volume.BufferLength);
+VOID DispatchQueryVolumeInformation(PDOKAN_IO_EVENT IoEvent) {
+  CreateDispatchCommon(IoEvent,
+                       IoEvent->EventContext->Operation.Volume.BufferLength);
 
-  eventInfo = (PEVENT_INFORMATION)malloc(sizeOfEventInfo);
-  if (eventInfo == NULL) {
-    return;
-  }
+  DbgPrint("###QueryVolumeInfo file handle = 0x%p, eventID = %04d, event Info "
+           "= 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  RtlZeroMemory(eventInfo, sizeOfEventInfo);
-  RtlZeroMemory(&fileInfo, sizeof(DOKAN_FILE_INFO));
+  IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
 
-  // There is no Context because file is not opened
-  // so DispatchCommon is not used here
-  openInfo = (PDOKAN_OPEN_INFO)(INT_PTR)EventContext->Context;
-
-  eventInfo->BufferLength = 0;
-  eventInfo->SerialNumber = EventContext->SerialNumber;
-
-  fileInfo.ProcessId = EventContext->ProcessId;
-  fileInfo.DokanOptions = DokanInstance->DokanOptions;
-
-  eventInfo->Status = STATUS_INVALID_PARAMETER;
-  eventInfo->BufferLength = 0;
-
-  DbgPrint("###QueryVolumeInfo %04d\n",
-           openInfo != NULL ? openInfo->EventId : -1);
-
-  switch (EventContext->Operation.Volume.FsInformationClass) {
+  switch (IoEvent->EventContext->Operation.Volume.FsInformationClass) {
   case FileFsVolumeInformation:
-    eventInfo->Status = DokanFsVolumeInformation(
-        eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
+    IoEvent->EventResult->Status = DokanFsVolumeInformation(
+        IoEvent->EventResult, IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                                 IoEvent->DokanInstance->DokanOperations);
     break;
   case FileFsSizeInformation:
-    eventInfo->Status = DokanFsSizeInformation(
-        eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
+    IoEvent->EventResult->Status = DokanFsSizeInformation(
+        IoEvent->EventResult, IoEvent->EventContext, &IoEvent->DokanFileInfo,
+                               IoEvent->DokanInstance->DokanOperations);
     break;
   case FileFsAttributeInformation:
-    eventInfo->Status = DokanFsAttributeInformation(
-        eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
+    IoEvent->EventResult->Status = DokanFsAttributeInformation(
+        IoEvent->EventResult, IoEvent->EventContext, &IoEvent->DokanFileInfo,
+        IoEvent->DokanInstance->DokanOperations);
     break;
   case FileFsFullSizeInformation:
-    eventInfo->Status = DokanFsFullSizeInformation(
-        eventInfo, EventContext, &fileInfo, DokanInstance->DokanOperations);
+    IoEvent->EventResult->Status = DokanFsFullSizeInformation(
+        IoEvent->EventResult, IoEvent->EventContext, &IoEvent->DokanFileInfo,
+        IoEvent->DokanInstance->DokanOperations);
     break;
   default:
     DbgPrint("error unknown volume info %d\n",
-             EventContext->Operation.Volume.FsInformationClass);
+             IoEvent->EventContext->Operation.Volume.FsInformationClass);
   }
 
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }

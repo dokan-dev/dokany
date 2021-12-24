@@ -21,35 +21,27 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include "dokan_pool.h"
 
-VOID DispatchClose(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                   PDOKAN_INSTANCE DokanInstance) {
-  PEVENT_INFORMATION eventInfo;
-  DOKAN_FILE_INFO fileInfo;
-  PDOKAN_OPEN_INFO openInfo;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
+VOID DispatchClose(PDOKAN_IO_EVENT IoEvent) {
+  CheckFileName(IoEvent->EventContext->Operation.Close.FileName);
 
-  UNREFERENCED_PARAMETER(Handle);
+  DbgPrint("###Close file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                          : -1,
+           IoEvent);
 
-  CheckFileName(EventContext->Operation.Close.FileName);
-
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
-
-  eventInfo->Status = STATUS_SUCCESS; // return success at any case
-
-  DbgPrint("###Close %04d\n", openInfo != NULL ? openInfo->EventId : -1);
-  
   // Driver has simply notifying us of the Close request which he has
   // already completed at this stage. Driver is not expecting us
   // to reply from this so there is no need to send an EVENT_INFORMATION.
 
-  if (openInfo != NULL) {
-    EnterCriticalSection(&DokanInstance->CriticalSection);
-    openInfo->FileName = _wcsdup(EventContext->Operation.Close.FileName);
-    openInfo->OpenCount--;
-    LeaveCriticalSection(&DokanInstance->CriticalSection);
+  if (IoEvent->DokanOpenInfo) {
+    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    IoEvent->DokanOpenInfo->FileName =
+        _wcsdup(IoEvent->EventContext->Operation.Close.FileName);
+    IoEvent->DokanOpenInfo->OpenCount--;
+    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    ReleaseDokanOpenInfo(IoEvent);
   }
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
 }

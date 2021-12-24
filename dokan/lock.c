@@ -23,36 +23,34 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
-                  PDOKAN_INSTANCE DokanInstance) {
-  DOKAN_FILE_INFO fileInfo;
-  PEVENT_INFORMATION eventInfo;
-  PDOKAN_OPEN_INFO openInfo;
+VOID DispatchLock(PDOKAN_IO_EVENT IoEvent) {
   NTSTATUS status;
-  ULONG sizeOfEventInfo = DispatchGetEventInformationLength(0);
 
-  CheckFileName(EventContext->Operation.Lock.FileName);
+  CheckFileName(IoEvent->EventContext->Operation.Lock.FileName);
 
-  eventInfo = DispatchCommon(EventContext, sizeOfEventInfo, DokanInstance,
-                             &fileInfo, &openInfo);
+  CreateDispatchCommon(IoEvent, 0);
 
-  DbgPrint("###Lock %04d\n", openInfo != NULL ? openInfo->EventId : -1);
+  DbgPrint("###Lock file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
+           IoEvent->DokanOpenInfo,
+           IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId
+                                            : -1,
+           IoEvent);
 
-  eventInfo->Status = STATUS_NOT_IMPLEMENTED;
+  IoEvent->EventResult->Status = STATUS_NOT_IMPLEMENTED;
 
-  switch (EventContext->MinorFunction) {
+  switch (IoEvent->EventContext->MinorFunction) {
   case IRP_MN_LOCK:
-    if (DokanInstance->DokanOperations->LockFile) {
+    if (IoEvent->DokanInstance->DokanOperations->LockFile) {
 
-      status = DokanInstance->DokanOperations->LockFile(
-          EventContext->Operation.Lock.FileName,
-          EventContext->Operation.Lock.ByteOffset.QuadPart,
-          EventContext->Operation.Lock.Length.QuadPart,
+      status = IoEvent->DokanInstance->DokanOperations->LockFile(
+          IoEvent->EventContext->Operation.Lock.FileName,
+          IoEvent->EventContext->Operation.Lock.ByteOffset.QuadPart,
+          IoEvent->EventContext->Operation.Lock.Length.QuadPart,
           // EventContext->Operation.Lock.Key,
-          &fileInfo);
+          &IoEvent->DokanFileInfo);
 
       if (status != STATUS_NOT_IMPLEMENTED) {
-        eventInfo->Status =
+        IoEvent->EventResult->Status =
             status != STATUS_SUCCESS ? STATUS_LOCK_NOT_GRANTED : STATUS_SUCCESS;
       }
     }
@@ -62,29 +60,25 @@ VOID DispatchLock(HANDLE Handle, PEVENT_CONTEXT EventContext,
   case IRP_MN_UNLOCK_ALL_BY_KEY:
     break;
   case IRP_MN_UNLOCK_SINGLE:
-    if (DokanInstance->DokanOperations->UnlockFile) {
+    if (IoEvent->DokanInstance->DokanOperations->UnlockFile) {
 
-      status = DokanInstance->DokanOperations->UnlockFile(
-          EventContext->Operation.Lock.FileName,
-          EventContext->Operation.Lock.ByteOffset.QuadPart,
-          EventContext->Operation.Lock.Length.QuadPart,
+      status = IoEvent->DokanInstance->DokanOperations->UnlockFile(
+          IoEvent->EventContext->Operation.Lock.FileName,
+          IoEvent->EventContext->Operation.Lock.ByteOffset.QuadPart,
+          IoEvent->EventContext->Operation.Lock.Length.QuadPart,
           // EventContext->Operation.Lock.Key,
-          &fileInfo);
+          &IoEvent->DokanFileInfo);
 
       if (status != STATUS_NOT_IMPLEMENTED) {
-        eventInfo->Status =
+        IoEvent->EventResult->Status =
             STATUS_SUCCESS; // always succeeds so it cannot fail ?
       }
     }
     break;
   default:
-    DbgPrint("unknown lock function %d\n", EventContext->MinorFunction);
+    DbgPrint("unknown lock function %d\n",
+             IoEvent->EventContext->MinorFunction);
   }
 
-  if (openInfo != NULL)
-    openInfo->UserContext = fileInfo.Context;
-
-  SendEventInformation(Handle, eventInfo, sizeOfEventInfo);
-  ReleaseDokanOpenInfo(eventInfo, &fileInfo, DokanInstance);
-  free(eventInfo);
+  EventCompletion(IoEvent);
 }
