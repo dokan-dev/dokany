@@ -34,30 +34,6 @@ VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) 
   DOKAN_LOG("End");
 }
 
-VOID DokanCheckKeepAlive(__in PDokanDCB Dcb) {
-  LARGE_INTEGER tickCount;
-  PDokanVCB vcb;
-
-  KeEnterCriticalRegion();
-  KeQueryTickCount(&tickCount);
-  ExAcquireResourceSharedLite(&Dcb->Resource, TRUE);
-
-  if (Dcb->TickCount.QuadPart < tickCount.QuadPart) {
-    vcb = Dcb->Vcb;
-    ExReleaseResourceLite(&Dcb->Resource);
-    DOKAN_LOG("Timeout reached so perform an umount");
-    if (IsUnmountPendingVcb(vcb)) {
-      DOKAN_LOG("Volume is not mounted");
-      KeLeaveCriticalRegion();
-      return;
-    }
-    DokanUnmount(NULL, Dcb);
-  } else {
-    ExReleaseResourceLite(&Dcb->Resource);
-  }
-  KeLeaveCriticalRegion();
-}
-
 NTSTATUS
 ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   KIRQL oldIrql;
@@ -245,7 +221,6 @@ Routine Description:
   BOOLEAN waitObj = TRUE;
   LARGE_INTEGER LastTime = {0};
   LARGE_INTEGER CurrentTime = {0};
-  PDokanVCB vcb;
   PDokanDCB Dcb = pDcb;
   DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
 
@@ -256,8 +231,6 @@ Routine Description:
   pollevents[0] = (PVOID)&Dcb->KillEvent;
   pollevents[1] = (PVOID)&Dcb->ForceTimeoutEvent;
   pollevents[2] = (PVOID)&timer;
-
-  vcb = Dcb->Vcb;
 
   KeSetTimerEx(&timer, timeout, DOKAN_CHECK_INTERVAL, NULL);
 
@@ -273,19 +246,15 @@ Routine Description:
       waitObj = FALSE;
     } else {
       KeClearEvent(&Dcb->ForceTimeoutEvent);
-      // in this case the timer was executed and we are checking if the timer
+      // In this case the timer was executed and we are checking if the timer
       // occurred regulary using the period DOKAN_CHECK_INTERVAL. If not, this
-      // means the system was in sleep mode. If in this case the timer is
-      // faster awaken than the incoming IOCTL_KEEPALIVE
-      // the MountPoint would be removed by mistake (DokanCheckKeepAlive).
+      // means the system was in sleep mode.
       KeQuerySystemTime(&CurrentTime);
       if ((CurrentTime.QuadPart - LastTime.QuadPart) >
           ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
         DokanLogInfo(&logger, L"Wake from sleep detected.");
       } else {
         ReleaseTimeoutPendingIrp(Dcb);
-        if (!vcb->IsKeepaliveActive)
-          DokanCheckKeepAlive(Dcb); //Remove for Dokan 2.x.x
       }
       KeQuerySystemTime(&LastTime);
     }

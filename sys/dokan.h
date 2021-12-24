@@ -271,7 +271,6 @@ typedef struct _DokanDiskControlBlock {
 
   ULONG MountId;
   ULONG Flags;
-  LARGE_INTEGER TickCount;
 
   CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
