@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 void utf8_to_wchar_buf_old(const char *src, wchar_t *res, int maxlen);
-size_t utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen);
+int utf8_to_wchar_buf(const char *src, wchar_t *res, int maxlen);
 
 FILETIME unixTimeToFiletime(time_t t);
 time_t filetimeToUnixTime(const FILETIME *ft);
