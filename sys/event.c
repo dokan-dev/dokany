@@ -462,10 +462,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   ULONG bufferLength = 0;
   PCHAR buffer = NULL;
 
-  // TODO(adrienj): Remove the check when moving to FSCTL only.
-  if (RequestContext->Vcb == NULL) {
-    return STATUS_INVALID_PARAMETER;
-  }
   if (IsUnmountPendingVcb(RequestContext->Vcb)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted");
     return STATUS_NO_SUCH_DEVICE;

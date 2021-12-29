@@ -34,41 +34,6 @@ GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
-  case IOCTL_EVENT_START:
-    status = DokanEventStart(RequestContext);
-    break;
-
-  case IOCTL_SET_DEBUG_MODE: {
-    PULONG pDebug = NULL;
-    GET_IRP_BUFFER_OR_BREAK(RequestContext->Irp, pDebug);
-    g_Debug = *pDebug;
-    status = STATUS_SUCCESS;
-    DOKAN_LOG_FINE_IRP(RequestContext, "Set debug mode: %d", g_Debug);
-  } break;
-
-  case IOCTL_EVENT_RELEASE:
-    status = DokanGlobalEventRelease(RequestContext);
-    break;
-
-  case IOCTL_MOUNTPOINT_CLEANUP:
-    RemoveSessionDevices(RequestContext, GetCurrentSessionId(RequestContext));
-    status = STATUS_SUCCESS;
-    break;
-
-  case IOCTL_EVENT_MOUNTPOINT_LIST:
-    status = DokanGetMountPointList(RequestContext);
-    break;
-
-  case IOCTL_GET_VERSION: {
-    ULONG* version;
-    if (!PREPARE_OUTPUT(RequestContext->Irp, version,
-                        /*SetInformationOnFailure=*/FALSE)) {
-      break;
-    }
-    *version = (ULONG) DOKAN_DRIVER_VERSION;
-    status = STATUS_SUCCESS;
-  } break;
-
   default:
     status = STATUS_INVALID_PARAMETER;
     DOKAN_LOG_FINE_IRP(
@@ -750,10 +715,6 @@ IsVolumeOpen(__in PDokanVCB Vcb, __in PFILE_OBJECT FileObject) {
 }
 
 NTSTATUS DokanGetVolumeMetrics(__in PREQUEST_CONTEXT RequestContext) {
-  // TODO(adrienj): Remove the check when moving to FSCTL only.
-  if (RequestContext->Vcb == NULL) {
-    return STATUS_INVALID_PARAMETER;
-  }
   VOLUME_METRICS* outputBuffer;
   if (!PREPARE_OUTPUT(RequestContext->Irp, outputBuffer,
                       /*SetInformationOnFailure=*/TRUE)) {
@@ -770,21 +731,6 @@ VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
   switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
-    case IOCTL_EVENT_RELEASE:
-      status = DokanEventRelease(RequestContext, RequestContext->DeviceObject);
-      break;
-    case IOCTL_EVENT_WRITE:
-      status = DokanEventWrite(RequestContext);
-      break;
-    case IOCTL_GET_VOLUME_METRICS:
-      status = DokanGetVolumeMetrics(RequestContext);
-      break;
-    case IOCTL_RESET_TIMEOUT:
-      status = DokanResetPendingIrpTimeout(RequestContext);
-      break;
-    case IOCTL_GET_ACCESS_TOKEN:
-      status = DokanGetAccessToken(RequestContext);
-      break;
     default: {
       // TODO: The early check fails some IFSTEST (Network) should make
       // an exception for them. Disabling the volume open check for now.
