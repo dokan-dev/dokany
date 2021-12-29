@@ -620,8 +620,8 @@ static NTSTATUS DOKAN_CALLBACK memfs_getvolumeinformation(
 }
 
 static NTSTATUS DOKAN_CALLBACK
-memfs_mounted(PDOKAN_FILE_INFO /*dokanfileinfo*/) {
-  spdlog::info(L"Mounted");
+memfs_mounted(LPCWSTR MountPoint, PDOKAN_FILE_INFO /*dokanfileinfo*/) {
+  spdlog::info(L"Mounted as {}", MountPoint);
   return STATUS_SUCCESS;
 }
 

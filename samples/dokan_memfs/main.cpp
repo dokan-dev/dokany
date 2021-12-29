@@ -51,9 +51,26 @@ void show_usage() {
   // clang-format on
 }
 
+std::shared_ptr<memfs::memfs> dokan_memfs;
+
+BOOL WINAPI ctrl_handler(DWORD dw_ctrl_type) {
+  switch (dw_ctrl_type) {
+  case CTRL_C_EVENT:
+  case CTRL_BREAK_EVENT:
+  case CTRL_CLOSE_EVENT:
+  case CTRL_LOGOFF_EVENT:
+  case CTRL_SHUTDOWN_EVENT:
+    SetConsoleCtrlHandler(ctrl_handler, FALSE);
+    DokanRemoveMountPoint(dokan_memfs->mount_point);
+    return TRUE;
+  default:
+    return FALSE;
+  }
+}
+
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   try {
-    auto dokan_memfs = std::make_shared<memfs::memfs>();
+    dokan_memfs = std::make_shared<memfs::memfs>();
     // Parse arguments
     for (ULONG i = 1; i < argc; ++i) {
       std::wstring arg = argv[i];
@@ -92,6 +109,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
           dokan_memfs->thread_number = std::stoi(extra_arg);
         }
       }
+    }
+    if (!SetConsoleCtrlHandler(ctrl_handler, TRUE)) {
+      spdlog::error("Control Handler is not set: {}", GetLastError());
     }
     DokanInit();
     // Start the memory filesystem
