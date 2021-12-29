@@ -31,6 +31,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_DRIVER_VERSION 0x0000190
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
+// This is arbitrary. There isn't really an absolute max, but we marshal it in
+// a fixed-size buffer.
+#define VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE (1024 * 16)
 
 #define IOCTL_GET_VERSION                                                      \
   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -120,7 +123,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_WRITE_TO_END_OF_FILE 128
 #define DOKAN_NOCACHE 256
 #define DOKAN_RETRY_CREATE 512
-#define DOKAN_FILE_CHANGE_LAST_WRITE 1024
+#define DOKAN_EVER_USED_IN_NOTIFY_LIST 1024
+#define DOKAN_FILE_CHANGE_LAST_WRITE 2048
 
 // used in DOKAN_START->DeviceType
 #define DOKAN_DISK_FILE_SYSTEM 0
@@ -420,8 +424,6 @@ typedef struct _EVENT_INFORMATION {
 #define DOKAN_EVENT_MOUNT_MANAGER                                   (1 << 3)
 #define DOKAN_EVENT_CURRENT_SESSION                                 (1 << 4)
 #define DOKAN_EVENT_FILELOCK_USER_MODE                              (1 << 5)
-// No longer used option (1 << 6)
-// No longer used option (1 << 7)
 // CaseSenitive FileName: NTFS can look to be case-insensitive
 // but in some situation it can also be case-sensitive :
 // * NTFS keep the filename casing used during Create internally.
@@ -432,11 +434,12 @@ typedef struct _EVENT_INFORMATION {
 //   case-sensitive / insensitive, even if the device tags says otherwise.
 // Dokan choose to support case-sensitive or case-insensitive filesystem
 // but not those NTFS specific scenarios.
-#define DOKAN_EVENT_CASE_SENSITIVE                                  (1 << 8)
+#define DOKAN_EVENT_CASE_SENSITIVE                                  (1 << 6)
 // Enables unmounting of network drives via file explorer
-#define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                          (1 << 9)
-#define DOKAN_EVENT_DISPATCH_DRIVER_LOGS                            (1 << 10)
-#define DOKAN_EVENT_ALLOW_IPC_BATCHING                              (1 << 11)
+#define DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT                          (1 << 7)
+#define DOKAN_EVENT_DISPATCH_DRIVER_LOGS                            (1 << 8)
+#define DOKAN_EVENT_ALLOW_IPC_BATCHING                              (1 << 9)
+#define DOKAN_EVENT_DRIVE_LETTER_IN_USE                             (1 << 10)
 
 // Non-exclusive bits that can be set in EVENT_DRIVER_INFO.Flags for the driver
 // to send back extra info about what happened during a mount attempt, whether
@@ -471,9 +474,11 @@ typedef struct _EVENT_INFORMATION {
 typedef struct _EVENT_DRIVER_INFO {
   ULONG DriverVersion;
   ULONG Status;
+  ULONG Flags;
   ULONG DeviceNumber;
   ULONG MountId;
   WCHAR DeviceName[64];
+  WCHAR ActualDriveLetter;
 } EVENT_DRIVER_INFO, *PEVENT_DRIVER_INFO;
 
 typedef struct _EVENT_START {
@@ -483,6 +488,8 @@ typedef struct _EVENT_START {
   WCHAR MountPoint[260];
   WCHAR UNCName[64];
   ULONG IrpTimeout;
+  ULONG VolumeSecurityDescriptorLength;
+  char VolumeSecurityDescriptor[VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE];
 } EVENT_START, *PEVENT_START;
 
 #ifdef _MSC_VER
@@ -512,10 +519,10 @@ typedef struct _DOKAN_LINK_INFORMATION {
 } DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
 
 /**
-* \struct DOKAN_CONTROL
-* \brief Dokan Control
+* \struct DOKAN_MOUNT_POINT_INFO
+* \brief Dokan Mount point information
 */
-typedef struct _DOKAN_CONTROL {
+typedef struct _DOKAN_MOUNT_POINT_INFO {
   /** File System Type */
   ULONG Type;
   /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
@@ -524,21 +531,11 @@ typedef struct _DOKAN_CONTROL {
   WCHAR UNCName[64];
   /** Disk Device Name */
   WCHAR DeviceName[64];
-#ifdef _MSC_VER
-  /**
-  * Volume Device Object. The value is always 0
-  * and should be removed from the public DOKAN_CONTROL.
-  * MinGW also do not support PVOID64 so we convert it to ULONG64 see #902.
-  */
-  PVOID64 VolumeDeviceObject;
-#else
-  ULONG64 VolumeDeviceObject;
-#endif
   /** Session ID of calling process */
   ULONG SessionId;
   /** Contains information about the flags on the mount */
   ULONG MountOptions;
-} DOKAN_CONTROL, *PDOKAN_CONTROL;
+} DOKAN_MOUNT_POINT_INFO, *PDOKAN_MOUNT_POINT_INFO;
 
 // Dokan Major IRP values dispatched to userland for custom request with
 // EVENT_CONTEXT.

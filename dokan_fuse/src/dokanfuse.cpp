@@ -426,7 +426,8 @@ GetVolumeInformation(LPWSTR VolumeNameBuffer, DWORD VolumeNameSize,
       FileSystemNameSize, DokanFileInfo, FileSystemFlags));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseMounted(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseMounted(LPCWSTR /*MountPoint*/,
+                                           PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
     FPRINTF(stderr, "Mounted\n");

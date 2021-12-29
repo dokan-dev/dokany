@@ -228,8 +228,9 @@ DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
 
   ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
-  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
-  if (dokanControl == NULL) {
+  PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
+      DokanGetMountPointList(FALSE, &nbRead);
+  if (dokanMountPointInfo == NULL) {
     DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
     return WN_NOT_CONNECTED;
   }
@@ -237,9 +238,10 @@ DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
   dosDevice[12] = Name[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-    if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
-      if (dokanControl[i].MountOptions & DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
-        DokanReleaseMountPointList(dokanControl);
+    if (wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
+      if (dokanMountPointInfo[i].MountOptions &
+          DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
+        DokanReleaseMountPointList(dokanMountPointInfo);
         if (DokanRemoveMountPoint(Name)) {
           DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint succeeded\n");
           return WN_SUCCESS;
@@ -262,8 +264,9 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
 
   ULONG nbRead = 0;
   WCHAR dosDevice[] = L"\\DosDevices\\C:";
-  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
-  if (dokanControl == NULL) {
+  PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
+      DokanGetMountPointList(FALSE, &nbRead);
+  if (dokanMountPointInfo == NULL) {
     DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
     return WN_NOT_CONNECTED;
   }
@@ -271,9 +274,9 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-    if (wcscmp(dokanControl[i].MountPoint, dosDevice) == 0) {
-      if (wcscmp(dokanControl[i].UNCName, L"") == 0) {
-        DokanReleaseMountPointList(dokanControl);
+    if (wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
+      if (wcscmp(dokanMountPointInfo[i].UNCName, L"") == 0) {
+        DokanReleaseMountPointList(dokanMountPointInfo);
         // No UNC, always return success
         if (*BufferSize == 0)
           return WN_MORE_DATA;
@@ -283,20 +286,21 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
       }
 
       /* Include trailing 0 and leading '\' */
-      DWORD len = (lstrlenW(dokanControl[i].UNCName) + 2) * sizeof(WCHAR);
+      DWORD len =
+          (lstrlenW(dokanMountPointInfo[i].UNCName) + 2) * sizeof(WCHAR);
       if (len > *BufferSize) {
         *BufferSize = len;
-        DokanReleaseMountPointList(dokanControl);
+        DokanReleaseMountPointList(dokanMountPointInfo);
         return WN_MORE_DATA;
       }
       RemoteName[0] = L'\\';
-      CopyMemory(&RemoteName[1], dokanControl[i].UNCName, len);
+      CopyMemory(&RemoteName[1], dokanMountPointInfo[i].UNCName, len);
       *BufferSize = len;
-      DokanReleaseMountPointList(dokanControl);
+      DokanReleaseMountPointList(dokanMountPointInfo);
       return WN_SUCCESS;
     }
   }
-  DokanReleaseMountPointList(dokanControl);
+  DokanReleaseMountPointList(dokanMountPointInfo);
   return WN_NOT_CONNECTED;
 }
 
@@ -587,9 +591,10 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   PWCHAR pStrings = (PWCHAR)((PBYTE)Buffer + *BufferSize);
   PWCHAR pDst;
   ULONG nbRead = 0;
-  PDOKAN_CONTROL dokanControl = DokanGetMountPointList(TRUE, &nbRead);
-  if (dokanControl == NULL) {
-      DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
+  PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
+      DokanGetMountPointList(TRUE, &nbRead);
+  if (dokanMountPointInfo == NULL) {
+    DbgPrintW(L"NPEnumResource DokanGetMountPointList failed\n");
     return WN_NO_MORE_ENTRIES;
   }
 
@@ -600,12 +605,14 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
   DbgPrintW(L"NPEnumResource nbRead: %d\n", nbRead);
 
   while (cEntriesCopied < *Count && pCtx->index < nbRead) {
-    DbgPrintW(L"NPEnumResource SesstionID: %lu\n", dokanControl[pCtx->index].SessionId);
-    if (-1 != dokanControl[pCtx->index].SessionId && sessionId != dokanControl[pCtx->index].SessionId) {
+    DbgPrintW(L"NPEnumResource SesstionID: %lu\n",
+              dokanMountPointInfo[pCtx->index].SessionId);
+    if (-1 != dokanMountPointInfo[pCtx->index].SessionId &&
+        sessionId != dokanMountPointInfo[pCtx->index].SessionId) {
       pCtx->index++;
       continue;
     }
-    if (wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
+    if (wcscmp(dokanMountPointInfo[pCtx->index].UNCName, L"") == 0) {
       DbgPrintW(L"NPEnumResource: end reached at index %lu\n", pCtx->index);
       break;
     }
@@ -613,11 +620,11 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
     if (pCtx->dwScope == RESOURCE_CONNECTED) {
       DbgPrintW(L"NPEnumResource: RESOURCE_CONNECTED\n");
 
-      if (lstrlenW(dokanControl[pCtx->index].MountPoint) >
+      if (lstrlenW(dokanMountPointInfo[pCtx->index].MountPoint) >
         12 /* \DosDevices\C: */) {
         /* How many bytes is needed for the current NETRESOURCE data. */
         ULONG cbRemoteName =
-          (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+          (lstrlenW(dokanMountPointInfo[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
         cbEntry = sizeof(NETRESOURCE);
         cbEntry += 3 * sizeof(WCHAR);            /* C:\0*/
         cbEntry += sizeof(WCHAR) + cbRemoteName; /* Leading \. */
@@ -641,13 +648,13 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
         pDst = pStrings;
 
         pNetResource->lpLocalName = pDst;
-        *pDst++ = dokanControl[pCtx->index].MountPoint[12];
+        *pDst++ = dokanMountPointInfo[pCtx->index].MountPoint[12];
         *pDst++ = L':';
         *pDst++ = L'\0';
 
         pNetResource->lpRemoteName = pDst;
         *pDst++ = L'\\';
-        CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
+        CopyMemory(pDst, dokanMountPointInfo[pCtx->index].UNCName, cbRemoteName);
         pDst += cbRemoteName / sizeof(WCHAR);
 
         pNetResource->lpComment = NULL;
@@ -669,7 +676,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       if (pCtx->fRoot) {
         WCHAR *lpServerName = NULL;
         ULONG ulServerName = 0;
-        parseServerName(&dokanControl[pCtx->index].UNCName[1], &lpServerName,
+        parseServerName(&dokanMountPointInfo[pCtx->index].UNCName[1], &lpServerName,
           &ulServerName);
 
         /* Return server.
@@ -715,7 +722,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       } else {
         /* How many bytes is needed for the current NETRESOURCE data. */
         ULONG cbRemoteName =
-          (lstrlenW(dokanControl[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
+          (lstrlenW(dokanMountPointInfo[pCtx->index].UNCName) + 1) * sizeof(WCHAR);
         cbEntry = sizeof(NETRESOURCE);
         /* Remote name: \\ + server + \ + name. */
         cbEntry += 1 * sizeof(WCHAR) + cbRemoteName;
@@ -741,7 +748,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
         pNetResource->lpRemoteName = pDst;
         *pDst++ = L'\\';
-        CopyMemory(pDst, dokanControl[pCtx->index].UNCName, cbRemoteName);
+        CopyMemory(pDst, dokanMountPointInfo[pCtx->index].UNCName, cbRemoteName);
         pDst += cbRemoteName / sizeof(WCHAR);
 
         pNetResource->lpComment = NULL;
@@ -762,7 +769,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
       dwStatus = WN_NO_MORE_ENTRIES;
     } else {
       DbgPrintW(L"NPEnumResource: invalid dwScope 0x%x\n", pCtx->dwScope);
-      DokanReleaseMountPointList(dokanControl);
+      DokanReleaseMountPointList(dokanMountPointInfo);
       return WN_BAD_HANDLE;
     }
   }
@@ -771,7 +778,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
   if (cEntriesCopied == 0 && dwStatus == WN_SUCCESS) {
     if (pCtx->index >= nbRead ||
-        wcscmp(dokanControl[pCtx->index].UNCName, L"") == 0) {
+        wcscmp(dokanMountPointInfo[pCtx->index].UNCName, L"") == 0) {
       dwStatus = WN_NO_MORE_ENTRIES;
     } else {
       DbgPrintW(L"NPEnumResource: More Data Needed - %d\n", cbEntry);
@@ -782,7 +789,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
 
   DbgPrintW(L"NPEnumResource: Entries returned %d, dwStatus 0x%08X\n",
             cEntriesCopied, dwStatus);
-  DokanReleaseMountPointList(dokanControl);
+  DokanReleaseMountPointList(dokanMountPointInfo);
   return dwStatus;
 }
 

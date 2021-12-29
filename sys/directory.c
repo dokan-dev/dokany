@@ -244,6 +244,11 @@ DokanNotifyChangeDirectory(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   DokanFCBLockRO(fcb);
+  // These flags are only set for debugging purposes.
+  DokanFCBFlagsSetBit(fcb, DOKAN_EVER_USED_IN_NOTIFY_LIST);
+  DokanCCBFlagsSetBit(ccb, DOKAN_EVER_USED_IN_NOTIFY_LIST);
+  // Note that this stores a pointer to the FileName embedded in the FCB in the
+  // opaque DirNotifyList (the string is not copied).
   FsRtlNotifyFullChangeDirectory(
       RequestContext->Vcb->NotifySync, &RequestContext->Vcb->DirNotifyList, ccb,
       (PSTRING)&fcb->FileName,

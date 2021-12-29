@@ -743,6 +743,9 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   PDEVICE_OBJECT volDeviceObject;
   PDRIVER_OBJECT driverObject = RequestContext->DeviceObject->DriverObject;
   NTSTATUS status = STATUS_UNRECOGNIZED_VOLUME;
+  // Note: this can't live on DOKAN_GLOBAL because we can't reliably access that
+  // in the case where we use this.
+  static LONG hasMountedAnyDisk = 0;
 
   DOKAN_INIT_LOGGER(logger, driverObject, IRP_MJ_FILE_SYSTEM_CONTROL);
   DOKAN_LOG_FINE_IRP(RequestContext, "Mounting disk device.");
@@ -750,15 +753,43 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   PDEVICE_OBJECT deviceObject =
       RequestContext->IrpSp->Parameters.MountVolume.DeviceObject;
   dcb = deviceObject->DeviceExtension;
-  if (!dcb) {
-    DOKAN_LOG_FINE_IRP(RequestContext,
-                       "Not DokanDiskDevice (no device extension)");
-    return status;
+  PDEVICE_OBJECT lowerDeviceObject = NULL;
+  while (!MatchDokanDCBType(RequestContext, dcb, &logger,
+                            /*LogFailures=*/!hasMountedAnyDisk)) {
+    PDEVICE_OBJECT parentDeviceObject =
+        lowerDeviceObject ? lowerDeviceObject : deviceObject;
+    lowerDeviceObject = IoGetLowerDeviceObject(parentDeviceObject);
+    if (parentDeviceObject != deviceObject) {
+      ObDereferenceObject(parentDeviceObject);
+    }
+    if (!lowerDeviceObject) {
+      if (!hasMountedAnyDisk) {
+        // We stop logging wrapped devices once we successfully mount any disk,
+        // because otherwise these messages generate useless noise when the file
+        // system gets random mount requests for non-dokan disks.
+        DOKAN_LOG_FINE_IRP(
+            RequestContext,
+            "Not mounting because there is no matching DCB. This is"
+            " expected, if a non-DriveFS device is being mounted. If"
+            " this prevents DriveFS startup, it may mean the DriveFS"
+            " device has its identity obscured by a filter driver.");
+      }
+      return STATUS_UNRECOGNIZED_VOLUME;
+    }
+    if (!hasMountedAnyDisk) {
+      DOKAN_LOG_FINE_IRP(RequestContext,
+                         "Processing the lower level DeviceObject, in case"
+                         " this is a DriveFS device wrapped by a filter.");
+    }
+    dcb = lowerDeviceObject->DeviceExtension;
+  }
+  if (lowerDeviceObject) {
+    ObDereferenceObject(lowerDeviceObject);
   }
 
-  if (GetIdentifierType(dcb) != DCB) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Not DokanDiskDevice");
-    return status;
+  if (dcb->Global->DriverVersion != DOKAN_DRIVER_VERSION) {
+    return DokanLogError(&logger, STATUS_UNRECOGNIZED_VOLUME,
+                         L"The driver version of the disk does not match.");
   }
 
   if (IsDeletePending(dcb->DeviceObject)) {
@@ -895,9 +926,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
       }
       ExReleaseResourceLite(&dcb->Global->MountManagerLock);
     }
-  }
-
-  if (isDriveLetter) {
+  } else if (isDriveLetter) {
     DokanCreateMountPoint(dcb);
   }
 
@@ -905,6 +934,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
     RunAsSystem(DokanRegisterUncProvider, dcb);
   }
 
+  InterlockedOr(&hasMountedAnyDisk, 1);
   DokanLogInfo(&logger, L"Mounting successfully done.");
   DOKAN_LOG_FINE_IRP(RequestContext, "Mounting successfully done.");
 

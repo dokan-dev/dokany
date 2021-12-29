@@ -94,7 +94,13 @@ extern "C" {
  * \see <a href="https://github.com/dokan-dev/dokany/issues/843">Issue #843</a>
  */
 #define DOKAN_OPTION_REMOVABLE (1 << 5)
-/** Use mount manager */
+/**
+ * Use Windows Mount Manager.
+ * This option is highly recommended to use for better system integration
+ *
+ * If a drive letter is used but is busy, Mount manager will assign one for us and 
+ * \ref DOKAN_OPERATIONS.Mounted parameters will contain the new mount point.
+ */
 #define DOKAN_OPTION_MOUNT_MANAGER (1 << 6)
 /** Mount the drive on current session only */
 #define DOKAN_OPTION_CURRENT_SESSION (1 << 7)
@@ -650,11 +656,15 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Called when Dokan successfully mounts the volume.
   *
+  * If \ref DOKAN_OPTION_MOUNT_MANAGER is enabled and the drive letter requested is busy,
+  * the MountPoint can contain a different drive letter that the mount manager assigned us.
+  *
+  * \param MountPoint The mount point assign to the instance.
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see Unmounted
   */
-  NTSTATUS(DOKAN_CALLBACK *Mounted)(PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *Mounted)(LPCWSTR MountPoint, PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Unmounted Dokan API callback
@@ -933,20 +943,20 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
  *
  * \param uncOnly Get only instances that have UNC Name.
  * \param nbRead Number of instances successfully retrieved.
- * \return Allocate array of DOKAN_CONTROL.
+ * \return Allocate array of DOKAN_MOUNT_POINT_INFO.
  */
-PDOKAN_CONTROL DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
+PDOKAN_MOUNT_POINT_INFO DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
 
 /**
  * \brief Release Mount point list resources from \ref DokanGetMountPointList.
  *
- * After \ref DokanGetMountPointList call you will receive a dynamically allocated array of DOKAN_CONTROL.
+ * After \ref DokanGetMountPointList call you will receive a dynamically allocated array of DOKAN_MOUNT_POINT_INFO.
  * This array needs to be released when no longer needed by calling this function.
  *
- * \param list Allocated array of DOKAN_CONTROL from \ref DokanGetMountPointList.
+ * \param list Allocated array of DOKAN_MOUNT_POINT_INFO from \ref DokanGetMountPointList.
  * \return Nothing.
  */
-VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_CONTROL list);
+VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_MOUNT_POINT_INFO list);
 
 /**
  * \brief Convert \ref DOKAN_OPERATIONS.ZwCreateFile parameters to <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx">CreateFile</a> parameters.

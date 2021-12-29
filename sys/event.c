@@ -589,6 +589,124 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   return result;
 }
 
+// Gets the binary owner information from the security descriptor of the device.
+// Returns either the information or NULL if it cannot be read. Logs the reason
+// for any failure. If the result is not NULL then the caller must free it via
+// ExFreePool.
+char* GetDeviceOwner(__in PDOKAN_LOGGER Logger,
+                     __in const WCHAR* DeviceNameForLog,
+                     __in PDEVICE_OBJECT DeviceObject,
+                     _Inout_ PULONG OwnerSize) {
+  NTSTATUS status = STATUS_SUCCESS;
+  HANDLE handle = 0;
+  char* result = NULL;
+  __try {
+    status = ObOpenObjectByPointer(DeviceObject, OBJ_KERNEL_HANDLE, NULL,
+                                   READ_CONTROL, 0, KernelMode, &handle);
+    if (!NT_SUCCESS(status)) {
+      DokanLogInfo(Logger, L"Failed to open device: %s, status: 0x%x",
+                   DeviceNameForLog, status);
+      __leave;
+    }
+    status = ZwQuerySecurityObject(handle, OWNER_SECURITY_INFORMATION, NULL, 0,
+                                   OwnerSize);
+    if (status != STATUS_BUFFER_TOO_SMALL) {
+      DokanLogInfo(Logger,
+                   L"Failed to query for owner length of device: %s,"
+                   L" status: 0x%x",
+                   DeviceNameForLog, status);
+      __leave;
+    }
+    result = DokanAlloc(*OwnerSize);
+    status = ZwQuerySecurityObject(handle, OWNER_SECURITY_INFORMATION, result,
+                                   *OwnerSize, OwnerSize);
+    if (!NT_SUCCESS(status)) {
+      DokanLogInfo(Logger, L"Failed to query for owner of device: %s,"
+                   L" status: 0x%x",
+                   DeviceNameForLog, status);
+      ExFreePool(result);
+      result = NULL;
+      __leave;
+    }
+  } __finally {
+    if (handle != 0) {
+      ZwClose(handle);
+    }
+  }
+  return result;
+}
+
+// Determines whether the given two devices have the same owner specified by
+// their security descriptors. Calling the devices "new" and "existing" is
+// useful for the logging done within this function, but otherwise irrelevant.
+// Any failure or negative result is logged.
+BOOLEAN HasSameOwner(__in PDOKAN_LOGGER Logger,
+                     __in PDEVICE_OBJECT NewDevice,
+                     __in PDEVICE_OBJECT OldDevice) {
+  BOOLEAN result = FALSE;
+  char* newOwner = NULL;
+  char* oldOwner = NULL;
+  ULONG oldOwnerSize = 0;
+  ULONG newOwnerSize = 0;
+  __try {
+    newOwner = GetDeviceOwner(Logger, L"new device", NewDevice, &newOwnerSize);
+    if (newOwner == NULL) {
+      __leave;
+    }
+    oldOwner = GetDeviceOwner(Logger, L"old device", OldDevice, &oldOwnerSize);
+    if (oldOwner == NULL) {
+      __leave;
+    }
+    if (oldOwnerSize != newOwnerSize ||
+        RtlCompareMemory(newOwner, oldOwner, oldOwnerSize) != oldOwnerSize) {
+      DokanLogInfo(Logger, L"Retrieved device owners and they do not match.");
+      __leave;
+    }
+    result = TRUE;
+  } __finally {
+    if (newOwner != NULL) {
+      ExFreePool(newOwner);
+    }
+    if (oldOwner != NULL) {
+      ExFreePool(oldOwner);
+    }
+  }
+  return result;
+}
+
+// Unmounts the drive indicated by OldControl in order for the caller to replace
+// it with the one indicated by NewControl. If this cannot be done due to
+// different ownership, or mysteriously fails, returns FALSE; otherwise returns
+// TRUE.
+BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
+                             __in PDOKAN_LOGGER Logger,
+                             __in PDOKAN_GLOBAL DokanGlobal,
+                             __in PDOKAN_CONTROL OldControl,
+                             __in PDOKAN_CONTROL NewControl) {
+  DokanLogInfo(Logger,
+      L"Mount point exists and"
+      L" DOKAN_EVENT_REPLACE_DOKAN_DRIVE_IF_EXISTS is set: %s",
+      NewControl->MountPoint);
+  if (!HasSameOwner(Logger, NewControl->DiskDeviceObject,
+                    OldControl->DiskDeviceObject)) {
+    DokanLogInfo(Logger,
+                 L"Not replacing existing drive with different owner.");
+    return FALSE;
+  }
+  DokanLogInfo(Logger, L"Unmounting the existing drive.");
+  DokanUnmount(RequestContext, OldControl->Dcb);
+  PMOUNT_ENTRY entryAfterUnmount =
+      FindMountEntry(DokanGlobal, NewControl, FALSE);
+  if (entryAfterUnmount != NULL) {
+    DokanLogInfo(
+        Logger,
+        L"Warning: old mount entry was not removed by unmount attempt.");
+    return FALSE;
+  }
+  DokanLogInfo(Logger, L"The existing mount entry is now gone.");
+  return TRUE;
+}
+
 VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
                           __in ULONG sessionId) {
   if (sessionId == -1) {
@@ -630,9 +748,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   BOOLEAN mountGlobally = TRUE;
   BOOLEAN fileLockUserMode = FALSE;
   ULONG sessionId = (ULONG)-1;
+  PSECURITY_DESCRIPTOR volumeSecurityDescriptor = NULL;
   BOOLEAN startFailure = FALSE;
   BOOLEAN isMountPointDriveLetter = FALSE;
-  ULONG driverInfoFlags = 0;
 
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject, 0);
 
@@ -678,6 +796,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   driverInfo = RequestContext->Irp->AssociatedIrp.SystemBuffer;
+  driverInfo->Flags = 0;
   if (startFailure) {
     driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
     driverInfo->Status = DOKAN_START_FAILED;
@@ -728,11 +847,11 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   if (eventStart->Flags & DOKAN_EVENT_CASE_SENSITIVE) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Case sensitive enabled\n");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Case sensitive enabled");
   }
 
   if (eventStart->Flags & DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Network unmount enabled\n");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Network unmount enabled");
   }
 
   KeEnterCriticalRegion();
@@ -756,11 +875,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_LOG_FINE_IRP(RequestContext, "Checking for MountPoint %ls", dokanControl.MountPoint);
   PMOUNT_ENTRY foundEntry =
       FindMountEntry(RequestContext->DokanGlobal, &dokanControl, FALSE);
-  if (foundEntry != NULL) {
-    DokanLogInfo(
-        &logger,
-        L"Mount point exists; DOKAN_EVENT_RESOLVE_MOUNT_CONFLICTS not set: %s",
-        dokanControl.MountPoint);
+  if (foundEntry != NULL && !useMountManager) {
+    // Legacy behavior: fail on existing mount entry with the same mount point.
+    // Note: there are edge cases where this entry (which is internal to dokan)
+    // may be left around despite the drive being technically unmounted. In such
+    // a case, the code outside this driver can't know that. Therefore, it's
+    // advisable to set the flag and avoid this branch.
     driverInfo->DriverVersion = DOKAN_DRIVER_VERSION;
     driverInfo->Status = DOKAN_START_FAILED;
     RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -791,12 +911,19 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
 
   InterlockedIncrement((LONG*)&RequestContext->DokanGlobal->MountId);
 
+  if (eventStart->VolumeSecurityDescriptorLength != 0) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Using volume security descriptor of length %d",
+        eventStart->VolumeSecurityDescriptorLength);
+    deviceCharacteristics |= FILE_DEVICE_SECURE_OPEN;
+    volumeSecurityDescriptor = eventStart->VolumeSecurityDescriptor;
+  }
+
   status = DokanCreateDiskDevice(
       RequestContext->DeviceObject->DriverObject,
       RequestContext->DokanGlobal->MountId, eventStart->MountPoint,
-      eventStart->UNCName, sessionId, baseGuidString,
+      eventStart->UNCName, volumeSecurityDescriptor, sessionId, baseGuidString,
       RequestContext->DokanGlobal, deviceType, deviceCharacteristics,
-      mountGlobally, useMountManager, &dcb, &dokanControl);
+      mountGlobally, useMountManager, &dokanControl);
 
   if (!NT_SUCCESS(status)) {
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
@@ -806,6 +933,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
+  dcb = dokanControl.Dcb;
   dcb->FcbGarbageCollectionIntervalMs = 2000;
   dcb->MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
@@ -818,6 +946,41 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     IncrementVcbLogCacheCount();
   }
 
+  // This has 2 effects that differ from legacy behavior: (1) try to get rid of
+  // the occupied drive, if it's a dokan drive owned by the same user; (2) have
+  // the mount manager avoid using the occupied drive, if it's not one we're
+  // willing to get rid of. By having the mount manager take care of that, we
+  // avoid having to figure out a new suitable mount point ourselves. Because of
+  // various explicit mount manager IOCTLs that dokan historically issues, we
+  // need a stricter flag to avoid clobbering dokan drives than to avoid
+  // clobbering real ones.
+  if (foundEntry != NULL) {
+    if (MaybeUnmountOldDrive(RequestContext, &logger,
+                             RequestContext->DokanGlobal,
+                             &foundEntry->MountControl, &dokanControl)) {
+      driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_UNMOUNTED;
+    } else {
+      driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_LEFT_MOUNTED;
+      dcb->ForceDriveLetterAutoAssignment = TRUE;
+    }
+  } else if (eventStart->Flags & DOKAN_EVENT_DRIVE_LETTER_IN_USE) {
+    // The drive letter is perceived as being in use in user mode, and this
+    // driver doesn't own it. In this case we explicitly ask not to use it.
+    // Although we ask the mount manager to avoid clobbering existing links
+    // in device.c, that only works for persistent ones and not e.g. if you
+    // do something like "subst g: c:\temp".
+    DokanLogInfo(
+        &logger,
+        L"Forcing auto-assignment because the drive letter is in use by"
+        L" another driver.");
+    dcb->ForceDriveLetterAutoAssignment = TRUE;
+  }
+  if (!isMountPointDriveLetter) {
+    dcb->ForceDriveLetterAutoAssignment = FALSE;
+  }
+  if (dcb->ForceDriveLetterAutoAssignment) {
+    driverInfo->Flags |= DOKAN_DRIVER_INFO_AUTO_ASSIGN_REQUESTED;
+  }
   PMOUNT_ENTRY mountEntry =
       InsertMountEntry(RequestContext->DokanGlobal, &dokanControl, FALSE);
   if (mountEntry != NULL) {
@@ -881,7 +1044,45 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   IoVerifyVolume(dcb->DeviceObject, FALSE);
 
   if (useMountManager) {
-    if (!isMountPointDriveLetter && dcb->PersistentSymbolicLinkName) {
+    // The mount entry now has the actual mount point, because IoVerifyVolume
+    // re-entrantly invokes DokanMountVolume, which calls DokanCreateMountPoint,
+    // which re-entrantly issues IOCTL_MOUNTDEV_LINK_CREATED, and that updates
+    // the mount entry. We now copy the actual drive letter to the returned
+    // info. We expect it to be in the form \DosDevices\G:. If it's a directory
+    // mount point, this value is unused by the library.
+    if (isMountPointDriveLetter) {
+      if (!dcb->MountPointDetermined) {
+        // Getting into this block is considered very rare, and we are not
+        // even sure how to achieve it naturally. It can be triggered
+        // artificially by adding an applicable deleted volume record under
+        // HKLM\System\MountedDevices.
+        DokanLogError(&logger, 0,
+                      L"Warning: mount point creation is being forced.");
+        driverInfo->Flags |= DOKAN_DRIVER_INFO_MOUNT_FORCED;
+        DokanCreateMountPoint(dcb);
+        if (!dcb->MountPointDetermined) {
+          // This is not believed to be possible. We have historical evidence
+          // that DokanCreateMountPoint always works, but we don't have proof
+          // that it always updates MountPointDetermined synchronously, so we
+          // still report success in this case.
+          DokanLogError(&logger, 0,
+                        L"Mount point was still not assigned after forcing.");
+          driverInfo->Status = DOKAN_START_FAILED;
+          driverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED;
+        }
+      }
+      if (RtlCompareMemory(mountEntry->MountControl.MountPoint,
+                           L"\\DosDevices\\", 24) == 24) {
+        driverInfo->ActualDriveLetter = mountEntry->MountControl.MountPoint[12];
+        DokanLogInfo(&logger, L"Returning actual mount point %c",
+                     driverInfo->ActualDriveLetter);
+      } else {
+        DokanLogInfo(
+            &logger,
+            L"Warning: actual mount point %s does not have expected prefix.",
+            mountEntry->MountControl.MountPoint);
+      }
+    } else if (!isMountPointDriveLetter && dcb->PersistentSymbolicLinkName) {
       // Set our existing directory path as reparse point.
       // It needs to be done outside IoVerifyVolume/DokanMountVolume as the
       // MountManager will also call IoVerifyVolume on the device which will
@@ -903,7 +1104,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
                         L"Failed to set reparse point on MountPoint \"%wZ\"",
                         dcb->MountPoint);
           driverInfo->Status = DOKAN_START_FAILED;
-          driverInfoFlags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED |
+          driverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED |
                                DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED;
         }
       }
@@ -916,7 +1117,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   ExFreePool(eventStart);
   ExFreePool(baseGuidString);
 
-  if (driverInfoFlags & DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
+  if (driverInfo->Flags & DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
     DokanEventRelease(RequestContext,
                       mountEntry->MountControl.VolumeDeviceObject);
     driverInfo->DeviceNumber = 0;
@@ -924,10 +1125,10 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   DokanLogInfo(&logger, L"Finished event start with status %d and flags: %I32x",
-               driverInfo->Status, driverInfoFlags);
+               driverInfo->Status, driverInfo->Flags);
   DOKAN_LOG_FINE_IRP(RequestContext,
                      "Finished event start with status %d and flags: %I32x",
-                     driverInfo->Status, driverInfoFlags);
+                     driverInfo->Status, driverInfo->Flags);
   return RequestContext->Irp->IoStatus.Status;
 }
 

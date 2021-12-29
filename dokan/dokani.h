@@ -157,7 +157,7 @@ typedef struct _DOKAN_IO_EVENT {
        : 0)
 
 
-BOOL DokanStart(PDOKAN_INSTANCE Instance);
+BOOL DokanStart(PDOKAN_INSTANCE DokanInstance);
 
 BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                   ULONG InputLength, PVOID OutputBuffer, ULONG OutputLength,
@@ -211,6 +211,8 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint);
 VOID CheckFileName(LPWSTR FileName);
 
 VOID ReleaseDokanOpenInfo(PDOKAN_IO_EVENT IoEvent);
+
+VOID DokanNotifyUnmounted(PDOKAN_INSTANCE DokanInstance);
 
 #ifdef __cplusplus
 }

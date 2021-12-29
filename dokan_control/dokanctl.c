@@ -202,18 +202,20 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   // No admin rights required
   case L'l': {
     ULONG nbRead = 0;
-    PDOKAN_CONTROL dokanControl = DokanGetMountPointList(FALSE, &nbRead);
-    if (dokanControl == NULL) {
+    PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
+        DokanGetMountPointList(FALSE, &nbRead);
+    if (dokanMountPointInfo == NULL) {
       fwprintf(stderr, L"  Cannot retrieve mount point list.\n");
       return EXIT_FAILURE;
     }
 
     fwprintf(stdout, L"  Mount points: %lu\n", nbRead);
     for (ULONG p = 0; p < nbRead; ++p)
-      fwprintf(stdout, L"  %lu# MountPoint: %ls - UNC: %ls - DeviceName: %ls\n", p,
-               dokanControl[p].MountPoint, dokanControl[p].UNCName,
-               dokanControl[p].DeviceName);
-    DokanReleaseMountPointList(dokanControl);
+      fwprintf(stdout, L"  %lu# MountPoint: %ls - UNC: %ls - DeviceName: %ls\n",
+               p, dokanMountPointInfo[p].MountPoint,
+               dokanMountPointInfo[p].UNCName,
+               dokanMountPointInfo[p].DeviceName);
+    DokanReleaseMountPointList(dokanMountPointInfo);
   } break;
 
   case L'v': {

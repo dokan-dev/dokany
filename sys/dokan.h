@@ -127,8 +127,6 @@ extern ULONG DokanMdlSafePriority;
 #define DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX (1000 * 60 * 5) // in millisecond
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
 
-#define DOKAN_KEEPALIVE_TIMEOUT_DEFAULT (1000 * 15) // in millisecond
-
 extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 #define DokanAllocateIrpEntry()                                                \
   ExAllocateFromNPagedLookasideList(&DokanIrpEntryLookasideList)
@@ -183,11 +181,6 @@ typedef struct _IRP_LIST {
   KSPIN_LOCK ListLock;
 } IRP_LIST, *PIRP_LIST;
 
-typedef struct _MOUNT_ENTRY {
-  LIST_ENTRY ListEntry;
-  DOKAN_CONTROL MountControl;
-} MOUNT_ENTRY, *PMOUNT_ENTRY;
-
 typedef struct _DOKAN_GLOBAL {
   FSD_IDENTIFIER Identifier;
   ERESOURCE Resource;
@@ -195,9 +188,6 @@ typedef struct _DOKAN_GLOBAL {
   PDEVICE_OBJECT FsDiskDeviceObject;
   PDEVICE_OBJECT FsCdDeviceObject;
   ULONG MountId;
-  // the list of waiting IRP for mount service
-  IRP_LIST PendingService;
-  IRP_LIST NotifyService;
 
   PKTHREAD DeviceDeleteThread;
 
@@ -205,6 +195,8 @@ typedef struct _DOKAN_GLOBAL {
   LIST_ENTRY DeviceDeleteList;
   KEVENT KillDeleteDeviceEvent;
 
+  ULONG DriverVersion;
+  
   // We try to avoid having race condition when switching the AutoMount flag of
   // the MountManager. Yes, this only guarantee for dokan mount and it is still
   // possible another process conflict with it but that the best we can do.
@@ -281,6 +273,10 @@ typedef struct _DokanDiskControlBlock {
   ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
   
+  // If true, we know the requested mount point is occupied by a dokan drive we
+  // can't remove, so force the mount manager to auto-assign a different drive
+  // letter.
+  BOOLEAN ForceDriveLetterAutoAssignment;
   // Whether the mount manager has notified us of the actual assigned mount
   // point yet.
   BOOLEAN MountPointDetermined;
@@ -307,6 +303,34 @@ typedef struct _DokanDiskControlBlock {
   ULONG MountOptions;
 
 } DokanDCB, *PDokanDCB;
+
+#define MAX_PATH 260
+
+typedef struct _DOKAN_CONTROL {
+  /** File System Type */
+  ULONG Type;
+  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
+  WCHAR MountPoint[MAX_PATH];
+  /** UNC name used for network volume */
+  WCHAR UNCName[64];
+  /** Disk Device Name */
+  WCHAR DeviceName[64];
+  /** Always set on MOUNT_ENTRY */
+  PDokanDCB Dcb;
+  /** Always set on MOUNT_ENTRY */
+  PDEVICE_OBJECT DiskDeviceObject;
+  /** NULL until fully mounted */
+  PDEVICE_OBJECT VolumeDeviceObject;
+  /** Session ID of calling process */
+  ULONG SessionId;
+  /** Contains information about the flags on the mount */
+  ULONG MountOptions;
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
+
+typedef struct _MOUNT_ENTRY {
+  LIST_ENTRY ListEntry;
+  DOKAN_CONTROL MountControl;
+} MOUNT_ENTRY, *PMOUNT_ENTRY;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \
   (DeviceObject->Characteristics & FILE_READ_ONLY_DEVICE)
@@ -1031,12 +1055,13 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
+                      __in_opt PSECURITY_DESCRIPTOR VolumeSecurityDescriptor,
                       __in ULONG sessionID, __in PWCHAR BaseGuid,
                       __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
                       __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
-                      __out PDokanDCB *Dcb, __out PDOKAN_CONTROL DokanControl);
+                      __out PDOKAN_CONTROL DokanControl);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,

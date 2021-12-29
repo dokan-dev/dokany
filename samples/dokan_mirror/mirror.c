@@ -1508,10 +1508,11 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK MirrorMounted(LPCWSTR MountPoint,
+                                             PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
 
-  DbgPrint(L"Mounted\n");
+  DbgPrint(L"Mounted as %s\n", MountPoint);
   return STATUS_SUCCESS;
 }
 

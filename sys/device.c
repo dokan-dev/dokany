@@ -366,12 +366,23 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // Invoked when the mount manager is considering assigning a drive letter
       // to a newly mounted volume. This lets us make a non-binding request for
       // a certain drive letter before assignment happens.
+      DokanLogInfo(&logger,
+                   L"Mount manager is querying for desired drive letter."
+                   L" ForceDriveLetterAutoAssignment = %d",
+                   dcb->ForceDriveLetterAutoAssignment);
 
       PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
       if (!PrepareOutputHelper(RequestContext->Irp, &linkName,
                                FIELD_OFFSET(MOUNTDEV_SUGGESTED_LINK_NAME, Name),
                           /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
+        break;
+      }
+      if (dcb->ForceDriveLetterAutoAssignment) {
+        DokanLogInfo(&logger,
+                     L"Not suggesting a link name because auto-assignment was "
+                     L"requested.");
+        status = STATUS_NOT_FOUND;
         break;
       }
       if (dcb->MountPoint == NULL || dcb->MountPoint->Length == 0) {
@@ -392,7 +403,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
       // Return the drive letter. Generally this is the one specified in the
       // mount request from user mode.
-      linkName->UseOnlyIfThereAreNoOtherLinks = FALSE;
+      linkName->UseOnlyIfThereAreNoOtherLinks = TRUE;
       linkName->NameLength = dcb->MountPoint->Length;
       if (!AppendVarSizeOutputString(RequestContext->Irp, &linkName->Name,
                                      dcb->MountPoint,

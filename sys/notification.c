@@ -502,11 +502,11 @@ ULONG GetCurrentSessionId(__in PREQUEST_CONTEXT RequestContext) {
 
   status = IoGetRequestorSessionId(RequestContext->Irp, &sessionNumber);
   if (!NT_SUCCESS(status)) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Failed %s",
+    DOKAN_LOG_FINE_IRP(RequestContext, "IoGetRequestorSessionId failed %s",
                        DokanGetNTSTATUSStr(status));
     return (ULONG)-1;
   }
-  DOKAN_LOG_FINE_IRP(RequestContext, "%lu", sessionNumber);
+  DOKAN_LOG_FINE_IRP(RequestContext, "Session number: %lu", sessionNumber);
   return sessionNumber;
 }
 

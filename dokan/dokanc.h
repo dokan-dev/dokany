@@ -34,18 +34,9 @@ extern "C" {
 
 #define DOKAN_DRIVER_SERVICE L"Dokan" DOKAN_MAJOR_API_VERSION
 
-#define DOKAN_CONTROL_OPTION_FORCE_UNMOUNT 1
-
-#define DOKAN_CONTROL_SUCCESS 1
-#define DOKAN_CONTROL_FAIL 0
-
 #define DOKAN_SERVICE_START 1
 #define DOKAN_SERVICE_STOP 2
 #define DOKAN_SERVICE_DELETE 3
-
-#define DOKAN_KEEPALIVE_TIME 3000 // in miliseconds
-
-#define DOKAN_MAX_THREAD 63
 
 // DokanOptions->DebugMode is ON?
 extern BOOL g_DebugMode;
