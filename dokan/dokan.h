@@ -157,6 +157,10 @@ typedef struct _DOKAN_OPTIONS {
   ULONG AllocationUnitSize;
   /** Sector Size of the volume. This will affect the file size. */
   ULONG SectorSize;
+  /** Length of the optional VolumeSecurityDescriptor provided. Set 0 will disable the option. */
+  ULONG VolumeSecurityDescriptorLength;
+  /** Optional Volume Security descriptor. See <a href="https://docs.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-initializesecuritydescriptor">InitializeSecurityDescriptor</a> */
+  CHAR VolumeSecurityDescriptor[VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE];
 } DOKAN_OPTIONS, *PDOKAN_OPTIONS;
 
 /**
@@ -833,10 +837,9 @@ int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
  * \param DokanInstance Dokan mount instance context that can be used for related instance calls like \ref DokanIsFileSystemRunning .
  * \return \ref DokanMainResult status.
  */
-int DOKANAPI DokanCreateFileSystem(
-	_In_ PDOKAN_OPTIONS DokanOptions,
-	_In_ PDOKAN_OPERATIONS DokanOperations,
-	_Out_ DOKAN_HANDLE *DokanInstance);
+int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
+                                   _In_ PDOKAN_OPERATIONS DokanOperations,
+                                   _Out_ DOKAN_HANDLE *DokanInstance);
 
 /**
  * \brief Check if the FileSystem is still running or not.

@@ -924,7 +924,7 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
   return FALSE;
 }
 
-BOOL DokanStart(PDOKAN_INSTANCE DokanInstance) {
+BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   EVENT_START eventStart;
   EVENT_DRIVER_INFO driverInfo;
   ULONG returnedLength = 0;
@@ -973,6 +973,23 @@ BOOL DokanStart(PDOKAN_INSTANCE DokanInstance) {
   if (driverLetter && mountManager &&
       !CheckDriveLetterAvailability(DokanInstance->MountPoint[0])) {
     eventStart.Flags |= DOKAN_EVENT_DRIVE_LETTER_IN_USE;
+  }
+
+  if (DokanInstance->DokanOptions->VolumeSecurityDescriptorLength != 0) {
+    if (DokanInstance->DokanOptions->VolumeSecurityDescriptorLength >
+        VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE) {
+      DokanDbgPrint(
+          "Dokan Error: Invalid volume security descriptor length "
+          "provided %ld\n",
+          DokanInstance->DokanOptions->VolumeSecurityDescriptorLength);
+      return FALSE;
+    }
+    eventStart.VolumeSecurityDescriptorLength =
+        DokanInstance->DokanOptions->VolumeSecurityDescriptorLength;
+    memcpy_s(eventStart.VolumeSecurityDescriptor,
+             sizeof(eventStart.VolumeSecurityDescriptor),
+             DokanInstance->DokanOptions->VolumeSecurityDescriptor,
+             sizeof(DokanInstance->DokanOptions->VolumeSecurityDescriptor));
   }
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),

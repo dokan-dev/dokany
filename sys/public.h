@@ -469,7 +469,7 @@ typedef struct _EVENT_START {
   WCHAR UNCName[64];
   ULONG IrpTimeout;
   ULONG VolumeSecurityDescriptorLength;
-  char VolumeSecurityDescriptor[VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE];
+  CHAR VolumeSecurityDescriptor[VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE];
 } EVENT_START, *PEVENT_START;
 
 #ifdef _MSC_VER
