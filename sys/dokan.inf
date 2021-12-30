@@ -28,7 +28,7 @@ DelService = %ServiceName%,0x200
 1 = %Disk1%
 
 [SourceDisksFiles]
-dokan1.sys = 1
+dokan2.sys = 1
 
 [DokanFileSystem.DriverFiles]
 %DriverName%.sys
@@ -51,7 +51,7 @@ HKR,,TypesSupported,0x00010001,7
 
 [Strings]
 Dokan = "Dokan"
-DriverName = "dokan1"
+DriverName = "dokan2"
 Disk1 = "Dokan installation media"
 ServiceDesc = "Dokan kernel-mode file system driver."
-ServiceName = "dokan1"
+ServiceName = "dokan2"

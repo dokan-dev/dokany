@@ -69,7 +69,7 @@ $ifstestParameters = @(
 	"-g", "EaInformation",
 	"-g", "FileSystemControlGeneral",      # reason: Retrieval Pointers fsctl not supported
 	"/v",                                  # verbose output
-	"/d", "\Device\Dokan_1",               # Dokan device named need for FileSystemDeviceOpenTest
+	"/d", "\Device\Dokan_2",               # Dokan device named need for FileSystemDeviceOpenTest
 	"/r", "$fsTestPath2",                  # SimpleRenameInformationTest need an extra volum
 	"/u", $ifstest_user,
 	"/U", $ifstest_pass

@@ -55,10 +55,10 @@ extern "C" {
  */
 /** @{ */
 
-/** The current Dokan version (140 means ver 1.4.0). \ref DOKAN_OPTIONS.Version */
-#define DOKAN_VERSION 160
+/** The current Dokan version (200 means ver 2.0.0). \ref DOKAN_OPTIONS.Version */
+#define DOKAN_VERSION 200
 /** Minimum Dokan version (ver 2.0.0) accepted. */
-#define DOKAN_MINIMUM_COMPATIBLE_VERSION 110
+#define DOKAN_MINIMUM_COMPATIBLE_VERSION 200
 /** Driver file name including the DOKAN_MAJOR_API_VERSION */
 #define DOKAN_DRIVER_NAME L"dokan" DOKAN_MAJOR_API_VERSION L".sys"
 /** Network provider name including the DOKAN_MAJOR_API_VERSION */

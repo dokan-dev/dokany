@@ -14,7 +14,7 @@
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
-  version: 1.5.1-{build}
+  version: 2.0.0-{build}
   configuration:
   - All
   - SonarQube
@@ -65,7 +65,7 @@
         }
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
-          & verifier /standard /driver dokan1.sys
+          & verifier /standard /driver dokan2.sys
           Write-Host "Before reboot"
           Start-Sleep -s 30 # Wait appveyor to be ready https://github.com/appveyor/ci/issues/3650
           Restart-Computer
@@ -303,9 +303,9 @@
   - ps: |
       if ($env:CONFIGURATION -eq "FsTest") {
         Write-Host Running tests...
-        $env:DokanLibrary1 = [System.Environment]::GetEnvironmentVariable("DokanLibrary1", "Machine")
-        $memfs = @("${env:DokanLibrary1}\sample\memfs\memfs.exe", "${env:DokanLibrary1}\x86\sample\memfs\memfs.exe")
-        $mirrors = @("${env:DokanLibrary1}\sample\mirror\mirror.exe", "${env:DokanLibrary1}\x86\sample\mirror\mirror.exe")
+        $env:DokanLibrary2 = [System.Environment]::GetEnvironmentVariable("DokanLibrary2", "Machine")
+        $memfs = @("${env:DokanLibrary2}\sample\memfs\memfs.exe", "${env:DokanLibrary2}\x86\sample\memfs\memfs.exe")
+        $mirrors = @("${env:DokanLibrary2}\sample\mirror\mirror.exe", "${env:DokanLibrary2}\x86\sample\mirror\mirror.exe")
 
         cd .\samples
         .\memfs_test.ps1 -Memfs $memfs
