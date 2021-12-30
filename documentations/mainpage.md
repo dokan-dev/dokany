@@ -124,7 +124,7 @@ Users can use the command line to unmount file system like this:
 ## Network Provider
 
 If mounting is done with \ref DOKAN_OPTION_NETWORK, Dokan Network Provider must be used to ensure correct functionality.
-This file (dokannp1.dll) *must* be copied to `%WINDIR%\system32` and the provider can be registered on a system with `dokanctl.exe /i n` command.
+This file (dokannp2.dll) *must* be copied to `%WINDIR%\system32` and the provider can be registered on a system with `dokanctl.exe /i n` command.
 
 Without this [Network Provider](https://msdn.microsoft.com/en-us/library/windows/desktop/aa378776%28v=vs.85%29.aspx), Windows Explorer will not properly handle virtual drives mounted as network shares and drives could appear disconnected.
 
@@ -133,7 +133,7 @@ If Network Redirector is setup using a UNC Name, Dokan Network Provider will ass
 ## Testing a File System
 
 File systems can be tested using different tools.
-Microsoft has their own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [ IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
+Microsoft has their own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
 
 There is also [WinFSTest](https://github.com/Liryna/winfstest). Dokany is automatically running it on the sample mirror at every commit with appveyor.
 
