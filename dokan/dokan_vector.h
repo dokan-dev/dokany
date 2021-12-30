@@ -36,13 +36,6 @@ DOKAN_VECTOR *DokanVector_Alloc(size_t ItemSize);
 // Creates a new instance of DOKAN_VECTOR with default values.
 DOKAN_VECTOR *DokanVector_AllocWithCapacity(size_t ItemSize, size_t MaxItems);
 
-// Creates a new instance of DOKAN_VECTOR with default values on the stack.
-BOOL DokanVector_StackAlloc(PDOKAN_VECTOR Vector, size_t ItemSize);
-
-// Creates a new instance of DOKAN_VECTOR with default values on the stack.
-BOOL DokanVector_StackAllocWithCapacity(PDOKAN_VECTOR Vector, size_t ItemSize,
-                                        size_t MaxItems);
-
 // Releases the memory associated with a DOKAN_VECTOR;
 VOID DokanVector_Free(PDOKAN_VECTOR Vector);
 

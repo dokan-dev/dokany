@@ -83,51 +83,6 @@ PDOKAN_VECTOR DokanVector_AllocWithCapacity(size_t ItemSize, size_t MaxItems) {
   return vector;
 }
 
-// Creates a new instance of DOKAN_VECTOR with default values on the stack.
-BOOL DokanVector_StackAlloc(PDOKAN_VECTOR Vector, size_t ItemSize) {
-  assert(Vector && ItemSize > 0);
-  if (ItemSize == 0) {
-    DbgPrintW(L"Cannot allocate a DOKAN_VECTOR with an ItemSize of 0.\n");
-    ZeroMemory(Vector, sizeof(DOKAN_VECTOR));
-    return FALSE;
-  }
-  Vector->Items = malloc(ItemSize * DEFAULT_ITEM_COUNT);
-  if (!Vector->Items) {
-    DbgPrintW(L"DOKAN_VECTOR Items allocation failed.\n");
-    return FALSE;
-  }
-  Vector->ItemCount = 0;
-  Vector->ItemSize = ItemSize;
-  Vector->MaxItems = DEFAULT_ITEM_COUNT;
-  Vector->IsStackAllocated = TRUE;
-  return TRUE;
-}
-
-// Creates a new instance of DOKAN_VECTOR with default values on the stack.
-BOOL DokanVector_StackAllocWithCapacity(PDOKAN_VECTOR Vector, size_t ItemSize,
-                                        size_t MaxItems) {
-  assert(Vector && ItemSize > 0);
-  if (ItemSize == 0) {
-    DbgPrintW(L"Cannot allocate a DOKAN_VECTOR with an ItemSize of 0.\n");
-    ZeroMemory(Vector, sizeof(DOKAN_VECTOR));
-    return FALSE;
-  }
-  if (MaxItems > 0) {
-    Vector->Items = malloc(ItemSize * MaxItems);
-    if (!Vector->Items) {
-      DbgPrintW(L"DOKAN_VECTOR Items allocation failed.\n");
-      return FALSE;
-    }
-  } else {
-    Vector->Items = NULL;
-  }
-  Vector->ItemCount = 0;
-  Vector->ItemSize = ItemSize;
-  Vector->MaxItems = MaxItems;
-  Vector->IsStackAllocated = TRUE;
-  return TRUE;
-}
-
 // Releases the memory associated with a DOKAN_VECTOR;
 VOID DokanVector_Free(PDOKAN_VECTOR Vector) {
   if (Vector) {
