@@ -89,6 +89,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
         dokan_memfs->enable_network_unmount = true;
       } else if (arg == L"/e") {
         dokan_memfs->dispatch_driver_logs = true;
+      } else if (arg == L"/t") {
+        dokan_memfs->single_thread = true;
       } else {
         if (i + 1 >= argc) {
           show_usage();
@@ -105,8 +107,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
           wcscpy_s(dokan_memfs->unc_name,
                    sizeof(dokan_memfs->unc_name) / sizeof(WCHAR),
                    extra_arg.c_str());
-        } else if (arg == L"/t") {
-          dokan_memfs->thread_number = std::stoi(extra_arg);
         }
       }
     }

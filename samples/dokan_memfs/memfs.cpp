@@ -39,6 +39,7 @@ void memfs::run() {
   dokan_options.Options = DOKAN_OPTION_ALT_STREAM |
                           DOKAN_OPTION_CASE_SENSITIVE;
   dokan_options.MountPoint = mount_point;
+  dokan_options.SingleThread = single_thread;
   if (debug_log) {
     dokan_options.Options |= DOKAN_OPTION_STDERR | DOKAN_OPTION_DEBUG;
     if (dispatch_driver_logs) {

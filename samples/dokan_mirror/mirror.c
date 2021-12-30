@@ -1545,7 +1545,7 @@ void ShowUsage() {
   fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
           "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
-          "  /t Single thread (ex. /t 5)\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
+          "  /t Single thread\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
           "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
           "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
           "  /n (use network drive)\t\t\t Show device as network device.\n"

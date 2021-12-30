@@ -49,7 +49,7 @@ class memfs {
   // FileSystem mount options
   WCHAR mount_point[MAX_PATH] = L"M:\\";
   WCHAR unc_name[MAX_PATH] = L"";
-  USHORT thread_number = 5;
+  bool single_thread = false;
   bool network_drive = false;
   bool removable_drive = false;
   bool current_session = false;
