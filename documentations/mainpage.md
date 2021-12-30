@@ -124,7 +124,7 @@ Users can use the command line to unmount file system like this:
 ## Network Provider
 
 If mounting is done with \ref DOKAN_OPTION_NETWORK, Dokan Network Provider must be used to ensure correct functionality.
-This file (dokannp2.dll) *must* be copied to `%WINDIR%\system32` and the provider can be registered on a system with `dokanctl.exe /i n` command.
+The files `dokan2.dll` & `dokannp2.dll` *must* be copied to `%WINDIR%\system32` and the provider can be registered on a system with `dokanctl.exe /i n` command.
 
 Without this [Network Provider](https://msdn.microsoft.com/en-us/library/windows/desktop/aa378776%28v=vs.85%29.aspx), Windows Explorer will not properly handle virtual drives mounted as network shares and drives could appear disconnected.
 
