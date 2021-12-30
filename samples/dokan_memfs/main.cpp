@@ -37,7 +37,7 @@ void show_usage() {
                 "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
                 "  /n (use network drive)\t\t\t Show device as network device.\n"
                 "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
-                "  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
+                "  /t Single thread\t\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
                 "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
                 "  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
                 "  /x (network unmount)\t\t\t\t Allows unmounting network drive from file explorer\n"
