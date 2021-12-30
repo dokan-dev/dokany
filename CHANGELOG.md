@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [2.0.0.1000] - 2021-12-30
+### Added
+- Kernel / Library - Introduce Thread & Memory pool to process and pull events. This is highly based on #307 but without the async logic. The reason is to avoid using the kernel `NotificationLoop` that was dispatching requests to workers (userland thread) sequentially since wake up workers have a high cost of thread context switch.
+The previous logic is nice when you want workers to be async (like #307) but as we have threads (and now even a thread poll) dedicated to pull and process events, there is no issue to make them synchronously wait in kernel for new events and directly take them from the pending request list.
+The library will start with a single main thread that pulls events by batch and dispatches them to the thread pool but keeps the last one to be executed (or the only one) to be executed on the same thread. Each thread waken will do the same and pull new events at the same time. If none is returned, the thread goes back to sleep and otherwise does the same as the main thread (dispatch and process...etc). Only the main thread waits indefinitely for new events while others wait 100ms in the kernel before returning back to userland.Batching events, thread and memory pool offers a great flexibility of resources especially on heavy load.Thousands of lines of code were changed in the library (thanks again to @Corillian contribution of full rewrite) but the public API hasn't changed much.After running multiple benchmarks against `memfs`, sequential requests are about 10-35% faster but in the real world with the thread pool the perf are way above. @Corillian full rewrite of `FindFiles` actually improved an astonishing +100-250%...crazy.
+- Library - `DokanCreateFileSystem` creates a filesystem like `DokanMain` but is async and will directly return when mount happens. `DokanWaitForFileSystemClosed` will wait until the filesystem is unmount and `DokanIsFileSystemRunning` can be used to check if it is still running. `DokanCloseHandle` will trigger an unmount and wait for it to be completed.
+- Library - `DokanInit` and `DokanShutdown` are two new API that need to be called before creating filesystems and when dokan is no longer needed. They allocate internal mandatory dokan resources.  
+- Kernel / Library - A Volume Security descriptor can now be assigned to `DOKAN_OPTIONS.VolumeSecurityDescriptor` to personalize the volume security permissions.
+- Kernel - `FSCTL_EVENT_PROCESS_N_PULL` replace `IOCTL_EVENT_WAIT` and `IOCTL_EVENT_INFO` to process a possible answer and pull new events.
+- Kernel - If Mount manager is enabled and the drive letter provided is busy, the drive will try to release the drive letter if it owns it. This can be useful during fast mount & unmount. If the drive letter is still busy after that, Mount manager is asked to assign a new one for us and will be provided to userland through `EVENT_DRIVER_INFO.ActualDriveLetter`.
+- Library - `DOKAN_OPERATIONS.Mounted` now has a `MountPoint` param that will return the actual mount point used (see above on why it can be different).
+- Library - `DOKAN_FILE_INFO.ProcessingContext` is a new Dokan reserved field currently used to pass information during a `FindFiles`.
+
+### Changed
+- Kernel - Major API has moved to version 2. This version is not compatible with dokan version 1.x.x.
+- Kernel - Remove legacy Keepalive logic.
+- Kernel - Remove legacy IOCTL.
+- Kernel - Enable `DOKAN_EVENT_ENABLE_FCB_GC` by default and the interval can be set from userland (currently not public).
+- Memfs - Unmount drive when `Ctrl + C` is used.
+- Kernel - Move back `DOKAN_CONTROL` to the private kernel header to avoid sharing kernel variables to userland. Instead, `DOKAN_MOUNT_POINT_INFO` was created for this purpose and taken over in the different userland API that was using `DOKAN_CONTROL`.
+- Library - `DOKAN_OPTION_*` values were reordered and reassigned.
+- Library - `DOKAN_OPTIONS.ThreadCount` was replaced by `DOKAN_OPTIONS.SingleThread` since the library now uses a thread pool that allocats workers depending on workload and the available resources.
+- Library - `PFillFindStreamData` now returns `FALSE` if the buffer is full, otherwise `TRUE`. It also requires to pass the `FindStreamContext` argument received during `FindStreams` instead of the previous `DokanFileInfo`.
+- Library - `DokanGetMountPointList` and `DokanReleaseMountPointList` use the new `DOKAN_MOUNT_POINT_INFO` instead of the now private `DOKAN_CONTROL`.
+- Library - All `DokanNotify*` functions now require the `DOKAN_HANDLE` created by `DokanCreateFileSystem`.
+- Memfs - Pass already processed `stream_names` when adding the node.
+
+### Fixed
+- Library - `DOKAN_EVENT_DISPATCH_DRIVER_LOGS` is now usable to retrieve Kernel logs even on release build due to the batching events now enabled by default.
 
 ## [1.5.1.1000] - 2021-11-26
 ### Added
