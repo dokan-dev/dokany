@@ -930,7 +930,6 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   dcb = dokanControl.Dcb;
-  dcb->FcbGarbageCollectionIntervalMs = 2000;
   dcb->MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
       (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
@@ -1021,6 +1020,20 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       eventStart->IrpTimeout = DOKAN_IRP_PENDING_TIMEOUT;
     }
     dcb->IrpTimeout = eventStart->IrpTimeout;
+  }
+
+  dcb->FcbGarbageCollectionIntervalMs =
+      eventStart->FcbGarbageCollectionIntervalMs;
+  // Sanitize the garbage collection parameter.
+  if (dcb->FcbGarbageCollectionIntervalMs > 0) {
+    if (dcb->FcbGarbageCollectionIntervalMs <
+        MIN_FCB_GARBAGE_COLLECTION_INTERVAL) {
+      DokanLogInfo(&logger,
+                   L"Not using FCB garbage collection because the"
+                   L" specified interval of %lu is too low to be useful.",
+                   dcb->FcbGarbageCollectionIntervalMs);
+      dcb->FcbGarbageCollectionIntervalMs = 0;
+    }
   }
 
   DokanLogInfo(&logger, L"Event start using mount ID: %d; device name: %s.",

@@ -468,6 +468,7 @@ typedef struct _EVENT_START {
   WCHAR MountPoint[260];
   WCHAR UNCName[64];
   ULONG IrpTimeout;
+  ULONG FcbGarbageCollectionIntervalMs;
   ULONG VolumeSecurityDescriptorLength;
   CHAR VolumeSecurityDescriptor[VOLUME_SECURITY_DESCRIPTOR_MAX_SIZE];
 } EVENT_START, *PEVENT_START;
