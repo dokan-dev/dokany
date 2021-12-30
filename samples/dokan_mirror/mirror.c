@@ -78,16 +78,16 @@ static void DbgPrint(LPCWSTR format, ...) {
   }
 }
 
-static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
-static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
-static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
-static WCHAR VolumeName[MAX_PATH + 1] = L"DOKAN";
+static WCHAR gRootDirectory[DOKAN_MAX_PATH] = L"C:";
+static WCHAR gMountPoint[DOKAN_MAX_PATH] = L"M:\\";
+static WCHAR gUNCName[DOKAN_MAX_PATH] = L"";
+static WCHAR gVolumeName[MAX_PATH + 1] = L"DOKAN";
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
-  wcsncpy_s(filePath, numberOfElements, RootDirectory, wcslen(RootDirectory));
-  size_t unclen = wcslen(UNCName);
-  if (unclen > 0 && _wcsnicmp(FileName, UNCName, unclen) == 0) {
+  wcsncpy_s(filePath, numberOfElements, gRootDirectory, wcslen(gRootDirectory));
+  size_t unclen = wcslen(gUNCName);
+  if (unclen > 0 && _wcsnicmp(FileName, gUNCName, unclen) == 0) {
     if (_wcsnicmp(FileName + unclen, L".", 1) != 0) {
       wcsncat_s(filePath, numberOfElements, FileName + unclen,
                 wcslen(FileName) - unclen);
@@ -1331,7 +1331,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   WCHAR volumeRoot[4];
   DWORD fsFlags = 0;
 
-  wcscpy_s(VolumeNameBuffer, VolumeNameSize, VolumeName);
+  wcscpy_s(VolumeNameBuffer, VolumeNameSize, gVolumeName);
 
   if (VolumeSerialNumber)
     *VolumeSerialNumber = 0x19831116;
@@ -1344,7 +1344,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
       *FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES;
   }
 
-  volumeRoot[0] = RootDirectory[0];
+  volumeRoot[0] = gRootDirectory[0];
   volumeRoot[1] = ':';
   volumeRoot[2] = '\\';
   volumeRoot[3] = '\0';
@@ -1406,10 +1406,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
   WCHAR DriveLetter[3] = {'C', ':', 0};
   PWCHAR RootPathName;
 
-  if (RootDirectory[0] == L'\\') { // UNC as Root
-    RootPathName = RootDirectory;
+  if (gRootDirectory[0] == L'\\') { // UNC as Root
+    RootPathName = gRootDirectory;
   } else {
-    DriveLetter[0] = RootDirectory[0];
+    DriveLetter[0] = gRootDirectory[0];
     RootPathName = DriveLetter;
   }
 
@@ -1533,7 +1533,7 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
   case CTRL_LOGOFF_EVENT:
   case CTRL_SHUTDOWN_EVENT:
     SetConsoleCtrlHandler(CtrlHandler, FALSE);
-    DokanRemoveMountPoint(MountPoint);
+    DokanRemoveMountPoint(gMountPoint);
     return TRUE;
   default:
     return FALSE;
@@ -1602,19 +1602,19 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     switch (towlower(argv[command][1])) {
     case L'r':
       CHECK_CMD_ARG(command, argc)
-      wcscpy_s(RootDirectory, sizeof(RootDirectory) / sizeof(WCHAR),
+      wcscpy_s(gRootDirectory, sizeof(gRootDirectory) / sizeof(WCHAR),
                argv[command]);
-      if (!wcslen(RootDirectory)) {
+      if (!wcslen(gRootDirectory)) {
         DbgPrint(L"Invalid RootDirectory\n");
         return EXIT_FAILURE;
       }
 
-      DbgPrint(L"RootDirectory: %ls\n", RootDirectory);
+      DbgPrint(L"RootDirectory: %ls\n", gRootDirectory);
       break;
     case L'l':
       CHECK_CMD_ARG(command, argc)
-      wcscpy_s(MountPoint, sizeof(MountPoint) / sizeof(WCHAR), argv[command]);
-      dokanOptions.MountPoint = MountPoint;
+      wcscpy_s(gMountPoint, sizeof(gMountPoint) / sizeof(WCHAR), argv[command]);
+      dokanOptions.MountPoint = gMountPoint;
       break;
      case L't':
       dokanOptions.SingleThread = TRUE;
@@ -1656,14 +1656,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'u':
       CHECK_CMD_ARG(command, argc)
-      wcscpy_s(UNCName, sizeof(UNCName) / sizeof(WCHAR), argv[command]);
-      dokanOptions.UNCName = UNCName;
-      DbgPrint(L"UNC Name: %ls\n", UNCName);
+      wcscpy_s(gUNCName, sizeof(gUNCName) / sizeof(WCHAR), argv[command]);
+      dokanOptions.UNCName = gUNCName;
+      DbgPrint(L"UNC Name: %ls\n", gUNCName);
       break;
     case L'v':
       CHECK_CMD_ARG(command, argc)
-      wcscpy_s(VolumeName, sizeof(VolumeName) / sizeof(WCHAR), argv[command]);
-      DbgPrint(L"Volume Name: %ls\n", VolumeName);
+      wcscpy_s(gVolumeName, sizeof(gVolumeName) / sizeof(WCHAR), argv[command]);
+      DbgPrint(L"Volume Name: %ls\n", gVolumeName);
       break;
     case L'p':
       g_ImpersonateCallerUser = TRUE;
@@ -1686,7 +1686,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     }
   }
 
-  if (wcscmp(UNCName, L"") != 0 &&
+  if (wcscmp(gUNCName, L"") != 0 &&
       !(dokanOptions.Options & DOKAN_OPTION_NETWORK)) {
     fwprintf(
              stderr,
@@ -1700,7 +1700,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   }
 
   if (!(dokanOptions.Options & DOKAN_OPTION_MOUNT_MANAGER) &&
-      wcscmp(MountPoint, L"") == 0) {
+      wcscmp(gMountPoint, L"") == 0) {
     fwprintf(stderr, L"Mount Point required.\n");
     return EXIT_FAILURE;
   }
