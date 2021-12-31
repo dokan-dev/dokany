@@ -509,21 +509,29 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
 
 
 NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
+  // 1 - Complete the optional event.
+  // Main pull thread will not have events to complete when:
+  // * The file system just started and it is the first pull.
+  // * The event completed had no answer to send like Close().
+  // Other threads from the pool will have an EVENT_INFORMATION
+  // to complete that include the wait timeout for new events.
   NTSTATUS status = DokanCompleteIrp(RequestContext);
   if (status != STATUS_BUFFER_TOO_SMALL && status != STATUS_SUCCESS) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Failed to process IRP");
     return status;
   }
+
+  // 2 - Ensure we have enough space to at least store an event before waiting.
   if (RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength <
       sizeof(EVENT_CONTEXT)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "No output buffer provided");
     return status;
   }
+  // 3 - Flag the device as having workers starting to pull events.
   RequestContext->Vcb->HasEventWait = TRUE;
 
   PEVENT_INFORMATION eventInfo =
       (PEVENT_INFORMATION)(RequestContext->Irp->AssociatedIrp.SystemBuffer);
-
   ULONG waitTimeoutMs =
       status == STATUS_BUFFER_TOO_SMALL ? 0 : eventInfo->PullEventTimeoutMs;
   PLIST_ENTRY listEntry;
@@ -531,6 +539,8 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
   KeQuerySystemTime(&timeout);
   timeout.QuadPart += waitTimeoutMs * 1000; // Ms to 100 nano
 
+  // 4 - Wait for new event indefinitely if we are the main pull thread
+  // or wait for the requested time.
   ULONG result =
       KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode,
                       TRUE, waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
@@ -543,6 +553,7 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_NO_SUCH_DEVICE;
   }
 
+  // 5 - Fill the provided buffer as much as we can with events.
   return PullEvents(RequestContext, &RequestContext->Dcb->NotifyEvent);
 }
 
