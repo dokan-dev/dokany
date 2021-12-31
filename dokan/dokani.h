@@ -113,24 +113,6 @@ typedef struct _DOKAN_OPEN_INFO {
   PEVENT_CONTEXT EventContext;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
 
-typedef enum _DOKAN_OVERLAPPED_TYPE {
-  // The overlapped operation contains a DOKAN_IO_EVENT as its payload
-  DOKAN_OVERLAPPED_TYPE_IOEVENT = 0,
-  // The overlapped operation payload contains a result being passed back to the
-  // kernel driver. Results are represented as an EVENT_INFORMATION struct.
-  DOKAN_OVERLAPPED_TYPE_IOEVENT_RESULT,
-} DOKAN_OVERLAPPED_TYPE;
-
-// See DeviceIoControl() for how InputPayload and OutputLoad are used as it's not entirely intuitive
-// https://msdn.microsoft.com/en-us/library/windows/desktop/aa363216%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
-typedef struct _DOKAN_OVERLAPPED {
-  OVERLAPPED InternalOverlapped;
-  PVOID InputPayload;
-  PVOID OutputPayload;
-  DOKAN_OVERLAPPED_TYPE PayloadType;
-  BOOL PayloadPoolAllocated;
-} DOKAN_OVERLAPPED, *PDOKAN_OVERLAPPED;
-
 typedef struct _DOKAN_IO_BATCH {
   PDOKAN_INSTANCE DokanInstance;
   DWORD NumberOfBytesTransferred;
