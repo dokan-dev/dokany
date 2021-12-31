@@ -1,4 +1,4 @@
-; *** dokan1.ddf example ***
+; *** dokan2.ddf example ***
 ;
 .OPTION EXPLICIT     ; Generate errors
 .Set CabinetFileCountThreshold=0
@@ -14,41 +14,41 @@
 .Set DiskDirectory1=dokan_wix
 .Set DestinationDir=Releasex64
 x64\Release\Driver\sys\dokan.inf
-x64\Release\Driver\sys\dokan1.sys
-x64\Release\Driver\sys\dokan1.cat
-x64\Release\Driver\dokan1.pdb
+x64\Release\Driver\sys\dokan2.sys
+x64\Release\Driver\sys\dokan2.cat
+x64\Release\Driver\dokan2.pdb
 .Set DestinationDir=Releasex86
 Win32\Release\Driver\sys\dokan.inf
-Win32\Release\Driver\sys\dokan1.sys
-Win32\Release\Driver\sys\dokan1.cat
-Win32\Release\Driver\dokan1.pdb
+Win32\Release\Driver\sys\dokan2.sys
+Win32\Release\Driver\sys\dokan2.cat
+Win32\Release\Driver\dokan2.pdb
 .Set DestinationDir=ReleaseARM
 ARM\Release\Driver\sys\dokan.inf
-ARM\Release\Driver\sys\dokan1.sys
-ARM\Release\Driver\sys\dokan1.cat
-ARM\Release\Driver\dokan1.pdb
+ARM\Release\Driver\sys\dokan2.sys
+ARM\Release\Driver\sys\dokan2.cat
+ARM\Release\Driver\dokan2.pdb
 .Set DestinationDir=ReleaseARM64
 ARM64\Release\Driver\sys\dokan.inf
-ARM64\Release\Driver\sys\dokan1.sys
-ARM64\Release\Driver\sys\dokan1.cat
-ARM64\Release\Driver\dokan1.pdb
+ARM64\Release\Driver\sys\dokan2.sys
+ARM64\Release\Driver\sys\dokan2.cat
+ARM64\Release\Driver\dokan2.pdb
 .Set DestinationDir=Debugx64
 x64\Debug\Driver\sys\dokan.inf
-x64\Debug\Driver\sys\dokan1.sys
-x64\Debug\Driver\sys\dokan1.cat
-x64\Debug\Driver\dokan1.pdb
+x64\Debug\Driver\sys\dokan2.sys
+x64\Debug\Driver\sys\dokan2.cat
+x64\Debug\Driver\dokan2.pdb
 .Set DestinationDir=Debugx86
 Win32\Debug\Driver\sys\dokan.inf
-Win32\Debug\Driver\sys\dokan1.sys
-Win32\Debug\Driver\sys\dokan1.cat
-Win32\Debug\Driver\dokan1.pdb
+Win32\Debug\Driver\sys\dokan2.sys
+Win32\Debug\Driver\sys\dokan2.cat
+Win32\Debug\Driver\dokan2.pdb
 .Set DestinationDir=DebugARM
 ARM\Debug\Driver\sys\dokan.inf
-ARM\Debug\Driver\sys\dokan1.sys
-ARM\Debug\Driver\sys\dokan1.cat
-ARM\Debug\Driver\dokan1.pdb
+ARM\Debug\Driver\sys\dokan2.sys
+ARM\Debug\Driver\sys\dokan2.cat
+ARM\Debug\Driver\dokan2.pdb
 .Set DestinationDir=DebugARM64
 ARM64\Debug\Driver\sys\dokan.inf
-ARM64\Debug\Driver\sys\dokan1.sys
-ARM64\Debug\Driver\sys\dokan1.cat
-ARM64\Debug\Driver\dokan1.pdb
+ARM64\Debug\Driver\sys\dokan2.sys
+ARM64\Debug\Driver\sys\dokan2.cat
+ARM64\Debug\Driver\dokan2.pdb
