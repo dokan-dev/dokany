@@ -54,7 +54,6 @@ typedef struct _DOKAN_INSTANCE_THREADINFO {
 typedef struct _DOKAN_INSTANCE {
   /** to ensure that unmount dispatch is called at once */
   CRITICAL_SECTION CriticalSection;
-
   /**
    * Current DeviceName.
    * When there are many mounts, each mount uses different DeviceName.
@@ -64,27 +63,28 @@ typedef struct _DOKAN_INSTANCE {
   WCHAR MountPoint[MAX_PATH];
   /** UNC name used for network volume */
   WCHAR UNCName[64];
-
   /** Device number */
   ULONG DeviceNumber;
   /** Mount ID */
   ULONG MountId;
-
   /** DOKAN_OPTIONS linked to the mount */
   PDOKAN_OPTIONS DokanOptions;
   /** DOKAN_OPERATIONS linked to the mount */
   PDOKAN_OPERATIONS DokanOperations;
-
   /** Current list entry informations */
   LIST_ENTRY ListEntry;
-
+  /** Global Dokan Kernel device handle */
   HANDLE GlobalDevice;
+  /** Device handle used to communicate with the kernel mount instance */
   HANDLE Device;
+  /** Device unmount event. It is set when the device is stopped */
   HANDLE DeviceClosedWaitHandle;
+  /** Thread pool context of the mount instance */
   DOKAN_INSTANCE_THREADINFO ThreadInfo;
+  /** Handle with the notify file opened at mount */
   HANDLE NotifyHandle;
+  /** Handle of the Keepalive file opened at mount */
   HANDLE KeepaliveHandle;
-
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
 /**
@@ -113,23 +113,75 @@ typedef struct _DOKAN_OPEN_INFO {
   PEVENT_CONTEXT EventContext;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
 
+/**
+ * \struct DOKAN_IO_BATCH
+ * \brief Dokan IO batch buffer
+ *
+ * This is used to pull batch of events from the kernel.
+ * 
+ * For each EVENT_CONTEXT that is pulled from the kernel, a DOKAN_IO_EVENT is allocated with its EventContext pointer placed to the IoBatch buffer.
+ * DOKAN_IO_EVENT will be dispatched for being processed by a pool thread (or the main pull thread).
+ * When the event is processed, the DOKAN_IO_EVENT will be freed and the EventContextBatchCount will be decremented.
+ * When it reaches 0, the buffer is free or pushed to the memory pool.
+ */
 typedef struct _DOKAN_IO_BATCH {
+  /** Dokan instance linked to the batch */
   PDOKAN_INSTANCE DokanInstance;
+  /** Size read from kernel that is hold in EventContext */
   DWORD NumberOfBytesTransferred;
+  /** Whether it is used by the Main pull thread that wait indefinitely in kernel compared to volatile pool threads */
   BOOL MainPullThread;
+  /**
+   * Whether this object was allocated from the memory pool.
+   * Large Write events will allocate a specific buffer that will not come from the memory pool.
+   */
   BOOL PoolAllocated;
+  /**
+   * Number of actual EVENT_CONTEXT stored in EventContext.
+   * This is used as a shared buffer counter that is decremented when an event is processed.
+   * When it reaches 0, the buffer is free or pushed to the memory pool.
+   */
   LONG EventContextBatchCount;
+  /**
+   * The actual buffer used to pull events from kernel.
+   * It may contain multiple EVENT_CONTEXT depending on what the kernel has to offer right now.
+   * A high activity will generate multiple EVENT_CONTEXT to be batched in a single pull.
+   */
   EVENT_CONTEXT EventContext[1];
 } DOKAN_IO_BATCH, *PDOKAN_IO_BATCH;
 
+/**
+ * \struct DOKAN_IO_EVENT
+ * \brief Dokan IO Event
+ *
+ * Use to track one of the even pulled by DOKAN_IO_BATCH while it is being processed by the FileSystem.
+ * The EventContext is owned by the DOKAN_IO_BATCH and not this instance.
+ */
 typedef struct _DOKAN_IO_EVENT {
+  /** Dokan instance linked to the event */
   PDOKAN_INSTANCE DokanInstance;
+  /** Optional open information for the event context */
   PDOKAN_OPEN_INFO DokanOpenInfo;
+  /**
+   * Optional result of the event to send to the kernel.
+   * Some events like Close() do not have a response.
+   */
   PEVENT_INFORMATION EventResult;
+  /** Size of the EventResult buffer to send to the kernel */
   ULONG EventResultSize;
+  /**
+   * Whether if EventResult was allocated from the memory pool.
+   * Large events like FindFiles will allocate a specific buffer that will not come from the memory pool.
+   */
   BOOL PoolAllocated;
+  /** File information for the event context */
   DOKAN_FILE_INFO DokanFileInfo;
+  /** The actual event pulled from the kernel. This buffer is not owned by the IoEvent. */
   PEVENT_CONTEXT EventContext;
+  /**
+   * The io batch that owns the lifetime of the EventContext.
+   * When it is free, the EventContext of this IoEvent is no longer safe to access.
+   */
   PDOKAN_IO_BATCH IoBatch;
 } DOKAN_IO_EVENT, *PDOKAN_IO_EVENT;
 
