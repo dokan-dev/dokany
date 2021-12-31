@@ -217,7 +217,7 @@ typedef int(WINAPI *PFillFindData)(PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
 
 /**
  * \brief FillFindStreamData Used to add an entry in FindStreams
- * \return FALSE if buffer is full, otherwise TRUE
+ * \return FALSE if the buffer is full, otherwise TRUE
  */
 typedef BOOL(WINAPI *PFillFindStreamData)(PWIN32_FIND_STREAM_DATA, PVOID);
 
@@ -791,19 +791,18 @@ typedef struct _DOKAN_OPERATIONS {
 /** @{ */
 
 /**
- * \brief Initialize all required Dokan internal resources. 
+ * \brief Initialize all required Dokan internal resources.
  *
- * This needs to be called only once before trying to use \ref DokanCreateFileSystem for the first time.
- * Otherwise \ref DokanCreateFileSystem will just fail.
+ * This needs to be called only once before trying to use \ref DokanMain or \ref DokanCreateFileSystem for the first time.
+ * Otherwise both will fail and raise an exception.
  */
 VOID DOKANAPI DokanInit();
 
 /**
- * \brief Release all allocated resources by \ref DokanInit
+ * \brief Release all allocated resources by \ref DokanInit when they are no longer needed.
  *
- * This should be called when the application no longer expects to create a new FileSystem with \ref DokanCreateFileSystem and after all devices are unmount.
- * 
- * \return \ref DokanMainResult status.
+ * This should be called when the application no longer expects to create a new FileSystem with
+ * \ref DokanMain or \ref DokanCreateFileSystem and after all devices are unmount.
  */
 VOID DOKANAPI DokanShutdown();
 
