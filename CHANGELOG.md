@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [2.0.0.1000] - 2021-12-30
+
+See [here](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0) how to migrate an existing > 1.1.0 filesystem to 2.0.0.
+
 ### Added
 - Kernel / Library - Introduce Thread & Memory pool to process and pull events. This is highly based on #307 but without the async logic. The reason is to avoid using the kernel `NotificationLoop` that was dispatching requests to workers (userland thread) sequentially since wake up workers have a high cost of thread context switch.
 The previous logic is nice when you want workers to be async (like #307) but as we have threads (and now even a thread poll) dedicated to pull and process events, there is no issue to make them synchronously wait in kernel for new events and directly take them from the pending request list.
