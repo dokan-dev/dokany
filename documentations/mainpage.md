@@ -98,17 +98,15 @@ exported can be used to process wildcard matching.
 
 ### Mounting
 
-As stated above, the file system can be mounted by invoking \ref DokanMain
-function. The function blocks until the file system is unmounted. File
-system applications should fill DOKAN_OPTIONS struct to describe the future device and DOKAN_OPERATIONS with function pointers for file
-system operations (such as ZwCreateFile, ReadFile, CloseFile, ...)
-before passing these parameters to the DokanMain function.  Functions in
-DOKAN_OPERATIONS struct need to be thread-safe, because they are
-called in several threads (not the thread invoking DokanMain) with
-different execution contexts.
-\ref DokanMain can instantly return a \ref DokanMainResult status in case of mount failure.
+As stated above, the file system can be mounted by invoking \ref DokanMain function or \ref DokanCreateFileSystem.
+The function \ref DokanMain blocks until the file system is unmounted while \ref DokanCreateFileSystem only blocks until the file system is mounted.
+File system applications should fill \ref DOKAN_OPTIONS struct to describe the future device and \ref DOKAN_OPERATIONS with function pointers for file system operations (such as ZwCreateFile, ReadFile, CloseFile, ...) before passing these parameters to one of the functions.
+Functions in \ref DOKAN_OPERATIONS struct need to be thread-safe, because they are called in several threads (unless the \ref DOKAN_OPTIONS.SingleThread is used) with different execution contexts.
 
-DOKAN_OPTIONS.Options with \ref DOKAN_OPTION flags describe the behavior of the device.
+\ref DokanMain can instantly return a \ref DokanMainResult status in case of mount failure.
+\ref DokanCreateFileSystem will provide a \ref DOKAN_HANDLE that can be used with \ref DokanWaitForFileSystemClosed to wait until the filesystem is unmount or with \ref DokanIsFileSystemRunning to check if the filesystem is still running. \ref DokanCloseHandle will trigger an unmount and wait for it to be completed.
+
+ \ref DOKAN_OPTIONS.Options with \ref DOKAN_OPTION flags describe the behavior of the device.
 
 ### Unmounting
 
