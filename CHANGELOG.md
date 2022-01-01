@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.0.2000] - 2021-01-01
+
+### Fixed
+- Library - Missing new 2.0.0 API export.
+- Library - Move `DOKAN_FILE_INFO.ProcessingContext` offset in struct to avoid padding issues.
+
 ## [2.0.0.1000] - 2021-12-30
 
 See [here](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0) how to migrate an existing > 1.1.0 filesystem to 2.0.0.
