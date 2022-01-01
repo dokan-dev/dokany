@@ -179,6 +179,12 @@ typedef struct _DOKAN_FILE_INFO {
   /** A pointer to DOKAN_OPTIONS which was passed to \ref DokanMain or \ref DokanCreateFileSystem. */
   PDOKAN_OPTIONS DokanOptions;
   /**
+   * Reserved. Used internally by Dokan library. Never modify.
+   * If the processing for the event requires extra data to be associated with it
+   * then a pointer to that data can be placed here
+   */
+  PVOID ProcessingContext;
+  /**
    * Process ID for the thread that originally requested a given I/O operation.
    */
   ULONG ProcessId;
@@ -197,12 +203,6 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR Nocache;
   /**  If \c TRUE, write to the current end of file instead of using the Offset parameter. */
   UCHAR WriteToEndOfFile;
-  /**
-   * Reserved. Used internally by Dokan library. Never modify. 
-   * If the processing for the event requires extra data to be associated with it
-   * then a pointer to that data can be placed here
-   */
-  PVOID ProcessingContext;
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 #define DOKAN_EXCEPTION_NOT_INITIALIZED 0x0f0ff0ff
