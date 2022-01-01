@@ -29,3 +29,7 @@ DokanNotifyXAttrUpdate
 DokanNotifyRename
 DokanInit
 DokanShutdown
+DokanCreateFileSystem
+DokanIsFileSystemRunning
+DokanWaitForFileSystemClosed
+DokanCloseHandle
