@@ -50,7 +50,7 @@ $Configs = @(
 		"Name" = "driveMntMgr";
 	},
 	@{
-		"MirrorArguments" = "/l $DokanDriverLetter /n /u \myfs\dokan";
+		"MirrorArguments" = "/l $DokanDriverLetter /n \myfs\dokan";
 		"Destination" = "\\myfs\dokan";
 		"Name" = "netUnc";
 	}
