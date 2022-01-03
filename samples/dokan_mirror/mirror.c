@@ -1548,13 +1548,12 @@ void ShowUsage() {
           "  /t Single thread\t\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
           "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
           "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
-          "  /n (use network drive)\t\t\t Show device as network device.\n"
           "  /m (use removable drive)\t\t\t Show device as removable media.\n"
           "  /w (write-protect drive)\t\t\t Read only filesystem.\n"
           "  /b (case sensitive drive)\t\t\t Supports case-sensitive file names.\n"
           "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
           "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
-          "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
+          "  /n (Network drive with UNC name ex. \\myfs\\fs1) Show device as network device with a UNC name.\n"
           "  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
           "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
@@ -1625,9 +1624,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     case L's':
       g_UseStdErr = TRUE;
       break;
-    case L'n':
-      dokanOptions.Options |= DOKAN_OPTION_NETWORK;
-      break;
     case L'm':
       dokanOptions.Options |= DOKAN_OPTION_REMOVABLE;
       break;
@@ -1654,8 +1650,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       dokanOptions.Options |= DOKAN_OPTION_CASE_SENSITIVE;
       g_CaseSensitive = TRUE;
       break;
-    case L'u':
+    case L'n':
       CHECK_CMD_ARG(command, argc)
+      dokanOptions.Options |= DOKAN_OPTION_NETWORK;
       wcscpy_s(gUNCName, sizeof(gUNCName) / sizeof(WCHAR), argv[command]);
       dokanOptions.UNCName = gUNCName;
       DbgPrint(L"UNC Name: %ls\n", gUNCName);

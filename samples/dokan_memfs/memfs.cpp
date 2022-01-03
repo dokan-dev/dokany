@@ -51,9 +51,7 @@ void memfs::run() {
   // Mount type
   if (network_drive) {
     dokan_options.Options |= DOKAN_OPTION_NETWORK;
-    if (unc_name[0]) {
-      dokan_options.UNCName = unc_name;
-    }
+    dokan_options.UNCName = unc_name;
     if (enable_network_unmount) {
       dokan_options.Options |= DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE;
     }

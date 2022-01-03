@@ -85,7 +85,7 @@ extern "C" {
 #define DOKAN_OPTION_ALT_STREAM (1 << 2)
 /** Enable mount drive as write-protected */
 #define DOKAN_OPTION_WRITE_PROTECT (1 << 3)
-/** Use network drive - Dokan network provider needs to be installed */
+/** Use network drive - Dokan network provider needs to be installed and a \ref DOKAN_OPTIONS.UNCName provided */
 #define DOKAN_OPTION_NETWORK (1 << 4)
 /**
  * Use removable drive

@@ -34,6 +34,7 @@ void show_usage() {
   spdlog::error("memfs.exe - Dokan Memory filesystem that can be mounted as a local or network drive.\n"
                 "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
                 "  /m (use removable drive)\t\t\t Show device as removable media.\n"
+                "  /n (Network drive with UNC name ex. \\myfs\\fs1) Show device as network device with a UNC name.\n"
                 "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
                 "  /n (use network drive)\t\t\t Show device as network device.\n"
                 "  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
@@ -77,8 +78,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       if (arg == L"/h") {
         show_usage();
         return 0;
-      } else if (arg == L"/n") {
-        dokan_memfs->network_drive = true;
       } else if (arg == L"/m") {
         dokan_memfs->removable_drive = true;
       } else if (arg == L"/c") {
@@ -103,7 +102,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
           wcscpy_s(dokan_memfs->mount_point,
                    sizeof(dokan_memfs->mount_point) / sizeof(WCHAR),
                    extra_arg.c_str());
-        } else if (arg == L"/u") {
+        } else if (arg == L"/n") {
+          dokan_memfs->network_drive = true;
           wcscpy_s(dokan_memfs->unc_name,
                    sizeof(dokan_memfs->unc_name) / sizeof(WCHAR),
                    extra_arg.c_str());

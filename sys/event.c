@@ -791,6 +791,13 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     startFailure = TRUE;
   }
 
+  if (eventStart->DeviceType == DOKAN_NETWORK_FILE_SYSTEM &&
+      DokanSearchStringChar(eventStart->UNCName, sizeof(eventStart->UNCName),
+                            '\0') == -1) {
+    DokanLogInfo(&logger, L"Network filesystem is enabled without UNCName.");
+    startFailure = TRUE;
+  }
+
   driverInfo = RequestContext->Irp->AssociatedIrp.SystemBuffer;
   driverInfo->Flags = 0;
   if (startFailure) {
