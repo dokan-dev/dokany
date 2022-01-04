@@ -482,7 +482,9 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
         // We have reached the end of the list
         break;
       }
-      alreadySeenWorkItem = workItem;
+      if (!alreadySeenWorkItem) {
+        alreadySeenWorkItem = workItem;
+      }
       continue;
     }
     // Send the work item back in the response to the current IOCTL.
