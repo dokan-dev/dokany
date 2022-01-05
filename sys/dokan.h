@@ -152,7 +152,7 @@ extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 //
 typedef enum _FSD_IDENTIFIER_TYPE {
   DGL = ':DGL',       // Dokan Global
-  DCB = ':DCB',       // Disk Control Block
+  DCB = ':DDC',       // Disk Control Block
   VCB = ':VCB',       // Volume Control Block
   FCB = ':FCB',       // File Control Block
   CCB = ':CCB',       // Context Control Block
