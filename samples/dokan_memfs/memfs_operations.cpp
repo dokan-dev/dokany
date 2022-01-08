@@ -620,8 +620,12 @@ static NTSTATUS DOKAN_CALLBACK memfs_getvolumeinformation(
 }
 
 static NTSTATUS DOKAN_CALLBACK
-memfs_mounted(LPCWSTR MountPoint, PDOKAN_FILE_INFO /*dokanfileinfo*/) {
+memfs_mounted(LPCWSTR MountPoint, PDOKAN_FILE_INFO dokanfileinfo) {
   spdlog::info(L"Mounted as {}", MountPoint);
+  WCHAR *mount_point =
+      (reinterpret_cast<memfs *>(dokanfileinfo->DokanOptions->GlobalContext))
+          ->mount_point;
+  wcscpy_s(mount_point, sizeof(WCHAR) * MAX_PATH, MountPoint);
   return STATUS_SUCCESS;
 }
 

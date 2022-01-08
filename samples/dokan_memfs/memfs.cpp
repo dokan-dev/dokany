@@ -67,7 +67,7 @@ void memfs::run() {
   }
   
   dokan_options.Timeout = timeout;
-  dokan_options.GlobalContext = reinterpret_cast<ULONG64>(fs_filenodes.get());
+  dokan_options.GlobalContext = reinterpret_cast<ULONG64>(this);
 
   NTSTATUS status = DokanMain(&dokan_options, &memfs_operations);
   switch (status) {

@@ -31,14 +31,15 @@ THE SOFTWARE.
 #include <dokan/dokan.h>
 
 #include "filenodes.h"
+#include "memfs.h"
 
 namespace memfs {
 // Memfs Dokan API implementation.
 extern DOKAN_OPERATIONS memfs_operations;
-
 // Helper getting the memfs filenodes context at each Dokan API call.
-#define GET_FS_INSTANCE \
-  reinterpret_cast<fs_filenodes*>(dokanfileinfo->DokanOptions->GlobalContext)
+#define GET_FS_INSTANCE                                                        \
+  reinterpret_cast<memfs *>(dokanfileinfo->DokanOptions->GlobalContext)        \
+      ->fs_filenodes.get()
 }  // namespace memfs
 
 #endif  // MEMFS_OPERATIONS_H_
