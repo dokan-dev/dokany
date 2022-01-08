@@ -85,6 +85,8 @@ typedef struct _DOKAN_INSTANCE {
   HANDLE NotifyHandle;
   /** Handle of the Keepalive file opened at mount */
   HANDLE KeepaliveHandle;
+  /** Whether the filesystem was intentionally stopped */
+  BOOL FileSystemStopped;
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
 /**

@@ -353,9 +353,11 @@ VOID DispatchEvent(PDOKAN_IO_EVENT ioEvent) {
 }
 
 VOID OnDeviceIoCtlFailed(PDOKAN_INSTANCE DokanInstance, DWORD Result) {
-  DokanDbgPrintW(L"Dokan Fatal: Closing IO processing for dokan instance %s "
-                 L"with error code 0x%x and unmounting volume.\n",
-                 DokanInstance->DeviceName, Result);
+  if (!DokanInstance->FileSystemStopped) {
+    DokanDbgPrintW(L"Dokan Fatal: Closing IO processing for dokan instance %s "
+                   L"with error code 0x%x and unmounting volume.\n",
+                   DokanInstance->DeviceName, Result);
+  }
 
   DokanNotifyUnmounted(DokanInstance);
 
@@ -451,10 +453,12 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
     if (eventInfo) {
       FreeIoEventResult(eventInfo, eventInfoPollAllocated);
     }
-    DokanDbgPrintW(
-        L"Dokan Error: Dokan device result ioctl failed for wait with "
-        L"code %d.\n",
-        lastError);
+    if (!IoBatch->DokanInstance->FileSystemStopped) {
+      DokanDbgPrintW(
+          L"Dokan Error: Dokan device result ioctl failed for wait with "
+          L"code %d.\n",
+          lastError);
+    }
     return lastError;
   }
   if (eventInfo) {
@@ -574,9 +578,12 @@ VOID DOKANAPI DokanCloseHandle(_In_ DOKAN_HANDLE DokanInstance) {
     return;
   }
   // make sure the driver is unmounted
+  instance->FileSystemStopped = TRUE;
   DokanRemoveMountPoint(instance->MountPoint);
   DokanWaitForFileSystemClosed((DOKAN_HANDLE)instance, INFINITE);
+  EnterCriticalSection(&g_InstanceCriticalSection);
   DeleteDokanInstance(instance);
+  LeaveCriticalSection(&g_InstanceCriticalSection);
 }
 
 int DOKANAPI DokanMain(PDOKAN_OPTIONS DokanOptions,
