@@ -30,7 +30,7 @@ THE SOFTWARE.
 #include <spdlog/spdlog.h>
 
 namespace memfs {
-void memfs::run() {
+void memfs::start() {
   fs_filenodes = std::make_unique<::memfs::fs_filenodes>();
 
   DOKAN_OPTIONS dokan_options;
@@ -69,7 +69,8 @@ void memfs::run() {
   dokan_options.Timeout = timeout;
   dokan_options.GlobalContext = reinterpret_cast<ULONG64>(this);
 
-  NTSTATUS status = DokanMain(&dokan_options, &memfs_operations);
+  NTSTATUS status =
+      DokanCreateFileSystem(&dokan_options, &memfs_operations, &instance);
   switch (status) {
     case DOKAN_SUCCESS:
       break;
@@ -93,5 +94,8 @@ void memfs::run() {
   }
 }
 
-memfs::~memfs() { DokanRemoveMountPoint(mount_point); }
-}  // namespace memfs
+void memfs::wait() { DokanWaitForFileSystemClosed(instance, INFINITE); }
+
+void memfs::stop() { DokanCloseHandle(instance); }
+
+} // namespace memfs

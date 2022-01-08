@@ -62,7 +62,7 @@ BOOL WINAPI ctrl_handler(DWORD dw_ctrl_type) {
   case CTRL_LOGOFF_EVENT:
   case CTRL_SHUTDOWN_EVENT:
     SetConsoleCtrlHandler(ctrl_handler, FALSE);
-    DokanRemoveMountPoint(dokan_memfs->mount_point);
+    dokan_memfs->stop();
     return TRUE;
   default:
     return FALSE;
@@ -115,7 +115,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     }
     DokanInit();
     // Start the memory filesystem
-    dokan_memfs->run();
+    dokan_memfs->start();
+    dokan_memfs->wait();
     DokanShutdown();
   } catch (const std::exception& ex) {
     spdlog::error("dokan_memfs failure: {}", ex.what());

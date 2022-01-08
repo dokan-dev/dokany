@@ -42,9 +42,11 @@ class memfs {
  public:
   memfs() = default;
   // Start the memory filesystem and block until unmount.
-  void run();
-  // Unmount the device when destructor is called.
-  virtual ~memfs();
+  void start();
+  void wait();
+  void stop();
+
+  DOKAN_HANDLE instance = nullptr;
 
   // FileSystem mount options
   WCHAR mount_point[MAX_PATH] = L"M:\\";
