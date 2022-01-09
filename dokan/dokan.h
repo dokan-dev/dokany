@@ -315,6 +315,10 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * ReadFile callback on the file previously opened in DOKAN_OPERATIONS.ZwCreateFile.
   * It can be called by different threads at the same time, so the read/context has to be thread safe.
+  * 
+  * When apps make use of memory mapped files, DOKAN_OPERATIONS.WriteFile or DOKAN_OPERATIONS.ReadFile
+  * functions may be invoked after DOKAN_OPERATIONS.Cleanup in order to complete the I/O operations.
+  * The file system application should also properly work in this case.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param Buffer Read buffer that has to be filled with the read result.
@@ -338,6 +342,10 @@ typedef struct _DOKAN_OPERATIONS {
   * WriteFile callback on the file previously opened in DOKAN_OPERATIONS.ZwCreateFile
   * It can be called by different threads at the same time, sp the write/context has to be thread safe.
   *
+  * When apps make use of memory mapped files, DOKAN_OPERATIONS.WriteFile or DOKAN_OPERATIONS.ReadFile
+  * functions may be invoked after DOKAN_OPERATIONS.Cleanup in order to complete the I/O operations.
+  * The file system application should also properly work in this case.
+  * 
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param Buffer Data that has to be written.
   * \param NumberOfBytesToWrite Buffer length and write size to continue with.
