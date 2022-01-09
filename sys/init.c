@@ -150,31 +150,21 @@ PDEVICE_ENTRY FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal,
     return NULL;
   }
 
-  if (!ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE)) {
-    DOKAN_LOG("Not able to acquire dokanGlobal->Resource \n");
-    return NULL;
-  }
-
   if (IsListEmpty(&dokanGlobal->DeviceDeleteList)) {
-    ExReleaseResourceLite(&dokanGlobal->Resource);
     return NULL;
   }
 
   for (entry = listHead->Flink, nextEntry = entry->Flink; entry != listHead;
        entry = nextEntry, nextEntry = entry->Flink) {
-
     PDEVICE_ENTRY deviceEntry =
         CONTAINING_RECORD(entry, DEVICE_ENTRY, ListEntry);
     if (deviceEntry) {
       if (deviceEntry->SessionId == sessionId) {
-        ExReleaseResourceLite(&dokanGlobal->Resource);
         DOKAN_LOG("Device to delete found for a specific session\n");
         return deviceEntry;
       }
     }
   }
-
-  ExReleaseResourceLite(&dokanGlobal->Resource);
   return NULL;
 }
 

@@ -709,21 +709,18 @@ VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
     return;
   }
 
+  if (!ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
+                                      TRUE)) {
+    DOKAN_LOG("Not able to acquire dokanGlobal->Resource \n");
+  }
   PDEVICE_ENTRY foundEntry;
-
-  BOOLEAN isDone = FALSE;
-  do {
-    foundEntry =
-        FindDeviceForDeleteBySessionId(RequestContext->DokanGlobal, sessionId);
-    if (foundEntry != NULL) {
-      DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
-      foundEntry->SessionId = (ULONG)-1;
-      foundEntry->MountPoint.Buffer = NULL;
-    } else {
-      isDone = TRUE;
-    }
-  } while (!isDone);
-
+  while ((foundEntry = FindDeviceForDeleteBySessionId(
+              RequestContext->DokanGlobal, sessionId)) != NULL) {
+    DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
+    foundEntry->SessionId = (ULONG)-1;
+    foundEntry->MountPoint.Buffer = NULL;
+  }
+  ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
 }
 
 // start event dispatching
