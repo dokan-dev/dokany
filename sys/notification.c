@@ -355,6 +355,7 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
 
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingRetryIrp);
+  ReleaseNotifyEvent(&dcb->NotifyEvent);
   DokanStopCheckThread(dcb);
   DokanStopEventNotificationThread(dcb);
   KeRundownQueue(&dcb->NotifyIrpEventQueue);
