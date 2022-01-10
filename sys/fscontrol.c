@@ -494,17 +494,16 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
     RequestContext->Irp->IoStatus.Information += workItemBytes;
     ExFreePool(workItem);
     if (!RequestContext->Dcb->AllowIpcBatching) {
-      // If there is still pending items we need to reflag the queue for when we come back
-      if (!IsListEmpty(&NotifyEvent->ListHead) &&
-          !KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
-        KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
-                      &RequestContext->Dcb->NotifyIrpEventQueueList);
-      }
       break;
     }
   }
+  // If there is still pending items we need to reflag the queue for when we come back
+  if (!IsListEmpty(&NotifyEvent->ListHead) &&
+       !KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
+     KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
+                   &RequestContext->Dcb->NotifyIrpEventQueueList);
+  }
   KeReleaseSpinLock(&NotifyEvent->ListLock, workQueueIrql);
-
   RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
   return RequestContext->Irp->IoStatus.Status;
 }
