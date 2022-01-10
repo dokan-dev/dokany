@@ -141,11 +141,11 @@ VOID IncrementVcbLogCacheCount();
 
 // Only allow logging events that are not pulling events to avoid unnecessary log
 // flood
-#define DOKAN_DENIED_LOG_EVENT(IrpSp)         (FALSE) //                                \
- // (IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&                       \
-  // IrpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&                           \
-  // IrpSp->Parameters.FileSystemControl.FsControlCode ==                        \
-  //     FSCTL_EVENT_PROCESS_N_PULL)
+#define DOKAN_DENIED_LOG_EVENT(IrpSp)                                          \
+  (IrpSp->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL &&                       \
+   IrpSp->MinorFunction == IRP_MN_USER_FS_REQUEST &&                           \
+   IrpSp->Parameters.FileSystemControl.FsControlCode ==                        \
+       FSCTL_EVENT_PROCESS_N_PULL)
 
 // Log the Irp FSCTL or IOCTL Control code.
 #define DOKAN_LOG_IOCTL(RequestContext, ControlCode, format, ...)              \
