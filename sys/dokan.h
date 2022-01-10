@@ -815,7 +815,6 @@ typedef struct _DEVICE_ENTRY {
 
 typedef struct _DRIVER_EVENT_CONTEXT {
   LIST_ENTRY ListEntry;
-  PKEVENT Completed;
   EVENT_CONTEXT EventContext;
 } DRIVER_EVENT_CONTEXT, *PDRIVER_EVENT_CONTEXT;
 
@@ -1135,8 +1134,6 @@ VOID DokanStopCheckThread(__in PDokanDCB Dcb);
 
 BOOLEAN
 DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext, __in_opt PDokanCCB Ccb);
-
-VOID DokanInitIrpList(__in PIRP_LIST IrpList);
 
 NTSTATUS
 DokanStartEventNotificationThread(__in PDokanDCB Dcb);
