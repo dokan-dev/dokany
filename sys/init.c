@@ -55,10 +55,11 @@ static VOID FreeDcbNames(__in PDokanDCB Dcb) {
   }
 }
 
-VOID DokanInitIrpList(__in PIRP_LIST IrpList) {
+VOID DokanInitIrpList(__in PIRP_LIST IrpList, __in BOOLEAN EventEnabled) {
   InitializeListHead(&IrpList->ListHead);
   KeInitializeSpinLock(&IrpList->ListLock);
   KeInitializeEvent(&IrpList->NotEmpty, NotificationEvent, FALSE);
+  IrpList->EventEnabled = EventEnabled;
 }
 
 PDEVICE_ENTRY
@@ -1040,9 +1041,9 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     diskDeviceObject->Flags |= DO_DIRECT_IO;
 
     // initialize Event and Event queue
-    DokanInitIrpList(&dcb->PendingIrp);
-    DokanInitIrpList(&dcb->NotifyEvent);
-    DokanInitIrpList(&dcb->PendingRetryIrp);
+    DokanInitIrpList(&dcb->PendingIrp, /*EventEnabled=*/FALSE);
+    DokanInitIrpList(&dcb->NotifyEvent, /*EventEnabled=*/TRUE);
+    DokanInitIrpList(&dcb->PendingRetryIrp, /*EventEnabled=*/TRUE);
     RtlZeroMemory(&dcb->NotifyIrpEventQueueList, sizeof(LIST_ENTRY));
     InitializeListHead(&dcb->NotifyIrpEventQueueList);
     KeInitializeQueue(&dcb->NotifyIrpEventQueue, 0);

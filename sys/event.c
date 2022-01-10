@@ -186,7 +186,7 @@ NTSTATUS
 RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
                        __in_opt PEVENT_CONTEXT EventContext,
                        __in PIRP_LIST IrpList, __in ULONG CheckMount,
-                       __in NTSTATUS CurrentStatus, __in BOOLEAN SetEvent) {
+                       __in NTSTATUS CurrentStatus) {
   PIRP_ENTRY irpEntry;
   KIRQL oldIrql;
 
@@ -265,7 +265,7 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] =
       irpEntry;
 
-  if (SetEvent) {
+  if (IrpList->EventEnabled) {
     KeSetEvent(&IrpList->NotEmpty, IO_NO_INCREMENT, FALSE);
   }
 
@@ -301,9 +301,9 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
                            RequestContext->IrpSp->MajorFunction);
   } else {
     status = RegisterPendingIrpMain(RequestContext, EventContext,
-                                    &RequestContext->Dcb->PendingIrp, TRUE,
-                                    /*CurrentStatus=*/STATUS_SUCCESS,
-                                    /*SetEvent=*/FALSE);
+                                    &RequestContext->Dcb->PendingIrp,
+                                    /*CheckMount=*/TRUE,
+                                    /*CurrentStatus=*/STATUS_SUCCESS);
   }
 
 
@@ -334,8 +334,7 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext) {
   RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
                          &RequestContext->Dcb->PendingRetryIrp,
                          /*CheckMount=*/TRUE,
-                         /*CurrentStatus=*/STATUS_SUCCESS,
-                         /*SetEvent=*/TRUE);
+                         /*CurrentStatus=*/STATUS_SUCCESS);
 }
 
 VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
@@ -345,7 +344,7 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
   }
   RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
                          &RequestContext->Dcb->PendingIrp,
-                         /*CheckMount=*/TRUE, Status, /*SetEvent=*/FALSE);
+                         /*CheckMount=*/TRUE, /*CurrentStatus=*/Status);
   KeSetEvent(&RequestContext->Dcb->ForceTimeoutEvent, 0, FALSE);
 }
 

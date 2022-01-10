@@ -177,6 +177,7 @@ typedef struct _FSD_IDENTIFIER {
 
 typedef struct _IRP_LIST {
   LIST_ENTRY ListHead;
+  BOOLEAN EventEnabled;
   KEVENT NotEmpty;
   KSPIN_LOCK ListLock;
 } IRP_LIST, *PIRP_LIST;
