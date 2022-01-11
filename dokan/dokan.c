@@ -695,9 +695,10 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
              DokanOptions->UNCName);
   }
 
-  if (!DokanStart(dokanInstance)) {
+  int result = DokanStart(dokanInstance);
+  if (result != DOKAN_SUCCESS) {
     DeleteDokanInstance(dokanInstance);
-    return DOKAN_START_ERROR;
+    return result;
   }
 
   GetRawDeviceName(dokanInstance->DeviceName, rawDeviceName, MAX_PATH);
@@ -937,7 +938,7 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
   return FALSE;
 }
 
-BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
+int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   EVENT_START eventStart;
   EVENT_DRIVER_INFO driverInfo;
   ULONG returnedLength = 0;
@@ -995,7 +996,7 @@ BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
           "Dokan Error: Invalid volume security descriptor length "
           "provided %ld\n",
           DokanInstance->DokanOptions->VolumeSecurityDescriptorLength);
-      return FALSE;
+      return DOKAN_START_ERROR;
     }
     eventStart.VolumeSecurityDescriptorLength =
         DokanInstance->DokanOptions->VolumeSecurityDescriptorLength;
@@ -1021,10 +1022,14 @@ BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
     if (driverInfo.DriverVersion != eventStart.UserVersion) {
       DokanDbgPrint("Dokan Error: driver version mismatch, driver %X, dll %X\n",
                     driverInfo.DriverVersion, eventStart.UserVersion);
-    } else {
-      DokanDbgPrint("Dokan Error: driver start error\n");
+      return DOKAN_VERSION_ERROR;
+    } else if (driverInfo.Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
+      DokanDbgPrint("Dokan Error: Driver failed to set mount point %s\n",
+                    eventStart.MountPoint);
+      return DOKAN_MOUNT_ERROR;
     }
-    return FALSE;
+    DokanDbgPrint("Dokan Error: driver start error\n");    
+    return DOKAN_START_ERROR;
   } else if (driverInfo.Status == DOKAN_MOUNTED) {
     DokanInstance->MountId = driverInfo.MountId;
     DokanInstance->DeviceNumber = driverInfo.DeviceNumber;
@@ -1033,9 +1038,9 @@ BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
     if (driverLetter && mountManager) {
       DokanInstance->MountPoint[0] = driverInfo.ActualDriveLetter;
     }
-    return TRUE;
+    return DOKAN_START_ERROR;
   }
-  return FALSE;
+  return DOKAN_SUCCESS;
 }
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode) {

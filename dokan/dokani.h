@@ -193,7 +193,7 @@ typedef struct _DOKAN_IO_EVENT {
        : 0)
 
 
-BOOL DokanStart(_In_ PDOKAN_INSTANCE DokanInstance);
+int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance);
 
 BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                   ULONG InputLength, PVOID OutputBuffer, ULONG OutputLength,
