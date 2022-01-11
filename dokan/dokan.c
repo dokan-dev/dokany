@@ -1038,9 +1038,9 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
     if (driverLetter && mountManager) {
       DokanInstance->MountPoint[0] = driverInfo.ActualDriveLetter;
     }
-    return DOKAN_START_ERROR;
+    return DOKAN_SUCCESS;
   }
-  return DOKAN_SUCCESS;
+  return DOKAN_START_ERROR;
 }
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode) {
