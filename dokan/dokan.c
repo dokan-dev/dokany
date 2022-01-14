@@ -264,7 +264,7 @@ VOID CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
             DokanOptions->AllocationUnitSize, DokanOptions->SectorSize);
 }
 
-VOID SetupIOEventForProcessing(DOKAN_IO_EVENT *IoEvent) {
+VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   IoEvent->DokanOpenInfo =
       (PDOKAN_OPEN_INFO)(UINT_PTR)IoEvent->EventContext->Context;
   IoEvent->DokanFileInfo.DokanContext = (ULONG64)IoEvent;
