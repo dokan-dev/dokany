@@ -129,9 +129,6 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   IoEvent->DokanOpenInfo->EventContext = IoEvent->EventContext;
   IoEvent->DokanOpenInfo->DokanInstance = IoEvent->DokanInstance;
   IoEvent->DokanOpenInfo->EventId = currentEventId;
-  // CreateFile is the only event that has DokanOpenInfo as DokanContext.
-  // It allows DokanOpenRequestorToken to retrieve the open information.
-  IoEvent->DokanFileInfo.DokanContext = (ULONG64)IoEvent->DokanOpenInfo;
 
   // Pass it to the driver so we can retrieve it on the next call of the same context.
   IoEvent->EventResult->Context = (ULONG64)IoEvent->DokanOpenInfo;
