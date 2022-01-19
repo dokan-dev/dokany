@@ -730,38 +730,38 @@ NTSTATUS
 VolumeDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
-  switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
-    default: {
-      // TODO: The early check fails some IFSTEST (Network) should make
-      // an exception for them. Disabling the volume open check for now.
+  ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
+      RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
+  switch (baseCode) {
+    case IOCTL_STORAGE_BASE:
+    case IOCTL_DISK_BASE:
+    case FILE_DEVICE_NETWORK_FILE_SYSTEM:
+      status = DiskDeviceControlWithLock(RequestContext,
+                                         RequestContext->Dcb->DeviceObject);
+      break;
+
+    case MOUNTDEVCONTROLTYPE:
       // Device control functions are only supposed to work on a volume handle.
       // Some win32 functions, like GetVolumePathName, rely on these operations
       // failing for file/directory handles. On the other hand, dokan issues its
       // custom operations on non-volume handles, so we can't do this check at
       // the top.
-      /*if (!IsVolumeOpen(RequestContext->Vcb,
-                        RequestContext->IrpSp->FileObject)) {
+      if (!IsVolumeOpen(RequestContext->Vcb,
+                       RequestContext->IrpSp->FileObject)) {
         status = STATUS_INVALID_PARAMETER;
         break;
-      }*/
-      ULONG baseCode = DEVICE_TYPE_FROM_CTL_CODE(
-          RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
-      // In case of IOCTL_STORAGE_BASE or IOCTL_DISK_BASE OR
-      // FILE_DEVICE_NETWORK_FILE_SYSTEM or MOUNTDEVCONTROLTYPE ioctl type, pass
-      // to DiskDeviceControl to avoid code duplication
-      // TODO: probably not the best way to pass down Irp...
-      if (baseCode == IOCTL_STORAGE_BASE || baseCode == IOCTL_DISK_BASE ||
-          baseCode == FILE_DEVICE_NETWORK_FILE_SYSTEM ||
-          baseCode == MOUNTDEVCONTROLTYPE) {
-        status = DiskDeviceControlWithLock(RequestContext,
-                                           RequestContext->Dcb->DeviceObject);
-      } else {
-        DOKAN_LOG_FINE_IRP(
-            RequestContext, "Unsupported IoControlCode %x",
-            RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
       }
-    } break;
-  }  // switch IoControlCode
+      status = DiskDeviceControlWithLock(RequestContext,
+                                         RequestContext->Dcb->DeviceObject);
+      break;
+
+    default:
+      DOKAN_LOG_FINE_IRP(
+          RequestContext, "Unsupported IoControlCode %x",
+          RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
+      break;
+  }
+
   return status;
 }
 
