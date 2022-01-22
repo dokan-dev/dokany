@@ -308,23 +308,23 @@ typedef struct _DokanDiskControlBlock {
 #define MAX_PATH 260
 
 typedef struct _DOKAN_CONTROL {
-  /** File System Type */
+  // File System Type
   ULONG Type;
-  /** Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS) */
+  // Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS)
   WCHAR MountPoint[MAX_PATH];
-  /** UNC name used for network volume */
+  // UNC name used for network volume
   WCHAR UNCName[64];
-  /** Disk Device Name */
+  // Disk Device Name
   WCHAR DeviceName[64];
-  /** Always set on MOUNT_ENTRY */
+  // Always set on MOUNT_ENTRY
   PDokanDCB Dcb;
-  /** Always set on MOUNT_ENTRY */
+  // Always set on MOUNT_ENTRY
   PDEVICE_OBJECT DiskDeviceObject;
-  /** NULL until fully mounted */
+  // NULL until fully mounted
   PDEVICE_OBJECT VolumeDeviceObject;
-  /** Session ID of calling process */
+  // Session ID of calling process
   ULONG SessionId;
-  /** Contains information about the flags on the mount */
+  // Contains information about the flags on the mount
   ULONG MountOptions;
 } DOKAN_CONTROL, *PDOKAN_CONTROL;
 
