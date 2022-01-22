@@ -32,16 +32,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 NTSTATUS
 GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
-
-  switch (RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode) {
-  default:
-    status = STATUS_INVALID_PARAMETER;
     DOKAN_LOG_FINE_IRP(
         RequestContext, "Unsupported IoControlCode %x",
         RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
-    break;
-  }
-
   return status;
 }
 
