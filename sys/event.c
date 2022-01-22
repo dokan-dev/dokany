@@ -1024,15 +1024,13 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     }
     dcb->IrpTimeout = eventStart->IrpTimeout;
   }
-
   dcb->FcbGarbageCollectionIntervalMs =
       eventStart->FcbGarbageCollectionIntervalMs;
   // Sanitize the garbage collection parameter.
   if (dcb->FcbGarbageCollectionIntervalMs > 0) {
-    if (dcb->FcbGarbageCollectionIntervalMs <
-        MIN_FCB_GARBAGE_COLLECTION_INTERVAL) {
-      DokanLogInfo(&logger,
-                   L"Not using FCB garbage collection because the"
+    if (dcb->FcbGarbageCollectionIntervalMs
+        < MIN_FCB_GARBAGE_COLLECTION_INTERVAL) {
+      DokanLogInfo(&logger, L"Not using FCB garbage collection because the"
                    L" specified interval of %lu is too low to be useful.",
                    dcb->FcbGarbageCollectionIntervalMs);
       dcb->FcbGarbageCollectionIntervalMs = 0;
