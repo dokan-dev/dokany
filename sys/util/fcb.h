@@ -27,10 +27,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern const UNICODE_STRING g_KeepAliveFileName;
 extern const UNICODE_STRING g_NotificationFileName;
 
-// Create a new instance of DokanFCB and insert in VolumeControlBlock Fcb list.
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                           __in ULONG FileNameLength);
-
 // Decrements the FileCount on the given Fcb, which either deletes it or
 // schedules it for garbage collection if the FileCount becomes 0.
 NTSTATUS
@@ -39,8 +35,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 // Return the FCB instance attached to the FileName if already present in the
 // VolumeControlBlock Fcb list.
 PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
-                      __in PWCHAR FileName, __in ULONG FileNameLength,
-                      BOOLEAN CaseSensitive);
+                      __in PWCHAR FileName, __in ULONG FileNameLength);
 
 // Starts the FCB garbage collector thread for the given volume. If the
 // Vcb->FcbGarbageCollectorThread is NULL after this then it could not be
@@ -71,6 +66,26 @@ BOOLEAN DokanForceFcbGarbageCollection(__in PDokanVCB Vcb);
 // helper by e.g. the garbage collector, and not by an I/O handling function.
 // The VCB and FCB must both be locked RW when this is called. After it returns,
 // do not unlock the FCB.
-VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
+VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
+                    __in BOOLEAN RemoveFromTable);
+
+// Comparison callback routine for the AVL table.
+// Both pointers are FCB. Return the compare result based on the FileName.
+RTL_GENERIC_COMPARE_RESULTS DokanCompareFcb(__in struct _RTL_AVL_TABLE* Table,
+                                            __in PVOID FirstStruct,
+                                            __in PVOID SecondStruct);
+
+// Allocation callback routine for the AVL table.
+// The size requested contains the AVL node header and the data.
+PVOID DokanAllocateFcbAvl(__in struct _RTL_AVL_TABLE* Table,
+                          __in CLONG ByteSize);
+
+// Deallocation callback routine for the AVL table.
+VOID DokanFreeFcbAvl(__in struct _RTL_AVL_TABLE* Table, __in PVOID Buffer);
+
+// Update the filename of the given Fcb.
+// The Vcb & Fcb must be acquired priore to the call.
+VOID DokanRenameFcb(__in PREQUEST_CONTEXT Request, __in PDokanFCB Fcb,
+                    __in PWCH FileName, __in USHORT FileNameLength);
 
 #endif  // FCB_H_

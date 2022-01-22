@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/fcb.h"
 #include "util/irp_buffer_helper.h"
 #include "util/str.h"
 
@@ -350,54 +351,51 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
   }
 }
 
-VOID FlushAllCachedFcb(__in PREQUEST_CONTEXT RequestContext,
-                       __in PDokanFCB fcbRelatedTo,
-                       __in_opt PFILE_OBJECT fileObject) {
-  PLIST_ENTRY thisEntry, nextEntry, listHead;
-  PDokanFCB fcb = NULL;
-
-  if (fcbRelatedTo == NULL) {
+VOID FlushIfDescendant(__in PREQUEST_CONTEXT RequestContext,
+                       __in PDokanFCB FcbRelatedTo, __in PDokanFCB Fcb) {
+  if (DokanFCBFlagsIsSet(Fcb, DOKAN_FILE_DIRECTORY)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "FCB=%p is directory so skip it.", Fcb);
     return;
   }
 
-  if (!DokanFCBFlagsIsSet(fcbRelatedTo, DOKAN_FILE_DIRECTORY)) {
+  DOKAN_LOG_FINE_IRP(RequestContext, "Check \"%wZ\" if is related to \"%wZ\"",
+                     &Fcb->FileName, &FcbRelatedTo->FileName);
+
+  if (!StartsWith(&Fcb->FileName, &FcbRelatedTo->FileName)) {
+    return;
+  }
+  DOKAN_LOG_FINE_IRP(RequestContext, "Flush \"%wZ\" if it is possible.",
+                     &Fcb->FileName);
+  FlushFcb(RequestContext, Fcb, NULL);
+}
+
+VOID FlushAllCachedFcb(__in PREQUEST_CONTEXT RequestContext,
+                       __in PDokanFCB FcbRelatedTo,
+                       __in_opt PFILE_OBJECT FileObject) {
+  if (FcbRelatedTo == NULL) {
+    return;
+  }
+
+  if (!DokanFCBFlagsIsSet(FcbRelatedTo, DOKAN_FILE_DIRECTORY)) {
     DOKAN_LOG_FINE_IRP(
         RequestContext,
         "FlushAllCachedFcb file passed in. Flush only: FCB=%p FileObject=%p.",
-        fcbRelatedTo, fileObject);
-    FlushFcb(RequestContext, fcbRelatedTo, fileObject);
+        FcbRelatedTo, FileObject);
+    FlushFcb(RequestContext, FcbRelatedTo, FileObject);
     return;
   }
 
-  DokanVCBLockRW(fcbRelatedTo->Vcb);
+  DokanVCBLockRW(FcbRelatedTo->Vcb);
 
-  listHead = &fcbRelatedTo->Vcb->NextFCB;
-
-  for (thisEntry = listHead->Flink; thisEntry != listHead;
-       thisEntry = nextEntry) {
-    nextEntry = thisEntry->Flink;
-
-    fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-
-    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "FCB=%p is directory so skip it.",
-                    fcb);
-      continue;
-    }
-
-    DOKAN_LOG_FINE_IRP(RequestContext, "Check \"%wZ\" if is related to \"%wZ\"", &fcb->FileName,
-                  &fcbRelatedTo->FileName);
-
-    if (StartsWith(&fcb->FileName, &fcbRelatedTo->FileName)) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "Flush \"%wZ\" if it is possible.",
-                    &fcb->FileName);
-      FlushFcb(RequestContext, fcb, NULL);
-    }
-
-    fcb = NULL;
+  for (PDokanFCB *fcbInTable = (PDokanFCB *)RtlEnumerateGenericTableAvl(
+           &RequestContext->Vcb->FcbTable, /*Restart=*/TRUE);
+       fcbInTable != NULL;
+       fcbInTable = (PDokanFCB *)RtlEnumerateGenericTableAvl(
+           &RequestContext->Vcb->FcbTable, /*Restart=*/FALSE)) {
+    FlushIfDescendant(RequestContext, FcbRelatedTo, *fcbInTable);
   }
 
-  DokanVCBUnlock(fcbRelatedTo->Vcb);
+  DokanVCBUnlock(FcbRelatedTo->Vcb);
 
   DOKAN_LOG_FINE_IRP(RequestContext, "Finished");
 }
@@ -846,7 +844,6 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
       if (infoClass == FileDispositionInformation ||
           infoClass == FileDispositionInformationEx) {
         if (EventInfo->Operation.Delete.DeleteOnClose) {
-
           if (!MmFlushImageSection(&fcb->SectionObjectPointers,
                                    MmFlushForDelete)) {
             DOKAN_LOG_FINE_IRP(RequestContext,
@@ -888,14 +885,9 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
           __leave;
         }
 
-        fcb->FileName.Buffer = buffer;
-        ASSERT(fcb->FileName.Buffer != NULL);
-
-        RtlCopyMemory(fcb->FileName.Buffer, EventInfo->Buffer,
-                      EventInfo->BufferLength);
-
-        fcb->FileName.Length = (USHORT)EventInfo->BufferLength;
-        fcb->FileName.MaximumLength = (USHORT)EventInfo->BufferLength;
+        RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+        DokanRenameFcb(RequestContext, fcb, buffer,
+                       (USHORT)EventInfo->BufferLength);
         DOKAN_LOG_FINE_IRP(RequestContext, "Fcb=%p renamed \"%wZ\"", fcb,
                            &fcb->FileName);
       }

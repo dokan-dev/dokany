@@ -364,7 +364,14 @@ typedef struct _DokanVolumeControlBlock {
   ERESOURCE Resource;
   PDEVICE_OBJECT DeviceObject;
   PDokanDCB Dcb;
-  LIST_ENTRY NextFCB;
+
+  // Avl Table storing the DokanFCB instances.
+  RTL_AVL_TABLE FcbTable;
+  // Lookaside list for the FCB Avl table node containing the Avl header and a
+  // pointer to our DokanFCB that is allocated by the global fcb lookaside list.
+  LOOKASIDE_LIST_EX FCBAvlNodeLookasideList;
+  // Whether the lookaside list was initialized.
+  BOOLEAN FCBAvlNodeLookasideListInit;
 
   // NotifySync is used by notify directory change
   PNOTIFY_SYNC NotifySync;
@@ -541,6 +548,12 @@ typedef struct _DokanFileControlBlock {
   // owned by the VCB and guarded by the VCB lock.
   BOOLEAN GarbageCollectionGracePeriodPassed;
 
+  // The Fcb was removed from the Avl table and is waiting to be deleted when
+  // all existing handles are being closed. This can happen when a file is
+  // renamed with the destination having an open handle. NTFS denies this action
+  // but due to a Dokan bug, this is actually possible. Until it is fixed, we
+  // reproduce the behavior prior to the Avl table.
+  BOOLEAN ReplacedByRename;
 } DokanFCB, *PDokanFCB;
 
 #define DokanResourceLockRO(resource)                                          \
@@ -1177,6 +1190,9 @@ VOID DokanCreateMountPoint(__in PDokanDCB Dcb);
 
 VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB fcb,
               __in_opt PFILE_OBJECT fileObject);
+
+BOOLEAN
+DokanLookasideCreate(__in LOOKASIDE_LIST_EX *pCache, __in size_t cbElement);
 
 PDEVICE_ENTRY
 FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);

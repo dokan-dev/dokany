@@ -366,6 +366,9 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
   DokanStopFcbGarbageCollectorThread(vcb);
   ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
+  if (vcb->FCBAvlNodeLookasideListInit) {
+    ExDeleteLookasideListEx(&vcb->FCBAvlNodeLookasideList);
+  }
   DokanCleanupAllChangeNotificationWaiters(vcb);
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext);
 

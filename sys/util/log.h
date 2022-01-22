@@ -139,6 +139,17 @@ VOID IncrementVcbLogCacheCount();
   DOKAN_LOG_INTERNAL(RequestContext, "[%p]: " Format,   \
                      (RequestContext ? RequestContext->Irp : 0), __VA_ARGS__)
 
+// Logging function that should be used in an VCB context.
+#define DOKAN_LOG_VCB(dVcb, Format, ...)                               \
+  do {                                                                 \
+    REQUEST_CONTEXT vcbRequestContext;                                 \
+    RtlZeroMemory(&vcbRequestContext, sizeof(REQUEST_CONTEXT));        \
+    vcbRequestContext.DoNotLogActivity = FALSE;                        \
+    vcbRequestContext.Vcb = (dVcb);                                    \
+    vcbRequestContext.Dcb = (dVcb)->Dcb;                               \
+    DOKAN_LOG_INTERNAL((&vcbRequestContext), ": " Format, __VA_ARGS__) \
+  } while (0)
+
 // Only allow logging events that are not pulling events to avoid unnecessary log
 // flood
 #define DOKAN_DENIED_LOG_EVENT(IrpSp)                                          \

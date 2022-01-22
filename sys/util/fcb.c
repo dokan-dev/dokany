@@ -28,126 +28,123 @@ const UNICODE_STRING g_NotificationFileName =
     RTL_CONSTANT_STRING(DOKAN_NOTIFICATION_FILE_NAME);
 
 // We must NOT call without VCB lock
-PDokanFCB DokanAllocateFCB(__in PDokanVCB Vcb, __in PWCHAR FileName,
-                           __in ULONG FileNameLength) {
-  PDokanFCB fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
-
-  // Try again if garbage collection frees up space. This is a no-op when
-  // garbage collection is disabled.
-  if (fcb == NULL && DokanForceFcbGarbageCollection(Vcb)) {
-    fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
-  }
-
-  if (fcb == NULL) {
-    return NULL;
-  }
-
-  ASSERT(Vcb != NULL);
-
-  RtlZeroMemory(fcb, sizeof(DokanFCB));
-
-  fcb->AdvancedFCBHeader.Resource =
+BOOLEAN DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
+                           __in PDokanFCB Fcb) {
+  Fcb->AdvancedFCBHeader.Resource =
       ExAllocateFromLookasideListEx(&g_DokanEResourceLookasideList);
-  if (fcb->AdvancedFCBHeader.Resource == NULL) {
-    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
-    return NULL;
+  if (Fcb->AdvancedFCBHeader.Resource == NULL) {
+    DOKAN_LOG_FINE_IRP(RequestContext,
+                       "Failed to allocate FCB ERESOURCE for %p", Fcb);
+    return FALSE;
   }
 
-  fcb->Identifier.Type = FCB;
-  fcb->Identifier.Size = sizeof(DokanFCB);
+  Fcb->Identifier.Type = FCB;
+  Fcb->Identifier.Size = sizeof(DokanFCB);
 
-  fcb->Vcb = Vcb;
+  Fcb->Vcb = RequestContext->Vcb;
 
-  ExInitializeResourceLite(&fcb->PagingIoResource);
-  ExInitializeResourceLite(fcb->AdvancedFCBHeader.Resource);
+  ExInitializeResourceLite(&Fcb->PagingIoResource);
+  ExInitializeResourceLite(Fcb->AdvancedFCBHeader.Resource);
 
-  ExInitializeFastMutex(&fcb->AdvancedFCBHeaderMutex);
+  ExInitializeFastMutex(&Fcb->AdvancedFCBHeaderMutex);
 
-  FsRtlSetupAdvancedHeader(&fcb->AdvancedFCBHeader,
-                           &fcb->AdvancedFCBHeaderMutex);
+  FsRtlSetupAdvancedHeader(&Fcb->AdvancedFCBHeader,
+                           &Fcb->AdvancedFCBHeaderMutex);
 
   // ValidDataLength not supported - initialize to 0x7fffffff / 0xffffffff
   // If fcb->Header.IsFastIoPossible was set the Cache manager would send
   // us a SetFilelnformation IRP to update this value
-  fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
+  Fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
 
-  fcb->AdvancedFCBHeader.PagingIoResource = &fcb->PagingIoResource;
+  Fcb->AdvancedFCBHeader.PagingIoResource = &Fcb->PagingIoResource;
 
-  fcb->AdvancedFCBHeader.AllocationSize.QuadPart = 4096;
-  fcb->AdvancedFCBHeader.FileSize.QuadPart = 4096;
+  Fcb->AdvancedFCBHeader.AllocationSize.QuadPart = 4096;
+  Fcb->AdvancedFCBHeader.FileSize.QuadPart = 4096;
 
-  fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
-  FsRtlInitializeOplock(DokanGetFcbOplock(fcb));
+  Fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
+  FsRtlInitializeOplock(DokanGetFcbOplock(Fcb));
 
-  fcb->FileName.Buffer = FileName;
-  fcb->FileName.Length = (USHORT)FileNameLength;
-  fcb->FileName.MaximumLength = (USHORT)FileNameLength;
+  InitializeListHead(&Fcb->NextCCB);
 
-  InitializeListHead(&fcb->NextCCB);
-  InsertTailList(&Vcb->NextFCB, &fcb->NextFCB);
+  InterlockedIncrement(&RequestContext->Vcb->FcbAllocated);
+  InterlockedAnd64(&RequestContext->Vcb->ValidFcbMask, (LONG64)Fcb);
+  ++RequestContext->Vcb->VolumeMetrics.FcbAllocations;
 
-  InterlockedIncrement(&Vcb->FcbAllocated);
-  InterlockedAnd64(&Vcb->ValidFcbMask, (LONG64)fcb);
-  ++Vcb->VolumeMetrics.FcbAllocations;
-  return fcb;
+  if (RtlEqualUnicodeString(&Fcb->FileName, &g_KeepAliveFileName, FALSE)) {
+    Fcb->IsKeepalive = TRUE;
+    Fcb->BlockUserModeDispatch = TRUE;
+  }
+  if (RtlEqualUnicodeString(&Fcb->FileName, &g_NotificationFileName, FALSE)) {
+    Fcb->BlockUserModeDispatch = TRUE;
+  }
+  return TRUE;
 }
 
-PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext, __in PWCHAR FileName,
-                      __in ULONG FileNameLength, BOOLEAN CaseSensitive) {
-  PLIST_ENTRY thisEntry, nextEntry, listHead;
+PDokanFCB GetOrCreateUninitializedFcb(__in PREQUEST_CONTEXT RequestContext,
+                                      __in PUNICODE_STRING FileName,
+                                      __in PBOOLEAN NewElement) {
   PDokanFCB fcb = NULL;
+
+  fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
+  // Try again if garbage collection frees up space. This is a no-op when
+  // garbage collection is disabled.
+  if (fcb == NULL && DokanForceFcbGarbageCollection(RequestContext->Vcb)) {
+    fcb = ExAllocateFromLookasideListEx(&g_DokanFCBLookasideList);
+  }
+  if (fcb == NULL) {
+    return NULL;
+  }
+  RtlZeroMemory(fcb, sizeof(DokanFCB));
+  fcb->FileName = *FileName;
+
+  PDokanFCB *fcbInTable = (PDokanFCB *)RtlInsertElementGenericTableAvl(
+      &RequestContext->Vcb->FcbTable, &fcb, sizeof(PDokanFCB), NewElement);
+  if (!fcbInTable) {
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
+    return NULL;
+  }
+  if (!(*NewElement)) {
+    ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
+  }
+  return *fcbInTable;
+}
+
+PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
+                      __in PWCHAR FileName, __in ULONG FileNameLength) {
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
 
   UNREFERENCED_PARAMETER(RequestContext);
 
   DokanVCBLockRW(RequestContext->Vcb);
 
-  // search the FCB which is already allocated
-  // (being used now)
-  listHead = &RequestContext->Vcb->NextFCB;
-
-  for (thisEntry = listHead->Flink; thisEntry != listHead;
-       thisEntry = nextEntry) {
-
-    nextEntry = thisEntry->Flink;
-
-    fcb = CONTAINING_RECORD(thisEntry, DokanFCB, NextFCB);
-    DOKAN_LOG_FINE_IRP(RequestContext, "Has entry FCB=%p FileName=\"%wZ\" FileCount: %lu", fcb,
-                  &fcb->FileName, fcb->FileCount);
-    if (fcb->FileName.Length == FileNameLength  // FileNameLength in bytes
-        && RtlEqualUnicodeString(&fn, &fcb->FileName, !CaseSensitive)) {
-      // we have the FCB which is already allocated and used
-      DOKAN_LOG_FINE_IRP(RequestContext, "Found existing FCB=%p", fcb);
-      break;
-    }
-
-    fcb = NULL;
+  BOOLEAN newElement = FALSE;
+  PDokanFCB fcb = GetOrCreateUninitializedFcb(RequestContext, &fn, &newElement);
+  if (!fcb) {
+    ExFreePool(FileName);
+    DOKAN_LOG_FINE_IRP(RequestContext, "Failed to find or allocate FCB for %wZ",
+                       &fn);
+    DokanVCBUnlock(RequestContext->Vcb);
+    return NULL;
   }
 
-  // we don't have FCB
-  if (fcb == NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "No matching FCB found.");
-    fcb = DokanAllocateFCB(RequestContext->Vcb, FileName, FileNameLength);
-
-    // no memory?
-    if (fcb == NULL) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "Failed to allocate FCB");
+  if (newElement) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "New FCB %p allocated for %wZ", fcb,
+                       &fcb->FileName);
+    if (!DokanInitializeFcb(RequestContext, fcb)) {
+      BOOLEAN removed =
+          RtlDeleteElementGenericTableAvl(&RequestContext->Vcb->FcbTable, &fcb);
+      ASSERT(removed);
+      UNREFERENCED_PARAMETER(removed);
+      DOKAN_LOG_FINE_IRP(RequestContext, "Failed to init FCB %p for %wZ", fcb,
+                         &fcb->FileName);
       ExFreePool(FileName);
+      ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
       DokanVCBUnlock(RequestContext->Vcb);
       return NULL;
     }
-
-    ASSERT(fcb != NULL);
-    if (RtlEqualUnicodeString(&fcb->FileName, &g_KeepAliveFileName, FALSE)) {
-      fcb->IsKeepalive = TRUE;
-      fcb->BlockUserModeDispatch = TRUE;
-    }
-    if (RtlEqualUnicodeString(&fcb->FileName, &g_NotificationFileName, FALSE)) {
-      fcb->BlockUserModeDispatch = TRUE;
-    }
-
-    // we already have FCB
   } else {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Found existing FCB %p for %wZ", fcb,
+                       &fcb->FileName);
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
@@ -202,7 +199,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   if (InterlockedDecrement(&Fcb->FileCount) == 0 &&
       !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
     // We get here when garbage collection is disabled.
-    DokanDeleteFcb(Vcb, Fcb);
+    DokanDeleteFcb(Vcb, Fcb, /*RemoveFromTable=*/!Fcb->ReplacedByRename);
   } else {
     DokanFCBUnlock(Fcb);
   }
@@ -211,12 +208,18 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   return STATUS_SUCCESS;
 }
 
-VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
+VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
+                    __in BOOLEAN DeleteFromTable) {
   ++Vcb->VolumeMetrics.FcbDeletions;
-  RemoveEntryList(&Fcb->NextFCB);
+
+  if (DeleteFromTable) {
+    BOOLEAN removed = RtlDeleteElementGenericTableAvl(&Vcb->FcbTable, &Fcb);
+    ASSERT(removed);
+    UNREFERENCED_PARAMETER(removed);
+  }
   InitializeListHead(&Fcb->NextCCB);
 
-  DOKAN_LOG_("Free FCB:%p", Fcb);
+  DOKAN_LOG_("Free FCB %p", Fcb);
 
   ExFreePool(Fcb->FileName.Buffer);
   Fcb->FileName.Buffer = NULL;
@@ -242,6 +245,9 @@ BOOLEAN DokanScheduleFcbForGarbageCollection(__in PDokanVCB Vcb,
                                              __in PDokanFCB Fcb) {
   DOKAN_INIT_LOGGER(logger, Vcb->Dcb->DeviceObject->DriverObject, 0);
   if (Vcb->FcbGarbageCollectorThread == NULL) {
+    return FALSE;
+  }
+  if (Fcb->ReplacedByRename) {
     return FALSE;
   }
   if (Fcb->NextGarbageCollectableFcb.Flink != NULL) {
@@ -280,6 +286,13 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
   NewFileName->Length = 0;
 }
 
+VOID GarbageCollectFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
+                       __in BOOLEAN RemoveFromTable) {
+  RemoveEntryList(&Fcb->NextGarbageCollectableFcb);
+  DokanFCBLockRW(Fcb);
+  DokanDeleteFcb(Vcb, Fcb, RemoveFromTable);
+}
+
 // Called with the VCB locked. Immediately deletes the FCBs that are ready to
 // delete. Returns how many are skipped due to having been scheduled too
 // recently. If Force is TRUE then all the scheduled ones are deleted, and the
@@ -298,9 +311,7 @@ ULONG DeleteFcbGarbageAndGetRemainingCount(__in PDokanVCB Vcb,
     // that there is a guaranteed window of possible reuse, which achieves the
     // performance gains we are aiming for with GC.
     if (Force || nextFcb->GarbageCollectionGracePeriodPassed) {
-      RemoveEntryList(thisEntry);
-      DokanFCBLockRW(nextFcb);
-      DokanDeleteFcb(Vcb, nextFcb);
+      GarbageCollectFCB(Vcb, nextFcb, /*RemoveFromTable=*/TRUE);
     } else {
       nextFcb->GarbageCollectionGracePeriodPassed = TRUE;
       ++remainingCount;
@@ -418,4 +429,76 @@ void DokanStartFcbGarbageCollector(PDokanVCB Vcb) {
                             (PVOID *)&Vcb->FcbGarbageCollectorThread, NULL);
 
   ZwClose(thread);
+}
+
+RTL_GENERIC_COMPARE_RESULTS DokanCompareFcb(__in struct _RTL_AVL_TABLE *Table,
+                                            __in PVOID FirstStruct,
+                                            __in PVOID SecondStruct) {
+  PDokanVCB vcb = (PDokanVCB)Table->TableContext;
+  PDokanFCB firstFcb = *(PDokanFCB *)FirstStruct;
+  PDokanFCB secondFcb = *(PDokanFCB *)SecondStruct;
+  LONG result = RtlCompareUnicodeString(
+      &firstFcb->FileName, &secondFcb->FileName,
+      !(vcb->Dcb->MountOptions & DOKAN_EVENT_CASE_SENSITIVE));
+  DOKAN_LOG_VCB(vcb, "First: %p %wZ Second: %p %wZ - Result: %ld", firstFcb,
+                &firstFcb->FileName, secondFcb, &secondFcb->FileName, result);
+  if (result < 0) {
+    return GenericLessThan;
+  } else if (result > 0) {
+    return GenericGreaterThan;
+  }
+  return GenericEqual;
+}
+
+PVOID DokanAllocateFcbAvl(__in struct _RTL_AVL_TABLE *Table,
+                          __in CLONG ByteSize) {
+  PDokanVCB vcb = (PDokanVCB)Table->TableContext;
+  if (!vcb->FCBAvlNodeLookasideListInit) {
+    if (!DokanLookasideCreate(&vcb->FCBAvlNodeLookasideList, ByteSize)) {
+      DOKAN_LOG_VCB(vcb,
+                    "DokanLookasideCreate VCB FCBAvlNodeLookasideList failed.");
+      return NULL;
+    }
+    vcb->FCBAvlNodeLookasideListInit = TRUE;
+  }
+  return ExAllocateFromLookasideListEx(&vcb->FCBAvlNodeLookasideList);
+}
+
+VOID DokanFreeFcbAvl(__in struct _RTL_AVL_TABLE *Table, __in PVOID Buffer) {
+  PDokanVCB vcb = (PDokanVCB)Table->TableContext;
+  ExFreeToLookasideListEx(&vcb->FCBAvlNodeLookasideList, Buffer);
+}
+
+VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
+                    __in PWCH FileName, __in USHORT FileNameLength) {
+  BOOLEAN removed =
+      RtlDeleteElementGenericTableAvl(&RequestContext->Vcb->FcbTable, &Fcb);
+  ASSERT(removed);
+  UNREFERENCED_PARAMETER(removed);
+
+  Fcb->FileName = DokanWrapUnicodeString(FileName, FileNameLength);
+
+  BOOLEAN newElement = FALSE;
+  PDokanFCB *fcbInTable = (PDokanFCB *)RtlInsertElementGenericTableAvl(
+      &RequestContext->Vcb->FcbTable, &Fcb, sizeof(PDokanFCB), &newElement);
+  ASSERT(fcbInTable);
+  if (newElement) {
+    return;
+  }
+
+  PDokanFCB conflictingFcb = *fcbInTable;
+  ASSERT(!conflictingFcb->ReplacedByRename);
+  // An Fcb with the same name already exists in the table and needs to be
+  // removed to allow the new Fcb to take over.
+  if (conflictingFcb->NextGarbageCollectableFcb.Flink) {
+    // The Fcb is pending GC. Force it's deletion now.
+    GarbageCollectFCB(RequestContext->Vcb, conflictingFcb,
+                      /*RemoveFromTable=*/FALSE);
+  } else {
+    // This cannot happen on NTFS. See Fcb::PendingDeletion doc.
+    conflictingFcb->ReplacedByRename = TRUE;
+  }
+
+  // Reinsert the Fcb with the updated name
+  *fcbInTable = Fcb;
 }

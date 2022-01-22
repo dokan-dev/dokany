@@ -858,7 +858,8 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
     DokanStartFcbGarbageCollector(vcb);
   }
 
-  InitializeListHead(&vcb->NextFCB);
+  RtlInitializeGenericTableAvl(&vcb->FcbTable, DokanCompareFcb,
+                               DokanAllocateFcbAvl, DokanFreeFcbAvl, vcb);
 
   InitializeListHead(&vcb->DirNotifyList);
   FsRtlNotifyInitializeSync(&vcb->NotifySync);
