@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokan.h"
+#include "util/irp_buffer_helper.h"
 #include "util/mountmgr.h"
 #include "util/str.h"
 
@@ -571,14 +572,13 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
     for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
          listEntry != &RequestContext->DokanGlobal->MountPointList;
          listEntry = listEntry->Flink, ++i) {
-      if (RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength <
-          (sizeof(DOKAN_MOUNT_POINT_INFO) * (i + 1))) {
+      if (!ExtendOutputBufferBySize(RequestContext->Irp,
+                                    sizeof(DOKAN_MOUNT_POINT_INFO),
+                                    /*UpdateInformationOnFailure=*/FALSE)) {
         status = STATUS_BUFFER_OVERFLOW;
         __leave;
       }
 
-      RequestContext->Irp->IoStatus.Information =
-          sizeof(DOKAN_MOUNT_POINT_INFO) * (i + 1);
       mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
 
       dokanMountPointInfo[i].Type = mountEntry->MountControl.Type;
@@ -597,7 +597,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     status = STATUS_SUCCESS;
-  } finally {
+  } __finally {
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
   }
 
