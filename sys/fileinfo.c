@@ -797,181 +797,134 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
                                  __in PEVENT_INFORMATION EventInfo) {
   PDokanCCB ccb;
   PDokanFCB fcb = NULL;
-  UNICODE_STRING oldFileName;
-  BOOLEAN fcbLocked = FALSE;
-  BOOLEAN vcbLocked = FALSE;
   FILE_INFORMATION_CLASS infoClass;
 
-  __try {
-    RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
-    RequestContext->Irp->IoStatus.Status = EventInfo->Status;
+  RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+  RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 
-    ccb = RequestContext->IrpSp->FileObject->FsContext2;
-    ASSERT(ccb != NULL);
+  ccb = RequestContext->IrpSp->FileObject->FsContext2;
+  ASSERT(ccb != NULL);
 
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&ccb->Resource, TRUE);
+  infoClass = RequestContext->IrpSp->Parameters.SetFile.FileInformationClass;
+  DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p infoClass=%s",
+                     RequestContext->IrpSp->FileObject,
+                     DokanGetFileInformationClassStr(infoClass));
 
-    fcb = ccb->Fcb;
-    ASSERT(fcb != NULL);
+  ccb->UserContext = EventInfo->Context;
 
-    infoClass = RequestContext->IrpSp->Parameters.SetFile.FileInformationClass;
-    DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p infoClass=%s",
-                       RequestContext->IrpSp->FileObject,
-                       DokanGetFileInformationClassStr(infoClass));
+  if (!NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
+    return;
+  }
 
-    // Note that we do not acquire the resource for paging file
-    // operations in order to avoid deadlock with Mm
-    if (!(RequestContext->Irp->Flags & IRP_PAGING_IO)) {
-      // If we are going to change the FileName on the FCB, then we want the VCB
-      // locked so that we don't race with the loop in create.c that searches
-      // currently open FCBs for a matching name. However, we need to lock that
-      // before the FCB so that the lock order is consistent everywhere.
-      if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status) &&
-          infoClass == FileRenameInformation) {
-        DokanVCBLockRW(fcb->Vcb);
-        vcbLocked = TRUE;
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
+
+  switch (RequestContext->IrpSp->Parameters.SetFile.FileInformationClass) {
+  case FileAllocationInformation:
+    DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                            FILE_ACTION_MODIFIED);
+    break;
+  case FileBasicInformation:
+    DokanNotifyReportChange(
+        RequestContext, fcb,
+        FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_LAST_WRITE |
+            FILE_NOTIFY_CHANGE_LAST_ACCESS | FILE_NOTIFY_CHANGE_CREATION,
+        FILE_ACTION_MODIFIED);
+    break;
+  case FileDispositionInformation:
+  case FileDispositionInformationEx: {
+    if (EventInfo->Operation.Delete.DeleteOnClose) {
+      // Note that we do not acquire the resource for paging file
+      // operations in order to avoid deadlock with Mm
+      BOOLEAN fcbLocked = !(RequestContext->Irp->Flags & IRP_PAGING_IO);
+      if (fcbLocked) {
+        DokanFCBLockRW(fcb);
       }
-      DokanFCBLockRW(fcb);
-      fcbLocked = TRUE;
+      if (!MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForDelete)) {
+        DOKAN_LOG_FINE_IRP(RequestContext, "Cannot delete user mapped image");
+        RequestContext->Irp->IoStatus.Status = STATUS_CANNOT_DELETE;
+      } else {
+        DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+        DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+        DOKAN_LOG_FINE_IRP(RequestContext, "FileObject->DeletePending = TRUE");
+        RequestContext->IrpSp->FileObject->DeletePending = TRUE;
+      }
+      if (fcbLocked) {
+        DokanFCBUnlock(fcb);
+      }
+    } else {
+      DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
+      DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
+      DOKAN_LOG_FINE_IRP(RequestContext, "FileObject->DeletePending = FALSE");
+      RequestContext->IrpSp->FileObject->DeletePending = FALSE;
     }
-
-    ccb->UserContext = EventInfo->Context;
-
-    RtlZeroMemory(&oldFileName, sizeof(UNICODE_STRING));
-
-    if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
-      if (infoClass == FileDispositionInformation ||
-          infoClass == FileDispositionInformationEx) {
-        if (EventInfo->Operation.Delete.DeleteOnClose) {
-          if (!MmFlushImageSection(&fcb->SectionObjectPointers,
-                                   MmFlushForDelete)) {
-            DOKAN_LOG_FINE_IRP(RequestContext,
-                               "Cannot delete user mapped image");
-            RequestContext->Irp->IoStatus.Status = STATUS_CANNOT_DELETE;
-          } else {
-            DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
-            DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-            DOKAN_LOG_FINE_IRP(RequestContext,
-                               "FileObject->DeletePending = TRUE");
-            RequestContext->IrpSp->FileObject->DeletePending = TRUE;
-          }
-
-        } else {
-          DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
-          DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
-          DOKAN_LOG_FINE_IRP(RequestContext,
-                             "FileObject->DeletePending = FALSE");
-          RequestContext->IrpSp->FileObject->DeletePending = FALSE;
-        }
-      }
-
-      // if rename is executed, reassign the file name
-      if (infoClass == FileRenameInformation ||
-          infoClass == FileRenameInformationEx) {
-        PVOID buffer = NULL;
-
-        // this is used to inform rename in the bellow switch case
-        oldFileName.Buffer = fcb->FileName.Buffer;
-        oldFileName.Length = (USHORT)fcb->FileName.Length;
-        oldFileName.MaximumLength = (USHORT)fcb->FileName.Length;
-
-        // copy new file name
-        buffer = DokanAllocZero(EventInfo->BufferLength + sizeof(WCHAR));
-        if (buffer == NULL) {
-          RequestContext->Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-          ExReleaseResourceLite(&ccb->Resource);
-          KeLeaveCriticalRegion();
-          __leave;
-        }
-
-        RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-        DokanRenameFcb(RequestContext, fcb, buffer,
-                       (USHORT)EventInfo->BufferLength);
-        DOKAN_LOG_FINE_IRP(RequestContext, "Fcb=%p renamed \"%wZ\"", fcb,
-                           &fcb->FileName);
+    if (RequestContext->IrpSp->FileObject->DeletePending) {
+      if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+        DokanNotifyReportChange(RequestContext, fcb,
+                                FILE_NOTIFY_CHANGE_DIR_NAME,
+                                FILE_ACTION_REMOVED);
+      } else {
+        DokanNotifyReportChange(RequestContext, fcb,
+                                FILE_NOTIFY_CHANGE_FILE_NAME,
+                                FILE_ACTION_REMOVED);
       }
     }
-
-    ExReleaseResourceLite(&ccb->Resource);
-    KeLeaveCriticalRegion();
-
-    if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
-      switch (RequestContext->IrpSp->Parameters.SetFile.FileInformationClass) {
-        case FileAllocationInformation:
-          DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                  FILE_ACTION_MODIFIED);
-          break;
-        case FileBasicInformation:
-          DokanNotifyReportChange(
-              RequestContext, fcb,
-              FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_LAST_WRITE |
-                  FILE_NOTIFY_CHANGE_LAST_ACCESS | FILE_NOTIFY_CHANGE_CREATION,
-              FILE_ACTION_MODIFIED);
-          break;
-        case FileDispositionInformation:
-        case FileDispositionInformationEx:
-         if (RequestContext->IrpSp->FileObject->DeletePending) {
-            if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-              DokanNotifyReportChange(RequestContext, fcb,
-                                      FILE_NOTIFY_CHANGE_DIR_NAME,
-                                      FILE_ACTION_REMOVED);
-            } else {
-              DokanNotifyReportChange(RequestContext, fcb,
-                                      FILE_NOTIFY_CHANGE_FILE_NAME,
-                                      FILE_ACTION_REMOVED);
-            }
-          }
-          break;
-        case FileEndOfFileInformation:
-          DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                  FILE_ACTION_MODIFIED);
-          break;
-        case FileRenameInformationEx:
-        case FileRenameInformation: {
-          if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
-            DokanNotifyReportChange0(
-                RequestContext, fcb, &oldFileName,
-                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                    ? FILE_NOTIFY_CHANGE_DIR_NAME
-                    : FILE_NOTIFY_CHANGE_FILE_NAME,
-                FILE_ACTION_RENAMED_OLD_NAME);
-            DokanNotifyReportChange(
-                RequestContext, fcb,
-                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                    ? FILE_NOTIFY_CHANGE_DIR_NAME
-                    : FILE_NOTIFY_CHANGE_FILE_NAME,
-                FILE_ACTION_RENAMED_NEW_NAME);
-          } else {
-            DokanNotifyReportChange0(
-                RequestContext, fcb, &oldFileName,
-                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                    ? FILE_NOTIFY_CHANGE_DIR_NAME
-                    : FILE_NOTIFY_CHANGE_FILE_NAME,
-                FILE_ACTION_REMOVED);
-            DokanNotifyReportChange(
-                RequestContext, fcb,
-                DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
-                    ? FILE_NOTIFY_CHANGE_DIR_NAME
-                    : FILE_NOTIFY_CHANGE_FILE_NAME,
-                FILE_ACTION_ADDED);
-          }
-          // free old file name
-          ExFreePool(oldFileName.Buffer);
-        } break;
-        case FileValidDataLengthInformation:
-          DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
-                                  FILE_ACTION_MODIFIED);
-          break;
-      }
-    }
-
-  } __finally {
-    if (fcbLocked) {
+  } break;
+  case FileEndOfFileInformation:
+    DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                            FILE_ACTION_MODIFIED);
+    break;
+  case FileRenameInformationEx:
+  case FileRenameInformation: {
+    DokanFCBLockRW(fcb);
+    // Process rename
+    UNICODE_STRING oldFileName =
+        DokanWrapUnicodeString(fcb->FileName.Buffer, fcb->FileName.Length);
+    // Copy new file name
+    PVOID buffer = DokanAllocZero(EventInfo->BufferLength + sizeof(WCHAR));
+    if (buffer == NULL) {
+      RequestContext->Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
       DokanFCBUnlock(fcb);
+      return;
     }
-    if (vcbLocked) {
-      DokanVCBUnlock(fcb->Vcb);
+    RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+    DokanVCBLockRW(RequestContext->Vcb);
+    DokanRenameFcb(RequestContext, fcb, buffer,
+                   (USHORT)EventInfo->BufferLength);
+    DokanVCBUnlock(RequestContext->Vcb);
+    DOKAN_LOG_FINE_IRP(RequestContext, "Fcb=%p renamed \"%wZ\"", fcb,
+                       &fcb->FileName);
+    DokanFCBUnlock(fcb);
+    // Notify rename
+    if (IsInSameDirectory(&oldFileName, &fcb->FileName)) {
+      DokanNotifyReportChange0(RequestContext, fcb, &oldFileName,
+                               DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                   ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                   : FILE_NOTIFY_CHANGE_FILE_NAME,
+                               FILE_ACTION_RENAMED_OLD_NAME);
+      DokanNotifyReportChange(RequestContext, fcb,
+                              DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                  ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                  : FILE_NOTIFY_CHANGE_FILE_NAME,
+                              FILE_ACTION_RENAMED_NEW_NAME);
+    } else {
+      DokanNotifyReportChange0(RequestContext, fcb, &oldFileName,
+                               DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                   ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                   : FILE_NOTIFY_CHANGE_FILE_NAME,
+                               FILE_ACTION_REMOVED);
+      DokanNotifyReportChange(RequestContext, fcb,
+                              DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)
+                                  ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                  : FILE_NOTIFY_CHANGE_FILE_NAME,
+                              FILE_ACTION_ADDED);
     }
+    // free old file name
+    ExFreePool(oldFileName.Buffer);
+  } break;
+  case FileValidDataLengthInformation:
+    DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
+                            FILE_ACTION_MODIFIED);
+    break;
   }
 }

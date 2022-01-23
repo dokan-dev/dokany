@@ -725,8 +725,6 @@ BOOLEAN DokanVCBTryLockRW(PDokanVCB vcb);
 typedef struct _DokanContextControlBlock {
   // Locking: Read only field. No locking needed.
   FSD_IDENTIFIER Identifier;
-  // Locking: Main lock for CCBs.
-  ERESOURCE Resource;
   // Locking: Read only field. No locking needed.
   PDokanFCB Fcb;
   // Locking: Modified with the *FCB* lock held.

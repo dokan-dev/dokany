@@ -49,7 +49,6 @@ PDokanCCB DokanAllocateCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB 
 
   ccb->Fcb = Fcb;
   DOKAN_LOG_FINE_IRP(RequestContext, "Allocated CCB");
-  ExInitializeResourceLite(&ccb->Resource);
 
   InitializeListHead(&ccb->NextCCB);
 
@@ -103,8 +102,6 @@ DokanFreeCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB ccb) {
   }
 
   DokanFCBUnlock(fcb);
-
-  ExDeleteResourceLite(&ccb->Resource);
 
   if (ccb->SearchPattern) {
     ExFreePool(ccb->SearchPattern);
