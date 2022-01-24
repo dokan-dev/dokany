@@ -31,7 +31,7 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
   ULONG eventInfoSize;
   WCHAR rawDeviceName[MAX_PATH];
 
-  ioEvent = FileInfo->DokanContext;
+  ioEvent = (PDOKAN_IO_EVENT)(UINT_PTR)FileInfo->DokanContext;
   if (ioEvent->EventContext == NULL || ioEvent->DokanInstance == NULL) {
     SetLastError(ERROR_INVALID_PARAMETER);
     return INVALID_HANDLE_VALUE;
