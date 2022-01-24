@@ -3,6 +3,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.1.1000] - 2021-01-23
+
+### Added
+- Kernel - Use the Rtl API to store DokanFCB in a Adelson-Velsky/Landis(AVL) table
+
+### Fixed
+- Kernel - Fix possible `PullEvents` infinite loop.
+- Kernel - Fix crash when v2 and v1 are installed.
+- Kernel - Make `RemoveSessionDevices` thread safe.
+- Library - Fix `OpenRequestToken` crash when called outside `CreateFile`.
+- Kernel - Fix subfolder property when using mount manager.
+
+### Changed
+- Installer - Allow installation side to side with 1.x.x.
+- Library / Kernel - Enforce UNC usage with network drive option.
+- Memfs - Update mount point in memfs after mount in case it changes.
+- Library - Silence expected failures during unmount and make `DeleteDokanInstance` safer.
+- Memfs - Use the new mount async API.
+- Kernel - Release `NotifyEvent` memory on unmount.
+- Kernel - Use IRP buffer fct for `GetMountPointList`.
+- Kernel - Cleanup `SetInformation` completion and remove `DokanCCB::ERESOURCE`.
+
 ## [2.0.0.2000] - 2021-01-01
 
 ### Fixed
