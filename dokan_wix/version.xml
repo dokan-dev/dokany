@@ -6,7 +6,7 @@
 <?define ProductCodeX86="{DB21E410-4FE3-0200-0001-220123221346}" ?>
 <?define UpgradeCodeX86="{2EF80C86-08A6-4FE1-BE92-13FD293C831B}" ?>
 <?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
-<?define BundleUpgradeCode="{A30D29CD-FA58-4542-8D41-7EDD1FB1EE5A}" ?>
+<?define BundleUpgradeCode="{832B1FAC-B29B-4DDC-A449-007F63A4A1EF}" ?>
 <?define BaseVersion="2.0.1" ?>
 <?define MajorVersion="2" ?>
 <?define BuildVersion="1000" ?>
