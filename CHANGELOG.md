@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.1.2000] - 2021-01-28
+
+### Fixed
+- Installer - Set new BundleUpgradeCode for v2.
+- Kernel - Lock Fcb during setFileInfo notify report change
+
 ## [2.0.1.1000] - 2021-01-23
 
 ### Added
@@ -610,6 +616,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.0.1.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.1.1000...v2.0.1.2000
 [2.0.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.0.2000...v2.0.1.1000
 [2.0.0.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.0.1000...v2.0.0.2000
 [2.0.0.1000]: https://github.com/dokan-dev/dokany/compare/v1.5.1.1000...v2.0.0.1000
