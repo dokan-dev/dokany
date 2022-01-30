@@ -564,7 +564,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo;
   USHORT i = 0;
 
-  try {
+  __try {
     ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
                                    TRUE);
     dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)
