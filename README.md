@@ -41,9 +41,9 @@ As better threading and memory poll were added in v2, it is expected that concur
 
 A sample of the results:
 ```
-Create New      |  +13.55% | List           |  +60.69% | GetAttributes |  +48.78% | Read | +16-28% |
-Open/Overwrite  | +153.41% | ListExactFiles | +131.91% | SetAttributes | +120.91% | Read |  +9-24% |
-RandomOpenClose | +173.05% |                |          | Delete        |  +90.83% |      |         |
+Create New      |  +13.55% | List          |  +60.69% | GetAttributes |  +48.78% | Read  | +16-28% |
+Open/Overwrite  | +153.41% | ListExactFile | +131.91% | SetAttributes | +120.91% | Write |  +2-24% |
+RandomOpenClose | +173.05% |               |          | Delete        |  +90.83% |       |         |
 ```
 
 ## Licensing
