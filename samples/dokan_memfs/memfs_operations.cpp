@@ -463,15 +463,24 @@ static NTSTATUS DOKAN_CALLBACK memfs_setfileattributes(
                fileattributes);
   if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
 
-  // No attributes need to be changed
-  if (fileattributes == 0) return STATUS_SUCCESS;
+  // from https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileattributesw
+  DWORD const attributes_allowed_to_set =
+      FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NORMAL |
+      FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_OFFLINE |
+      FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM |
+      FILE_ATTRIBUTE_TEMPORARY;
 
-  // FILE_ATTRIBUTE_NORMAL is override if any other attribute is set
-  if (fileattributes & FILE_ATTRIBUTE_NORMAL &&
-      (fileattributes & (fileattributes - 1)))
-    fileattributes &= ~FILE_ATTRIBUTE_NORMAL;
+  fileattributes &= attributes_allowed_to_set;
 
-  f->attributes = fileattributes;
+  DWORD new_file_attributes =
+      (f->attributes & ~attributes_allowed_to_set) | fileattributes;
+
+  // FILE_ATTRIBUTE_NORMAL is overriden if any other attribute is set
+  if ((new_file_attributes & FILE_ATTRIBUTE_NORMAL) &&
+      (new_file_attributes & ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL)))
+    new_file_attributes &= ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL);
+
+  f->attributes = new_file_attributes;
   return STATUS_SUCCESS;
 }
 
