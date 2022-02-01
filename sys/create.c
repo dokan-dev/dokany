@@ -48,7 +48,7 @@ PDokanCCB DokanAllocateCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB 
   ccb->Identifier.Size = sizeof(DokanCCB);
 
   ccb->Fcb = Fcb;
-  DOKAN_LOG_FINE_IRP(RequestContext, "Allocated CCB");
+  DOKAN_LOG_FINE_IRP(RequestContext, "Allocated CCB=%p", ccb);
 
   InitializeListHead(&ccb->NextCCB);
 
