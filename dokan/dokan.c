@@ -428,6 +428,8 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
     inputBuffer = (PCHAR)eventInfo;
     eventInfoSize =
         GetEventInfoSize(IoEvent->EventContext->MajorFunction, eventInfo);
+    eventInfo->PullEventTimeoutMs =
+        IoBatch->MainPullThread ? /*infinite*/ 0 : DOKAN_PULL_EVENT_TIMEOUT_MS;
     PushIoBatchBuffer(IoEvent->IoBatch);
     PushIoEventBuffer(IoEvent);
     DbgPrint(
@@ -477,6 +479,8 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
   PDOKAN_INSTANCE dokanInstance = ioEvent->DokanInstance;
   PDOKAN_IO_BATCH ioBatch = NULL;
   BOOL mainPullThread = ioEvent->EventContext == NULL;
+  BOOL processEventOnCurrentThread =
+      !mainPullThread || dokanInstance->DokanOptions->SingleThread;
 
   while (TRUE) {
     // 6 - Process events coming from:
@@ -484,16 +488,13 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
     // - New pool thread that just started with a dispatched event.
     // Note: Main pull thread does not have an EventContext when started.
     if (ioEvent && ioEvent->EventContext) {
+      assert(!mainPullThread);
       DispatchEvent(ioEvent);
       if (!ioEvent->EventResult) {
         // Some events like Close() do not have event results.
-        // Release the resource and terminate here unless we are the main pulling thread.
+        // Release the resource and terminate here.
         PushIoBatchBuffer(ioEvent->IoBatch);
         PushIoEventBuffer(ioEvent);
-        if (mainPullThread) {
-          ioEvent = NULL;
-          continue;
-        }
         return;
       }
     }
@@ -543,10 +544,12 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
       --eventContextBatchCount;
       // It is unsafe to access the context from here after Queuing the event.
       context = (PEVENT_CONTEXT)((PCHAR)(context) + context->Length);
-      // 4 - All batched events are dispatched to the thread pool except the last event that is executed on the current thread.
+      // 4 - All batched events are dispatched to the thread pool except the last event
+      // that is executed on the current thread if we are not the main pull thread.
       // Note: Single thread mode has batching disabled and therefore only has one event which is executed on the main thread.
-      if (eventContextBatchCount) {
+      if (eventContextBatchCount || !processEventOnCurrentThread) {
         QueueIoEvent(ioEvent);
+        ioEvent = NULL;
       }
     }
   }
@@ -853,8 +856,6 @@ VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo) {
 
   IoEvent->EventResult->SerialNumber = IoEvent->EventContext->SerialNumber;
   IoEvent->EventResult->Context = IoEvent->EventContext->Context;
-  IoEvent->EventResult->PullEventTimeoutMs =
-      IoEvent->IoBatch->MainPullThread ? /*ms*/ 100 : 0;
 }
 
 VOID ReleaseDokanOpenInfo(PDOKAN_IO_EVENT IoEvent) {
