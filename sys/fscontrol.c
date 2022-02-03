@@ -535,23 +535,26 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
       (PEVENT_INFORMATION)(RequestContext->Irp->AssociatedIrp.SystemBuffer);
   ULONG waitTimeoutMs =
       status == STATUS_BUFFER_TOO_SMALL ? 0 : eventInfo->PullEventTimeoutMs;
-  PLIST_ENTRY listEntry;
   LARGE_INTEGER timeout;
-  KeQuerySystemTime(&timeout);
-  timeout.QuadPart += waitTimeoutMs * 1000; // Ms to 100 nano
+  if (waitTimeoutMs) {
+    DokanQuerySystemTime(&timeout);
+    timeout.QuadPart += (LONGLONG)waitTimeoutMs * 10000; // Ms to 100 nano
+  }
 
   // 4 - Wait for new event indefinitely if we are the main pull thread
   // or wait for the requested time.
-  ULONG result =
-      KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode,
-                      TRUE, waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
-  if (result == STATUS_TIMEOUT) {
+  PLIST_ENTRY listEntry;
+  KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode, TRUE,
+                  waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
+  if (listEntry != &RequestContext->Dcb->NotifyIrpEventQueueList) {
+    // Here we got interrupted: Alert / Timeout.
+    // In that case listEntry is an NTSTATUS (See KeRemoveQueue doc).
+
+    // Were we awake due to the device being unmount ?
+    if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+      return STATUS_NO_SUCH_DEVICE;
+    }
     return STATUS_SUCCESS;
-  }
-  // Were we awake due to the device being unmount ?
-  if (IsUnmountPendingVcb(RequestContext->Vcb)) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted");
-    return STATUS_NO_SUCH_DEVICE;
   }
 
   // 5 - Fill the provided buffer as much as we can with events.
