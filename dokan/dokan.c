@@ -488,7 +488,7 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
     // - New pool thread that just started with a dispatched event.
     // Note: Main pull thread does not have an EventContext when started.
     if (ioEvent && ioEvent->EventContext) {
-      assert(!mainPullThread);
+      assert(processEventOnCurrentThread);
       DispatchEvent(ioEvent);
       if (!ioEvent->EventResult) {
         // Some events like Close() do not have event results.
