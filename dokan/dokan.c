@@ -479,8 +479,6 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
   PDOKAN_INSTANCE dokanInstance = ioEvent->DokanInstance;
   PDOKAN_IO_BATCH ioBatch = NULL;
   BOOL mainPullThread = ioEvent->EventContext == NULL;
-  BOOL processEventOnCurrentThread =
-      !mainPullThread || dokanInstance->DokanOptions->SingleThread;
 
   while (TRUE) {
     // 6 - Process events coming from:
@@ -488,13 +486,16 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
     // - New pool thread that just started with a dispatched event.
     // Note: Main pull thread does not have an EventContext when started.
     if (ioEvent && ioEvent->EventContext) {
-      assert(processEventOnCurrentThread);
       DispatchEvent(ioEvent);
       if (!ioEvent->EventResult) {
         // Some events like Close() do not have event results.
-        // Release the resource and terminate here.
+        // Release the resource and terminate here unless we are the main pulling thread.
         PushIoBatchBuffer(ioEvent->IoBatch);
         PushIoEventBuffer(ioEvent);
+        if (mainPullThread) {
+          ioEvent = NULL;
+          continue;
+        }
         return;
       }
     }
@@ -547,9 +548,8 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
       // 4 - All batched events are dispatched to the thread pool except the last event
       // that is executed on the current thread if we are not the main pull thread.
       // Note: Single thread mode has batching disabled and therefore only has one event which is executed on the main thread.
-      if (eventContextBatchCount || !processEventOnCurrentThread) {
+      if (eventContextBatchCount) {
         QueueIoEvent(ioEvent);
-        ioEvent = NULL;
       }
     }
   }
@@ -722,14 +722,18 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     return DOKAN_DRIVER_INSTALL_ERROR;
   }
 
-  PDOKAN_IO_EVENT ioEvent = PopIoEventBuffer();
-  if (!ioEvent) {
-    DokanDbgPrintW(L"Dokan Error: IoEvent allocation failed.");
-    DeleteDokanInstance(dokanInstance);
-    return DOKAN_MOUNT_ERROR;
+  int mainPullThreadCount =
+      DokanOptions->SingleThread ? 1 : DOKAN_MAIN_PULL_THREAD_COUNT;
+  for (int x = 0; x < mainPullThreadCount; ++x) {
+    PDOKAN_IO_EVENT ioEvent = PopIoEventBuffer();
+    if (!ioEvent) {
+      DokanDbgPrintW(L"Dokan Error: IoEvent allocation failed.");
+      DeleteDokanInstance(dokanInstance);
+      return DOKAN_MOUNT_ERROR;
+    }
+    ioEvent->DokanInstance = dokanInstance;
+    QueueIoEvent(ioEvent);
   }
-  ioEvent->DokanInstance = dokanInstance;
-  QueueIoEvent(ioEvent);
 
   if (!DokanMount(dokanInstance->MountPoint, dokanInstance->DeviceName, DokanOptions)) {
     SendReleaseIRP(dokanInstance->DeviceName);

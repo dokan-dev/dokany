@@ -25,6 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 
 #define DOKAN_PULL_EVENT_TIMEOUT_MS 100
+#define DOKAN_MAIN_PULL_THREAD_COUNT 6
 #define BATCH_EVENT_CONTEXT_SIZE (EVENT_CONTEXT_MAX_SIZE * 4)
 #define DOKAN_IO_BATCH_SIZE                                                    \
   ((SIZE_T)(FIELD_OFFSET(DOKAN_IO_BATCH, EventContext)) +                      \
