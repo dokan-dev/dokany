@@ -272,9 +272,9 @@ VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   IoEvent->DokanFileInfo.DokanOptions = IoEvent->DokanInstance->DokanOptions;
 
   if (IoEvent->DokanOpenInfo) {
-    EnterCriticalSection(&IoEvent->DokanInstance->CriticalSection);
+    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
     IoEvent->DokanOpenInfo->OpenCount++;
-    LeaveCriticalSection(&IoEvent->DokanInstance->CriticalSection);
+    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
     IoEvent->DokanFileInfo.Context =
         InterlockedAdd64(&IoEvent->DokanOpenInfo->UserContext, 0);
     IoEvent->DokanFileInfo.IsDirectory =
@@ -865,20 +865,22 @@ VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo) {
 VOID ReleaseDokanOpenInfo(PDOKAN_IO_EVENT IoEvent) {
   LPWSTR fileNameForClose = NULL;
 
-  if (IoEvent->DokanOpenInfo != NULL) {
-    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    IoEvent->DokanOpenInfo->OpenCount--;
-    if (IoEvent->DokanOpenInfo->OpenCount < 1) {
-      if (IoEvent->DokanOpenInfo->FileName) {
-        fileNameForClose = IoEvent->DokanOpenInfo->FileName;
-        IoEvent->DokanOpenInfo->FileName = NULL;
-      }
-      LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-      PushFileOpenInfo(IoEvent->DokanOpenInfo);
-      IoEvent->DokanOpenInfo = NULL;
-    } else {
-      LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  IoEvent->DokanOpenInfo->OpenCount--;
+  if (IoEvent->DokanOpenInfo->OpenCount < 1) {
+    if (IoEvent->DokanOpenInfo->FileName) {
+      fileNameForClose = IoEvent->DokanOpenInfo->FileName;
+      IoEvent->DokanOpenInfo->FileName = NULL;
     }
+    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    PushFileOpenInfo(IoEvent->DokanOpenInfo);
+    IoEvent->DokanOpenInfo = NULL;
+    if (IoEvent->EventResult) {
+      // Reset the Kernel UserContext if we can. Close events do not have one.
+      IoEvent->EventResult->Context = 0;
+    }
+  } else {
+    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
   }
 
   if (fileNameForClose) {
