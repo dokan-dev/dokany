@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.2.1000] - 2021-02-06
+
+### Fixed
+- Library - Fix `DokanResetTimeout` DokanFileInfo usage.
+- Library - Correctly set PullEventTimeoutMs value.
+- Kernel - Fix notify queue timeout value and timeout detection.
+- Memfs - Fix `SetFileAttributes` behavior.
+- Library - Fix incorrect lock used for DokanOpenInfo `OpenCount` increments.
+
+### Changed
+- Library - Use multiple main pull thread (4 instead of 1) to avoid deadlock during low activity.
+
 ## [2.0.1.2000] - 2021-01-28
 
 ### Fixed
@@ -616,6 +628,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.0.2.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.1.2000...v2.0.2.1000
 [2.0.1.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.1.1000...v2.0.1.2000
 [2.0.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.0.2000...v2.0.1.1000
 [2.0.0.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.0.1000...v2.0.0.2000
