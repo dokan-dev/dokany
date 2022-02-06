@@ -545,8 +545,7 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
       --eventContextBatchCount;
       // It is unsafe to access the context from here after Queuing the event.
       context = (PEVENT_CONTEXT)((PCHAR)(context) + context->Length);
-      // 4 - All batched events are dispatched to the thread pool except the last event
-      // that is executed on the current thread if we are not the main pull thread.
+      // 4 - All batched events are dispatched to the thread pool except the last event that is executed on the current thread.
       // Note: Single thread mode has batching disabled and therefore only has one event which is executed on the main thread.
       if (eventContextBatchCount) {
         QueueIoEvent(ioEvent);
