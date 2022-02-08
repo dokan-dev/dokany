@@ -265,7 +265,8 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
 #define DOKAN_NP_DEVICE_NAME                                                   \
   L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_PATH L"System32\\dokannp" DOKAN_MAJOR_API_VERSION L".dll"
+#define DOKAN_NP_PATH                                                          \
+  L"%SystemRoot%\\System32\\dokannp" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_BINARY_NAME L"dokannp" DOKAN_MAJOR_API_VERSION L".dll"
 #define DOKAN_NP_ORDER_KEY                                                     \
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
@@ -294,7 +295,7 @@ BOOL DOKANAPI DokanNetworkProviderInstall() {
   RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
                 (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
 
-  RegSetValueEx(key, L"ProviderPath", 0, REG_SZ, (BYTE *)DOKAN_NP_PATH,
+  RegSetValueEx(key, L"ProviderPath", 0, REG_EXPAND_SZ, (BYTE *)DOKAN_NP_PATH,
                 (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
 
   RegCloseKey(key);
