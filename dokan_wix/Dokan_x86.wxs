@@ -166,7 +166,7 @@
               <File Id="DokannpPDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
             </Component>
             <Directory Id="DRIVERDIR" Name="driver">
-              <Component Id="Driver_Win32" Guid="{1AFEA463-3DB8-48FA-87D1-7151BE92DB4B}">
+              <Component Id="Driver_Win32" Guid="{773993A8-BDDF-450B-9F27-3BED9B0DAA52}">
                 <File Id="Driver_Sys" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Driver_Cat" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Driver_Inf" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
