@@ -211,9 +211,11 @@ VOID DispatchSetInformation(PDOKAN_IO_EVENT IoEvent) {
                                     IoEvent->EventContext->Operation.SetFile
                                         .BufferOffset);
     CreateDispatchCommon(IoEvent, renameInfo->FileNameLength,
-                         /*ClearBuffer=*/TRUE);
+                         /*UseExtraMemoryPool=*/FALSE,
+                         /*ClearNonPoolBuffer=*/TRUE);
   } else {
-    CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
+    CreateDispatchCommon(IoEvent, 0, /*UseExtraMemoryPool=*/FALSE,
+                         /*ClearNonPoolBuffer=*/TRUE);
   }
 
   CheckFileName(IoEvent->EventContext->Operation.SetFile.FileName);

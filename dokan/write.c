@@ -29,11 +29,16 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 DWORD SendWriteRequest(PDOKAN_IO_EVENT IoEvent, ULONG WriteEventContextLength,
                        PDOKAN_IO_BATCH *WriteIoBatch) {
   DWORD WrittenLength = 0;
-  *WriteIoBatch = malloc((SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
-                         WriteEventContextLength);
-  if (!*WriteIoBatch) {
-    DokanDbgPrintW(L"Dokan Error: Failed to allocate IO event buffer.\n");
-    return ERROR_NO_SYSTEM_RESOURCES;
+  if (WriteEventContextLength <= BATCH_EVENT_CONTEXT_SIZE) {
+    *WriteIoBatch = PopIoBatchBuffer();
+  } else {
+    *WriteIoBatch = malloc((SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
+                           WriteEventContextLength);
+    if (!*WriteIoBatch) {
+      DokanDbgPrintW(L"Dokan Error: Failed to allocate IO event buffer.\n");
+      return ERROR_NO_SYSTEM_RESOURCES;
+    }
+    (*WriteIoBatch)->PoolAllocated = FALSE;
   }
 
   if (!DeviceIoControl(
@@ -56,7 +61,8 @@ VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
   ULONG writtenLength = 0;
   NTSTATUS status;
 
-  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
+  CreateDispatchCommon(IoEvent, 0, /*UseExtraMemoryPool=*/FALSE,
+                       /*ClearNonPoolBuffer=*/TRUE);
 
   CheckFileName(IoEvent->EventContext->Operation.Write.FileName);
   DbgPrint(
@@ -117,7 +123,7 @@ VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
   }
 
   if (writeIoBatch != IoEvent->IoBatch) {
-    free(writeIoBatch);
+    PushIoBatchBuffer(writeIoBatch);
   }
 
   EventCompletion(IoEvent);

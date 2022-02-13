@@ -314,7 +314,8 @@ DokanFsFullSizeInformation(PEVENT_INFORMATION EventInfo,
 VOID DispatchQueryVolumeInformation(PDOKAN_IO_EVENT IoEvent) {
   CreateDispatchCommon(IoEvent,
                        IoEvent->EventContext->Operation.Volume.BufferLength,
-                       /*ClearBuffer=*/TRUE);
+                       /*UseExtraMemoryPool=*/FALSE,
+                       /*ClearNonPoolBuffer=*/TRUE);
 
   DbgPrint("###QueryVolumeInfo file handle = 0x%p, eventID = %04d, event Info "
            "= 0x%p\n",

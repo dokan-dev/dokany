@@ -472,7 +472,8 @@ VOID DispatchQueryInformation(PDOKAN_IO_EVENT IoEvent) {
 
   CreateDispatchCommon(IoEvent,
                        IoEvent->EventContext->Operation.File.BufferLength,
-                       /*ClearBuffer=*/TRUE);
+                       /*UseExtraMemoryPool=*/FALSE,
+                       /*ClearNonPoolBuffer=*/TRUE);
 
   if (IoEvent->EventContext->Operation.File.FileInformationClass ==
       FileStreamInformation) {

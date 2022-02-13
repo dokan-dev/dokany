@@ -376,10 +376,23 @@ VOID HandleProcessIoFatalError(PDOKAN_INSTANCE DokanInstance,
   OnDeviceIoCtlFailed(DokanInstance, Result);
 }
 
-VOID FreeIoEventResult(PEVENT_INFORMATION EventResult, BOOL PoolAllocated) {
+VOID FreeIoEventResult(PEVENT_INFORMATION EventResult, ULONG EventResultSize,
+                       BOOL PoolAllocated) {
   if (EventResult) {
     if (PoolAllocated) {
-      PushEventResult(EventResult);
+      if (EventResultSize <= DOKAN_EVENT_INFO_DEFAULT_SIZE) {
+        PushEventResult(EventResult);
+      } else if (EventResultSize <= DOKAN_EVENT_INFO_16K_SIZE) {
+        Push16KEventResult(EventResult);
+      } else if (EventResultSize <= DOKAN_EVENT_INFO_32K_SIZE) {
+        Push32KEventResult(EventResult);
+      } else if (EventResultSize <= DOKAN_EVENT_INFO_64K_SIZE) {
+        Push64KEventResult(EventResult);
+      } else if (EventResultSize <= DOKAN_EVENT_INFO_128K_SIZE) {
+        Push128KEventResult(EventResult);
+      } else {
+        assert(FALSE);
+      }
     } else {
       FreeEventResult(EventResult);
     }
@@ -419,11 +432,13 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
   DWORD lastError = 0;
   PCHAR inputBuffer = NULL;
   DWORD eventInfoSize = 0;
+  ULONG eventResultSize = 0;
   PEVENT_INFORMATION eventInfo = NULL;
   BOOL eventInfoPollAllocated = FALSE;
 
   if (IoEvent && IoEvent->EventResult) {
     eventInfo = IoEvent->EventResult;
+    eventResultSize = IoEvent->EventResultSize;
     eventInfoPollAllocated = IoEvent->PoolAllocated;
     inputBuffer = (PCHAR)eventInfo;
     eventInfoSize =
@@ -455,7 +470,7 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
           )) {
     lastError = GetLastError();
     if (eventInfo) {
-      FreeIoEventResult(eventInfo, eventInfoPollAllocated);
+      FreeIoEventResult(eventInfo, eventResultSize, eventInfoPollAllocated);
     }
     if (!IoBatch->DokanInstance->FileSystemStopped) {
       DokanDbgPrintW(
@@ -466,7 +481,7 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
     return lastError;
   }
   if (eventInfo) {
-    FreeIoEventResult(eventInfo, eventInfoPollAllocated);
+    FreeIoEventResult(eventInfo, eventResultSize, eventInfoPollAllocated);
   }
   return 0;
 }
@@ -897,7 +912,7 @@ ULONG DispatchGetEventInformationLength(ULONG bufferSize) {
              FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]) + bufferSize);
 }
 
-VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo, BOOL ClearBuffer) {
+VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo, BOOL UseExtraMemoryPool, BOOL ClearNonPoolBuffer) {
   assert(IoEvent != NULL);
   assert(IoEvent->EventResult == NULL && IoEvent->EventResultSize == 0);
 
@@ -906,15 +921,38 @@ VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo, BOOL C
     IoEvent->EventResultSize = DOKAN_EVENT_INFO_DEFAULT_SIZE;
     IoEvent->PoolAllocated = TRUE;
   } else {
-    IoEvent->EventResultSize =
-        DispatchGetEventInformationLength(SizeOfEventInfo);
-    IoEvent->EventResult = (PEVENT_INFORMATION)malloc(IoEvent->EventResultSize);
-    if (!IoEvent->EventResult) {
-      return;
+    if (UseExtraMemoryPool) {
+      if (SizeOfEventInfo <= (16 * 1024)) {
+        IoEvent->EventResult = Pop16KEventResult();
+        IoEvent->EventResultSize = DOKAN_EVENT_INFO_16K_SIZE;
+        IoEvent->PoolAllocated = TRUE;
+      } else if (SizeOfEventInfo <= (32 * 1024)) {
+        IoEvent->EventResult = Pop32KEventResult();
+        IoEvent->EventResultSize = DOKAN_EVENT_INFO_32K_SIZE;
+        IoEvent->PoolAllocated = TRUE;
+      } else if (SizeOfEventInfo <= (64 * 1024)) {
+        IoEvent->EventResult = Pop64KEventResult();
+        IoEvent->EventResultSize = DOKAN_EVENT_INFO_64K_SIZE;
+        IoEvent->PoolAllocated = TRUE;
+      } else if (SizeOfEventInfo <= (128 * 1024)) {
+        IoEvent->EventResult = Pop128KEventResult();
+        IoEvent->EventResultSize = DOKAN_EVENT_INFO_128K_SIZE;
+        IoEvent->PoolAllocated = TRUE;
+      }
     }
-    ZeroMemory(IoEvent->EventResult,
-               ClearBuffer ? IoEvent->EventResultSize
-                           : FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]));
+    if (IoEvent->EventResult == NULL) {
+      IoEvent->EventResultSize =
+          DispatchGetEventInformationLength(SizeOfEventInfo);
+      IoEvent->EventResult =
+          (PEVENT_INFORMATION)malloc(IoEvent->EventResultSize);
+      if (!IoEvent->EventResult) {
+        return;
+      }
+      ZeroMemory(IoEvent->EventResult,
+                 ClearNonPoolBuffer
+                     ? IoEvent->EventResultSize
+                     : FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]));
+    }
   }
   assert(IoEvent->EventResult &&
          IoEvent->EventResultSize >=

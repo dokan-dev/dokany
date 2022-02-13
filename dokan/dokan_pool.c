@@ -27,6 +27,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #define DOKAN_IO_BATCH_POOL_SIZE 1024
 #define DOKAN_IO_EVENT_POOL_SIZE 1024
+#define DOKAN_IO_EXTRA_EVENT_POOL_SIZE 128
 #define DOKAN_DIRECTORY_LIST_POOL_SIZE 128
 
 // Global thread pool
@@ -41,6 +42,18 @@ CRITICAL_SECTION g_IoEventBufferCriticalSection;
 
 PDOKAN_VECTOR g_EventResultPool = NULL;
 CRITICAL_SECTION g_EventResultCriticalSection;
+
+PDOKAN_VECTOR g_16KEventResultPool = NULL;
+CRITICAL_SECTION g_16KEventResultCriticalSection;
+
+PDOKAN_VECTOR g_32KEventResultPool = NULL;
+CRITICAL_SECTION g_32KEventResultCriticalSection;
+
+PDOKAN_VECTOR g_64KEventResultPool = NULL;
+CRITICAL_SECTION g_64KEventResultCriticalSection;
+
+PDOKAN_VECTOR g_128KEventResultPool = NULL;
+CRITICAL_SECTION g_128KEventResultCriticalSection;
 
 PDOKAN_VECTOR g_FileInfoPool = NULL;
 CRITICAL_SECTION g_FileInfoCriticalSection;
@@ -62,6 +75,14 @@ int InitializePool() {
   (void)InitializeCriticalSectionAndSpinCount(&g_IoEventBufferCriticalSection,
                                               0x80000400);
   (void)InitializeCriticalSectionAndSpinCount(&g_EventResultCriticalSection,
+                                              0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&g_16KEventResultCriticalSection,
+                                              0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&g_32KEventResultCriticalSection,
+                                              0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&g_64KEventResultCriticalSection,
+                                              0x80000400);
+  (void)InitializeCriticalSectionAndSpinCount(&g_128KEventResultCriticalSection,
                                               0x80000400);
   (void)InitializeCriticalSectionAndSpinCount(&g_FileInfoCriticalSection,
                                               0x80000400);
@@ -87,6 +108,14 @@ int InitializePool() {
       DokanVector_AllocWithCapacity(sizeof(PVOID), DOKAN_IO_EVENT_POOL_SIZE);
   g_EventResultPool =
       DokanVector_AllocWithCapacity(sizeof(PVOID), DOKAN_IO_EVENT_POOL_SIZE);
+  g_16KEventResultPool = DokanVector_AllocWithCapacity(
+      sizeof(PVOID), DOKAN_IO_EXTRA_EVENT_POOL_SIZE);
+  g_32KEventResultPool = DokanVector_AllocWithCapacity(
+      sizeof(PVOID), DOKAN_IO_EXTRA_EVENT_POOL_SIZE);
+  g_64KEventResultPool = DokanVector_AllocWithCapacity(
+      sizeof(PVOID), DOKAN_IO_EXTRA_EVENT_POOL_SIZE);
+  g_128KEventResultPool = DokanVector_AllocWithCapacity(
+      sizeof(PVOID), DOKAN_IO_EXTRA_EVENT_POOL_SIZE);
   g_FileInfoPool =
       DokanVector_AllocWithCapacity(sizeof(PVOID), DOKAN_IO_EVENT_POOL_SIZE);
   g_DirectoryListPool = DokanVector_AllocWithCapacity(
@@ -144,6 +173,62 @@ VOID CleanupPool() {
     DeleteCriticalSection(&g_EventResultCriticalSection);
   }
 
+  {
+    EnterCriticalSection(&g_16KEventResultCriticalSection);
+    {
+      for (size_t i = 0; i < DokanVector_GetCount(g_16KEventResultPool); ++i) {
+        FreeEventResult(*(PEVENT_INFORMATION *)DokanVector_GetItem(
+            g_16KEventResultPool, i));
+      }
+      DokanVector_Free(g_16KEventResultPool);
+      g_16KEventResultPool = NULL;
+    }
+    LeaveCriticalSection(&g_16KEventResultCriticalSection);
+    DeleteCriticalSection(&g_16KEventResultCriticalSection);
+  }
+
+  {
+    EnterCriticalSection(&g_32KEventResultCriticalSection);
+    {
+      for (size_t i = 0; i < DokanVector_GetCount(g_32KEventResultPool); ++i) {
+        FreeEventResult(*(PEVENT_INFORMATION *)DokanVector_GetItem(
+            g_32KEventResultPool, i));
+      }
+      DokanVector_Free(g_32KEventResultPool);
+      g_32KEventResultPool = NULL;
+    }
+    LeaveCriticalSection(&g_32KEventResultCriticalSection);
+    DeleteCriticalSection(&g_32KEventResultCriticalSection);
+  }
+
+  {
+    EnterCriticalSection(&g_64KEventResultCriticalSection);
+    {
+      for (size_t i = 0; i < DokanVector_GetCount(g_64KEventResultPool); ++i) {
+        FreeEventResult(*(PEVENT_INFORMATION *)DokanVector_GetItem(
+            g_64KEventResultPool, i));
+      }
+      DokanVector_Free(g_64KEventResultPool);
+      g_64KEventResultPool = NULL;
+    }
+    LeaveCriticalSection(&g_64KEventResultCriticalSection);
+    DeleteCriticalSection(&g_64KEventResultCriticalSection);
+  }
+
+  {
+    EnterCriticalSection(&g_128KEventResultCriticalSection);
+    {
+      for (size_t i = 0; i < DokanVector_GetCount(g_128KEventResultPool); ++i) {
+        FreeEventResult(*(PEVENT_INFORMATION *)DokanVector_GetItem(
+            g_128KEventResultPool, i));
+      }
+      DokanVector_Free(g_128KEventResultPool);
+      g_128KEventResultPool = NULL;
+    }
+    LeaveCriticalSection(&g_128KEventResultCriticalSection);
+    DeleteCriticalSection(&g_128KEventResultCriticalSection);
+  }
+
   //////////////////// File info object pool ////////////////////
   {
     EnterCriticalSection(&g_FileInfoCriticalSection);
@@ -193,7 +278,8 @@ PDOKAN_IO_BATCH PopIoBatchBuffer() {
     ioBatch = (PDOKAN_IO_BATCH)malloc(DOKAN_IO_BATCH_SIZE);
   }
   if (ioBatch) {
-    RtlZeroMemory(ioBatch, DOKAN_IO_BATCH_SIZE);
+    RtlZeroMemory(ioBatch, FIELD_OFFSET(DOKAN_IO_BATCH, EventContext));
+    ioBatch->PoolAllocated = TRUE;
   }
   return ioBatch;
 }
@@ -209,6 +295,10 @@ VOID PushIoBatchBuffer(PDOKAN_IO_BATCH IoBatch) {
   LONG currentEventContextBatchCount =
       InterlockedDecrement(&IoBatch->EventContextBatchCount);
   if (currentEventContextBatchCount > 0) {
+    return;
+  }
+  if (!IoBatch->PoolAllocated) {
+    FreeIoBatchBuffer(IoBatch);
     return;
   }
   EnterCriticalSection(&g_IoBatchBufferCriticalSection);
@@ -297,6 +387,154 @@ VOID PushEventResult(PEVENT_INFORMATION EventResult) {
     }
   }
   LeaveCriticalSection(&g_EventResultCriticalSection);
+  if (EventResult) {
+    FreeEventResult(EventResult);
+  }
+}
+
+/////////////////// EVENT_INFORMATION 16K ///////////////////
+PEVENT_INFORMATION Pop16KEventResult() {
+  PEVENT_INFORMATION eventResult = NULL;
+  EnterCriticalSection(&g_16KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_16KEventResultPool) > 0) {
+      eventResult =
+          *(PEVENT_INFORMATION *)DokanVector_GetLastItem(g_16KEventResultPool);
+      DokanVector_PopBack(g_16KEventResultPool);
+    }
+  }
+  LeaveCriticalSection(&g_16KEventResultCriticalSection);
+  if (!eventResult) {
+    eventResult = (PEVENT_INFORMATION)malloc(DOKAN_EVENT_INFO_16K_SIZE);
+  }
+  if (eventResult) {
+    RtlZeroMemory(eventResult, FIELD_OFFSET(EVENT_INFORMATION, Buffer));
+  }
+  return eventResult;
+}
+
+VOID Push16KEventResult(PEVENT_INFORMATION EventResult) {
+  assert(EventResult);
+  EnterCriticalSection(&g_16KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_16KEventResultPool) <
+        DOKAN_IO_EXTRA_EVENT_POOL_SIZE) {
+      DokanVector_PushBack(g_16KEventResultPool, &EventResult);
+      EventResult = NULL;
+    }
+  }
+  LeaveCriticalSection(&g_16KEventResultCriticalSection);
+  if (EventResult) {
+    FreeEventResult(EventResult);
+  }
+}
+
+/////////////////// EVENT_INFORMATION 32K ///////////////////
+PEVENT_INFORMATION Pop32KEventResult() {
+  PEVENT_INFORMATION eventResult = NULL;
+  EnterCriticalSection(&g_32KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_32KEventResultPool) > 0) {
+      eventResult =
+          *(PEVENT_INFORMATION *)DokanVector_GetLastItem(g_32KEventResultPool);
+      DokanVector_PopBack(g_32KEventResultPool);
+    }
+  }
+  LeaveCriticalSection(&g_32KEventResultCriticalSection);
+  if (!eventResult) {
+    eventResult = (PEVENT_INFORMATION)malloc(DOKAN_EVENT_INFO_32K_SIZE);
+  }
+  if (eventResult) {
+    RtlZeroMemory(eventResult, FIELD_OFFSET(EVENT_INFORMATION, Buffer));
+  }
+  return eventResult;
+}
+
+VOID Push32KEventResult(PEVENT_INFORMATION EventResult) {
+  assert(EventResult);
+  EnterCriticalSection(&g_32KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_32KEventResultPool) <
+        DOKAN_IO_EXTRA_EVENT_POOL_SIZE) {
+      DokanVector_PushBack(g_32KEventResultPool, &EventResult);
+      EventResult = NULL;
+    }
+  }
+  LeaveCriticalSection(&g_32KEventResultCriticalSection);
+  if (EventResult) {
+    FreeEventResult(EventResult);
+  }
+}
+
+/////////////////// EVENT_INFORMATION 64K ///////////////////
+PEVENT_INFORMATION Pop64KEventResult() {
+  PEVENT_INFORMATION eventResult = NULL;
+  EnterCriticalSection(&g_64KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_64KEventResultPool) > 0) {
+      eventResult =
+          *(PEVENT_INFORMATION *)DokanVector_GetLastItem(g_64KEventResultPool);
+      DokanVector_PopBack(g_64KEventResultPool);
+    }
+  }
+  LeaveCriticalSection(&g_64KEventResultCriticalSection);
+  if (!eventResult) {
+    eventResult = (PEVENT_INFORMATION)malloc(DOKAN_EVENT_INFO_64K_SIZE);
+  }
+  if (eventResult) {
+    RtlZeroMemory(eventResult, FIELD_OFFSET(EVENT_INFORMATION, Buffer));
+  }
+  return eventResult;
+}
+
+VOID Push64KEventResult(PEVENT_INFORMATION EventResult) {
+  assert(EventResult);
+  EnterCriticalSection(&g_64KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_64KEventResultPool) <
+        DOKAN_IO_EXTRA_EVENT_POOL_SIZE) {
+      DokanVector_PushBack(g_64KEventResultPool, &EventResult);
+      EventResult = NULL;
+    }
+  }
+  LeaveCriticalSection(&g_64KEventResultCriticalSection);
+  if (EventResult) {
+    FreeEventResult(EventResult);
+  }
+}
+
+/////////////////// EVENT_INFORMATION 128K ///////////////////
+PEVENT_INFORMATION Pop128KEventResult() {
+  PEVENT_INFORMATION eventResult = NULL;
+  EnterCriticalSection(&g_128KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_128KEventResultPool) > 0) {
+      eventResult =
+          *(PEVENT_INFORMATION *)DokanVector_GetLastItem(g_128KEventResultPool);
+      DokanVector_PopBack(g_128KEventResultPool);
+    }
+  }
+  LeaveCriticalSection(&g_128KEventResultCriticalSection);
+  if (!eventResult) {
+    eventResult = (PEVENT_INFORMATION)malloc(DOKAN_EVENT_INFO_128K_SIZE);
+  }
+  if (eventResult) {
+    RtlZeroMemory(eventResult, FIELD_OFFSET(EVENT_INFORMATION, Buffer));
+  }
+  return eventResult;
+}
+
+VOID Push128KEventResult(PEVENT_INFORMATION EventResult) {
+  assert(EventResult);
+  EnterCriticalSection(&g_128KEventResultCriticalSection);
+  {
+    if (DokanVector_GetCount(g_128KEventResultPool) <
+        DOKAN_IO_EXTRA_EVENT_POOL_SIZE) {
+      DokanVector_PushBack(g_128KEventResultPool, &EventResult);
+      EventResult = NULL;
+    }
+  }
+  LeaveCriticalSection(&g_128KEventResultCriticalSection);
   if (EventResult) {
     FreeEventResult(EventResult);
   }

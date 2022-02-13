@@ -32,6 +32,15 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
   ((SIZE_T)(FIELD_OFFSET(DOKAN_IO_BATCH, EventContext)) +                      \
    BATCH_EVENT_CONTEXT_SIZE)
 
+#define DOKAN_EVENT_INFO_16K_SIZE                                              \
+  (FIELD_OFFSET(EVENT_INFORMATION, Buffer) + (16 * 1024))
+#define DOKAN_EVENT_INFO_32K_SIZE                                              \
+  (FIELD_OFFSET(EVENT_INFORMATION, Buffer) + (32 * 1024))
+#define DOKAN_EVENT_INFO_64K_SIZE                                              \
+  (FIELD_OFFSET(EVENT_INFORMATION, Buffer) + (64 * 1024))
+#define DOKAN_EVENT_INFO_128K_SIZE                                             \
+  (FIELD_OFFSET(EVENT_INFORMATION, Buffer) + (128 * 1024))
+
 PTP_POOL GetThreadPool();
 int InitializePool();
 VOID CleanupPool();
@@ -46,6 +55,15 @@ VOID PushIoEventBuffer(PDOKAN_IO_EVENT IoEvent);
 PEVENT_INFORMATION PopEventResult();
 VOID PushEventResult(PEVENT_INFORMATION EventResult);
 VOID FreeEventResult(PEVENT_INFORMATION EventResult);
+
+PEVENT_INFORMATION Pop16KEventResult();
+VOID Push16KEventResult(PEVENT_INFORMATION EventResult);
+PEVENT_INFORMATION Pop32KEventResult();
+VOID Push32KEventResult(PEVENT_INFORMATION EventResult);
+PEVENT_INFORMATION Pop64KEventResult();
+VOID Push64KEventResult(PEVENT_INFORMATION EventResult);
+PEVENT_INFORMATION Pop128KEventResult();
+VOID Push128KEventResult(PEVENT_INFORMATION EventResult);
 
 PDOKAN_OPEN_INFO PopFileOpenInfo();
 VOID PushFileOpenInfo(PDOKAN_OPEN_INFO FileInfo);
