@@ -134,7 +134,8 @@ VOID DispatchQuerySecurity(PDOKAN_IO_EVENT IoEvent) {
   CheckFileName(IoEvent->EventContext->Operation.Security.FileName);
 
   CreateDispatchCommon(IoEvent,
-                       IoEvent->EventContext->Operation.Security.BufferLength);
+                       IoEvent->EventContext->Operation.Security.BufferLength,
+                       /*ClearBuffer=*/TRUE);
 
   DbgPrint("###GetFileSecurity file handle = 0x%p, eventID = %04d, event Info "
            "= 0x%p\n",
@@ -184,7 +185,7 @@ VOID DispatchSetSecurity(PDOKAN_IO_EVENT IoEvent) {
 
   CheckFileName(IoEvent->EventContext->Operation.SetSecurity.FileName);
 
-  CreateDispatchCommon(IoEvent, 0);
+  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
 
   DbgPrint(
       "###SetSecurity file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",

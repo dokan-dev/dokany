@@ -27,7 +27,7 @@ VOID DispatchFlush(PDOKAN_IO_EVENT IoEvent) {
 
   CheckFileName(IoEvent->EventContext->Operation.Flush.FileName);
 
-  CreateDispatchCommon(IoEvent, 0);
+  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
 
   DbgPrint("###Flush file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
            IoEvent->DokanOpenInfo,

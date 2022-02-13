@@ -634,7 +634,8 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
   }
 
   CreateDispatchCommon(IoEvent,
-                       IoEvent->EventContext->Operation.Directory.BufferLength);
+                       IoEvent->EventContext->Operation.Directory.BufferLength,
+                       /*ClearBuffer=*/TRUE);
 
   IoEvent->EventResult->Operation.Directory.Index =
       IoEvent->EventContext->Operation.Directory.FileIndex;

@@ -120,6 +120,12 @@ extern "C" {
  * Can be very slow if single thread is enabled.
  */
 #define DOKAN_OPTION_DISPATCH_DRIVER_LOGS (1 << 11)
+/**
+ * Pull batches of events from the driver instead of a single one and execute them parallelly.
+ * This option should only be used on computers with low cpu count
+ * and userland filesystem taking time to process requests (like remote storage).
+ */
+#define DOKAN_OPTION_ALLOW_IPC_BATCHING (1 << 12)
 
 /** @} */
 

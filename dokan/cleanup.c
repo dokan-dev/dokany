@@ -25,7 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 VOID DispatchCleanup(PDOKAN_IO_EVENT IoEvent) {
   CheckFileName(IoEvent->EventContext->Operation.Cleanup.FileName);
 
-  CreateDispatchCommon(IoEvent, 0);
+  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
 
   IoEvent->EventResult->Status = STATUS_SUCCESS; // return success at any case
 

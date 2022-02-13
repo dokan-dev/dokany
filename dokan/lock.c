@@ -28,7 +28,7 @@ VOID DispatchLock(PDOKAN_IO_EVENT IoEvent) {
 
   CheckFileName(IoEvent->EventContext->Operation.Lock.FileName);
 
-  CreateDispatchCommon(IoEvent, 0);
+  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
 
   DbgPrint("###Lock file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
            IoEvent->DokanOpenInfo,

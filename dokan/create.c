@@ -120,7 +120,7 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   CheckFileName(fileName);
 
-  CreateDispatchCommon(IoEvent, 0);
+  CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
 
   assert(IoEvent->DokanOpenInfo == NULL);
 

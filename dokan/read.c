@@ -29,7 +29,8 @@ VOID DispatchRead(PDOKAN_IO_EVENT IoEvent) {
   CheckFileName(IoEvent->EventContext->Operation.Read.FileName);
 
   CreateDispatchCommon(IoEvent,
-                       IoEvent->EventContext->Operation.Read.BufferLength);
+                       IoEvent->EventContext->Operation.Read.BufferLength,
+                       /*ClearBuffer=*/FALSE);
 
   DbgPrint("###Read file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
            IoEvent->DokanOpenInfo,

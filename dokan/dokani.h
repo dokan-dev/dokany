@@ -87,6 +87,11 @@ typedef struct _DOKAN_INSTANCE {
   HANDLE KeepaliveHandle;
   /** Whether the filesystem was intentionally stopped */
   BOOL FileSystemStopped;
+  /**
+   * Whether the Unmounted notification was called.
+   * Only the first incrementer thread will call it.
+   */
+  LONG UnmountedCalled;
 } DOKAN_INSTANCE, *PDOKAN_INSTANCE;
 
 /**
@@ -133,11 +138,6 @@ typedef struct _DOKAN_IO_BATCH {
   DWORD NumberOfBytesTransferred;
   /** Whether it is used by the Main pull thread that wait indefinitely in kernel compared to volatile pool threads */
   BOOL MainPullThread;
-  /**
-   * Whether this object was allocated from the memory pool.
-   * Large Write events will allocate a specific buffer that will not come from the memory pool.
-   */
-  BOOL PoolAllocated;
   /**
    * Number of actual EVENT_CONTEXT stored in EventContext.
    * This is used as a shared buffer counter that is decremented when an event is processed.
@@ -212,7 +212,8 @@ BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 
 VOID EventCompletion(PDOKAN_IO_EVENT EventInfo);
 
-VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo);
+VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo,
+                          BOOL ClearBuffer);
 
 VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent);
 

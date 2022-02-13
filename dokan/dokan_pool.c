@@ -180,7 +180,7 @@ VOID CleanupPool() {
 /////////////////// DOKAN_IO_BATCH ///////////////////
 PDOKAN_IO_BATCH PopIoBatchBuffer() {
   PDOKAN_IO_BATCH ioBatch = NULL;
-  EnterCriticalSection(&g_IoEventBufferCriticalSection);
+  EnterCriticalSection(&g_IoBatchBufferCriticalSection);
   {
     if (DokanVector_GetCount(g_IoBatchBufferPool) > 0) {
       ioBatch =
@@ -188,13 +188,12 @@ PDOKAN_IO_BATCH PopIoBatchBuffer() {
       DokanVector_PopBack(g_IoBatchBufferPool);
     }
   }
-  LeaveCriticalSection(&g_IoEventBufferCriticalSection);
+  LeaveCriticalSection(&g_IoBatchBufferCriticalSection);
   if (!ioBatch) {
     ioBatch = (PDOKAN_IO_BATCH)malloc(DOKAN_IO_BATCH_SIZE);
   }
   if (ioBatch) {
     RtlZeroMemory(ioBatch, DOKAN_IO_BATCH_SIZE);
-    ioBatch->PoolAllocated = TRUE;
   }
   return ioBatch;
 }
@@ -212,18 +211,14 @@ VOID PushIoBatchBuffer(PDOKAN_IO_BATCH IoBatch) {
   if (currentEventContextBatchCount > 0) {
     return;
   }
-  if (!IoBatch->PoolAllocated) {
-    FreeIoBatchBuffer(IoBatch);
-    return;
-  }
-  EnterCriticalSection(&g_IoEventBufferCriticalSection);
+  EnterCriticalSection(&g_IoBatchBufferCriticalSection);
   {
     if (DokanVector_GetCount(g_IoBatchBufferPool) < DOKAN_IO_BATCH_POOL_SIZE) {
       DokanVector_PushBack(g_IoBatchBufferPool, &IoBatch);
       IoBatch = NULL;
     }
   }
-  LeaveCriticalSection(&g_IoEventBufferCriticalSection);
+  LeaveCriticalSection(&g_IoBatchBufferCriticalSection);
   if (IoBatch) {
     FreeIoBatchBuffer(IoBatch);
   }

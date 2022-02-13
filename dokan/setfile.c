@@ -210,9 +210,10 @@ VOID DispatchSetInformation(PDOKAN_IO_EVENT IoEvent) {
         (PDOKAN_RENAME_INFORMATION)((PCHAR)IoEvent->EventContext +
                                     IoEvent->EventContext->Operation.SetFile
                                         .BufferOffset);
-    CreateDispatchCommon(IoEvent, renameInfo->FileNameLength);
+    CreateDispatchCommon(IoEvent, renameInfo->FileNameLength,
+                         /*ClearBuffer=*/TRUE);
   } else {
-    CreateDispatchCommon(IoEvent, 0);
+    CreateDispatchCommon(IoEvent, 0, /*ClearBuffer=*/TRUE);
   }
 
   CheckFileName(IoEvent->EventContext->Operation.SetFile.FileName);

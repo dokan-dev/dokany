@@ -359,7 +359,9 @@ VOID OnDeviceIoCtlFailed(PDOKAN_INSTANCE DokanInstance, DWORD Result) {
                    DokanInstance->DeviceName, Result);
   }
 
-  DokanNotifyUnmounted(DokanInstance);
+  if (InterlockedAdd(&DokanInstance->UnmountedCalled, 1) == 1) {
+    DokanNotifyUnmounted(DokanInstance);
+  }
 
   // set the device to a closed state
   SetEvent(DokanInstance->DeviceClosedWaitHandle);
@@ -384,12 +386,9 @@ VOID FreeIoEventResult(PEVENT_INFORMATION EventResult, BOOL PoolAllocated) {
   }
 }
 
-VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
-                               PTP_WORK Work);
-
-VOID QueueIoEvent(PDOKAN_IO_EVENT IoEvent) {
+VOID QueueIoEvent(PDOKAN_IO_EVENT IoEvent, PTP_WORK_CALLBACK Callback) {
   PTP_WORK work = CreateThreadpoolWork(
-      DispatchCallback, IoEvent,
+      Callback, IoEvent,
       &IoEvent->DokanInstance->ThreadInfo.CallbackEnvironment);
   if (!work) {
     DWORD lastError = GetLastError();
@@ -415,7 +414,8 @@ GetEventInfoSize(__in ULONG MajorFunction, __in PEVENT_INFORMATION EventInfo) {
 }
 
 DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
-                                  PDOKAN_IO_BATCH IoBatch) {
+                                  PDOKAN_IO_BATCH IoBatch,
+                                  BOOL ReleaseBatchBuffers) {
   DWORD lastError = 0;
   PCHAR inputBuffer = NULL;
   DWORD eventInfoSize = 0;
@@ -430,8 +430,10 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
         GetEventInfoSize(IoEvent->EventContext->MajorFunction, eventInfo);
     eventInfo->PullEventTimeoutMs =
         IoBatch->MainPullThread ? /*infinite*/ 0 : DOKAN_PULL_EVENT_TIMEOUT_MS;
-    PushIoBatchBuffer(IoEvent->IoBatch);
-    PushIoEventBuffer(IoEvent);
+    if (ReleaseBatchBuffers) {
+      PushIoBatchBuffer(IoEvent->IoBatch);
+      PushIoEventBuffer(IoEvent);
+    }
     DbgPrint(
         "Dokan Information: SendAndPullEventInformation() with NTSTATUS 0x%x, "
         "context 0x%lx, and result object 0x%p with size %d\n",
@@ -469,7 +471,7 @@ DWORD SendAndPullEventInformation(PDOKAN_IO_EVENT IoEvent,
   return 0;
 }
 
-VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
+VOID CALLBACK DispatchBatchIoCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
                                PTP_WORK Work) {
   UNREFERENCED_PARAMETER(Instance);
   UNREFERENCED_PARAMETER(Work);
@@ -505,7 +507,7 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
     ioBatch->DokanInstance = dokanInstance;
 
     // 1 - Send event result and pull new events.
-    DWORD error = SendAndPullEventInformation(ioEvent, ioBatch);
+    DWORD error = SendAndPullEventInformation(ioEvent, ioBatch, /*ReleaseBatchBuffers=*/TRUE);
     if (error) {
       HandleProcessIoFatalError(dokanInstance, ioBatch, error);
       return;
@@ -548,9 +550,44 @@ VOID CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Parameter,
       // 4 - All batched events are dispatched to the thread pool except the last event that is executed on the current thread.
       // Note: Single thread mode has batching disabled and therefore only has one event which is executed on the main thread.
       if (eventContextBatchCount) {
-        QueueIoEvent(ioEvent);
+        QueueIoEvent(ioEvent, DispatchBatchIoCallback);
       }
     }
+  }
+}
+
+VOID CALLBACK DispatchDedicatedIoCallback(PTP_CALLBACK_INSTANCE Instance,
+                                          PVOID Parameter, PTP_WORK Work) {
+  UNREFERENCED_PARAMETER(Instance);
+  UNREFERENCED_PARAMETER(Work);
+
+  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)Parameter;
+  assert(ioEvent);
+  PDOKAN_IO_BATCH ioBatch = PopIoBatchBuffer();
+  ioBatch->MainPullThread = TRUE;
+  ioBatch->DokanInstance = ioEvent->DokanInstance;
+  ioEvent->EventContext = ioBatch->EventContext;
+  ioEvent->IoBatch = ioBatch;
+
+  while (TRUE) {
+    // 1 - Send possible event result and pull new events.
+    DWORD error =
+        SendAndPullEventInformation(ioEvent, ioBatch, /*ReleaseBatchBuffers=*/FALSE);
+    if (error) {
+      PushIoEventBuffer(ioEvent);
+      HandleProcessIoFatalError(ioBatch->DokanInstance, ioBatch, error);
+      return;
+    }
+    RtlZeroMemory(ioEvent, sizeof(DOKAN_IO_EVENT));
+    ioEvent->DokanInstance = ioBatch->DokanInstance;
+    ioEvent->EventContext = ioBatch->EventContext;
+    ioEvent->IoBatch = ioBatch;
+    // 2 - Restart pulling as there is nothing to process.
+    if (!ioBatch->NumberOfBytesTransferred) {
+      continue;
+    }
+    // 3 - Process event
+    DispatchEvent(ioEvent);
   }
 }
 
@@ -721,9 +758,31 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     return DOKAN_DRIVER_INSTALL_ERROR;
   }
 
-  int mainPullThreadCount =
-      DokanOptions->SingleThread ? 1 : DOKAN_MAIN_PULL_THREAD_COUNT;
-  for (int x = 0; x < mainPullThreadCount; ++x) {
+  DWORD_PTR processAffinityMask;
+  DWORD_PTR systemAffinityMask;
+  DWORD mainPullThreadCount = 0;
+  if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask,
+                             &systemAffinityMask)) {
+    while (processAffinityMask) {
+      mainPullThreadCount += 1;
+      processAffinityMask >>= 1;
+    }
+  } else {
+    DbgPrintW(L"Dokan Error: GetProcessAffinityMask failed with Error %d\n",
+              GetLastError());
+  }
+  if (DokanOptions->SingleThread) {
+    mainPullThreadCount = 1; // Really not recommanded
+    DokanOptions->Options &= ~DOKAN_OPTION_ALLOW_IPC_BATCHING;
+  } else if (mainPullThreadCount < DOKAN_MAIN_PULL_THREAD_COUNT_MIN) {
+    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MIN;
+  } else if (mainPullThreadCount > DOKAN_MAIN_PULL_THREAD_COUNT_MAX) {
+    // Thread pool will allocate more threads when pulling batched events
+    DokanOptions->Options |= DOKAN_OPTION_ALLOW_IPC_BATCHING;
+    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MAX;
+  }
+  DbgPrintW(L"Dokan: Using %d main pull threads\n", mainPullThreadCount);
+  for (DWORD x = 0; x < mainPullThreadCount; ++x) {
     PDOKAN_IO_EVENT ioEvent = PopIoEventBuffer();
     if (!ioEvent) {
       DokanDbgPrintW(L"Dokan Error: IoEvent allocation failed.");
@@ -731,7 +790,9 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
       return DOKAN_MOUNT_ERROR;
     }
     ioEvent->DokanInstance = dokanInstance;
-    QueueIoEvent(ioEvent);
+    QueueIoEvent(ioEvent, DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING
+                              ? DispatchBatchIoCallback
+                              : DispatchDedicatedIoCallback);
   }
 
   if (!DokanMount(dokanInstance->MountPoint, dokanInstance->DeviceName, DokanOptions)) {
@@ -836,7 +897,7 @@ ULONG DispatchGetEventInformationLength(ULONG bufferSize) {
              FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]) + bufferSize);
 }
 
-VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo) {
+VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo, BOOL ClearBuffer) {
   assert(IoEvent != NULL);
   assert(IoEvent->EventResult == NULL && IoEvent->EventResultSize == 0);
 
@@ -851,7 +912,9 @@ VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo) {
     if (!IoEvent->EventResult) {
       return;
     }
-    ZeroMemory(IoEvent->EventResult, IoEvent->EventResultSize);
+    ZeroMemory(IoEvent->EventResult,
+               ClearBuffer ? IoEvent->EventResultSize
+                           : FIELD_OFFSET(EVENT_INFORMATION, Buffer[0]));
   }
   assert(IoEvent->EventResult &&
          IoEvent->EventResultSize >=
@@ -955,9 +1018,6 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   ZeroMemory(&driverInfo, sizeof(EVENT_DRIVER_INFO));
 
   eventStart.UserVersion = DOKAN_DRIVER_VERSION;
-  if (!DokanInstance->DokanOptions->SingleThread) {
-    eventStart.Flags |= DOKAN_EVENT_ALLOW_IPC_BATCHING;
-  }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALT_STREAM) {
     eventStart.Flags |= DOKAN_EVENT_ALTERNATIVE_STREAM_ON;
   }
