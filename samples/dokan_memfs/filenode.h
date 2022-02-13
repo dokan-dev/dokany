@@ -36,7 +36,7 @@ THE SOFTWARE.
 #include <WinBase.h>
 #include <atomic>
 #include <filesystem>
-#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -44,7 +44,7 @@ THE SOFTWARE.
 namespace memfs {
 
 // Safe class wrapping a Win32 Security Descriptor
-struct security_informations : std::mutex {
+struct security_informations : std::shared_mutex {
   std::unique_ptr<byte[]> descriptor = nullptr;
   DWORD descriptor_size = 0;
 
@@ -121,12 +121,12 @@ class filenode {
  private:
   filenode() = default;
 
-  std::mutex _data_mutex;
+  std::shared_mutex _data_mutex;
   // _data_mutex need to be aquired
   std::vector<uint8_t> _data;
   std::unordered_map<std::wstring, std::shared_ptr<filenode> > _streams;
 
-  std::mutex _fileName_mutex;
+  std::shared_mutex _fileName_mutex;
   // _fileName_mutex need to be aquired
   std::wstring _fileName;
 };

@@ -655,7 +655,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_getfilesecurity(
 
   if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
 
-  std::lock_guard<std::mutex> lockFile(f->security);
+  std::shared_lock lockFile(f->security);
 
   // This will make dokan library return a default security descriptor
   if (!f->security.descriptor) return STATUS_NOT_IMPLEMENTED;
@@ -707,7 +707,7 @@ static NTSTATUS DOKAN_CALLBACK memfs_setfilesecurity(
 
   if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
 
-  std::lock_guard<std::mutex> securityLock(f->security);
+  std::unique_lock securityLock(f->security);
 
   // SetPrivateObjectSecurity - ObjectsSecurityDescriptor
   // The memory for the security descriptor must be allocated from the process
