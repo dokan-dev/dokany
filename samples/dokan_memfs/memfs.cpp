@@ -96,6 +96,6 @@ void memfs::start() {
 
 void memfs::wait() { DokanWaitForFileSystemClosed(instance, INFINITE); }
 
-void memfs::stop() { DokanCloseHandle(instance); }
+void memfs::stop() { DokanRemoveMountPoint(mount_point); }
 
 } // namespace memfs
