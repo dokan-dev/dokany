@@ -3,6 +3,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.3.1000] - 2021-02-06
+
+### Added
+- Library - Add 16-128k IoBatch/EventResult pool for read and write.
+
+### Changed
+- MemFS - Replace `std::mutex` by `std::shared_mutex`.
+- Library - Detect and use the best number of pulling threads with a minimum of two (unless single thread mode enabled) and a max of 16. Above 16, the io batch is enabled to use the extra threads to execute the possible extra request pulled.
+- Library - Expensive `ZeroMemory` on large Read and Write buffers were removed.
+- Library - Use absolute path for `NetworkProvider` registration `ProviderPath`.
+
+### Fixed
+- Installer - Change driver `GUID` to avoid installer to uninstall v1 files during the installation.
+- Library - Fix incorrect lock hold when manipulating IoBatch.
+- Library - Add lock to avoid `Unmounted` callback to be called multiple times (each pulling thread).
+- MemFS - Fix double instance free on `CTRL+C`.
+
 ## [2.0.2.1000] - 2021-02-06
 
 ### Fixed

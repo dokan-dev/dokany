@@ -34,15 +34,15 @@ for more information.
 
 The API has then again changed over time in [1.1.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.0.0-application-to-Dokany-1.1.0) and [2.0.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0).
 
-## Benchmark v1.5.1.1000 vs v2.0.1.2000
-A benchmark that is testing multiple scenarios repeaditly and sequentially was run 5 times against the `memfs` sample of v1.5.1.1000 and v2.0.1.2000 in an idle environment to precise results.
+## Benchmark v1.5.1.1000 vs v2.0.3.1000
+A benchmark that is testing multiple scenarios repeaditly and sequentially was run 5 times against the `memfs` sample of v1.5.1.1000 and v2.0.3.1000 in an idle environment to precise results.
 The detail results can be seen in this spreadsheet [here](https://docs.google.com/spreadsheets/d/1zdJ6fmP_sqUGCM7SLtTle9N3JLyBOEAMRlwDLfUqm4Q/edit?usp=sharing).
 As better threading and memory poll were added in v2, it is expected that concurrent scenarios (like those tests) would be even more highly improved.
 
 A sample of the results:
 ```
-Create New      |  +13.55% | List          |  +60.69% | GetAttributes |  +48.78% | Read  | +16-28% |
-Open/Overwrite  | +153.41% | ListExactFile | +131.91% | SetAttributes | +120.91% | Write |  +2-24% |
+Create New      |  +13.55% | List          |  +60.69% | GetAttributes |  +48.78% | Read  | +18-42% |
+Open/Overwrite  | +153.41% | ListExactFile | +131.91% | SetAttributes | +120.91% | Write | +10-32% |
 RandomOpenClose | +173.05% |               |          | Delete        |  +90.83% |       |         |
 ```
 
