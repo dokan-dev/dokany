@@ -4,7 +4,7 @@
 <?define ProductCodeX64="{DB21E410-4FE3-0200-0003-220213223853}" ?>
 <?define UpgradeCodeX64="{FC60082A-8D90-4AEB-901A-C5E38682B830}" ?>
 <?define ProductCodeX86="{DB21E410-4FE3-0200-0003-220213223853}" ?>
-<?define UpgradeCodeX86="{FC60082A-8D90-4AEB-901A-C5E38682B830}" ?>
+<?define UpgradeCodeX86="{FC6008A2-8D90-4AEB-901A-C5E38682B830}" ?>
 <?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
 <?define BundleUpgradeCode="{832B1FAC-B29B-4DDC-A449-007F63A4A1EF}" ?>
 <?define BaseVersion="2.0.3" ?>
