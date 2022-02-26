@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include>
 <?define ProductName="Dokan Library" ?>
-<?define ProductCodeX64="{DB21E410-4FE3-0200-0003-220213223853}" ?>
-<?define UpgradeCodeX64="{FC60082A-8D90-4AEB-901A-C5E38682B830}" ?>
-<?define ProductCodeX86="{DB21E410-4FE3-0200-0003-220213223853}" ?>
-<?define UpgradeCodeX86="{FC6008A2-8D90-4AEB-901A-C5E38682B830}" ?>
-<?define ProviderKey="{5F030BFA-CE6E-408A-9694-F593B319DBBE}" ?>
-<?define BundleUpgradeCode="{832B1FAC-B29B-4DDC-A449-007F63A4A1EF}" ?>
+<?define ProductCodeX64="{9A7325EA-D3C9-4A13-848C-C137AE6C4AE9}" ?>
+<?define UpgradeCodeX64="{31A8F445-2AC6-494B-819C-4F4E1B2AECF1}" ?>
+<?define ProductCodeX86="{D1680D5B-295F-4DA2-A963-81938532C6F0}" ?>
+<?define UpgradeCodeX86="{B08DE90A-F064-4ADC-99AC-2EC933417CC5}" ?>
+<?define ProviderKey="{6DE61B71-BBFA-4007-8660-BD13A0DF9004}" ?>
+<?define BundleUpgradeCode="{F9DD32AC-C2BA-4B2C-841F-B34ABED0A0F1}" ?>
 <?define BaseVersion="2.0.3" ?>
 <?define MajorVersion="2" ?>
 <?define BuildVersion="1000" ?>

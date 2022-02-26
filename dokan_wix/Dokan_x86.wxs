@@ -144,7 +144,7 @@
       <Directory Id="ProgramFilesFolder">
         <Directory Id="DOKANDIR" Name="Dokan">
           <Directory Id="INSTALLDIR" Name="DokanLibrary-$(var.BaseVersion)">
-            <Component Id="ProgramFilesComponent" Win64="no" Guid="{93E94825-DE3C-4B8E-9C35-6D130386EFEA}">
+            <Component Id="ProgramFilesComponent" Win64="no" Guid="{8041BCE6-160A-4A26-94FF-31A2A903230A}">
               <Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes" />
               <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)" >
                 <RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no" />
@@ -160,35 +160,35 @@
               <File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no"/>
               <RemoveFolder Id="RemoveINSTALLDIR" On="uninstall" />
             </Component>
-            <Component Id="Sys32PDBFiles" Guid="{D88F93D7-C6AA-4476-ABF0-1C3273303F08}">
+            <Component Id="Sys32PDBFiles" Guid="{059680E5-A328-4254-A5D6-86BBB0BD7911}">
               <File Id="DokanPDB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
               <File Id="DokanfusePDB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
               <File Id="DokannpPDB" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
             </Component>
             <Directory Id="DRIVERDIR" Name="driver">
-              <Component Id="Driver_Win32" Guid="{773993A8-BDDF-450B-9F27-3BED9B0DAA52}">
+              <Component Id="Driver_Win32" Guid="{918BC4D2-755C-4E18-BAEB-13EBC58FE260}">
                 <File Id="Driver_Sys" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Driver_Cat" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Driver_Inf" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
                 <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
-              <Component Id="Driver_Win32pdb" Guid="{184A5365-8C4C-4853-A9DA-381C0B12D8D1}">
+              <Component Id="Driver_Win32pdb" Guid="{68920BC6-D80C-4CB3-969C-1E7BFDBF3056}">
                 <File Id="Driver_Syspdb" Source="..\Win32\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
               </Component>
             </Directory>
             <Directory Id="INCLUDEDIR" Name="include">
               <Directory Id="DOKANINCLUDEDIR" Name="dokan">
-                <Component Id="IncludeDokanFilesComponent" Win64="no" Guid="{6D001C3A-F866-40F7-9E16-492766A8A3C7}">
+                <Component Id="IncludeDokanFilesComponent" Win64="no" Guid="{E493EAB3-2577-4C79-A051-E3AFC332F066}">
                   <File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes"/>
                   <File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no"/>
                   <File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
                 </Component>
               </Directory>
-              <Component Id="IncludeFuseCompatFilesComponent" Win64="no" Guid="{7129AF7C-D5E2-4D3B-B29B-9CBE045F655B}">
+              <Component Id="IncludeFuseCompatFilesComponent" Win64="no" Guid="{14ABEE64-1ACE-4908-8D20-A84CD6E87053}">
                 <File Id="fuse_include_H" Source="..\dokan_fuse\include\old\fuse.h" Name="fuse.h" KeyPath="yes"/>
               </Component>
               <Directory Id="FUSEINCLUDEDIR" Name="fuse">
-                <Component Id="IncludeFuseFilesComponent" Win64="no" Guid="{113F4C52-C272-4346-B65F-E827B8150815}">
+                <Component Id="IncludeFuseFilesComponent" Win64="no" Guid="{23D52DE0-55DF-4835-9C0C-3E2AAA987AD3}">
                   <File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="yes"/>
                   <File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
                   <File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>
@@ -199,7 +199,7 @@
               </Directory>
             </Directory>
             <Directory Id="LIBDIR" Name="lib">
-              <Component Id="LibFilesComponent" Win64="no" Guid="{777220E2-B13C-495B-9B58-936A2810DEEB}">
+              <Component Id="LibFilesComponent" Win64="no" Guid="{52C09B1A-9E0F-4939-A32E-0AD4EDE4D7DE}">
                 <Environment Id="DokanLibraryLibx86EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_x86" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes" />
                 <File Id="dokanLIB" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
                 <File Id="dokanfuseLIB" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
@@ -208,7 +208,7 @@
             </Directory>
             <Directory Id="SAMPLEDIR" Name="sample">
               <Directory Id="MIRRORDIR" Name="mirror">
-                <Component Id="SampleMirrorFilesComponent" Win64="no" Guid="{A15F307B-4DA6-4EDA-9AAF-CF86E1B7639E}">
+                <Component Id="SampleMirrorFilesComponent" Win64="no" Guid="{226E42DF-CF84-4771-A59C-8F1818ADBCE5}">
                   <File Id="mirrorEXE" Source="..\Win32\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
                   <File Id="dokanMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
@@ -216,7 +216,7 @@
                 </Component>
               </Directory>
               <Directory Id="MEMFSDIR" Name="memfs">
-                <Component Id="SampleMemFSFilesComponent" Win64="no" Guid="{7E838450-25C6-4F58-A914-1EA60E507AC1}">
+                <Component Id="SampleMemFSFilesComponent" Win64="no" Guid="{1F35A0DD-BB05-4C15-8EE8-B1C3FC3FDD27}">
                   <File Id="memfsEXE" Source="..\Win32\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
                   <File Id="dokanMemFSDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
                   <File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
@@ -241,7 +241,7 @@
 
       <Directory Id="WindowsFolder" >
         <Directory Id="Sys32Folder" Name="System32">
-          <Component Id="Sys32Files" Guid="{A38A0CC4-3893-43B3-A7B8-8E30207607E4}">
+          <Component Id="Sys32Files" Guid="{CF6199EC-D177-4DAB-938D-8AD01D01816E}">
             <File Id="DokanSysDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
             <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll"/>
             <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
@@ -298,11 +298,11 @@
   </Product>
 
   <Fragment>
-    <Component Id="ProgramFilesCygwinComponent" Win64="no" Guid="{44994086-D28C-4041-B3C0-01FEE13F95F7}" Directory="INSTALLDIR">
+    <Component Id="ProgramFilesCygwinComponent" Win64="no" Guid="{3057CA21-B7D8-4820-AF64-B41C37164EC2}" Directory="INSTALLDIR">
       <File Id="X86DokanCygFuseDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
       <File Id="X86DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
     </Component>
-    <Component Id="SampleFuseMirrorCygwinComponent" Win64="no" Guid="{BBFA5102-DB04-438D-BECC-861116145FC0}" Directory="FUSEMIRRORDIR">
+    <Component Id="SampleFuseMirrorCygwinComponent" Win64="no" Guid="{0B87835E-B47E-401C-86BB-857E41D76B57}" Directory="FUSEMIRRORDIR">
       <File Id="fuseMirrorEXE" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
       <File Id="dokanFuseMirrorDLL" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
       <File Id="dokanCygFuseMirrorDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
