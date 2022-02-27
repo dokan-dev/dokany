@@ -3,10 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.3.2000] - 2021-02-27
+
+### Fixed
+- Installer - Regenerate all `GUID` to fix uninstall and conflict with v1.
+
 ## [2.0.3.1000] - 2021-02-06
 
 ### Added
-- Library - Add 16-128k IoBatch/EventResult pool for read and write.
+- Library - Add 16-128k `IoBatch/EventResult` pool for read and write.
 
 ### Changed
 - MemFS - Replace `std::mutex` by `std::shared_mutex`.
@@ -645,6 +650,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.0.3.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.3.1000...v2.0.3.2000
 [2.0.3.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.2.1000...v2.0.3.1000
 [2.0.2.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.1.2000...v2.0.2.1000
 [2.0.1.2000]: https://github.com/dokan-dev/dokany/compare/v2.0.1.1000...v2.0.1.2000
