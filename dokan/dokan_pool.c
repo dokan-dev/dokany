@@ -560,13 +560,17 @@ PDOKAN_OPEN_INFO PopFileOpenInfo() {
     RtlZeroMemory(fileInfo, sizeof(DOKAN_OPEN_INFO));
     InitializeCriticalSection(&fileInfo->CriticalSection);
   }
-
   if (fileInfo) {
     fileInfo->DokanInstance = NULL;
     fileInfo->DirList = NULL;
-    InterlockedExchange64(&fileInfo->UserContext, 0);
+    fileInfo->DirListSearchPattern= NULL;
+    fileInfo->UserContext = 0;
     fileInfo->EventId = 0;
     fileInfo->IsDirectory = FALSE;
+    fileInfo->OpenCount = 0;
+    fileInfo->CloseFileName = NULL;
+    fileInfo->CloseUserContext = 0;
+    fileInfo->EventContext = NULL;
   }
   return fileInfo;
 }

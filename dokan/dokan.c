@@ -274,9 +274,8 @@ VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   if (IoEvent->DokanOpenInfo) {
     EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
     IoEvent->DokanOpenInfo->OpenCount++;
+    IoEvent->DokanFileInfo.Context = IoEvent->DokanOpenInfo->UserContext;
     LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    IoEvent->DokanFileInfo.Context =
-        InterlockedAdd64(&IoEvent->DokanOpenInfo->UserContext, 0);
     IoEvent->DokanFileInfo.IsDirectory =
         (UCHAR)IoEvent->DokanOpenInfo->IsDirectory;
 
@@ -879,11 +878,7 @@ VOID ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions) {
 
 VOID EventCompletion(PDOKAN_IO_EVENT IoEvent) {
   assert(IoEvent->EventResult);
-  if (IoEvent->DokanOpenInfo) {
-    InterlockedExchange64(&IoEvent->DokanOpenInfo->UserContext,
-                          IoEvent->DokanFileInfo.Context);
-    ReleaseDokanOpenInfo(IoEvent);
-  }
+  ReleaseDokanOpenInfo(IoEvent);
 }
 
 VOID CheckFileName(LPWSTR FileName) {
@@ -963,26 +958,38 @@ VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo, BOOL U
 }
 
 VOID ReleaseDokanOpenInfo(PDOKAN_IO_EVENT IoEvent) {
-  LPWSTR fileNameForClose = NULL;
-
+  if (!IoEvent->DokanOpenInfo) {
+    return;
+  }
   EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  IoEvent->DokanOpenInfo->UserContext = IoEvent->DokanFileInfo.Context;
   IoEvent->DokanOpenInfo->OpenCount--;
-  if (IoEvent->DokanOpenInfo->OpenCount < 1) {
-    if (IoEvent->DokanOpenInfo->FileName) {
-      fileNameForClose = IoEvent->DokanOpenInfo->FileName;
-      IoEvent->DokanOpenInfo->FileName = NULL;
-    }
+  if (IoEvent->EventContext->MajorFunction == IRP_MJ_CLOSE) {
+    IoEvent->DokanOpenInfo->CloseFileName =
+        _wcsdup(IoEvent->EventContext->Operation.Close.FileName);
+    IoEvent->DokanOpenInfo->CloseUserContext = IoEvent->DokanFileInfo.Context;
+    IoEvent->DokanOpenInfo->OpenCount--;
+  }
+  if (IoEvent->DokanOpenInfo->OpenCount > 0) {
+    // We are still waiting for the Close event or there is another event running. We delay the Close event.
     LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    PushFileOpenInfo(IoEvent->DokanOpenInfo);
-    IoEvent->DokanOpenInfo = NULL;
-    if (IoEvent->EventResult) {
-      // Reset the Kernel UserContext if we can. Close events do not have one.
-      IoEvent->EventResult->Context = 0;
-    }
-  } else {
-    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    return;
   }
 
+  // Process close event as OpenCount is now 0
+  LPWSTR fileNameForClose = NULL;
+  if (IoEvent->DokanOpenInfo->CloseFileName) {
+    fileNameForClose = IoEvent->DokanOpenInfo->CloseFileName;
+    IoEvent->DokanOpenInfo->CloseFileName = NULL;
+  }
+  IoEvent->DokanFileInfo.Context = IoEvent->DokanOpenInfo->CloseUserContext;
+  LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  PushFileOpenInfo(IoEvent->DokanOpenInfo);
+  IoEvent->DokanOpenInfo = NULL;
+  if (IoEvent->EventResult) {
+    // Reset the Kernel UserContext if we can. Close events do not have one.
+    IoEvent->EventResult->Context = 0;
+  }
   if (fileNameForClose) {
     if (IoEvent->DokanInstance->DokanOperations->CloseFile) {
       IoEvent->DokanInstance->DokanOperations->CloseFile(

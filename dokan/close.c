@@ -35,13 +35,5 @@ VOID DispatchClose(PDOKAN_IO_EVENT IoEvent) {
   // Driver has simply notifying us of the Close request which he has
   // already completed at this stage. Driver is not expecting us
   // to reply from this so there is no need to send an EVENT_INFORMATION.
-
-  if (IoEvent->DokanOpenInfo) {
-    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    IoEvent->DokanOpenInfo->FileName =
-        _wcsdup(IoEvent->EventContext->Operation.Close.FileName);
-    IoEvent->DokanOpenInfo->OpenCount--;
-    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    ReleaseDokanOpenInfo(IoEvent);
-  }
+  ReleaseDokanOpenInfo(IoEvent);
 }

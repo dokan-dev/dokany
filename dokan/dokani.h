@@ -107,7 +107,7 @@ typedef struct _DOKAN_OPEN_INFO {
   PDOKAN_VECTOR DirList;
   PWCHAR DirListSearchPattern;
   /** User Context see DOKAN_FILE_INFO.Context */
-  volatile LONG64 UserContext;
+  LONG64 UserContext;
   /** Event Id */
   ULONG EventId;
   /** DOKAN_OPTIONS linked to the mount */
@@ -115,7 +115,8 @@ typedef struct _DOKAN_OPEN_INFO {
   /** Open count on the file */
   ULONG OpenCount;
   /** Used when dispatching the close once the OpenCount drops to 0 **/
-  LPWSTR FileName;
+  LPWSTR CloseFileName;
+  LONG64 CloseUserContext;
   /** Event context */
   PEVENT_CONTEXT EventContext;
 } DOKAN_OPEN_INFO, *PDOKAN_OPEN_INFO;
