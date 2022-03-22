@@ -1,4 +1,4 @@
-case STATUS_SUCCESS: return "STATUS_SUCCESS";
+﻿case STATUS_SUCCESS: return "STATUS_SUCCESS";
 case STATUS_WAIT_1: return "STATUS_WAIT_1";
 case STATUS_WAIT_2: return "STATUS_WAIT_2";
 case STATUS_WAIT_3: return "STATUS_WAIT_3";
