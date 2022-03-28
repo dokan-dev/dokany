@@ -86,15 +86,7 @@ static WCHAR gVolumeName[MAX_PATH + 1] = L"DOKAN";
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
   wcsncpy_s(filePath, numberOfElements, gRootDirectory, wcslen(gRootDirectory));
-  size_t unclen = wcslen(gUNCName);
-  if (unclen > 0 && _wcsnicmp(FileName, gUNCName, unclen) == 0) {
-    if (_wcsnicmp(FileName + unclen, L".", 1) != 0) {
-      wcsncat_s(filePath, numberOfElements, FileName + unclen,
-                wcslen(FileName) - unclen);
-    }
-  } else {
-    wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
-  }
+  wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
 }
 
 static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {

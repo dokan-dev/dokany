@@ -626,8 +626,26 @@ Return Value:
                     fileObject->FileName.Length);
     }
 
-    // Fail if device is read-only and request involves a write operation
+    // Remove possible UNCName prefix
+    if (RequestContext->Dcb->UNCName != NULL) {
+      UNICODE_STRING fileNameUS =
+          DokanWrapUnicodeString(fileName, fileNameLength);
+      if (StartsWith(&fileNameUS, RequestContext->Dcb->UNCName)) {
+        fileNameLength -= RequestContext->Dcb->UNCName->Length;
+        if (fileNameLength == 0) {
+          fileName[0] = '\\';
+          fileName[1] = '\0';
+          fileNameLength = sizeof(WCHAR);
+        } else {
+          RtlMoveMemory(fileName,
+                        (PCHAR)fileName + RequestContext->Dcb->UNCName->Length,
+                        fileNameLength);
+          fileName[fileNameLength / sizeof(WCHAR)] = '\0';
+        }
+      }
+    }
 
+    // Fail if device is read-only and request involves a write operation
     if (IS_DEVICE_READ_ONLY(RequestContext->DeviceObject) &&
         ((disposition == FILE_SUPERSEDE) || (disposition == FILE_CREATE) ||
          (disposition == FILE_OVERWRITE) ||
