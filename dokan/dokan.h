@@ -400,7 +400,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \brief FindFiles Dokan API callback
   *
   * List all files in the requested path.
-  * If this function is not implemented, \ref DOKAN_OPERATIONS.FindFilesWithPattern will instead be called with a wildcard as pattern.
+  * If this function is not implemented by not assigning the function pointer,
+  * \ref DOKAN_OPERATIONS.FindFilesWithPattern will instead be called with a wildcard as pattern.
+  * It is recommended to have this implemented for performance reason.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param FillFindData Callback that has to be called with PWIN32_FIND_DATAW that contain file information.
