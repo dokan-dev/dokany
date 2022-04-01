@@ -692,7 +692,7 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
     return;
   }
 
-  if ((IoEvent->EventContext->Operation.Directory.SearchPatternLength == 0 ||
+  if ((!searchPattern ||
        !IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) &&
       IoEvent->DokanInstance->DokanOperations->FindFiles) {
     status = IoEvent->DokanInstance->DokanOperations->FindFiles(
@@ -700,9 +700,7 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
         DokanFillFileData, &IoEvent->DokanFileInfo);
     EndFindFilesCommon(IoEvent, status);
 
-  } else if (IoEvent->EventContext->Operation.Directory.SearchPatternLength !=
-                 0 &&
-             IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
+  } else if (IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
     status = IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
         IoEvent->EventContext->Operation.Directory.DirectoryName,
         searchPattern ? searchPattern : L"*", DokanFillFileData,
