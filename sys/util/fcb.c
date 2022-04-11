@@ -277,6 +277,7 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
     Fcb->GarbageCollectionGracePeriodPassed = FALSE;
     DokanFCBFlagsClearBit(Fcb, DOKAN_DELETE_ON_CLOSE);
     DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_DIRECTORY);
+    DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
   } else {
     // It's not actually scheduled for GC, so this function is a no-op aside
     // from its obligation to clean up the string.
