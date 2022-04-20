@@ -5,7 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased] - 2.0.4.1000
 
+### Changed
+- Kernel - Remove possible `UNCName` prefix during Create.
+- Library - Allow `FindFiles` to be optional by using `FindFilesWithPattern` with wildcard.
+
+### Fixed
+- FUSE - update library name in module definition.
 - Library - Move `UserContext` under `OpenCount` lock to reduce incorrect value used when calling `Close`.
+- Kernel - Clear write change flag when `FCB` is being reused.
 
 ## [2.0.3.2000] - 2021-02-27
 
