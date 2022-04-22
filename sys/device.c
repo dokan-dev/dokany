@@ -489,11 +489,6 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       status = STATUS_SUCCESS;
     } break;
 
-    case IOCTL_STORAGE_EJECT_MEDIA: {
-      DokanUnmount(RequestContext, dcb);
-      status = STATUS_SUCCESS;
-    } break;
-
     case IOCTL_REDIR_QUERY_PATH_EX:
     case IOCTL_REDIR_QUERY_PATH: {
       PQUERY_PATH_RESPONSE pathResp;
