@@ -9,7 +9,7 @@ function Exec-External {
 }
 
 function Add-VisualStudio-Path {
-	$vsPath = & "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath
+	$vsPath = (& "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath).Split([Environment]::NewLine) | Select -First 1
 	$msBuild_VSPath = "$vsPath\MSBuild\Current\Bin"
 	
 	if (!(Test-Path -Path $msBuild_VSPath)) {
