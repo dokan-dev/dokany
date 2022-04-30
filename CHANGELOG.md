@@ -3,16 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 2.0.4.1000
+## [2.0.4.1000] - 2021-04-30
 
 ### Changed
-- Kernel - Remove possible `UNCName` prefix during Create.
+- Kernel - Remove possible `UNCName` prefix in `Filename` during `CreateFile`.
+- Library - Doc - Recommend `FindFiles` to be implemented
 - Library - Allow `FindFiles` to be optional by using `FindFilesWithPattern` with wildcard.
 
 ### Fixed
-- FUSE - update library name in module definition.
 - Library - Move `UserContext` under `OpenCount` lock to reduce incorrect value used when calling `Close`.
-- Kernel - Clear write change flag when `FCB` is being reused.
+- Kernel - Clear write change flag when FCB is being reused.
+- Kernel - Remove unsupported eject media support (deadlock).
+- FUSE - Update library name in module definition.
 
 ## [2.0.3.2000] - 2021-02-27
 
