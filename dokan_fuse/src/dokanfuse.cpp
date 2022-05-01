@@ -493,7 +493,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
 
   impl_fuse_context impl(fs, &fs->ops, fs->user_data, fs->conf.debug != 0,
                          fileumask, dirumask, fs->conf.fsname, fs->conf.volname,
-                         fs->conf.uncname);
+                         fs->conf.uncname, fs->conf.max_read);
 
   // Parse Dokan options
   PDOKAN_OPTIONS dokanOptions = static_cast<PDOKAN_OPTIONS>(malloc(sizeof(DOKAN_OPTIONS)));
@@ -617,6 +617,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("daemon_timeout=%d", timeoutInSec, 0),
     FUSE_LIB_OPT("alloc_unit_size=%lu", allocationUnitSize, 0),
     FUSE_LIB_OPT("sector_size=%lu", sectorSize, 0),
+    FUSE_LIB_OPT("max_read=%lu", max_read, MAX_READ_SIZE),
     FUSE_LIB_OPT("-n", networkDrive, 1),
     FUSE_LIB_OPT("-m", mountManager, 1),
     FUSE_LIB_OPT("-p", removableDrive, 1),
@@ -635,6 +636,7 @@ static void fuse_lib_help(void) {
       "    -o daemon_timeout=M    set timeout in seconds\n"
       "    -o alloc_unit_size=M   set allocation unit size\n"
       "    -o sector_size=M       set sector size\n"
+      "    -o max_read=M          set max read size. 0 for not infinite\n"
       "    -n                     use network drive\n"
       "    -m                     use mount manager\n"
       "    -p                     use removable drive\n"

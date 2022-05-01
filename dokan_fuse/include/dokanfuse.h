@@ -37,6 +37,7 @@ struct fuse_config
   int networkDrive;
   unsigned long allocationUnitSize;
   unsigned long sectorSize;
+  unsigned long max_read;
 };
 
 struct fuse_session

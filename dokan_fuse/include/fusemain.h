@@ -81,13 +81,15 @@ class impl_fuse_context
 	unsigned int filemask_;
 	unsigned int dirmask_;
 	const char *fsname_, *volname_, *uncname_;
+	unsigned long max_read_;
 
 	impl_file_locks file_locks;
 public:
 	impl_fuse_context(fuse *fuse, const struct fuse_operations *ops,
 			void *user_data, bool debug, unsigned int filemask,
 			unsigned int dirmask, const char *fsname,
-			const char *volname, const char *uncname);
+			const char *volname, const char *uncname,
+			unsigned long max_read);
 
 	bool debug() const {return debug_;}
 

@@ -74,10 +74,10 @@ impl_fuse_context::impl_fuse_context(fuse *fuse,
                                      void *user_data, bool debug,
                                      unsigned int filemask,
                                      unsigned int dirmask, const char *fsname,
-                                     const char *volname, const char *uncname)
+    const char *volname, const char *uncname, unsigned long max_read)
     : ops_(*ops), user_data_(user_data), fuse_(fuse), debug_(debug),
       filemask_(filemask), dirmask_(dirmask), fsname_(fsname),
-      volname_(volname), uncname_(uncname) // Use current user data
+      volname_(volname), uncname_(uncname), max_read_(max_read) // Use current user data
 {
   // Reset connection info
   memset(&conn_info_, 0, sizeof(fuse_conn_info));
@@ -613,8 +613,8 @@ int impl_fuse_context::read_file(LPCWSTR /*file_name*/, LPVOID buffer,
   DWORD total_read = 0;
   while (total_read < num_bytes_to_read) {
     DWORD to_read = num_bytes_to_read - total_read;
-    if (to_read > MAX_READ_SIZE)
-      to_read = MAX_READ_SIZE;
+    if (max_read_ && to_read > max_read_)
+      to_read = max_read_;
 
     int res = ops_.read(file_name.c_str(), static_cast<char *>(buffer), to_read,
                         off,
