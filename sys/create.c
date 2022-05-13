@@ -630,7 +630,8 @@ Return Value:
     if (RequestContext->Dcb->UNCName != NULL) {
       UNICODE_STRING fileNameUS =
           DokanWrapUnicodeString(fileName, fileNameLength);
-      if (StartsWith(&fileNameUS, RequestContext->Dcb->UNCName)) {
+      if (RtlPrefixUnicodeString(RequestContext->Dcb->UNCName, &fileNameUS,
+                                 /*CaseInSensitive=*/TRUE)) {
         fileNameLength -= RequestContext->Dcb->UNCName->Length;
         if (fileNameLength == 0) {
           fileName[0] = '\\';
