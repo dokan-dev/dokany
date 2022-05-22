@@ -528,6 +528,9 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
     DOKAN_LOG_FINE_IRP(RequestContext, "No output buffer provided");
     return status;
   }
+  if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+    return STATUS_NO_SUCH_DEVICE;
+  }
   // 3 - Flag the device as having workers starting to pull events.
   RequestContext->Vcb->HasEventWait = TRUE;
 
