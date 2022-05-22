@@ -245,13 +245,14 @@ Routine Description:
       // KillEvent or something error is occurred
       waitObj = FALSE;
     } else {
+      BOOL isForceTimeout = status == STATUS_WAIT_1;
       KeClearEvent(&Dcb->ForceTimeoutEvent);
       // In this case the timer was executed and we are checking if the timer
       // occurred regulary using the period DOKAN_CHECK_INTERVAL. If not, this
       // means the system was in sleep mode.
       KeQuerySystemTime(&CurrentTime);
-      if ((CurrentTime.QuadPart - LastTime.QuadPart) >
-          ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
+      if (!isForceTimeout && (CurrentTime.QuadPart - LastTime.QuadPart) >
+                                 ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
         DokanLogInfo(&logger, L"Wake from sleep detected.");
       } else {
         ReleaseTimeoutPendingIrp(Dcb);
