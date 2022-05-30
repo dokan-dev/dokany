@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ### Changed
 - Kernel - Remove possible `UNCName` prefix in `Filename` during `CreateFile`.
-- Library - Doc - Recommend `FindFiles` to be implemented
+- Library - Doc - Recommend `FindFiles` to be implemented.
 - Library - Allow `FindFiles` to be optional by using `FindFilesWithPattern` with wildcard.
 
 ### Fixed
