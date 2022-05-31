@@ -493,12 +493,6 @@ typedef struct _DOKAN_RENAME_INFORMATION {
 #pragma warning(pop)
 #endif
 
-typedef struct _DOKAN_LINK_INFORMATION {
-  BOOLEAN ReplaceIfExists;
-  ULONG FileNameLength;
-  WCHAR FileName[1];
-} DOKAN_LINK_INFORMATION, *PDOKAN_LINK_INFORMATION;
-
 /**
 * \struct DOKAN_MOUNT_POINT_INFO
 * \brief Dokan Mount point information
