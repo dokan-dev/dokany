@@ -692,21 +692,28 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
     return;
   }
 
-  if ((!searchPattern ||
-       !IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) &&
-      IoEvent->DokanInstance->DokanOperations->FindFiles) {
-    status = IoEvent->DokanInstance->DokanOperations->FindFiles(
-        IoEvent->EventContext->Operation.Directory.DirectoryName,
-        DokanFillFileData, &IoEvent->DokanFileInfo);
-    EndFindFilesCommon(IoEvent, status);
+  status = STATUS_NOT_IMPLEMENTED;
 
-  } else if (IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
+  // Reminder: FindFilesWithPattern may not be implemented by returning STATUS_NOT_IMPLEMENTED.
+  if (IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
     status = IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
         IoEvent->EventContext->Operation.Directory.DirectoryName,
         searchPattern ? searchPattern : L"*", DokanFillFileData,
         &IoEvent->DokanFileInfo);
+  }
+
+  // And if not, try with FindFiles.
+  if (status == STATUS_NOT_IMPLEMENTED &&
+      IoEvent->DokanInstance->DokanOperations->FindFiles) {
+    status = IoEvent->DokanInstance->DokanOperations->FindFiles(
+        IoEvent->EventContext->Operation.Directory.DirectoryName,
+        DokanFillFileData, &IoEvent->DokanFileInfo);
+  }
+
+  if (status != STATUS_NOT_IMPLEMENTED) {
     EndFindFilesCommon(IoEvent, status);
   } else {
+    // Neither FindFilesWithPattern nor FindFiles are implemented.
     IoEvent->EventResult->Status = STATUS_NOT_IMPLEMENTED;
     EventCompletion(IoEvent);
   }

@@ -400,8 +400,8 @@ typedef struct _DOKAN_OPERATIONS {
   * \brief FindFiles Dokan API callback
   *
   * List all files in the requested path.
-  * If this function is not implemented by not assigning the function pointer,
-  * \ref DOKAN_OPERATIONS.FindFilesWithPattern will instead be called with a wildcard as pattern.
+  * \ref DOKAN_OPERATIONS.FindFilesWithPattern is checked first. If it is not implemented or
+  * returns \c STATUS_NOT_IMPLEMENTED, then FindFiles is called, if assigned.
   * It is recommended to have this implemented for performance reason.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
@@ -421,7 +421,7 @@ typedef struct _DOKAN_OPERATIONS {
   * The search pattern is a Windows MS-DOS-style expression.
   * It can contain wild cards and extended characters or none of them. See \ref DokanIsNameInExpression.
   *
-  * If the function is not implemented by not assigning the function pointer, \ref DOKAN_OPERATIONS.FindFiles
+  * If the function is not implemented, \ref DOKAN_OPERATIONS.FindFiles
   * will be called instead and the result will be filtered internally by the library.
   * It is recommended to have this implemented for performance reason.
   *
