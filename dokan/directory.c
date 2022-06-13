@@ -391,6 +391,8 @@ LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
   BOOL patternCheck = FALSE;
   PWCHAR pattern = NULL;
   BOOL bufferOverFlow = FALSE;
+  BOOL caseSensitive = IoEvent->DokanInstance->DokanOptions->Options &
+                       DOKAN_OPTION_CASE_SENSITIVE;
 
   if (IoEvent->EventContext->Operation.Directory.SearchPatternLength > 0) {
     pattern = (PWCHAR)((SIZE_T)&IoEvent->EventContext->Operation.Directory
@@ -412,7 +414,8 @@ LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
 
     // pattern is not specified or pattern match is ignore cases
     if (!patternCheck ||
-        DokanIsNameInExpression(pattern, find->FindData.cFileName, TRUE)) {
+        DokanIsNameInExpression(pattern, find->FindData.cFileName,
+                                !caseSensitive)) {
       if (IoEvent->EventContext->Operation.Directory.FileIndex <= index) {
         // index+1 is very important, should use next entry index
         ULONG entrySize = DokanFillDirectoryInformation(
