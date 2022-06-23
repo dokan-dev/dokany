@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 2.0.5.1000
+
+### Changed
+- FUSE - Allow override default max read size by option.
+- Kernel - Remove `UNCName` `CaseInSensitive` prefix during Create.
+- Library - Allow `FindFilesWithPattern` to return `STATUS_NOT_IMPLEMENTED` (like on v1).
+
+### Fixed
+- Kernel - Add `Vcb` null check before marking the volume as having wait events.
+- Library - Use Case sensitive option when listing filtering is done by the library.
+
 ## [2.0.4.1000] - 2021-04-30
 
 ### Changed
