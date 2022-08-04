@@ -377,24 +377,23 @@ VOID HandleProcessIoFatalError(PDOKAN_INSTANCE DokanInstance,
 
 VOID FreeIoEventResult(PEVENT_INFORMATION EventResult, ULONG EventResultSize,
                        BOOL PoolAllocated) {
-  if (EventResult) {
-    if (PoolAllocated) {
-      if (EventResultSize <= DOKAN_EVENT_INFO_DEFAULT_SIZE) {
-        PushEventResult(EventResult);
-      } else if (EventResultSize <= DOKAN_EVENT_INFO_16K_SIZE) {
-        Push16KEventResult(EventResult);
-      } else if (EventResultSize <= DOKAN_EVENT_INFO_32K_SIZE) {
-        Push32KEventResult(EventResult);
-      } else if (EventResultSize <= DOKAN_EVENT_INFO_64K_SIZE) {
-        Push64KEventResult(EventResult);
-      } else if (EventResultSize <= DOKAN_EVENT_INFO_128K_SIZE) {
-        Push128KEventResult(EventResult);
-      } else {
-        assert(FALSE);
-      }
-    } else {
-      FreeEventResult(EventResult);
-    }
+  if (!EventResult) {
+    return;
+  }
+  if (!PoolAllocated) {
+    FreeEventResult(EventResult);
+  } else if (EventResultSize <= DOKAN_EVENT_INFO_DEFAULT_SIZE) {
+    PushEventResult(EventResult);
+  } else if (EventResultSize <= DOKAN_EVENT_INFO_16K_SIZE) {
+    Push16KEventResult(EventResult);
+  } else if (EventResultSize <= DOKAN_EVENT_INFO_32K_SIZE) {
+    Push32KEventResult(EventResult);
+  } else if (EventResultSize <= DOKAN_EVENT_INFO_64K_SIZE) {
+    Push64KEventResult(EventResult);
+  } else if (EventResultSize <= DOKAN_EVENT_INFO_128K_SIZE) {
+    Push128KEventResult(EventResult);
+  } else {
+    assert(FALSE);
   }
 }
 
