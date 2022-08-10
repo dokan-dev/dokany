@@ -265,37 +265,40 @@ VOID CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
 }
 
 VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
+  // The event should not have a pending result from a previous request.
+  assert(IoEvent->EventResult == NULL);
+
   IoEvent->DokanOpenInfo =
       (PDOKAN_OPEN_INFO)(UINT_PTR)IoEvent->EventContext->Context;
   IoEvent->DokanFileInfo.DokanContext = (ULONG64)IoEvent;
   IoEvent->DokanFileInfo.ProcessId = IoEvent->EventContext->ProcessId;
   IoEvent->DokanFileInfo.DokanOptions = IoEvent->DokanInstance->DokanOptions;
 
-  if (IoEvent->DokanOpenInfo) {
-    EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    IoEvent->DokanOpenInfo->OpenCount++;
-    IoEvent->DokanFileInfo.Context = IoEvent->DokanOpenInfo->UserContext;
-    LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-    IoEvent->DokanFileInfo.IsDirectory =
-        (UCHAR)IoEvent->DokanOpenInfo->IsDirectory;
-
-    if (IoEvent->EventContext->FileFlags & DOKAN_DELETE_ON_CLOSE) {
-      IoEvent->DokanFileInfo.DeleteOnClose = 1;
-    }
-    if (IoEvent->EventContext->FileFlags & DOKAN_PAGING_IO) {
-      IoEvent->DokanFileInfo.PagingIo = 1;
-    }
-    if (IoEvent->EventContext->FileFlags & DOKAN_WRITE_TO_END_OF_FILE) {
-      IoEvent->DokanFileInfo.WriteToEndOfFile = 1;
-    }
-    if (IoEvent->EventContext->FileFlags & DOKAN_SYNCHRONOUS_IO) {
-      IoEvent->DokanFileInfo.SynchronousIo = 1;
-    }
-    if (IoEvent->EventContext->FileFlags & DOKAN_NOCACHE) {
-      IoEvent->DokanFileInfo.Nocache = 1;
-    }
+  if (!IoEvent->DokanOpenInfo) {
+    return;
   }
-  assert(IoEvent->EventResult == NULL);
+  EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  IoEvent->DokanOpenInfo->OpenCount++;
+  IoEvent->DokanFileInfo.Context = IoEvent->DokanOpenInfo->UserContext;
+  LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  IoEvent->DokanFileInfo.IsDirectory =
+      (UCHAR)IoEvent->DokanOpenInfo->IsDirectory;
+
+  if (IoEvent->EventContext->FileFlags & DOKAN_DELETE_ON_CLOSE) {
+    IoEvent->DokanFileInfo.DeleteOnClose = 1;
+  }
+  if (IoEvent->EventContext->FileFlags & DOKAN_PAGING_IO) {
+    IoEvent->DokanFileInfo.PagingIo = 1;
+  }
+  if (IoEvent->EventContext->FileFlags & DOKAN_WRITE_TO_END_OF_FILE) {
+    IoEvent->DokanFileInfo.WriteToEndOfFile = 1;
+  }
+  if (IoEvent->EventContext->FileFlags & DOKAN_SYNCHRONOUS_IO) {
+    IoEvent->DokanFileInfo.SynchronousIo = 1;
+  }
+  if (IoEvent->EventContext->FileFlags & DOKAN_NOCACHE) {
+    IoEvent->DokanFileInfo.Nocache = 1;
+  }
 }
 
 VOID DispatchEvent(PDOKAN_IO_EVENT ioEvent) {
