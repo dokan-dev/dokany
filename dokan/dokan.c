@@ -173,21 +173,16 @@ VOID DeleteDokanInstance(PDOKAN_INSTANCE DokanInstance) {
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint) {
   size_t mountPointLength;
-
   if (!mountPoint || *mountPoint == 0) {
     return FALSE;
   }
-
   mountPointLength = wcslen(mountPoint);
-
   if (mountPointLength == 1 ||
       (mountPointLength == 2 && mountPoint[1] == L':') ||
       (mountPointLength == 3 && mountPoint[1] == L':' &&
        mountPoint[2] == L'\\')) {
-
     return TRUE;
   }
-
   return FALSE;
 }
 
