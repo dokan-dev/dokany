@@ -608,9 +608,7 @@ BOOL DOKANAPI DokanIsFileSystemRunning(_In_ DOKAN_HANDLE DokanInstance) {
     return FALSE;
   }
   return WaitForSingleObject(instance->DeviceClosedWaitHandle, 0) ==
-                 WAIT_TIMEOUT
-             ? TRUE
-             : FALSE;
+         WAIT_TIMEOUT;
 }
 
 DWORD DOKANAPI DokanWaitForFileSystemClosed(_In_ DOKAN_HANDLE DokanInstance,
