@@ -29,15 +29,15 @@ ULONG DOKANAPI DokanDriverVersion() {
   ULONG version = 0;
   ULONG ret = 0;
 
-  if (SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_GET_VERSION,
-                   NULL,          // InputBuffer
-                   0,             // InputLength
-                   &version,      // OutputBuffer
-                   sizeof(ULONG), // OutputLength
-                   &ret)) {
-
-    return version;
+  if (!SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_GET_VERSION,
+                    NULL,          // InputBuffer
+                    0,             // InputLength
+                    &version,      // OutputBuffer
+                    sizeof(ULONG), // OutputLength
+                    &ret)) {
+    DbgPrintW(L"FSCTL_GET_VERSION failed\n");
+    return 0;
   }
 
-  return STATUS_SUCCESS;
+  return version;
 }
