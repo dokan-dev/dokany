@@ -932,7 +932,7 @@ ULONG DOKANAPI DokanVersion();
 /**
  * \brief Get the version of the Dokan driver.
  * The returned ULONG is the version number without the dots.
- * \return The version of Dokan driver.
+ * \return The version of Dokan driver or 0 on failure.
  */
 ULONG DOKANAPI DokanDriverVersion();
 
