@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [Unreleased] - 2.0.6.1000
 
-## [2.0.5.1000] - 2021-07-04
+## [2.0.5.1000] - 2022-07-04
 
 ### Changed
 - FUSE - Allow override default max read size by option.
@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Add `Vcb` null check before marking the volume as having wait events.
 - Library - Use Case sensitive option when listing filtering is done by the library.
 
-## [2.0.4.1000] - 2021-04-30
+## [2.0.4.1000] - 2022-04-30
 
 ### Changed
 - Kernel - Remove possible `UNCName` prefix in `Filename` during `CreateFile`.
@@ -29,12 +29,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Remove unsupported eject media support (deadlock).
 - FUSE - Update library name in module definition.
 
-## [2.0.3.2000] - 2021-02-27
+## [2.0.3.2000] - 2022-02-27
 
 ### Fixed
 - Installer - Regenerate all `GUID` to fix uninstall and conflict with v1.
 
-## [2.0.3.1000] - 2021-02-06
+## [2.0.3.1000] - 2022-02-06
 
 ### Added
 - Library - Add 16-128k `IoBatch/EventResult` pool for read and write.
@@ -51,7 +51,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Add lock to avoid `Unmounted` callback to be called multiple times (each pulling thread).
 - MemFS - Fix double instance free on `CTRL+C`.
 
-## [2.0.2.1000] - 2021-02-06
+## [2.0.2.1000] - 2022-02-06
 
 ### Fixed
 - Library - Fix `DokanResetTimeout` DokanFileInfo usage.
@@ -63,13 +63,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ### Changed
 - Library - Use multiple main pull thread (4 instead of 1) to avoid deadlock during low activity.
 
-## [2.0.1.2000] - 2021-01-28
+## [2.0.1.2000] - 2022-01-28
 
 ### Fixed
 - Installer - Set new BundleUpgradeCode for v2.
 - Kernel - Lock Fcb during setFileInfo notify report change
 
-## [2.0.1.1000] - 2021-01-23
+## [2.0.1.1000] - 2022-01-23
 
 ### Added
 - Kernel - Use the Rtl API to store DokanFCB in a Adelson-Velsky/Landis(AVL) table
@@ -91,7 +91,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Kernel - Use IRP buffer fct for `GetMountPointList`.
 - Kernel - Cleanup `SetInformation` completion and remove `DokanCCB::ERESOURCE`.
 
-## [2.0.0.2000] - 2021-01-01
+## [2.0.0.2000] - 2022-01-01
 
 ### Fixed
 - Library - Missing new 2.0.0 API export.
