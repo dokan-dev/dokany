@@ -26,6 +26,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntstatus.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stddef.h>
 
 #define DOKAN_STREAM_ENTRY_ALIGNMENT 8
 
