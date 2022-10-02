@@ -895,20 +895,6 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
               FILE_NOTIFY_CHANGE_LAST_ACCESS | FILE_NOTIFY_CHANGE_CREATION,
           FILE_ACTION_MODIFIED);
       break;
-    case FileDispositionInformation:
-    case FileDispositionInformationEx:
-      if (RequestContext->IrpSp->FileObject->DeletePending) {
-        if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-          DokanNotifyReportChange(RequestContext, fcb,
-                                  FILE_NOTIFY_CHANGE_DIR_NAME,
-                                  FILE_ACTION_REMOVED);
-        } else {
-          DokanNotifyReportChange(RequestContext, fcb,
-                                  FILE_NOTIFY_CHANGE_FILE_NAME,
-                                  FILE_ACTION_REMOVED);
-        }
-      }
-      break;
     case FileEndOfFileInformation:
       DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,
                               FILE_ACTION_MODIFIED);
