@@ -1419,9 +1419,6 @@ BOOL DOKANAPI DokanNotifyPath(_In_ DOKAN_HANDLE DokanInstance,
                               _In_ LPCWSTR FilePath,
                               _In_ ULONG CompletionFilter, _In_ ULONG Action) {
   DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
-  if (!instance) {
-    return FALSE;
-  }
   if (FilePath == NULL || !instance || !instance->NotifyHandle) {
     return FALSE;
   }
