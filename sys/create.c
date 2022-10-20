@@ -410,7 +410,7 @@ Return Value:
         "FileObject=%p RelatedFileObject=%p FileName=\"%wZ\" Flags=%x "
         "DesiredAccess=%lx Options=%lx "
         "FileAttributes=%x ShareAccess=%x",
-        fileObject, relatedFileObject, fileObject->FileName,
+        fileObject, relatedFileObject, &fileObject->FileName,
         RequestContext->IrpSp->Flags,
         RequestContext->IrpSp->Parameters.Create.SecurityContext->DesiredAccess,
         RequestContext->IrpSp->Parameters.Create.Options,
