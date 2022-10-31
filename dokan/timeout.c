@@ -50,7 +50,8 @@ BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO FileInfo) {
   status = SendToDevice(rawDeviceName, FSCTL_RESET_TIMEOUT, eventInfo,
                         eventInfoSize, NULL, 0, &returnedLength);
   if (!status) {
-    DbgPrintW(L"FSCTL_RESET_TIMEOUT failed\n");
+    DbgPrintW(L"Failed to Reset Timeout for %04d with timeout: %04d\n",
+              ioEvent->EventContext->SerialNumber, Timeout);
   }
   free(eventInfo);
   return status;

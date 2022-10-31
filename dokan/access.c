@@ -60,7 +60,8 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
   if (status) {
     handle = eventInfo->Operation.AccessToken.Handle;
   } else {
-    DbgPrintW(L"FSCTL_GET_ACCESS_TOKEN failed\n");
+    DbgPrintW(L"Failed to OpenRequestorToken for %04d\n",
+              ioEvent->EventContext->SerialNumber);
   }
   free(eventInfo);
   return handle;

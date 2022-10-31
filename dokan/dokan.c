@@ -1005,7 +1005,7 @@ BOOL SendReleaseIRP(LPCWSTR DeviceName) {
   if (!SendToDevice(rawDeviceName, FSCTL_EVENT_RELEASE, NULL, 0, NULL, 0,
                     &returnedLength)) {
 
-    DbgPrintW(L"Failed to unmount device:%s\n", DeviceName);
+    DbgPrintW(L"Failed to unmount device: %s\n", DeviceName);
     return FALSE;
   }
 
