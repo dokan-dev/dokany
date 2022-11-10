@@ -683,7 +683,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * \param MountPoint The mount point assign to the instance.
   * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
+  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result. The value is currently not used by the library.
   * \see Unmounted
   */
   NTSTATUS(DOKAN_CALLBACK *Mounted)(LPCWSTR MountPoint, PDOKAN_FILE_INFO DokanFileInfo);
@@ -694,7 +694,7 @@ typedef struct _DOKAN_OPERATIONS {
   * Called when Dokan is unmounting the volume.
   *
   * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or \c NTSTATUS appropriate to the request result.
+  * \return \c STATUS_SUCCESS on success or \c NTSTATUS appropriate to the request result. The value is currently not used by the library.
   * \see Mounted
   */
   NTSTATUS(DOKAN_CALLBACK *Unmounted)(PDOKAN_FILE_INFO DokanFileInfo);
