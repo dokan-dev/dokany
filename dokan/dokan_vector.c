@@ -85,13 +85,14 @@ PDOKAN_VECTOR DokanVector_AllocWithCapacity(size_t ItemSize, size_t MaxItems) {
 
 // Releases the memory associated with a DOKAN_VECTOR;
 VOID DokanVector_Free(PDOKAN_VECTOR Vector) {
-  if (Vector) {
-    if (Vector->Items) {
-      free(Vector->Items);
-    }
-    if (!Vector->IsStackAllocated) {
-      free(Vector);
-    }
+  if (!Vector) {
+    return;
+  }
+  if (Vector->Items) {
+    free(Vector->Items);
+  }
+  if (!Vector->IsStackAllocated) {
+    free(Vector);
   }
 }
 
