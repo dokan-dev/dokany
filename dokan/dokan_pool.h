@@ -52,10 +52,12 @@ VOID FreeIoBatchBuffer(PDOKAN_IO_BATCH IoBatch);
 PDOKAN_IO_EVENT PopIoEventBuffer();
 VOID PushIoEventBuffer(PDOKAN_IO_EVENT IoEvent);
 
+// Default Event size.
 PEVENT_INFORMATION PopEventResult();
 VOID PushEventResult(PEVENT_INFORMATION EventResult);
 VOID FreeEventResult(PEVENT_INFORMATION EventResult);
 
+// Event with extra memory allocated for events holding additional data. 
 PEVENT_INFORMATION Pop16KEventResult();
 VOID Push16KEventResult(PEVENT_INFORMATION EventResult);
 PEVENT_INFORMATION Pop32KEventResult();
