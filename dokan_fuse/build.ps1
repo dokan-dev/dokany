@@ -8,11 +8,11 @@ $script:failed = 0
     New-Item -Force -Type Directory $buildDir
     & $env:CYGWIN_INST_DIR\bin\bash -lc "
         cd '$currentPath'/'$buildDir' &&
-        cmake ../../../ -DCMAKE_TOOLCHAIN_FILE=../../../cmake/toolchain-i686-pc-cygwin.cmake -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
+        cmake ../../../ -DCMAKE_INSTALL_PREFIX='../../../../$installDir' -DCMAKE_INSTALL_BINDIR=. &&
         make -j `$(getconf _NPROCESSORS_ONLN) install"
     & $env:CYGWIN_INST_DIR\bin\bash -lc "
         cd '$currentPath' &&
-        i686-pc-cygwin-gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
+        gcc -o '$installDir'/mirror samples/fuse_mirror/fusexmp.c `$(PKG_CONFIG_PATH='$installDir/lib/pkgconfig' pkg-config fuse --cflags --libs)"
     if ($LASTEXITCODE -ne 0) {
         $script:failed = $LASTEXITCODE
     }
