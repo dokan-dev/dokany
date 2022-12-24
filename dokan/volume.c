@@ -36,7 +36,7 @@ NTSTATUS DOKAN_CALLBACK DokanGetDiskFreeSpace(PULONGLONG FreeBytesAvailable,
   return STATUS_SUCCESS;
 }
 
-NTSTATUS DOKAN_CALLBACK DokanGetVolumeInformation(
+NTSTATUS DOKAN_CALLBACK DokanGetDefaultVolumeInformation(
     LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
     LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
     LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
@@ -52,6 +52,34 @@ NTSTATUS DOKAN_CALLBACK DokanGetVolumeInformation(
   wcscpy_s(FileSystemNameBuffer, FileSystemNameSize, L"NTFS");
 
   return STATUS_SUCCESS;
+}
+
+NTSTATUS DokanGetVolumeInformation(
+    PDOKAN_OPERATIONS DokanOperations, LPWSTR VolumeNameBuffer,
+    DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
+    LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
+    LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
+    PDOKAN_FILE_INFO DokanFileInfo) {
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+
+  RtlZeroMemory(VolumeNameBuffer, VolumeNameSize * sizeof(WCHAR));
+  RtlZeroMemory(FileSystemNameBuffer, FileSystemNameSize * sizeof(WCHAR));
+
+  if (DokanOperations->GetVolumeInformation) {
+    status = DokanOperations->GetVolumeInformation(
+        VolumeNameBuffer, VolumeNameSize, VolumeSerialNumber,
+        MaximumComponentLength, FileSystemFlags, FileSystemNameBuffer,
+        FileSystemNameSize, DokanFileInfo);
+  }
+
+  if (status == STATUS_NOT_IMPLEMENTED) {
+    status = DokanGetDefaultVolumeInformation(
+        VolumeNameBuffer, VolumeNameSize, VolumeSerialNumber,
+        MaximumComponentLength, FileSystemFlags, FileSystemNameBuffer,
+        FileSystemNameSize, DokanFileInfo);
+  }
+
+  return status;
 }
 
 NTSTATUS
@@ -76,36 +104,16 @@ DokanFsVolumeInformation(PEVENT_INFORMATION EventInfo,
     return STATUS_BUFFER_OVERFLOW;
   }
 
-  RtlZeroMemory(volumeName, sizeof(volumeName));
-  RtlZeroMemory(fsName, sizeof(fsName));
-
-  if (DokanOperations->GetVolumeInformation) {
-    status = DokanOperations->GetVolumeInformation(
-        volumeName,                         // VolumeNameBuffer
-        sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
-        &volumeSerial,                      // VolumeSerialNumber
-        &maxComLength,                      // MaximumComponentLength
-        &fsFlags,                           // FileSystemFlags
-        fsName,                             // FileSystemNameBuffer
-        sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
-        FileInfo);
-  }
-
-  if (status == STATUS_NOT_IMPLEMENTED) {
-    status = DokanGetVolumeInformation(
-        volumeName,                         // VolumeNameBuffer
-        sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
-        &volumeSerial,                      // VolumeSerialNumber
-        &maxComLength,                      // MaximumComponentLength
-        &fsFlags,                           // FileSystemFlags
-        fsName,                             // FileSystemNameBuffer
-        sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
-        FileInfo);
-  }
-
-  if (status != STATUS_SUCCESS) {
-    return status;
-  }
+  status = DokanGetVolumeInformation(
+      DokanOperations,
+      volumeName,                         // VolumeNameBuffer
+      sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
+      &volumeSerial,                      // VolumeSerialNumber
+      &maxComLength,                      // MaximumComponentLength
+      &fsFlags,                           // FileSystemFlags
+      fsName,                             // FileSystemNameBuffer
+      sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
+      FileInfo);
 
   volumeInfo->VolumeCreationTime.QuadPart = 0;
   volumeInfo->VolumeSerialNumber = volumeSerial;
@@ -203,32 +211,16 @@ DokanFsAttributeInformation(PEVENT_INFORMATION EventInfo,
     return STATUS_BUFFER_OVERFLOW;
   }
 
-  RtlZeroMemory(volumeName, sizeof(volumeName));
-  RtlZeroMemory(fsName, sizeof(fsName));
-
-  if (DokanOperations->GetVolumeInformation) {
-    status = DokanOperations->GetVolumeInformation(
-        volumeName,                         // VolumeNameBuffer
-        sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
-        &volumeSerial,                      // VolumeSerialNumber
-        &maxComLength,                      // MaximumComponentLength
-        &fsFlags,                           // FileSystemFlags
-        fsName,                             // FileSystemNameBuffer
-        sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
-        FileInfo);
-  }
-
-  if (status == STATUS_NOT_IMPLEMENTED) {
-    status = DokanGetVolumeInformation(
-        volumeName,                         // VolumeNameBuffer
-        sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
-        &volumeSerial,                      // VolumeSerialNumber
-        &maxComLength,                      // MaximumComponentLength
-        &fsFlags,                           // FileSystemFlags
-        fsName,                             // FileSystemNameBuffer
-        sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
-        FileInfo);
-  }
+  status = DokanGetVolumeInformation(
+      DokanOperations,
+      volumeName,                         // VolumeNameBuffer
+      sizeof(volumeName) / sizeof(WCHAR), // VolumeNameSize
+      &volumeSerial,                      // VolumeSerialNumber
+      &maxComLength,                      // MaximumComponentLength
+      &fsFlags,                           // FileSystemFlags
+      fsName,                             // FileSystemNameBuffer
+      sizeof(fsName) / sizeof(WCHAR),     // FileSystemNameSize
+      FileInfo);
 
   if (status != STATUS_SUCCESS) {
     return status;
