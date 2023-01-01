@@ -34,11 +34,11 @@ namespace memfs {
 fs_filenodes::fs_filenodes() {
   WCHAR buffer[1024];
   WCHAR final_buffer[2048];
-  PTOKEN_USER user_token = NULL;
-  PTOKEN_GROUPS groups_token = NULL;
+  PTOKEN_USER user_token = nullptr;
+  PTOKEN_GROUPS groups_token = nullptr;
   HANDLE token_handle;
-  LPTSTR user_sid_str = NULL;
-  LPTSTR group_sid_str = NULL;
+  LPTSTR user_sid_str = nullptr;
+  LPTSTR group_sid_str = nullptr;
 
   // Build default root filenode SecurityDescriptor
   if (OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &token_handle) ==
@@ -75,7 +75,7 @@ fs_filenodes::fs_filenodes() {
   LocalFree(group_sid_str);
   CloseHandle(token_handle);
   swprintf_s(final_buffer, 2048, L"%lsD:PAI(A;OICI;FA;;;AU)", buffer);
-  PSECURITY_DESCRIPTOR security_descriptor = NULL;
+  PSECURITY_DESCRIPTOR security_descriptor = nullptr;
   ULONG size = 0;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
           final_buffer, SDDL_REVISION_1, &security_descriptor, &size))

@@ -663,15 +663,15 @@ static NTSTATUS DOKAN_CALLBACK memfs_getfilesecurity(
   // We have a Security Descriptor but we need to extract only informations
   // requested 1 - Convert the Security Descriptor to SDDL string with the
   // informations requested
-  LPTSTR pStringBuffer = NULL;
+  LPTSTR pStringBuffer = nullptr;
   if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
           f->security.descriptor.get(), SDDL_REVISION_1, *security_information,
-          &pStringBuffer, NULL)) {
+          &pStringBuffer, nullptr)) {
     return STATUS_NOT_IMPLEMENTED;
   }
 
   // 2 - Convert the SDDL string back to Security Descriptor
-  PSECURITY_DESCRIPTOR SecurityDescriptorTmp = NULL;
+  PSECURITY_DESCRIPTOR SecurityDescriptorTmp = nullptr;
   ULONG Size = 0;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
           pStringBuffer, SDDL_REVISION_1, &SecurityDescriptorTmp, &Size)) {
