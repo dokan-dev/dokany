@@ -36,7 +36,7 @@ BEGIN
             VALUE "FileDescription", "Dokan Library"
             VALUE "FileVersion", "2.0.6.1000"
             VALUE "InternalName", "dokan.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2021"
+            VALUE "LegalCopyright", "Copyright (C) 2023"
             VALUE "OriginalFilename", "dokan.dll"
             VALUE "ProductName", "Dokan"
             VALUE "ProductVersion", "2.0.6.1000"
