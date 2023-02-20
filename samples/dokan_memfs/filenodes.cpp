@@ -91,7 +91,7 @@ fs_filenodes::fs_filenodes() {
 
 NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
                   std::optional<std::pair<std::wstring, std::wstring>> stream_names) {
-  std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
+  std::scoped_lock lock(_filesnodes_mutex);
 
   if (f->fileindex == 0)  // previous init
     f->fileindex = _fs_fileindex_count++;
@@ -138,14 +138,14 @@ NTSTATUS fs_filenodes::add(const std::shared_ptr<filenode> &f,
 }
 
 std::shared_ptr<filenode> fs_filenodes::find(const std::wstring& filename) {
-  std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
+  std::scoped_lock lock(_filesnodes_mutex);
   auto fileNode = _filenodes.find(filename);
   return (fileNode != _filenodes.end()) ? fileNode->second : nullptr;
 }
 
 std::set<std::shared_ptr<filenode>> fs_filenodes::list_folder(
     const std::wstring& fileName) {
-  std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
+  std::scoped_lock lock(_filesnodes_mutex);
 
   auto it = _directoryPaths.find(fileName);
   return (it != _directoryPaths.end()) ? it->second
@@ -159,7 +159,7 @@ void fs_filenodes::remove(const std::wstring& filename) {
 void fs_filenodes::remove(const std::shared_ptr<filenode>& f) {
   if (!f) return;
 
-  std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
+  std::scoped_lock lock(_filesnodes_mutex);
   auto fileName = f->get_filename();
   spdlog::info(L"Remove: {}", fileName);
 
@@ -210,7 +210,7 @@ NTSTATUS fs_filenodes::move(const std::wstring& old_filename,
 
   auto newParent_path = memfs_helper::GetParentPath(new_filename);
 
-  std::lock_guard<std::recursive_mutex> lock(_filesnodes_mutex);
+  std::scoped_lock lock(_filesnodes_mutex);
   if (!_directoryPaths.count(newParent_path)) {
     spdlog::warn(L"Move: No directory: {} exist FilePath: {}", newParent_path,
                  new_filename);
