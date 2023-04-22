@@ -581,17 +581,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
     opened = TRUE;
   }
 
-  LARGE_INTEGER distanceToMove;
-  distanceToMove.QuadPart = Offset;
-  if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-    DWORD error = GetLastError();
-    DbgPrint(L"\tseek error, offset = %d\n\n", offset);
-    if (opened)
-      CloseHandle(handle);
-    return DokanNtStatusFromWin32(error);
-  }
-
-  if (!ReadFile(handle, Buffer, BufferLength, ReadLength, NULL)) {
+  OVERLAPPED overlap;
+  memset(&overlap, 0, sizeof(OVERLAPPED));
+  overlap.Offset = Offset & 0xFFFFFFFF;
+  overlap.OffsetHigh = (Offset >> 32) & 0xFFFFFFFF;
+  if (!ReadFile(handle, Buffer, BufferLength, ReadLength, &overlap)) {
     DWORD error = GetLastError();
     DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n\n",
              error, BufferLength, *ReadLength);
@@ -651,17 +645,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 
   fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
 
-  LARGE_INTEGER distanceToMove;
+  OVERLAPPED overlap;
+  memset(&overlap, 0, sizeof(OVERLAPPED));
   if (DokanFileInfo->WriteToEndOfFile) {
-    LARGE_INTEGER z;
-    z.QuadPart = 0;
-    if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
-      if (opened)
-        CloseHandle(handle);
-      return DokanNtStatusFromWin32(error);
-    }
+    overlap.Offset = 0xFFFFFFFF;
+    overlap.OffsetHigh = 0xFFFFFFFF;
   } else {
     // Paging IO cannot write after allocate file size.
     if (DokanFileInfo->PagingIo) {
@@ -689,18 +677,12 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
       // file systems ) then  users will have to zero the hole themselves.
     }
 
-    distanceToMove.QuadPart = Offset;
-    if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
-      if (opened)
-        CloseHandle(handle);
-      return DokanNtStatusFromWin32(error);
-    }
+    overlap.Offset = Offset & 0xFFFFFFFF;
+    overlap.OffsetHigh = (Offset >> 32) & 0xFFFFFFFF;
   }
 
   if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten,
-                 NULL)) {
+                 &overlap)) {
     DWORD error = GetLastError();
     DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
              error, NumberOfBytesToWrite, *NumberOfBytesWritten);
