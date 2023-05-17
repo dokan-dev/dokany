@@ -564,6 +564,7 @@ PDOKAN_OPEN_INFO PopFileOpenInfo() {
     fileInfo->DokanInstance = NULL;
     fileInfo->DirList = NULL;
     fileInfo->DirListSearchPattern= NULL;
+    fileInfo->UnimplementedFindFilesWithPattern = FALSE;
     fileInfo->UserContext = 0;
     fileInfo->EventId = 0;
     fileInfo->IsDirectory = FALSE;

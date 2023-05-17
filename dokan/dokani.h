@@ -107,6 +107,8 @@ typedef struct _DOKAN_OPEN_INFO {
   PDOKAN_INSTANCE DokanInstance;
   PDOKAN_VECTOR DirList;
   PWCHAR DirListSearchPattern;
+  /** Whether the FindFilesWithPattern has returned STATUS_NOT_IMPLEMENTED */
+  BOOLEAN UnimplementedFindFilesWithPattern;
   /** User Context see DOKAN_FILE_INFO.Context */
   LONG64 UserContext;
   /** Event Id */

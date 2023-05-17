@@ -402,7 +402,8 @@ LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
   }
 
   if (pattern && wcscmp(pattern, L"*") != 0 &&
-      !IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
+      (!IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern ||
+       IoEvent->DokanOpenInfo->UnimplementedFindFilesWithPattern)) {
     patternCheck = TRUE;
   }
 
@@ -703,6 +704,11 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
         IoEvent->EventContext->Operation.Directory.DirectoryName,
         searchPattern ? searchPattern : L"*", DokanFillFileData,
         &IoEvent->DokanFileInfo);
+    if (status == STATUS_NOT_IMPLEMENTED) {
+      EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+      IoEvent->DokanOpenInfo->UnimplementedFindFilesWithPattern = TRUE;
+      LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+    }
   }
 
   // And if not, try with FindFiles.
