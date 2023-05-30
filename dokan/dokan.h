@@ -549,6 +549,7 @@ typedef struct _DOKAN_OPERATIONS {
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param ByteOffset File length to set.
   * \param DokanFileInfo Information about the file or directory.
+  * \see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/75241cca-3167-472f-8058-a52d77c6bb17"> FileEndOfFileInformation (MSDN)</a>
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
   NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)(LPCWSTR FileName,
@@ -563,6 +564,7 @@ typedef struct _DOKAN_OPERATIONS {
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param AllocSize File length to set.
   * \param DokanFileInfo Information about the file or directory.
+  * \see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/0201c69b-50db-412d-bab3-dd97aeede13b"> FileAllocationInformation (MSDN)</a>
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
   NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)(LPCWSTR FileName,
