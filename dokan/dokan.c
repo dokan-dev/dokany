@@ -620,6 +620,25 @@ DWORD DOKANAPI DokanWaitForFileSystemClosed(_In_ DOKAN_HANDLE DokanInstance,
   return WaitForSingleObject(instance->DeviceClosedWaitHandle, dwMilliseconds);
 }
 
+BOOL DOKANAPI DokanRegisterWaitForFileSystemClosed(
+    _In_ DOKAN_HANDLE DokanInstance, _Out_ PHANDLE WaitHandle,
+    _In_ WAITORTIMERCALLBACKFUNC Callback, _In_ PVOID Context,
+    ULONG dwMilliseconds) {
+  DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
+  if (!instance) {
+    return FALSE;
+  }
+  return RegisterWaitForSingleObject(
+      WaitHandle, instance->DeviceClosedWaitHandle, Callback, Context,
+      dwMilliseconds, WT_EXECUTEONLYONCE);
+}
+
+BOOL DOKANAPI DokanUnregisterWaitForFileSystemClosed(
+    _In_ HANDLE WaitHandle, BOOL WaitForCallbacks) {
+  return UnregisterWaitEx(
+      WaitHandle, WaitForCallbacks ? INVALID_HANDLE_VALUE : NULL);
+}
+
 VOID DOKANAPI DokanCloseHandle(_In_ DOKAN_HANDLE DokanInstance) {
   DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
   if (!instance) {
