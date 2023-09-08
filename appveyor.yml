@@ -350,6 +350,9 @@
           $mergeBranchHead = $parents[1]
           $prBranchHead = $parents[2]
 
+          # Python 3 is needed by git clang-format
+          $env:PATH ="C:\Python38;$env:PATH"
+
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
           Exec-External {& git clang-format --quiet --style=file --diff $mergeBranchHead} |
             Select-String -NotMatch "^no modified files to format$" > $diffFile
