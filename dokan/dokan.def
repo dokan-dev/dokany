@@ -32,4 +32,6 @@ DokanShutdown
 DokanCreateFileSystem
 DokanIsFileSystemRunning
 DokanWaitForFileSystemClosed
+DokanRegisterWaitForFileSystemClosed
+DokanUnregisterWaitForFileSystemClosed
 DokanCloseHandle

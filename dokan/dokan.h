@@ -879,6 +879,31 @@ DWORD DOKANAPI DokanWaitForFileSystemClosed(_In_ DOKAN_HANDLE DokanInstance,
                                             _In_ DWORD dwMilliseconds);
 
 /**
+ * \brief Register callback for FileSystem unmount.
+ *
+ * \param DokanInstance The dokan mount context created by \ref DokanCreateFileSystem .
+ * \param WaitHandle Handle to wait handle registration. This handle needs to be closed by calling <a href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-unregisterwait">UnregisterWait</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/sync/unregisterwait">UnregisterWaitEx</a> or \ref DokanUnregisterWaitForFileSystemClosed to unregister the callback .
+ * \param Callback Callback function to be called from a worker thread when file system is unmounted .
+ * \param Context A context parameter to send to callback function .
+ * \param dwMilliseconds The time-out interval, in milliseconds. See <a href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-registerwaitforsingleobject">RegisterWaitForSingleObject</a>.
+ * \return TRUE if successful, FALSE otherwise.
+ */
+BOOL DOKANAPI DokanRegisterWaitForFileSystemClosed(
+    _In_ DOKAN_HANDLE DokanInstance, _Out_ PHANDLE WaitHandle,
+    _In_ WAITORTIMERCALLBACKFUNC Callback, _In_ PVOID Context,
+    ULONG dwMilliseconds);
+
+/**
+ * \brief Unregister callback for FileSystem unmount.
+ *
+ * \param WaitHandle Handle returned as WaitHandle parameter in previous call to \ref DokanRegisterWaitForFileSystemClosed .
+ * \param WaitForCallbacks Indicates whether to wait for callbacks to complete before returning. Normally set to TRUE unless called from same thread as callback function.
+ * \return TRUE if successful, FALSE otherwise.
+ */
+BOOL DOKANAPI DokanUnregisterWaitForFileSystemClosed(_In_ HANDLE WaitHandle,
+                                                     BOOL WaitForCallbacks);
+
+/**
  * \brief Unmount the Dokan instance.
  * 
  * Unmount and wait until all resources of the \c DokanInstance are released.
