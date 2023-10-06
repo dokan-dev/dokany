@@ -96,6 +96,26 @@ VOID DokanVector_Free(PDOKAN_VECTOR Vector) {
   }
 }
 
+// Appends an item to the vector at the Front. Expensive, please use PushBack instead.
+BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item) {
+  assert(Vector && Item);
+  if (Vector->ItemCount + 1 >= Vector->MaxItems) {
+    if (!DokanVector_Grow(Vector, 1)) {
+      return FALSE;
+    }
+  }
+  // Shift the vector from one item.
+  memmove_s(((BYTE *)Vector->Items) + Vector->ItemSize,
+            (Vector->MaxItems - 1) * Vector->ItemSize, (BYTE *)Vector->Items,
+            Vector->ItemCount * Vector->ItemSize);
+  // Copy the new item at the front.
+  memcpy_s((BYTE *)Vector->Items,
+           (Vector->MaxItems - Vector->ItemCount) * Vector->ItemSize, Item,
+           Vector->ItemSize);
+  ++Vector->ItemCount;
+  return TRUE;
+}
+
 // Appends an item to the vector.
 BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item) {
   assert(Vector && Item);
