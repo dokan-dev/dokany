@@ -1,0 +1,26 @@
+﻿$ErrorActionPreference = 'Stop';
+
+$packageName= 'dokany2'
+$toolsDir   = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
+#$fileLocation = Join-Path $toolsDir 'NAME_OF_EMBEDDED_INSTALLER_FILE'
+
+$packageArgs = @{
+  packageName   = $packageName
+  unzipLocation = $toolsDir
+  fileType      = 'MSI'
+  url           = '[[Url]]'
+  url64bit      = '[[Url64]]'
+  #file         = $fileLocation
+
+  softwareName  = 'Dokan Library*'
+
+  checksum      = '[[Checksum]]'
+  checksumType  = 'sha256'
+  checksum64    = '[[Checksum64]]'
+  checksumType64= 'sha256'
+
+  silentArgs    = "/passive /norestart"
+  validExitCodes= @(0, 3010, 1641)
+}
+
+Install-ChocolateyPackage @packageArgs

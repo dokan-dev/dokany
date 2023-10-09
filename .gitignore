@@ -23,6 +23,7 @@ obj
 *.exe
 ReleasePS
 *.zip
+/chocolatey/build/
 /dokan_wix/Bootstrapper/Redist
 /*.opendb
 /dokan_wix/msbuild.log
