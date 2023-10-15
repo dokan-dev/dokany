@@ -1146,7 +1146,7 @@ int impl_file_lock::lock_file(impl_file_handle *file, long long start,
         locked = true;
     }
   }
-  if (!locked & mark)
+  if (!locked && mark)
     file->locks[start] = len;
   LeaveCriticalSection(&lock);
   return locked ? -EACCES : 0;
