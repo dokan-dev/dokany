@@ -39,6 +39,9 @@ DOKAN_VECTOR *DokanVector_AllocWithCapacity(size_t ItemSize, size_t MaxItems);
 // Releases the memory associated with a DOKAN_VECTOR;
 VOID DokanVector_Free(PDOKAN_VECTOR Vector);
 
+// Appends an item to the vector at the Front. Expensive, please use PushBack instead.
+BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item);
+
 // Appends an item to the vector.
 BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item);
 

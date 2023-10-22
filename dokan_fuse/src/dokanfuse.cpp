@@ -502,6 +502,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   }
   ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
 
+  wchar_t uncName[MAX_PATH + 1];
   dokanOptions->GlobalContext = reinterpret_cast<ULONG64>(&impl);
   if (fs->conf.mountManager)
     dokanOptions->Options |= DOKAN_OPTION_MOUNT_MANAGER;
@@ -511,8 +512,7 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
     }
     if (fs->conf.networkDrive) {
       dokanOptions->Options |= DOKAN_OPTION_NETWORK;
-      wchar_t uncName[MAX_PATH + 1];
-      if (fs->conf.networkDrive && fs->conf.uncname) {
+      if (fs->conf.uncname) {
         mbstowcs(uncName, fs->conf.uncname, MAX_PATH);
         dokanOptions->UNCName = uncName;
       }

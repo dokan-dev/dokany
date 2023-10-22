@@ -145,7 +145,7 @@ typedef struct _DOKAN_OPTIONS {
   ULONG Options;
   /** FileSystem can store anything here. */
   ULONG64 GlobalContext;
-  /** Mount point. It can be a driver letter like "M:\" or a folder path "C:\mount\dokan" on a NTFS partition. */
+  /** Mount point. It can be a driver letter like "M:\" or an existing empty folder path "C:\mount\dokan" on a NTFS partition. */
   LPCWSTR MountPoint;
   /**
    * UNC Name for the Network Redirector

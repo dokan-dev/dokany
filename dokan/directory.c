@@ -509,12 +509,12 @@ VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent) {
       findData.cFileName[0] = '.';
       findData.cFileName[1] = '.';
       // NULL written during ZeroMemory()
-      DokanVector_PushBack(dirList, &findData);
+      DokanVector_PushFront(dirList, &findData);
     }
     if (!currentFolder) {
       findData.cFileName[0] = '.';
       findData.cFileName[1] = '\0';
-      DokanVector_PushBack(dirList, &findData);
+      DokanVector_PushFront(dirList, &findData);
     }
   }
 }
