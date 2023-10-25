@@ -610,8 +610,10 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
   ULONG fileInfoClass =
       IoEvent->EventContext->Operation.Directory.FileInformationClass;
   BOOL forceScan = FALSE;
+  PDOKAN_OPEN_INFO openInfo = IoEvent->DokanOpenInfo;
+  BOOLEAN allocatedOpenInfo = FALSE;
 
-   DbgPrint(
+  DbgPrint(
       "###FindFiles file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
       IoEvent->DokanOpenInfo,
       IoEvent->DokanOpenInfo != NULL ? IoEvent->DokanOpenInfo->EventId : -1,
@@ -652,22 +654,24 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
                                  .SearchPatternOffset);
   }
 
-  EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  if (!openInfo) {
+    openInfo = PopFileOpenInfo();
+    allocatedOpenInfo = TRUE;
+  }
+
+  EnterCriticalSection(&openInfo->CriticalSection);
   {
-    if (IoEvent->DokanOpenInfo->DirList == NULL) {
+    if (openInfo->DirList == NULL) {
       forceScan = TRUE;
-    } else if (searchPattern && IoEvent->DokanOpenInfo->DirListSearchPattern) {
-      forceScan = wcscmp(searchPattern,
-                         IoEvent->DokanOpenInfo->DirListSearchPattern) != 0
+    } else if (searchPattern && openInfo->DirListSearchPattern) {
+      forceScan = wcscmp(searchPattern, openInfo->DirListSearchPattern) != 0
                       ? TRUE
                       : FALSE;
     } else if (searchPattern) {
       forceScan = wcscmp(searchPattern, L"*") != 0 ? TRUE : FALSE;
-    } else if (IoEvent->DokanOpenInfo->DirListSearchPattern) {
+    } else if (openInfo->DirListSearchPattern) {
       forceScan =
-          wcscmp(IoEvent->DokanOpenInfo->DirListSearchPattern, L"*") != 0
-              ? TRUE
-              : FALSE;
+          wcscmp(openInfo->DirListSearchPattern, L"*") != 0 ? TRUE : FALSE;
     }
     // In FastFat SL_INDEX_SPECIFIED overrides SL_RESTART_SCAN
     forceScan =
@@ -676,14 +680,17 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
             ? TRUE
             : FALSE;
     if (!forceScan) {
-      status = WriteDirectoryResults(IoEvent, IoEvent->DokanOpenInfo->DirList);
+      status = WriteDirectoryResults(IoEvent, openInfo->DirList);
     }
   }
-  LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+  LeaveCriticalSection(&openInfo->CriticalSection);
 
   if (!forceScan) {
     IoEvent->EventResult->Status = status;
     EventCompletion(IoEvent);
+    if (allocatedOpenInfo) {
+      PushFileOpenInfo(openInfo);
+    }
     return;
   }
 
@@ -693,6 +700,9 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
         "Dokan Error: Failed to allocate memory for a new directory list.\n");
     IoEvent->EventResult->Status = STATUS_NO_MEMORY;
     EventCompletion(IoEvent);
+    if (allocatedOpenInfo) {
+      PushFileOpenInfo(openInfo);
+    }
     return;
   }
 
@@ -705,9 +715,9 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
         searchPattern ? searchPattern : L"*", DokanFillFileData,
         &IoEvent->DokanFileInfo);
     if (status == STATUS_NOT_IMPLEMENTED) {
-      EnterCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
-      IoEvent->DokanOpenInfo->UnimplementedFindFilesWithPattern = TRUE;
-      LeaveCriticalSection(&IoEvent->DokanOpenInfo->CriticalSection);
+      EnterCriticalSection(&openInfo->CriticalSection);
+      openInfo->UnimplementedFindFilesWithPattern = TRUE;
+      LeaveCriticalSection(&openInfo->CriticalSection);
     }
   }
 
@@ -725,6 +735,10 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
     // Neither FindFilesWithPattern nor FindFiles are implemented.
     IoEvent->EventResult->Status = STATUS_NOT_IMPLEMENTED;
     EventCompletion(IoEvent);
+  }
+
+  if (allocatedOpenInfo) {
+    PushFileOpenInfo(openInfo);
   }
 }
 
