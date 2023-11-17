@@ -214,7 +214,7 @@ GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
 
 VOID ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions);
 
-BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
+BOOL DokanMount(PDOKAN_INSTANCE DokanInstance,
                 PDOKAN_OPTIONS DokanOptions);
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);

@@ -505,23 +505,16 @@ BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
   return FALSE;
 }
 
-VOID DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
-  DWORD receipients;
+VOID CALLBACK DokanBroadcastCallback(PTP_CALLBACK_INSTANCE Instance,
+                                     PVOID Parameter, PTP_WORK Work) {
+  UNREFERENCED_PARAMETER(Instance);
+  UNREFERENCED_PARAMETER(Work);
+
   DWORD device_event;
   DEV_BROADCAST_VOLUME params;
-  WCHAR drive[4] = L"C:\\";
-  LONG wEventId;
-
-  if (!isalpha(cLetter)) {
-    DbgPrint("DokanBroadcastLink: invalid parameter\n");
-    return;
-  }
-
-  receipients = BSM_APPLICATIONS;
-  // Unsafe to call Advapi32.dll during DLL_PROCESS_DETACH
-  if (EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
-    receipients |= BSM_ALLDESKTOPS;
-  }
+  WCHAR cLetter = (size_t)Parameter & 0xff;
+  DWORD receipients = ((size_t)Parameter >> 16) & 0x7fff;
+  BOOL bRemoved = ((size_t)Parameter >> 31) & 0x1;
 
   device_event = bRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
 
@@ -529,35 +522,69 @@ VOID DokanBroadcastLink(WCHAR cLetter, BOOL bRemoved) {
   params.dbcv_size = sizeof(params);
   params.dbcv_devicetype = DBT_DEVTYP_VOLUME;
   params.dbcv_reserved = 0;
-  params.dbcv_unitmask = (1 << (toupper(cLetter) - 'A'));
+  params.dbcv_unitmask = (1 << cLetter);
   params.dbcv_flags = 0;
 
-  if (BroadcastSystemMessage(
-          BSF_NOHANG | BSF_FORCEIFHUNG, &receipients,
-          WM_DEVICECHANGE, device_event, (LPARAM)&params) <= 0) {
+  if (BroadcastSystemMessage(BSF_NOHANG | BSF_FORCEIFHUNG, &receipients,
+                             WM_DEVICECHANGE, device_event,
+                             (LPARAM)&params) <= 0) {
 
     DbgPrint("DokanBroadcastLink: BroadcastSystemMessage failed - %d\n",
              GetLastError());
   }
+}
+
+VOID DokanBroadcastLink(PDOKAN_INSTANCE DokanInstance, BOOL bRemoved) {
+  DWORD receipients = BSM_APPLICATIONS;
+  WCHAR drive[4] = L"C:\\";
+  LONG wEventId;
+  WCHAR cLetter = DokanInstance->MountPoint[0];
+
+  if (!isalpha(cLetter)) {
+    DbgPrint("DokanBroadcastLink: invalid parameter\n");
+    return;
+  }
+
+  // Unsafe to call Advapi32.dll during DLL_PROCESS_DETACH
+  if (EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
+    receipients |= BSM_ALLDESKTOPS;
+  }
+
+  // Async call BroadcastSystemMessage to avoid possible hangs from receiver apps.
+  // Store the event information inside the "unused" pointer value:
+  PVOID parameter =
+      (PVOID)(size_t)((bRemoved << 31) | ((receipients & 0x7fff) << 16) |
+                      ((toupper(cLetter) - 'A') & 0xff));
+  PTP_WORK work =
+      CreateThreadpoolWork(DokanBroadcastCallback, parameter,
+                           &DokanInstance->ThreadInfo.CallbackEnvironment);
+  if (!work) {
+    DWORD lastError = GetLastError();
+    DbgPrintW(L"Dokan Error: CreateThreadpoolWork() has returned error "
+              L"code %u.\n",
+              lastError);
+    return;
+  }
+  SubmitThreadpoolWork(work);
 
   drive[0] = towupper(cLetter);
   wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
   SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
 }
 
-BOOL DokanMount(LPCWSTR MountPoint, LPCWSTR DeviceName,
-                PDOKAN_OPTIONS DokanOptions) {
+BOOL DokanMount(PDOKAN_INSTANCE DokanInstance, PDOKAN_OPTIONS DokanOptions) {
   UNREFERENCED_PARAMETER(DokanOptions);
-  if (MountPoint != NULL) {
-    if (!IsMountPointDriveLetter(MountPoint)) {
+  if (DokanInstance->MountPoint != NULL) {
+    if (!IsMountPointDriveLetter(DokanInstance->MountPoint)) {
       if (DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
         return TRUE; // Kernel has already created the reparse point.
       }
       // Should it not also be moved to kernel ?
-      return CreateMountPoint(MountPoint, DeviceName);
+      return CreateMountPoint(DokanInstance->MountPoint,
+                              DokanInstance->DeviceName);
     } else {
       // Notify applications / explorer
-      DokanBroadcastLink(MountPoint[0], FALSE);
+      DokanBroadcastLink(DokanInstance, FALSE);
     }
   }
   return TRUE;
@@ -605,7 +632,7 @@ VOID DokanNotifyUnmounted(PDOKAN_INSTANCE DokanInstance) {
     }
   } else {
     // Notify applications / explorer
-    DokanBroadcastLink(DokanInstance->MountPoint[0], TRUE);
+    DokanBroadcastLink(DokanInstance, TRUE);
   }
 
   if (DokanInstance->DokanOperations->Unmounted) {
