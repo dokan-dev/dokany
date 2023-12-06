@@ -486,21 +486,18 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     if (irpEntry->RequestContext.Irp == NULL) {
       // this IRP is already canceled
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-      continue;
-    }
-
-    if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
+      DokanFreeIrpEntry(irpEntry);
+    } else if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
       // Cancel routine will run as soon as we release the lock
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
-      continue;
+    } else {
+      // IrpEntry is saved here for CancelRoutine
+      // Clear it to prevent to be completed by CancelRoutine twice
+      irpEntry->RequestContext.Irp->Tail.Overlay
+          .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+      InsertTailList(&completeList, thisEntry);
     }
-
-    // IrpEntry is saved here for CancelRoutine
-    // Clear it to prevent to be completed by CancelRoutine twice
-    irpEntry->RequestContext.Irp->Tail.Overlay
-        .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-    InsertTailList(&completeList, thisEntry);
     offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
                                eventInfo);
     // Everything through offset - 1 must be readable by the completion function
