@@ -353,24 +353,6 @@ void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
                              __in PEVENT_INFORMATION eventInfo) {
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
 
-  if (irpEntry->RequestContext.Irp == NULL) {
-    // this IRP is already canceled
-    ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-    return;
-  }
-
-  if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
-    // Cancel routine will run as soon as we release the lock
-    InitializeListHead(&irpEntry->ListEntry);
-    irpEntry->CancelRoutineFreeMemory = TRUE;
-    return;
-  }
-
-  // IrpEntry is saved here for CancelRoutine
-  // Clear it to prevent to be completed by CancelRoutine twice
-  irpEntry->RequestContext.Irp->Tail.Overlay
-      .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-
   DOKAN_LOG_BEGIN_MJ((&irpEntry->RequestContext));
 
   if (eventInfo->Status == STATUS_PENDING) {
@@ -501,6 +483,23 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
       continue;
     }
     RemoveEntryList(thisEntry);
+    if (irpEntry->RequestContext.Irp == NULL) {
+      // this IRP is already canceled
+      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      continue;
+    }
+
+    if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
+      // Cancel routine will run as soon as we release the lock
+      InitializeListHead(&irpEntry->ListEntry);
+      irpEntry->CancelRoutineFreeMemory = TRUE;
+      continue;
+    }
+
+    // IrpEntry is saved here for CancelRoutine
+    // Clear it to prevent to be completed by CancelRoutine twice
+    irpEntry->RequestContext.Irp->Tail.Overlay
+        .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
     InsertTailList(&completeList, thisEntry);
     offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
                                eventInfo);
