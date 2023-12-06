@@ -1173,18 +1173,18 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
       continue;
     }
 
-    // do NOT free irpEntry here
     writeIrp = irpEntry->RequestContext.Irp;
     if (writeIrp == NULL) {
       // this IRP has already been canceled
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      RemoveEntryList(&irpEntry->ListEntry);
       DokanFreeIrpEntry(irpEntry);
       continue;
     }
 
     if (IoSetCancelRoutine(writeIrp, DokanIrpCancelRoutine) == NULL) {
-      // if (IoSetCancelRoutine(writeIrp, NULL) != NULL) {
       // Cancel routine will run as soon as we release the lock
+      RemoveEntryList(&irpEntry->ListEntry);
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
       continue;
