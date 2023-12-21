@@ -2,27 +2,23 @@
 Signature         = "$Windows NT$"
 Class             = DiskDrive
 ClassGuid         = {4d36e967-e325-11ce-bfc1-08002be10318}
-Provider          = %Dokan%
+Provider          = %ProviderName%
 DriverVer         = 01/01/2018,1.0.0.0
 CatalogFile       = %DriverName%.cat
 DriverPackageType = FileSystem
 
 [DestinationDirs]
-DefaultDestDir              = 12
-DokanFileSystem.DriverFiles = 12
+DefaultDestDir              = 13
 
-[DefaultInstall]
-OptionDesc = %ServiceDesc%
-CopyFiles = DokanFileSystem.DriverFiles
+[DefaultInstall.NTamd64]
+OptionDesc = %ServiceDescription%
+CopyFiles  = DokanFileSystem.DriverFiles
 
-[DefaultInstall.Services]
-AddService = %ServiceName%,,DokanFileSystem.Service,DokanFileSystem.EventLog
+[DefaultInstall.NTamd64.Services]
+AddService = %DriverName%,,DokanFileSystem.Service,DokanFileSystem.EventLog
 
-[DefaultUninstall]
-DelFiles   = DokanFileSystem.DriverFiles
-
-[DefaultUninstall.Services]
-DelService = %ServiceName%,0x200
+[DefaultUninstall.NTamd64.Services]
+DelService = %DriverName%,0x200
 
 [SourceDisksNames]
 1 = %Disk1%
@@ -34,9 +30,9 @@ dokan2.sys = 1
 %DriverName%.sys
 
 [DokanFileSystem.Service]
-DisplayName    = %ServiceName%
-Description    = %ServiceDesc%
-ServiceBinary  = %12%\%DriverName%.sys
+DisplayName    = %DriverName%
+Description    = %ServiceDescription%
+ServiceBinary  = %13%\%DriverName%.sys
 ServiceType    = 2 ;    SERVICE_FILE_SYSTEM_DRIVER
 StartType      = 1 ;    SERVICE_SYSTEM_START
 ErrorControl   = 1 ;    SERVICE_ERROR_NORMAL
@@ -46,12 +42,11 @@ LoadOrderGroup = "File System"
 AddReg = DokanFileSystem.EventLog.Reg
 
 [DokanFileSystem.EventLog.Reg]
-HKR,,EventMessageFile,0x00020000,"%%SystemRoot%%\System32\drivers\%DriverName%.sys"
+HKR,,EventMessageFile,0x00020000,"%13%\%DriverName%.sys"
 HKR,,TypesSupported,0x00010001,7
 
 [Strings]
-Dokan = "Dokan"
-DriverName = "dokan2"
-Disk1 = "Dokan installation media"
-ServiceDesc = "Dokan kernel-mode file system driver."
-ServiceName = "dokan2"
+ProviderName       = "Dokan"
+DriverName         = "dokan2"
+Disk1              = "Dokan Drive installation media"
+ServiceDescription = "Dokan kernel-mode file system driver."
