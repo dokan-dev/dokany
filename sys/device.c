@@ -32,9 +32,9 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 NTSTATUS
 GlobalDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
-    DOKAN_LOG_FINE_IRP(
-        RequestContext, "Unsupported IoControlCode %x",
-        RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
+  DOKAN_LOG_FINE_IRP(
+      RequestContext, "Unsupported IoControlCode %x",
+      RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode);
   return status;
 }
 
@@ -285,7 +285,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       PMOUNTDEV_NAME mountdevName;
       if (!PrepareOutputHelper(RequestContext->Irp, &mountdevName,
                                FIELD_OFFSET(MOUNTDEV_NAME, Name),
-                          /*SetInformationOnFailure=*/TRUE)) {
+                               /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
       }
@@ -304,7 +304,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       PMOUNTDEV_UNIQUE_ID uniqueId;
       if (!PrepareOutputHelper(RequestContext->Irp, &uniqueId,
                                FIELD_OFFSET(MOUNTDEV_UNIQUE_ID, UniqueId),
-                          /*SetInformationOnFailure=*/TRUE)) {
+                               /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
       }
@@ -332,7 +332,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       PMOUNTDEV_SUGGESTED_LINK_NAME linkName;
       if (!PrepareOutputHelper(RequestContext->Irp, &linkName,
                                FIELD_OFFSET(MOUNTDEV_SUGGESTED_LINK_NAME, Name),
-                          /*SetInformationOnFailure=*/TRUE)) {
+                               /*SetInformationOnFailure=*/TRUE)) {
         status = STATUS_BUFFER_TOO_SMALL;
         break;
       }

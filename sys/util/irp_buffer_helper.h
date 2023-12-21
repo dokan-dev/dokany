@@ -169,7 +169,7 @@ inline BOOLEAN PrepareOutputHelper(_Inout_ PIRP Irp,
 // If the buffer is too small, this function's only effect is to optionally
 // increase the IRP's Information value, if UpdateInformationOnFailure is TRUE.
 BOOLEAN ExtendOutputBufferBySize(_Inout_ PIRP Irp, _In_ ULONG AdditionalSize,
-                           _In_ BOOLEAN UpdateInformationOnFailure);
+                                 _In_ BOOLEAN UpdateInformationOnFailure);
 
 // Given an IRP that is returning a struct ending with a variable-sized string,
 // i.e.

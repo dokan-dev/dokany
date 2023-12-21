@@ -373,7 +373,7 @@ DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
       DokanFCBLockRO(fcb);
       NTSTATUS status = DokanNotifyReportChange0(
           RequestContext, fcb, &receivedBuffer, pNotifyPath->CompletionFilter,
-                                        pNotifyPath->Action);
+          pNotifyPath->Action);
       DokanFCBUnlock(fcb);
       if (status == STATUS_OBJECT_NAME_INVALID) {
         DokanCleanupAllChangeNotificationWaiters(fcb->Vcb);

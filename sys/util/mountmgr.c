@@ -255,7 +255,6 @@ NTSTATUS DokanQueryAutoMount(PBOOLEAN State) {
   NTSTATUS status;
   MOUNTMGR_QUERY_AUTO_MOUNT queryAutoMount;
 
-
   status =
       DokanSendIoContlToMountManager(IOCTL_MOUNTMGR_QUERY_AUTO_MOUNT, NULL, 0,
                                      &queryAutoMount, sizeof(queryAutoMount));
