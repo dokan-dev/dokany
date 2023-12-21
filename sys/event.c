@@ -352,7 +352,6 @@ void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
                              __in PIRP_ENTRY irpEntry,
                              __in PEVENT_INFORMATION eventInfo) {
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
-
   DOKAN_LOG_BEGIN_MJ((&irpEntry->RequestContext));
 
   if (eventInfo->Status == STATUS_PENDING) {
@@ -484,11 +483,12 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     }
     RemoveEntryList(thisEntry);
     if (irpEntry->RequestContext.Irp == NULL) {
-      // this IRP is already canceled
+      // This IRP is already canceled; just discard it.
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
       DokanFreeIrpEntry(irpEntry);
     } else if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
-      // Cancel routine will run as soon as we release the lock
+      // Cancellation is already in progress, and the cancel routine will run as
+      // soon as we release the lock.
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
     } else {
