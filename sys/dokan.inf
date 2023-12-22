@@ -8,17 +8,10 @@ CatalogFile       = %DriverName%.cat
 DriverPackageType = FileSystem
 
 [DestinationDirs]
-DefaultDestDir              = 13
+DefaultDestDir = 12
 
-[DefaultInstall.NTamd64]
-OptionDesc = %ServiceDescription%
+[DefaultInstall.NT$ARCH$]
 CopyFiles  = DokanFileSystem.DriverFiles
-
-[DefaultInstall.NTamd64.Services]
-AddService = %DriverName%,,DokanFileSystem.Service,DokanFileSystem.EventLog
-
-[DefaultUninstall.NTamd64.Services]
-DelService = %DriverName%,0x200
 
 [SourceDisksNames]
 1 = %Disk1%
@@ -29,24 +22,7 @@ dokan2.sys = 1
 [DokanFileSystem.DriverFiles]
 %DriverName%.sys
 
-[DokanFileSystem.Service]
-DisplayName    = %DriverName%
-Description    = %ServiceDescription%
-ServiceBinary  = %13%\%DriverName%.sys
-ServiceType    = 2 ;    SERVICE_FILE_SYSTEM_DRIVER
-StartType      = 1 ;    SERVICE_SYSTEM_START
-ErrorControl   = 1 ;    SERVICE_ERROR_NORMAL
-LoadOrderGroup = "File System"
-
-[DokanFileSystem.EventLog]
-AddReg = DokanFileSystem.EventLog.Reg
-
-[DokanFileSystem.EventLog.Reg]
-HKR,,EventMessageFile,0x00020000,"%13%\%DriverName%.sys"
-HKR,,TypesSupported,0x00010001,7
-
 [Strings]
 ProviderName       = "Dokan"
 DriverName         = "dokan2"
 Disk1              = "Dokan Drive installation media"
-ServiceDescription = "Dokan kernel-mode file system driver."
