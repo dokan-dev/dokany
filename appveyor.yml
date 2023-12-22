@@ -46,11 +46,11 @@
       - configuration: Documentation
         image: Visual Studio 2017
       - configuration: All
-        image: Visual Studio 2019
+        image: Visual Studio 2022
       - configuration: SonarQube
-        image: Visual Studio 2019
+        image: Visual Studio 2022
       - configuration: Documentation
-        image: Visual Studio 2019
+        image: Visual Studio 2022
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
