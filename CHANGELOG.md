@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [2.1.0.1000] - 2022-12-22
+## [2.1.0.1000] - 2023-12-22
 
 ### Added
 - Libary - New dismount callbacks were added `DokanRegisterWaitForFileSystemClosed` & `DokanUnregisterWaitForFileSystemClosed`.
