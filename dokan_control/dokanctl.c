@@ -41,8 +41,8 @@ int ShowUsage() {
   fprintf(stderr,
           "dokanctl /u MountPoint\n"
           "dokanctl /u M\n"
-          "dokanctl /i [d||n]\n"
-          "dokanctl /r [d||n]\n"
+          "dokanctl /i [d|n|a]\n"
+          "dokanctl /r [d|n|a]\n"
           "dokanctl /v\n"
           "\n"
           "Example:\n"
@@ -148,34 +148,44 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
   // Admin rights required
   case L'i': {
     WCHAR type = towlower(argv[2][0]);
-    if (type == L'd') {
-      return InstallDriver(driverFullPath);
-    } else if (type == L'n') {
-      if (DokanNetworkProviderInstall()) {
-        fprintf(stdout, "network provider install ok\n");
-      } else {
-        fprintf(stderr, "network provider install failed\n");
-        return EXIT_FAILURE;
-      }
-    } else {
+    int result = EXIT_SUCCESS;
+    if (type != L'd' && type != L'n' && type != L'a') {
       return DefaultCaseOption();
     }
+    if (type == L'd' || type == L'a') {
+      result = InstallDriver(driverFullPath);
+    }
+    if (result != EXIT_SUCCESS || (type != L'n' && type != L'a')) {
+      return result;
+    }
+    if (DokanNetworkProviderInstall()) {
+      fprintf(stdout, "Network provider install ok\n");
+    } else {
+      fprintf(stderr, "Network provider install failed\n");
+      result = EXIT_FAILURE;
+    }
+    return result;
   } break;
 
   case L'r': {
     WCHAR type = towlower(argv[2][0]);
-    if (type == L'd') {
-      return DeleteDokanService(DOKAN_DRIVER_SERVICE);
-    } else if (type == L'n') {
-      if (DokanNetworkProviderUninstall())
-        fprintf(stdout, "network provider remove ok\n");
-      else {
-        fprintf(stderr, "network provider remove failed\n");
-        return EXIT_FAILURE;
-      }
-    } else {
+    int result = EXIT_SUCCESS;
+    if (type != L'd' && type != L'n' && type != L'a') {
       return DefaultCaseOption();
     }
+    if (type == L'd' || type == L'a') {
+      result = DeleteDokanService(DOKAN_DRIVER_SERVICE);
+    }
+    if (result != EXIT_SUCCESS || (type != L'n' && type != L'a')) {
+      return result;
+    }
+    if (DokanNetworkProviderUninstall()) {
+      fprintf(stdout, "Network provider remove ok\n");
+    } else {
+      fprintf(stderr, "Network provider remove failed\n");
+      result = EXIT_FAILURE;
+    }
+    return result;
   } break;
 
   case L'd': {
