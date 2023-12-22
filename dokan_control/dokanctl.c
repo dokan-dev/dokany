@@ -165,7 +165,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       result = EXIT_FAILURE;
     }
     return result;
-  } break;
+  }
 
   case L'r': {
     WCHAR type = towlower(argv[2][0]);
@@ -186,7 +186,7 @@ int __cdecl wmain(int argc, PWCHAR argv[]) {
       result = EXIT_FAILURE;
     }
     return result;
-  } break;
+  }
 
   case L'd': {
     WCHAR type = towlower(argv[2][0]);
