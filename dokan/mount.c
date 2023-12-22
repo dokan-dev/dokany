@@ -85,14 +85,14 @@ typedef struct _REPARSE_DATA_BUFFER {
 #define REPARSE_DATA_BUFFER_HEADER_SIZE                                        \
   FIELD_OFFSET(REPARSE_DATA_BUFFER, GenericReparseBuffer)
 
-static BOOL DokanServiceCheck(LPCWSTR ServiceName) {
+static BOOL DokanServiceExists(LPCWSTR ServiceName) {
   SC_HANDLE controlHandle;
   SC_HANDLE serviceHandle;
 
   controlHandle = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 
   if (controlHandle == NULL) {
-    DbgPrint("DokanServiceCheck: Failed to open Service Control Manager. error "
+    DbgPrint("DokanServiceExists: Failed to open Service Control Manager. error "
              "= %d\n",
              GetLastError());
     return FALSE;
@@ -104,7 +104,7 @@ static BOOL DokanServiceCheck(LPCWSTR ServiceName) {
 
   if (serviceHandle == NULL) {
     DokanDbgPrintW(
-        L"DokanServiceCheck: Failed to open Service (%s). error = %d\n",
+        L"DokanServiceExists: Failed to open Service (%s). error = %d\n",
         ServiceName, GetLastError());
     CloseServiceHandle(controlHandle);
     return FALSE;
@@ -194,6 +194,44 @@ static BOOL DokanServiceControl(LPCWSTR ServiceName, ULONG Type) {
   return result;
 }
 
+#define DOKAN_EVENT_LOG_SYSTEM_SERVICE_KEY                                            \
+  L"System\\CurrentControlSet\\Services\\EventLog\\System"
+#define DOKAN_SYS_PATH                                                         \
+  L"%SystemRoot%\\System32\\drivers\\dokan" DOKAN_MAJOR_API_VERSION L".sys"
+
+VOID DokanDriverEventLogInstall() {
+  HKEY key;
+  DWORD position;
+  DWORD type = 0x7;
+
+  if (RegCreateKeyEx(
+          HKEY_LOCAL_MACHINE,
+          DOKAN_EVENT_LOG_SYSTEM_SERVICE_KEY L"\\dokan" DOKAN_MAJOR_API_VERSION,
+          0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
+          &position) != ERROR_SUCCESS) {
+    return;
+  }
+
+  RegSetValueEx(key, L"EventMessageFile", 0, REG_SZ, (BYTE *)DOKAN_SYS_PATH,
+                (DWORD)(wcslen(DOKAN_SYS_PATH) + 1) * sizeof(WCHAR));
+
+  RegSetValueEx(key, L"TypesSupported", 0, REG_DWORD, (BYTE *)&type,
+                sizeof(type));
+
+  RegCloseKey(key);
+  return;
+}
+
+VOID DokanDriverEventLogUninstall() {
+  HKEY key;
+  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_EVENT_LOG_SYSTEM_SERVICE_KEY, 0,
+                    KEY_ALL_ACCESS, &key) != ERROR_SUCCESS) {
+    return;
+  }
+  RegDeleteKey(key, L"dokan" DOKAN_MAJOR_API_VERSION);
+  RegCloseKey(key);
+}
+
 BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
                                   LPCWSTR ServiceFullPath) {
   SC_HANDLE controlHandle;
@@ -232,24 +270,25 @@ BOOL DOKANAPI DokanServiceInstall(LPCWSTR ServiceName, DWORD ServiceType,
 
   DokanDbgPrintW(L"DokanServiceInstall: Service (%s) installed\n", ServiceName);
 
-  if (DokanServiceControl(ServiceName, DOKAN_SERVICE_START)) {
-    DokanDbgPrintW(L"DokanServiceInstall: Service (%s) started\n", ServiceName);
-    return TRUE;
-  } else {
+  if (!DokanServiceControl(ServiceName, DOKAN_SERVICE_START)) {
     DokanDbgPrintW(L"DokanServiceInstall: Service (%s) start failed\n",
                    ServiceName);
     return FALSE;
   }
+  DokanDbgPrintW(L"DokanServiceInstall: Service (%s) started\n", ServiceName);
+
+  DokanDriverEventLogInstall();
+  return TRUE;
 }
 
 BOOL DOKANAPI DokanServiceDelete(LPCWSTR ServiceName) {
-  if (DokanServiceCheck(ServiceName)) {
-    DokanServiceControl(ServiceName, DOKAN_SERVICE_STOP);
-    if (DokanServiceControl(ServiceName, DOKAN_SERVICE_DELETE)) {
-      return TRUE;
-    } else {
-      return FALSE;
-    }
+  if (!DokanServiceExists(ServiceName)) {
+    return TRUE;
+  }
+  DokanDriverEventLogUninstall();
+  DokanServiceControl(ServiceName, DOKAN_SERVICE_STOP);
+  if (!DokanServiceControl(ServiceName, DOKAN_SERVICE_DELETE)) {
+    return FALSE;
   }
   return TRUE;
 }
@@ -339,13 +378,16 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
   ZeroMemory(&buffer2, sizeof(buffer));
   ZeroMemory(commanp, sizeof(commanp));
 
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
-               &key);
-  RegDeleteKey(key, L"NetworkProvider");
+  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
+                   &key) == ERROR_SUCCESS) {
+    RegDeleteKey(key, L"NetworkProvider");
+    RegCloseKey(key);
+  }
 
-  RegCloseKey(key);
-
-  RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS, &key);
+  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS,
+                   &key) != ERROR_SUCCESS) {
+    return;
+  }
 
   RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
                   &buffer_size);
