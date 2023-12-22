@@ -159,9 +159,7 @@ UINT __stdcall ExecuteInstall(MSIHANDLE hInstall) {
   WCHAR *buffer = GetCustomActionData(hInstall);
   ExitOnNullWithLastError(buffer, hr, "GetCustomActionData failed");
 
-  //hr = StartDokanCtlProcess(buffer, L"/i a");
-  //ExitOnFailure(hr, "StartDokanCtlProcess failed");
-  hr = StartDokanCtlProcess(buffer, L"/i n");
+  hr = StartDokanCtlProcess(buffer, L"/i a");
   ExitOnFailure(hr, "StartDokanCtlProcess failed");
 
   WcaLog(LOGMSG_STANDARD, "ExecuteInstall done.");
@@ -186,9 +184,7 @@ UINT __stdcall ExecuteUninstall(MSIHANDLE hInstall) {
   WCHAR *buffer = GetCustomActionData(hInstall);
   ExitOnNullWithLastError(buffer, hr, "GetCustomActionData failed");
 
-  // hr = StartDokanCtlProcess(buffer, L"/r a");
-  // ExitOnFailure(hr, "failed to StartDokanCtlProcess");
-  hr = StartDokanCtlProcess(buffer, L"/r n");
+  hr = StartDokanCtlProcess(buffer, L"/r a");
   ExitOnFailure(hr, "StartDokanCtlProcess failed");
 
   WcaLog(LOGMSG_STANDARD, "ExecuteUninstall done.");

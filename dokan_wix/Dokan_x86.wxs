@@ -170,7 +170,6 @@
                 <File Id="Driver_Sys" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
                 <File Id="Driver_Cat" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
                 <File Id="Driver_Inf" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
-                <difx:Driver AddRemovePrograms="no" DeleteFiles="yes" Legacy="yes"/>
               </Component>
               <Component Id="Driver_Win32pdb" Guid="{68920BC6-D80C-4CB3-969C-1E7BFDBF3056}">
                 <File Id="Driver_Syspdb" Source="..\Win32\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
@@ -246,6 +245,11 @@
             <File Id="DokannpDLL" Source="..\Win32\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll"/>
             <File Id="DokanfuseSysDLL" Source="..\Win32\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
           </Component>
+		  <Directory Id="DriversFolder" Name="drivers">
+            <Component Id="Sys32DriversFiles" Guid="{22C9BD53-1D99-4F54-A579-6503F19FA846}">
+              <File Id="Registered_Driver_Sys" Source="..\Win32\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+            </Component>
+		  </Directory>
         </Directory>
       </Directory>
     </Directory>
@@ -253,6 +257,7 @@
     <Feature Id="DokanDriverFeature" Title="Dokan Core" Description="Dokan driver, Dokan library and FUSE library" Level="1" Display="expand" Absent="disallow">
       <ComponentRef Id="ProgramFilesComponent"/>
       <ComponentRef Id="Driver_Win32"/>
+      <ComponentRef Id="Sys32DriversFiles"/>
       <ComponentRef Id="Sys32Files"/>
       <?if $(var.BuildCygwin)=true ?>
       <ComponentRef Id="ProgramFilesCygwinComponent" />
