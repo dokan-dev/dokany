@@ -386,7 +386,7 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
 
   if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS,
                    &key) != ERROR_SUCCESS) {
-    return;
+    return TRUE;
   }
 
   RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
