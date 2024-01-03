@@ -14,7 +14,7 @@
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
 
   skip_tags: true
-  version: 2.0.3-{build}
+  version: 2.1.0-{build}
   configuration:
   - All
   - SonarQube
@@ -25,6 +25,7 @@
     - Visual Studio 2019
     - Visual Studio 2017
     - Visual Studio 2015
+    - Visual Studio 2022
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
 #    - Previous Visual Studio 2019
@@ -44,6 +45,12 @@
         image: Visual Studio 2017
       - configuration: Documentation
         image: Visual Studio 2017
+      - configuration: All
+        image: Visual Studio 2022
+      - configuration: SonarQube
+        image: Visual Studio 2022
+      - configuration: Documentation
+        image: Visual Studio 2022
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
@@ -186,10 +193,10 @@
         cd sonar-scanner
         Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
         Exec-External { & 7z e .\build-wrapper-win-x86.zip }
-        Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/5.13.0.66756/sonar-scanner-msbuild-5.13.0.66756-net46.zip -OutFile .\sonar-scanner-msbuild.zip
+        Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/6.0.0.81631/sonar-scanner-6.0.0.81631-net-framework.zip -OutFile .\sonar-scanner-msbuild.zip
         Exec-External { & 7z x .\sonar-scanner-msbuild.zip }
         $env:Path = "$((Get-Location).Path);" + $env:Path
-        $env:JAVA_HOME = "C:\Program Files\Java\jdk15"
+        $env:JAVA_HOME = "C:\Program Files\Java\jdk21"
         cd ..
 
         .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION

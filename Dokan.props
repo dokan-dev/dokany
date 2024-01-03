@@ -3,7 +3,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
     <DOKANAPIVersion>2</DOKANAPIVersion>
-    <DOKANVersion>2.0.6</DOKANVersion>
+    <DOKANVersion>2.1.0</DOKANVersion>
   </PropertyGroup>
   <PropertyGroup />
   <ItemDefinitionGroup />

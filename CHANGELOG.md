@@ -3,6 +3,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.0.1000] - 2023-12-22
+
+### Added
+- Libary - New dismount callbacks were added `DokanRegisterWaitForFileSystemClosed` & `DokanUnregisterWaitForFileSystemClosed`.
+- Dokanctl - New parameters: `/i` and `/r` can now use `a` to install the driver and network provider together.
+
+### Changed
+- Installer - Due to the migration of the `INF` to primitive drivers that no longer accepts creating services for `system32/drivers`, `dokanctl` is now used to install the driver service and register `EventLog`.
+- Kernel - Migrate `INF` to primitive driver and discard service and `EventLog` section.
+- Multiple documentation enhancement.
+- Memfs - Replace deprecated `lock_guard` by `scoped_lock`.
+- Mirror - Use `OVERLAPPED` for offset write and read.
+- Library - Improve failure logging `ResetTimeout` `SendReleaseIRP` `OpenRequestorToken`.
+- Library - Fix `MatchFiles` not checking the pattern when `FindFilesWithPattern` returned `STATUS_NOT_IMPLEMENTED`.
+- Library - Async call `BroadcastSystemMessage` to avoid possible hangs from receiver apps during un/mount.
+
+### Fixed
+- Library - Allow directory listing without open handle (v2 regression).
+- Library - `FindFiles` - Add `.` and `..` at the front of the results.
+- FUSE - Fix bool wrongly used as bitwise operation.
+- FUSE - Fix unsafe uncName buffer usage in dokanOptions.
+- FUSE - Fix unsafe nullptr mountpoint free.
+- Kernel - Fix log BSOD due to incorrect parameter type passed when forward logs are enabled.
+- Kernel - Fix IRP cancellation BSOD.
+- Kernel - Remove from `PendingIrp` list the IRP already freed or canceled during `DokanEventWrite`.
+- Kernel - Fix deadlock due to `CcPurgeCacheSection` closing another `FileObject` for the `FCB` re-entrantly from cleanup.
+
 ## [2.0.6.1000] - 2022-10-02
 
 ### Changed
@@ -682,6 +709,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.6.1000...v2.1.0.1000
 [2.0.6.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.5.1000...v2.0.6.1000
 [2.0.5.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.4.1000...v2.0.5.1000
 [2.0.4.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.3.2000...v2.0.4.1000

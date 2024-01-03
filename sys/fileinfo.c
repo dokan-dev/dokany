@@ -387,12 +387,12 @@ VOID FlushAllCachedFcb(__in PREQUEST_CONTEXT RequestContext,
 
   DokanVCBLockRW(FcbRelatedTo->Vcb);
 
-  for (PDokanFCB *fcbInTable = (PDokanFCB *)RtlEnumerateGenericTableAvl(
-           &RequestContext->Vcb->FcbTable, /*Restart=*/TRUE);
-       fcbInTable != NULL;
-       fcbInTable = (PDokanFCB *)RtlEnumerateGenericTableAvl(
-           &RequestContext->Vcb->FcbTable, /*Restart=*/FALSE)) {
-    FlushIfDescendant(RequestContext, FcbRelatedTo, *fcbInTable);
+  for (PDokanFCB* fcbInTable = (PDokanFCB*)RtlEnumerateGenericTableAvl(
+	  &RequestContext->Vcb->FcbTable, /*Restart=*/TRUE);
+	  fcbInTable != NULL;
+	  fcbInTable = (PDokanFCB*)RtlEnumerateGenericTableAvl(
+		  &RequestContext->Vcb->FcbTable, /*Restart=*/FALSE)) {
+	  FlushIfDescendant(RequestContext, FcbRelatedTo, *fcbInTable);
   }
 
   DokanVCBUnlock(FcbRelatedTo->Vcb);

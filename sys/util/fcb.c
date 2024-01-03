@@ -193,11 +193,23 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
 
   ASSERT(Fcb->Vcb == Vcb);
 
+  // We need to be able to remove a FileObject that is not the final one,
+  // without the VCB lock. This is because CcPurgeCacheSection may trigger a
+  // close of one FileObject from within a cleanup of another (with the same
+  // FCB). In that case, there is already a FCB lock held below us on the stack,
+  // making it unsafe to acquire a VCB lock.
+  if (InterlockedDecrement(&Fcb->FileCount) != 0) {
+    return STATUS_SUCCESS;
+  }
+
   DokanVCBLockRW(Vcb);
   DokanFCBLockRW(Fcb);
 
-  if (InterlockedDecrement(&Fcb->FileCount) == 0 &&
-      !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
+  // Note that the FileCount could theoretically be nonzero if incremented by
+  // another thread after the early return and before the locking of the VCB.
+  // The code that increments it does so with the VCB locked, so at this point
+  // we are sure.
+  if (Fcb->FileCount == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
     // We get here when garbage collection is disabled.
     DokanDeleteFcb(Vcb, Fcb, /*RemoveFromTable=*/!Fcb->ReplacedByRename);
   } else {

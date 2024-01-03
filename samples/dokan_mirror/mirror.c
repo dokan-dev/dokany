@@ -223,13 +223,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
   PrintUserName(DokanFileInfo);
 
-  /*
-  if (ShareMode == 0 && AccessMode & FILE_WRITE_DATA)
-          ShareMode = FILE_SHARE_WRITE;
-  else if (ShareMode == 0)
-          ShareMode = FILE_SHARE_READ;
-  */
-
   DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
   MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
@@ -352,7 +345,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
 
-      //We create folder
+      // We create folder
       if (!CreateDirectory(filePath, &securityAttrib)) {
         error = GetLastError();
         // Fail to create folder for OPEN_ALWAYS is not an error
@@ -392,9 +385,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
       handle =
-        CreateFile(filePath, genericDesiredAccess, ShareAccess,
-                   &securityAttrib, OPEN_EXISTING,
-                   fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+          CreateFile(filePath, genericDesiredAccess, ShareAccess,
+                     &securityAttrib, OPEN_EXISTING,
+                     fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
       if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
         // Clean Up operation for impersonate
@@ -452,14 +445,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
       }
     }
 
-    handle = CreateFile(
-                        filePath,
-        genericDesiredAccess, // GENERIC_READ|GENERIC_WRITE|GENERIC_EXECUTE,
-                        ShareAccess,
-                        &securityAttrib, // security attribute
-                        creationDisposition,
-                        fileAttributesAndFlags, // |FILE_FLAG_NO_BUFFERING,
-                        NULL);                  // template file handle
+    handle =
+        CreateFile(filePath, genericDesiredAccess, ShareAccess, &securityAttrib,
+                   creationDisposition, fileAttributesAndFlags, NULL); 
 
     if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
       // Clean Up operation for impersonate

@@ -352,25 +352,6 @@ void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
                              __in PIRP_ENTRY irpEntry,
                              __in PEVENT_INFORMATION eventInfo) {
   DOKAN_INIT_LOGGER(logger, DeviceObject->DriverObject, 0);
-
-  if (irpEntry->RequestContext.Irp == NULL) {
-    // this IRP is already canceled
-    ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-    return;
-  }
-
-  if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
-    // Cancel routine will run as soon as we release the lock
-    InitializeListHead(&irpEntry->ListEntry);
-    irpEntry->CancelRoutineFreeMemory = TRUE;
-    return;
-  }
-
-  // IrpEntry is saved here for CancelRoutine
-  // Clear it to prevent to be completed by CancelRoutine twice
-  irpEntry->RequestContext.Irp->Tail.Overlay
-      .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-
   DOKAN_LOG_BEGIN_MJ((&irpEntry->RequestContext));
 
   if (eventInfo->Status == STATUS_PENDING) {
@@ -501,7 +482,22 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
       continue;
     }
     RemoveEntryList(thisEntry);
-    InsertTailList(&completeList, thisEntry);
+    if (irpEntry->RequestContext.Irp == NULL) {
+      // This IRP is already canceled; just discard it.
+      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      DokanFreeIrpEntry(irpEntry);
+    } else if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
+      // Cancellation is already in progress, and the cancel routine will run as
+      // soon as we release the lock.
+      InitializeListHead(&irpEntry->ListEntry);
+      irpEntry->CancelRoutineFreeMemory = TRUE;
+    } else {
+      // IrpEntry is saved here for CancelRoutine
+      // Clear it to prevent to be completed by CancelRoutine twice
+      irpEntry->RequestContext.Irp->Tail.Overlay
+          .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+      InsertTailList(&completeList, thisEntry);
+    }
     offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
                                eventInfo);
     // Everything through offset - 1 must be readable by the completion function
@@ -1177,18 +1173,18 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
       continue;
     }
 
-    // do NOT free irpEntry here
     writeIrp = irpEntry->RequestContext.Irp;
     if (writeIrp == NULL) {
       // this IRP has already been canceled
       ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
+      RemoveEntryList(&irpEntry->ListEntry);
       DokanFreeIrpEntry(irpEntry);
       continue;
     }
 
     if (IoSetCancelRoutine(writeIrp, DokanIrpCancelRoutine) == NULL) {
-      // if (IoSetCancelRoutine(writeIrp, NULL) != NULL) {
       // Cancel routine will run as soon as we release the lock
+      RemoveEntryList(&irpEntry->ListEntry);
       InitializeListHead(&irpEntry->ListEntry);
       irpEntry->CancelRoutineFreeMemory = TRUE;
       continue;

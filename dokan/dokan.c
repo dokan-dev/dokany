@@ -823,7 +823,7 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
                               : DispatchDedicatedIoCallback);
   }
 
-  if (!DokanMount(dokanInstance->MountPoint, dokanInstance->DeviceName, DokanOptions)) {
+  if (!DokanMount(dokanInstance, DokanOptions)) {
     SendReleaseIRP(dokanInstance->DeviceName);
     DokanDbgPrint("Dokan Error: DokanMount Failed\n");
     DeleteDokanInstance(dokanInstance);

@@ -168,7 +168,7 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
 	if (mountpoint)
 		*mountpoint = hopts.mountpoint;
 	else
-		free(hopts.mountpoint);
+		goto err;
 
 	if (multithreaded)
 		*multithreaded = !hopts.singlethread;
@@ -177,7 +177,8 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
 	return 0;
 
 err:
-	free(hopts.mountpoint);
+	if (hopts.mountpoint)
+		free(hopts.mountpoint);
 	return -1;
 }
 
