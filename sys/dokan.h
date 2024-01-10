@@ -330,6 +330,9 @@ typedef struct _DOKAN_CONTROL {
 
 typedef struct _MOUNT_ENTRY {
   LIST_ENTRY ListEntry;
+  // Lock automatically acquired by FindMountEntry which must be released
+  // when the object access is no longer required.
+  ERESOURCE Resource;
   DOKAN_CONTROL MountControl;
 } MOUNT_ENTRY, *PMOUNT_ENTRY;
 
@@ -1164,18 +1167,31 @@ BOOLEAN IsDeletePending(__in PDEVICE_OBJECT DeviceObject);
 
 BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
 
-PMOUNT_ENTRY InsertMountEntry(PDOKAN_GLOBAL dokanGlobal,
-                              PDOKAN_CONTROL DokanControl,
-                              BOOLEAN lockGlobal);
+// Insert a new mount entry for the given DokanControl.
+// Global resource lock must be acquired prior.
+BOOLEAN InsertMountEntry(PDOKAN_GLOBAL DokanGlobal,
+                         PDOKAN_CONTROL DokanControl);
 
-PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL dokanGlobal,
+// Returns the mount entry for the given DokanControl if present.
+// The mount entry returned has its resource locked
+// and must be released when its access is no longer required.
+_Ret_maybenull_
+_When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
+_When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
+PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
                             __in PDOKAN_CONTROL DokanControl,
-                            __in BOOLEAN lockGlobal);
+                            __in BOOLEAN ExclusiveLock);
 
+// Returns the mount entry for the given names if present.
+// The mount entry returned has its resource locked
+// and must be released when its access is no longer required.
+_Ret_maybenull_
+_When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
+_When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
 PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
                                   __in PUNICODE_STRING DiskDeviceName,
                                   __in PUNICODE_STRING UNCName,
-                                  __in BOOLEAN LockGlobal);
+                                  __in BOOLEAN ExclusiveLock);
 
 NTSTATUS DokanAllocateMdl(__in PREQUEST_CONTEXT RequestContext,
                           __in ULONG Length);

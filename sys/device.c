@@ -430,11 +430,13 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
       // Update the mount point in dokan's global list, so that other dokan
       // functions (e.g. for unmounting) can look up the drive by mount point
       // later.
-      PMOUNT_ENTRY mountEntry = FindMountEntryByName(
-          dcb->Global, dcb->DiskDeviceName, dcb->UNCName, /*LockGlobal=*/TRUE);
+      PMOUNT_ENTRY mountEntry =
+          FindMountEntryByName(dcb->Global, dcb->DiskDeviceName, dcb->UNCName,
+                               /*ExclusiveLock=*/TRUE);
       if (mountEntry != NULL) {
         RtlStringCchCopyUnicodeString(mountEntry->MountControl.MountPoint,
                                       MAXIMUM_FILENAME_LENGTH, dcb->MountPoint);
+        ExReleaseResourceLite(&mountEntry->Resource);
       } else {
         DokanLogInfo(&logger, L"Cannot find associated MountEntry to update.");
       }

@@ -899,10 +899,12 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
                   dcb->UNCName->Length);
   }
   dokanControl.SessionId = dcb->SessionId;
-  mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
+  mountEntry =
+      FindMountEntry(dcb->Global, &dokanControl, /*ExclusiveLock=*/TRUE);
   if (mountEntry != NULL) {
     mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
     mountEntry->MountControl.MountOptions = dcb->MountOptions;
+    ExReleaseResourceLite(&mountEntry->Resource);
   } else {
     ExReleaseResourceLite(&dcb->Resource);
     return DokanLogError(&logger, STATUS_DEVICE_REMOVED,

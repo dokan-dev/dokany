@@ -419,20 +419,23 @@ NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   dokanControl.SessionId = GetCurrentSessionId(RequestContext);
-  mountEntry = FindMountEntry(RequestContext->DokanGlobal, &dokanControl, TRUE);
+  mountEntry = FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
+                 /*ExclusiveLock=*/FALSE);
   if (mountEntry == NULL) {
-    dokanControl.SessionId = (ULONG)-1;
     DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found device associated to mount point %ws",
                   dokanControl.MountPoint);
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  if (IsDeletePending(mountEntry->MountControl.VolumeDeviceObject)) {
+  PDEVICE_OBJECT volumeDeviceObject = mountEntry->MountControl.VolumeDeviceObject;
+  ExReleaseResourceLite(&mountEntry->Resource);
+
+  if (IsDeletePending(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");
     return STATUS_DEVICE_REMOVED;
   }
 
-  if (!IsMounted(mountEntry->MountControl.VolumeDeviceObject)) {
+  if (!IsMounted(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(
         RequestContext,
         "Device is still not mounted, so an unmount not possible at this "
@@ -440,6 +443,5 @@ NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_DEVICE_BUSY;
   }
 
-  return DokanEventRelease(RequestContext,
-                           mountEntry->MountControl.VolumeDeviceObject);
+  return DokanEventRelease(RequestContext, volumeDeviceObject);
 }

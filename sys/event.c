@@ -687,11 +687,12 @@ BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
   DokanLogInfo(Logger, L"Unmounting the existing drive.");
   DokanUnmount(RequestContext, OldControl->Dcb);
   PMOUNT_ENTRY entryAfterUnmount =
-      FindMountEntry(DokanGlobal, NewControl, FALSE);
+      FindMountEntry(DokanGlobal, NewControl, /*ExclusiveLock=*/FALSE);
   if (entryAfterUnmount != NULL) {
     DokanLogInfo(
         Logger,
         L"Warning: old mount entry was not removed by unmount attempt.");
+    ExReleaseResourceLite(&entryAfterUnmount->Resource);
     return FALSE;
   }
   DokanLogInfo(Logger, L"The existing mount entry is now gone.");
@@ -867,10 +868,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   dokanControl.SessionId = sessionId;
   dokanControl.MountOptions = eventStart->Flags;
 
-  DOKAN_LOG_FINE_IRP(RequestContext, "Checking for MountPoint %ls", dokanControl.MountPoint);
-  PMOUNT_ENTRY foundEntry =
-      FindMountEntry(RequestContext->DokanGlobal, &dokanControl, FALSE);
-  if (foundEntry != NULL && !useMountManager) {
+  DOKAN_LOG_FINE_IRP(RequestContext, "Checking for MountPoint %ls",
+                     dokanControl.MountPoint);
+  PMOUNT_ENTRY foundPrevEntry =
+      FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
+                     /*ExclusiveLock=*/FALSE);
+  if (foundPrevEntry != NULL && !useMountManager) {
     // Legacy behavior: fail on existing mount entry with the same mount point.
     // Note: there are edge cases where this entry (which is internal to dokan)
     // may be left around despite the drive being technically unmounted. In such
@@ -880,6 +883,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     driverInfo->Status = DOKAN_START_FAILED;
     RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
     RequestContext->Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
+    ExReleaseResourceLite(&foundPrevEntry->Resource);
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
@@ -894,6 +898,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
 
   status = RtlStringFromGUID(&baseGuid, &unicodeGuid);
   if (!NT_SUCCESS(status)) {
+    if (foundPrevEntry) {
+      ExReleaseResourceLite(&foundPrevEntry->Resource);
+    }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
@@ -904,11 +911,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   RtlStringCchCopyW(baseGuidString, 64, unicodeGuid.Buffer);
   RtlFreeUnicodeString(&unicodeGuid);
 
-  InterlockedIncrement((LONG*)&RequestContext->DokanGlobal->MountId);
+  InterlockedIncrement((LONG *)&RequestContext->DokanGlobal->MountId);
 
   if (eventStart->VolumeSecurityDescriptorLength != 0) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Using volume security descriptor of length %d",
-        eventStart->VolumeSecurityDescriptorLength);
+    DOKAN_LOG_FINE_IRP(RequestContext,
+                       "Using volume security descriptor of length %d",
+                       eventStart->VolumeSecurityDescriptorLength);
     deviceCharacteristics |= FILE_DEVICE_SECURE_OPEN;
     volumeSecurityDescriptor = eventStart->VolumeSecurityDescriptor;
   }
@@ -921,6 +929,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       mountGlobally, useMountManager, &dokanControl);
 
   if (!NT_SUCCESS(status)) {
+    if (foundPrevEntry) {
+      ExReleaseResourceLite(&foundPrevEntry->Resource);
+    }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
@@ -948,15 +959,16 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   // various explicit mount manager IOCTLs that dokan historically issues, we
   // need a stricter flag to avoid clobbering dokan drives than to avoid
   // clobbering real ones.
-  if (foundEntry != NULL) {
+  if (foundPrevEntry != NULL) {
     if (MaybeUnmountOldDrive(RequestContext, &logger,
                              RequestContext->DokanGlobal,
-                             &foundEntry->MountControl, &dokanControl)) {
+                             &foundPrevEntry->MountControl, &dokanControl)) {
       driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_UNMOUNTED;
     } else {
       driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_LEFT_MOUNTED;
       dcb->ForceDriveLetterAutoAssignment = TRUE;
     }
+    ExReleaseResourceLite(&foundPrevEntry->Resource);
   } else if (eventStart->Flags & DOKAN_EVENT_DRIVE_LETTER_IN_USE) {
     // The drive letter is perceived as being in use in user mode, and this
     // driver doesn't own it. In this case we explicitly ask not to use it.
@@ -975,11 +987,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   if (dcb->ForceDriveLetterAutoAssignment) {
     driverInfo->Flags |= DOKAN_DRIVER_INFO_AUTO_ASSIGN_REQUESTED;
   }
-  PMOUNT_ENTRY mountEntry =
-      InsertMountEntry(RequestContext->DokanGlobal, &dokanControl, FALSE);
-  if (mountEntry != NULL) {
-    DokanLogInfo(&logger, L"Inserted new mount entry.");
-  } else {
+  if (!InsertMountEntry(RequestContext->DokanGlobal, &dokanControl)) {
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
     ExFreePool(eventStart);
@@ -988,6 +996,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate new mount entry.");
   }
+  DokanLogInfo(&logger, L"Inserted new mount entry.");
 
   dcb->FileLockInUserMode = fileLockUserMode;
   driverInfo->DeviceNumber = RequestContext->DokanGlobal->MountId;
@@ -1048,6 +1057,18 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   KeLeaveCriticalRegion();
 
   IoVerifyVolume(dcb->DeviceObject, FALSE);
+
+  PMOUNT_ENTRY mountEntry =
+      FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
+                     /*ExclusiveLock=*/FALSE);
+  if (!mountEntry) {
+    // The device was removed right after being mounted and before we finish.
+    ExFreePool(eventStart);
+    ExFreePool(baseGuidString);
+    return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
+                         L"Unable to find mount entry after insert and "
+                         L"IoVerifyVolume. The device must have been removed.");
+  }
 
   if (useMountManager) {
     // The mount entry now has the actual mount point, because IoVerifyVolume
@@ -1123,9 +1144,11 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   ExFreePool(eventStart);
   ExFreePool(baseGuidString);
 
+  PDEVICE_OBJECT volumeDeviceObject =
+      mountEntry->MountControl.VolumeDeviceObject;
+  ExReleaseResourceLite(&mountEntry->Resource);
   if (driverInfo->Flags & DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
-    DokanEventRelease(RequestContext,
-                      mountEntry->MountControl.VolumeDeviceObject);
+    DokanEventRelease(RequestContext, volumeDeviceObject);
     driverInfo->DeviceNumber = 0;
     driverInfo->MountId = 0;
   }
