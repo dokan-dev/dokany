@@ -345,15 +345,24 @@ execute DokanDeviceDeleteDelayedThread
 }
 
 VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
-                      __in PMOUNT_ENTRY MountEntry) {
+                      __in PDOKAN_CONTROL DokanControl) {
   ExAcquireResourceExclusiveLite(&DokanGlobal->Resource, TRUE);
 
-  ExAcquireResourceExclusiveLite(&MountEntry->Resource, TRUE);
-  RemoveEntryList(&MountEntry->ListEntry);
-  InitializeListHead(&MountEntry->ListEntry);
-  ExReleaseResourceLite(&MountEntry->Resource);
-  ExDeleteResourceLite(&MountEntry->Resource);
-  ExFreePool(MountEntry);
+  // We need to refetch the entry to get the correct locking order
+  // but we call it with the global lock acquired so we can remove
+  // and release its memory without having another thread waiting
+  // on it in a concurrent FindMountEntry call.
+  PMOUNT_ENTRY mountEntry =
+      FindMountEntry(DokanGlobal, DokanControl, /*ExclusiveLock=*/TRUE);
+  if (!mountEntry) {
+    // Already removed
+    return;
+  }
+  RemoveEntryList(&mountEntry->ListEntry);
+  InitializeListHead(&mountEntry->ListEntry);
+  ExReleaseResourceLite(&mountEntry->Resource);
+  ExDeleteResourceLite(&mountEntry->Resource);
+  ExFreePool(mountEntry);
 
   ExReleaseResourceLite(&DokanGlobal->Resource);
 }
@@ -1179,7 +1188,7 @@ VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
       RunAsSystem(DokanDeregisterUncProvider, Dcb);
     }
     DokanLogInfo(&logger, L"Removing mount entry.");
-    RemoveMountEntry(Dcb->Global, mountEntry);
+    RemoveMountEntry(Dcb->Global, &dokanControl);
   } else {
     DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found associated mount entry.");
   }
