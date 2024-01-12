@@ -672,20 +672,20 @@ BOOLEAN HasSameOwner(__in PDOKAN_LOGGER Logger,
 BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
                              __in PDOKAN_LOGGER Logger,
                              __in PDOKAN_GLOBAL DokanGlobal,
-                             __in PDOKAN_CONTROL OldControl,
+                             __in PDEVICE_OBJECT OldDevice,
+                             __in PDokanDCB OldDcb,
                              __in PDOKAN_CONTROL NewControl) {
   DokanLogInfo(Logger,
       L"Mount point exists and"
       L" DOKAN_EVENT_REPLACE_DOKAN_DRIVE_IF_EXISTS is set: %s",
       NewControl->MountPoint);
-  if (!HasSameOwner(Logger, NewControl->DiskDeviceObject,
-                    OldControl->DiskDeviceObject)) {
+  if (!HasSameOwner(Logger, NewControl->DiskDeviceObject, OldDevice)) {
     DokanLogInfo(Logger,
                  L"Not replacing existing drive with different owner.");
     return FALSE;
   }
   DokanLogInfo(Logger, L"Unmounting the existing drive.");
-  DokanUnmount(RequestContext, OldControl->Dcb);
+  DokanUnmount(RequestContext, OldDcb);
   PMOUNT_ENTRY entryAfterUnmount =
       FindMountEntry(DokanGlobal, NewControl, /*ExclusiveLock=*/FALSE);
   if (entryAfterUnmount != NULL) {
@@ -960,15 +960,17 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   // need a stricter flag to avoid clobbering dokan drives than to avoid
   // clobbering real ones.
   if (foundPrevEntry != NULL) {
+    PDEVICE_OBJECT oldDevice = foundPrevEntry->MountControl.DiskDeviceObject;
+    PDokanDCB oldDcb = foundPrevEntry->MountControl.Dcb;
+    ExReleaseResourceLite(&foundPrevEntry->Resource);
     if (MaybeUnmountOldDrive(RequestContext, &logger,
-                             RequestContext->DokanGlobal,
-                             &foundPrevEntry->MountControl, &dokanControl)) {
+                             RequestContext->DokanGlobal, oldDevice, oldDcb,
+                             &dokanControl)) {
       driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_UNMOUNTED;
     } else {
       driverInfo->Flags |= DOKAN_DRIVER_INFO_OLD_DRIVE_LEFT_MOUNTED;
       dcb->ForceDriveLetterAutoAssignment = TRUE;
     }
-    ExReleaseResourceLite(&foundPrevEntry->Resource);
   } else if (eventStart->Flags & DOKAN_EVENT_DRIVE_LETTER_IN_USE) {
     // The drive letter is perceived as being in use in user mode, and this
     // driver doesn't own it. In this case we explicitly ask not to use it.

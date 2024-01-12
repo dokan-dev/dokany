@@ -1175,6 +1175,7 @@ BOOLEAN InsertMountEntry(PDOKAN_GLOBAL DokanGlobal,
 // Returns the mount entry for the given DokanControl if present.
 // The mount entry returned has its resource locked
 // and must be released when its access is no longer required.
+// This function should not be called while already holding a MountEntry lock.
 _Ret_maybenull_
 _When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
 _When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
