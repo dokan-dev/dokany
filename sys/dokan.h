@@ -1170,7 +1170,6 @@ BOOLEAN IsDeletePending(__in PDEVICE_OBJECT DeviceObject);
 BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
 
 // Insert a new mount entry for the given DokanControl.
-// Global resource lock must be acquired prior.
 BOOLEAN InsertMountEntry(PDOKAN_GLOBAL DokanGlobal,
                          PDOKAN_CONTROL DokanControl);
 
