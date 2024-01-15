@@ -348,10 +348,10 @@ execute DokanDeviceDeleteDelayedThread
 
 VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
                       __in PDOKAN_CONTROL DokanControl) {
-  ExAcquireResourceExclusiveLite(&DokanGlobal->Resource, TRUE);
+  ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
 
   // We need to refetch the entry to get the correct locking order
-  // but we call it with the global lock acquired so we can remove
+  // but we call it with the mount entry list lock acquired so we can remove
   // and release its memory without having another thread waiting
   // on it in a concurrent FindMountEntry call.
   PMOUNT_ENTRY mountEntry =
@@ -366,7 +366,7 @@ VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   ExDeleteResourceLite(&mountEntry->Resource);
   ExFreePool(mountEntry);
 
-  ExReleaseResourceLite(&DokanGlobal->Resource);
+  ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
 }
 
 BOOLEAN IsMounted(__in PDEVICE_OBJECT DeviceObject) {
@@ -487,12 +487,16 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   PDOKAN_CONTROL dokanControlLookup = NULL;
   BOOLEAN useMountPoint = (DokanControl->MountPoint[0] != L'\0');
   BOOLEAN isSessionIdMatch = FALSE;
+  BOOLEAN LockMountEntryList =
+      !ExIsResourceAcquiredExclusiveLite(&DokanGlobal->MountPointListLock);
   DOKAN_INIT_LOGGER(logger, DokanGlobal->DeviceObject->DriverObject, 0);
 
-  DokanLogInfo(&logger,
-               L"Finding mount entry; mount point = %s.", DokanControl->MountPoint);
+  DokanLogInfo(&logger, L"Finding mount entry; mount point = %s.",
+               DokanControl->MountPoint);
 
-  ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
+  if (LockMountEntryList) {
+    ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
+  }
   for (listEntry = DokanGlobal->MountPointList.Flink;
        listEntry != &DokanGlobal->MountPointList;
        listEntry = listEntry->Flink) {
@@ -534,7 +538,9 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
     DokanLogInfo(&logger, L"No mount entry found.");
   }
 
-  ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
+  if (LockMountEntryList) {
+    ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
+  }
   return mountEntry;
 }
 

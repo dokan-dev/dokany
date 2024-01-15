@@ -194,6 +194,7 @@ typedef struct _DOKAN_GLOBAL {
 
   ERESOURCE MountPointListLock;
   LIST_ENTRY MountPointList;
+
   LIST_ENTRY DeviceDeleteList;
   KEVENT KillDeleteDeviceEvent;
 
