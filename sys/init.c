@@ -487,14 +487,14 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   PDOKAN_CONTROL dokanControlLookup = NULL;
   BOOLEAN useMountPoint = (DokanControl->MountPoint[0] != L'\0');
   BOOLEAN isSessionIdMatch = FALSE;
-  BOOLEAN LockMountEntryList =
+  BOOLEAN lockMountEntryList =
       !ExIsResourceAcquiredExclusiveLite(&DokanGlobal->MountPointListLock);
   DOKAN_INIT_LOGGER(logger, DokanGlobal->DeviceObject->DriverObject, 0);
 
   DokanLogInfo(&logger, L"Finding mount entry; mount point = %s.",
                DokanControl->MountPoint);
 
-  if (LockMountEntryList) {
+  if (lockMountEntryList) {
     ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
   }
   for (listEntry = DokanGlobal->MountPointList.Flink;
@@ -538,7 +538,7 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
     DokanLogInfo(&logger, L"No mount entry found.");
   }
 
-  if (LockMountEntryList) {
+  if (lockMountEntryList) {
     ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
   }
   return mountEntry;
@@ -578,7 +578,8 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   USHORT i = 0;
 
   __try {
-    ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->MountPointListLock, TRUE);
+    ExAcquireResourceExclusiveLite(
+        &RequestContext->DokanGlobal->MountPointListLock, TRUE);
     dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)
                               RequestContext->Irp->AssociatedIrp.SystemBuffer;
     for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
