@@ -127,7 +127,9 @@ InsertMountEntry(PDOKAN_GLOBAL DokanGlobal, PDOKAN_CONTROL DokanControl) {
   ExInitializeResourceLite(&mountEntry->Resource);
   InitializeListHead(&mountEntry->ListEntry);
   RtlCopyMemory(&mountEntry->MountControl, DokanControl, sizeof(DOKAN_CONTROL));
+  ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
   InsertTailList(&DokanGlobal->MountPointList, &mountEntry->ListEntry);
+  ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
   return TRUE;
 }
 
@@ -485,20 +487,17 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   PDOKAN_CONTROL dokanControlLookup = NULL;
   BOOLEAN useMountPoint = (DokanControl->MountPoint[0] != L'\0');
   BOOLEAN isSessionIdMatch = FALSE;
-  BOOLEAN lockGlobal =
-      !ExIsResourceAcquiredExclusiveLite(&DokanGlobal->Resource);
   DOKAN_INIT_LOGGER(logger, DokanGlobal->DeviceObject->DriverObject, 0);
 
   DokanLogInfo(&logger,
                L"Finding mount entry; mount point = %s.", DokanControl->MountPoint);
 
-  if (lockGlobal) {
-    ExAcquireResourceExclusiveLite(&DokanGlobal->Resource, TRUE);
-  }
+  ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
   for (listEntry = DokanGlobal->MountPointList.Flink;
        listEntry != &DokanGlobal->MountPointList;
        listEntry = listEntry->Flink) {
     mountEntryLookup = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+    ExAcquireResourceSharedLite(&mountEntryLookup->Resource, TRUE);
     dokanControlLookup = &mountEntryLookup->MountControl;
     if (useMountPoint) {
       isSessionIdMatch =
@@ -519,13 +518,14 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
       mountEntry = mountEntryLookup;
       break;
     }
+    ExReleaseResourceLite(&mountEntryLookup->Resource);
   }
 
   if (mountEntry) {
     if (ExclusiveLock) {
+      // Convert owned Shared lock to Exclusive
+      ExReleaseResourceLite(&mountEntry->Resource);
       ExAcquireResourceExclusiveLite(&mountEntry->Resource, TRUE);
-    } else {
-      ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
     }
     DokanLogInfo(&logger, L"Mount entry found: %s -> %s",
                  mountEntry->MountControl.MountPoint,
@@ -534,9 +534,7 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
     DokanLogInfo(&logger, L"No mount entry found.");
   }
 
-  if (lockGlobal) {
-    ExReleaseResourceLite(&DokanGlobal->Resource);
-  }
+  ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
   return mountEntry;
 }
 
@@ -574,8 +572,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   USHORT i = 0;
 
   __try {
-    ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
-                                   TRUE);
+    ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->MountPointListLock, TRUE);
     dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)
                               RequestContext->Irp->AssociatedIrp.SystemBuffer;
     for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
@@ -589,6 +586,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
       }
 
       mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+      ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
 
       dokanMountPointInfo[i].Type = mountEntry->MountControl.Type;
       dokanMountPointInfo[i].SessionId = mountEntry->MountControl.SessionId;
@@ -603,11 +601,13 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
       RtlCopyMemory(&dokanMountPointInfo[i].DeviceName,
                     &mountEntry->MountControl.DeviceName,
                     sizeof(mountEntry->MountControl.DeviceName));
+
+      ExReleaseResourceLite(&mountEntry->Resource);
     }
 
     status = STATUS_SUCCESS;
   } __finally {
-    ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
+    ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
   }
 
   return status;
@@ -712,6 +712,7 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   InitializeListHead(&dokanGlobal->MountPointList);
   InitializeListHead(&dokanGlobal->DeviceDeleteList);
   ExInitializeResourceLite(&dokanGlobal->Resource);
+  ExInitializeResourceLite(&dokanGlobal->MountPointListLock);
   ExInitializeResourceLite(&dokanGlobal->MountManagerLock);
 
   dokanGlobal->Identifier.Type = DGL;

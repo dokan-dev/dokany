@@ -194,6 +194,7 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
   IoDeleteDevice(dokanGlobal->DeviceObject);
   ExDeleteResourceLite(&dokanGlobal->Resource);
+  ExDeleteResourceLite(&dokanGlobal->MountPointListLock);
   ExDeleteResourceLite(&dokanGlobal->MountManagerLock);
 }
 
