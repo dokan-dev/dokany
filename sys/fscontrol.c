@@ -756,7 +756,6 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   PDokanDCB dcb = NULL;
   PDokanVCB vcb = NULL;
   PVPB vpb = NULL;
-  DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry = NULL;
   PDEVICE_OBJECT volDeviceObject;
   PDRIVER_OBJECT driverObject = RequestContext->DeviceObject->DriverObject;
@@ -820,7 +819,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
 
   DokanLogInfo(&logger,
                L"Mounting volume using MountPoint \"%wZ\" device \"%wZ\"",
-               dcb->MountPoint, dcb->DiskDeviceName);
+               dcb->Control.MountPoint, dcb->Control.DiskDeviceName);
 
   if (!isNetworkFileSystem) {
     status = IoCreateDevice(driverObject,               // DriverObject
@@ -834,7 +833,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
     status = IoCreateDeviceSecure(
         driverObject,               // DriverObject
         sizeof(DokanVCB),           // DeviceExtensionSize
-        dcb->DiskDeviceName,        // DeviceName
+        dcb->Control.DiskDeviceName, // DeviceName
         dcb->VolumeDeviceType,      // DeviceType
         dcb->DeviceCharacteristics, // DeviceCharacteristics
         FALSE,                      // Not Exclusive
@@ -890,33 +889,12 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_LOG_FINE_IRP(RequestContext, "ExAcquireResourceExclusiveLite dcb resource");
   ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
 
-  // set the device on dokanControl
-  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-  RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
-                dcb->DiskDeviceName->Length);
-  if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
-    RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
-                  dcb->UNCName->Length);
-  }
-  dokanControl.SessionId = dcb->SessionId;
-  mountEntry =
-      FindMountEntry(dcb->Global, &dokanControl, /*ExclusiveLock=*/TRUE);
-  if (mountEntry != NULL) {
-    mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
-    mountEntry->MountControl.MountOptions = dcb->MountOptions;
-    ExReleaseResourceLite(&mountEntry->Resource);
-  } else {
-    ExReleaseResourceLite(&dcb->Resource);
-    return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
-                         L"MountEntry not found.");
-  }
-
   ExReleaseResourceLite(&dcb->Resource);
 
   // Start check thread
   DokanStartCheckThread(dcb);
 
-  BOOLEAN isDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
+  BOOLEAN isDriveLetter = IsMountPointDriveLetter(dcb->Control.MountPoint);
   // Create mount point for the volume
   if (dcb->UseMountManager) {
     BOOLEAN autoMountStateBackup = TRUE;
@@ -935,7 +913,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
         DokanSendAutoMount(FALSE);
       }
     }
-    status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
+    status = DokanSendVolumeArrivalNotification(dcb->Control.DiskDeviceName);
     if (!NT_SUCCESS(status)) {
       DokanLogError(&logger, status,
                     L"DokanSendVolumeArrivalNotification failed.");

@@ -192,7 +192,6 @@ typedef struct _DOKAN_GLOBAL {
 
   PKTHREAD DeviceDeleteThread;
 
-  ERESOURCE MountPointListLock;
   LIST_ENTRY MountPointList;
 
   LIST_ENTRY DeviceDeleteList;
@@ -207,7 +206,22 @@ typedef struct _DOKAN_GLOBAL {
 
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
 
-// make sure Identifier is the top of struct
+typedef struct _DOKAN_CONTROL {
+  // Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS)
+  PUNICODE_STRING MountPoint;
+  // UNC name used for network volume
+  PUNICODE_STRING UNCName;
+  // Disk Device Name
+  PUNICODE_STRING DiskDeviceName;
+  // Session ID of calling process
+  ULONG SessionId;
+  // Contains information about the flags on the mount
+  ULONG MountOptions;
+} DOKAN_CONTROL, *PDOKAN_CONTROL;
+
+typedef struct DokanVCB *PDokanVCB;
+
+// Make sure Identifier is the top of struct
 typedef struct _DokanDiskControlBlock {
 
   FSD_IDENTIFIER Identifier;
@@ -218,7 +232,8 @@ typedef struct _DokanDiskControlBlock {
   PDRIVER_OBJECT DriverObject;
   PDEVICE_OBJECT DeviceObject;
 
-  PVOID Vcb;
+  // NULL until fully mounted
+  PDokanVCB Vcb;
 
   // Pending IRPs
   IRP_LIST PendingIrp;
@@ -232,13 +247,10 @@ typedef struct _DokanDiskControlBlock {
   // the time they become ready to retry.
   IRP_LIST PendingRetryIrp;
 
-  PUNICODE_STRING DiskDeviceName;
   PUNICODE_STRING SymbolicLinkName;
   // MountManager assigned a persistent symbolic link name
   // during IOCTL_MOUNTDEV_LINK_CREATED
   PUNICODE_STRING PersistentSymbolicLinkName;
-  PUNICODE_STRING MountPoint;
-  PUNICODE_STRING UNCName;
   LPWSTR VolumeLabel;
 
   DEVICE_TYPE DeviceType;
@@ -273,7 +285,6 @@ typedef struct _DokanDiskControlBlock {
   CACHE_MANAGER_CALLBACKS CacheManagerNoOpCallbacks;
 
   ULONG IrpTimeout;
-  ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
   
   // If true, we know the requested mount point is occupied by a dokan drive we
@@ -301,41 +312,13 @@ typedef struct _DokanDiskControlBlock {
   // repeatedly rebuilding state that they attach to the FCB header.
   ULONG FcbGarbageCollectionIntervalMs;
 
-  // Contains mount options from user space. See DOKAN_EVENT_* in public.h
-  // for possible values.
-  ULONG MountOptions;
+  DOKAN_CONTROL Control;
 
 } DokanDCB, *PDokanDCB;
 
-#define MAX_PATH 260
-
-typedef struct _DOKAN_CONTROL {
-  // File System Type
-  ULONG Type;
-  // Mount point. Can be "M:\" (drive letter) or "C:\mount\dokan" (path in NTFS)
-  WCHAR MountPoint[MAX_PATH];
-  // UNC name used for network volume
-  WCHAR UNCName[64];
-  // Disk Device Name
-  WCHAR DeviceName[64];
-  // Always set on MOUNT_ENTRY
-  PDokanDCB Dcb;
-  // Always set on MOUNT_ENTRY
-  PDEVICE_OBJECT DiskDeviceObject;
-  // NULL until fully mounted
-  PDEVICE_OBJECT VolumeDeviceObject;
-  // Session ID of calling process
-  ULONG SessionId;
-  // Contains information about the flags on the mount
-  ULONG MountOptions;
-} DOKAN_CONTROL, *PDOKAN_CONTROL;
-
 typedef struct _MOUNT_ENTRY {
   LIST_ENTRY ListEntry;
-  // Lock automatically acquired by FindMountEntry which must be released
-  // when the object access is no longer required.
-  ERESOURCE Resource;
-  DOKAN_CONTROL MountControl;
+  PDokanDCB Dcb;
 } MOUNT_ENTRY, *PMOUNT_ENTRY;
 
 #define IS_DEVICE_READ_ONLY(DeviceObject)                                      \
@@ -827,7 +810,7 @@ typedef struct _DEVICE_ENTRY {
   PDEVICE_OBJECT VolumeDeviceObject;
   ULONG SessionId;
   ULONG Counter;
-  UNICODE_STRING MountPoint;
+  PUNICODE_STRING MountPoint;
 } DEVICE_ENTRY, *PDEVICE_ENTRY;
 
 typedef struct _DRIVER_EVENT_CONTEXT {
@@ -1070,14 +1053,13 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
-                      __in PWCHAR MountPoint, __in PWCHAR UNCName,
+                      __in PWCHAR MountPoint,
                       __in_opt PSECURITY_DESCRIPTOR VolumeSecurityDescriptor,
-                      __in ULONG sessionID, __in PWCHAR BaseGuid,
-                      __in PDOKAN_GLOBAL DokanGlobal,
+                      __in PWCHAR BaseGuid, __in PDOKAN_GLOBAL DokanGlobal,
                       __in DEVICE_TYPE DeviceType,
                       __in ULONG DeviceCharacteristics,
                       __in BOOLEAN MountGlobally, __in BOOLEAN UseMountManager,
-                      __out PDOKAN_CONTROL DokanControl);
+                      __in PDOKAN_CONTROL DokanControl, __out PDokanDCB *Dcb);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
@@ -1177,23 +1159,10 @@ BOOLEAN InsertMountEntry(PDOKAN_GLOBAL DokanGlobal,
 // The mount entry returned has its resource locked
 // and must be released when its access is no longer required.
 // This function should not be called while already holding a MountEntry lock.
-_Ret_maybenull_
-_When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
-_When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
-PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
-                            __in PDOKAN_CONTROL DokanControl,
-                            __in BOOLEAN ExclusiveLock);
-
-// Returns the mount entry for the given names if present.
-// The mount entry returned has its resource locked
-// and must be released when its access is no longer required.
-_Ret_maybenull_
-_When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
-_When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
-PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
-                                  __in PUNICODE_STRING DiskDeviceName,
-                                  __in PUNICODE_STRING UNCName,
-                                  __in BOOLEAN ExclusiveLock);
+PMOUNT_ENTRY
+FindMountEntry(__in PREQUEST_CONTEXT RequestContext, __in ULONG SessionId,
+               __in PUNICODE_STRING MountPoint,
+               __in PUNICODE_STRING DiskDeviceName);
 
 NTSTATUS DokanAllocateMdl(__in PREQUEST_CONTEXT RequestContext,
                           __in ULONG Length);

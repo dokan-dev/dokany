@@ -627,19 +627,21 @@ Return Value:
     }
 
     // Remove possible UNCName prefix
-    if (RequestContext->Dcb->UNCName != NULL) {
+    if (RequestContext->Dcb->Control.UNCName[0] != '\0') {
       UNICODE_STRING fileNameUS =
           DokanWrapUnicodeString(fileName, fileNameLength);
-      if (RtlPrefixUnicodeString(RequestContext->Dcb->UNCName, &fileNameUS,
+      if (RtlPrefixUnicodeString(RequestContext->Dcb->Control.UNCName,
+                                 &fileNameUS,
                                  /*CaseInSensitive=*/TRUE)) {
-        fileNameLength -= RequestContext->Dcb->UNCName->Length;
+        fileNameLength -= RequestContext->Dcb->Control.UNCName->Length;
         if (fileNameLength == 0) {
           fileName[0] = '\\';
           fileName[1] = '\0';
           fileNameLength = sizeof(WCHAR);
         } else {
           RtlMoveMemory(fileName,
-                        (PCHAR)fileName + RequestContext->Dcb->UNCName->Length,
+                        (PCHAR)fileName +
+                            RequestContext->Dcb->Control.UNCName->Length,
                         fileNameLength);
           fileName[fileNameLength / sizeof(WCHAR)] = '\0';
         }

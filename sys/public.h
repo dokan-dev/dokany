@@ -465,7 +465,7 @@ typedef struct _EVENT_START {
   ULONG UserVersion;
   ULONG DeviceType;
   ULONG Flags;
-  WCHAR MountPoint[260];
+  WCHAR MountPoint[MAX_PATH];
   WCHAR UNCName[64];
   ULONG IrpTimeout;
   ULONG FcbGarbageCollectionIntervalMs;

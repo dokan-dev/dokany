@@ -44,6 +44,7 @@ FSCTL_EVENT_PROCESS_N_PULL:
 
 #include "dokan.h"
 #include "util/irp_buffer_helper.h"
+#include "util/str.h"
 
 VOID SetCommonEventContext(__in PREQUEST_CONTEXT RequestContext,
                            __in PEVENT_CONTEXT EventContext,
@@ -304,8 +305,9 @@ VOID DokanStopFcbGarbageCollectorThread(__in PDokanVCB Vcb) {
 
 NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
                            __in PDEVICE_OBJECT DeviceObject) {
-  PDokanDCB dcb;
-  PDokanVCB vcb;
+  PDokanDCB dcb = NULL;
+  PDokanVCB vcb = NULL;
+  PMOUNT_ENTRY mountEntry = NULL;
   NTSTATUS status = STATUS_SUCCESS;
   DOKAN_INIT_LOGGER(logger,
                     DeviceObject == NULL ? NULL
@@ -370,7 +372,14 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
     ExDeleteLookasideListEx(&vcb->FCBAvlNodeLookasideList);
   }
   DokanCleanupAllChangeNotificationWaiters(vcb);
+
+  PMOUNT_ENTRY mountEntry = RemoveMountEntry(RequestContext, &dcb->Control);
+
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext);
+
+  if (mountEntry) {
+    ExFreePool(mountEntry);
+  }
 
   DokanDeleteDeviceObject(RequestContext, dcb);
 
@@ -395,40 +404,46 @@ ULONG GetCurrentSessionId(__in PREQUEST_CONTEXT RequestContext) {
 
 NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint;
-  DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry;
+  PUNICODE_STRING unicodeMountPoint = NULL;
 
   GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(RequestContext->Irp,
                                                 szMountPoint);
 
-  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
-                    L"\\DosDevices\\");
-  if ((szMountPoint->Length / sizeof(WCHAR)) < 4) {
-    dokanControl.MountPoint[12] = towupper(szMountPoint->Buffer[0]);
-    dokanControl.MountPoint[13] = L':';
-    dokanControl.MountPoint[14] = L'\0';
+  WCHAR mountPoint[MAX_PATH + /*\DosDevices\*/ 13];
+  RtlStringCchCopyW(mountPoint, sizeof(mountPoint), g_DosDevicesPrefix.Buffer);
+  if (wcsnlen_s(szMountPoint->Buffer, MAX_PATH) == 1) {
+    mountPoint[12] = towupper(szMountPoint->Buffer[0]);
+    mountPoint[13] = L':';
+    mountPoint[14] = L'\0';
   } else {
-    if (szMountPoint->Length >
-        sizeof(dokanControl.MountPoint) - 12 * sizeof(WCHAR)) {
+    NTSTATUS status = RtlStringCchCatW(mountPoint, MAXIMUM_FILENAME_LENGTH, szMountPoint->Buffer);
+    if (!NT_SUCCESS(status)) {
       DOKAN_LOG_FINE_IRP(RequestContext, "Mount point buffer has invalid size");
       return STATUS_BUFFER_OVERFLOW;
     }
-    RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
-                  szMountPoint->Length);
+  }
+  unicodeMountPoint = DokanAllocateUnicodeString(mountPoint);
+  if (!unicodeMountPoint) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "Failed to allocate unicode string for mount point.");
+    return STATUS_BUFFER_OVERFLOW;
   }
 
-  dokanControl.SessionId = GetCurrentSessionId(RequestContext);
-  mountEntry = FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
-                 /*ExclusiveLock=*/FALSE);
+  mountEntry = FindMountEntry(
+      RequestContext, GetCurrentSessionId(RequestContext), unicodeMountPoint,
+      /*DiskDeviceName=*/NULL);
+  DokanFreeUnicodeString(unicodeMountPoint);
   if (mountEntry == NULL) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found device associated to mount point %ws",
-                  dokanControl.MountPoint);
+                       unicodeMountPoint);
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  PDEVICE_OBJECT volumeDeviceObject = mountEntry->MountControl.VolumeDeviceObject;
-  ExReleaseResourceLite(&mountEntry->Resource);
+  PDEVICE_OBJECT volumeDeviceObject = NULL;
+  if (mountEntry->Dcb->Vcb) {
+    volumeDeviceObject = mountEntry->Dcb->Vcb->DeviceObject;
+  }
+  IoReleaseRemoveLock(&mountEntry->Dcb->RemoveLock, RequestContext);
 
   if (IsDeletePending(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");

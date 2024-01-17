@@ -687,12 +687,13 @@ BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
   DokanLogInfo(Logger, L"Unmounting the existing drive.");
   DokanUnmount(RequestContext, OldDcb);
   PMOUNT_ENTRY entryAfterUnmount =
-      FindMountEntry(DokanGlobal, NewControl, /*ExclusiveLock=*/FALSE);
+      FindMountEntry(RequestContext, /*SessionId=*/-1, NewControl->MountPoint,
+                     /*DiskDeviceName=*/NULL);
   if (entryAfterUnmount != NULL) {
     DokanLogInfo(
         Logger,
         L"Warning: old mount entry was not removed by unmount attempt.");
-    ExReleaseResourceLite(&entryAfterUnmount->Resource);
+    IoReleaseRemoveLock(&entryAfterUnmount->Dcb->RemoveLock, RequestContext);
     return FALSE;
   }
   DokanLogInfo(Logger, L"The existing mount entry is now gone.");
@@ -714,7 +715,8 @@ VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
               RequestContext->DokanGlobal, sessionId)) != NULL) {
     DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
     foundEntry->SessionId = (ULONG)-1;
-    foundEntry->MountPoint.Buffer = NULL;
+    DokanFreeUnicodeString(foundEntry->MountPoint);
+    foundEntry->MountPoint = NULL;
   }
   ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
 }
@@ -850,29 +852,36 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Network unmount enabled");
   }
 
-  KeEnterCriticalRegion();
-  ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource, TRUE);
 
   DOKAN_CONTROL dokanControl;
-  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
-                    L"\\DosDevices\\");
-  if (wcslen(eventStart->MountPoint) == 1) {
-    dokanControl.MountPoint[12] = towupper(eventStart->MountPoint[0]);
-    dokanControl.MountPoint[13] = L':';
-    dokanControl.MountPoint[14] = L'\0';
+  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));  
+  WCHAR mountPoint[MAX_PATH + /*\DosDevices\*/ 13];
+  RtlStringCchCopyW(mountPoint, sizeof(mountPoint), g_DosDevicesPrefix.Buffer);
+  if (wcsnlen_s(eventStart->MountPoint, MAX_PATH) == 1) {
+    mountPoint[12] = towupper(eventStart->MountPoint[0]);
+    mountPoint[13] = L':';
+    mountPoint[14] = L'\0';
   } else {
-    RtlStringCchCatW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
+    RtlStringCchCatW(mountPoint, MAXIMUM_FILENAME_LENGTH,
                      eventStart->MountPoint);
   }
+  if (eventStart->UNCName != NULL) {
+    RtlStringCchCopyW(dokanControl.UNCName,
+                      sizeof(dokanControl.UNCName) / sizeof(WCHAR),
+                      eventStart->UNCName);
+  }
+  dokanControl.MountPoint = DokanAllocateUnicodeString(mountPoint);
   dokanControl.SessionId = sessionId;
   dokanControl.MountOptions = eventStart->Flags;
 
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource, TRUE);
+
   DOKAN_LOG_FINE_IRP(RequestContext, "Checking for MountPoint %ls",
                      dokanControl.MountPoint);
-  PMOUNT_ENTRY foundPrevEntry =
-      FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
-                     /*ExclusiveLock=*/FALSE);
+  PMOUNT_ENTRY foundPrevEntry = FindMountEntry(
+      RequestContext, dokanControl.SessionId, dokanControl.MountPoint,
+      /*DiskDeviceName=*/NULL);
   if (foundPrevEntry != NULL && !useMountManager) {
     // Legacy behavior: fail on existing mount entry with the same mount point.
     // Note: there are edge cases where this entry (which is internal to dokan)
@@ -899,7 +908,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   status = RtlStringFromGUID(&baseGuid, &unicodeGuid);
   if (!NT_SUCCESS(status)) {
     if (foundPrevEntry) {
-      ExReleaseResourceLite(&foundPrevEntry->Resource);
+      IoReleaseRemoveLock(&foundPrevEntry->Dcb->RemoveLock, RequestContext);
     }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
@@ -924,13 +933,13 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   status = DokanCreateDiskDevice(
       RequestContext->DeviceObject->DriverObject,
       RequestContext->DokanGlobal->MountId, eventStart->MountPoint,
-      eventStart->UNCName, volumeSecurityDescriptor, sessionId, baseGuidString,
-      RequestContext->DokanGlobal, deviceType, deviceCharacteristics,
-      mountGlobally, useMountManager, &dokanControl);
+      volumeSecurityDescriptor, baseGuidString, RequestContext->DokanGlobal,
+      deviceType, deviceCharacteristics, mountGlobally, useMountManager,
+      &dokanControl, &dcb);
 
   if (!NT_SUCCESS(status)) {
     if (foundPrevEntry) {
-      ExReleaseResourceLite(&foundPrevEntry->Resource);
+      IoReleaseRemoveLock(&foundPrevEntry->Dcb->RemoveLock, RequestContext);
     }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
@@ -939,13 +948,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
-  dcb = dokanControl.Dcb;
-  dcb->MountOptions = eventStart->Flags;
+  dcb->Control.MountOptions = eventStart->Flags;
   dcb->DispatchDriverLogs =
       (eventStart->Flags & DOKAN_EVENT_DISPATCH_DRIVER_LOGS) != 0;
   dcb->AllowIpcBatching =
       (eventStart->Flags & DOKAN_EVENT_ALLOW_IPC_BATCHING) != 0;
-  isMountPointDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
+  isMountPointDriveLetter = IsMountPointDriveLetter(dcb->Control.MountPoint);
 
   if (dcb->DispatchDriverLogs) {
     IncrementVcbLogCacheCount();

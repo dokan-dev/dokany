@@ -408,38 +408,23 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
         DokanLogInfo(&logger, L"Link name is not under DosDevices; ignoring.");
         break;
       }
-      if (dcb->MountPoint &&
-          RtlEqualUnicodeString(dcb->MountPoint, &mountdevNameString,
+      if (dcb->Control.MountPoint &&
+          RtlEqualUnicodeString(dcb->Control.MountPoint, &mountdevNameString,
                                 /*CaseInsensitive=*/FALSE)) {
         dcb->MountPointDetermined = TRUE;
         DokanLogInfo(&logger, L"Link name matches the current one.");
         break;
       }
 
-      // Update the mount point on the DCB for the volume.
-      if (dcb->MountPoint) {
-        ExFreePool(dcb->MountPoint);
+      if (dcb->Control.MountPoint) {
+        DokanFreeUnicodeString(dcb->Control.MountPoint);
       }
-      dcb->MountPoint = DokanAllocDuplicateString(&mountdevNameString);
-      if (dcb->MountPoint == NULL) {
+      dcb->Control.MountPoint = DokanAllocDuplicateString(&mountdevNameString);
+      if (dcb->Control.MountPoint == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
         break;
       }
       dcb->MountPointDetermined = TRUE;
-
-      // Update the mount point in dokan's global list, so that other dokan
-      // functions (e.g. for unmounting) can look up the drive by mount point
-      // later.
-      PMOUNT_ENTRY mountEntry =
-          FindMountEntryByName(dcb->Global, dcb->DiskDeviceName, dcb->UNCName,
-                               /*ExclusiveLock=*/TRUE);
-      if (mountEntry != NULL) {
-        RtlStringCchCopyUnicodeString(mountEntry->MountControl.MountPoint,
-                                      MAXIMUM_FILENAME_LENGTH, dcb->MountPoint);
-        ExReleaseResourceLite(&mountEntry->Resource);
-      } else {
-        DokanLogInfo(&logger, L"Cannot find associated MountEntry to update.");
-      }
     } break;
 
     case IOCTL_MOUNTDEV_LINK_DELETED: {
