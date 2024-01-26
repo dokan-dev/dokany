@@ -119,6 +119,8 @@ For details, see the
 
 ## Installation
 
+`choco install dokany2`
+
 For manual installation, see the
 [installation page](https://github.com/dokan-dev/dokany/wiki/Installation).
 
