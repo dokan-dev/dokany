@@ -121,7 +121,7 @@ For details, see the
 
 The latest official and signed build can be downloaded from:
 * [Github release page](https://github.com/dokan-dev/dokany/releases)
-* `choco install dokany2`.
+* `choco install dokany2`
 
 For manual installation, see the
 [installation page](https://github.com/dokan-dev/dokany/wiki/Installation).
