@@ -1,4 +1,5 @@
 # Dokany
+
 [![Github All Releases](https://img.shields.io/github/downloads/dokan-dev/dokany/total.svg)](https://github.com/dokan-dev/dokany/releases)
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dokany&metric=alert_status)](https://sonarcloud.io/dashboard?id=dokany)
@@ -11,6 +12,7 @@
 ![Dokan Demo](http://dokan-dev.github.io/images/screencast.gif)
 
 ## What is Dokan
+
 When you want to create a new file system on Windows, other than FAT or NTFS,
 you need to develop a file system driver. Developing a device driver that works
 in kernel mode on windows is extremely technical. By using Dokan, you can create
@@ -20,6 +22,7 @@ dokany includes a [FUSE wrapper](https://github.com/dokan-dev/dokany/wiki/FUSE)
 that helps you to port your FUSE filesystems without changes.
 
 ## What is Dokany
+
 *Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and
 updated to build with latest tools.*
 
@@ -32,6 +35,7 @@ for more information.
 The API has then again changed over time in [1.1.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.0.0-application-to-Dokany-1.1.0) and [2.0.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0).
 
 ## Benchmark v1.5.1.1000 vs v2.0.3.1000
+
 A benchmark that is testing multiple scenarios repeaditly and sequentially was run 5 times against the `memfs` sample of v1.5.1.1000 and v2.0.3.1000 in an idle environment to precise results.
 The detail results can be seen in this spreadsheet [here](https://docs.google.com/spreadsheets/d/1zdJ6fmP_sqUGCM7SLtTle9N3JLyBOEAMRlwDLfUqm4Q/edit?usp=sharing).
 As better threading and memory poll were added in v2, it is expected that concurrent scenarios (like those tests) would be even more highly improved.
@@ -44,6 +48,7 @@ RandomOpenClose | +173.05% |               |          | Delete        |  +90.83%
 ```
 
 ## Licensing
+
 Dokan contains LGPL and MIT licensed programs.
 
 - user-mode library (dokan2.dll)   **LGPL**
@@ -61,6 +66,7 @@ For details, please check the license files.
 You can obtain source files from https://dokan-dev.github.io
 
 ## Environment
+
 Dokan works on
  * Windows Server 2022 / 2019 / 2016 / 2012 (R2) / 2008 R2 SP1
  * Windows 11 / 10 / 8.1 / 8 / 7 SP1
@@ -74,6 +80,7 @@ Platform
 **Signed Release and Debug drivers** are provided at each release for all platforms.
 
 ## How it works
+
 Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file
 system driver (dokan2.sys). Once the Dokan file system driver is installed, you can
 create file systems which can be seen as normal file systems in Windows. The
@@ -102,6 +109,7 @@ To learn more about Dokan file system development, see the
 [![API documentation](https://img.shields.io/badge/Documentation-API-green.svg)](https://dokan-dev.github.io/dokany-doc/html/) and the [samples](https://github.com/dokan-dev/dokany/tree/master/samples), especially [dokan_memfs](https://github.com/dokan-dev/dokany/tree/master/samples/dokan_memfs).
 
 ## Build
+
 In short, download and install the
 [Visual Studio 2019](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx), select [Windows 10 SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk/) component during the install or from the Tools menu &
 install the [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
@@ -110,10 +118,14 @@ For details, see the
 [build page](https://github.com/dokan-dev/dokany/wiki/Build).
 
 ## Installation
+
+`choco install dokany2`
+
 For manual installation, see the
 [installation page](https://github.com/dokan-dev/dokany/wiki/Installation).
 
 ## Contribute
+
 You want Dokan to get better? Contribute!
 
 Learn the code and suggest your changes on
