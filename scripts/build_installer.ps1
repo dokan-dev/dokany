@@ -51,3 +51,16 @@ Write-Host Build archive ...
 set-alias sz "$env:ProgramFiles\7-Zip\7z.exe"  
 Exec-External { sz a -tzip .\dokan_wix\dokan.zip Win32 x64 ARM ARM64 }
 Write-Host Build archive done !
+
+if ([string]::IsNullOrEmpty($env:CHOCO_PUBLISH_API_KEY)) {
+	Write-Host Skip Chocolatey publication due to missing CHOCO_PUBLISH_API_KEY env variable
+	exit
+}
+$publishChocoConfirmation = Read-Host "Do you want to publish version ${version} to Chocolatey ? [y/n]"
+if ($publishChocoConfirmation -ne 'y') { exit }
+$baseVersion = Select-String -Path .\dokan_wix\version.xml -Pattern 'BaseVersion="(.*)"' | % { $_.Matches.groups[1].Value }
+$buildVersion = Select-String -Path .\dokan_wix\version.xml -Pattern 'BuildVersion="(.*)"' | % { $_.Matches.groups[1].Value }
+Push-Location .\chocolatey
+Exec-External { .\release.ps1 "$baseVersion.$buildVersion" }
+Pop-Location
+
