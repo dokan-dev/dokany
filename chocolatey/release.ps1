@@ -1,9 +1,7 @@
-param($ver)
+param($version)
 
 $ErrorActionPreference = 'Stop'
 
-.\package.ps1 $ver
+.\chocolatey\package.ps1 $version
 
-Set-Location .\build
-choco push "dokany2.${ver}.nupkg" --api-key="${CHOCO_API_KEY}" --source="https://push.chocolatey.org/"
-Set-Location ..
+choco push ".\chocolatey\build\dokany2.${version}.nupkg" --api-key="${CHOCO_API_KEY}" --source="https://push.chocolatey.org/"

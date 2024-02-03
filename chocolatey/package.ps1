@@ -1,37 +1,31 @@
-param($ver)
+param($version)
 
 $ErrorActionPreference = 'Stop'
 
-Remove-Item build -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .\chocolatey\build -Recurse -Force -ErrorAction SilentlyContinue
 
-New-Item ./build -Force -ItemType Directory
-Copy-Item dokany.nuspec.template build/dokany.nuspec
-Copy-Item tools build/ -Recurse
-Rename-Item build/tools/chocolateyinstall.ps1.template chocolateyinstall.ps1
+New-Item .\chocolatey\build -Force -ItemType Directory
+Copy-Item .\chocolatey\dokany.nuspec.template .\chocolatey\build\dokany.nuspec
+Copy-Item .\chocolatey\tools .\chocolatey\build\ -Recurse
+Rename-Item .\chocolatey\build\tools\chocolateyinstall.ps1.template chocolateyinstall.ps1
 
-(Get-Content build/dokany.nuspec).Replace('[[PackageVersion]]', $ver) | Set-Content build/dokany.nuspec
-
-$url64 = "https://github.com/dokan-dev/dokany/releases/download/v${ver}/Dokan_x64.msi"
-$url32 = "https://github.com/dokan-dev/dokany/releases/download/v${ver}/Dokan_x86.msi"
+(Get-Content -Encoding UTF8 .\chocolatey\build\dokany.nuspec).Replace('[[PackageVersion]]', $version) | Set-Content -Encoding UTF8 .\chocolatey\build\dokany.nuspec
 
 function Hash {
     param (
-        $url
+        $path
     )
-    Invoke-WebRequest $url -OutFile build/dokany.msi
-    $hash = Get-FileHash build/dokany.msi -Algorithm SHA256
+    $hash = Get-FileHash $path -Algorithm SHA256
     # return hex string
     return $hash.Hash
 }
 
-$hash64 = Hash $url64
-$hash32 = Hash $url32
+$hash64 = Hash .\dokan_wix\Dokan_x64.msi
+$hash32 = Hash .\dokan_wix\Dokan_x86.msi
 
-$install = (Get-Content build/tools/chocolateyinstall.ps1)
+$install = (Get-Content .\chocolatey\build\tools\chocolateyinstall.ps1)
 $install = $install.Replace('[[Url]]', $url32).Replace('[[Checksum]]', $hash32)
 $install = $install.Replace('[[Url64]]', $url64).Replace('[[Checksum64]]', $hash64)
-Set-Content build/tools/chocolateyinstall.ps1 -Value $install
+Set-Content -Encoding UTF8 .\chocolatey\build\tools\chocolateyinstall.ps1 -Value $install
 
-Set-Location .\build
-choco pack
-Set-Location ..
+choco pack .\chocolatey\build\dokany.nuspec --out .\chocolatey\build
