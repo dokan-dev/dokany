@@ -31,6 +31,7 @@ struct fuse_config
   int debug;
   int mountManager;
   int readonly;
+  int allowIpcBatching;
   int setsignals;
   unsigned int timeoutInSec;
   int removableDrive;

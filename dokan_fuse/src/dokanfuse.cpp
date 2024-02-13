@@ -540,6 +540,10 @@ int do_fuse_loop(struct fuse *fs, bool mt) {
   if (fs->conf.readonly)
     dokanOptions->Options |= DOKAN_OPTION_WRITE_PROTECT;
 
+  // Allow IPC batching
+  if (fs->conf.allowIpcBatching)
+    dokanOptions->Options |= DOKAN_OPTION_ALLOW_IPC_BATCHING;
+
   // Load Dokan DLL
   if (!fs->ch->init()) {
     free(dokanOptions);
@@ -621,6 +625,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("-n", networkDrive, 1),
     FUSE_LIB_OPT("-m", mountManager, 1),
     FUSE_LIB_OPT("-p", removableDrive, 1),
+    FUSE_LIB_OPT("-b", allowIpcBatching, 1),
     FUSE_OPT_END};
 
 static void fuse_lib_help(void) {
@@ -640,6 +645,7 @@ static void fuse_lib_help(void) {
       "    -n                     use network drive\n"
       "    -m                     use mount manager\n"
       "    -p                     use removable drive\n"
+      "    -b                     enable ipc batching\n"
       "\n");
 }
 
