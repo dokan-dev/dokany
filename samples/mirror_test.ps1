@@ -40,6 +40,11 @@ $Configs = @(
 		"Name" = "driveRemovable";
 	},
 	@{
+		"MirrorArguments" = "/l $DokanDriverLetter /g";
+		"Destination" = "$($DokanDriverLetter):";
+		"Name" = "ipcBatching";
+	},
+	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /o";
 		"Destination" = "$($DokanDriverLetter):";
 		"Name" = "driveRemovableMntMgr";
