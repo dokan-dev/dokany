@@ -497,14 +497,13 @@ VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent) {
   }
 
   if (!currentFolder || !parentFolder) {
-    GetSystemTimeAsFileTime(&systime);
     ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
     findData.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+    // Folders times should ideally be the real current and parent folder times.
+    GetSystemTimeAsFileTime(&systime);
     findData.ftCreationTime = systime;
     findData.ftLastAccessTime = systime;
     findData.ftLastWriteTime = systime;
-    // Folders times should be the real current and parent folder times...
-    // TODO: Should it be PushFront ?
     if (!parentFolder) {
       findData.cFileName[0] = '.';
       findData.cFileName[1] = '.';
