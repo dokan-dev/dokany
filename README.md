@@ -3,7 +3,7 @@
 [![Github All Releases](https://img.shields.io/github/downloads/dokan-dev/dokany/total.svg)](https://github.com/dokan-dev/dokany/releases)
 [![Build status](https://ci.appveyor.com/api/projects/status/4tpt4v8btyahh3le/branch/master?svg=true)](https://ci.appveyor.com/project/Maxhy/dokany/branch/master)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dokany&metric=alert_status)](https://sonarcloud.io/dashboard?id=dokany)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/5c2ecf8d8f734437beb795dbe5aaa918)](https://www.codacy.com/gh/dokan-dev/dokany/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=dokan-dev/dokany&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/5c2ecf8d8f734437beb795dbe5aaa918)](https://app.codacy.com/gh/dokan-dev/dokany/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1234/badge)](https://bestpractices.coreinfrastructure.org/projects/1234)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fdokan-dev%2Fdokany.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fdokan-dev%2Fdokany?ref=badge_shield)
 [![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/dokan-dev/dokany.svg)](http://isitmaintained.com/project/dokan-dev/dokany "Average time to resolve an issue")
