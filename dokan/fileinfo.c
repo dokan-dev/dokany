@@ -317,8 +317,9 @@ VOID DOKANAPI DokanEndDispatchGetFileInformation(
     IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
     IoEvent->EventResult->BufferLength = 0;
   } else {
-
-    switch (IoEvent->EventContext->Operation.File.FileInformationClass) {
+    ULONG fileInformationClass =
+        IoEvent->EventContext->Operation.File.FileInformationClass;
+    switch (fileInformationClass) {
     case FileBasicInformation:
       DbgPrint("\tFileBasicInformation\n");
       Status = DokanFillFileBasicInfo(
@@ -380,10 +381,13 @@ VOID DOKANAPI DokanEndDispatchGetFileInformation(
       break;
 
     case FileNormalizedNameInformation:
-      DbgPrint("\tFileNormalizedNameInformation\n");
     case FileNameInformation:
       // this case is not used because driver deal with
-      DbgPrint("\tFileNameInformation\n");
+      if (fileInformationClass == FileNormalizedNameInformation) {
+        DbgPrint("\tFileNormalizedNameInformation\n");
+      } else {
+        DbgPrint("\tFileNameInformation\n");
+      }
       Status = DokanFillFileNameInfo(
           (PFILE_NAME_INFORMATION)IoEvent->EventResult->Buffer,
           ByHandleFileInfo, &remainingLength, IoEvent->EventContext);
@@ -410,8 +414,7 @@ VOID DOKANAPI DokanEndDispatchGetFileInformation(
       break;
     default: {
       Status = STATUS_INVALID_PARAMETER;
-      DbgPrint("  unknown type:%d\n",
-               IoEvent->EventContext->Operation.File.FileInformationClass);
+      DbgPrint("  unknown type:%d\n", fileInformationClass);
     } break;
     }
 
