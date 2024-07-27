@@ -809,7 +809,10 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     DokanOptions->Options |= DOKAN_OPTION_ALLOW_IPC_BATCHING;
     mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MAX;
   }
-  DbgPrintW(L"Dokan: Using %d main pull threads\n", mainPullThreadCount);
+  BOOLEAN allowIpcBatching =
+      (BOOLEAN)(DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING);
+  DbgPrintW(L"Dokan: Using %d main pull threads with ipc batching: %d\n",
+            mainPullThreadCount, allowIpcBatching);
   for (DWORD x = 0; x < mainPullThreadCount; ++x) {
     PDOKAN_IO_EVENT ioEvent = PopIoEventBuffer();
     if (!ioEvent) {
@@ -818,7 +821,7 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
       return DOKAN_MOUNT_ERROR;
     }
     ioEvent->DokanInstance = dokanInstance;
-    QueueIoEvent(ioEvent, DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING
+    QueueIoEvent(ioEvent, allowIpcBatching
                               ? DispatchBatchIoCallback
                               : DispatchDedicatedIoCallback);
   }
@@ -1108,6 +1111,9 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
     eventStart.Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
+  }
+  if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) {
+    eventStart.Flags |= DOKAN_EVENT_ALLOW_IPC_BATCHING;
   }
   if (driverLetter && mountManager &&
       !CheckDriveLetterAvailability(DokanInstance->MountPoint[0])) {

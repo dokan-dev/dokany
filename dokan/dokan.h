@@ -102,7 +102,12 @@ extern "C" {
  * \ref DOKAN_OPERATIONS.Mounted parameters will contain the new mount point.
  */
 #define DOKAN_OPTION_MOUNT_MANAGER (1 << 6)
-/** Mount the drive on current session only */
+/**
+ * Mount the drive on current session only
+ * Note: As Windows process only have on sessionID which is here used to define what is the current session,
+ * impersonation will not work if someone attend to mount for a user from another one (like system service).
+ * See issue #1196
+ */
 #define DOKAN_OPTION_CURRENT_SESSION (1 << 7)
 /** Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it */
 #define DOKAN_OPTION_FILELOCK_USER_MODE (1 << 8)

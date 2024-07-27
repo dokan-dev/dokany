@@ -1508,6 +1508,7 @@ void ShowUsage() {
           "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
           "  /t Single thread\t\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
+          "  /g IPC Batching\t\t\t\t Pull batches of events from the driver instead of a single one and execute them parallelly.\n\t\t\t\t\t\t Only recommended for slow (remote) mirrored device.\n"
           "  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
           "  /s (use stderr for output)\t\t\t Enable debug output to stderr.\n"
           "  /m (use removable drive)\t\t\t Show device as removable media.\n"
@@ -1606,6 +1607,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
       break;
     case L'e':
       dokanOptions.Options |= DOKAN_OPTION_DISPATCH_DRIVER_LOGS;
+      break;
+    case L'g':
+      dokanOptions.Options |= DOKAN_OPTION_ALLOW_IPC_BATCHING;
       break;
     case L'b':
       // Only work when mirroring a folder with setCaseSensitiveInfo option enabled on win10

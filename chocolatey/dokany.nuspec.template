@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Read this before creating packages: https://chocolatey.org/docs/create-packages -->
+<!-- Test your packages in a test environment: https://github.com/chocolatey/chocolatey-test-environment -->
+<!-- Do not remove this test for UTF-8: if “Ω” doesn’t appear as greek uppercase omega letter enclosed in quotation marks, you should use an editor that supports UTF-8, not this one. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <!-- == PACKAGE SPECIFIC SECTION == -->
+    <!-- This section is about this package, although id and version have ties back to the software -->
+    <!-- id is lowercase and if you want a good separator for words, use '-', not '.'. Dots are only acceptable as suffixes for certain types of packages, e.g. .install, .portable, .extension, .template -->
+    <!-- If the software is cross-platform, attempt to use the same id as the debian/rpm package(s) if possible. -->
+    <id>dokany2</id>
+    <!-- version should MATCH as closely as possible with the underlying software -->
+    <!-- Is the version a prerelease of a version? https://docs.nuget.org/create/versioning#creating-prerelease-packages -->
+    <!-- Note that unstable versions like 0.0.1 can be considered a released version, but it's possible that one can release a 0.0.1-beta before you release a 0.0.1 version. If the version number is final, that is considered a released version and not a prerelease. -->
+    <version>[[PackageVersion]]</version>
+    <!--PackageSourceUrl - Where is this Chocolatey package located (think GitHub)? packageSourceUrl is highly recommended for the community feed-->
+    <packageSourceUrl>http://github.com/dokan-dev/dokany</packageSourceUrl>
+    <!-- owners is a poor name for maintainers of the package. It sticks around by this name for compatibility reasons. It basically means you. -->
+    <owners>dokan-dev</owners>
+    <!-- ============================== -->
+
+    <!-- == SOFTWARE SPECIFIC SECTION == -->
+    <!-- This section is about the software itself -->
+    <title>Dokany (Install)</title>
+    <authors>Adrien J. and Maxime C.</authors>
+    <!-- projectUrl is required for the community feed -->
+    <projectUrl>http://dokan-dev.github.io/</projectUrl>
+    <!--<iconUrl>http://cdn.rawgit.com/[[MaintainerRepo]]/master/icons/[[PackageNameLower]].png</iconUrl>-->
+    <!-- <copyright>Year Software Vendor</copyright> -->
+    <!-- If there is a license Url available, it is is required for the community feed -->
+    <licenseUrl>https://github.com/dokan-dev/dokany/blob/master/license.mit.txt</licenseUrl>
+    <projectSourceUrl>http://github.com/dokan-dev/dokany</projectSourceUrl>
+    <docsUrl>https://github.com/dokan-dev/dokany/wiki</docsUrl>
+    <!--<mailingListUrl></mailingListUrl>-->
+    <bugTrackerUrl>https://github.com/dokan-dev/dokany/issues</bugTrackerUrl>
+    <tags>dokany2 fs vfs filesystem dokan admin fuse</tags>
+    <summary>User mode file system driver for windows with FUSE Wrapper</summary>
+    <description>---
+
+      ### [choco://dokany2](choco://dokany2)
+      To use choco:// protocol URLs, install [(unofficial) choco:// Protocol support ](https://chocolatey.org/packages/choco-protocol-support)
+      
+      ---
+      
+      ![Screenshot of dokany in use](https://camo.githubusercontent.com/e825c85d44931bd98fe0585a64478bc57f6eb34a/687474703a2f2f646f6b616e2d6465762e6769746875622e696f2f696d616765732f73637265656e636173742e676966)
+      
+      ### What is Dokan
+      
+      When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system driver. Developing a device driver that works in kernel mode on windows is extremely technical. By using Dokan, you can create your own file systems very easily without writing device drivers. Dokan is similar to FUSE (Linux file system in user space) but works on Windows. Moreover dokany include a FUSE wrapper that help you to port your FUSE filesystems without changes
+      
+      ### What is Dokany
+      
+      Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and updated to build with latest tools.
+      
+      Because the original Dokan Legacy (less than v0.6.0) project is no longer maintained.
+      
+      Since version 0.8.0, dokany break dokan API compatibility. See Choose a version for more informations.
+      
+      Signed x86 / x64 drivers are provided at each release.	
+      
+      ### Environment
+      
+      Dokan works on
+      
+      * Windows 11
+      * Windows 10
+      * Windows Server 2012 R2
+      * Windows 8.1
+      * Windows Server 2012
+      * Windows 8
+      * Windows Server 2008 R2 SP1
+      * Windows 7 SP1
+        
+      ### How it works
+      
+      Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file system driver (dokan2.sys). Once Dokan file system driver is installed, you can create file systems which can be seen as normal file systems in Windows. The application that creates file systems using Dokan library is called File system application.
+      
+      File operation requests from user programs (e.g., CreateFile, ReadFile, WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode) which will subsequently forward the requests to the Dokan file system driver (dokan1.sys). By using functions provided by the Dokan user mode library (dokan1.dll), file system applications are able to register callback functions to the file system driver. The file system driver will invoke these callback routines in order to response to the requests it received. The results of the callback routines will be sent back to the user program.
+      
+      For example, when Windows Explorer requests to open a directory, the CreateFile with Direction option request will be sent to Dokan file system driver and the driver will invoke the CreateFile callback provided by the file system application. The results of this routine are sent back to Windows Explorer as the response to the CreateFile request. Therefore, the Dokan file system driver acts as a proxy between user programs and file system applications. The advantage of this approach is that it allows programmers to develop file systems in user mode which is safe and easy to debug.
+      
+      To learn more about Dokan file system development, see the API documentation.	
+      
+      ---</description>
+    <releaseNotes>https://github.com/dokan-dev/dokany/blob/master/CHANGELOG.md</releaseNotes>
+    <!-- =============================== -->      
+
+    <!-- chocolatey-uninstall.extension - If supporting 0.9.9.x (or below) and including a chocolateyUninstall.ps1 file to uninstall an EXE/MSI, you probably want to include chocolatey-uninstall.extension as a dependency. Please verify whether you are using a helper function from that package. -->
+
+    <!--<provides>NOT YET IMPLEMENTED</provides>-->
+    <!--<conflicts>NOT YET IMPLEMENTED</conflicts>-->
+    <!--<replaces>NOT YET IMPLEMENTED</replaces>-->
+  </metadata>
+  <files>
+    <!-- this section controls what actually gets packaged into the Chocolatey package -->
+    <file src="tools\**" target="tools" />
+    <!--Building from Linux? You may need this instead: <file src="tools/**" target="tools" />-->
+  </files>
+</package>

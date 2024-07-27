@@ -528,7 +528,7 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
     DOKAN_LOG_FINE_IRP(RequestContext, "No output buffer provided");
     return status;
   }
-  if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+  if (RequestContext->Vcb == NULL || IsUnmountPendingVcb(RequestContext->Vcb)) {
     return STATUS_NO_SUCH_DEVICE;
   }
   // 3 - Flag the device as having workers starting to pull events.
@@ -899,10 +899,12 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
                   dcb->UNCName->Length);
   }
   dokanControl.SessionId = dcb->SessionId;
-  mountEntry = FindMountEntry(dcb->Global, &dokanControl, TRUE);
+  mountEntry =
+      FindMountEntry(dcb->Global, &dokanControl, /*ExclusiveLock=*/TRUE);
   if (mountEntry != NULL) {
     mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
     mountEntry->MountControl.MountOptions = dcb->MountOptions;
+    ExReleaseResourceLite(&mountEntry->Resource);
   } else {
     ExReleaseResourceLite(&dcb->Resource);
     return DokanLogError(&logger, STATUS_DEVICE_REMOVED,

@@ -358,6 +358,8 @@
           $prBranchHead = $parents[2]
 
           # Python 3 is needed by git clang-format
+          # https://help.appveyor.com/discussions/problems/6832-appveyor-doesnt-recognizes-python3-command
+          Copy-Item -Path "C:\Python38\python.exe" -Destination "C:\Python38\python3.exe"
           $env:PATH ="C:\Python38;$env:PATH"
 
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"

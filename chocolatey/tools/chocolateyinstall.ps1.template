@@ -1,0 +1,27 @@
+﻿$ErrorActionPreference = 'Stop';
+
+$packageName    = 'dokany2'
+$toolsDir       = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
+$url            = "$toolsDir\Dokan_x86.msi" 
+$url64          = "$toolsDir\Dokan_x64.msi"
+
+$packageArgs = @{
+  packageName   = $packageName
+  unzipLocation = $toolsDir
+  fileType      = 'MSI'
+  url           = '[[Url]]'
+  url64bit      = '[[Url64]]'
+
+  softwareName  = 'Dokan Library*'
+
+  checksum      = '[[Checksum]]'
+  checksumType  = 'sha256'
+  checksum64    = '[[Checksum64]]'
+  checksumType64= 'sha256'
+
+  silentArgs    = "/passive /norestart"
+  validExitCodes= @(0, 3010, 1641)
+}
+
+Install-ChocolateyPackage @packageArgs
+Remove-Item $toolsDir\*.msi -Force -EA SilentlyContinue | Out-Null
