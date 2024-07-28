@@ -577,28 +577,49 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo;
   USHORT i = 0;
 
-  __try {
-    ExAcquireResourceExclusiveLite(
-        &RequestContext->DokanGlobal->MountPointListLock, TRUE);
-    dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)
-                              RequestContext->Irp->AssociatedIrp.SystemBuffer;
-    for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
-         listEntry != &RequestContext->DokanGlobal->MountPointList;
-         listEntry = listEntry->Flink, ++i) {
+  BOOLEAN isAdmin =
+      SeSinglePrivilegeCheck(RtlConvertLongToLuid(SE_IMPERSONATE_PRIVILEGE),
+                             RequestContext->Irp->RequestorMode);
+
+  ULONG sessionId;
+  if (!NT_SUCCESS(IoGetRequestorSessionId(RequestContext->Irp, &sessionId))) {
+    sessionId = 0;
+  }
+
+  status = STATUS_SUCCESS;
+
+  ExAcquireResourceExclusiveLite(
+    &RequestContext->DokanGlobal->MountPointListLock, TRUE);
+
+  dokanMountPointInfo =
+    (PDOKAN_MOUNT_POINT_INFO)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+  
+  for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
+       listEntry != &RequestContext->DokanGlobal->MountPointList;
+       listEntry = listEntry->Flink, ++i) {
+
+    mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+    ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
+
+    __try {
+      // For non-admins, skip drives that are not in same session as
+      // requestor
+      if (!isAdmin && mountEntry->MountControl.SessionId != sessionId) {
+        i--;
+        continue;
+      }
+
       if (!ExtendOutputBufferBySize(RequestContext->Irp,
                                     sizeof(DOKAN_MOUNT_POINT_INFO),
                                     /*UpdateInformationOnFailure=*/FALSE)) {
         status = STATUS_BUFFER_OVERFLOW;
-        __leave;
+        break;
       }
-
-      mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
-      ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
 
       dokanMountPointInfo[i].Type = mountEntry->MountControl.Type;
       dokanMountPointInfo[i].SessionId = mountEntry->MountControl.SessionId;
       dokanMountPointInfo[i].MountOptions =
-          mountEntry->MountControl.MountOptions;
+        mountEntry->MountControl.MountOptions;
       RtlCopyMemory(&dokanMountPointInfo[i].MountPoint,
                     &mountEntry->MountControl.MountPoint,
                     sizeof(mountEntry->MountControl.MountPoint));
@@ -608,14 +629,12 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
       RtlCopyMemory(&dokanMountPointInfo[i].DeviceName,
                     &mountEntry->MountControl.DeviceName,
                     sizeof(mountEntry->MountControl.DeviceName));
-
+    } __finally {
       ExReleaseResourceLite(&mountEntry->Resource);
     }
-
-    status = STATUS_SUCCESS;
-  } __finally {
-    ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
   }
+
+  ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
 
   return status;
 }
@@ -757,7 +776,6 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   return STATUS_SUCCESS;
 }
 
-KSTART_ROUTINE DokanRegisterUncProvider;
 VOID DokanRegisterUncProvider(__in PVOID pDcb) {
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
@@ -1192,8 +1210,7 @@ VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
         mountEntry->MountControl.Type == FILE_DEVICE_NETWORK_FILE_SYSTEM;
     ExReleaseResourceLite(&mountEntry->Resource);
     if (isNetworkDrive) {
-      // Run FsRtlDeregisterUncProvider in System thread.
-      RunAsSystem(DokanDeregisterUncProvider, Dcb);
+      DokanDeregisterUncProvider(Dcb);
     }
     DokanLogInfo(&logger, L"Removing mount entry.");
     RemoveMountEntry(Dcb->Global, &dokanControl);

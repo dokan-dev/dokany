@@ -952,7 +952,7 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   if (isNetworkFileSystem) {
-    RunAsSystem(DokanRegisterUncProvider, dcb);
+    DokanRegisterUncProvider(dcb);
   }
 
   InterlockedOr(&hasMountedAnyDisk, 1);
