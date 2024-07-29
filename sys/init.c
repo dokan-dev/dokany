@@ -571,7 +571,7 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
 
 NTSTATUS
 DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  NTSTATUS status = STATUS_SUCCESS;
   PLIST_ENTRY listEntry;
   PMOUNT_ENTRY mountEntry;
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo;
@@ -585,8 +585,6 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   if (!NT_SUCCESS(IoGetRequestorSessionId(RequestContext->Irp, &sessionId))) {
     sessionId = 0;
   }
-
-  status = STATUS_SUCCESS;
 
   ExAcquireResourceExclusiveLite(
     &RequestContext->DokanGlobal->MountPointListLock, TRUE);
@@ -602,8 +600,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
     ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
 
     __try {
-      // For non-admins, skip drives that are not in same session as
-      // requestor
+      // For non-admins, skip drives that are not in same session as requestor
       if (!isAdmin && mountEntry->MountControl.SessionId != sessionId) {
         i--;
         continue;
@@ -776,29 +773,24 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   return STATUS_SUCCESS;
 }
 
-VOID DokanRegisterUncProvider(__in PVOID pDcb) {
+VOID DokanRegisterUncProvider(__in PDokanDCB pDcb) {
   NTSTATUS status;
-  PDokanDCB Dcb = pDcb;
 
-  if (Dcb->UNCName != NULL && Dcb->UNCName->Length > 0) {
-    status =
-        FsRtlRegisterUncProvider(&(Dcb->MupHandle), Dcb->DiskDeviceName, FALSE);
+  if (pDcb->UNCName != NULL && pDcb->UNCName->Length > 0) {
+    status = FsRtlRegisterUncProvider(&(pDcb->MupHandle), pDcb->DiskDeviceName,
+                                      FALSE);
     DOKAN_LOG_("FsRtlRegisterUncProvider %s", DokanGetNTSTATUSStr(status));
     if (!NT_SUCCESS(status)) {
-      Dcb->MupHandle = 0;
+      pDcb->MupHandle = 0;
     }
   }
-  PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
-KSTART_ROUTINE DokanDeregisterUncProvider;
-VOID DokanDeregisterUncProvider(__in PVOID pDcb) {
-  PDokanDCB Dcb = pDcb;
-  if (Dcb->MupHandle) {
-    FsRtlDeregisterUncProvider(Dcb->MupHandle);
-    Dcb->MupHandle = 0;
+VOID DokanDeregisterUncProvider(__in PDokanDCB pDcb) {
+  if (pDcb->MupHandle) {
+    FsRtlDeregisterUncProvider(pDcb->MupHandle);
+    pDcb->MupHandle = 0;
   }
-  PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 KSTART_ROUTINE DokanCreateMountPointSysProc;

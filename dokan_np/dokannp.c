@@ -273,8 +273,7 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
   }
 
   DWORD currentSessionId;
-  if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId))
-  {
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId)) {
     currentSessionId = 0;
   }
 
