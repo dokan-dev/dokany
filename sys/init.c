@@ -587,11 +587,11 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   ExAcquireResourceExclusiveLite(
-    &RequestContext->DokanGlobal->MountPointListLock, TRUE);
+      &RequestContext->DokanGlobal->MountPointListLock, TRUE);
 
   dokanMountPointInfo =
-    (PDOKAN_MOUNT_POINT_INFO)RequestContext->Irp->AssociatedIrp.SystemBuffer;
-  
+      (PDOKAN_MOUNT_POINT_INFO)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+
   for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
        listEntry != &RequestContext->DokanGlobal->MountPointList;
        listEntry = listEntry->Flink, ++i) {
@@ -616,7 +616,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
       dokanMountPointInfo[i].Type = mountEntry->MountControl.Type;
       dokanMountPointInfo[i].SessionId = mountEntry->MountControl.SessionId;
       dokanMountPointInfo[i].MountOptions =
-        mountEntry->MountControl.MountOptions;
+          mountEntry->MountControl.MountOptions;
       RtlCopyMemory(&dokanMountPointInfo[i].MountPoint,
                     &mountEntry->MountControl.MountPoint,
                     sizeof(mountEntry->MountControl.MountPoint));
@@ -773,24 +773,30 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   return STATUS_SUCCESS;
 }
 
-VOID DokanRegisterUncProvider(__in PDokanDCB pDcb) {
+KSTART_ROUTINE DokanRegisterUncProvider;
+VOID DokanRegisterUncProvider(__in PVOID pDcb) {
   NTSTATUS status;
+  PDokanDCB Dcb = pDcb;
 
-  if (pDcb->UNCName != NULL && pDcb->UNCName->Length > 0) {
-    status = FsRtlRegisterUncProvider(&(pDcb->MupHandle), pDcb->DiskDeviceName,
-                                      FALSE);
+  if (Dcb->UNCName != NULL && Dcb->UNCName->Length > 0) {
+    status =
+        FsRtlRegisterUncProvider(&(Dcb->MupHandle), Dcb->DiskDeviceName, FALSE);
     DOKAN_LOG_("FsRtlRegisterUncProvider %s", DokanGetNTSTATUSStr(status));
     if (!NT_SUCCESS(status)) {
-      pDcb->MupHandle = 0;
+      Dcb->MupHandle = 0;
     }
   }
+  PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
-VOID DokanDeregisterUncProvider(__in PDokanDCB pDcb) {
-  if (pDcb->MupHandle) {
-    FsRtlDeregisterUncProvider(pDcb->MupHandle);
-    pDcb->MupHandle = 0;
+KSTART_ROUTINE DokanDeregisterUncProvider;
+VOID DokanDeregisterUncProvider(__in PVOID pDcb) {
+  PDokanDCB Dcb = pDcb;
+  if (Dcb->MupHandle) {
+    FsRtlDeregisterUncProvider(Dcb->MupHandle);
+    Dcb->MupHandle = 0;
   }
+  PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 KSTART_ROUTINE DokanCreateMountPointSysProc;
@@ -1202,7 +1208,8 @@ VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
         mountEntry->MountControl.Type == FILE_DEVICE_NETWORK_FILE_SYSTEM;
     ExReleaseResourceLite(&mountEntry->Resource);
     if (isNetworkDrive) {
-      DokanDeregisterUncProvider(Dcb);
+      // Run FsRtlDeregisterUncProvider in System thread.
+      RunAsSystem(DokanDeregisterUncProvider, Dcb);
     }
     DokanLogInfo(&logger, L"Removing mount entry.");
     RemoveMountEntry(Dcb->Global, &dokanControl);
