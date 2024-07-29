@@ -601,7 +601,9 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
 
     __try {
       // For non-admins, skip drives that are not in same session as requestor
-      if (!isAdmin && mountEntry->MountControl.SessionId != sessionId) {
+      if (!isAdmin &&
+          mountEntry->MountControl.SessionId != -1 &&
+          mountEntry->MountControl.SessionId != sessionId) {
         i--;
         continue;
       }
