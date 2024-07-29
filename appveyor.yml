@@ -363,6 +363,7 @@
           $env:PATH ="C:\Python38;$env:PATH"
 
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
+          Exec-External {& git config --global core.autocrlf true }
           Exec-External {& git clang-format --quiet --style=file --diff $mergeBranchHead} |
             Select-String -NotMatch "^no modified files to format$" > $diffFile
           if ((Get-Item $diffFile).length -gt 0) {
