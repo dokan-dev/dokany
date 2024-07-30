@@ -571,29 +571,49 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
 
 NTSTATUS
 DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
-  NTSTATUS status = STATUS_INVALID_PARAMETER;
+  NTSTATUS status = STATUS_SUCCESS;
   PLIST_ENTRY listEntry;
   PMOUNT_ENTRY mountEntry;
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo;
   USHORT i = 0;
 
-  __try {
-    ExAcquireResourceExclusiveLite(
-        &RequestContext->DokanGlobal->MountPointListLock, TRUE);
-    dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)
-                              RequestContext->Irp->AssociatedIrp.SystemBuffer;
-    for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
-         listEntry != &RequestContext->DokanGlobal->MountPointList;
-         listEntry = listEntry->Flink, ++i) {
+  BOOLEAN isAdmin =
+      SeSinglePrivilegeCheck(RtlConvertLongToLuid(SE_IMPERSONATE_PRIVILEGE),
+                             RequestContext->Irp->RequestorMode);
+
+  ULONG sessionId;
+  if (!NT_SUCCESS(IoGetRequestorSessionId(RequestContext->Irp, &sessionId))) {
+    sessionId = 0;
+  }
+
+  ExAcquireResourceExclusiveLite(
+      &RequestContext->DokanGlobal->MountPointListLock, TRUE);
+
+  dokanMountPointInfo =
+      (PDOKAN_MOUNT_POINT_INFO)RequestContext->Irp->AssociatedIrp.SystemBuffer;
+
+  for (listEntry = RequestContext->DokanGlobal->MountPointList.Flink;
+       listEntry != &RequestContext->DokanGlobal->MountPointList;
+       listEntry = listEntry->Flink, ++i) {
+
+    mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
+    ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
+
+    __try {
+      // For non-admins, skip drives that are not in same session as requestor
+      if (!isAdmin &&
+          mountEntry->MountControl.SessionId != -1 &&
+          mountEntry->MountControl.SessionId != sessionId) {
+        i--;
+        continue;
+      }
+
       if (!ExtendOutputBufferBySize(RequestContext->Irp,
                                     sizeof(DOKAN_MOUNT_POINT_INFO),
                                     /*UpdateInformationOnFailure=*/FALSE)) {
         status = STATUS_BUFFER_OVERFLOW;
-        __leave;
+        break;
       }
-
-      mountEntry = CONTAINING_RECORD(listEntry, MOUNT_ENTRY, ListEntry);
-      ExAcquireResourceSharedLite(&mountEntry->Resource, TRUE);
 
       dokanMountPointInfo[i].Type = mountEntry->MountControl.Type;
       dokanMountPointInfo[i].SessionId = mountEntry->MountControl.SessionId;
@@ -608,14 +628,12 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
       RtlCopyMemory(&dokanMountPointInfo[i].DeviceName,
                     &mountEntry->MountControl.DeviceName,
                     sizeof(mountEntry->MountControl.DeviceName));
-
+    } __finally {
       ExReleaseResourceLite(&mountEntry->Resource);
     }
-
-    status = STATUS_SUCCESS;
-  } __finally {
-    ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
   }
+
+  ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
 
   return status;
 }

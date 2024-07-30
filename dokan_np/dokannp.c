@@ -272,10 +272,17 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
     return WN_NOT_CONNECTED;
   }
 
+  DWORD currentSessionId;
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId)) {
+    currentSessionId = 0;
+  }
+
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-    if (wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
+    if ((dokanMountPointInfo[i].SessionId == -1 ||
+        dokanMountPointInfo[i].SessionId == currentSessionId) &&
+        wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
       if (wcscmp(dokanMountPointInfo[i].UNCName, L"") == 0) {
         DokanReleaseMountPointList(dokanMountPointInfo);
         // No UNC, always return success
