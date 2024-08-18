@@ -26,8 +26,8 @@ $hash64 = Hash .\chocolatey\build\tools\Dokan_x64.msi
 $hash32 = Hash .\chocolatey\build\tools\Dokan_x86.msi
 
 $install = (Get-Content .\chocolatey\build\tools\chocolateyinstall.ps1)
-$install = $install.Replace('[[Url]]', $url32).Replace('[[Checksum]]', $hash32)
-$install = $install.Replace('[[Url64]]', $url64).Replace('[[Checksum64]]', $hash64)
+$install = $install.Replace('[[Checksum]]', $hash32)
+$install = $install.Replace('[[Checksum64]]', $hash64)
 Set-Content -Encoding UTF8 .\chocolatey\build\tools\chocolateyinstall.ps1 -Value $install
 
 choco pack .\chocolatey\build\dokany.nuspec --out .\chocolatey\build

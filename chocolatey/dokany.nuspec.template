@@ -25,7 +25,7 @@
     <authors>Adrien J. and Maxime C.</authors>
     <!-- projectUrl is required for the community feed -->
     <projectUrl>http://dokan-dev.github.io/</projectUrl>
-    <!--<iconUrl>http://cdn.rawgit.com/[[MaintainerRepo]]/master/icons/[[PackageNameLower]].png</iconUrl>-->
+    <iconUrl>http://cdn.rawgit.com/dokan-dev/dokany/master/dokan_wix/Bootstrapper/Resources/dokan.png</iconUrl>
     <!-- <copyright>Year Software Vendor</copyright> -->
     <!-- If there is a license Url available, it is is required for the community feed -->
     <licenseUrl>https://github.com/dokan-dev/dokany/blob/master/license.mit.txt</licenseUrl>

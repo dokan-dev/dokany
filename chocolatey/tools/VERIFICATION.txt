@@ -1,0 +1,9 @@
+﻿VERIFICATION
+Verification is intended to assist the Chocolatey moderators and community
+in verifying that this package's contents are trustworthy.
+
+Dokany repository can be found at https://github.com/dokan-dev/dokany
+ with official binary releases at https://github.com/dokan-dev/dokany/releases
+
+Use powershell `Get-FileHash $path -Algorithm SHA256` on the included MSI
+and against the same version on the official website to verify their integrity.
