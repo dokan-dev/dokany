@@ -46,6 +46,7 @@ Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Release /p:Pl
 copy .\dokan_wix\Bootstrapper\bin\x86\Release\DokanSetup.exe .\dokan_wix\
 copy .\dokan_wix\bin\x64\Release\Dokan_x64.msi .\dokan_wix\
 copy .\dokan_wix\bin\x86\Release\Dokan_x86.msi .\dokan_wix\
+copy .\dokan_wix\bin\ARM64\Release\Dokan_ARM64.msi .\dokan_wix\
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\x86\Debug\DokanSetup.exe .\dokan_wix\DokanSetupDbg.exe
 Write-Host Build installer done !
