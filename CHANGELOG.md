@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.2.0.1000] - 2024-08-18
+
+### Changed
+- Installer - Migrate to WiX 5 and Add ARM64 MSI (bundled in the bootstrapper).
+- Library - Keep network drive isolated between users when browsing with UNC path (#1235).
+- FUSE - Add option `-b` to enable Dokan ipc batching option.
+
+### Fixed
+- Library - Fix missing return value on `DokanNetworkProviderUninstall` failure.
+- Memfs - Release instance resources on unmount.
+- Kernel - Prevent MountEntry node access when concurrently removed.
+
 ## [2.1.0.1000] - 2023-12-22
 
 ### Added
@@ -709,6 +721,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.1.0.1000...v2.2.0.1000
 [2.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.6.1000...v2.1.0.1000
 [2.0.6.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.5.1000...v2.0.6.1000
 [2.0.5.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.4.1000...v2.0.5.1000
