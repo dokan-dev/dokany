@@ -20,7 +20,11 @@
 				ShowVersion="yes"
 				SuppressOptionsUI="no"
 				SuppressRepair="yes"
-				Theme="rtfLicense" />
+				Theme="rtfLicense"
+				ThemeFile="Resources\RtfTheme.xml"
+				LocalizationFile="Resources\RtfTheme.wxl"/>
+			<Payload Name="Resources\RtfTheme.wxl" SourceFile="Resources\RtfTheme.wxl" />
+			<Payload Name="dokan.ico" SourceFile="..\dokan.ico" Compressed="yes" />
 		</BootstrapperApplication>
 
 		<Variable Name="InstallFolder" Type="formatted" Value="[ProgramFiles6432Folder]Dokan\Dokan Library-$(var.BaseVersion)" />
