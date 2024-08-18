@@ -213,7 +213,7 @@
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
-        $env:Path += ";C:\Program Files (x86)\WiX Toolset v3.11;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
+        $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
         $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\signtool.exe"
@@ -238,6 +238,11 @@
         .\cert\dokan-sign.ps1
 
         cd dokan_wix
+
+        Exec-External {& dotnet tool install --global wix }
+        # Nuget restore sln fails to restore all the project of the solution for some reason so lets do it manually
+        dir .\* -include ('*.wixproj', '*.vcxproj') -recurse | ForEach-Object { nuget restore $_.FullName -SolutionDirectory . }
+
         (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
         (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
 
@@ -256,7 +261,7 @@
         Write-Host Build archive done !
 
         Write-Host Upload Artifact...
-        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\${BuildConfig}\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
+        Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\Bootstrapper\bin\x86\${BuildConfig}\DokanSetup.exe" -FileName ("DokanSetup-" + $installer_version + ".exe")
         Push-AppveyorArtifact "${env:APPVEYOR_BUILD_FOLDER}\dokan_wix\dokan.zip" -FileName ("dokan-" + $installer_version + ".zip")
         Write-Host Artifact uploaded!
       }

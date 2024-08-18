@@ -1,78 +1,29 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="WixToolset.Sdk/5.0.1">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProductVersion>3.9</ProductVersion>
-    <ProjectGuid>D8A3E7DE-948C-4686-B015-BC342BECA990</ProjectGuid>
-    <SchemaVersion>2.0</SchemaVersion>
     <OutputName>DokanSetup</OutputName>
     <OutputType>Bundle</OutputType>
-    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
-    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
     <DefineConstants>Debug</DefineConstants>
     <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
     <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Bundle.wxs" />
-  </ItemGroup>
-  <ItemGroup>
-    <WixExtension Include="WixDependencyExtension">
-      <HintPath>$(WixExtDir)\WixDependencyExtension.dll</HintPath>
-      <Name>WixDependencyExtension</Name>
-    </WixExtension>
-    <WixExtension Include="WixUtilExtension">
-      <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
-      <Name>WixUtilExtension</Name>
-    </WixExtension>
-    <WixExtension Include="WixNetFxExtension">
-      <HintPath>$(WixExtDir)\WixNetFxExtension.dll</HintPath>
-      <Name>WixNetFxExtension</Name>
-    </WixExtension>
-    <WixExtension Include="WixBalExtension">
-      <HintPath>$(WixExtDir)\WixBalExtension.dll</HintPath>
-      <Name>WixBalExtension</Name>
-    </WixExtension>
+    <PackageReference Include="WixToolset.Dependency.wixext" Version="5.0.1" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.1" />
+    <PackageReference Include="WixToolset.Bal.wixext" Version="5.0.1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Resources\dokan.png" />
     <Content Include="Resources\licdata.rtf" />
-    <Content Include="Resources\RtfTheme.xml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources" />
-    <Folder Include="Resources\1033" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\1033\RtfTheme.wxl" />
-  </ItemGroup>
-  <Import Project="$(WixTargetsPath)" />
-  <PropertyGroup>
-    <PostBuildEvent>if /I "$(ConfigurationName)" == "Release" (
-  "%25WIX%25\bin\insignia.exe" -ib "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)engine.exe"
-  "%25SIGNTOOL%25" sign /v /sha1 "%25SHA1_CERTTHUMBPRINT%25" /t http://timestamp.digicert.com "$(TargetDir)engine.exe"
-  "%25SIGNTOOL%25" sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "%25SHA2_CERTTHUMBPRINT%25" "$(TargetDir)engine.exe"
-  "%25WIX%25\bin\insignia.exe" -ab "$(TargetDir)engine.exe" "$(TargetDir)$(TargetFileName)" -o "$(TargetDir)$(TargetFileName)"
-  "%25SIGNTOOL%25" sign /v /sha1 "%25SHA1_CERTTHUMBPRINT%25" /t http://timestamp.digicert.com "$(TargetDir)$(TargetFileName)"
-  "%25SIGNTOOL%25" sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "%25SHA2_CERTTHUMBPRINT%25" "$(TargetDir)$(TargetFileName)"
-  del "$(TargetDir)engine.exe"
-)</PostBuildEvent>
-  </PropertyGroup>
-  <!--
-	To modify your build process, add your task inside one of the targets below and uncomment it.
-	Other similar extension points exist, see Wix.targets.
-	<Target Name="BeforeBuild">
-	</Target>
-	<Target Name="AfterBuild">
-	</Target>
-	-->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="if /I &quot;$(ConfigurationName)&quot; == &quot;Release&quot; (&#xA;  &quot;%25WIX%25\bin\insignia.exe&quot; -ib &quot;$(TargetDir)$(TargetFileName)&quot; -o &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25WIX%25\bin\insignia.exe&quot; -ab &quot;$(TargetDir)engine.exe&quot; &quot;$(TargetDir)$(TargetFileName)&quot; -o &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  del &quot;$(TargetDir)engine.exe&quot;&#xA;)" />
+  </Target>
 </Project>

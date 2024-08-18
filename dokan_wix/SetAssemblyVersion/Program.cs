@@ -155,24 +155,13 @@ namespace SetAssemblyVersion
 
                 const string cLineFormat = "{0}=\"{1}\" ?>";
 
-                if (line.ToLower().Contains("productcodex86"))
+                if (line.ToLower().Contains("productcodex86") || line.ToLower().Contains("productcodex64") || line.ToLower().Contains("productcodearm64"))
                 {
                     var myVersion = productVer.Major.ToString("X2") + productVer.Minor.ToString("X2") + "-" +
                                     productVer.Build.ToString("X4") + "-" + dateString;
                     value = parts[1];
 
                     // Format ProductCode="{65A3A986-3DC3-mjmi-buld-yyMMddHHmmss}" ?>
-
-                    value = value.Substring(0, 16) + myVersion;
-                    line = $"{parts[0]}={value}" + "}" + "\"" + " ?>";
-                }
-                else if (line.ToLower().Contains("productcodex64"))
-                {
-                    var myVersion = productVer.Major.ToString("X2") + productVer.Minor.ToString("X2") + "-" +
-                                    productVer.Build.ToString("X4") + "-" + dateString;
-                    value = parts[1];
-
-                    // Format ProductCode="{65A3A964-3DC3-mjmi-buld-yyMMddHHmmss}" ?>
 
                     value = value.Substring(0, 16) + myVersion;
                     line = $"{parts[0]}={value}" + "}" + "\"" + " ?>";

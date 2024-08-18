@@ -27,6 +27,7 @@ ReleasePS
 /dokan_wix/Bootstrapper/Redist
 /*.opendb
 /dokan_wix/msbuild.log
+/dokan_wix/packages
 /dokan_fuse/build/
 /dokan_fuse/CMakeFiles
 /dokan_fuse/CMakeCache.txt
@@ -57,3 +58,4 @@ ReleasePS
 *.bak
 *.log
 *.msi
+*.wixpdb
