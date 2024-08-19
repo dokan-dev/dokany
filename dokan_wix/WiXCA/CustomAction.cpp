@@ -187,6 +187,9 @@ UINT __stdcall ExecuteUninstall(MSIHANDLE hInstall) {
   hr = StartDokanCtlProcess(buffer, L"/r a");
   ExitOnFailure(hr, "StartDokanCtlProcess failed");
 
+  hr = WcaDeferredActionRequiresReboot();
+  ExitOnFailure(hr, "WcaDeferredActionRequiresReboot failed");
+
   WcaLog(LOGMSG_STANDARD, "ExecuteUninstall done.");
 
 LExit:
@@ -195,6 +198,42 @@ LExit:
 
   er = SUCCEEDED(hr) ? ERROR_SUCCESS : ERROR_INSTALL_FAILURE;
   return WcaFinalize(er);
+}
+
+UINT __stdcall ServicePendingStop(MSIHANDLE MsiHandle) {
+  HRESULT hr = S_OK;
+  UINT err = ERROR_SUCCESS;
+
+  hr = WcaInitialize(MsiHandle, "ServicePendingStop");
+  ExitOnFailure(hr, "Failed to initialize");
+
+  PWSTR serviceName = NULL;
+  WcaGetProperty(L"SERVICENAME", &serviceName);
+  ExitOnFailure(hr, "Failed to get SERVICENAME");
+
+  SC_HANDLE scmHandle = OpenSCManagerW(0, 0, 0);
+  ExitOnNullWithLastError(scmHandle, hr, "Failed to open SCM");
+
+  WcaLog(LOGMSG_STANDARD, "Check state of service: \"%ws\"", serviceName);
+
+  SERVICE_STATUS serviceStatus;
+  SC_HANDLE serviceHandle =
+      OpenServiceW(scmHandle, serviceName, SERVICE_QUERY_STATUS);
+  if (!serviceHandle) {
+    WcaLog(LOGMSG_STANDARD, "Service not present");
+  } else if (QueryServiceStatus(serviceHandle, &serviceStatus)) {
+    WcaLog(LOGMSG_STANDARD, "Service current state: %d",
+           serviceStatus.dwCurrentState);
+    if (serviceStatus.dwCurrentState == SERVICE_STOP_PENDING) {
+      WcaLog(LOGMSG_STANDARD, "Mark service pending reboot");
+      WcaSetIntProperty(L"ServicePendingStop", 1);
+    }
+  }
+
+LExit:
+
+  err = SUCCEEDED(hr) ? ERROR_SUCCESS : ERROR_INSTALL_FAILURE;
+  return WcaFinalize(err);
 }
 
 // DllMain - Initialize and cleanup WiX custom action utils.

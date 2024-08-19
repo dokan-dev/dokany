@@ -33,6 +33,7 @@
 		<Property Id="ARPPRODUCTICON" Value="DokanIcon" />
 		<Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
 		<Property Id="INSTALLDEVFILES" Value="0" />
+		<Property Id="SERVICENAME" Value="dokan$(var.MajorVersion)" />
 
 		<Property Id="WIN7KB4474419INSTALLED" Secure="yes">
 			<DirectorySearch Id="searchSystem4" Path="[SystemFolder]" Depth="0">
@@ -91,8 +92,10 @@
 
 		<CustomAction Id="ExecuteUninstallAction" DllEntry="ExecuteUninstall" Execute="deferred" Return="check" Impersonate="no" BinaryRef="SetupCA2" />
 
-		<InstallExecuteSequence>
+		<CustomAction Id="InitServicePendingStopProp" Property="ServicePendingStop" Value="0" />
+		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2" />
 
+		<InstallExecuteSequence>
 			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;" />
 
 			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;" />
@@ -102,6 +105,10 @@
 			<Custom Action="ExecuteUninstallAction" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
 			<Custom Action="SetARPINSTALLLOCATION" After="InstallValidate"></Custom>
 
+			<!-- Verify whether the driver uninstall require a restart -->
+			<Custom Action="InitServicePendingStopProp" Before="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot;" />
+			<Custom Action="SetServicePendingStopProp" After="InstallFinalize" Condition="REMOVE=&quot;ALL&quot;" />
+			<ScheduleReboot After="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot; AND ServicePendingStop=1" />
 		</InstallExecuteSequence>
 
 		<Media Id="1" Cabinet="Dokan.cab" EmbedCab="yes" />
