@@ -1522,7 +1522,6 @@ void ShowUsage() {
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
           "  /i Timeout in Milliseconds (ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
-          "  /z Enabled FCB GCt\t\t\t\t Might speed up on env with filter drivers (Anti-virus) slowing down the system.\n"
           "  /x Network unmount\t\t\t\t Allows unmounting network drive from file explorer.\n"
           "  /e Enable Driver Logs\t\t\t\t Forward Driver logs to userland.\n"
           "  /v Volume name\t\t\t\t Personalize the volume name.\n\n"
