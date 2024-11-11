@@ -232,6 +232,7 @@ class impl_file_handle
 	friend class impl_file_lock;
 	friend class impl_file_locks;
 	bool is_dir_;
+	int open_flags_;
 	uint64_t fh_;
 	impl_file_handle *next_file;
 	impl_file_lock *file_lock;
@@ -247,7 +248,9 @@ public:
 	bool is_dir() const {return is_dir_;}
 	int close(const struct fuse_operations *ops);
 	fuse_file_info make_finfo();
-	const std::string& get_name() const {return file_lock->get_name();}
+	const std::string &get_name() const { return file_lock->get_name(); }
+	void set_open_flags(int open_flags) { open_flags_ = open_flags; };
+	int open_flags() { return open_flags_; };
 	void set_finfo(const fuse_file_info& finfo) { fh_ = finfo.fh; };
 	int check_lock(long long start, long long len) { return file_lock->lock_file(this, start, len, false); }
 	int lock(long long start, long long len) { return file_lock->lock_file(this, start, len); }

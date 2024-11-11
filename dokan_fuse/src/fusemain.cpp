@@ -137,8 +137,9 @@ int impl_fuse_context::do_open_file(LPCWSTR FileName, DWORD share_mode,
   std::unique_ptr<impl_file_handle> file;
   CHECKED(file_locks.get_file(fname, false, Flags, share_mode, file));
 
+  file->set_open_flags(convert_flags(Flags));
   fuse_file_info finfo = {0};
-  finfo.flags = convert_flags(Flags);
+  finfo.flags = file->open_flags();
 
   CHECKED(ops_.open(fname.c_str(), &finfo));
 
@@ -1178,7 +1179,7 @@ int impl_file_lock::unlock_file(impl_file_handle *file, long long start,
 ////// File handle
 ///////////////////////////////////////////////////////////////////////////////////////
 impl_file_handle::impl_file_handle(bool is_dir, DWORD shared_mode)
-    : is_dir_(is_dir), fh_(-1), next_file(nullptr), file_lock(nullptr), shared_mode_(shared_mode) {}
+    : is_dir_(is_dir), open_flags_(0), fh_(-1), next_file(nullptr), file_lock(nullptr), shared_mode_(shared_mode) {}
 
 impl_file_handle::~impl_file_handle() { file_lock->remove_file(this); }
 
@@ -1198,7 +1199,7 @@ int impl_file_handle::close(const struct fuse_operations *ops) {
     if (ops->release) // Ignoring result.
     {
       fuse_file_info finfo(make_finfo());
-      ops->release(get_name().c_str(), &finfo); // Set open() flags here?
+      ops->release(get_name().c_str(), &finfo);
     }
   }
   return flush_err;
@@ -1207,5 +1208,6 @@ int impl_file_handle::close(const struct fuse_operations *ops) {
 fuse_file_info impl_file_handle::make_finfo() {
   fuse_file_info res = {0};
   res.fh = fh_;
+  res.flags = open_flags_;
   return res;
 }
