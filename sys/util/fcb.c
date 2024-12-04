@@ -110,8 +110,7 @@ PDokanFCB GetOrCreateUninitializedFcb(__in PREQUEST_CONTEXT RequestContext,
 }
 
 PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
-                      __in PWCHAR FileName, __in ULONG FileNameLength,
-                      __out BOOLEAN* IsAlreadyOpen) {
+                      __in PWCHAR FileName, __in ULONG FileNameLength) {
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
 
   UNREFERENCED_PARAMETER(RequestContext);
@@ -149,8 +148,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
-  LONG openCount = InterlockedIncrement(&fcb->FileCount);
-  *IsAlreadyOpen = openCount > 1;
+  InterlockedIncrement(&fcb->FileCount);
   DokanVCBUnlock(RequestContext->Vcb);
   return fcb;
 }

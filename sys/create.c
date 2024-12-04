@@ -675,7 +675,6 @@ Return Value:
       }
     }
     if (allocateCcb) {
-      BOOLEAN isAlreadyOpen = FALSE;
       // Allocate an FCB or find one in the open list.
       if (RequestContext->IrpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
         status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
@@ -684,11 +683,9 @@ Return Value:
           fileName = NULL;
           __leave;
         }
-        fcb = DokanGetFCB(RequestContext, parentDir, parentDirLength,
-                          &isAlreadyOpen);
+        fcb = DokanGetFCB(RequestContext, parentDir, parentDirLength);
       } else {
-        fcb = DokanGetFCB(RequestContext, fileName, fileNameLength,
-                          &isAlreadyOpen);
+        fcb = DokanGetFCB(RequestContext, fileName, fileNameLength);
       }
       if (fcb == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
@@ -702,7 +699,7 @@ Return Value:
       DOKAN_LOG_FINE_IRP(RequestContext, "Use FCB=%p", fcb);
 
       // Cannot create a file already open
-      if (isAlreadyOpen && disposition == FILE_CREATE) {
+      if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
         status = STATUS_OBJECT_NAME_COLLISION;
         __leave;
       }
