@@ -115,15 +115,12 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
 
   UNREFERENCED_PARAMETER(RequestContext);
 
-  DokanVCBLockRW(RequestContext->Vcb);
-
   BOOLEAN newElement = FALSE;
   PDokanFCB fcb = GetOrCreateUninitializedFcb(RequestContext, &fn, &newElement);
   if (!fcb) {
     ExFreePool(FileName);
     DOKAN_LOG_FINE_IRP(RequestContext, "Failed to find or allocate FCB for %wZ",
                        &fn);
-    DokanVCBUnlock(RequestContext->Vcb);
     return NULL;
   }
 
@@ -139,7 +136,6 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
                          &fcb->FileName);
       ExFreePool(FileName);
       ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
-      DokanVCBUnlock(RequestContext->Vcb);
       return NULL;
     }
   } else {
@@ -148,7 +144,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
-  DokanVCBUnlock(RequestContext->Vcb);
+  DokanFCBFileCountIncrement(fcb);
   return fcb;
 }
 
@@ -197,7 +193,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   // close of one FileObject from within a cleanup of another (with the same
   // FCB). In that case, there is already a FCB lock held below us on the stack,
   // making it unsafe to acquire a VCB lock.
-  if (InterlockedDecrement(&Fcb->FileCount) != 0) {
+  if (DokanFCBFileCountDecrement(Fcb) != 0) {
     return STATUS_SUCCESS;
   }
 
@@ -208,7 +204,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   // another thread after the early return and before the locking of the VCB.
   // The code that increments it does so with the VCB locked, so at this point
   // we are sure.
-  if (Fcb->FileCount == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
+  if (DokanFCBFileCountGet(Fcb) == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
     // We get here when garbage collection is disabled.
     DokanDeleteFcb(Vcb, Fcb, /*RemoveFromTable=*/!Fcb->ReplacedByRename);
   } else {

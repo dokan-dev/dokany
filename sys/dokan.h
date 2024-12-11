@@ -487,7 +487,7 @@ typedef struct _DokanFileControlBlock {
   // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
 
-  // Locking: Atomics - not behind an accessor.
+  // Locking: Use atomic file count operations - DokanFCBFileCount*
   LONG FileCount;
 
   // Locking: Use atomic flag operations - DokanFCBFlags*
@@ -1239,6 +1239,10 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 }
 
 #define IsFlagOn(a, b) ((BOOLEAN)(FlagOn(a, b) == b))
+
+#define DokanFCBFileCountIncrement(fcb) (InterlockedIncrement(&(fcb)->FileCount))
+#define DokanFCBFileCountDecrement(fcb) (InterlockedDecrement(&(fcb)->FileCount))
+#define DokanFCBFileCountGet(fcb) (InterlockedAdd(&(fcb)->FileCount, 0))
 
 #define DokanFCBFlagsGet(fcb) ((fcb)->Flags)
 #define DokanFCBFlagsIsSet(fcb, bit) (((fcb)->Flags) & (bit))
