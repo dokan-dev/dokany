@@ -390,7 +390,9 @@ Return Value:
   BOOLEAN unwindShareAccess = FALSE;
   BOOLEAN eventContextConsumed = FALSE;
   DWORD disposition = 0;
+  BOOLEAN vcbLocked = FALSE;
   BOOLEAN fcbLocked = FALSE;
+  LONG fileCount = 0;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
                     IRP_MJ_CREATE);
 
@@ -675,6 +677,9 @@ Return Value:
       }
     }
     if (allocateCcb) {
+      vcbLocked = TRUE;
+      DokanVCBLockRW(RequestContext->Vcb);
+
       // Allocate an FCB or find one in the open list.
       if (RequestContext->IrpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
         status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
@@ -697,12 +702,6 @@ Return Value:
                      &fileObject->FileName);
       }
       DOKAN_LOG_FINE_IRP(RequestContext, "Use FCB=%p", fcb);
-
-      // Cannot create a file already open
-      if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
-        status = STATUS_OBJECT_NAME_COLLISION;
-        __leave;
-      }
     }
 
     // Cannot create a directory temporary
@@ -717,6 +716,13 @@ Return Value:
 
     fcbLocked = TRUE;
     DokanFCBLockRW(fcb);
+
+    fileCount = DokanFCBFileCountGet(fcb);
+
+    if (vcbLocked) {
+      DokanVCBUnlock(RequestContext->Vcb);
+      vcbLocked = FALSE;
+    }
 
     if (RequestContext->IrpSp->Flags & SL_OPEN_PAGING_FILE) {
       // Paging file is not supported
@@ -1010,7 +1016,7 @@ Return Value:
 
     // Share access support
 
-    if (fcb->FileCount > 1) {
+    if (fileCount > 1) {
 
       //
       //  Check if the Fcb has the proper share access.  This routine will
@@ -1159,7 +1165,7 @@ Return Value:
     //  that the Oplock check proceeds against any added access we had
     //  to give the caller.
     //
-    if (fcb->FileCount > 1) {
+    if (fileCount > 1) {
       status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), RequestContext->Irp,
                            RequestContext->DeviceObject,
                            DokanRetryCreateAfterOplockBreak, DokanPrePostIrp);
@@ -1172,7 +1178,7 @@ Return Value:
         DOKAN_LOG_FINE_IRP(RequestContext,
                            "FsRtlCheckOplock returned STATUS_PENDING, fcb = "
                            "%p, fileCount = %lu",
-                           fcb, fcb->FileCount);
+                           fcb, fileCount);
         __leave;
       }
     }
@@ -1202,7 +1208,7 @@ Return Value:
       //  the oplock package.
       if ((status == STATUS_SUCCESS)) {
         status = FsRtlOplockFsctrl(DokanGetFcbOplock(fcb), RequestContext->Irp,
-                                   fcb->FileCount);
+                                   fileCount);
       }
 
       //
@@ -1217,7 +1223,8 @@ Return Value:
         DOKAN_LOG_FINE_IRP(RequestContext,
                       "FsRtlOplockFsctrl failed with 0x%x %s, fcb = %p, "
                       "fileCount = %lu",
-                      status, DokanGetNTSTATUSStr(status), fcb, fcb->FileCount);
+                      status, DokanGetNTSTATUSStr(status), fcb,
+                      fileCount);
 
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
@@ -1257,6 +1264,9 @@ Return Value:
 
     if (fcbLocked)
       DokanFCBUnlock(fcb);
+
+    if (vcbLocked)
+      DokanVCBUnlock(RequestContext->Vcb);
 
     if (relatedFileName) {
       ExFreePool(relatedFileName->Buffer);
