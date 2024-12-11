@@ -697,12 +697,6 @@ Return Value:
                      &fileObject->FileName);
       }
       DOKAN_LOG_FINE_IRP(RequestContext, "Use FCB=%p", fcb);
-
-      // Cannot create a file already open
-      if (fcb->FileCount > 1 && disposition == FILE_CREATE) {
-        status = STATUS_OBJECT_NAME_COLLISION;
-        __leave;
-      }
     }
 
     // Cannot create a directory temporary
@@ -717,6 +711,7 @@ Return Value:
 
     fcbLocked = TRUE;
     DokanFCBLockRW(fcb);
+    InterlockedIncrement(&fcb->FileCount);
 
     if (RequestContext->IrpSp->Flags & SL_OPEN_PAGING_FILE) {
       // Paging file is not supported

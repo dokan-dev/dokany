@@ -148,7 +148,6 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
-  InterlockedIncrement(&fcb->FileCount);
   DokanVCBUnlock(RequestContext->Vcb);
   return fcb;
 }
