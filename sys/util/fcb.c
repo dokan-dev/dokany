@@ -144,7 +144,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
-  DokanFCBFileCountIncrement(fcb);
+  InterlockedIncrement(&fcb->FileCount);
   return fcb;
 }
 
@@ -193,7 +193,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   // close of one FileObject from within a cleanup of another (with the same
   // FCB). In that case, there is already a FCB lock held below us on the stack,
   // making it unsafe to acquire a VCB lock.
-  if (DokanFCBFileCountDecrement(Fcb) != 0) {
+  if (InterlockedDecrement(&Fcb->FileCount) != 0) {
     return STATUS_SUCCESS;
   }
 
@@ -204,7 +204,7 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   // another thread after the early return and before the locking of the VCB.
   // The code that increments it does so with the VCB locked, so at this point
   // we are sure.
-  if (DokanFCBFileCountGet(Fcb) == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
+  if (Fcb->FileCount == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
     // We get here when garbage collection is disabled.
     DokanDeleteFcb(Vcb, Fcb, /*RemoveFromTable=*/!Fcb->ReplacedByRename);
   } else {

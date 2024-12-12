@@ -326,15 +326,15 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
 
   if (Fcb->SectionObjectPointers.ImageSectionObject != NULL) {
     DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection FCB=%p FileCount=%lu.", Fcb,
-                  DokanFCBFileCountGet(Fcb));
+                  Fcb->FileCount);
     MmFlushImageSection(&Fcb->SectionObjectPointers, MmFlushForWrite);
     DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection done FCB=%p FileCount=%lu.", Fcb,
-                  DokanFCBFileCountGet(Fcb));
+                  Fcb->FileCount);
   }
 
   if (Fcb->SectionObjectPointers.DataSectionObject != NULL) {
     DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache FCB=%p FileCount=%lu.", Fcb,
-                  DokanFCBFileCountGet(Fcb));
+                  Fcb->FileCount);
 
     CcFlushCache(&Fcb->SectionObjectPointers, NULL, 0, NULL);
 
@@ -347,7 +347,7 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
       CcUninitializeCacheMap(FileObject, NULL, NULL);
     }
     DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache done FCB=%p FileCount=%lu.", Fcb,
-                  DokanFCBFileCountGet(Fcb));
+                  Fcb->FileCount);
   }
 }
 
@@ -488,8 +488,7 @@ ULONG PopulateRenameEventInformations(__in PREQUEST_CONTEXT RequestContext,
     renameContext->FileNameLength = fileNameLength;
     DOKAN_LOG_FINE_IRP(
         RequestContext, "Rename: \"%wZ\" => \"%ls\", Fcb=%p FileCount = %u",
-        Fcb->FileName, renameContext->FileName, Fcb,
-        (ULONG)DokanFCBFileCountGet(Fcb));
+        Fcb->FileName, renameContext->FileName, Fcb, (ULONG)Fcb->FileCount);
   }
   return fileNameLength;
 }

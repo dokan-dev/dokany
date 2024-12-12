@@ -717,7 +717,7 @@ Return Value:
     fcbLocked = TRUE;
     DokanFCBLockRW(fcb);
 
-    fileCount = DokanFCBFileCountGet(fcb);
+    fileCount = fcb->FileCount;
 
     if (vcbLocked) {
       DokanVCBUnlock(RequestContext->Vcb);
@@ -1223,8 +1223,7 @@ Return Value:
         DOKAN_LOG_FINE_IRP(RequestContext,
                       "FsRtlOplockFsctrl failed with 0x%x %s, fcb = %p, "
                       "fileCount = %lu",
-                      status, DokanGetNTSTATUSStr(status), fcb,
-                      fileCount);
+                      status, DokanGetNTSTATUSStr(status), fcb, fileCount);
 
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
