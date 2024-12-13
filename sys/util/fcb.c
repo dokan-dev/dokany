@@ -115,12 +115,15 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
 
   UNREFERENCED_PARAMETER(RequestContext);
 
+  DokanVCBLockRW(RequestContext->Vcb);
+
   BOOLEAN newElement = FALSE;
   PDokanFCB fcb = GetOrCreateUninitializedFcb(RequestContext, &fn, &newElement);
   if (!fcb) {
     ExFreePool(FileName);
     DOKAN_LOG_FINE_IRP(RequestContext, "Failed to find or allocate FCB for %wZ",
                        &fn);
+    DokanVCBUnlock(RequestContext->Vcb);
     return NULL;
   }
 
@@ -136,6 +139,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
                          &fcb->FileName);
       ExFreePool(FileName);
       ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
+      DokanVCBUnlock(RequestContext->Vcb);
       return NULL;
     }
   } else {
@@ -145,6 +149,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
   }
 
   InterlockedIncrement(&fcb->FileCount);
+  DokanVCBUnlock(RequestContext->Vcb);
   return fcb;
 }
 
