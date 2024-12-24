@@ -34,7 +34,7 @@ attributes, etc.), DOKAN_OPERATIONS.ZwCreateFile is always invoked. On the other
 gets called by the Dokan file system driver when the file is closed by
 the \c CloseHandle Windows API.
 
-Each function should return \c STATUS_SUCCESS when the operation succeeds, otherwise if an error occurs, return the proper \c NTSTATUS (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55).
+Each function should return \c STATUS_SUCCESS when the operation succeeds, otherwise if an error occurs, return the proper and most precise \c NTSTATUS (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55).
 For example, when ZwCreateFile can't open a file (Win32 error \c ERROR_FILE_NOT_FOUND), it should return \c STATUS_OBJECT_NAME_NOT_FOUND.
 Dokan has an exported helper that can be used to convert Win32 Error to \c NTSTATUS with \ref DokanNtStatusFromWin32.
 
