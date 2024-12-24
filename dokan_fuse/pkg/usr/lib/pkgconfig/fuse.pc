@@ -1,0 +1,10 @@
+prefix=/opt
+exec_prefix=${prefix}
+libdir=${exec_prefix}/bin
+includedir=${prefix}/include
+
+Name: fuse
+Description: A wrapper library that makes Dokan compatible with FUSE API
+Version: 2.7
+Libs: -L${libdir}  -ldokanfuse1 
+Cflags: -I${includedir}/dokan_fuse 
