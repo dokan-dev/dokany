@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.2.1.1000] - 2025-01-18
+
+### Changed
+- Kernel - Remove STATUS_OBJECT_NAME_COLLISION create check for existing item.
+
+### Fixed
+- FUSE - Set open flags during `release`.
+- Installer - Uninstall - Detect and report service is pending stop (removal) and reboot is required.
+
 ## [2.2.0.1000] - 2024-08-18
 
 ### Changed
