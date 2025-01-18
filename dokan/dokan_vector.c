@@ -2,7 +2,7 @@
   Dokan : user-mode file system library for Windows
 
   Copyright (C) 2016 Keith Newton
-  Copyright (C) 2022 - 2023 Google, Inc.
+  Copyright (C) 2022 - 2025 Google, Inc.
 
   http://dokan-dev.github.io
 
