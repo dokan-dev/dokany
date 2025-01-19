@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [2.2.1.1000] - 2025-01-18
 
 ### Changed
-- Kernel - Remove STATUS_OBJECT_NAME_COLLISION create check for existing item.
+- Kernel - Remove `STATUS_OBJECT_NAME_COLLISION` create check for existing item.
 
 ### Fixed
 - FUSE - Set open flags during `release`.
@@ -730,6 +730,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.0.1000...v2.2.1.1000
 [2.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.1.0.1000...v2.2.0.1000
 [2.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.6.1000...v2.1.0.1000
 [2.0.6.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.5.1000...v2.0.6.1000
