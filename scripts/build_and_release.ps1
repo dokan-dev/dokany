@@ -60,7 +60,7 @@ if ([string]::IsNullOrEmpty($env:CHOCO_API_KEY)) {
 	Write-Host Skip Chocolatey publication due to missing CHOCO_API_KEY env variable
 	exit
 }
-$publishChocoConfirmation = Read-Host "Do you want to publish version ${version} to Chocolatey ? [y/n]"
+$publishChocoConfirmation = Read-Host "Do you want to publish to Chocolatey ? [y/n]"
 if ($publishChocoConfirmation -ne 'y') { exit }
 $baseVersion = Select-String -Path .\dokan_wix\version.xml -Pattern 'BaseVersion="(.*)"' | % { $_.Matches.groups[1].Value }
 $buildVersion = Select-String -Path .\dokan_wix\version.xml -Pattern 'BuildVersion="(.*)"' | % { $_.Matches.groups[1].Value }
