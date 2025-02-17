@@ -1,225 +1,175 @@
 ﻿<?include version.xml ?>
-
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-
-	<Package Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) (ARM64)"
-			 Language="1033" Version="$(var.BaseVersion).$(var.BuildVersion)"
-			 Manufacturer="$(var.CompanyName)"
-			 UpgradeCode="$(var.UpgradeCodeARM64)"
-			 ProductCode="$(var.ProductCodeARM64)">
-		<Icon Id="DokanIcon" SourceFile="Dokan.ico" />
-
+	<Package Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) (ARM64)" Language="1033" Version="$(var.BaseVersion).$(var.BuildVersion)" Manufacturer="$(var.CompanyName)" UpgradeCode="$(var.UpgradeCodeARM64)" ProductCode="$(var.ProductCodeARM64)">
+		<Icon Id="DokanIcon" SourceFile="Dokan.ico"/>
 		<Upgrade Id="$(var.UpgradeCodeARM64)">
-			<UpgradeVersion OnlyDetect="no"
-							Property="PREVIOUSFOUND"
-							IgnoreRemoveFailure="no"
-							Minimum="0.1.0"
-							IncludeMinimum="yes"
-							Maximum="$(var.BaseVersion)"
-							IncludeMaximum="no" />
+			<UpgradeVersion OnlyDetect="no" Property="PREVIOUSFOUND" IgnoreRemoveFailure="no" Minimum="0.1.0" IncludeMinimum="yes" Maximum="$(var.BaseVersion)" IncludeMaximum="no"/>
 		</Upgrade>
-
-		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
-					  AllowSameVersionUpgrades="yes"
-					  DisallowUpgradeErrorMessage="A previous version of [ProductName] is already installed. Please uninstall the existing version first, reboot the system and start the setup again."
-					  Disallow="yes" />
-
-		<Property Id="ARPNOREPAIR" Value="1" />
-		<Property Id="ARPNOMODIFY" Value="1" />
-		<Property Id="ARPPRODUCTICON" Value="DokanIcon" />
-		<Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1" />
-		<Property Id="INSTALLDEVFILES" Value="0" />
-		<Property Id="SERVICENAME" Value="dokan$(var.MajorVersion)" />
-
+		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="yes" DisallowUpgradeErrorMessage="A previous version of [ProductName] is already installed. Please uninstall the existing version first, reboot the system and start the setup again." Disallow="yes"/>
+		<Property Id="ARPNOREPAIR" Value="1"/>
+		<Property Id="ARPNOMODIFY" Value="1"/>
+		<Property Id="ARPPRODUCTICON" Value="DokanIcon"/>
+		<Property Id="MSIUNINSTALLSUPERSEDEDCOMPONENTS" Value="1"/>
+		<Property Id="INSTALLDEVFILES" Value="0"/>
+		<Property Id="SERVICENAME" Value="dokan$(var.MajorVersion)"/>
 		<Property Id="REGINSTALLDIR" Secure="yes">
-			<RegistrySearch Id="RegInstallDirSearch"
-							Root="HKLM"
-							Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)"
-							Name="AppLocation"
-							Type="directory"
-							Bitness="always64">
+			<RegistrySearch Id="RegInstallDirSearch" Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)" Name="AppLocation" Type="directory" Bitness="always64">
 			</RegistrySearch>
 		</Property>
-
 		<Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
 			<DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
-				<FileSearch Name="dokan$(var.MajorVersion).sys" />
+				<FileSearch Name="dokan$(var.MajorVersion).sys"/>
 			</DirectorySearch>
 		</Property>
-
 		<Property Id="DOKANREBOOTPENDING" Secure="yes">
-			<RegistrySearch Id="RegDokanRebootSearch"
-							Root="HKLM"
-							Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)"
-							Name="DeleteFlag"
-							Type="raw"
-							Bitness="always64">
+			<RegistrySearch Id="RegDokanRebootSearch" Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)" Name="DeleteFlag" Type="raw" Bitness="always64">
 			</RegistrySearch>
 		</Property>
-
 		<!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
-
 		<!-- IMAGE_FILE_MACHINE_AMD64 = 43620 -->
-		<util:QueryNativeMachine />
-		<Launch Condition="Installed OR WIX_NATIVE_MACHINE = 43620"
-				Message="Installation failed because the ARM64 version of Dokan requires a ARM64 version of Windows." />
-
-		<Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll" />
-
-		<CustomAction Id="CheckForRebootPending" Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall." />
-
-		<CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
-
-		<CustomAction Id="SetFolderValue" Return="check" Property="ExecuteInstallAction" Value="INSTALLFOLDER=[INSTALLDIR]" />
-
-		<CustomAction Id="GetInstallDir" Return="check" Property="INSTALLDIR" Value="[REGINSTALLDIR]" />
-
-		<CustomAction Id="ExecuteInstallAction" DllEntry="ExecuteInstall" Execute="deferred" Return="check" Impersonate="no" BinaryRef="SetupCA2" />
-
-		<CustomAction Id="SetUninstallFolderValue" Return="check" Property="ExecuteUninstallAction" Value="INSTALLFOLDER=[INSTALLDIR]" />
-
-		<CustomAction Id="ExecuteUninstallAction" DllEntry="ExecuteUninstall" Execute="deferred" Return="check" Impersonate="no" BinaryRef="SetupCA2" />
-
-		<CustomAction Id="InitServicePendingStopProp" Property="ServicePendingStop" Value="0" />
-		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2" />
-
+		<util:QueryNativeMachine/>
+		<Launch Condition="Installed OR WIX_NATIVE_MACHINE = 43620" Message="Installation failed because the ARM64 version of Dokan requires a ARM64 version of Windows."/>
+		<Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
+		<CustomAction Id="CheckForRebootPending" Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall."/>
+		<CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]"/>
+		<CustomAction Id="SetFolderValue" Return="check" Property="ExecuteInstallAction" Value="INSTALLFOLDER=[INSTALLDIR]"/>
+		<CustomAction Id="GetInstallDir" Return="check" Property="INSTALLDIR" Value="[REGINSTALLDIR]"/>
+		<CustomAction Id="ExecuteInstallAction" DllEntry="ExecuteInstall" Execute="deferred" Return="check" Impersonate="no" BinaryRef="SetupCA2"/>
+		<CustomAction Id="SetUninstallFolderValue" Return="check" Property="ExecuteUninstallAction" Value="INSTALLFOLDER=[INSTALLDIR]"/>
+		<CustomAction Id="ExecuteUninstallAction" DllEntry="ExecuteUninstall" Execute="deferred" Return="check" Impersonate="no" BinaryRef="SetupCA2"/>
+		<CustomAction Id="InitServicePendingStopProp" Property="ServicePendingStop" Value="0"/>
+		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2"/>
 		<InstallExecuteSequence>
-			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;" />
-
-			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;" />
-			<Custom Action="SetFolderValue" Before="ExecuteInstallAction" />
-			<Custom Action="ExecuteInstallAction" After="PublishProduct" Condition="Not REMOVE=&quot;ALL&quot;" />
-			<Custom Action="SetUninstallFolderValue" Before="ExecuteUninstallAction" />
-			<Custom Action="ExecuteUninstallAction" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
-			<Custom Action="SetARPINSTALLLOCATION" After="InstallValidate"></Custom>
-
+			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;"/>
+			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;"/>
+			<Custom Action="SetFolderValue" Before="ExecuteInstallAction"/>
+			<Custom Action="ExecuteInstallAction" After="PublishProduct" Condition="Not REMOVE=&quot;ALL&quot;"/>
+			<Custom Action="SetUninstallFolderValue" Before="ExecuteUninstallAction"/>
+			<Custom Action="ExecuteUninstallAction" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;"/>
+			<Custom Action="SetARPINSTALLLOCATION" After="InstallValidate"/>
 			<!-- Verify whether the driver uninstall require a restart -->
-			<Custom Action="InitServicePendingStopProp" Before="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot;" />
-			<Custom Action="SetServicePendingStopProp" After="InstallFinalize" Condition="REMOVE=&quot;ALL&quot;" />
-			<ScheduleReboot After="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot; AND ServicePendingStop=1" />
+			<Custom Action="InitServicePendingStopProp" Before="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot;"/>
+			<Custom Action="SetServicePendingStopProp" After="InstallFinalize" Condition="REMOVE=&quot;ALL&quot;"/>
+			<ScheduleReboot After="SetServicePendingStopProp" Condition="REMOVE=&quot;ALL&quot; AND ServicePendingStop=1"/>
 		</InstallExecuteSequence>
-
-		<Media Id="1" Cabinet="Dokan.cab" EmbedCab="yes" />
-
+		<Media Id="1" Cabinet="Dokan.cab" EmbedCab="yes"/>
 		<Feature Id="DokanDriverFeature" Title="Dokan Core" Description="Dokan driver, Dokan library and FUSE library" Level="1" Display="expand" AllowAbsent="no">
-			<ComponentRef Id="ProgramFilesComponent" />
-			<ComponentRef Id="Driver_ARM64" />
-			<ComponentRef Id="Sys32Files" />
-			<ComponentRef Id="Sys32DriversFiles" />
+			<ComponentRef Id="ProgramFilesComponent"/>
+			<ComponentRef Id="Driver_ARM64"/>
+			<ComponentRef Id="Sys32Files"/>
+			<ComponentRef Id="Sys32DriversFiles"/>
 		</Feature>
 		<Feature Id="DokanDevFeature" Title="Development" Description="Dokan development files" Level="2" Display="expand">
-			<Level Value="1" Condition="INSTALLDEVFILES = 1" />
+			<Level Value="1" Condition="INSTALLDEVFILES = 1"/>
 			<Feature Id="DokanLibBFeature" Title="Headers and Libs" Description="Headers and libraries required for native User-Mode File System development" Level="2" Display="expand">
-				<Level Value="1" Condition="INSTALLDEVFILES = 1" />
-				<ComponentRef Id="IncludeDokanFilesComponent" />
-				<ComponentRef Id="IncludeFuseCompatFilesComponent" />
-				<ComponentRef Id="IncludeFuseFilesComponent" />
-				<ComponentRef Id="LibFilesComponent" />
-				<ComponentRef Id="SampleMirrorFilesComponent" />
-				<ComponentRef Id="SampleMemFSFilesComponent" />
+				<Level Value="1" Condition="INSTALLDEVFILES = 1"/>
+				<ComponentRef Id="IncludeDokanFilesComponent"/>
+				<ComponentRef Id="IncludeFuseCompatFilesComponent"/>
+				<ComponentRef Id="IncludeFuseFilesComponent"/>
+				<ComponentRef Id="LibFilesComponent"/>
+				<ComponentRef Id="SampleMirrorFilesComponent"/>
+				<ComponentRef Id="SampleMemFSFilesComponent"/>
 			</Feature>
 			<Feature Id="DokanPDBFeature" Title="Symbols" Description="Dokan Core PDB debug files" Level="2" Display="expand">
-				<Level Value="1" Condition="INSTALLDEVFILES = 1" />
-				<ComponentRef Id="Driver_ARM64pdb" />
-				<ComponentRef Id="SysPDBFiles" />
+				<Level Value="1" Condition="INSTALLDEVFILES = 1"/>
+				<ComponentRef Id="Driver_ARM64pdb"/>
+				<ComponentRef Id="SysPDBFiles"/>
 			</Feature>
 		</Feature>
-
 		<!-- Define proper UI in case MSI is run without bootstrapper -->
 		<UI Id="FeatureTree">
-			<ui:WixUI Id="WixUI_FeatureTree" />
-			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg" Order="10" Condition="NOT Installed" />
-			<Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="10" Condition="NOT Installed" />
+			<ui:WixUI Id="WixUI_FeatureTree"/>
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg" Order="10" Condition="NOT Installed"/>
+			<Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="10" Condition="NOT Installed"/>
 		</UI>
-
 		<StandardDirectory Id="ProgramFiles64Folder">
 			<Directory Id="DOKANDIR" Name="Dokan">
 				<Directory Id="INSTALLDIR" Name="DokanLibrary-$(var.BaseVersion)">
 					<Component Id="ProgramFilesComponent" Guid="{C2C81F15-C46C-4CE3-97BB-B782CB1E571C}" Bitness="always64">
-						<Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes" />
+						<Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes"/>
 						<RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)">
-							<RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no" />
+							<RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no"/>
 						</RegistryKey>
 						<RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)">
-							<RegistryValue Type="string" Name="FullVersion" Value="$(var.BaseVersion).$(var.BuildVersion)" KeyPath="no" />
+							<RegistryValue Type="string" Name="FullVersion" Value="$(var.BaseVersion).$(var.BuildVersion)" KeyPath="no"/>
 						</RegistryKey>
-						<File Id="DokanDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no" />
-						<File Id="DokanfuseDLL" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no" />
-						<File Id="dokanctlEXE" Source="..\ARM64\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no" />
-						<File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no" />
-						<File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no" />
-						<File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no" />
-						<RemoveFolder Id="RemoveINSTALLDIR" On="uninstall" />
+						<File Id="DokanDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+						<File Id="DokanfuseDLL" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
+						<File Id="dokanctlEXE" Source="..\ARM64\$(var.Configuration)\dokanctl.exe" Name="dokanctl.exe" KeyPath="no"/>
+						<File Id="READMEurl" Source="README.url" Name="README.url" KeyPath="no"/>
+						<File Id="licenselgplTXT" Source="..\license.lgpl.txt" Name="license.lgpl.txt" KeyPath="no"/>
+						<File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no"/>
+						<RemoveFolder Id="RemoveINSTALLDIR" On="uninstall"/>
 					</Component>
 					<Component Id="SysPDBFiles" Guid="{13A9BCAF-229C-468B-A48D-237A4147B823}">
-						<File Id="DokanPDB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes" />
-						<File Id="DokanfusePDB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no" />
-						<File Id="DokannpPDB" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no" />
+						<File Id="DokanPDB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
+						<File Id="DokanfusePDB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
+						<File Id="DokannpPDB" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
 					</Component>
 					<Directory Id="LIBDIR" Name="lib">
 						<Component Id="LibFilesComponent" Guid="{953AC0EA-3436-4FBD-8B9E-5960F09CEC34}" Bitness="always64">
-							<Environment Id="DokanLibraryLibARM64EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_ARM64" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes" />
-							<File Id="dokanLIB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes" />
-							<File Id="dokanfuseLIB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no" />
-							<File Id="dokannpLIB" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no" />
+							<Environment Id="DokanLibraryLibARM64EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_ARM64" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes"/>
+							<File Id="dokanLIB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
+							<File Id="dokanfuseLIB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
+							<File Id="dokannpLIB" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).lib" Name="dokannp$(var.MajorVersion).lib" KeyPath="no"/>
 						</Component>
 					</Directory>
 					<Directory Id="DRIVERDIR" Name="driver">
 						<Component Id="Driver_ARM64" Guid="{87F2159C-3E84-4629-ACD9-A8EA07C84F6C}">
-							<File Id="Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes" />
-							<File Id="Driver_Cat" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no" />
-							<File Id="Driver_Inf" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no" />
+							<File Id="Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
+							<File Id="Driver_Cat" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
+							<File Id="Driver_Inf" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
 						</Component>
 						<Component Id="Driver_ARM64pdb" Guid="{4BD9696D-0EE6-4305-8FF6-CA5885E62348}">
-							<File Id="Driver_Syspdb" Source="..\ARM64\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes" />
+							<File Id="Driver_Syspdb" Source="..\ARM64\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
 						</Component>
 					</Directory>
 					<Directory Id="INCLUDEDIR" Name="include">
 						<Directory Id="DOKANINCLUDEDIR" Name="dokan">
 							<Component Id="IncludeDokanFilesComponent" Guid="{7830FCFE-101A-49A9-BF04-DB8FBAC41EFD}" Bitness="always64">
-								<File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes" />
-								<File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no" />
-								<File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no" />
+								<File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes"/>
+								<File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no"/>
+								<File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
 							</Component>
 						</Directory>
 						<Component Id="IncludeFuseCompatFilesComponent" Guid="{E9820CFD-7AB8-4953-94E2-76548605A626}" Bitness="always64">
-							<File Id="fuse_include_H" Source="..\dokan_fuse\include\old\fuse.h" Name="fuse.h" KeyPath="yes" />
+							<File Id="fuse_include_H" Source="..\dokan_fuse\include\old\fuse.h" Name="fuse.h" KeyPath="yes"/>
 						</Component>
 						<Directory Id="FUSEINCLUDEDIR" Name="fuse">
 							<Component Id="IncludeFuseFilesComponent" Guid="{F483EFF5-700D-44AC-893B-650519BFFBFE}" Bitness="always64">
-								<File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="yes" />
-								<File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no" />
-								<File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no" />
-								<File Id="fuse_sem_fixH" Source="..\dokan_fuse\include\fuse_sem_fix.h" Name="fuse_sem_fix.h" KeyPath="no" />
-								<File Id="fuse_winH" Source="..\dokan_fuse\include\fuse_win.h" Name="fuse_win.h" KeyPath="no" />
-								<File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no" />
+								<File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="yes"/>
+								<File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
+								<File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>
+								<File Id="fuse_sem_fixH" Source="..\dokan_fuse\include\fuse_sem_fix.h" Name="fuse_sem_fix.h" KeyPath="no"/>
+								<File Id="fuse_winH" Source="..\dokan_fuse\include\fuse_win.h" Name="fuse_win.h" KeyPath="no"/>
+								<File Id="utilsH" Source="..\dokan_fuse\include\utils.h" Name="utils.h" KeyPath="no"/>
 							</Component>
 						</Directory>
 					</Directory>
 					<Directory Id="SAMPLEDIR" Name="sample">
 						<Directory Id="MIRRORDIR" Name="mirror">
 							<Component Id="SampleMirrorFilesComponent" Guid="{F3DF60AD-3A7D-4678-91C9-097E561A8311}" Bitness="always64">
-								<File Id="mirrorEXE" Source="..\ARM64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes" />
-								<File Id="dokanMirrorDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no" />
-								<File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no" />
-								<File Id="mirrorC" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no" />
+								<File Id="mirrorEXE" Source="..\ARM64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
+								<File Id="dokanMirrorDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+								<File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
+								<File Id="mirrorC" Source="..\samples\dokan_mirror\mirror.c" Name="mirror.c" KeyPath="no"/>
 							</Component>
 						</Directory>
 						<Directory Id="MEMFSDIR" Name="memfs">
 							<Component Id="SampleMemFSFilesComponent" Guid="{F6487723-7E5B-4E8D-889D-C4B0ACEEA43D}" Bitness="always64">
-								<File Id="memfsEXE" Source="..\ARM64\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes" />
-								<File Id="dokanMemFSDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no" />
-								<File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no" />
-								<File Id="filenodeCPP" Source="..\samples\dokan_memfs\filenode.cpp" Name="filenode.cpp" KeyPath="no" />
-								<File Id="filenodeH" Source="..\samples\dokan_memfs\filenode.h" Name="filenode.h" KeyPath="no" />
-								<File Id="filenodesCPP" Source="..\samples\dokan_memfs\filenodes.cpp" Name="filenodes.cpp" KeyPath="no" />
-								<File Id="filenodesH" Source="..\samples\dokan_memfs\filenodes.h" Name="filenodes.h" KeyPath="no" />
-								<File Id="mainCPP" Source="..\samples\dokan_memfs\main.cpp" Name="main.cpp" KeyPath="no" />
-								<File Id="memfsCPP" Source="..\samples\dokan_memfs\memfs.cpp" Name="memfs.cpp" KeyPath="no" />
-								<File Id="memfsH" Source="..\samples\dokan_memfs\memfs.h" Name="memfs.h" KeyPath="no" />
-								<File Id="memfs_helperH" Source="..\samples\dokan_memfs\memfs_helper.h" Name="memfs_helper.h" KeyPath="no" />
-								<File Id="memfs_operationsCPP" Source="..\samples\dokan_memfs\memfs_operations.cpp" Name="memfs_operations.cpp" KeyPath="no" />
-								<File Id="memfs_operationsH" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no" />
+								<File Id="memfsEXE" Source="..\ARM64\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
+								<File Id="dokanMemFSDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
+								<File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
+								<File Id="filenodeCPP" Source="..\samples\dokan_memfs\filenode.cpp" Name="filenode.cpp" KeyPath="no"/>
+								<File Id="filenodeH" Source="..\samples\dokan_memfs\filenode.h" Name="filenode.h" KeyPath="no"/>
+								<File Id="filenodesCPP" Source="..\samples\dokan_memfs\filenodes.cpp" Name="filenodes.cpp" KeyPath="no"/>
+								<File Id="filenodesH" Source="..\samples\dokan_memfs\filenodes.h" Name="filenodes.h" KeyPath="no"/>
+								<File Id="mainCPP" Source="..\samples\dokan_memfs\main.cpp" Name="main.cpp" KeyPath="no"/>
+								<File Id="memfsCPP" Source="..\samples\dokan_memfs\memfs.cpp" Name="memfs.cpp" KeyPath="no"/>
+								<File Id="memfsH" Source="..\samples\dokan_memfs\memfs.h" Name="memfs.h" KeyPath="no"/>
+								<File Id="memfs_helperH" Source="..\samples\dokan_memfs\memfs_helper.h" Name="memfs_helper.h" KeyPath="no"/>
+								<File Id="memfs_operationsCPP" Source="..\samples\dokan_memfs\memfs_operations.cpp" Name="memfs_operations.cpp" KeyPath="no"/>
+								<File Id="memfs_operationsH" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
 							</Component>
 						</Directory>
 						<Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
@@ -228,17 +178,16 @@
 				</Directory>
 			</Directory>
 		</StandardDirectory>
-
 		<StandardDirectory Id="WindowsFolder">
 			<Directory Id="Sys32Folder" Name="System32">
 				<Component Id="Sys32Files" Guid="{3A47A4F3-45ED-4E73-977B-D09426B5CDED}">
-					<File Id="DokanSysDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes" />
-					<File Id="DokannpDLL" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll" />
-					<File Id="DokanfuseSysDLL" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll" />
+					<File Id="DokanSysDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
+					<File Id="DokannpDLL" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll"/>
+					<File Id="DokanfuseSysDLL" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
 				</Component>
 				<Directory Id="DriversFolder" Name="drivers">
 					<Component Id="Sys32DriversFiles" Guid="{B4BA8943-57A0-4625-82E9-F0A19D316551}">
-						<File Id="Registered_Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes" />
+						<File Id="Registered_Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
 					</Component>
 				</Directory>
 			</Directory>
