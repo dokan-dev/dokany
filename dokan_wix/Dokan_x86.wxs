@@ -25,21 +25,20 @@
 			<RegistrySearch Id="RegInstallDirSearch" Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeX86)" Name="AppLocation" Type="directory" Bitness="always32">
 			</RegistrySearch>
 		</Property>
-		<Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
-			<DirectorySearch Id="Dokan.sys" Path="[SystemFolder]\drivers">
-				<FileSearch Name="dokan$(var.MajorVersion).sys"/>
-			</DirectorySearch>
-		</Property>
 		<Property Id="DOKANREBOOTPENDING" Secure="yes">
 			<RegistrySearch Id="RegDokanRebootSearch" Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)" Name="DeleteFlag" Type="raw" Bitness="always32">
 			</RegistrySearch>
 		</Property>
-		<!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
+		<Property Id="DOKANSERVICEALREADYPRESENT" Secure="yes">
+			<RegistrySearch Id="RegDokanServiceSearch" Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)" Name="DisplayName" Type="raw" Bitness="always32">
+			</RegistrySearch>
+		</Property>
 		<Launch Condition="Installed OR NOT VersionNT64" Message="Installation failed because the 32-bit version of Dokan cannot be installed on a 64-bit version of Windows."/>
 		<Launch Condition="Installed OR VersionNT &gt; 601 OR (VersionNT = 601 AND ServicePackLevel &gt;= 1)" Message="Installation failed because your version of Windows is too old. Dokan requires Windows 7 SP1 or newer."/>
 		<Launch Condition="Installed OR VersionNT &gt; 601 OR (VersionNT = 601 AND WIN7KB4474419INSTALLED)" Message="Installation failed because Microsoft patch KB4474419 is not installed. A reboot is needed between the installation of said patch and the installation of [ProductName]. https://support.microsoft.com/en-us/kb/4474419"/>
 		<Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 		<CustomAction Id="CheckForRebootPending" Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall."/>
+		<CustomAction Id="CheckServicePresent" Error="Installation failed because Dokan driver is already installed by another installer. Please uninstall it before retrying."/>
 		<CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]"/>
 		<CustomAction Id="SetFolderValue" Return="check" Property="ExecuteInstallAction" Value="INSTALLFOLDER=[INSTALLDIR]"/>
 		<CustomAction Id="GetInstallDir" Return="check" Property="INSTALLDIR" Value="[REGINSTALLDIR]"/>
@@ -50,6 +49,7 @@
 		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2"/>
 		<InstallExecuteSequence>
 			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;"/>
+			<Custom Action="CheckServicePresent" After="CheckForRebootPending" Condition="DOKANSERVICEALREADYPRESENT"/>
 			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;"/>
 			<Custom Action="SetFolderValue" Before="ExecuteInstallAction"/>
 			<Custom Action="ExecuteInstallAction" After="PublishProduct" Condition="Not REMOVE=&quot;ALL&quot;"/>

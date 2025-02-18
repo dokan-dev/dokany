@@ -16,21 +16,20 @@
 			<RegistrySearch Id="RegInstallDirSearch" Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)" Name="AppLocation" Type="directory" Bitness="always64">
 			</RegistrySearch>
 		</Property>
-		<Property Id="DOKANSYSALREADYINSTALLED" Secure="yes">
-			<DirectorySearch Id="Dokan.sys" Path="[System64Folder]\drivers">
-				<FileSearch Name="dokan$(var.MajorVersion).sys"/>
-			</DirectorySearch>
-		</Property>
 		<Property Id="DOKANREBOOTPENDING" Secure="yes">
 			<RegistrySearch Id="RegDokanRebootSearch" Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)" Name="DeleteFlag" Type="raw" Bitness="always64">
 			</RegistrySearch>
 		</Property>
-		<!--<Condition Message="Installation failed because another Dokan Library $(var.MajorVersion) is already installed."><![CDATA[Installed OR NOT DOKANSYSALREADYINSTALLED]]></Condition>-->
+		<Property Id="DOKANSERVICEALREADYPRESENT" Secure="yes">
+			<RegistrySearch Id="RegDokanServiceSearch" Root="HKLM" Key="SYSTEM\ControlSet001\Services\Dokan$(var.MajorVersion)" Name="DisplayName" Type="raw" Bitness="always64">
+			</RegistrySearch>
+		</Property>
 		<!-- IMAGE_FILE_MACHINE_AMD64 = 43620 -->
 		<util:QueryNativeMachine/>
 		<Launch Condition="Installed OR WIX_NATIVE_MACHINE = 43620" Message="Installation failed because the ARM64 version of Dokan requires a ARM64 version of Windows."/>
 		<Binary Id="SetupCA2" SourceFile="WiXCA\bin\$(var.Configuration)\WiXCA.dll"/>
 		<CustomAction Id="CheckForRebootPending" Error="Installation failed because a Windows reboot is still pending after a Dokan driver uninstall."/>
+		<CustomAction Id="CheckServicePresent" Error="Installation failed because Dokan driver is already installed by another installer. Please uninstall it before retrying."/>
 		<CustomAction Id="SetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]"/>
 		<CustomAction Id="SetFolderValue" Return="check" Property="ExecuteInstallAction" Value="INSTALLFOLDER=[INSTALLDIR]"/>
 		<CustomAction Id="GetInstallDir" Return="check" Property="INSTALLDIR" Value="[REGINSTALLDIR]"/>
@@ -41,6 +40,7 @@
 		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2"/>
 		<InstallExecuteSequence>
 			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;"/>
+			<Custom Action="CheckServicePresent" After="CheckForRebootPending" Condition="DOKANSERVICEALREADYPRESENT"/>
 			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;"/>
 			<Custom Action="SetFolderValue" Before="ExecuteInstallAction"/>
 			<Custom Action="ExecuteInstallAction" After="PublishProduct" Condition="Not REMOVE=&quot;ALL&quot;"/>
