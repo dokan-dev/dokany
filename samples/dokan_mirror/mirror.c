@@ -33,9 +33,9 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <winbase.h>
 
-// Enable Long Paths on Windows 10 version 1607 and later by changing
-// the OS configuration (see Microsoft own documentation for the steps)
-// and rebuild the mirror with the following line uncommented.
+// Long Paths is supported from Windows 10 version 1607 but require changing the OS configuration.
+// See https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
+// The root directory mirrored require the "\\?\" prefix like "\\?\D:\very long path" or "\\?\UNC\server\share" for UNC.
 #define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
 //dirty but should be enough
