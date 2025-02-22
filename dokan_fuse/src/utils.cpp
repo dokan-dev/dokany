@@ -78,9 +78,7 @@ std::string unixify(const std::string &str) {
 
 FILETIME unixTimeToFiletime(time_t t) {
   // Note that LONGLONG is a 64-bit value
-  LONGLONG ll;
-
-  ll = Int32x32To64(t, 10000000) + 116444736000000000LL;
+  LONGLONG ll = (t * 10000000LL) + 116444736000000000LL;
   FILETIME res;
   res.dwLowDateTime = static_cast<DWORD>(ll);
   res.dwHighDateTime = static_cast<DWORD>(ll >> 32);
