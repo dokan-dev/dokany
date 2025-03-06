@@ -32,12 +32,14 @@ DWORD SendWriteRequest(PDOKAN_IO_EVENT IoEvent, ULONG WriteEventContextLength,
   if (WriteEventContextLength <= BATCH_EVENT_CONTEXT_SIZE) {
     *WriteIoBatch = PopIoBatchBuffer();
   } else {
-    *WriteIoBatch = malloc((SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
-                           WriteEventContextLength);
-    if (!*WriteIoBatch) {
+    PDOKAN_IO_BATCH buffer =
+        malloc((SIZE_T)FIELD_OFFSET(DOKAN_IO_BATCH, EventContext) +
+               WriteEventContextLength);
+    if (!buffer) {
       DokanDbgPrintW(L"Dokan Error: Failed to allocate IO event buffer.\n");
       return ERROR_NO_SYSTEM_RESOURCES;
     }
+    *WriteIoBatch = buffer;
     (*WriteIoBatch)->PoolAllocated = FALSE;
   }
 
@@ -78,9 +80,6 @@ VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
         IoEvent, IoEvent->EventContext->Operation.Write.RequestLength,
         &writeIoBatch);
     if (error != ERROR_SUCCESS) {
-      if (error != ERROR_NO_SYSTEM_RESOURCES) {
-        free(writeIoBatch);
-      }
       if (error == ERROR_OPERATION_ABORTED) {
         IoEvent->EventResult->Status = STATUS_CANCELLED;
         DbgPrint(
@@ -92,6 +91,13 @@ VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
                  "SendWriteRequest = %lu. \nUnknown SendWriteRequest error : "
                  "EventContext had been destoryed. Status = %X. \n",
                  error, IoEvent->EventResult->Status);
+      }
+      if (writeIoBatch != IoEvent->IoBatch) {
+        if (writeIoBatch->PoolAllocated) {
+          PushIoBatchBuffer(writeIoBatch);
+        } else {
+          free(writeIoBatch);
+        }
       }
       EventCompletion(IoEvent);
       return;
