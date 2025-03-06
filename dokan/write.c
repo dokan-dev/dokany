@@ -123,7 +123,11 @@ VOID DispatchWrite(PDOKAN_IO_EVENT IoEvent) {
   }
 
   if (writeIoBatch != IoEvent->IoBatch) {
-    PushIoBatchBuffer(writeIoBatch);
+    if (writeIoBatch->PoolAllocated) {
+      PushIoBatchBuffer(writeIoBatch);
+    } else {
+      free(writeIoBatch);
+    }
   }
 
   EventCompletion(IoEvent);
