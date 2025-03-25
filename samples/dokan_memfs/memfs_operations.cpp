@@ -408,13 +408,12 @@ memfs_getfileInformation(LPCWSTR filename, LPBY_HANDLE_FILE_INFORMATION buffer,
   buffer->nNumberOfLinks = 1;
   buffer->dwVolumeSerialNumber = g_volumserial;
 
-  spdlog::info(
-      L"GetFileInformation: {} Attributes: {:x} Times: Creation {:x} "
-      L"LastAccess {:x} LastWrite {:x} FileSize {} NumberOfLinks {} "
-      L"VolumeSerialNumber {:x}",
-      filename_str, f->attributes, f->times.creation, f->times.lastaccess,
-      f->times.lastwrite, strLength, buffer->nNumberOfLinks,
-      buffer->dwVolumeSerialNumber);
+  spdlog::info(L"GetFileInformation: {} Attributes: {:x} Times: Creation {:x} "
+               L"LastAccess {:x} LastWrite {:x} FileSize {} NumberOfLinks {} "
+               L"VolumeSerialNumber {:x}",
+               filename_str, f->attributes.load(), f->times.creation.load(),
+               f->times.lastaccess.load(), f->times.lastwrite.load(), strLength,
+               buffer->nNumberOfLinks, buffer->dwVolumeSerialNumber);
 
   return STATUS_SUCCESS;
 }
@@ -448,7 +447,8 @@ static NTSTATUS DOKAN_CALLBACK memfs_findfiles(LPCWSTR filename,
         L"FindFiles: {} fileNode: {} Attributes: {} Times: Creation {} "
         L"LastAccess {} LastWrite {} FileSize {}",
         filename_str, fileNodeName, findData.dwFileAttributes,
-        f->times.creation, f->times.lastaccess, f->times.lastwrite, file_size);
+        f->times.creation.load(), f->times.lastaccess.load(),
+        f->times.lastwrite.load(), file_size);
     fill_finddata(&findData, dokanfileinfo);
   }
   return STATUS_SUCCESS;
