@@ -211,6 +211,7 @@
       $mm_version += $env:APPVEYOR_BUILD_NUMBER;
       (Get-Content "${env:APPVEYOR_BUILD_FOLDER}\CHANGELOG.md") -replace '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}', ($env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version) | out-file "${env:APPVEYOR_BUILD_FOLDER}\CHANGELOG.md"
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
+      Update-AppveyorBuild -Version $installer_version
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
         $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
