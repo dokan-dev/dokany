@@ -1391,8 +1391,8 @@ VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
 }
 
 VOID DOKANAPI DokanInit() {
-  // ensure 64-bit alignment
-  assert(FIELD_OFFSET(EVENT_INFORMATION, Buffer) % 8 == 0);
+  // ensure 64-byte alignment, memcpy runs much faster on 64-byte aligned buffer on moden CPU
+  static_assert(FIELD_OFFSET(EVENT_INFORMATION, Buffer) % 64 == 0, "alignment error");
 
   // this is not as safe as a critical section so to some degree we rely on
   // the user to do the right thing

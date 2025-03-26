@@ -388,6 +388,7 @@ typedef struct _EVENT_INFORMATION {
   ULONG64 Context;
   ULONG BufferLength;
   ULONG PullEventTimeoutMs;
+  UCHAR Padding[24]; // ensure buffer is 64-byte aligned
   UCHAR Buffer[DOKAN_EVENT_INFO_MIN_BUFFER_SIZE];
 } EVENT_INFORMATION, *PEVENT_INFORMATION;
 
