@@ -168,16 +168,23 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
   PLIST_ENTRY listHead;
   LIST_ENTRY completeList;
   PIRP_ENTRY irpEntry;
-  PIRP irp;
+  REQUEST_CONTEXT requestContent;
 
   MoveIrpList(PendingIrp, &completeList);
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->RequestContext.Irp;
+    requestContent = irpEntry->RequestContext;
     DokanFreeIrpEntry(irpEntry);
-    irp->IoStatus.Information = 0;
-    DokanCompleteIrpRequest(irp, STATUS_CANCELLED);
+    if (requestContent.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+        DOKAN_LOG_("Cleanup before completing FileObject=%p",
+            requestContent.IrpSp->FileObject);
+        DokanExecuteCleanup(&requestContent, /*ReportChanges=*/FALSE);
+    }
+    DOKAN_LOG_("FileObject=%p",
+        requestContent.IrpSp->FileObject);
+    requestContent.Irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(requestContent.Irp, STATUS_CANCELLED);
   }
 }
 

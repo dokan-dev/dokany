@@ -209,9 +209,7 @@ NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
                   &fcb->FileLock);
           }
         } else {
-          // Shouldn't be something like UncleanCount counter and not FileCount
-          // here?
-          oplockCount = fcb->FileCount;
+          oplockCount = fcb->UncleanCount;
         }
       }
     } else if ((fsControlCode == FSCTL_OPLOCK_BREAK_ACKNOWLEDGE) ||

@@ -83,7 +83,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
     RemoveEntryList(thisEntry);
 
-    DOKAN_LOG_("Timeout Irp %p", irpEntry->SerialNumber);
+    DOKAN_LOG_("Timeout Irp %ld", irpEntry->SerialNumber);
 
     irp = irpEntry->RequestContext.Irp;
 
@@ -123,27 +123,34 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
   shouldUnmount = !vcb->IsKeepaliveActive && !IsListEmpty(&completeList);
   while (!IsListEmpty(&completeList)) {
-    listHead = RemoveHeadList(&completeList);
-    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->RequestContext.Irp;
-    PIO_STACK_LOCATION irpSp = irpEntry->RequestContext.IrpSp;
-    if (irpSp->MajorFunction == IRP_MJ_CREATE) {
-      BOOLEAN canceled = (irpEntry->TickCount.QuadPart == 0);
-      PFILE_OBJECT fileObject = irpEntry->RequestContext.IrpSp->FileObject;
-      if (fileObject != NULL) {
-        PDokanCCB ccb = fileObject->FsContext2;
-        if (ccb != NULL) {
-          PDokanFCB fcb = ccb->Fcb;
-          OplockDebugRecordFlag(
-              fcb, canceled ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
-                            : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
-        }
-      }
-      DokanCancelCreateIrp(&irpEntry->RequestContext,
-          canceled ? STATUS_CANCELLED : STATUS_INSUFFICIENT_RESOURCES);
-    } else {
-      irp->IoStatus.Information = 0;
-      DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES);
+      listHead = RemoveHeadList(&completeList);
+      irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
+      irp = irpEntry->RequestContext.Irp;
+      PIO_STACK_LOCATION irpSp = irpEntry->RequestContext.IrpSp;
+      if (irpSp->MajorFunction == IRP_MJ_CREATE) {
+          BOOLEAN canceled = (irpEntry->TickCount.QuadPart == 0);
+          PFILE_OBJECT fileObject = irpEntry->RequestContext.IrpSp->FileObject;
+          if (fileObject != NULL) {
+              PDokanCCB ccb = fileObject->FsContext2;
+              if (ccb != NULL) {
+                  PDokanFCB fcb = ccb->Fcb;
+                  OplockDebugRecordFlag(
+                      fcb, canceled ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
+                      : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
+              }
+          }
+          DOKAN_LOG_("Cancel create FileObject=%p",
+              irpEntry->RequestContext.IrpSp->FileObject);
+          DokanCancelCreateIrp(&irpEntry->RequestContext,
+              canceled ? STATUS_CANCELLED : STATUS_INSUFFICIENT_RESOURCES);
+      } else {
+		  if (irpSp->MajorFunction == IRP_MJ_CLEANUP) {
+			  DokanExecuteCleanup(&irpEntry->RequestContext, /*ReportChanges=*/TRUE);
+		  }
+		  irp->IoStatus.Information = 0;
+		  DOKAN_LOG_("Cancel FileObject=%p",
+			  irpEntry->RequestContext.IrpSp->FileObject);
+		  DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES);
     }
     DokanFreeIrpEntry(irpEntry);
   }

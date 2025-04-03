@@ -96,6 +96,9 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
         DokanFreeEventContext(eventContext);
       }
       Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+    } else if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+        DOKAN_LOG_FINE_IRP((&requestContext), "Cancelling FileObject=%p Ccb=%p", requestContext.IrpSp->FileObject, requestContext.IrpSp->FileObject->FsContext2);
+        DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
     }
 
     if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
@@ -161,6 +164,10 @@ None.
   if (Irp->IoStatus.Status == STATUS_SUCCESS) {
     DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
   } else {
+      DOKAN_LOG_FINE_IRP((&requestContext), "Oplock completion FileObject=%p Ccb=%p", requestContext.IrpSp->FileObject, requestContext.IrpSp->FileObject->FsContext2);
+      if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+          DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
+      }
     Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);
   }

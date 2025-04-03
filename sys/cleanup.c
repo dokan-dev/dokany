@@ -22,6 +22,58 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
+VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext, BOOLEAN ReportChanges) {
+    PFILE_OBJECT fileObject;
+    PDokanCCB ccb = NULL;
+    PDokanFCB fcb = NULL;
+
+    fileObject = RequestContext->IrpSp->FileObject;
+    DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
+
+    // Cleanup must be success in any case
+    if (!fileObject || !RequestContext->Vcb || !RequestContext->Dcb || !fileObject->FsContext2) {
+        return;
+    }
+
+    ccb = fileObject->FsContext2;
+    ASSERT(ccb != NULL);
+
+    if (!IsCcbAndDcbSameMount(RequestContext, ccb, RequestContext->Dcb)) {
+        return;
+    }
+
+    fcb = ccb->Fcb;
+    ASSERT(fcb != NULL);
+
+    DokanFCBLockRW(fcb);
+
+    DOKAN_LOG_FINE_IRP(RequestContext, "UncleanCount Dec FileObject=%p Fcb=%p Ccb=%p", fileObject, fcb, ccb);
+    InterlockedDecrement(&fcb->UncleanCount);
+
+    IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
+
+    if (ReportChanges && DokanCCBFlagsIsSet(ccb, DOKAN_DELETE_ON_CLOSE)) {
+        if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+            DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
+                FILE_ACTION_REMOVED);
+        }
+        else {
+            DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+                FILE_ACTION_REMOVED);
+        }
+    }
+    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
+        FsRtlNotifyCleanup(RequestContext->Vcb->NotifySync,
+            &RequestContext->Vcb->DirNotifyList, ccb);
+    }
+    DokanFCBUnlock(fcb);
+    //
+    //  Unlock all outstanding file locks.
+    //
+    (VOID)FsRtlFastUnlockAll(&fcb->FileLock, fileObject,
+        IoGetRequestorProcess(RequestContext->Irp), NULL);
+}
+
 NTSTATUS
 DokanDispatchCleanup(__in PREQUEST_CONTEXT RequestContext)
 
@@ -55,8 +107,7 @@ Return Value:
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
   // Cleanup must be success in any case
-  if (fileObject == NULL || RequestContext->Vcb == NULL ||
-      !DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
+  if (!fileObject || !RequestContext->Vcb || !RequestContext->Dcb || !fileObject->FsContext2) {
     return STATUS_SUCCESS;
   }
 
@@ -65,6 +116,8 @@ Return Value:
 
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
+
+  BOOLEAN isUnmountPending = IsUnmountPendingVcb(RequestContext->Vcb);
 
   OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLEANUP);
   if (fcb->IsKeepalive) {
@@ -78,7 +131,7 @@ Return Value:
     }
     DokanFCBUnlock(fcb);
     if (shouldUnmount) {
-      if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+      if (isUnmountPending) {
         DokanLogInfo(&logger,
                      L"Ignoring keepalive close because unmount is already in"
                      L" progress.");
@@ -88,7 +141,9 @@ Return Value:
       }
     }
   }
-  if (fcb->BlockUserModeDispatch) {
+  if (isUnmountPending || fcb->BlockUserModeDispatch) {
+    // Request will not reach Userland and therefore `DokanCompleteCleanup` will not run, releasing the resources now.
+    DokanExecuteCleanup(RequestContext, /*ReportChanges=*/TRUE);
     return STATUS_SUCCESS;
   }
 
@@ -140,53 +195,10 @@ Return Value:
 
 VOID DokanCompleteCleanup(__in PREQUEST_CONTEXT RequestContext,
                           __in PEVENT_INFORMATION EventInfo) {
-  PDokanCCB ccb;
-  PDokanFCB fcb;
-  PFILE_OBJECT fileObject;
-
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p",
                      RequestContext->IrpSp->FileObject);
 
-  fileObject = RequestContext->IrpSp->FileObject;
-  ASSERT(fileObject != NULL);
-
-  ccb = fileObject->FsContext2;
-  ASSERT(ccb != NULL);
-  ccb->UserContext = EventInfo->Context;
-
-  fcb = ccb->Fcb;
-  ASSERT(fcb != NULL);
-
-  DokanFCBLockRW(fcb);
-
-  IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
-
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
-    DokanNotifyReportChange(RequestContext, fcb,
-                            FILE_NOTIFY_CHANGE_LAST_WRITE,
-                            FILE_ACTION_MODIFIED);
-  }
-
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
-    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-      DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
-                              FILE_ACTION_REMOVED);
-    } else {
-      DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
-                              FILE_ACTION_REMOVED);
-    }
-  }
-  DokanFCBUnlock(fcb);
-  //
-  //  Unlock all outstanding file locks.
-  //
-  (VOID) FsRtlFastUnlockAll(&fcb->FileLock, fileObject,
-                            IoGetRequestorProcess(RequestContext->Irp), NULL);
-
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-    FsRtlNotifyCleanup(RequestContext->Vcb->NotifySync,
-                       &RequestContext->Vcb->DirNotifyList, ccb);
-  }
+  DokanExecuteCleanup(RequestContext, /*ReportChanges=*/TRUE);
 
   RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }

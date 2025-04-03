@@ -27,8 +27,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern const UNICODE_STRING g_KeepAliveFileName;
 extern const UNICODE_STRING g_NotificationFileName;
 
-// Decrements the FileCount on the given Fcb, which either deletes it or
-// schedules it for garbage collection if the FileCount becomes 0.
+// Decrements the OpenCount on the given Fcb, which either deletes it or
+// schedules it for garbage collection if the OpenCount becomes 0.
 NTSTATUS
 DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb);
 

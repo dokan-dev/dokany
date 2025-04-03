@@ -325,16 +325,16 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
   }
 
   if (Fcb->SectionObjectPointers.ImageSectionObject != NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection FCB=%p FileCount=%lu.", Fcb,
-                  Fcb->FileCount);
+    DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb, Fcb->OpenCount,
+                  Fcb->UncleanCount);
     MmFlushImageSection(&Fcb->SectionObjectPointers, MmFlushForWrite);
-    DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection done FCB=%p FileCount=%lu.", Fcb,
-                  Fcb->FileCount);
+    DOKAN_LOG_FINE_IRP(RequestContext, "MmFlushImageSection done FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb, Fcb->OpenCount,
+        Fcb->UncleanCount);
   }
 
   if (Fcb->SectionObjectPointers.DataSectionObject != NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache FCB=%p FileCount=%lu.", Fcb,
-                  Fcb->FileCount);
+    DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb, Fcb->OpenCount,
+        Fcb->UncleanCount);
 
     CcFlushCache(&Fcb->SectionObjectPointers, NULL, 0, NULL);
 
@@ -346,8 +346,8 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
       DOKAN_LOG_FINE_IRP(RequestContext, "CcUninitializeCacheMap FileObject=%p", FileObject);
       CcUninitializeCacheMap(FileObject, NULL, NULL);
     }
-    DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache done FCB=%p FileCount=%lu.", Fcb,
-                  Fcb->FileCount);
+    DOKAN_LOG_FINE_IRP(RequestContext, "CcFlushCache done FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb, Fcb->OpenCount,
+        Fcb->UncleanCount);
   }
 }
 
@@ -487,8 +487,9 @@ ULONG PopulateRenameEventInformations(__in PREQUEST_CONTEXT RequestContext,
   if (renameContext) {
     renameContext->FileNameLength = fileNameLength;
     DOKAN_LOG_FINE_IRP(
-        RequestContext, "Rename: \"%wZ\" => \"%ls\", Fcb=%p FileCount = %u",
-        Fcb->FileName, renameContext->FileName, Fcb, (ULONG)Fcb->FileCount);
+        RequestContext, "Rename: \"%wZ\" => \"%ls\", Fcb=%p, OpenCount=%lu, UncleanCount=%lu",
+        Fcb->FileName, renameContext->FileName, Fcb, Fcb->OpenCount,
+        Fcb->UncleanCount);
   }
   return fileNameLength;
 }
