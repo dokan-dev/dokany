@@ -620,6 +620,11 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
 
   CheckFileName(IoEvent->EventContext->Operation.Directory.DirectoryName);
 
+  CreateDispatchCommon(IoEvent,
+                       IoEvent->EventContext->Operation.Directory.BufferLength,
+                       /*UseExtraMemoryPool=*/FALSE,
+                       /*ClearNonPoolBuffer=*/TRUE);
+
   // check whether this is handled FileInfoClass
   if (fileInfoClass != FileDirectoryInformation &&
       fileInfoClass != FileFullDirectoryInformation &&
@@ -637,11 +642,6 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
     EventCompletion(IoEvent);
     return;
   }
-
-  CreateDispatchCommon(IoEvent,
-                       IoEvent->EventContext->Operation.Directory.BufferLength,
-                       /*UseExtraMemoryPool=*/FALSE,
-                       /*ClearNonPoolBuffer=*/TRUE);
 
   IoEvent->EventResult->Operation.Directory.Index =
       IoEvent->EventContext->Operation.Directory.FileIndex;
