@@ -642,8 +642,8 @@ DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
       if (renameInfo->RootDirectory != NULL) {
         // Relative rename
         status = ObReferenceObjectByHandle(
-            renameInfo->RootDirectory, STANDARD_RIGHTS_READ, *IoFileObjectType,
-            KernelMode, (PVOID *)&rootDirObject, NULL);
+            renameInfo->RootDirectory, /*DesiredAccess=*/0, *IoFileObjectType,
+            RequestContext->Irp->RequestorMode, (PVOID*)&rootDirObject, NULL);
         if (!NT_SUCCESS(status)) {
           DOKAN_LOG_FINE_IRP(RequestContext,
                              "Failed to get RootDirectory object - %s",
@@ -667,6 +667,8 @@ DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
             status = STATUS_INVALID_PARAMETER;
             __leave;
           }
+        } else {
+          ObDereferenceObject(rootDirObject);
         }
       }
       // This is a dry run just to get the needed size to AllocateEventContext
