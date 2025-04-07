@@ -29,6 +29,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntddvol.h>
 #include <ntddstor.h>
 #include <ntifs.h>
+
 #include "../dokanfs_msg.h"
 
 ULONG g_Debug = DOKAN_DEBUG_DEFAULT;
