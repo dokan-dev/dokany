@@ -334,10 +334,7 @@ PCHAR DokanGetMinorFunctionStr(UCHAR MajorFunction, UCHAR MinorFunction) {
       }
     }
     case IRP_MJ_DEVICE_CONTROL: {
-      switch (MinorFunction) {
-        default:
-          return "MN_UNKNOWN";
-      }
+      return "MN_UNKNOWN";
     }
   }
   return "";
