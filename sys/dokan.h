@@ -482,8 +482,6 @@ typedef struct _DokanFileControlBlock {
 
   // Locking: Vcb pointer is read-only, no locks needed.
   PDokanVCB Vcb;
-  // Locking: DokanFCBLock{RO,RW} and usually vcb lock
-  LIST_ENTRY NextFCB;
   // Locking: DokanFCBLock{RO,RW}
   LIST_ENTRY NextCCB;
 
