@@ -42,8 +42,9 @@ NTSTATUS DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName);
 
 // Sends a control code directly to the MountManager.
 NTSTATUS
-DokanSendIoContlToMountManager(__in ULONG IoControlCode, __in PVOID InputBuffer,
-                               __in ULONG Length, __out PVOID OutputBuffer,
+DokanSendIoContlToMountManager(__in ULONG IoControlCode,
+                               __in_opt PVOID InputBuffer, __in ULONG Length,
+                               __out PVOID OutputBuffer,
                                __in ULONG OutputLength);
 
 // Inform MountManager of the new MountPoint linked to the persistante volum.
