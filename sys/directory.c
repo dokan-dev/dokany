@@ -243,6 +243,10 @@ DokanNotifyChangeDirectory(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  if (!DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
+    return STATUS_DELETE_PENDING;
+  }
+
   DokanFCBLockRO(fcb);
   // These flags are only set for debugging purposes.
   DokanFCBFlagsSetBit(fcb, DOKAN_EVER_USED_IN_NOTIFY_LIST);
