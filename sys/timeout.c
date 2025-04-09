@@ -149,7 +149,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
                                     : STATUS_INSUFFICIENT_RESOURCES);
     } else {
       if (irpSp->MajorFunction == IRP_MJ_CLEANUP) {
-        DokanExecuteCleanup(&irpEntry->RequestContext, /*ReportChanges=*/FALSE);
+        DokanExecuteCleanup(&irpEntry->RequestContext);
       }
       irp->IoStatus.Information = 0;
       DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES);

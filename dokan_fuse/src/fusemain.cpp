@@ -417,7 +417,7 @@ int impl_fuse_context::cleanup(LPCWSTR file_name,
   // No context for directories when ops_.opendir is not set
   if (dokan_file_info->Context
     || (dokan_file_info->IsDirectory && !ops_.opendir)) {
-    if (dokan_file_info->DeleteOnClose) {
+    if (dokan_file_info->DeletePending) {
       close_file(file_name, dokan_file_info);
       if (dokan_file_info->IsDirectory) {
         do_delete_directory(file_name, dokan_file_info);

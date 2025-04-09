@@ -182,7 +182,7 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
                                         requestContext.IrpSp->MinorFunction),
                requestContext.IrpSp->FileObject);
     if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
-      DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
+      DokanExecuteCleanup(&requestContext);
     }
     requestContext.Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(requestContext.Irp, STATUS_CANCELLED);

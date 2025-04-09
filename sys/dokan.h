@@ -931,7 +931,7 @@ DokanDispatchLock(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
 DokanDispatchCleanup(__in PREQUEST_CONTEXT RequestContext);
-VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext, BOOLEAN ReportChanges);
+VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
 DokanDispatchShutdown(__in PREQUEST_CONTEXT RequestContext);

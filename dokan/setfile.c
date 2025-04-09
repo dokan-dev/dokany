@@ -115,7 +115,7 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
     return STATUS_NOT_IMPLEMENTED;
 
-  if (DeleteFileFlag == FileInfo->DeleteOnClose) {
+  if (DeleteFileFlag == FileInfo->DeletePending) {
     return STATUS_SUCCESS;
   }
 
@@ -130,7 +130,7 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
       return STATUS_CANNOT_DELETE;
   }
 
-  FileInfo->DeleteOnClose = DeleteFileFlag;
+  FileInfo->DeletePending = DeleteFileFlag;
 
   if (FileInfo->IsDirectory) {
     result = DokanOperations->DeleteDirectory(
@@ -139,8 +139,8 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
     result = DokanOperations->DeleteFile(EventContext->Operation.SetFile.FileName,
                                        FileInfo);
   }
-  //Double set for later be sure FS user did not changed it
-  FileInfo->DeleteOnClose = DeleteFileFlag;
+  // Double set for later be sure FS user did not changed it
+  FileInfo->DeletePending = DeleteFileFlag;
   return result;
 }
 
@@ -281,9 +281,10 @@ VOID DispatchSetInformation(PDOKAN_IO_EVENT IoEvent) {
   if (status == STATUS_SUCCESS) {
     if (fileInformationClass == FileDispositionInformation ||
         fileInformationClass == FileDispositionInformationEx) {
-      IoEvent->EventResult->Operation.Delete.DeleteOnClose =
-          IoEvent->DokanFileInfo.DeleteOnClose;
-      DbgPrint("  dispositionInfo->DeleteFile = %d\n", IoEvent->DokanFileInfo.DeleteOnClose);
+      IoEvent->EventResult->Operation.Delete.DeletePending =
+          IoEvent->DokanFileInfo.DeletePending;
+      DbgPrint("  dispositionInfo->DeletePending = %d\n",
+               IoEvent->DokanFileInfo.DeletePending);
     } else if (fileInformationClass == FileRenameInformation ||
                fileInformationClass == FileRenameInformationEx) {
       PDOKAN_RENAME_INFORMATION renameInfo =

@@ -291,7 +291,7 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
     RemoveEntryList(&Fcb->NextGarbageCollectableFcb);
     Fcb->NextGarbageCollectableFcb.Flink = NULL;
     Fcb->GarbageCollectionGracePeriodPassed = FALSE;
-    DokanFCBFlagsClearBit(Fcb, DOKAN_DELETE_ON_CLOSE);
+    DokanFCBFlagsClearBit(Fcb, DOKAN_FCB_STATE_DELETE_PENDING);
     DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_DIRECTORY);
     DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
   } else {

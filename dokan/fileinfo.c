@@ -71,7 +71,6 @@ DokanFillFileStandardInfo(PFILE_STANDARD_INFORMATION StandardInfo,
   StandardInfo->EndOfFile.HighPart = FileInfo->nFileSizeHigh;
   StandardInfo->EndOfFile.LowPart = FileInfo->nFileSizeLow;
   StandardInfo->NumberOfLinks = FileInfo->nNumberOfLinks;
-  StandardInfo->DeletePending = DokanFileInfo->DeleteOnClose;
   StandardInfo->Directory = FALSE;
 
   if (FileInfo->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {

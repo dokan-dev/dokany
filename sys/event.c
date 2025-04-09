@@ -103,7 +103,7 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
       }
       Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
     } else if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
-      DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
+      DokanExecuteCleanup(&requestContext);
     }
 
     if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
@@ -172,7 +172,7 @@ None.
     DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
   } else {
     if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
-      DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
+      DokanExecuteCleanup(&requestContext);
     }
     Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);

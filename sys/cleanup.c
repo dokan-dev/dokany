@@ -22,8 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "dokan.h"
 
-VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext,
-                         BOOLEAN ReportChanges) {
+VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext) {
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
@@ -53,30 +52,6 @@ VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext,
 
   IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
 
-  if (ReportChanges) {
-    if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
-      DokanNotifyReportChange(RequestContext, fcb,
-                            FILE_NOTIFY_CHANGE_LAST_WRITE,
-                            FILE_ACTION_MODIFIED);
-    }
-  	
-    if (DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
-      if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-        DokanNotifyReportChange(RequestContext, fcb,
-                                FILE_NOTIFY_CHANGE_DIR_NAME,
-                                FILE_ACTION_REMOVED);
-      } else {
-        DokanNotifyReportChange(RequestContext, fcb,
-                                FILE_NOTIFY_CHANGE_FILE_NAME,
-                                FILE_ACTION_REMOVED);
-      }
-    }
-  }
-
-  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-    FsRtlNotifyCleanup(RequestContext->Vcb->NotifySync,
-                       &RequestContext->Vcb->DirNotifyList, ccb);
-  }
   DokanFCBUnlock(fcb);
   //
   //  Unlock all outstanding file locks.
@@ -133,6 +108,32 @@ Return Value:
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
+  DokanFCBLockRO(fcb);
+  if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_CHANGE_LAST_WRITE)) {
+    DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
+                            FILE_ACTION_MODIFIED);
+  }
+  if (DokanCCBFlagsIsSet(ccb, DOKAN_DELETE_ON_CLOSE)) {
+    DokanFCBFlagsSetBit(fcb, DOKAN_FCB_STATE_DELETE_PENDING);
+    DOKAN_LOG_FINE_IRP(RequestContext, "Transfer DeleteOnClose from Ccb=%p to Fcb=%p", ccb, fcb);
+  }
+  // Only notify when the last handle on Fcb marked for deletion.
+  BOOLEAN deletePending =
+      fcb->UncleanCount == 1 &&
+      DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING) != 0;
+  BOOLEAN isDirectory = DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY);
+  if (deletePending) {
+    DokanNotifyReportChange(RequestContext, fcb,
+                            isDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME
+                                        : FILE_NOTIFY_CHANGE_FILE_NAME,
+                            FILE_ACTION_REMOVED);
+  }
+  if (isDirectory) {
+    FsRtlNotifyCleanup(RequestContext->Vcb->NotifySync,
+                       &RequestContext->Vcb->DirNotifyList, ccb);
+  }
+  DokanFCBUnlock(fcb);
+
   BOOLEAN isUnmountPending = IsUnmountPendingVcb(RequestContext->Vcb);
 
   OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLEANUP);
@@ -160,7 +161,7 @@ Return Value:
   if (isUnmountPending || fcb->BlockUserModeDispatch) {
     // Request will not reach Userland and therefore `DokanCompleteCleanup`
     // will not run, releasing the resources now.
-    DokanExecuteCleanup(RequestContext, /*ReportChanges=*/!isUnmountPending);
+    DokanExecuteCleanup(RequestContext);
     return STATUS_SUCCESS;
   }
 
@@ -179,7 +180,9 @@ Return Value:
   fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
   eventContext->Context = ccb->UserContext;
-  eventContext->FileFlags |= DokanCCBFlagsGet(ccb);
+  eventContext->FileFlags |=
+      DokanCCBFlagsGet(ccb) |
+      (deletePending ? DOKAN_FCB_STATE_DELETE_PENDING : 0);
 
   // copy the filename to EventContext from ccb
   eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
@@ -214,7 +217,7 @@ VOID DokanCompleteCleanup(__in PREQUEST_CONTEXT RequestContext,
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p",
                      RequestContext->IrpSp->FileObject);
 
-  DokanExecuteCleanup(RequestContext, /*ReportChanges=*/TRUE);
+  DokanExecuteCleanup(RequestContext);
 
   RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }

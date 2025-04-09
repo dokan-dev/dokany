@@ -293,9 +293,9 @@ static void DOKAN_CALLBACK memfs_cleanup(LPCWSTR filename,
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   spdlog::info(L"Cleanup: {}", filename_str);
-  if (dokanfileinfo->DeleteOnClose) {
+  if (dokanfileinfo->DeletePending) {
     // Delete happens during cleanup and not in close event.
-    spdlog::info(L"\tDeleteOnClose: {}", filename_str);
+    spdlog::info(L"\tDeletePending: {}", filename_str);
     filenodes->remove(filename_str);
   }
 }

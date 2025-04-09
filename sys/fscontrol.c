@@ -240,9 +240,9 @@ NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
     if (((fsControlCode == FSCTL_REQUEST_FILTER_OPLOCK) ||
          (fsControlCode == FSCTL_REQUEST_BATCH_OPLOCK) ||
          ((fsControlCode == FSCTL_REQUEST_OPLOCK) &&
-          FlagOn(inputBuffer->RequestedOplockLevel, OPLOCK_LEVEL_CACHE_HANDLE))
-             ) &&
-        DokanFCBFlagsIsSet(fcb, DOKAN_DELETE_ON_CLOSE)) {
+          FlagOn(inputBuffer->RequestedOplockLevel,
+                 OPLOCK_LEVEL_CACHE_HANDLE))) &&
+        DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING)) {
       status = STATUS_DELETE_PENDING;
       __leave;
     }

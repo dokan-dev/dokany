@@ -433,6 +433,10 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         (fileAttributesAndFlags & FILE_FLAG_DELETE_ON_CLOSE))
       return STATUS_CANNOT_DELETE;
 
+    // Remove FILE_FLAG_DELETE_ON_CLOSE to avoid CloseHandle triggering a deletion.
+    // The Drive will inform us through `DeletePending` when to delete it.
+    fileAttributesAndFlags &= ~FILE_FLAG_DELETE_ON_CLOSE;
+
     // Truncate should always be used with write access
     if (creationDisposition == TRUNCATE_EXISTING)
       genericDesiredAccess |= GENERIC_WRITE;
@@ -521,10 +525,8 @@ static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
     DbgPrint(L"Cleanup: %s\n\tinvalid handle\n\n", filePath);
   }
 
-  if (DokanFileInfo->DeleteOnClose) {
-    // Should already be deleted by CloseHandle
-    // if open with FILE_FLAG_DELETE_ON_CLOSE
-    DbgPrint(L"\tDeleteOnClose\n");
+  if (DokanFileInfo->DeletePending) {
+    DbgPrint(L"\tDeletePending\n");
     if (DokanFileInfo->IsDirectory) {
       DbgPrint(L"  DeleteDirectory ");
       if (!RemoveDirectory(filePath)) {
@@ -837,7 +839,7 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
-  DbgPrint(L"DeleteFile %s - %d\n", filePath, DokanFileInfo->DeleteOnClose);
+  DbgPrint(L"DeleteFile %s - %d\n", filePath, DokanFileInfo->DeletePending);
 
   DWORD dwAttrib = GetFileAttributes(filePath);
 
@@ -847,7 +849,7 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 
   if (handle && handle != INVALID_HANDLE_VALUE) {
     FILE_DISPOSITION_INFO fdi;
-    fdi.DeleteFile = DokanFileInfo->DeleteOnClose;
+    fdi.DeleteFile = DokanFileInfo->DeletePending;
     if (!SetFileInformationByHandle(handle, FileDispositionInfo, &fdi,
                                     sizeof(FILE_DISPOSITION_INFO)))
       return DokanNtStatusFromWin32(GetLastError());
@@ -868,9 +870,9 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"DeleteDirectory %s - %d\n", filePath,
-           DokanFileInfo->DeleteOnClose);
+           DokanFileInfo->DeletePending);
 
-  if (!DokanFileInfo->DeleteOnClose)
+  if (!DokanFileInfo->DeletePending)
     //Dokan notify that the file is requested not to be deleted.
     return STATUS_SUCCESS;
 

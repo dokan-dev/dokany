@@ -292,8 +292,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
 
   // Cannot open a file with delete pending without share delete
   if ((FcbOrDcb->Identifier.Type == FCB) &&
-      !FlagOn(ShareAccess, FILE_SHARE_DELETE) &&
-      DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_DELETE_ON_CLOSE))
+      DokanFCBFlagsIsSet(FcbOrDcb, DOKAN_FCB_STATE_DELETE_PENDING))
     return STATUS_DELETE_PENDING;
 
   //
@@ -1320,55 +1319,51 @@ VOID DokanCompleteCreate(__in PREQUEST_CONTEXT RequestContext,
       RequestContext->IrpSp->FileObject,
       DokanGetCreateInformationStr(RequestContext->Irp->IoStatus.Information));
 
+  ULONG options = RequestContext->IrpSp->Parameters.Create.Options;
+
   // If volume is write-protected, we subbed FILE_OPEN for FILE_OPEN_IF
   // before call to userland in DokanDispatchCreate.
   // In this case, a not found error should return write protected status.
   if ((RequestContext->Irp->IoStatus.Information == FILE_DOES_NOT_EXIST) &&
       (IS_DEVICE_READ_ONLY(RequestContext->IrpSp->DeviceObject))) {
 
-    DWORD disposition =
-        (RequestContext->IrpSp->Parameters.Create.Options >> 24) & 0x000000ff;
+    DWORD disposition = (options >> 24) & 0x000000ff;
     if (disposition == FILE_OPEN_IF) {
       DOKAN_LOG_FINE_IRP(RequestContext, "Media is write protected");
       RequestContext->Irp->IoStatus.Status = STATUS_MEDIA_WRITE_PROTECTED;
     }
   }
 
-  if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status) &&
-      (RequestContext->IrpSp->Parameters.Create.Options & FILE_DIRECTORY_FILE ||
-       EventInfo->Operation.Create.Flags & DOKAN_FILE_DIRECTORY)) {
-    if (RequestContext->IrpSp->Parameters.Create.Options &
-        FILE_DIRECTORY_FILE) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "FILE_DIRECTORY_FILE %p", fcb);
-    } else {
-      DOKAN_LOG_FINE_IRP(RequestContext, "DOKAN_FILE_DIRECTORY %p", fcb);
+  if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
+    if (options & FILE_DIRECTORY_FILE ||
+        EventInfo->Operation.Create.Flags & DOKAN_FILE_DIRECTORY) {
+      if (options & FILE_DIRECTORY_FILE) {
+        DOKAN_LOG_FINE_IRP(RequestContext, "FILE_DIRECTORY_FILE %p", fcb);
+      } else {
+        DOKAN_LOG_FINE_IRP(RequestContext, "DOKAN_FILE_DIRECTORY %p", fcb);
+      }
+      DokanFCBFlagsSetBit(fcb, DOKAN_FILE_DIRECTORY);
     }
-    DokanFCBFlagsSetBit(fcb, DOKAN_FILE_DIRECTORY);
-  }
 
-  if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
     DokanCCBFlagsSetBit(ccb, DOKAN_FILE_OPENED);
-  }
 
-  // On Windows 8 and above, you can mark the file
-  // for delete-on-close at create time, which is acted on during cleanup.
-  if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status) &&
-      RequestContext->IrpSp->Parameters.Create.Options & FILE_DELETE_ON_CLOSE) {
-    DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
-    DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
-    DOKAN_LOG_FINE_IRP(
-        RequestContext,
-        "FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup");
-  }
+    // On Windows 8 and above, you can mark the file
+    // for delete-on-close at create time, which is acted on during cleanup.
+    if (options & FILE_DELETE_ON_CLOSE) {
+      DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
+      DOKAN_LOG_FINE_IRP(
+          RequestContext,
+          "FILE_DELETE_ON_CLOSE is set so remember for delete in cleanup");
+    }
 
-  if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
     InterlockedIncrement(&fcb->UncleanCount);
     if (RequestContext->Irp->IoStatus.Information == FILE_CREATED) {
       if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
-        DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,
-                                FILE_ACTION_ADDED);
+        DokanNotifyReportChange(RequestContext, fcb,
+                                FILE_NOTIFY_CHANGE_DIR_NAME, FILE_ACTION_ADDED);
       } else {
-        DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_FILE_NAME,
+        DokanNotifyReportChange(RequestContext, fcb,
+                                FILE_NOTIFY_CHANGE_FILE_NAME,
                                 FILE_ACTION_ADDED);
       }
     }

@@ -222,6 +222,7 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
   ULONG bufferLen = 0;
   PVOID buffer = NULL;
   PDokanCCB ccb;
+  PDokanFCB fcb;
 
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p",
                      RequestContext->IrpSp->FileObject);
@@ -231,6 +232,9 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
   ASSERT(ccb != NULL);
 
   ccb->UserContext = EventInfo->Context;
+
+  fcb = ccb->Fcb;
+  ASSERT(fcb != NULL);
 
   // where we shold copy FileInfo to
   buffer = RequestContext->Irp->AssociatedIrp.SystemBuffer;
@@ -272,6 +276,9 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
 
       ASSERT(header != NULL);
 
+      BOOLEAN deletePending =
+          DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING) != 0;
+
       if (RequestContext->IrpSp->Parameters.QueryFile.FileInformationClass ==
           FileAllInformation) {
 
@@ -281,7 +288,7 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
 
         allInfo->PositionInformation.CurrentByteOffset =
             RequestContext->IrpSp->FileObject->CurrentByteOffset;
-
+        allInfo->StandardInformation.DeletePending = deletePending;
         DokanFCBLockRO(ccb->Fcb);
         RequestContext->Irp->IoStatus.Status = FillNameInformation(
             RequestContext, ccb->Fcb, &allInfo->NameInformation);
@@ -295,6 +302,7 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
             (PFILE_STANDARD_INFORMATION)buffer;
         allocationSize = standardInfo->AllocationSize.QuadPart;
         fileSize = standardInfo->EndOfFile.QuadPart;
+        standardInfo->DeletePending = deletePending;
 
       } else if (RequestContext->IrpSp->Parameters.QueryFile
                      .FileInformationClass ==
@@ -852,22 +860,19 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
     switch (infoClass) {
     case FileDispositionInformation:
     case FileDispositionInformationEx: {
-      if (EventInfo->Operation.Delete.DeleteOnClose) {
+      if (EventInfo->Operation.Delete.DeletePending) {
         if (!MmFlushImageSection(&fcb->SectionObjectPointers,
                                  MmFlushForDelete)) {
           DOKAN_LOG_FINE_IRP(RequestContext, "Cannot delete user mapped image");
           RequestContext->Irp->IoStatus.Status = STATUS_CANNOT_DELETE;
         } else {
-          DokanCCBFlagsSetBit(ccb, DOKAN_DELETE_ON_CLOSE);
-          DokanFCBFlagsSetBit(fcb, DOKAN_DELETE_ON_CLOSE);
+          DokanFCBFlagsSetBit(fcb, DOKAN_FCB_STATE_DELETE_PENDING);
           DOKAN_LOG_FINE_IRP(RequestContext,
                              "FileObject->DeletePending = TRUE");
           RequestContext->IrpSp->FileObject->DeletePending = TRUE;
         }
-
       } else {
-        DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
-        DokanFCBFlagsClearBit(fcb, DOKAN_DELETE_ON_CLOSE);
+        DokanFCBFlagsClearBit(fcb, DOKAN_FCB_STATE_DELETE_PENDING);
         DOKAN_LOG_FINE_IRP(RequestContext, "FileObject->DeletePending = FALSE");
         RequestContext->IrpSp->FileObject->DeletePending = FALSE;
       }

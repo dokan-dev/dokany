@@ -204,8 +204,8 @@ typedef struct _DOKAN_FILE_INFO {
    * Must be set in \ref DOKAN_OPERATIONS.ZwCreateFile if the file appears to be a folder.
    */
   UCHAR IsDirectory;
-  /** Flag if the file has to be deleted during DOKAN_OPERATIONS. Cleanup event. */
-  UCHAR DeleteOnClose;
+  /** Flag if the file has to be deleted during DOKAN_OPERATIONS.Cleanup event. */
+  UCHAR DeletePending;
   /** Read or write is paging IO. */
   UCHAR PagingIo;
   /** Read or write is synchronous IO. */
