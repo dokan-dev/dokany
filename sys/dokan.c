@@ -555,6 +555,15 @@ NTSTATUS DokanNotifyReportChange(__in PREQUEST_CONTEXT RequestContext,
                                   Action);
 }
 
+BOOLEAN IsCcbAndDcbSameMount(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB Ccb, __in PDokanDCB Dcb) {
+    if (Ccb->MountId == Dcb->MountId) {
+        return TRUE;
+    }
+    DOKAN_LOG_FINE_IRP(RequestContext, "MountId is different: Ccb=%d Dcb=%d",
+        Ccb->MountId, Dcb->MountId);
+    return FALSE;
+}
+
 BOOLEAN
 DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext,
               __in_opt PDokanCCB Ccb) {
@@ -570,9 +579,7 @@ DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext,
     return FALSE;
   }
 
-  if (Ccb->MountId != RequestContext->Dcb->MountId) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "MountId is different: Ccb=%d Dcb=%d",
-                       Ccb->MountId, RequestContext->Dcb->MountId);
+  if (!IsCcbAndDcbSameMount(RequestContext, Ccb, RequestContext->Dcb)){
     return FALSE;
   }
 

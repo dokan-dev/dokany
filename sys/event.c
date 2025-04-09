@@ -87,6 +87,12 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
     RemoveEntryList(&irpEntry->ListEntry);
     InitializeListHead(&irpEntry->ListEntry);
 
+    DOKAN_LOG_("Cancel [%s][%s] FileObject=%p",
+               DokanGetMajorFunctionStr(requestContext.IrpSp->MajorFunction),
+               DokanGetMinorFunctionStr(requestContext.IrpSp->MajorFunction,
+                                        requestContext.IrpSp->MinorFunction),
+               requestContext.IrpSp->FileObject);
+
     // If Write is canceld before completion and buffer that saves writing
     // content is not freed, free it here
     if (requestContext.IrpSp->MajorFunction == IRP_MJ_WRITE) {
@@ -96,6 +102,8 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
         DokanFreeEventContext(eventContext);
       }
       Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+    } else if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+      DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
     }
 
     if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
@@ -152,7 +160,9 @@ None.
     return;
   }
 
-  DOKAN_LOG_FINE_IRP((&requestContext), "Oplock break completed %s",
+  DOKAN_LOG_FINE_IRP((&requestContext),
+                     "Oplock break completed FileObject=%p %s",
+                     requestContext.IrpSp->FileObject,
                      DokanGetNTSTATUSStr(Irp->IoStatus.Status));
 
   //
@@ -161,6 +171,9 @@ None.
   if (Irp->IoStatus.Status == STATUS_SUCCESS) {
     DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
   } else {
+    if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+      DokanExecuteCleanup(&requestContext, /*ReportChanges=*/FALSE);
+    }
     Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);
   }
@@ -305,7 +318,6 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
                                     /*CheckMount=*/TRUE,
                                     /*CurrentStatus=*/STATUS_SUCCESS);
   }
-
 
   if (status == STATUS_PENDING) {
     DokanEventNotification(RequestContext, &RequestContext->Dcb->NotifyEvent,

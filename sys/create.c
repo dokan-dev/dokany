@@ -697,6 +697,12 @@ Return Value:
                      &fileObject->FileName);
       }
       DOKAN_LOG_FINE_IRP(RequestContext, "Use FCB=%p", fcb);
+
+      // Cannot create a file already open
+      if (fcb->UncleanCount != 0 && disposition == FILE_CREATE) {
+        status = STATUS_OBJECT_NAME_COLLISION;
+        __leave;
+      }
     }
 
     // Cannot create a directory temporary
@@ -745,6 +751,7 @@ Return Value:
                    RequestContext->ProcessId);
     }
     if (fcb->BlockUserModeDispatch) {
+      InterlockedIncrement(&fcb->UncleanCount);
       RequestContext->Irp->IoStatus.Information = FILE_OPENED;
       status = STATUS_SUCCESS;
       __leave;
@@ -1004,7 +1011,7 @@ Return Value:
 
     // Share access support
 
-    if (fcb->FileCount > 1) {
+    if (fcb->OpenCount > 1) {
 
       //
       //  Check if the Fcb has the proper share access.  This routine will
@@ -1153,7 +1160,7 @@ Return Value:
     //  that the Oplock check proceeds against any added access we had
     //  to give the caller.
     //
-    if (fcb->FileCount > 1) {
+    if (fcb->UncleanCount != 0) {
       status = FsRtlCheckOplock(DokanGetFcbOplock(fcb), RequestContext->Irp,
                            RequestContext->DeviceObject,
                            DokanRetryCreateAfterOplockBreak, DokanPrePostIrp);
@@ -1165,8 +1172,8 @@ Return Value:
       if (status == STATUS_PENDING) {
         DOKAN_LOG_FINE_IRP(RequestContext,
                            "FsRtlCheckOplock returned STATUS_PENDING, fcb = "
-                           "%p, fileCount = %lu",
-                           fcb, fcb->FileCount);
+                           "%p, OpenCount = %lu, UncleanCount = %lu",
+                           fcb, fcb->OpenCount, fcb->UncleanCount);
         __leave;
       }
     }
@@ -1193,10 +1200,10 @@ Return Value:
 
       //
       //  If the caller wants atomic create-with-oplock semantics, tell
-      //  the oplock package.
+      //  the oplock package. Increment `UncleanCount` by 1 as it was not yet.
       if ((status == STATUS_SUCCESS)) {
         status = FsRtlOplockFsctrl(DokanGetFcbOplock(fcb), RequestContext->Irp,
-                                   fcb->FileCount);
+                                   fcb->UncleanCount + 1);
       }
 
       //
@@ -1209,9 +1216,10 @@ Return Value:
       if ((status != STATUS_SUCCESS) &&
           (status != STATUS_OPLOCK_BREAK_IN_PROGRESS)) {
         DOKAN_LOG_FINE_IRP(RequestContext,
-                      "FsRtlOplockFsctrl failed with 0x%x %s, fcb = %p, "
-                      "fileCount = %lu",
-                      status, DokanGetNTSTATUSStr(status), fcb, fcb->FileCount);
+                           "FsRtlOplockFsctrl failed with 0x%x %s, fcb = %p, "
+                           "OpenCount = %lu, UncleanCount = %lu",
+                           status, DokanGetNTSTATUSStr(status), fcb,
+                           fcb->OpenCount, fcb->UncleanCount + 1);
 
         __leave;
       } else if (status == STATUS_OPLOCK_BREAK_IN_PROGRESS) {
@@ -1354,6 +1362,7 @@ VOID DokanCompleteCreate(__in PREQUEST_CONTEXT RequestContext,
   }
 
   if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status)) {
+    InterlockedIncrement(&fcb->UncleanCount);
     if (RequestContext->Irp->IoStatus.Information == FILE_CREATED) {
       if (DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY)) {
         DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_DIR_NAME,

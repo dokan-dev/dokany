@@ -293,9 +293,9 @@ typedef struct _DokanDiskControlBlock {
 
   // How often to garbage-collect FCBs. If this is 0, we use the historical
   // default behavior of freeing them on the spot and in the current context
-  // when the FileCount reaches 0. If this is nonzero, then a background thread
-  // frees a list of FileCount == 0 FCBs at this interval, but requires them to
-  // have had FileCount == 0 for one whole interval before deleting them. The
+  // when the OpenCount reaches 0. If this is nonzero, then a background thread
+  // frees a list of OpenCount == 0 FCBs at this interval, but requires them to
+  // have had OpenCount == 0 for one whole interval before deleting them. The
   // advantage of the GC approach is that it prevents filter drivers from
   // exponentially slowing down procedures like zip file extraction due to
   // repeatedly rebuilding state that they attach to the FCB header.
@@ -486,7 +486,8 @@ typedef struct _DokanFileControlBlock {
   LIST_ENTRY NextCCB;
 
   // Locking: Atomics - not behind an accessor.
-  LONG FileCount;
+  LONG OpenCount; /* Reference between Create - Close */
+  LONG UncleanCount; /* Reference between Create Success - Cleanup */
 
   // Locking: Use atomic flag operations - DokanFCBFlags*
   ULONG Flags;
@@ -930,6 +931,7 @@ DokanDispatchLock(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS
 DokanDispatchCleanup(__in PREQUEST_CONTEXT RequestContext);
+VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext, BOOLEAN ReportChanges);
 
 NTSTATUS
 DokanDispatchShutdown(__in PREQUEST_CONTEXT RequestContext);
@@ -1146,6 +1148,9 @@ NTSTATUS
 DokanStartCheckThread(__in PDokanDCB Dcb);
 
 VOID DokanStopCheckThread(__in PDokanDCB Dcb);
+
+// Whether the Ccb is part of the given mount Dcb.
+BOOLEAN IsCcbAndDcbSameMount(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB Ccb, __in PDokanDCB Dcb);
 
 BOOLEAN
 DokanCheckCCB(__in PREQUEST_CONTEXT RequestContext, __in_opt PDokanCCB Ccb);

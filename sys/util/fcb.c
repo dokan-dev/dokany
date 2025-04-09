@@ -148,7 +148,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
     DokanCancelFcbGarbageCollection(fcb, &fn);
   }
 
-  InterlockedIncrement(&fcb->FileCount);
+  InterlockedIncrement(&fcb->OpenCount);
   DokanVCBUnlock(RequestContext->Vcb);
   return fcb;
 }
@@ -198,18 +198,18 @@ DokanFreeFCB(__in PDokanVCB Vcb, __in PDokanFCB Fcb) {
   // close of one FileObject from within a cleanup of another (with the same
   // FCB). In that case, there is already a FCB lock held below us on the stack,
   // making it unsafe to acquire a VCB lock.
-  if (InterlockedDecrement(&Fcb->FileCount) != 0) {
+  if (InterlockedDecrement(&Fcb->OpenCount) != 0) {
     return STATUS_SUCCESS;
   }
 
   DokanVCBLockRW(Vcb);
   DokanFCBLockRW(Fcb);
 
-  // Note that the FileCount could theoretically be nonzero if incremented by
+  // Note that the OpenCount could theoretically be nonzero if incremented by
   // another thread after the early return and before the locking of the VCB.
   // The code that increments it does so with the VCB locked, so at this point
   // we are sure.
-  if (Fcb->FileCount == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
+  if (Fcb->OpenCount == 0 && !DokanScheduleFcbForGarbageCollection(Vcb, Fcb)) {
     // We get here when garbage collection is disabled.
     DokanDeleteFcb(Vcb, Fcb, /*RemoveFromTable=*/!Fcb->ReplacedByRename);
   } else {
@@ -224,11 +224,15 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
                     __in BOOLEAN DeleteFromTable) {
   ++Vcb->VolumeMetrics.FcbDeletions;
 
+  ASSERT(Fcb->UncleanCount == 0);
+  ASSERT(Fcb->OpenCount == 0);
+
   if (DeleteFromTable) {
     BOOLEAN removed = RtlDeleteElementGenericTableAvl(&Vcb->FcbTable, &Fcb);
     ASSERT(removed);
     UNREFERENCED_PARAMETER(removed);
   }
+  ASSERT(IsListEmpty(&Fcb->NextCCB));
   InitializeListHead(&Fcb->NextCCB);
 
   DOKAN_LOG_("Free FCB %p", Fcb);
