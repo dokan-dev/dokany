@@ -105,7 +105,6 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
     PFILE_DISPOSITION_INFORMATION_EX dispositionexInfo =
         (PFILE_DISPOSITION_INFORMATION_EX)(
             (PCHAR)EventContext + EventContext->Operation.SetFile.BufferOffset);
-
     DeleteFileFlag = (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
   } break;
   default:
@@ -114,10 +113,6 @@ DokanSetDispositionInformation(PEVENT_CONTEXT EventContext,
 
   if (!DokanOperations->DeleteFile || !DokanOperations->DeleteDirectory)
     return STATUS_NOT_IMPLEMENTED;
-
-  if (DeleteFileFlag == FileInfo->DeletePending) {
-    return STATUS_SUCCESS;
-  }
 
   if (DokanOperations->GetFileInformation && DeleteFileFlag) {
     BY_HANDLE_FILE_INFORMATION byHandleFileInfo;

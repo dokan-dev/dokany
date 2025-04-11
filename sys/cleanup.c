@@ -115,12 +115,14 @@ Return Value:
   }
   if (DokanCCBFlagsIsSet(ccb, DOKAN_DELETE_ON_CLOSE)) {
     DokanFCBFlagsSetBit(fcb, DOKAN_FCB_STATE_DELETE_PENDING);
-    DOKAN_LOG_FINE_IRP(RequestContext, "Transfer DeleteOnClose from Ccb=%p to Fcb=%p", ccb, fcb);
+    DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
+    DOKAN_LOG_FINE_IRP(RequestContext,
+                       "Transfer DeleteOnClose from Ccb=%p to Fcb=%p", ccb,
+                       fcb);
   }
   // Only notify when the last handle on Fcb marked for deletion.
   BOOLEAN deletePending =
-      fcb->UncleanCount == 1 &&
-      DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING) != 0;
+      fcb->UncleanCount == 1 && DokanFCBPendingDeletion(fcb);
   BOOLEAN isDirectory = DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY);
   if (deletePending) {
     DokanNotifyReportChange(RequestContext, fcb,

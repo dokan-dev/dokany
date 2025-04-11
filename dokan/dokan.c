@@ -279,9 +279,6 @@ VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   IoEvent->DokanFileInfo.IsDirectory =
       (UCHAR)IoEvent->DokanOpenInfo->IsDirectory;
 
-  if (IoEvent->EventContext->FileFlags & DOKAN_FCB_STATE_DELETE_PENDING) {
-    IoEvent->DokanFileInfo.DeletePending = 1;
-  }
   if (IoEvent->EventContext->FileFlags & DOKAN_PAGING_IO) {
     IoEvent->DokanFileInfo.PagingIo = 1;
   }

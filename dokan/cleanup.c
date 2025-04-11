@@ -36,6 +36,10 @@ VOID DispatchCleanup(PDOKAN_IO_EVENT IoEvent) {
                                           : -1,
            IoEvent);
 
+  if (IoEvent->EventContext->FileFlags & DOKAN_FCB_STATE_DELETE_PENDING) {
+    IoEvent->DokanFileInfo.DeletePending = 1;
+  }
+
   if (IoEvent->DokanInstance->DokanOperations->Cleanup) {
     // ignore return value
     IoEvent->DokanInstance->DokanOperations->Cleanup(
