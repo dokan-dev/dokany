@@ -183,8 +183,7 @@ Return Value:
 
   eventContext->Context = ccb->UserContext;
   eventContext->FileFlags |=
-      DokanCCBFlagsGet(ccb) |
-      (deletePending ? DOKAN_FCB_STATE_DELETE_PENDING : 0);
+      DokanCCBFlagsGet(ccb) | (deletePending ? DOKAN_DELETE_ON_CLOSE : 0);
 
   // copy the filename to EventContext from ccb
   eventContext->Operation.Cleanup.FileNameLength = fcb->FileName.Length;
