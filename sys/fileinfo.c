@@ -276,7 +276,7 @@ VOID DokanCompleteQueryInformation(__in PREQUEST_CONTEXT RequestContext,
 
       ASSERT(header != NULL);
 
-      BOOLEAN deletePending = DokanFCBPendingDeletion(fcb);
+      BOOLEAN deletePending = DokanFCBIsPendingDeletion(fcb);
       if (RequestContext->IrpSp->Parameters.QueryFile.FileInformationClass ==
           FileAllInformation) {
         PFILE_ALL_INFORMATION allInfo = (PFILE_ALL_INFORMATION)buffer;
@@ -565,7 +565,7 @@ DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
     case FileDispositionInformation: {
       PFILE_DISPOSITION_INFORMATION dispositionInfo =
           (PFILE_DISPOSITION_INFORMATION)buffer;
-      if (dispositionInfo->DeleteFile == DokanFCBPendingDeletion(fcb)) {
+      if (dispositionInfo->DeleteFile == DokanFCBIsPendingDeletion(fcb)) {
         RequestContext->IrpSp->FileObject->DeletePending =
             dispositionInfo->DeleteFile;
         status = STATUS_SUCCESS;
@@ -577,7 +577,7 @@ DokanDispatchSetInformation(__in PREQUEST_CONTEXT RequestContext) {
           (PFILE_DISPOSITION_INFORMATION_EX)buffer;
       BOOLEAN deleteRequested =
           (dispositionexInfo->Flags & FILE_DISPOSITION_DELETE) != 0;
-      if (deleteRequested == DokanFCBPendingDeletion(fcb)) {
+      if (deleteRequested == DokanFCBIsPendingDeletion(fcb)) {
         RequestContext->IrpSp->FileObject->DeletePending = deleteRequested;
         status = STATUS_SUCCESS;
         __leave;

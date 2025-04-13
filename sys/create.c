@@ -291,7 +291,7 @@ Otherwise, STATUS_SHARING_VIOLATION is returned.
   UNREFERENCED_PARAMETER(RequestContext);
 
   // Cannot open a file with delete pending without share delete
-  if ((FcbOrDcb->Identifier.Type == FCB) && DokanFCBPendingDeletion(FcbOrDcb))
+  if ((FcbOrDcb->Identifier.Type == FCB) && DokanFCBIsPendingDeletion(FcbOrDcb))
     return STATUS_DELETE_PENDING;
 
   //

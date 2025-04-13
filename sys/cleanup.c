@@ -122,7 +122,7 @@ Return Value:
   }
   // Only notify when the last handle on Fcb marked for deletion.
   BOOLEAN deletePending =
-      fcb->UncleanCount == 1 && DokanFCBPendingDeletion(fcb);
+      fcb->UncleanCount == 1 && DokanFCBIsPendingDeletion(fcb);
   BOOLEAN isDirectory = DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY);
   if (deletePending) {
     DokanNotifyReportChange(RequestContext, fcb,

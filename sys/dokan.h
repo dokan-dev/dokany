@@ -1248,7 +1248,7 @@ __inline VOID DokanClearFlag(PULONG Flags, ULONG FlagBit) {
 #define DokanFCBFlagsSetBit(fcb, bit) SetLongFlag((fcb)->Flags, (bit))
 #define DokanFCBFlagsClearBit(fcb, bit) ClearLongFlag((fcb)->Flags, (bit))
 
-#define DokanFCBPendingDeletion(fcb)                                           \
+#define DokanFCBIsPendingDeletion(fcb)                                           \
   (DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING) != 0)
 
 #define DokanCCBFlagsGet DokanFCBFlagsGet

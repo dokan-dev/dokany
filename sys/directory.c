@@ -243,7 +243,7 @@ DokanNotifyChangeDirectory(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  if (DokanFCBPendingDeletion(fcb)) {
+  if (DokanFCBIsPendingDeletion(fcb)) {
     return STATUS_DELETE_PENDING;
   }
 
