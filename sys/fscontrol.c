@@ -242,7 +242,7 @@ NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
          ((fsControlCode == FSCTL_REQUEST_OPLOCK) &&
           FlagOn(inputBuffer->RequestedOplockLevel,
                  OPLOCK_LEVEL_CACHE_HANDLE))) &&
-        DokanFCBFlagsIsSet(fcb, DOKAN_FCB_STATE_DELETE_PENDING)) {
+        DokanFCBIsPendingDeletion(fcb)) {
       status = STATUS_DELETE_PENDING;
       __leave;
     }
