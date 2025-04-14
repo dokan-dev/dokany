@@ -275,7 +275,7 @@ typedef struct _DokanDiskControlBlock {
   ULONG IrpTimeout;
   ULONG SessionId;
   IO_REMOVE_LOCK RemoveLock;
-  
+
   // If true, we know the requested mount point is occupied by a dokan drive we
   // can't remove, so force the mount manager to auto-assign a different drive
   // letter.

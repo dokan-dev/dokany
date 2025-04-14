@@ -113,14 +113,23 @@ Return Value:
     DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_LAST_WRITE,
                             FILE_ACTION_MODIFIED);
   }
+  // DeleteOnClose is set during CreateFile but is only executed by the last
+  // handle on the object is closed. We transfer the marker to the Fcb and will
+  // see below if there is any outstanding open handle that will delay the
+  // deletion execution.
   if (DokanCCBFlagsIsSet(ccb, DOKAN_DELETE_ON_CLOSE)) {
+    // `DOKAN_FCB_STATE_DELETE_PENDING` will prevent the Fcb to be open. Note:
+    // Since `UncleanCount` is set on `DokanCompleteCreate` but this flag is
+    // checked during `DokanDispatchCreate`, there is still a possible race
+    // condition where an inflight create will succeed.
     DokanFCBFlagsSetBit(fcb, DOKAN_FCB_STATE_DELETE_PENDING);
     DokanCCBFlagsClearBit(ccb, DOKAN_DELETE_ON_CLOSE);
     DOKAN_LOG_FINE_IRP(RequestContext,
                        "Transfer DeleteOnClose from Ccb=%p to Fcb=%p", ccb,
                        fcb);
   }
-  // Only notify when the last handle on Fcb marked for deletion.
+  // The Fcb is marked for deletion due to DeleteOnClose or through
+  // FileDisposition, the last handle will execute the deletion.
   BOOLEAN deletePending =
       fcb->UncleanCount == 1 && DokanFCBIsPendingDeletion(fcb);
   BOOLEAN isDirectory = DokanFCBFlagsIsSet(fcb, DOKAN_FILE_DIRECTORY);
