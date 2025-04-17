@@ -256,7 +256,7 @@ DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
 
   DbgPrintW(L"NpCancelConnection Disconnect was ignored\n");
 
-  return WN_NO_ERROR;
+  return WN_NOT_CONNECTED;
 }
 
 DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
