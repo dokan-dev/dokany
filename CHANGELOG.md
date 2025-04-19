@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.3.0.1000] - 2025-04-19
+
+### Changed
+- Installer - Fail installation if the driver (service) is already present. This is to catch the case when the driver was installed manually or by another installer (third party).
+- Memfs - Update `spdlog` to `v1.15.1`.
+- Kernel - Add `Fcb::UncleanCount` to track and unsure `IRP_MJ_CLEANUP` is executed. Fixes rare BSOD during `FsRtlNotify`.
+
+### Fixed
+- FUSE - Fix a Y2038 bug by replacing `Int32x32To64` with multiplication.
+- Library - Fix memory leak in `DispatchWrite` when pool not used.
+- Library - Fix memory leak when `SendWriteRequest` IO fails.
+- Library - Fix crash when `DispatchDirectoryInformation` is called with unknown `fileInfoClass`.
+- Library - Send `STATUS_INVALID_PARAMETER` to driver for unknown events.
+- Kernel - Rename - Set the correct `AccessMode` for the provided handle during `ObReferenceObjectByHandle`.
+- Kernel - Prevent `FsRtlNotifyFullChangeDirectory` when `Fcb` is pending deletion.
+- Kernel/Library - Properly implement the deletion semantic for `DELETE_ON_CLOSE` and `FileDispositionInformation`. See the documentation [here](https://github.com/dokan-dev/dokany/commit/3a46d4eb90e7b12c8d9400365faa6232c282e596) and [here](https://github.com/dokan-dev/dokany/commit/11d73494df76d69b20199fd5ddfc3f750b85ac87) how to behavior changed and [here](https://github.com/dokan-dev/dokany/commit/e08b83c7ab4f1f6efea3a72a6fa0a3f1514385ad) how it was implemented.
+- NetworkProvider - Return proper error during `NPCancelConnection` to allow other providers to handle the request.
+
 ## [2.2.1.1000] - 2025-01-18
 
 ### Changed
@@ -730,6 +748,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.3.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.1.1000...v2.3.0.1000
 [2.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.0.1000...v2.2.1.1000
 [2.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.1.0.1000...v2.2.0.1000
 [2.1.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.0.6.1000...v2.1.0.1000
