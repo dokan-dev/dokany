@@ -515,7 +515,7 @@ memfs_deletefile(LPCWSTR filename, PDOKAN_FILE_INFO dokanfileinfo) {
   if (f->is_directory) return STATUS_ACCESS_DENIED;
 
   // Here prepare and check if the file can be deleted
-  // or if delete is canceled when dokanfileinfo->DeleteOnClose false
+  // or if delete is canceled when dokanfileinfo->DeletePending false
 
   return STATUS_SUCCESS;
 }
@@ -530,7 +530,7 @@ memfs_deletedirectory(LPCWSTR filename, PDOKAN_FILE_INFO dokanfileinfo) {
     return STATUS_DIRECTORY_NOT_EMPTY;
 
   // Here prepare and check if the directory can be deleted
-  // or if delete is canceled when dokanfileinfo->DeleteOnClose false
+  // or if delete is canceled when dokanfileinfo->DeletePending false
 
   return STATUS_SUCCESS;
 }

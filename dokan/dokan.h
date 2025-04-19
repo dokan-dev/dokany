@@ -204,7 +204,13 @@ typedef struct _DOKAN_FILE_INFO {
    * Must be set in \ref DOKAN_OPERATIONS.ZwCreateFile if the file appears to be a folder.
    */
   UCHAR IsDirectory;
-  /** Flag if the file has to be deleted during DOKAN_OPERATIONS.Cleanup event. */
+  /**
+   * Flag if the file has to be deleted during \ref DOKAN_OPERATIONS.Cleanup event.
+   * 
+   * If a prior \ref DOKAN_OPERATIONS.ZwCreateFile call with \c FILE_FLAG_DELETE_ON_CLOSE or \ref DOKAN_OPERATIONS.DeleteFile
+   * / \ref DOKAN_OPERATIONS.DeleteDirectory with DOKAN_FILE_INFO.DeletePending set to \c TRUE succeed on an object,
+   * the last handle open on that object will have this variable set to \c TRUE and therefore will have to delete the object.
+   */
   UCHAR DeletePending;
   /** Read or write is paging IO. */
   UCHAR PagingIo;
@@ -294,7 +300,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Cleanup request before \ref CloseFile is called.
   *
-  * When DOKAN_FILE_INFO.DeleteOnClose is \c TRUE, the file in Cleanup must be deleted.
+  * When DOKAN_FILE_INFO.DeletePending is \c TRUE, the file in Cleanup must be deleted.
   * The function cannot fail therefore the filesystem need to ensure ahead
   * that a the delete can safely happen during Cleanup. 
   * See DeleteFile documentation for explanation.
@@ -480,7 +486,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Check if it is possible to delete a file.
   *
-  * DeleteFile will also be called with DOKAN_FILE_INFO.DeleteOnClose set to \c FALSE
+  * DeleteFile will also be called with DOKAN_FILE_INFO.DeletePending set to \c FALSE
   * to notify the driver when the file is no longer requested to be deleted.
   *
   * The file in DeleteFile should not be deleted, but instead the file
@@ -489,9 +495,9 @@ typedef struct _DOKAN_OPERATIONS {
   * appropriate error codes, such as \c STATUS_ACCESS_DENIED or
   * \c STATUS_OBJECT_NAME_NOT_FOUND, should be returned.
   *
-  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards with
-  * DOKAN_FILE_INFO.DeleteOnClose set to \c TRUE. Only then must the closing file
-  * be deleted.
+  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards
+  * on the last context open on this object with DOKAN_FILE_INFO.DeletePending set to \c TRUE,
+  * Only then must the closing file be deleted.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param DokanFileInfo Information about the file or directory.
@@ -507,7 +513,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Check if it is possible to delete a directory.
   *
-  * DeleteDirectory will also be called with DOKAN_FILE_INFO.DeleteOnClose set to \c FALSE
+  * DeleteDirectory will also be called with DOKAN_FILE_INFO.DeletePending set to \c FALSE
   * to notify the driver when the file is no longer requested to be deleted.
   *
   * The Directory in DeleteDirectory should not be deleted, but instead
@@ -517,9 +523,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \c STATUS_OBJECT_PATH_NOT_FOUND, or \c STATUS_DIRECTORY_NOT_EMPTY, should
   * be returned.
   *
-  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards with
-  * DOKAN_FILE_INFO.DeleteOnClose set to \c TRUE. Only then must the closing file
-  * be deleted.
+  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards
+  * on the last context open on this object with DOKAN_FILE_INFO.DeletePending set to \c TRUE,
+  * Only then must the closing file be deleted.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param DokanFileInfo Information about the file or directory.
