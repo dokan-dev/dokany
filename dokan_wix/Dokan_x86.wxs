@@ -49,7 +49,7 @@
 		<CustomAction Id="SetServicePendingStopProp" DllEntry="ServicePendingStop" Execute="immediate" Return="ignore" BinaryRef="SetupCA2"/>
 		<InstallExecuteSequence>
 			<Custom Action="CheckForRebootPending" Before="LaunchConditions" Condition="DOKANREBOOTPENDING = &quot;#1&quot;"/>
-			<Custom Action="CheckServicePresent" After="CheckForRebootPending" Condition="DOKANSERVICEALREADYPRESENT"/>
+			<Custom Action="CheckServicePresent" After="CheckForRebootPending" Condition="Not REMOVE=&quot;ALL&quot; AND DOKANSERVICEALREADYPRESENT"/>
 			<Custom Action="GetInstallDir" Before="CostFinalize" Condition="REMOVE=&quot;ALL&quot;"/>
 			<Custom Action="SetFolderValue" Before="ExecuteInstallAction"/>
 			<Custom Action="ExecuteInstallAction" After="PublishProduct" Condition="Not REMOVE=&quot;ALL&quot;"/>
