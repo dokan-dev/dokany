@@ -2,27 +2,19 @@
 
 $packageName    = 'dokany2'
 $toolsDir       = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
-$url            = "$toolsDir\Dokan_x86.msi" 
-$url64          = "$toolsDir\Dokan_x64.msi"
+$file           = "$toolsDir\Dokan_x86.msi" 
+$file64         = "$toolsDir\Dokan_x64.msi"
 
 $packageArgs = @{
   packageName   = $packageName
-  unzipLocation = $toolsDir
   fileType      = 'MSI'
-  url           = $url
-  url64bit      = $url64
-
-  softwareName  = 'Dokan Library*'
-
-  checksum      = '[[Checksum]]'
-  checksumType  = 'sha256'
-  checksum64    = '[[Checksum64]]'
-  checksumType64= 'sha256'
-
   silentArgs    = "/passive /norestart"
+  file          = $file
+  file64        = $file64
   validExitCodes= @(0, 3010, 1641)
+  softwareName  = 'Dokan Library*'
 }
 
-Install-ChocolateyPackage @packageArgs
-Remove-Item $url -Force -EA SilentlyContinue | Out-Null
-Remove-Item $url64 -Force -EA SilentlyContinue | Out-Null
+Install-ChocolateyInstallPackage @packageArgs
+Remove-Item $file -Force -EA SilentlyContinue | Out-Null
+Remove-Item $file64 -Force -EA SilentlyContinue | Out-Null

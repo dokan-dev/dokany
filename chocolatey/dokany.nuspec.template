@@ -35,53 +35,49 @@
     <bugTrackerUrl>https://github.com/dokan-dev/dokany/issues</bugTrackerUrl>
     <tags>dokany2 fs vfs filesystem dokan admin fuse</tags>
     <summary>User mode file system driver for windows with FUSE Wrapper</summary>
-    <description>---
+    <description>### [choco://dokany2](choco://dokany2)
+To use choco:// protocol URLs, install [(unofficial) choco:// Protocol support ](https://chocolatey.org/packages/choco-protocol-support)
 
-      ### [choco://dokany2](choco://dokany2)
-      To use choco:// protocol URLs, install [(unofficial) choco:// Protocol support ](https://chocolatey.org/packages/choco-protocol-support)
-      
-      ---
-      
-      ![Screenshot of dokany in use](https://camo.githubusercontent.com/e825c85d44931bd98fe0585a64478bc57f6eb34a/687474703a2f2f646f6b616e2d6465762e6769746875622e696f2f696d616765732f73637265656e636173742e676966)
-      
-      ### What is Dokan
-      
-      When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system driver. Developing a device driver that works in kernel mode on windows is extremely technical. By using Dokan, you can create your own file systems very easily without writing device drivers. Dokan is similar to FUSE (Linux file system in user space) but works on Windows. Moreover dokany include a FUSE wrapper that help you to port your FUSE filesystems without changes
-      
-      ### What is Dokany
-      
-      Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and updated to build with latest tools.
-      
-      Because the original Dokan Legacy (less than v0.6.0) project is no longer maintained.
-      
-      Since version 0.8.0, dokany break dokan API compatibility. See Choose a version for more informations.
-      
-      Signed x86 / x64 drivers are provided at each release.	
-      
-      ### Environment
-      
-      Dokan works on
-      
-      * Windows 11
-      * Windows 10
-      * Windows Server 2012 R2
-      * Windows 8.1
-      * Windows Server 2012
-      * Windows 8
-      * Windows Server 2008 R2 SP1
-      * Windows 7 SP1
-        
-      ### How it works
-      
-      Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file system driver (dokan2.sys). Once Dokan file system driver is installed, you can create file systems which can be seen as normal file systems in Windows. The application that creates file systems using Dokan library is called File system application.
-      
-      File operation requests from user programs (e.g., CreateFile, ReadFile, WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode) which will subsequently forward the requests to the Dokan file system driver (dokan1.sys). By using functions provided by the Dokan user mode library (dokan1.dll), file system applications are able to register callback functions to the file system driver. The file system driver will invoke these callback routines in order to response to the requests it received. The results of the callback routines will be sent back to the user program.
-      
-      For example, when Windows Explorer requests to open a directory, the CreateFile with Direction option request will be sent to Dokan file system driver and the driver will invoke the CreateFile callback provided by the file system application. The results of this routine are sent back to Windows Explorer as the response to the CreateFile request. Therefore, the Dokan file system driver acts as a proxy between user programs and file system applications. The advantage of this approach is that it allows programmers to develop file systems in user mode which is safe and easy to debug.
-      
-      To learn more about Dokan file system development, see the API documentation.	
-      
-      ---</description>
+---
+
+![Screenshot of dokany in use](https://camo.githubusercontent.com/e825c85d44931bd98fe0585a64478bc57f6eb34a/687474703a2f2f646f6b616e2d6465762e6769746875622e696f2f696d616765732f73637265656e636173742e676966)
+
+### What is Dokan
+
+When you want to create a new file system on Windows, other than FAT or NTFS, you need to develop a file system driver. Developing a device driver that works in kernel mode on windows is extremely technical. By using Dokan, you can create your own file systems very easily without writing device drivers. Dokan is similar to FUSE (Linux file system in user space) but works on Windows. Moreover dokany include a FUSE wrapper that help you to port your FUSE filesystems without changes
+
+### What is Dokany
+
+Dokany is a fork of Dokan 0.6.0 with bug fixes, clean change history and updated to build with latest tools.
+
+Because the original Dokan Legacy (less than v0.6.0) project is no longer maintained.
+
+Since version 0.8.0, dokany break dokan API compatibility. See Choose a version for more informations.
+
+Signed x86 / x64 drivers are provided at each release.	
+
+### Environment
+
+Dokan works on
+
+* Windows 11
+* Windows 10
+* Windows Server 2012 R2
+* Windows 8.1
+* Windows Server 2012
+* Windows 8
+* Windows Server 2008 R2 SP1
+* Windows 7 SP1
+
+### How it works
+
+Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file system driver (dokan2.sys). Once Dokan file system driver is installed, you can create file systems which can be seen as normal file systems in Windows. The application that creates file systems using Dokan library is called File system application.
+
+File operation requests from user programs (e.g., CreateFile, ReadFile, WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode) which will subsequently forward the requests to the Dokan file system driver (dokan1.sys). By using functions provided by the Dokan user mode library (dokan1.dll), file system applications are able to register callback functions to the file system driver. The file system driver will invoke these callback routines in order to response to the requests it received. The results of the callback routines will be sent back to the user program.
+
+For example, when Windows Explorer requests to open a directory, the CreateFile with Direction option request will be sent to Dokan file system driver and the driver will invoke the CreateFile callback provided by the file system application. The results of this routine are sent back to Windows Explorer as the response to the CreateFile request. Therefore, the Dokan file system driver acts as a proxy between user programs and file system applications. The advantage of this approach is that it allows programmers to develop file systems in user mode which is safe and easy to debug.
+
+To learn more about Dokan file system development, see the API documentation.</description>
     <releaseNotes>https://github.com/dokan-dev/dokany/blob/master/CHANGELOG.md</releaseNotes>
     <!-- =============================== -->      
 
