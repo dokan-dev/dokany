@@ -9,6 +9,34 @@ Add-VisualStudio-Path
 # EV_CERTTHUMBPRINT - EV Sign certificat thumb print
 # CHOCO_API_KEY - Chocolatey API key to publish new installers
 
+if (!(Test-Path -Path .\dokan_wix\SetAssemblyVersion\bin\Release\SetAssemblyVersion.exe)) {
+	Exec-External { msbuild .\dokan_wix\SetAssemblyVersion.sln /p:Configuration=Release /p:Platform="Any CPU" /t:rebuild }
+}
+Exec-External { .\dokan_wix\SetAssemblyVersion\bin\Release\SetAssemblyVersion CHANGELOG.md .\dokan_wix\version.xml . }
+Write-Host Build dokan version done !
+
+Exec-External { .\scripts\build.ps1 }
+
+Exec-External { .\scripts\sign.ps1 }
+
+Exec-External { MakeCab /f .\dokan_wix\dokan.ddf }
+if (-not ([string]::IsNullOrEmpty($env:EV_CERTTHUMBPRINT)))
+{
+	Write-Host EV Sign cab ...
+	set-alias st "$env:SIGNTOOL"
+	Exec-External { st sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 "$env:EV_CERTTHUMBPRINT" .\dokan_wix\Dokan.cab }
+	Write-Host EV Sign cab done
+	Read-Host -Prompt "Please submit driver cab to developer hardware dashboard. Hit ENTER when it is done..." 
+}
+else { Write-Host EV_CERTTHUMBPRINT env variable is missing. EV Signature cab is needed for developer hardware dashboard submission. }
+
+if (Test-Path -Path C:\cygwin64) {
+	Write-Host Include Cygwin binaries in installer
+	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc .\dokan_wix\version.xml
+} else {
+	Write-Host Exclude Cygwin binaries from installer
+	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="true"', 'BuildCygwin="false"' | sc .\dokan_wix\version.xml
+}
 
 Write-Host Build installer ...
 # Nuget restore sln fails to restore all the project of the solution for some reason so lets do it manually
