@@ -50,7 +50,8 @@ VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext) {
 
   InterlockedDecrement(&fcb->UncleanCount);
 
-  IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
+  if (!RequestContext->RemovedShareAccessBeforeCheckOplock)
+    IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
 
   DokanFCBUnlock(fcb);
   //
@@ -199,9 +200,17 @@ Return Value:
   RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                 fcb->FileName.Buffer, fcb->FileName.Length);
 
+  // normally, share access should be removed before calling DokanCheckOplock, see fastfat.
+  // calling DokanCheckOplock without removing share access cause the pending create irp which break the oplock resume and return with STATUS_SHARING_VIOLATION.
+  IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
+
   // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
   status = DokanCheckOplock(fcb, RequestContext->Irp, eventContext,
                             DokanOplockComplete, DokanPrePostIrp);
+
+  // indicate that DokanExecuteCleanup should not remove share access again. Otherwise the IoCheckShareAccess may return STATUS_SUCCESS in resuming create while the File system application (mirror.exe) will return STATUS_SHARING_VIOLATION.
+  RequestContext->RemovedShareAccessBeforeCheckOplock = TRUE;
+
   DokanFCBUnlock(fcb);
 
   //

@@ -806,6 +806,9 @@ typedef struct _REQUEST_CONTEXT {
 
   // Whether if we are the top-level IRP.
   BOOLEAN IsTopLevelIrp;
+
+  // the share access has been removed before DokanCheckOplock during DokanDispatchCleanup
+  BOOLEAN RemovedShareAccessBeforeCheckOplock;
 } REQUEST_CONTEXT, *PREQUEST_CONTEXT;
 
 // IRP list which has pending status
