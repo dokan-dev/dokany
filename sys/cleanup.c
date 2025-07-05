@@ -52,10 +52,11 @@ VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext) {
 
   IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
 
-  // From Fastfat: Cleanup operations can always cleanup immediately therefore we execute it sync.
+  // From Fastfat: Cleanup operations can always cleanup immediately therefore
+  // we execute it sync.
   DokanCheckOplock(fcb, RequestContext->Irp, /*Context=*/NULL,
-                            /*CompletionRoutine=*/NULL,
-                            /*PostIrpRoutine=*/NULL);
+                   /*CompletionRoutine=*/NULL,
+                   /*PostIrpRoutine=*/NULL);
 
   DokanFCBUnlock(fcb);
   //
