@@ -52,6 +52,11 @@ VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext) {
 
   IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
 
+  // From Fastfat: Cleanup operations can always cleanup immediately therefore we execute it sync.
+  DokanCheckOplock(fcb, RequestContext->Irp, /*Context=*/NULL,
+                            /*CompletionRoutine=*/NULL,
+                            /*PostIrpRoutine=*/NULL);
+
   DokanFCBUnlock(fcb);
   //
   //  Unlock all outstanding file locks.
@@ -80,7 +85,6 @@ Return Value:
 
 --*/
 {
-  NTSTATUS status = STATUS_INVALID_PARAMETER;
   PFILE_OBJECT fileObject;
   PDokanCCB ccb = NULL;
   PDokanFCB fcb = NULL;
@@ -199,24 +203,7 @@ Return Value:
   RtlCopyMemory(eventContext->Operation.Cleanup.FileName,
                 fcb->FileName.Buffer, fcb->FileName.Length);
 
-  // FsRtlCheckOpLock is called with non-NULL completion routine - not blocking.
-  status = DokanCheckOplock(fcb, RequestContext->Irp, eventContext,
-                            DokanOplockComplete, DokanPrePostIrp);
   DokanFCBUnlock(fcb);
-
-  //
-  //  if FsRtlCheckOplock returns STATUS_PENDING the IRP has been posted
-  //  to service an oplock break and we need to leave now.
-  //
-  if (status != STATUS_SUCCESS) {
-    if (status == STATUS_PENDING) {
-      DOKAN_LOG_FINE_IRP(RequestContext,
-                         "FsRtlCheckOplock returned STATUS_PENDING");
-    } else {
-      DokanFreeEventContext(eventContext);
-    }
-    return status;
-  }
 
   // register this IRP to pending IRP list
   return DokanRegisterPendingIrp(RequestContext, eventContext);
