@@ -5,8 +5,6 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-$env:SONAR_TOKEN = $SONAR_TOKEN
-
 $env:SONAR_SCANNER_VERSION = "7.0.2.4839"
 $env:SONAR_DIRECTORY = [System.IO.Path]::Combine($(get-location).Path,".sonar")
 $env:SONAR_SCANNER_HOME = "$env:SONAR_DIRECTORY/sonar-scanner-$env:SONAR_SCANNER_VERSION-windows-x64"
@@ -29,6 +27,7 @@ function buildWrapper {
 .\scripts\build.ps1 -BuildPart win -Platforms x64 -Configurations Debug
 
 & $env:SONAR_SCANNER_HOME/bin/sonar-scanner.bat `
+  -D"sonar.token=$SONAR_TOKEN" `
   -D"sonar.organization=dokan-dev" `
   -D"sonar.projectKey=dokany" `
   -D"sonar.projectVersion=$BUILD_VERSION" `
