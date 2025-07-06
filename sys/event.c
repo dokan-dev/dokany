@@ -171,9 +171,6 @@ None.
   if (Irp->IoStatus.Status == STATUS_SUCCESS) {
     DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
   } else {
-    if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
-      DokanExecuteCleanup(&requestContext);
-    }
     Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);
   }
