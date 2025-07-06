@@ -186,20 +186,8 @@
           Add-AppveyorMessage -Message "Not running SonarQube on pull request." -Category Information
           return;
         }
-      
-        Add-Type -assembly system.io.compression.filesystem
 
-        New-Item -Path "sonar-scanner" -ItemType "directory"
-        cd sonar-scanner
-        Invoke-WebRequest https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip -OutFile .\build-wrapper-win-x86.zip
-        Exec-External { & 7z e .\build-wrapper-win-x86.zip }
-        Invoke-WebRequest https://github.com/SonarSource/sonar-scanner-msbuild/releases/download/10.2.0.117568/sonar-scanner-10.2.0.117568-net-framework.zip -OutFile .\sonar-scanner-msbuild.zip
-        Exec-External { & 7z x .\sonar-scanner-msbuild.zip }
-        $env:Path = "$((Get-Location).Path);" + $env:Path
-        $env:JAVA_HOME = "C:\Program Files\Java\jdk21"
-        cd ..
-
-        .\scripts\sonar-build.ps1 dokany $env:SonarQubeToken dokan-dev https://sonarcloud.io $env:APPVEYOR_BUILD_VERSION
+        .\scripts\sonar-build.ps1 $env:SonarQubeToken $env:APPVEYOR_BUILD_VERSION
       }
 
   - ps: |
