@@ -22,7 +22,11 @@ rm "$env:SONAR_DIRECTORY/build-wrapper-win-x86" -Force -Recurse -ErrorAction Sil
 (New-Object System.Net.WebClient).DownloadFile("https://sonarcloud.io/static/cpp/build-wrapper-win-x86.zip", "$env:SONAR_DIRECTORY/build-wrapper-win-x86.zip")
 [System.IO.Compression.ZipFile]::ExtractToDirectory("$env:SONAR_DIRECTORY/build-wrapper-win-x86.zip", "$env:SONAR_DIRECTORY")
 
-& $env:SONAR_DIRECTORY/build-wrapper-win-x86/build-wrapper-win-x86-64.exe --out-dir bw-output .\scripts\build.ps1 -BuildPart win -Platforms x64 -Configurations Debug
+function buildWrapper {
+	& $env:SONAR_DIRECTORY/build-wrapper-win-x86/build-wrapper-win-x86-64.exe --out-dir bw-output msbuild $args
+}
+
+.\scripts\build.ps1 -BuildPart win -Platforms x64 -Configurations Debug
 
 & $env:SONAR_SCANNER_HOME/bin/sonar-scanner.bat `
   -D"sonar.organization=dokan-dev" `
