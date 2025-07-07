@@ -1,5 +1,4 @@
 param (
-	[Parameter(Mandatory=$true)][string]$SONAR_TOKEN,
 	[Parameter(Mandatory=$true)][string]$BUILD_VERSION
 )
 
@@ -27,7 +26,6 @@ function buildWrapper {
 .\scripts\build.ps1 -BuildPart win -Platforms x64 -Configurations Debug
 
 & $env:SONAR_SCANNER_HOME/bin/sonar-scanner.bat `
-  -D"sonar.token=$SONAR_TOKEN" `
   -D"sonar.organization=dokan-dev" `
   -D"sonar.projectKey=dokany" `
   -D"sonar.projectVersion=$BUILD_VERSION" `

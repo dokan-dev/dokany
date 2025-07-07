@@ -2,8 +2,8 @@
   environment:
     AccessTokenDokanDoc:
       secure: Omu2AD4ooK5Owx+v4XS3VPuWc0xJyZXGZlgv4ipJqmt0wY2LN7bzev8y3OLHsARU
-    SonarQubeToken:
-      secure: /gni/fn6VjMyw7qdAvkHuB2h3NoRFdXNqlQSAvqiYsuODhOPDkGGX/yNeOP5F2On
+    SONAR_TOKEN:
+      secure: bA19d3tgfJPeQ4gxRDiDoew2q4oCI26f8wXN1ZeTklqEcZlZ9Wh67EZUP5Cz7WiI
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
@@ -188,7 +188,7 @@
         }
 
         $env:JAVA_HOME = "C:\Program Files\Java\jdk21"
-        .\scripts\sonar-build.ps1 $env:SonarQubeToken $env:APPVEYOR_BUILD_VERSION
+        .\scripts\sonar-build.ps1 $env:APPVEYOR_BUILD_VERSION
       }
 
   - ps: |
