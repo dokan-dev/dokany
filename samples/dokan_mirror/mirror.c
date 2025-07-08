@@ -1226,7 +1226,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
       FILE_FLAG_BACKUP_SEMANTICS, // |FILE_FLAG_NO_BUFFERING,
       NULL);
 
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
+  if (handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle\n\n");
     int error = GetLastError();
     return DokanNtStatusFromWin32(error);
