@@ -230,7 +230,7 @@ BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   }
 
   DWORD drives = GetLogicalDrives();
-  result = (drives >> (driveLetter - L'A') & 0x00000001);
+  result = (drives >> (DWORD)(driveLetter - L'A') & 0x00000001);
   if (result > 0) {
     DbgPrintW(L"CheckDriveLetterAvailability failed, GetLogicalDrives - Drive "
               L"letter \"%c\" is already used.\n",
