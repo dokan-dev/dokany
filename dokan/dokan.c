@@ -1075,13 +1075,19 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
 
 int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   EVENT_START eventStart;
-  EVENT_DRIVER_INFO driverInfo;
+  PEVENT_DRIVER_INFO driverInfo;
   ULONG returnedLength = 0;
   BOOL mountManager = FALSE;
   BOOL driverLetter = IsMountPointDriveLetter(DokanInstance->MountPoint);
 
+  driverInfo = malloc(sizeof(EVENT_DRIVER_INFO));
+  if (!driverInfo) {
+    DbgPrint("Failed to allocate event driver info\n");
+    return DOKAN_ERROR;
+  }
+
   ZeroMemory(&eventStart, sizeof(EVENT_START));
-  ZeroMemory(&driverInfo, sizeof(EVENT_DRIVER_INFO));
+  ZeroMemory(driverInfo, sizeof(EVENT_DRIVER_INFO));
 
   eventStart.UserVersion = DOKAN_DRIVER_VERSION;
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALT_STREAM) {
@@ -1113,7 +1119,8 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE) {
     eventStart.Flags |= DOKAN_EVENT_CASE_SENSITIVE;
   }
-  if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
+  if (DokanInstance->DokanOptions->Options &
+      DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
     eventStart.Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) {
@@ -1143,39 +1150,42 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
 
   memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
            DokanInstance->MountPoint, sizeof(DokanInstance->MountPoint));
-  memcpy_s(eventStart.UNCName, sizeof(eventStart.UNCName), DokanInstance->UNCName,
-           sizeof(DokanInstance->UNCName));
+  memcpy_s(eventStart.UNCName, sizeof(eventStart.UNCName),
+           DokanInstance->UNCName, sizeof(DokanInstance->UNCName));
 
   eventStart.IrpTimeout = DokanInstance->DokanOptions->Timeout;
   eventStart.FcbGarbageCollectionIntervalMs = 2000;
 
   SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_EVENT_START, &eventStart,
-               sizeof(EVENT_START), &driverInfo, sizeof(EVENT_DRIVER_INFO),
+               sizeof(EVENT_START), driverInfo, sizeof(EVENT_DRIVER_INFO),
                &returnedLength);
 
-  if (driverInfo.Status == DOKAN_START_FAILED) {
-    if (driverInfo.DriverVersion != eventStart.UserVersion) {
+  if (driverInfo->Status == DOKAN_START_FAILED) {
+    if (driverInfo->DriverVersion != eventStart.UserVersion) {
       DokanDbgPrint("Dokan Error: driver version mismatch, driver %X, dll %X\n",
-                    driverInfo.DriverVersion, eventStart.UserVersion);
+                    driverInfo->DriverVersion, eventStart.UserVersion);
       return DOKAN_VERSION_ERROR;
-    } else if (driverInfo.Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
+    } else if (driverInfo->Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
       DokanDbgPrint("Dokan Error: Driver failed to set mount point %s\n",
                     eventStart.MountPoint);
       return DOKAN_MOUNT_ERROR;
     }
-    DokanDbgPrint("Dokan Error: driver start error\n");    
+    DokanDbgPrint("Dokan Error: driver start error\n");
     return DOKAN_START_ERROR;
-  } else if (driverInfo.Status == DOKAN_MOUNTED) {
-    DokanInstance->MountId = driverInfo.MountId;
-    DokanInstance->DeviceNumber = driverInfo.DeviceNumber;
-    wcscpy_s(DokanInstance->DeviceName, sizeof(DokanInstance->DeviceName) / sizeof(WCHAR),
-             driverInfo.DeviceName);
-    if (driverLetter && mountManager) {
-      DokanInstance->MountPoint[0] = driverInfo.ActualDriveLetter;
-    }
-    return DOKAN_SUCCESS;
   }
-  return DOKAN_START_ERROR;
+  if (driverInfo->Status != DOKAN_MOUNTED) {
+    DokanDbgPrint("Dokan Error: driver didn't mount\n");
+    return DOKAN_START_ERROR;
+  }
+  DokanInstance->MountId = driverInfo->MountId;
+  DokanInstance->DeviceNumber = driverInfo->DeviceNumber;
+  wcscpy_s(DokanInstance->DeviceName,
+           sizeof(DokanInstance->DeviceName) / sizeof(WCHAR),
+           driverInfo->DeviceName);
+  if (driverLetter && mountManager) {
+    DokanInstance->MountPoint[0] = driverInfo->ActualDriveLetter;
+  }
+  return DOKAN_SUCCESS;
 }
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode) {
