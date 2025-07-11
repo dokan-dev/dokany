@@ -1164,17 +1164,21 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
     if (driverInfo->DriverVersion != eventStart.UserVersion) {
       DokanDbgPrint("Dokan Error: driver version mismatch, driver %X, dll %X\n",
                     driverInfo->DriverVersion, eventStart.UserVersion);
+      free(driverInfo);
       return DOKAN_VERSION_ERROR;
     } else if (driverInfo->Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
       DokanDbgPrint("Dokan Error: Driver failed to set mount point %s\n",
                     eventStart.MountPoint);
+      free(driverInfo);
       return DOKAN_MOUNT_ERROR;
     }
     DokanDbgPrint("Dokan Error: driver start error\n");
+    free(driverInfo);
     return DOKAN_START_ERROR;
   }
   if (driverInfo->Status != DOKAN_MOUNTED) {
     DokanDbgPrint("Dokan Error: driver didn't mount\n");
+    free(driverInfo);
     return DOKAN_START_ERROR;
   }
   DokanInstance->MountId = driverInfo->MountId;
@@ -1185,6 +1189,7 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   if (driverLetter && mountManager) {
     DokanInstance->MountPoint[0] = driverInfo->ActualDriveLetter;
   }
+  free(driverInfo);
   return DOKAN_SUCCESS;
 }
 
