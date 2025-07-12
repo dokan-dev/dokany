@@ -1138,6 +1138,7 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
           "Dokan Error: Invalid volume security descriptor length "
           "provided %ld\n",
           DokanInstance->DokanOptions->VolumeSecurityDescriptorLength);
+      free(driverInfo);
       return DOKAN_START_ERROR;
     }
     eventStart.VolumeSecurityDescriptorLength =
