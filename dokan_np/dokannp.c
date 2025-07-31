@@ -232,7 +232,7 @@ DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
       DokanGetMountPointList(FALSE, &nbRead);
   if (dokanMountPointInfo == NULL) {
-    DbgPrintW(L"NpGetConnection DokanGetMountPointList failed\n");
+    DbgPrintW(L"NPCancelConnection DokanGetMountPointList failed\n");
     return WN_NOT_CONNECTED;
   }
 
