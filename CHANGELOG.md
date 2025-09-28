@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.3.1.1000] - 2025-09-28
+
+### Changed
+- Kernel - `Cleanup` - Run `CheckOplock` sync on completion.
+- Choco - Use `Install-ChocolateyInstallPackage` instead of `Install-ChocolateyPackage`.
+
+### Fixed
+- Library - `DokanStart` - Remove memory leak on failure.
+- Library - `DokanStart` - Move large `EVENT_DRIVER_INFO` struct from stack to heap.
+- Installer - Only check for service present during installation
+
 ## [2.3.0.1000] - 2025-04-19
 
 ### Changed
@@ -748,6 +759,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[2.3.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.3.0.1000...v2.3.1.1000
 [2.3.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.1.1000...v2.3.0.1000
 [2.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.0.1000...v2.2.1.1000
 [2.2.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.1.0.1000...v2.2.0.1000

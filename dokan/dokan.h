@@ -56,7 +56,7 @@ extern "C" {
 /** @{ */
 
 /** The current Dokan version (200 means ver 2.0.0). \ref DOKAN_OPTIONS.Version */
-#define DOKAN_VERSION 230
+#define DOKAN_VERSION 231
 /** Minimum Dokan version (ver 2.0.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 200
 /** Driver file name including the DOKAN_MAJOR_API_VERSION */
