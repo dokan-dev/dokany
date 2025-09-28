@@ -6,6 +6,7 @@ Provider          = %ProviderName%
 DriverVer         = 01/01/2018,1.0.0.0
 CatalogFile       = %DriverName%.cat
 DriverPackageType = FileSystem
+PnpLockdown       = 1
 
 [DestinationDirs]
 DefaultDestDir = 12
