@@ -202,10 +202,10 @@
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
-        $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\"
+        $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\signtool.exe"
+        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe"
 
         cd dokan_wix
         $Platform = "Any CPU"
