@@ -387,7 +387,9 @@ LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
       IoEvent->EventContext->Operation.Directory.BufferLength;
   PVOID currentBuffer = IoEvent->EventResult->Buffer;
   PVOID lastBuffer = currentBuffer;
-  ULONG index = 0;
+
+  // Why should we always start at the beginning of the list over and over again ?
+  ULONG index = IoEvent->EventContext->Operation.Directory.FileIndex;
   BOOL patternCheck = FALSE;
   PWCHAR pattern = NULL;
   BOOL bufferOverFlow = FALSE;
@@ -407,7 +409,7 @@ LONG MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList) {
     patternCheck = TRUE;
   }
 
-  for (size_t i = 0; i < DokanVector_GetCount(DirList); ++i) {
+  for (size_t i = index; i < DokanVector_GetCount(DirList); ++i) {
     PDOKAN_FIND_DATA find = (PDOKAN_FIND_DATA)DokanVector_GetItem(DirList, i);
     DbgPrintW(L"FileMatch? : %s (%s,%d,%d)\n", find->FindData.cFileName,
               (pattern ? pattern : L"null"),
@@ -680,6 +682,36 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
             : FALSE;
     if (!forceScan) {
       status = WriteDirectoryResults(IoEvent, openInfo->DirList);
+
+      if ((STATUS_NO_MORE_FILES == status) && (openInfo->MoreItems == TRUE)) {
+        // Let's see, if there's more to come from the callback
+        IoEvent->EventResult->Status = STATUS_SUCCESS;
+        IoEvent->DokanFileInfo.ProcessingContext = openInfo->DirList;
+        IoEvent->DokanFileInfo.ForceScan = FALSE;
+
+        if (!openInfo->UnimplementedFindFilesWithPattern) {
+          status =
+              IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
+                  IoEvent->EventContext->Operation.Directory.DirectoryName,
+                  searchPattern ? searchPattern : L"*", DokanFillFileData,
+                  &IoEvent->DokanFileInfo);
+        } else {
+          status = IoEvent->DokanInstance->DokanOperations->FindFiles(
+              IoEvent->EventContext->Operation.Directory.DirectoryName,
+              DokanFillFileData, &IoEvent->DokanFileInfo);
+        }
+
+        openInfo->MoreItems = FALSE;
+        if (status == STATUS_MORE_ENTRIES) {
+          openInfo->MoreItems = TRUE;
+          status = STATUS_SUCCESS;
+        }
+
+        if (STATUS_SUCCESS == status) {
+          // try again
+          status = WriteDirectoryResults(IoEvent, openInfo->DirList);
+        }
+      }
     }
   }
   LeaveCriticalSection(&openInfo->CriticalSection);
@@ -707,6 +739,9 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
 
   status = STATUS_NOT_IMPLEMENTED;
 
+  IoEvent->DokanFileInfo.ForceScan = TRUE;
+  openInfo->MoreItems = FALSE;
+
   // Reminder: FindFilesWithPattern may not be implemented by returning STATUS_NOT_IMPLEMENTED.
   if (IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
     status = IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
@@ -729,6 +764,10 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
   }
 
   if (status != STATUS_NOT_IMPLEMENTED) {
+    if (status == STATUS_MORE_ENTRIES) {
+      openInfo->MoreItems = TRUE;
+      status = STATUS_SUCCESS;
+    }
     EndFindFilesCommon(IoEvent, status);
   } else {
     // Neither FindFilesWithPattern nor FindFiles are implemented.
