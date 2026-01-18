@@ -497,6 +497,9 @@ VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent) {
   }
 
   if (!currentFolder || !parentFolder) {
+    WIN32_FIND_DATAW missingItems[2];
+    ULONG missingCount = 0;
+
     ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
     findData.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
     // Folders times should ideally be the real current and parent folder times.
@@ -504,16 +507,20 @@ VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent) {
     findData.ftCreationTime = systime;
     findData.ftLastAccessTime = systime;
     findData.ftLastWriteTime = systime;
-    if (!parentFolder) {
-      findData.cFileName[0] = '.';
-      findData.cFileName[1] = '.';
-      // NULL written during ZeroMemory()
-      DokanVector_PushFront(dirList, &findData);
-    }
     if (!currentFolder) {
       findData.cFileName[0] = '.';
       findData.cFileName[1] = '\0';
-      DokanVector_PushFront(dirList, &findData);
+      missingItems[missingCount++] = findData;
+    }
+    if (!parentFolder) {
+      findData.cFileName[0] = '.';
+      findData.cFileName[1] = '.';
+      findData.cFileName[2] = '\0';
+      // NULL written during ZeroMemory()
+      missingItems[missingCount++] = findData;
+    }
+    if (missingCount > 0) {
+      DokanVector_PushFrontArray(dirList, missingItems, missingCount);
     }
   }
 }

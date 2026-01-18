@@ -42,6 +42,9 @@ VOID DokanVector_Free(PDOKAN_VECTOR Vector);
 // Appends an item to the vector at the Front. Expensive, please use PushBack instead.
 BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item);
 
+// Appends an array of items to the vector at the Front.
+BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, PVOID Items, size_t Count);
+
 // Appends an item to the vector.
 BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item);
 

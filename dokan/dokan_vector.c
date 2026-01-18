@@ -98,21 +98,30 @@ VOID DokanVector_Free(PDOKAN_VECTOR Vector) {
 
 // Appends an item to the vector at the Front. Expensive, please use PushBack instead.
 BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item) {
-  assert(Vector && Item);
-  if (Vector->ItemCount + 1 >= Vector->MaxItems) {
-    if (!DokanVector_Grow(Vector, 1)) {
+  return DokanVector_PushFrontArray(Vector, Item, /*Count=*/1);
+}
+
+// Appends an array of items to the vector at the Front.
+// This is more efficient than calling DokanVector_PushFront multiple times as it only shifts the vector once.
+BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, PVOID Items,
+                                size_t Count) {
+  assert(Vector && Items);
+  if (Count == 0) {
+    return TRUE;
+  }
+  if (Vector->ItemCount + Count >= Vector->MaxItems) {
+    if (!DokanVector_Grow(Vector, Count)) {
       return FALSE;
     }
   }
-  // Shift the vector from one item.
-  memmove_s(((BYTE *)Vector->Items) + Vector->ItemSize,
-            (Vector->MaxItems - 1) * Vector->ItemSize, (BYTE *)Vector->Items,
+  // Shift the vector by Count items.
+  memmove_s(((BYTE *)Vector->Items) + (Vector->ItemSize * Count),
+            (Vector->MaxItems - Count) * Vector->ItemSize, (BYTE *)Vector->Items,
             Vector->ItemCount * Vector->ItemSize);
-  // Copy the new item at the front.
-  memcpy_s((BYTE *)Vector->Items,
-           (Vector->MaxItems - Vector->ItemCount) * Vector->ItemSize, Item,
-           Vector->ItemSize);
-  ++Vector->ItemCount;
+  // Copy the new items at the front.
+  memcpy_s((BYTE *)Vector->Items, Vector->MaxItems * Vector->ItemSize, Items,
+           Vector->ItemSize * Count);
+  Vector->ItemCount += Count;
   return TRUE;
 }
 
