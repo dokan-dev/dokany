@@ -1074,11 +1074,12 @@ BOOL SendGlobalReleaseIRP(LPCWSTR MountPoint) {
 }
 
 int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
-  EVENT_START eventStart;
+  PEVENT_START eventStart;
   PEVENT_DRIVER_INFO driverInfo;
   ULONG returnedLength = 0;
   BOOL mountManager = FALSE;
   BOOL driverLetter = IsMountPointDriveLetter(DokanInstance->MountPoint);
+  int status = DOKAN_SUCCESS;
 
   driverInfo = malloc(sizeof(EVENT_DRIVER_INFO));
   if (!driverInfo) {
@@ -1086,49 +1087,56 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
     return DOKAN_ERROR;
   }
 
-  ZeroMemory(&eventStart, sizeof(EVENT_START));
+  eventStart = malloc(sizeof(EVENT_START));
+  if (!eventStart) {
+    DbgPrint("Failed to allocate event start info\n");
+    free(driverInfo);
+    return DOKAN_ERROR;
+  }
+
+  ZeroMemory(eventStart, sizeof(EVENT_START));
   ZeroMemory(driverInfo, sizeof(EVENT_DRIVER_INFO));
 
-  eventStart.UserVersion = DOKAN_DRIVER_VERSION;
+  eventStart->UserVersion = DOKAN_DRIVER_VERSION;
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALT_STREAM) {
-    eventStart.Flags |= DOKAN_EVENT_ALTERNATIVE_STREAM_ON;
+    eventStart->Flags |= DOKAN_EVENT_ALTERNATIVE_STREAM_ON;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_NETWORK) {
-    eventStart.DeviceType = DOKAN_NETWORK_FILE_SYSTEM;
+    eventStart->DeviceType = DOKAN_NETWORK_FILE_SYSTEM;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_REMOVABLE) {
-    eventStart.Flags |= DOKAN_EVENT_REMOVABLE;
+    eventStart->Flags |= DOKAN_EVENT_REMOVABLE;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_WRITE_PROTECT) {
-    eventStart.Flags |= DOKAN_EVENT_WRITE_PROTECT;
+    eventStart->Flags |= DOKAN_EVENT_WRITE_PROTECT;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) {
-    eventStart.Flags |= DOKAN_EVENT_MOUNT_MANAGER;
+    eventStart->Flags |= DOKAN_EVENT_MOUNT_MANAGER;
     mountManager = TRUE;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) {
-    eventStart.Flags |= DOKAN_EVENT_CURRENT_SESSION;
+    eventStart->Flags |= DOKAN_EVENT_CURRENT_SESSION;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_FILELOCK_USER_MODE) {
-    eventStart.Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
+    eventStart->Flags |= DOKAN_EVENT_FILELOCK_USER_MODE;
   }
   if (DokanInstance->DokanOptions->Options &
       DOKAN_OPTION_ENABLE_UNMOUNT_NETWORK_DRIVE) {
-    eventStart.Flags |= DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
+    eventStart->Flags |= DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_CASE_SENSITIVE) {
-    eventStart.Flags |= DOKAN_EVENT_CASE_SENSITIVE;
+    eventStart->Flags |= DOKAN_EVENT_CASE_SENSITIVE;
   }
   if (DokanInstance->DokanOptions->Options &
       DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
-    eventStart.Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
+    eventStart->Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
   }
   if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) {
-    eventStart.Flags |= DOKAN_EVENT_ALLOW_IPC_BATCHING;
+    eventStart->Flags |= DOKAN_EVENT_ALLOW_IPC_BATCHING;
   }
   if (driverLetter && mountManager &&
       !CheckDriveLetterAvailability(DokanInstance->MountPoint[0])) {
-    eventStart.Flags |= DOKAN_EVENT_DRIVE_LETTER_IN_USE;
+    eventStart->Flags |= DOKAN_EVENT_DRIVE_LETTER_IN_USE;
   }
 
   if (DokanInstance->DokanOptions->VolumeSecurityDescriptorLength != 0) {
@@ -1138,49 +1146,48 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
           "Dokan Error: Invalid volume security descriptor length "
           "provided %ld\n",
           DokanInstance->DokanOptions->VolumeSecurityDescriptorLength);
-      free(driverInfo);
-      return DOKAN_START_ERROR;
+      status = DOKAN_START_ERROR;
+      goto Cleanup;
     }
-    eventStart.VolumeSecurityDescriptorLength =
+    eventStart->VolumeSecurityDescriptorLength =
         DokanInstance->DokanOptions->VolumeSecurityDescriptorLength;
-    memcpy_s(eventStart.VolumeSecurityDescriptor,
-             sizeof(eventStart.VolumeSecurityDescriptor),
+    memcpy_s(eventStart->VolumeSecurityDescriptor,
+             sizeof(eventStart->VolumeSecurityDescriptor),
              DokanInstance->DokanOptions->VolumeSecurityDescriptor,
              sizeof(DokanInstance->DokanOptions->VolumeSecurityDescriptor));
   }
 
-  memcpy_s(eventStart.MountPoint, sizeof(eventStart.MountPoint),
+  memcpy_s(eventStart->MountPoint, sizeof(eventStart->MountPoint),
            DokanInstance->MountPoint, sizeof(DokanInstance->MountPoint));
-  memcpy_s(eventStart.UNCName, sizeof(eventStart.UNCName),
+  memcpy_s(eventStart->UNCName, sizeof(eventStart->UNCName),
            DokanInstance->UNCName, sizeof(DokanInstance->UNCName));
 
-  eventStart.IrpTimeout = DokanInstance->DokanOptions->Timeout;
-  eventStart.FcbGarbageCollectionIntervalMs = 2000;
+  eventStart->IrpTimeout = DokanInstance->DokanOptions->Timeout;
+  eventStart->FcbGarbageCollectionIntervalMs = 2000;
 
-  SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_EVENT_START, &eventStart,
+  SendToDevice(DOKAN_GLOBAL_DEVICE_NAME, FSCTL_EVENT_START, eventStart,
                sizeof(EVENT_START), driverInfo, sizeof(EVENT_DRIVER_INFO),
                &returnedLength);
 
   if (driverInfo->Status == DOKAN_START_FAILED) {
-    if (driverInfo->DriverVersion != eventStart.UserVersion) {
+    if (driverInfo->DriverVersion != eventStart->UserVersion) {
       DokanDbgPrint("Dokan Error: driver version mismatch, driver %X, dll %X\n",
-                    driverInfo->DriverVersion, eventStart.UserVersion);
-      free(driverInfo);
-      return DOKAN_VERSION_ERROR;
+                    driverInfo->DriverVersion, eventStart->UserVersion);
+      status = DOKAN_VERSION_ERROR;
     } else if (driverInfo->Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
       DokanDbgPrint("Dokan Error: Driver failed to set mount point %s\n",
-                    eventStart.MountPoint);
-      free(driverInfo);
-      return DOKAN_MOUNT_ERROR;
+                    eventStart->MountPoint);
+      status = DOKAN_MOUNT_ERROR;
+    } else {
+      DokanDbgPrint("Dokan Error: driver start error\n");
+      status = DOKAN_START_ERROR;
     }
-    DokanDbgPrint("Dokan Error: driver start error\n");
-    free(driverInfo);
-    return DOKAN_START_ERROR;
+    goto Cleanup;
   }
   if (driverInfo->Status != DOKAN_MOUNTED) {
     DokanDbgPrint("Dokan Error: driver didn't mount\n");
-    free(driverInfo);
-    return DOKAN_START_ERROR;
+    status = DOKAN_START_ERROR;
+    goto Cleanup;
   }
   DokanInstance->MountId = driverInfo->MountId;
   DokanInstance->DeviceNumber = driverInfo->DeviceNumber;
@@ -1190,8 +1197,13 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
   if (driverLetter && mountManager) {
     DokanInstance->MountPoint[0] = driverInfo->ActualDriveLetter;
   }
+  
+  status = DOKAN_SUCCESS;
+
+Cleanup:
   free(driverInfo);
-  return DOKAN_SUCCESS;
+  free(eventStart);
+  return status;
 }
 
 BOOL DOKANAPI DokanSetDebugMode(ULONG Mode) {
