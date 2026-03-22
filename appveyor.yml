@@ -3,7 +3,7 @@
     AccessTokenDokanDoc:
       secure: Omu2AD4ooK5Owx+v4XS3VPuWc0xJyZXGZlgv4ipJqmt0wY2LN7bzev8y3OLHsARU
     SONAR_TOKEN:
-      secure: bA19d3tgfJPeQ4gxRDiDoew2q4oCI26f8wXN1ZeTklqEcZlZ9Wh67EZUP5Cz7WiI
+      secure: CU8bNHSUY/Dly217K9j3u0TAyDmt6EVkEWH9XTcC1+xspn3b/zy0LAWNdx9Fg0zv
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
