@@ -152,9 +152,17 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
     }
 
     if (IoSetCancelRoutine(irp, NULL) == NULL) {
-      // Cancel routine will run as soon as we release the lock
-      InitializeListHead(&irpEntry->ListEntry);
-      irpEntry->CancelRoutineFreeMemory = TRUE;
+      if (irpEntry->RequestContext.ForcedCanceled) {
+        // DokanCreateIrpCancelRoutine already ran and set ForcedCanceled,
+        // expecting the timeout thread to call DokanCancelCreateIrp. Forward
+        // this entry to the destination so the caller can complete the IRP
+        // rather than leaving it permanently orphaned.
+        InsertTailList(Dest, &irpEntry->ListEntry);
+      } else {
+        // Cancel routine will run as soon as we release the lock
+        InitializeListHead(&irpEntry->ListEntry);
+        irpEntry->CancelRoutineFreeMemory = TRUE;
+      }
       continue;
     }
     InsertTailList(Dest, &irpEntry->ListEntry);
