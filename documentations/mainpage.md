@@ -96,6 +96,10 @@ library. Wildcard matching can be controlled by implementing
 DOKAN_OPERATIONS.FindFilesWithPattern function.  The function \ref DokanIsNameInExpression
 exported can be used to process wildcard matching.
 
+The functions may return STATUS_MORE_ENTRIES to request the library to call them again to fetch more directory entries.
+This can be used to add directory entries in chunks, instead of adding all entries in one call.
+If DOKAN_FILE_INFO.ForceScan is TRUE, the functions must start a new listing.
+
 ### Mounting
 
 As stated above, the file system can be mounted by invoking \ref DokanMain function or \ref DokanCreateFileSystem.
