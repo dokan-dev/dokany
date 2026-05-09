@@ -33,6 +33,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <strsafe.h>
 #include <windows.h>
 #include <winnetwk.h>
+#include <wtsapi32.h>
+#pragma comment(lib, "wtsapi32.lib")
 
 static VOID DokanDbgPrintW(LPCWSTR format, ...) {
   const WCHAR *outputString;
@@ -55,6 +57,8 @@ static VOID DokanDbgPrintW(LPCWSTR format, ...) {
 }
 
 #define DbgPrintW(format, ...) DokanDbgPrintW(format, __VA_ARGS__)
+
+BOOL IsSameUser(DWORD sessionID1, DWORD sessionID2);
 
 DWORD APIENTRY NPGetCaps(DWORD Index) {
   DWORD rc = 0;
@@ -280,9 +284,10 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-    if ((dokanMountPointInfo[i].SessionId == -1 ||
-        dokanMountPointInfo[i].SessionId == currentSessionId) &&
-        wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
+    if (dokanMountPointInfo[i].SessionId == -1 ||
+        ((dokanMountPointInfo[i].SessionId == currentSessionId) &&
+         wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) ||
+        IsSameUser(currentSessionId, dokanMountPointInfo[i].SessionId)) {
       if (wcscmp(dokanMountPointInfo[i].UNCName, L"") == 0) {
         DokanReleaseMountPointList(dokanMountPointInfo);
         // No UNC, always return success
@@ -616,7 +621,8 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
     DbgPrintW(L"NPEnumResource SesstionID: %lu\n",
               dokanMountPointInfo[pCtx->index].SessionId);
     if (-1 != dokanMountPointInfo[pCtx->index].SessionId &&
-        sessionId != dokanMountPointInfo[pCtx->index].SessionId) {
+        sessionId != dokanMountPointInfo[pCtx->index].SessionId &&
+        IsSameUser(sessionId, dokanMountPointInfo[pCtx->index].SessionId) == FALSE) {
       pCtx->index++;
       continue;
     }
@@ -1192,4 +1198,42 @@ DWORD APIENTRY NPGetUniversalName(__in LPCWSTR LocalPath, __in DWORD InfoLevel,
   }
 
   return WN_SUCCESS;
+}
+
+BOOL IsSameUser(DWORD sessionID1, DWORD sessionID2) {
+  LPTSTR userName1 = NULL, domain1 = NULL;
+  LPTSTR userName2 = NULL, domain2 = NULL;
+  DWORD bytesReturned = 0;
+  BOOL isSame = FALSE;
+
+  BOOL success1 =
+      WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionID1,
+                                 WTSUserName, &userName1, &bytesReturned);
+  BOOL success2 =
+      WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionID1,
+                                 WTSDomainName, &domain1, &bytesReturned);
+  BOOL success3 =
+      WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionID2,
+                                 WTSUserName, &userName2, &bytesReturned);
+  BOOL success4 =
+      WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionID2,
+                                 WTSDomainName, &domain2, &bytesReturned);
+
+  if (success1 && success2 && success3 && success4 && userName1 && userName2 &&
+      domain1 && domain2) {
+    if (_tcscmp(userName1, userName2) == 0 && _tcscmp(domain1, domain2) == 0) {
+      isSame = TRUE;
+    }
+  }
+
+  if (userName1)
+    WTSFreeMemory(userName1);
+  if (domain1)
+    WTSFreeMemory(domain1);
+  if (userName2)
+    WTSFreeMemory(userName2);
+  if (domain2)
+    WTSFreeMemory(domain2);
+
+  return isSame;
 }
