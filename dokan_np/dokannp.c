@@ -320,10 +320,8 @@ DWORD APIENTRY NPGetConnection(__in LPWSTR LocalName, __out LPWSTR RemoteName,
   dosDevice[12] = LocalName[0];
 
   for (unsigned int i = 0; i < nbRead; ++i) {
-    if ((dokanMountPointInfo[i].SessionId == -1 ||
-         (dokanMountPointInfo[i].SessionId == currentSessionId ||
-          IsSameUser(currentSessionId, dokanMountPointInfo[i].SessionId)) &&
-             wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0)) {
+    if ((dokanMountPointInfo[i].SessionId == -1 || (dokanMountPointInfo[i].SessionId == currentSessionId || IsSameUser(currentSessionId, dokanMountPointInfo[i].SessionId))) && wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0)
+	{
       if (wcscmp(dokanMountPointInfo[i].UNCName, L"") == 0) {
         DokanReleaseMountPointList(dokanMountPointInfo);
         // No UNC, always return success
@@ -658,7 +656,7 @@ DWORD APIENTRY NPEnumResource(__in HANDLE Enum, __in LPDWORD Count,
               dokanMountPointInfo[pCtx->index].SessionId);
     if (-1 != dokanMountPointInfo[pCtx->index].SessionId &&
         sessionId != dokanMountPointInfo[pCtx->index].SessionId &&
-        IsSameUser(sessionId, dokanMountPointInfo[pCtx->index].SessionId)) {
+        IsSameUser(sessionId, dokanMountPointInfo[pCtx->index].SessionId) == FALSE) {
       pCtx->index++;
       continue;
     }
