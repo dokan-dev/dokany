@@ -548,9 +548,16 @@ BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
 }
 
 VOID CALLBACK DokanBroadcastCallback(PTP_CALLBACK_INSTANCE Instance,
-                                     PVOID Parameter, PTP_WORK Work) {
-  UNREFERENCED_PARAMETER(Instance);
-  UNREFERENCED_PARAMETER(Work);
+                                     PVOID Parameter) {
+  // Release the library reference taken in DokanBroadcastLink once this
+  // callback has returned, so the library cannot be unloaded while the
+  // broadcast is still running.
+  HMODULE self = NULL;
+  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                             GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         (LPCWSTR)DokanBroadcastCallback, &self)) {
+    FreeLibraryWhenCallbackReturns(Instance, self);
+  }
 
   DWORD device_event;
   DEV_BROADCAST_VOLUME params;
@@ -593,21 +600,33 @@ VOID DokanBroadcastLink(PDOKAN_INSTANCE DokanInstance, BOOL bRemoved) {
   }
 
   // Async call BroadcastSystemMessage to avoid possible hangs from receiver apps.
+  // The broadcast must not run on the instance callback environment (or on any
+  // environment whose cleanup group is waited for in DeleteDokanInstance /
+  // CleanupPool): BroadcastSystemMessage with BSF_FORCEIFHUNG waits about 5
+  // seconds for each top-level window that is not processing messages, so a
+  // single hung window delayed DokanCloseHandle by 5 or 10 seconds. It is
+  // submitted to the default pool instead, and the library is pinned with a
+  // module reference that the callback releases when it returns.
   // Store the event information inside the "unused" pointer value:
   PVOID parameter =
       (PVOID)(size_t)((bRemoved << 31) | ((receipients & 0x7fff) << 16) |
                       ((toupper(cLetter) - 'A') & 0xff));
-  PTP_WORK work =
-      CreateThreadpoolWork(DokanBroadcastCallback, parameter,
-                           &DokanInstance->ThreadInfo.CallbackEnvironment);
-  if (!work) {
-    DWORD lastError = GetLastError();
-    DbgPrintW(L"Dokan Error: CreateThreadpoolWork() has returned error "
-              L"code %u.\n",
-              lastError);
+  HMODULE self = NULL;
+  if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                          (LPCWSTR)DokanBroadcastCallback, &self)) {
+    DbgPrintW(L"Dokan Error: GetModuleHandleEx() has returned error code "
+              L"%u.\n",
+              GetLastError());
     return;
   }
-  SubmitThreadpoolWork(work);
+  if (!TrySubmitThreadpoolCallback(DokanBroadcastCallback, parameter, NULL)) {
+    DWORD lastError = GetLastError();
+    DbgPrintW(L"Dokan Error: TrySubmitThreadpoolCallback() has returned error "
+              L"code %u.\n",
+              lastError);
+    FreeLibrary(self);
+    return;
+  }
 
   drive[0] = towupper(cLetter);
   wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
