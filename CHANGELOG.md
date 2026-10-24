@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Mirror - Allow overriding reported total/free disk space with /z TotalBytes FreeBytes (#791).
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed
