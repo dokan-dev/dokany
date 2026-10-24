@@ -103,7 +103,8 @@ extern "C" {
  */
 #define DOKAN_OPTION_MOUNT_MANAGER (1 << 6)
 /**
- * Mount the drive on current session only
+ * Mount the drive on current session only. Requires a drive-letter mount point;
+ * directory mount points are rejected with DOKAN_MOUNT_POINT_ERROR.
  * Note: As Windows process only have on sessionID which is here used to define what is the current session,
  * impersonation will not work if someone attend to mount for a user from another one (like system service).
  * See issue #1196

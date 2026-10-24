@@ -697,6 +697,12 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if ((DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) &&
+      !IsMountPointDriveLetter(DokanOptions->MountPoint)) {
+    DokanDbgPrintW(L"Dokan Error: Current-session mounts require a drive letter.\n");
+    return DOKAN_MOUNT_POINT_ERROR;
+  }
+
   if ((DokanOptions->Options & DOKAN_OPTION_NETWORK) &&
       !IsMountPointDriveLetter(DokanOptions->MountPoint)) {
     DokanOptions->Options &= ~DOKAN_OPTION_NETWORK;
