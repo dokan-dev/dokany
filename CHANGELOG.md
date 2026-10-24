@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.3.8.1000] - 2026-01-14
+
+### Added
+- Library - Callbacks FindFiles/FindFilesWithPattern can return STATUS_MORE_ENTRIES to signal availability of more entries
+- Library - Added Field ForceScan to structure DOKAN_FILE_INFO, that indicates to the callback, that the IRP requests a new scan instead of continuing a former one
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed

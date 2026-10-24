@@ -59,3 +59,4 @@ ReleasePS
 *.log
 *.msi
 *.wixpdb
+/dokan_fuse/out/build/x64-Debug
