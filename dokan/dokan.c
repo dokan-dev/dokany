@@ -814,7 +814,7 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MAX;
   }
   BOOLEAN allowIpcBatching =
-      (BOOLEAN)(DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING);
+      (DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) != 0;
   DbgPrintW(L"Dokan: Using %d main pull threads with ipc batching: %d\n",
             mainPullThreadCount, allowIpcBatching);
   for (DWORD x = 0; x < mainPullThreadCount; ++x) {
