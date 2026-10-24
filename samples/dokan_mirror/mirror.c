@@ -1754,10 +1754,18 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     fprintf(stderr, "Driver something wrong\n");
     break;
   case DOKAN_MOUNT_ERROR:
-    fprintf(stderr, "Can't assign a drive letter\n");
+    fprintf(stderr,
+            "Cannot assign the mount point (Dokan error %d). Check that the "
+            "drive letter is available, or that the target folder exists, is "
+            "empty, and can be accessed. Run with /d /s for detailed errors.\n",
+            status);
     break;
   case DOKAN_MOUNT_POINT_ERROR:
-    fprintf(stderr, "Mount point error\n");
+    fprintf(stderr,
+            "Invalid mount point (Dokan error %d). Use a drive letter or an "
+            "existing empty NTFS folder, and check the mount options. "
+            "Run with /d /s for detailed errors.\n",
+            status);
     break;
   case DOKAN_VERSION_ERROR:
     fprintf(stderr, "Version error\n");
