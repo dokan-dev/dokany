@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Library - Return a valid empty mount-point list and compact UNC-only results with an accurate count (#1109).
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed
