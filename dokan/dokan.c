@@ -1265,7 +1265,6 @@ PDOKAN_MOUNT_POINT_INFO DOKANAPI DokanGetMountPointList(BOOL uncOnly,
                                                         PULONG nbRead) {
   ULONG returnedLength = 0;
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo = NULL;
-  PDOKAN_MOUNT_POINT_INFO results = NULL;
   ULONG bufferLength = 32 * sizeof(*dokanMountPointInfo);
   BOOL success;
 
@@ -1290,23 +1289,18 @@ PDOKAN_MOUNT_POINT_INFO DOKANAPI DokanGetMountPointList(BOOL uncOnly,
     bufferLength *= 2;
   } while (!success);
 
-  if (returnedLength == 0) {
-    free(dokanMountPointInfo);
-    return NULL;
-  }
-
-  *nbRead = returnedLength / sizeof(DOKAN_MOUNT_POINT_INFO);
-  results = malloc(returnedLength);
-  if (results != NULL) {
-    ZeroMemory(results, returnedLength);
-    for (ULONG i = 0; i < *nbRead; ++i) {
-      if (!uncOnly || wcscmp(dokanMountPointInfo[i].UNCName, L"") != 0)
-        CopyMemory(&results[i], &dokanMountPointInfo[i],
-                   sizeof(DOKAN_MOUNT_POINT_INFO));
+  ULONG mountPointCount = returnedLength / sizeof(*dokanMountPointInfo);
+  for (ULONG i = 0; i < mountPointCount; ++i) {
+    if (!uncOnly || dokanMountPointInfo[i].UNCName[0] != L'\0') {
+      if (i != *nbRead)
+        CopyMemory(&dokanMountPointInfo[*nbRead], &dokanMountPointInfo[i],
+                   sizeof(*dokanMountPointInfo));
+      ++*nbRead;
     }
   }
-  free(dokanMountPointInfo);
-  return results;
+
+  // Keep the allocation even for an empty result so NULL indicates an error.
+  return dokanMountPointInfo;
 }
 
 VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_MOUNT_POINT_INFO list) {
