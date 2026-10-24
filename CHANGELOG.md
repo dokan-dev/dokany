@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Mirror - Normalize ordinary UNC roots to extended-length paths for long-path access (#1130).
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed
