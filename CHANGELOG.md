@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Samples - Clarify mount-point failures and direct users to detailed debug logs (#433).
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed

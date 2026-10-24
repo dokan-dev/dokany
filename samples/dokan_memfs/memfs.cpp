@@ -83,9 +83,15 @@ void memfs::start() {
     case DOKAN_START_ERROR:
       throw std::runtime_error("Driver something wrong");
     case DOKAN_MOUNT_ERROR:
-      throw std::runtime_error("Can't assign a drive letter");
+      throw std::runtime_error(
+          "Cannot assign the mount point. Check that the drive letter is "
+          "available, or that the target folder exists, is empty, and can be "
+          "accessed. Enable Dokan debug logging for detailed errors.");
     case DOKAN_MOUNT_POINT_ERROR:
-      throw std::runtime_error("Mount point error");
+      throw std::runtime_error(
+          "Invalid mount point. Use a drive letter or an existing empty NTFS "
+          "folder, and check the mount options. Enable Dokan debug logging "
+          "for detailed errors.");
     case DOKAN_VERSION_ERROR:
       throw std::runtime_error("Version error");
     default:
