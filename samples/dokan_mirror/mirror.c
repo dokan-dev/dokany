@@ -82,6 +82,25 @@ static WCHAR gRootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR gMountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR gUNCName[DOKAN_MAX_PATH] = L"";
 static WCHAR gVolumeName[MAX_PATH + 1] = L"DOKAN";
+static BOOL g_OverrideDiskSpace;
+static ULONGLONG g_TotalDiskSpace;
+static ULONGLONG g_FreeDiskSpace;
+
+static BOOL ParseByteCount(LPCWSTR text, PULONGLONG value) {
+  ULONGLONG result = 0;
+  if (!text || !*text)
+    return FALSE;
+  for (; *text; ++text) {
+    if (*text < L'0' || *text > L'9')
+      return FALSE;
+    ULONGLONG digit = *text - L'0';
+    if (result > ((ULONGLONG)MAXLONGLONG - digit) / 10)
+      return FALSE;
+    result = result * 10 + digit;
+  }
+  *value = result;
+  return TRUE;
+}
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -1348,27 +1367,19 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
   return STATUS_SUCCESS;
 }
 
-// Uncomment the function and set dokanOperations.GetDiskFreeSpace to personalize disk space
-/*
-static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
-    PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
-    PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
-  *FreeBytesAvailable = (ULONGLONG)(512 * 1024 * 1024);
-  *TotalNumberOfBytes = 9223372036854775807;
-  *TotalNumberOfFreeBytes = 9223372036854775807;
-
-  return STATUS_SUCCESS;
-}
-*/
-
 static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
     PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
     PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
   WCHAR DriveLetter[3] = {'C', ':', 0};
   PWCHAR RootPathName;
+
+  if (g_OverrideDiskSpace) {
+    *TotalNumberOfBytes = g_TotalDiskSpace;
+    *TotalNumberOfFreeBytes = g_FreeDiskSpace;
+    *FreeBytesAvailable = g_FreeDiskSpace;
+    return STATUS_SUCCESS;
+  }
 
   if (gRootDirectory[0] == L'\\') { // UNC as Root
     RootPathName = gRootDirectory;
@@ -1526,7 +1537,8 @@ void ShowUsage() {
           "  /i Timeout in Milliseconds (ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
           "  /x Network unmount\t\t\t\t Allows unmounting network drive from file explorer.\n"
           "  /e Enable Driver Logs\t\t\t\t Forward Driver logs to userland.\n"
-          "  /v Volume name\t\t\t\t Personalize the volume name.\n\n"
+          "  /v Volume name\t\t\t\t Personalize the volume name.\n"
+          "  /z TotalBytes FreeBytes\t\t\t Override reported disk space (decimal bytes, 0 <= free <= total <= 9223372036854775807).\n\n"
           "Examples:\n"
           "\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
           "\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
@@ -1574,6 +1586,23 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 
       DbgPrint(L"RootDirectory: %ls\n", gRootDirectory);
       break;
+    case L'z': {
+      ULONGLONG totalBytes, freeBytes;
+      CHECK_CMD_ARG(command, argc)
+      if (!ParseByteCount(argv[command], &totalBytes)) {
+        fwprintf(stderr, L"Invalid total byte count.\n");
+        return EXIT_FAILURE;
+      }
+      CHECK_CMD_ARG(command, argc)
+      if (!ParseByteCount(argv[command], &freeBytes) || freeBytes > totalBytes) {
+        fwprintf(stderr, L"Invalid free byte count; it must not exceed total bytes.\n");
+        return EXIT_FAILURE;
+      }
+      g_TotalDiskSpace = totalBytes;
+      g_FreeDiskSpace = freeBytes;
+      g_OverrideDiskSpace = TRUE;
+      break;
+    }
     case L'l':
       CHECK_CMD_ARG(command, argc)
       wcscpy_s(gMountPoint, sizeof(gMountPoint) / sizeof(WCHAR), argv[command]);
