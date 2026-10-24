@@ -31,11 +31,13 @@ THE SOFTWARE.
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <winbase.h>
 
 // Long Paths is supported from Windows 10 version 1607 but require changing the OS configuration.
 // See https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
-// The root directory mirrored require the "\\?\" prefix like "\\?\D:\very long path" or "\\?\UNC\myfs\\fs1" for UNC.
+// Ordinary UNC roots are normalized to the extended-length UNC namespace below.
+// Local long-path roots can be supplied with the "\\?\" prefix.
 #define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
 //dirty but should be enough
@@ -82,6 +84,40 @@ static WCHAR gRootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR gMountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR gUNCName[DOKAN_MAX_PATH] = L"";
 static WCHAR gVolumeName[MAX_PATH + 1] = L"DOKAN";
+
+static BOOL SetRootDirectory(LPCWSTR rootDirectory) {
+  size_t rootLength = wcslen(rootDirectory);
+  size_t rootCapacity = sizeof(gRootDirectory) / sizeof(WCHAR);
+
+  if (rootLength == 0 || rootLength >= rootCapacity)
+    return FALSE;
+
+  if (wcsncmp(rootDirectory, L"\\\\", 2) == 0 &&
+      wcsncmp(rootDirectory, L"\\\\?\\", 4) != 0 &&
+      wcsncmp(rootDirectory, L"\\\\.\\", 4) != 0) {
+    const WCHAR uncPrefix[] = L"\\\\?\\UNC\\";
+    size_t prefixLength = sizeof(uncPrefix) / sizeof(WCHAR) - 1;
+
+    // Resolve . and .. before the extended-length prefix disables Win32 parsing.
+    DWORD fullLength = GetFullPathNameW(rootDirectory, (DWORD)rootCapacity,
+                                        gRootDirectory, NULL);
+    if (fullLength < 2 || fullLength >= rootCapacity - (prefixLength - 2) ||
+        wcsncmp(gRootDirectory, L"\\\\", 2) != 0)
+      return FALSE;
+
+    LPCWSTR share = wcschr(gRootDirectory + 2, L'\\');
+    if (!share || share == gRootDirectory + 2 || share[1] == L'\0')
+      return FALSE;
+
+    // Replace the leading two backslashes, keeping the terminating NUL.
+    memmove(gRootDirectory + prefixLength, gRootDirectory + 2,
+            (fullLength - 1) * sizeof(WCHAR));
+    memcpy(gRootDirectory, uncPrefix, prefixLength * sizeof(WCHAR));
+    return TRUE;
+  }
+
+  return wcscpy_s(gRootDirectory, rootCapacity, rootDirectory) == 0;
+}
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
                         LPCWSTR FileName) {
@@ -1507,7 +1543,7 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 void ShowUsage() {
   // clang-format off
   fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
-          "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+          "  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror; UNC roots are normalized for long paths.\n"
           "  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
           "  /t Single thread\t\t\t\t Only use a single thread to process events.\n\t\t\t\t\t\t This is highly not recommended as can easily create a bottleneck.\n"
           "  /g IPC Batching\t\t\t\t Pull batches of events from the driver instead of a single one and execute them parallelly.\n\t\t\t\t\t\t Only recommended for slow (remote) mirrored device.\n"
@@ -1565,10 +1601,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
     switch (towlower(argv[command][1])) {
     case L'r':
       CHECK_CMD_ARG(command, argc)
-      wcscpy_s(gRootDirectory, sizeof(gRootDirectory) / sizeof(WCHAR),
-               argv[command]);
-      if (!wcslen(gRootDirectory)) {
-        DbgPrint(L"Invalid RootDirectory\n");
+      if (!SetRootDirectory(argv[command])) {
+        fwprintf(stderr, L"Invalid or too long RootDirectory.\n");
         return EXIT_FAILURE;
       }
 
