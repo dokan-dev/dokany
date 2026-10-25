@@ -56,7 +56,7 @@ extern "C" {
 /** @{ */
 
 /** The current Dokan version (200 means ver 2.0.0). \ref DOKAN_OPTIONS.Version */
-#define DOKAN_VERSION 231
+#define DOKAN_VERSION 238
 /** Minimum Dokan version (ver 2.0.0) accepted. */
 #define DOKAN_MINIMUM_COMPATIBLE_VERSION 200
 /** Driver file name including the DOKAN_MAJOR_API_VERSION */
@@ -220,6 +220,8 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR Nocache;
   /**  If \c TRUE, write to the current end of file instead of using the Offset parameter. */
   UCHAR WriteToEndOfFile;
+  /**  If \c TRUE, start a new directory scan in FindFiles/WithPattern. */
+  UCHAR ForceScan;
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 #define DOKAN_EXCEPTION_NOT_INITIALIZED 0x0f0ff0ff

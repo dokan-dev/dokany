@@ -291,6 +291,8 @@ VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   if (IoEvent->EventContext->FileFlags & DOKAN_NOCACHE) {
     IoEvent->DokanFileInfo.Nocache = 1;
   }
+
+  IoEvent->DokanFileInfo.ForceScan = FALSE;
 }
 
 VOID HandleUnknownEvent(PDOKAN_IO_EVENT IoEvent) {
