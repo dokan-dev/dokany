@@ -148,6 +148,8 @@ foreach ($mfs in $Memfs) {
 			throw ("Impossible to mount for command $command")
 		}
 
+		& (Join-Path $PSScriptRoot "byte_range_lock_test.ps1") -MountPath "$($destination)\"
+
 		Write-Host "Start FSX Test" -ForegroundColor Green
 		Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$($destination)\fsxtest"}
 		Write-Host "FSX Test finished" -ForegroundColor Green
