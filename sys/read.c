@@ -224,16 +224,6 @@ Return Value:
         }
         __leave;
       }
-
-      //
-      // We have to check for read access according to the current
-      // state of the file locks, and set FileSize from the Fcb.
-      //
-      // FsRtlCheckLockForReadAccess does not block.
-      if (!FsRtlCheckLockForReadAccess(&fcb->FileLock, RequestContext->Irp)) {
-        status = STATUS_FILE_LOCK_CONFLICT;
-        __leave;
-      }
     }
 
     // register this IRP to pending IPR list and make it pending status

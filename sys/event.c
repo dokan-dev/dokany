@@ -137,6 +137,21 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   DokanCompleteIrpRequest(Irp, STATUS_CANCELLED);
 }
 
+static VOID DokanFreeUnqueuedEventContext(
+    PREQUEST_CONTEXT RequestContext, PEVENT_CONTEXT EventContext) {
+  if (RequestContext->IrpSp->MajorFunction == IRP_MJ_WRITE) {
+    // Large writes have a separate payload behind the notification event.
+    PIRP irp = RequestContext->Irp;
+    PEVENT_CONTEXT writeContext =
+        irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
+    irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+    if (writeContext != NULL) {
+      DokanFreeEventContext(writeContext);
+    }
+  }
+  DokanFreeEventContext(EventContext);
+}
+
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
 /*++
 Routine Description:
@@ -165,22 +180,22 @@ None.
   if (!NT_SUCCESS(status)) {
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
-    return;
+  } else {
+    status = Irp->IoStatus.Status;
+    DOKAN_LOG_FINE_IRP((&requestContext),
+                      "Oplock break completed FileObject=%p %s",
+                      requestContext.IrpSp->FileObject,
+                      DokanGetNTSTATUSStr(status));
   }
 
-  DOKAN_LOG_FINE_IRP((&requestContext),
-                     "Oplock break completed FileObject=%p %s",
-                     requestContext.IrpSp->FileObject,
-                     DokanGetNTSTATUSStr(Irp->IoStatus.Status));
-
-  //
-  //  Check on the return value in the Irp.
-  //
-  if (Irp->IoStatus.Status == STATUS_SUCCESS) {
-    DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
+  if (status == STATUS_SUCCESS) {
+    status = DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
   } else {
+    DokanFreeUnqueuedEventContext(&requestContext, (PEVENT_CONTEXT)Context);
+  }
+  if (status != STATUS_PENDING) {
     Irp->IoStatus.Information = 0;
-    DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);
+    DokanCompleteIrpRequest(Irp, status);
   }
 }
 
@@ -301,6 +316,45 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   return STATUS_PENDING;
 }
 
+static BOOLEAN DokanHasByteRangeAccess(PREQUEST_CONTEXT RequestContext,
+                                      PEVENT_CONTEXT EventContext) {
+  PIO_STACK_LOCATION irpSp = RequestContext->IrpSp;
+  PIRP irp = RequestContext->Irp;
+  UCHAR majorFunction = irpSp->MajorFunction;
+  if ((majorFunction != IRP_MJ_READ && majorFunction != IRP_MJ_WRITE) ||
+      FlagOn(irp->Flags, IRP_PAGING_IO) ||
+      RequestContext->Dcb->FileLockInUserMode) {
+    return TRUE;
+  }
+
+  PFILE_OBJECT fileObject = irpSp->FileObject;
+  PDokanCCB ccb = fileObject->FsContext2;
+  PFILE_LOCK fileLock = &ccb->Fcb->FileLock;
+  LARGE_INTEGER length;
+
+  // The event carries the resolved offset for file-pointer I/O. Use it for
+  // the lock check when it differs from the original IRP offset.
+  if (majorFunction == IRP_MJ_READ) {
+    PLARGE_INTEGER offset = &EventContext->Operation.Read.ByteOffset;
+    if (offset->QuadPart == irpSp->Parameters.Read.ByteOffset.QuadPart) {
+      return FsRtlCheckLockForReadAccess(fileLock, irp);
+    }
+    length.QuadPart = irpSp->Parameters.Read.Length;
+    return FsRtlFastCheckLockForRead(fileLock, offset, &length,
+                                   irpSp->Parameters.Read.Key, fileObject,
+                                   IoGetRequestorProcess(irp));
+  }
+
+  PLARGE_INTEGER offset = &EventContext->Operation.Write.ByteOffset;
+  if (offset->QuadPart == irpSp->Parameters.Write.ByteOffset.QuadPart) {
+    return FsRtlCheckLockForWriteAccess(fileLock, irp);
+  }
+  length.QuadPart = irpSp->Parameters.Write.Length;
+  return FsRtlFastCheckLockForWrite(fileLock, offset, &length,
+                                  irpSp->Parameters.Write.Key, fileObject,
+                                  IoGetRequestorProcess(irp));
+}
+
 NTSTATUS
 DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
                         __in PEVENT_CONTEXT EventContext) {
@@ -311,15 +365,13 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
 
   if (!RequestContext->Vcb) {
     DOKAN_LOG_FINE_IRP(RequestContext, "IdentifierType is not VCB");
-    return STATUS_INVALID_PARAMETER;
-  }
-
-  // We check if we will have the space to sent the event before registering it
-  // to the pending IRPs. Write is an exception as it has a special workflow for
-  // large buffer that will request userland to allocate a specific buffer size
-  // that match it.
-  if (RequestContext->IrpSp->MajorFunction != IRP_MJ_WRITE &&
-      EventContext->Length > EVENT_CONTEXT_MAX_SIZE) {
+    status = STATUS_INVALID_PARAMETER;
+  } else if (!DokanHasByteRangeAccess(RequestContext, EventContext)) {
+    // Dispatch and oplock completion both check access before queueing I/O.
+    status = STATUS_FILE_LOCK_CONFLICT;
+  } else if (RequestContext->IrpSp->MajorFunction != IRP_MJ_WRITE &&
+             EventContext->Length > EVENT_CONTEXT_MAX_SIZE) {
+    // Large writes use a separate payload, so only other events are capped.
     InterlockedIncrement64((LONG64*)&RequestContext->Vcb->VolumeMetrics
                                .LargeIRPRegistrationCanceled);
     status = DokanLogError(&logger, STATUS_INVALID_PARAMETER,
@@ -337,7 +389,7 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
     DokanEventNotification(RequestContext, &RequestContext->Dcb->NotifyEvent,
                            EventContext);
   } else {
-    DokanFreeEventContext(EventContext);
+    DokanFreeUnqueuedEventContext(RequestContext, EventContext);
   }
 
   DOKAN_LOG_FINE_IRP(RequestContext, "Pending Registration: %s", DokanGetNTSTATUSStr(status));
