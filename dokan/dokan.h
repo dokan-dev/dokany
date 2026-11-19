@@ -984,14 +984,20 @@ ULONG DOKANAPI DokanDriverVersion();
 BOOL DOKANAPI DokanResetTimeout(ULONG Timeout, PDOKAN_FILE_INFO DokanFileInfo);
 
 /**
- * \brief Get the handle to Access Token.
+ * \brief Open a token for the requestor of the pending ZwCreateFile callback.
  *
- * This method needs be called in \ref DOKAN_OPERATIONS.ZwCreateFile callback.
- * The caller must call <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms724211(v=vs.85).aspx">CloseHandle</a>
- * for the returned handle.
+ * The process that mounted the file system can query the requestor's user SID
+ * and groups with GetTokenInformation. By default the handle has TOKEN_QUERY
+ * and the token has the SecurityIdentification impersonation level.
+ * If both the mount process and its calling thread have the enabled
+ * SeImpersonatePrivilege and the create permits local impersonation, the
+ * handle also has TOKEN_IMPERSONATE for use with ImpersonateLoggedOnUser.
+ * The driver returns an effective-only impersonation token. An anonymous
+ * request or a subject that Windows cannot pass on may have no token available.
  *
- * \param DokanFileInfo \ref DOKAN_FILE_INFO of the operation to extend.
- * \return A handle to the account token for the user on whose behalf the code is running.
+ * \param DokanFileInfo \ref DOKAN_FILE_INFO from the active create callback.
+ * \return A handle that the caller must close with CloseHandle, or
+ * INVALID_HANDLE_VALUE on failure. Call GetLastError for the error code.
  */
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 

@@ -24,46 +24,28 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 
 HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO FileInfo) {
-  BOOL status;
+  EVENT_INFORMATION eventInfo = {0};
   ULONG returnedLength;
   PDOKAN_IO_EVENT ioEvent;
-  PEVENT_INFORMATION eventInfo;
-  HANDLE handle = INVALID_HANDLE_VALUE;
-  ULONG eventInfoSize;
   WCHAR rawDeviceName[MAX_PATH];
 
+  if (FileInfo == NULL || FileInfo->DokanContext == 0) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return INVALID_HANDLE_VALUE;
+  }
   ioEvent = (PDOKAN_IO_EVENT)(UINT_PTR)FileInfo->DokanContext;
-  if (ioEvent->EventContext == NULL || ioEvent->DokanInstance == NULL) {
+  if (ioEvent->EventContext == NULL || ioEvent->DokanInstance == NULL ||
+      ioEvent->EventContext->MajorFunction != IRP_MJ_CREATE) {
     SetLastError(ERROR_INVALID_PARAMETER);
     return INVALID_HANDLE_VALUE;
   }
 
-  if (ioEvent->EventContext->MajorFunction != IRP_MJ_CREATE) {
-    SetLastError(ERROR_INVALID_PARAMETER);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  eventInfoSize = sizeof(EVENT_INFORMATION);
-  eventInfo = (PEVENT_INFORMATION)malloc(eventInfoSize);
-  if (eventInfo == NULL) {
-    SetLastError(ERROR_OUTOFMEMORY);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  RtlZeroMemory(eventInfo, eventInfoSize);
-  eventInfo->SerialNumber = ioEvent->EventContext->SerialNumber;
-
+  eventInfo.SerialNumber = ioEvent->EventContext->SerialNumber;
   GetRawDeviceName(ioEvent->DokanInstance->DeviceName, rawDeviceName, MAX_PATH);
-  status = SendToDevice(
-      rawDeviceName,
-      FSCTL_GET_ACCESS_TOKEN, eventInfo, eventInfoSize, eventInfo,
-      eventInfoSize, &returnedLength);
-  if (status) {
-    handle = eventInfo->Operation.AccessToken.Handle;
-  } else {
-    DbgPrintW(L"Failed to OpenRequestorToken for %04d\n",
-              ioEvent->EventContext->SerialNumber);
+  if (!SendToDevice(rawDeviceName, FSCTL_GET_ACCESS_TOKEN, &eventInfo,
+                    sizeof(eventInfo), &eventInfo, sizeof(eventInfo),
+                    &returnedLength)) {
+    return INVALID_HANDLE_VALUE;
   }
-  free(eventInfo);
-  return handle;
+  return eventInfo.Operation.AccessToken.Handle;
 }
