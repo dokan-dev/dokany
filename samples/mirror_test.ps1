@@ -23,7 +23,13 @@ $fsTestPath = "C:\FSTMP"
 $fsTestPath2 = "C:\FSTMP2"
 
 $DokanDriverLetter = "M"
+$tokenMount = Join-Path $fsTestPath ("token-mount-" + [Guid]::NewGuid().ToString("N"))
 $Configs = @(
+	@{
+		"MirrorArguments" = "/l $tokenMount /p";
+		"Destination" = $tokenMount;
+		"Name" = "impersonation";
+	},
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter";
 		"Destination" = "$($DokanDriverLetter):";
@@ -116,6 +122,11 @@ $env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
 $env:CI_BUILD_ARG = ""
 if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
  
+$tokenTest = Join-Path $PSScriptRoot "requestor_token_test"
+Exec-External { & $buildCmd "$tokenTest\requestor_token_test.vcxproj" /p:Configuration=Release /p:Platform=x64 }
+$tokenTestExe = Join-Path $tokenTest "x64\Release\requestor_token_test.exe"
+Exec-External { & $tokenTestExe }
+
 Write-Host Build test tools -ForegroundColor Green
 if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 {
@@ -179,6 +190,13 @@ foreach ($mirror in $Mirrors) {
 		
 		if ($count -eq 0) {
 			throw ("Impossible to mount for command $command")
+		}
+
+		if ($Config.Name -eq "impersonation") {
+			Exec-External { & $tokenTestExe --mirror $destination $MirrorDir }
+			if (!$app.WaitForExit(15000)) { throw "Mirror did not exit after unmount" }
+			Remove-Item -LiteralPath $destination
+			continue
 		}
 
 		Write-Host "Start FSX Test" -ForegroundColor Green

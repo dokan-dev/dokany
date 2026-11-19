@@ -230,6 +230,9 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   irpEntry->RequestContext = *RequestContext;
   irpEntry->IrpList = IrpList;
   irpEntry->AsyncStatus = CurrentStatus;
+  if (EventContext && RequestContext->IrpSp->MajorFunction == IRP_MJ_CREATE) {
+    DokanPrepareRequestorToken(irpEntry);
+  }
 
   // Update the irp timeout for the entry
   if (RequestContext->Vcb) {
@@ -974,7 +977,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
 
   status = DokanCreateDiskDevice(
       RequestContext->DeviceObject->DriverObject,
-      RequestContext->DokanGlobal->MountId, eventStart->MountPoint,
+      RequestContext->DokanGlobal->MountId,
+      IoGetRequestorProcess(RequestContext->Irp), eventStart->MountPoint,
       eventStart->UNCName, volumeSecurityDescriptor, sessionId, baseGuidString,
       RequestContext->DokanGlobal, deviceType, deviceCharacteristics,
       mountGlobally, useMountManager, &dokanControl);

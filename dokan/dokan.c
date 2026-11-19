@@ -1223,6 +1223,7 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                   PULONG ReturnedLength) {
   HANDLE device;
   BOOL status;
+  DWORD error;
 
   device = CreateFile(DeviceName,                         // lpFileName
                       0,                                  // dwDesiredAccess
@@ -1237,6 +1238,7 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
     DWORD dwErrorCode = GetLastError();
     DbgPrintW(L"Dokan Error: Failed to open %ws with code %d\n", DeviceName,
               dwErrorCode);
+    SetLastError(dwErrorCode);
     return FALSE;
   }
 
@@ -1250,11 +1252,13 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                            NULL            // synchronous call
   );
 
+  error = GetLastError();
   CloseHandle(device);
 
   if (!status) {
     DbgPrint("DokanError: Ioctl 0x%x failed with code %d on Device %ws\n",
-             IoControlCode, GetLastError(), DeviceName);
+             IoControlCode, error, DeviceName);
+    SetLastError(error);
     return FALSE;
   }
 

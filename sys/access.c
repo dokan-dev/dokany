@@ -23,93 +23,146 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 #include "util/irp_buffer_helper.h"
 
+// Capture the opener before publishing the create. Static tracking snapshots
+// its credentials here. With dynamic tracking the security manager takes a
+// reference to the opener's effective token.
+VOID DokanPrepareRequestorToken(__inout PIRP_ENTRY IrpEntry) {
+  PIO_SECURITY_CONTEXT security =
+      IrpEntry->RequestContext.IrpSp->Parameters.Create.SecurityContext;
+  SECURITY_CLIENT_CONTEXT client;
+  SECURITY_QUALITY_OF_SERVICE qos = {sizeof(qos), SecurityImpersonation,
+                                     SECURITY_DYNAMIC_TRACKING, TRUE};
+
+  if (KeGetCurrentIrql() != PASSIVE_LEVEL || security == NULL ||
+      security->AccessState == NULL) {
+    return;
+  }
+  // Use a supplied per-open QoS only to limit the local server. The I/O
+  // manager owns this field and the pending entry keeps no pointer to it.
+  if (security->SecurityQos != NULL) {
+    SECURITY_IMPERSONATION_LEVEL level =
+        security->SecurityQos->ImpersonationLevel;
+    if (security->SecurityQos->Length != sizeof(qos) ||
+        level < SecurityIdentification || level > SecurityDelegation) {
+      return;
+    }
+    qos.ContextTrackingMode = security->SecurityQos->ContextTrackingMode;
+    if (level == SecurityIdentification) {
+      qos.ImpersonationLevel = SecurityIdentification;
+    }
+  }
+
+  // Let the security manager check the opener's effective subject, including
+  // an opening thread that was already impersonating. An ineligible create
+  // still goes to the file system, but cannot supply a requestor token.
+  if (NT_SUCCESS(SeCreateClientSecurityFromSubjectContext(
+          &security->AccessState->SubjectSecurityContext, &qos, FALSE, &client))) {
+    IrpEntry->RequestorToken = client.ClientToken;
+    ObReferenceObject(IrpEntry->RequestorToken);
+    IrpEntry->RequestorLevel = qos.ImpersonationLevel;
+    SeDeleteClientSecurity(&client);
+  }
+}
+
+static BOOLEAN MountCanImpersonate(PEPROCESS MountProcess) {
+  LUID privilege = RtlConvertLongToLuid(SE_IMPERSONATE_PRIVILEGE);
+  SECURITY_SUBJECT_CONTEXT subject;
+  PRIVILEGE_SET required = {0};
+  BOOLEAN granted;
+
+  if (!SeSinglePrivilegeCheck(privilege, UserMode)) {
+    return FALSE;
+  }
+  // An impersonating worker must not lend a client's privileges to the host.
+  SeCaptureSubjectContextEx(NULL, MountProcess, &subject);
+  required.PrivilegeCount = 1;
+  required.Control = PRIVILEGE_SET_ALL_NECESSARY;
+  required.Privilege[0].Luid = privilege;
+  granted = SePrivilegeCheck(&required, &subject, UserMode);
+  SeReleaseSubjectContext(&subject);
+  return granted;
+}
+
 NTSTATUS
 DokanGetAccessToken(__in PREQUEST_CONTEXT RequestContext) {
-  KIRQL oldIrql = 0;
-  PLIST_ENTRY thisEntry, nextEntry, listHead;
-  PIRP_ENTRY irpEntry;
-  PEVENT_INFORMATION eventInfo = NULL;
-  PACCESS_TOKEN accessToken;
+  PIRP irp = RequestContext->Irp;
+  PDokanDCB dcb = RequestContext->Dcb;
+  PEVENT_INFORMATION eventInfo;
+  PLIST_ENTRY head = &dcb->PendingIrp.ListHead;
+  PLIST_ENTRY entry;
+  KIRQL oldIrql;
+  PACCESS_TOKEN token = NULL;
+  SECURITY_QUALITY_OF_SERVICE qos = {sizeof(qos), SecurityIdentification,
+                                     SECURITY_STATIC_TRACKING, TRUE};
+  OBJECT_ATTRIBUTES attributes;
+  ACCESS_MASK access = TOKEN_QUERY;
+  HANDLE source, handle;
   NTSTATUS status = STATUS_INVALID_PARAMETER;
-  HANDLE handle;
-  BOOLEAN hasLock = FALSE;
-  ULONG outBufferLen;
-  PACCESS_STATE accessState = NULL;
 
-  __try {
+  if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+    return STATUS_INVALID_DEVICE_STATE;
+  }
+  if (irp->RequestorMode != UserMode ||
+      dcb->MountProcess != PsGetCurrentProcess() ||
+      dcb->MountProcess != IoGetRequestorProcess(irp)) {
+    return STATUS_ACCESS_DENIED;
+  }
+  GET_IRP_BUFFER_OR_RETURN(irp, eventInfo);
+  if (RequestContext->IrpSp->Parameters.FileSystemControl.OutputBufferLength !=
+      sizeof(*eventInfo)) {
+    return STATUS_INVALID_PARAMETER;
+  }
+  eventInfo->Operation.AccessToken.Handle = NULL;
 
-    if (RequestContext->Irp->RequestorMode != UserMode) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "Needs to be called from user-mode");
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
+  KeAcquireSpinLock(&dcb->PendingIrp.ListLock, &oldIrql);
+  for (entry = head->Flink; entry != head; entry = entry->Flink) {
+    PIRP_ENTRY pending = CONTAINING_RECORD(entry, IRP_ENTRY, ListEntry);
+    if (pending->SerialNumber != eventInfo->SerialNumber) {
+      continue;
     }
-
-    GET_IRP_BUFFER_OR_LEAVE(RequestContext->Irp, eventInfo);
-    outBufferLen =
-        RequestContext->IrpSp->Parameters.DeviceIoControl.OutputBufferLength;
-    if (outBufferLen != sizeof(EVENT_INFORMATION)) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "Wrong output buffer length");
-      status = STATUS_INVALID_PARAMETER;
-      __leave;
-    }
-
-    ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
-    KeAcquireSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, &oldIrql);
-    hasLock = TRUE;
-
-    // search corresponding IRP through pending IRP list
-    listHead = &RequestContext->Dcb->PendingIrp.ListHead;
-
-    for (thisEntry = listHead->Flink; thisEntry != listHead;
-         thisEntry = nextEntry) {
-
-      nextEntry = thisEntry->Flink;
-
-      irpEntry = CONTAINING_RECORD(thisEntry, IRP_ENTRY, ListEntry);
-
-      if (irpEntry->SerialNumber != eventInfo->SerialNumber) {
-        continue;
+    if (pending->RequestContext.Irp != NULL &&
+        pending->RequestContext.IrpSp->MajorFunction == IRP_MJ_CREATE &&
+        !pending->RequestContext.Irp->Cancel &&
+        !pending->RequestContext.ForcedCanceled) {
+      token = pending->RequestorToken;
+      if (token != NULL) {
+        ObReferenceObject(token);
+        qos.ImpersonationLevel = pending->RequestorLevel;
+      } else {
+        status = STATUS_BAD_IMPERSONATION_LEVEL;
       }
-
-      // this irp must be IRP_MJ_CREATE
-      if (irpEntry->RequestContext.IrpSp->Parameters.Create.SecurityContext) {
-        accessState = irpEntry->RequestContext.IrpSp->Parameters.Create
-                          .SecurityContext->AccessState;
-      }
-      break;
     }
-    KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
-    hasLock = FALSE;
+    break;
+  }
+  KeReleaseSpinLock(&dcb->PendingIrp.ListLock, oldIrql);
+  if (token == NULL) {
+    return status;
+  }
 
-    if (accessState == NULL) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "Can't find pending Irp: %ld", eventInfo->SerialNumber);
-      __leave;
-    }
+  status = ObOpenObjectByPointer(token, OBJ_KERNEL_HANDLE, NULL, TOKEN_DUPLICATE,
+                                 *SeTokenObjectType, KernelMode, &source);
+  ObDereferenceObject(token);
+  if (!NT_SUCCESS(status)) {
+    return status;
+  }
 
-    accessToken =
-        SeQuerySubjectContextToken(&accessState->SubjectSecurityContext);
-    if (accessToken == NULL) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "AccessToken == NULL");
-      __leave;
-    }
-    // NOTE: Accessing *SeTokenObjectType while acquring sping lock causes
-    // BSOD on Windows XP.
-    status = ObOpenObjectByPointer(accessToken, 0, NULL, GENERIC_ALL,
-                                   *SeTokenObjectType, KernelMode, &handle);
-    if (!NT_SUCCESS(status)) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "ObOpenObjectByPointer failed: 0x%x %s", status,
-                       DokanGetNTSTATUSStr(status));
-      __leave;
-    }
-
+  if (qos.ImpersonationLevel == SecurityImpersonation &&
+      MountCanImpersonate(dcb->MountProcess)) {
+    access |= TOKEN_IMPERSONATE;
+  } else {
+    qos.ImpersonationLevel = SecurityIdentification;
+  }
+  // Only this effective-only duplicate is placed in the mount process's
+  // handle table. The original token handle stays private to the kernel.
+  InitializeObjectAttributes(&attributes, NULL, OBJ_FORCE_ACCESS_CHECK, NULL,
+                             NULL);
+  attributes.SecurityQualityOfService = &qos;
+  status = ZwDuplicateToken(source, access, &attributes, qos.EffectiveOnly,
+                            TokenImpersonation, &handle);
+  ZwClose(source);
+  if (NT_SUCCESS(status)) {
     eventInfo->Operation.AccessToken.Handle = handle;
-    RequestContext->Irp->IoStatus.Information = sizeof(EVENT_INFORMATION);
-    status = STATUS_SUCCESS;
-
-  } __finally {
-    if (hasLock) {
-      KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
-    }
+    irp->IoStatus.Information = sizeof(*eventInfo);
   }
   return status;
 }

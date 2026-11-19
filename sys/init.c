@@ -244,6 +244,9 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
         if (deviceEntry->DiskDeviceObject && canDeleteDiskDevice) {
           DOKAN_LOG_("Delete the disk device. ReferenceCount %lu",
                     deviceEntry->DiskDeviceObject->ReferenceCount);
+          if (dcb->MountProcess != NULL) {
+            ObDereferenceObject(dcb->MountProcess);
+          }
           IoDeleteDevice(deviceEntry->DiskDeviceObject);
           if (deviceEntry->DiskDeviceObject->Vpb) {
             DOKAN_LOG("Volume->DeviceObject set to NULL");
@@ -945,6 +948,7 @@ DokanSetVolumeSecurity(__in PDEVICE_OBJECT DeviceObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
+                      __in_opt PEPROCESS MountProcess,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in_opt PSECURITY_DESCRIPTOR VolumeSecurityDescriptor,
                       __in ULONG SessionId, __in PWCHAR BaseGuid,
@@ -1147,6 +1151,10 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     DokanLogInfo(&logger, L"SymbolicLink: \"%wZ\" -> \"%wZ\" created",
                  dcb->SymbolicLinkName, dcb->DiskDeviceName);
 
+    if (MountProcess != NULL) {
+      ObReferenceObject(MountProcess);
+      dcb->MountProcess = MountProcess;
+    }
     // Mark devices as initialized
     diskDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 

@@ -188,14 +188,14 @@ static BOOL AddSeSecurityNamePrivilege() {
 
 #define MirrorCheckFlag(val, flag)                                             \
   if (val & flag) {                                                            \
-    DbgPrint(L"\t" L#flag L"\n");                                              \
+    DbgPrint(L"\t" #flag L"\n");                                              \
   }
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
-                 ACCESS_MASK DesiredAccess, ULONG FileAttributes,
-                 ULONG ShareAccess, ULONG CreateDisposition,
-                 ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS
+MirrorOpenBackingFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
+                      ACCESS_MASK DesiredAccess, ULONG FileAttributes,
+                      ULONG ShareAccess, ULONG CreateDisposition,
+                      ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
   DWORD fileAttr;
@@ -205,8 +205,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   DWORD error = 0;
   SECURITY_ATTRIBUTES securityAttrib;
   ACCESS_MASK genericDesiredAccess;
-  // userTokenHandle is for Impersonate Caller User Option
-  HANDLE userTokenHandle = INVALID_HANDLE_VALUE;
 
   securityAttrib.nLength = sizeof(securityAttrib);
   securityAttrib.lpSecurityDescriptor =
@@ -220,8 +218,6 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"CreateFile : %s\n", filePath);
-
-  PrintUserName(DokanFileInfo);
 
   DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
@@ -322,28 +318,11 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     DbgPrint(L"\tUNKNOWN creationDisposition!\n");
   }
 
-  if (g_ImpersonateCallerUser) {
-    userTokenHandle = DokanOpenRequestorToken(DokanFileInfo);
-
-    if (userTokenHandle == INVALID_HANDLE_VALUE) {
-      DbgPrint(L"  DokanOpenRequestorToken failed\n");
-      // Should we return some error?
-    }
-  }
-
   if (DokanFileInfo->IsDirectory) {
     // It is a create directory request
 
     if (creationDisposition == CREATE_NEW ||
         creationDisposition == OPEN_ALWAYS) {
-
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-        // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-        if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-          // handle the error if failed to impersonate
-          DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-        }
-      }
 
       // We create folder
       if (!CreateDirectory(filePath, &securityAttrib)) {
@@ -356,46 +335,11 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
         }
       }
 
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-        // Clean Up operation for impersonate
-        DWORD lastError = GetLastError();
-        if (status != STATUS_SUCCESS) //Keep the handle open for CreateFile
-          CloseHandle(userTokenHandle);
-        RevertToSelf();
-        SetLastError(lastError);
-      }
-    }
-
-    if (status == STATUS_SUCCESS) {
-
-      //Check first if we're trying to open a file as a directory.
-      if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-          !(fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-          (CreateOptions & FILE_DIRECTORY_FILE)) {
-        return STATUS_NOT_A_DIRECTORY;
-      }
-
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-        // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-        if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-          // handle the error if failed to impersonate
-          DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-        }
-      }
-
       // FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
       handle =
           CreateFile(filePath, genericDesiredAccess, ShareAccess,
                      &securityAttrib, OPEN_EXISTING,
                      fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, NULL);
-
-      if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-        // Clean Up operation for impersonate
-        DWORD lastError = GetLastError();
-        CloseHandle(userTokenHandle);
-        RevertToSelf();
-        SetLastError(lastError);
-      }
 
       if (handle == INVALID_HANDLE_VALUE) {
         error = GetLastError();
@@ -441,25 +385,9 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
     if (creationDisposition == TRUNCATE_EXISTING)
       genericDesiredAccess |= GENERIC_WRITE;
 
-    if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-      // if g_ImpersonateCallerUser option is on, call the ImpersonateLoggedOnUser function.
-      if (!ImpersonateLoggedOnUser(userTokenHandle)) {
-        // handle the error if failed to impersonate
-        DbgPrint(L"\tImpersonateLoggedOnUser failed.\n");
-      }
-    }
-
     handle =
         CreateFile(filePath, genericDesiredAccess, ShareAccess, &securityAttrib,
                    creationDisposition, fileAttributesAndFlags, NULL); 
-
-    if (g_ImpersonateCallerUser && userTokenHandle != INVALID_HANDLE_VALUE) {
-      // Clean Up operation for impersonate
-      DWORD lastError = GetLastError();
-      CloseHandle(userTokenHandle);
-      RevertToSelf();
-      SetLastError(lastError);
-    }
 
     if (handle == INVALID_HANDLE_VALUE) {
       error = GetLastError();
@@ -491,6 +419,42 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
   }
 
   DbgPrint(L"\n");
+  return status;
+}
+
+static NTSTATUS DOKAN_CALLBACK
+MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
+                 ACCESS_MASK DesiredAccess, ULONG FileAttributes,
+                 ULONG ShareAccess, ULONG CreateDisposition,
+                 ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
+  NTSTATUS status;
+  PrintUserName(DokanFileInfo);
+  if (g_ImpersonateCallerUser) {
+    HANDLE token = DokanOpenRequestorToken(DokanFileInfo);
+    if (token == INVALID_HANDLE_VALUE) {
+      DWORD error = GetLastError();
+      DbgPrint(L"  DokanOpenRequestorToken failed: %lu\n", error);
+      return DokanNtStatusFromWin32(error ? error : ERROR_ACCESS_DENIED);
+    }
+    if (!ImpersonateLoggedOnUser(token)) {
+      DWORD error = GetLastError();
+      CloseHandle(token);
+      DbgPrint(L"  ImpersonateLoggedOnUser failed: %lu\n", error);
+      return DokanNtStatusFromWin32(error ? error : ERROR_ACCESS_DENIED);
+    }
+    CloseHandle(token);
+  }
+
+  __try {
+    status = MirrorOpenBackingFile(FileName, SecurityContext, DesiredAccess,
+                                   FileAttributes, ShareAccess, CreateDisposition,
+                                   CreateOptions, DokanFileInfo);
+  } __finally {
+    if (g_ImpersonateCallerUser && !RevertToSelf()) {
+      // A worker with the wrong identity must never service another request.
+      abort();
+    }
+  }
   return status;
 }
 
@@ -1519,7 +1483,7 @@ void ShowUsage() {
           "  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
           "  /c (mount for current session only)\t\t Device only visible for current user session.\n"
           "  /n (Network drive with UNC name ex. \\myfs\\fs1) Show device as network device with a UNC name.\n"
-          "  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
+          "  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t The mount process needs the enabled SeImpersonatePrivilege.\n"
           "  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
           "  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
           "  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
@@ -1688,14 +1652,6 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
              L"[Mirror] Failed to add security privilege to process\n"
              L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n"
              L"\t=> Please restart mirror sample with administrator rights to fix it\n");
-  }
-
-  if (g_ImpersonateCallerUser && !g_HasSeSecurityPrivilege) {
-    fwprintf(
-        stderr,
-        L"[Mirror] Impersonate Caller User requires administrator right to work properly\n"
-        L"\t=> Other users may not use the drive properly\n"
-        L"\t=> Please restart mirror sample with administrator rights to fix it\n");
   }
 
   if (g_DebugMode) {

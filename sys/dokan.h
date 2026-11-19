@@ -130,8 +130,6 @@ extern ULONG DokanMdlSafePriority;
 extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 #define DokanAllocateIrpEntry()                                                \
   ExAllocateFromNPagedLookasideList(&DokanIrpEntryLookasideList)
-#define DokanFreeIrpEntry(IrpEntry)                                            \
-  ExFreeToNPagedLookasideList(&DokanIrpEntryLookasideList, IrpEntry)
 
 //
 //  Undocumented definition of ExtensionFlags
@@ -267,6 +265,7 @@ typedef struct _DokanDiskControlBlock {
   ULONG SerialNumber;
 
   ULONG MountId;
+  PEPROCESS MountProcess;
   ULONG Flags;
 
   CACHE_MANAGER_CALLBACKS CacheManagerCallbacks;
@@ -814,11 +813,22 @@ typedef struct _IRP_ENTRY {
   LIST_ENTRY ListEntry;
   ULONG SerialNumber;
   REQUEST_CONTEXT RequestContext;
+  // Owned by this pending create. Lookups take a reference under ListLock.
+  PACCESS_TOKEN RequestorToken;
+  SECURITY_IMPERSONATION_LEVEL RequestorLevel;
   BOOLEAN CancelRoutineFreeMemory;
   NTSTATUS AsyncStatus;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
 } IRP_ENTRY, *PIRP_ENTRY;
+
+static inline VOID DokanFreeIrpEntry(PIRP_ENTRY IrpEntry) {
+  if (IrpEntry->RequestorToken != NULL) {
+    // Completion and cancellation may release the last reference under a spin lock.
+    ObDereferenceObjectDeferDelete(IrpEntry->RequestorToken);
+  }
+  ExFreeToNPagedLookasideList(&DokanIrpEntryLookasideList, IrpEntry);
+}
 
 typedef struct _DEVICE_ENTRY {
   LIST_ENTRY ListEntry;
@@ -959,6 +969,7 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext);
 
 NTSTATUS DokanResetPendingIrpTimeout(__in PREQUEST_CONTEXT RequestContext);
 
+VOID DokanPrepareRequestorToken(__inout PIRP_ENTRY IrpEntry);
 NTSTATUS
 DokanGetAccessToken(__in PREQUEST_CONTEXT RequestContext);
 
@@ -1070,6 +1081,7 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
 
 NTSTATUS
 DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
+                      __in_opt PEPROCESS MountProcess,
                       __in PWCHAR MountPoint, __in PWCHAR UNCName,
                       __in_opt PSECURITY_DESCRIPTOR VolumeSecurityDescriptor,
                       __in ULONG sessionID, __in PWCHAR BaseGuid,
