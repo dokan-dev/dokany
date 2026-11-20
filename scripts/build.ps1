@@ -1,6 +1,6 @@
 param (
 	[string[]]$BuildPart = @('win', 'cygwin'),
-	[string[]]$Platforms = @('Win32', 'x64', 'ARM', 'ARM64'),
+	[string[]]$Platforms = @('Win32', 'x64', 'ARM64'),
 	[string[]]$Configurations = @('Release', 'Debug')
 )
 
@@ -17,6 +17,10 @@ if (!([bool](Get-Command -Name buildWrapper -ErrorAction SilentlyContinue))) {
 }
 
 if ($BuildPart -contains 'win') {
+	if (!(Test-Path -Path '.\packages\Microsoft.Windows.WDK.x64.*') -and (Get-Command -Name nuget -ErrorAction SilentlyContinue)) {
+		Write-Host "Restoring WDK NuGet packages for sys..."
+		Exec-External { nuget restore .\sys\packages.config -PackagesDirectory .\packages }
+	}
 	foreach ($Configuration in $Configurations) {
 		foreach ($Platform in $Platforms) {
 			Write-Host Build dokan $Configuration $Platform ...
