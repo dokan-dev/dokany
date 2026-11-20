@@ -60,3 +60,6 @@ ReleasePS
 *.log
 *.msi
 *.wixpdb
+/.sonar
+/bw-output
+/.scannerwork
