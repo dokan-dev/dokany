@@ -104,7 +104,7 @@ DokanFreeCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB ccb) {
   DokanFCBUnlock(fcb);
 
   if (ccb->SearchPattern) {
-    ExFreePool(ccb->SearchPattern);
+    DokanFree(ccb->SearchPattern);
   }
 
   ExFreeToLookasideListEx(&g_DokanCCBLookasideList, ccb);
@@ -520,7 +520,7 @@ Return Value:
               DokanAlloc(relatedFcb->FileName.MaximumLength);
           if (relatedFileName->Buffer == NULL) {
             DOKAN_LOG_FINE_IRP(RequestContext, "Can't allocatePool for relatedFileName buffer");
-            ExFreePool(relatedFileName);
+            DokanFree(relatedFileName);
             relatedFileName = NULL;
             status = STATUS_INSUFFICIENT_RESOURCES;
             DokanFCBUnlock(relatedFcb);
@@ -654,7 +654,7 @@ Return Value:
 
       DOKAN_LOG_FINE_IRP(RequestContext, "Media is write protected");
       status = STATUS_MEDIA_WRITE_PROTECTED;
-      ExFreePool(fileName);
+      DokanFree(fileName);
       __leave;
     }
 
@@ -668,7 +668,7 @@ Return Value:
         fcb = ccb->Fcb;
         OplockDebugRecordFlag(fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRIED);
         allocateCcb = FALSE;
-        ExFreePool(fileName);
+        DokanFree(fileName);
         fileName = NULL;
       }
     }
@@ -677,7 +677,7 @@ Return Value:
       if (RequestContext->IrpSp->Flags & SL_OPEN_TARGET_DIRECTORY) {
         status = DokanGetParentDir(fileName, &parentDir, &parentDirLength);
         if (status != STATUS_SUCCESS) {
-          ExFreePool(fileName);
+          DokanFree(fileName);
           fileName = NULL;
           __leave;
         }
@@ -1259,8 +1259,8 @@ Return Value:
       DokanFCBUnlock(fcb);
 
     if (relatedFileName) {
-      ExFreePool(relatedFileName->Buffer);
-      ExFreePool(relatedFileName);
+      DokanFree(relatedFileName->Buffer);
+      DokanFree(relatedFileName);
     }
 
     if (!NT_SUCCESS(status)) {
@@ -1288,7 +1288,7 @@ Return Value:
     // If it's SL_OPEN_TARGET_DIRECTORY then
     // the FCB takes ownership of parentDir instead of fileName
     if (parentDir && fileName) {
-      ExFreePool(fileName);
+      DokanFree(fileName);
     }
   }
 

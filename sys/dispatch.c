@@ -54,7 +54,7 @@ NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
 VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                           __in NTSTATUS Status) {
   BOOLEAN isTopLevelIrp = FALSE;
-  PEVENT_INFORMATION eventInfo = NULL;
+  EVENT_INFORMATION eventInfo;
 
   __try {
     __try {
@@ -65,9 +65,9 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
         IoSetTopLevelIrp(RequestContext->Irp);
       }
 
-      eventInfo = DokanAllocZero(sizeof(EVENT_INFORMATION));
-      eventInfo->Status = Status;
-      DokanCompleteCreate(RequestContext, eventInfo);
+      RtlZeroMemory(&eventInfo, sizeof(EVENT_INFORMATION));
+      eventInfo.Status = Status;
+      DokanCompleteCreate(RequestContext, &eventInfo);
 
       DOKAN_LOG_END_MJ(RequestContext, RequestContext->Irp->IoStatus.Status);
 
@@ -77,10 +77,6 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                             GetExceptionCode());
     }
   } __finally {
-    if (eventInfo != NULL) {
-      ExFreePool(eventInfo);
-    }
-
     if (isTopLevelIrp) {
       IoSetTopLevelIrp(NULL);
     }

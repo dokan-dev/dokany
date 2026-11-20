@@ -109,6 +109,7 @@ extern DokanPtr_FsRtlAreThereWaitingFileLocks
 #define DOKAN_MDL_ALLOCATED 0x1
 
 #define DokanAlloc(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
+#define DokanFree(ptr) ExFreePoolWithTag(ptr, TAG)
 
 inline PVOID DokanAllocZero(SIZE_T size) {
   PVOID buffer = DokanAlloc(size);

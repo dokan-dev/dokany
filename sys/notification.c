@@ -102,7 +102,7 @@ AllocateEventContext(__in PREQUEST_CONTEXT RequestContext,
 VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext) {
   PDRIVER_EVENT_CONTEXT driverEventContext =
       CONTAINING_RECORD(EventContext, DRIVER_EVENT_CONTEXT, EventContext);
-  ExFreePool(driverEventContext);
+  DokanFree(driverEventContext);
 }
 
 VOID DokanEventNotification(__in PREQUEST_CONTEXT RequestContext,
@@ -209,7 +209,7 @@ VOID ReleaseNotifyEvent(__in PIRP_LIST NotifyEvent) {
     listHead = RemoveHeadList(&NotifyEvent->ListHead);
     driverEventContext =
         CONTAINING_RECORD(listHead, DRIVER_EVENT_CONTEXT, ListEntry);
-    ExFreePool(driverEventContext);
+    DokanFree(driverEventContext);
   }
 
   KeClearEvent(&NotifyEvent->NotEmpty);
@@ -258,7 +258,7 @@ VOID NotificationThread(__in PVOID pDcb) {
     }
   } while (status != STATUS_WAIT_0);
 
-  ExFreePool(waitBlock);
+  DokanFree(waitBlock);
   DOKAN_LOG("Stop");
 }
 

@@ -418,7 +418,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
       // Update the mount point on the DCB for the volume.
       if (dcb->MountPoint) {
-        ExFreePool(dcb->MountPoint);
+        DokanFree(dcb->MountPoint);
       }
       dcb->MountPoint = DokanAllocDuplicateString(&mountdevNameString);
       if (dcb->MountPoint == NULL) {
@@ -631,7 +631,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
           diskGeometry->SectorsPerTrack;
       mediaInfo->DeviceSpecific.DiskInfo.BytesPerSector =
           diskGeometry->BytesPerSector;
-      ExFreePool(diskGeometry);
+      DokanFree(diskGeometry);
       status = STATUS_SUCCESS;
     } break;
 

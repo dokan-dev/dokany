@@ -25,6 +25,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "log.h"
 
 #include <mountdev.h>
+#include <mountmgr.h>
 #include <ntdddisk.h>
 #include <ntddvol.h>
 #include <ntddstor.h>
@@ -42,6 +43,7 @@ DOKAN_LOG_CACHE g_DokanLogEntryList;
 
 VOID PopDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PDokanVCB Vcb);
 #ifdef ALLOC_PRAGMA
+#pragma alloc_text(PAGE, DokanGetIoctlStr)
 #pragma alloc_text(PAGE, PushDokanLogEntry)
 #pragma alloc_text(PAGE, PopDokanLogEntry)
 #pragma alloc_text(PAGE, CleanDokanLogEntry)
@@ -133,7 +135,7 @@ static VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
     }
   } __finally {
     if (message != NULL) {
-      ExFreePool(message);
+      DokanFree(message);
     }
   }
 }
@@ -513,7 +515,7 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
       PLIST_ENTRY listEntry = g_DokanLogEntryList.Log.Flink;
       RemoveEntryList(listEntry);
       logEntry = CONTAINING_RECORD(listEntry, DOKAN_LOG_ENTRY, ListEntry);
-      ExFreePool(logEntry);
+      DokanFree(logEntry);
       --g_DokanLogEntryList.NumberOfCachedEntries;
     }
 
@@ -537,7 +539,7 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
     logEntry->Log.MessageLength = (ULONG)(ppszDestEnd - logEntry->Log.Message);
     va_end(args);
     if (status != STATUS_SUCCESS && status != STATUS_BUFFER_OVERFLOW) {
-      ExFreePool(logEntry);
+      DokanFree(logEntry);
       __leave;
     }
 
@@ -593,7 +595,7 @@ VOID PopDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PDokanVCB Vcb) {
 
     nextListEntry = listEntry->Flink;
     RemoveEntryList(listEntry);
-    ExFreePool(logEntry);
+    DokanFree(logEntry);
     --g_DokanLogEntryList.NumberOfCachedEntries;
     listEntry = nextListEntry;
   }
@@ -640,7 +642,7 @@ VOID CleanDokanLogEntry(_In_ PVOID Vcb) {
 
       nextListEntry = listEntry->Flink;
       RemoveEntryList(listEntry);
-      ExFreePool(logEntry);
+      DokanFree(logEntry);
       --g_DokanLogEntryList.NumberOfCachedEntries;
       listEntry = nextListEntry;
     }

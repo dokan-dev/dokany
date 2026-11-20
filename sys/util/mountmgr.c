@@ -112,7 +112,7 @@ NTSTATUS DokanSendVolumeMountPoint(__in PDokanDCB Dcb, BOOLEAN Create) {
              : IOCTL_MOUNTMGR_VOLUME_MOUNT_POINT_DELETED,
       volumMountPoint, length, NULL, 0);
 
-  ExFreePool(volumMountPoint);
+  DokanFree(volumMountPoint);
   return status;
 }
 
@@ -144,7 +144,7 @@ DokanSendVolumeArrivalNotification(PUNICODE_STRING DeviceName) {
   status = DokanSendIoContlToMountManager(
       IOCTL_MOUNTMGR_VOLUME_ARRIVAL_NOTIFICATION, targetName, length, NULL, 0);
 
-  ExFreePool(targetName);
+  DokanFree(targetName);
   return status;
 }
 
@@ -178,7 +178,7 @@ DokanSendVolumeDeletePoints(__in PUNICODE_STRING MountPoint,
   deletedPoints = DokanAllocZero(olength);
   if (deletedPoints == NULL) {
     DOKAN_LOG("Can't allocate PMOUNTMGR_MOUNT_POINTS");
-    ExFreePool(point);
+    DokanFree(point);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
@@ -203,8 +203,8 @@ DokanSendVolumeDeletePoints(__in PUNICODE_STRING MountPoint,
   status = DokanSendIoContlToMountManager(IOCTL_MOUNTMGR_DELETE_POINTS, point,
                                           length, deletedPoints, olength);
 
-  ExFreePool(point);
-  ExFreePool(deletedPoints);
+  DokanFree(point);
+  DokanFree(deletedPoints);
   return status;
 }
 
@@ -247,7 +247,7 @@ DokanSendVolumeCreatePoint(__in PDRIVER_OBJECT DriverObject,
     DokanLogError(&logger, status, L"IOCTL_MOUNTMGR_CREATE_POINT failed.");
   }
 
-  ExFreePool(point);
+  DokanFree(point);
 
   return status;
 }
