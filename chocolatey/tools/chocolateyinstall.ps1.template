@@ -2,19 +2,16 @@
 
 $packageName    = 'dokany2'
 $toolsDir       = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
-$file           = "$toolsDir\Dokan_x86.msi" 
 $file64         = "$toolsDir\Dokan_x64.msi"
 
 $packageArgs = @{
   packageName   = $packageName
   fileType      = 'MSI'
   silentArgs    = "/passive /norestart"
-  file          = $file
   file64        = $file64
   validExitCodes= @(0, 3010, 1641)
   softwareName  = 'Dokan Library*'
 }
 
 Install-ChocolateyInstallPackage @packageArgs
-Remove-Item $file -Force -EA SilentlyContinue | Out-Null
 Remove-Item $file64 -Force -EA SilentlyContinue | Out-Null
