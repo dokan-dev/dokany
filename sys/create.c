@@ -627,7 +627,7 @@ Return Value:
     // Remove possible UNCName prefix
     if (RequestContext->Dcb->UNCName != NULL) {
       UNICODE_STRING fileNameUS =
-          DokanWrapUnicodeString(fileName, fileNameLength);
+          DokanWrapUnicodeString(fileName, (USHORT)fileNameLength);
       if (RtlPrefixUnicodeString(RequestContext->Dcb->UNCName, &fileNameUS,
                                  /*CaseInSensitive=*/TRUE)) {
         fileNameLength -= RequestContext->Dcb->UNCName->Length;
@@ -681,9 +681,9 @@ Return Value:
           fileName = NULL;
           __leave;
         }
-        fcb = DokanGetFCB(RequestContext, parentDir, parentDirLength);
+        fcb = DokanGetFCB(RequestContext, parentDir, (USHORT)parentDirLength);
       } else {
-        fcb = DokanGetFCB(RequestContext, fileName, fileNameLength);
+        fcb = DokanGetFCB(RequestContext, fileName, (USHORT)fileNameLength);
       }
       if (fcb == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;

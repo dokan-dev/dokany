@@ -618,7 +618,8 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
         break;
       }
       DokanPopulateDiskGeometry(diskGeometry);
-      mediaInfo->DeviceSpecific.DiskInfo.MediaType = diskGeometry->MediaType;
+      mediaInfo->DeviceSpecific.DiskInfo.MediaType =
+          (STORAGE_MEDIA_TYPE)diskGeometry->MediaType;
       mediaInfo->DeviceSpecific.DiskInfo.NumberMediaSides = 1;
       mediaInfo->DeviceSpecific.DiskInfo.MediaCharacteristics =
           (MEDIA_CURRENTLY_MOUNTED | MEDIA_READ_WRITE);

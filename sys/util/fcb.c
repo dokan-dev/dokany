@@ -110,7 +110,7 @@ PDokanFCB GetOrCreateUninitializedFcb(__in PREQUEST_CONTEXT RequestContext,
 }
 
 PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
-                      __in PWCHAR FileName, __in ULONG FileNameLength) {
+                      __in PWCHAR FileName, __in USHORT FileNameLength) {
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
 
   UNREFERENCED_PARAMETER(RequestContext);
