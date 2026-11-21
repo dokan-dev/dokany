@@ -140,7 +140,7 @@ DokanDispatchWrite(__in PREQUEST_CONTEXT RequestContext) {
         sizeof(EVENT_CONTEXT) + RequestContext->IrpSp->Parameters.Write.Length +
                   fcb->FileName.Length;
     if (safeEventLength.HighPart != 0 ||
-        safeEventLength.QuadPart <
+        (ULONGLONG)safeEventLength.QuadPart <
             sizeof(EVENT_CONTEXT) + fcb->FileName.Length) {
       DokanLogError(&logger,
                     STATUS_INVALID_PARAMETER,

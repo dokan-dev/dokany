@@ -127,7 +127,8 @@ DokanQueryDirectory(__in PREQUEST_CONTEXT RequestContext) {
     // and search pattern is provided
     if (RequestContext->IrpSp->Parameters.QueryDirectory.FileName) {
       // free current search pattern stored in CCB
-      if (ccb->SearchPattern) ExFreePool(ccb->SearchPattern);
+      if (ccb->SearchPattern)
+        DokanFree(ccb->SearchPattern);
 
       // the size of search pattern
       ccb->SearchPatternLength =

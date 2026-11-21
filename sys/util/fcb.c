@@ -110,7 +110,7 @@ PDokanFCB GetOrCreateUninitializedFcb(__in PREQUEST_CONTEXT RequestContext,
 }
 
 PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
-                      __in PWCHAR FileName, __in ULONG FileNameLength) {
+                      __in PWCHAR FileName, __in USHORT FileNameLength) {
   UNICODE_STRING fn = DokanWrapUnicodeString(FileName, FileNameLength);
 
   UNREFERENCED_PARAMETER(RequestContext);
@@ -120,7 +120,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
   BOOLEAN newElement = FALSE;
   PDokanFCB fcb = GetOrCreateUninitializedFcb(RequestContext, &fn, &newElement);
   if (!fcb) {
-    ExFreePool(FileName);
+    DokanFree(FileName);
     DOKAN_LOG_FINE_IRP(RequestContext, "Failed to find or allocate FCB for %wZ",
                        &fn);
     DokanVCBUnlock(RequestContext->Vcb);
@@ -137,7 +137,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
       UNREFERENCED_PARAMETER(removed);
       DOKAN_LOG_FINE_IRP(RequestContext, "Failed to init FCB %p for %wZ", fcb,
                          &fcb->FileName);
-      ExFreePool(FileName);
+      DokanFree(FileName);
       ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
       DokanVCBUnlock(RequestContext->Vcb);
       return NULL;
@@ -237,7 +237,7 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
 
   DOKAN_LOG_("Free FCB %p", Fcb);
 
-  ExFreePool(Fcb->FileName.Buffer);
+  DokanFree(Fcb->FileName.Buffer);
   Fcb->FileName.Buffer = NULL;
   Fcb->FileName.Length = 0;
   Fcb->FileName.MaximumLength = 0;
@@ -286,7 +286,7 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
     // Update the case of the file name and clear flags. Note that there cannot
     // be concurrent use of an FCB in the GC list while we are in this function.
     ASSERT(Fcb->FileName.Length == NewFileName->Length);
-    ExFreePool(Fcb->FileName.Buffer);
+    DokanFree(Fcb->FileName.Buffer);
     Fcb->FileName = *NewFileName;
     RemoveEntryList(&Fcb->NextGarbageCollectableFcb);
     Fcb->NextGarbageCollectableFcb.Flink = NULL;
@@ -297,7 +297,7 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
   } else {
     // It's not actually scheduled for GC, so this function is a no-op aside
     // from its obligation to clean up the string.
-    ExFreePool(NewFileName->Buffer);
+    DokanFree(NewFileName->Buffer);
   }
   NewFileName->Buffer = NULL;
   NewFileName->Length = 0;

@@ -44,7 +44,6 @@ dir .\dokan_wix -include ('*.wixproj', '*.vcxproj') -recurse | ForEach-Object { 
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\x86\Release\DokanSetup.exe .\dokan_wix\
 copy .\dokan_wix\bin\x64\Release\Dokan_x64.msi .\dokan_wix\
-copy .\dokan_wix\bin\x86\Release\Dokan_x86.msi .\dokan_wix\
 copy .\dokan_wix\bin\ARM64\Release\Dokan_ARM64.msi .\dokan_wix\
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Debug /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\x86\Debug\DokanSetup.exe .\dokan_wix\DokanSetupDbg.exe
@@ -52,7 +51,7 @@ Write-Host Build installer done !
 
 Write-Host Build archive ...
 set-alias sz "$env:ProgramFiles\7-Zip\7z.exe"  
-Exec-External { sz a -tzip .\dokan_wix\dokan.zip Win32 x64 ARM ARM64 }
+Exec-External { sz a -tzip .\dokan_wix\dokan.zip Win32 x64 ARM64 }
 Write-Host Build archive done !
 
 if ([string]::IsNullOrEmpty($env:CHOCO_API_KEY)) {

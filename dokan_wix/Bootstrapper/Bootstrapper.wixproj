@@ -10,6 +10,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <LinkerAdditionalOptions>-sw1132</LinkerAdditionalOptions>
+    <SignOutput Condition="'$(SIGNTOOL)' != '' and '$(SHA1_CERTTHUMBPRINT)' != '' and '$(SHA2_CERTTHUMBPRINT)' != ''">true</SignOutput>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Dependency.wixext" Version="5.0.1" />
@@ -23,7 +24,12 @@
   <ItemGroup>
     <Folder Include="Resources" />
   </ItemGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="if /I &quot;$(ConfigurationName)&quot; == &quot;Release&quot; (&#xA;  &quot;%25WIX%25\bin\insignia.exe&quot; -ib &quot;$(TargetDir)$(TargetFileName)&quot; -o &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;$(TargetDir)engine.exe&quot;&#xA;  &quot;%25WIX%25\bin\insignia.exe&quot; -ab &quot;$(TargetDir)engine.exe&quot; &quot;$(TargetDir)$(TargetFileName)&quot; -o &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  &quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;$(TargetDir)$(TargetFileName)&quot;&#xA;  del &quot;$(TargetDir)engine.exe&quot;&#xA;)" />
+  <Target Name="SignBundleEngine">
+    <Exec Command="&quot;%25SIGNTOOL%25&quot; sign /v /fd sha1 /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;%(SignBundleEngine.FullPath)&quot;" />
+    <Exec Command="&quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;%(SignBundleEngine.FullPath)&quot;" />
+  </Target>
+  <Target Name="SignBundle">
+    <Exec Command="&quot;%25SIGNTOOL%25&quot; sign /v /fd sha1 /sha1 &quot;%25SHA1_CERTTHUMBPRINT%25&quot; /t http://timestamp.digicert.com &quot;%(SignBundle.FullPath)&quot;" />
+    <Exec Command="&quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /as /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;%(SignBundle.FullPath)&quot;" />
   </Target>
 </Project>
