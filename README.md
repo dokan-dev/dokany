@@ -68,13 +68,11 @@ You can obtain source files from https://dokan-dev.github.io
 ## Environment
 
 Dokan works on
- * Windows Server 2022 / 2019 / 2016 / 2012 (R2) / 2008 R2 SP1
- * Windows 11 / 10 / 8.1 / 8 / 7 SP1
+ * Windows Server 2025 / 2022 / 2019 / 2016
+ * Windows 11 / 10 (64-bit)
  
 Platform
- * x86
- * x64
- * ARM
+ * x64 (including x86 WOW64 user-mode libraries)
  * ARM64
 
 **Signed Release and Debug drivers** are provided at each release for all platforms.
@@ -110,9 +108,8 @@ To learn more about Dokan file system development, see the
 
 ## Build
 
-In short, download and install the
-[Visual Studio 2019](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx), select [Windows 10 SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk/) component during the install or from the Tools menu &
-install the [WDK 10](https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
+In short, download and install
+[Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) with the **Desktop development with C++** workload, Spectre-mitigated libraries, the [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/), and the **Windows Driver Kit** Visual Studio component, then restore the WDK NuGet packages (`nuget restore sys\packages.config -PackagesDirectory packages`) or install the matching [WDK](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk).
 
 For details, see the
 [build page](https://github.com/dokan-dev/dokany/wiki/Build).

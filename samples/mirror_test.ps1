@@ -96,7 +96,7 @@ $ifstestParameters = @(
 )
 
 $fstoolsRevision="f010a68f96e004e8ef76436c0582e64216f400a0"
-$winfstestRevision="98faa827b31d6e9144ff7c2c235f0b07b0ccf5d0"
+$winfstestRevision="9ec0e51ab89be6a2229b519a7d5ff39f6199c515"
 $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $vswhere) {
@@ -104,15 +104,12 @@ if (Test-Path $vswhere) {
 	if ($path) {
 		$tmpBuildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
 		if (test-path $tmpBuildCmd) {
-			# Visual studio 2019
 			$buildCmd = $tmpBuildCmd
 			$fstoolsRevision="9e378a7745a7dcb6fbfc1f649975e7a47c8f952e"
-			$winfstestRevision="d8b70ad91fae6681edeef15c35344ae280467600"
 		}
 	}
 }
 
-$env:Path = $env:Path + ";C:\Program Files (x86)\Windows Kits\8.1\bin\x64\"
 $env:CI_BUILD_ARG = ""
 if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
  

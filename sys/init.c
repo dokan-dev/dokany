@@ -84,7 +84,7 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
     deviceEntry->MountPoint.Buffer = DokanAlloc(MountPoint->MaximumLength);
     if (deviceEntry->MountPoint.Buffer == NULL) {
       DOKAN_LOG("MountPoint allocation failed");
-      ExFreePool(deviceEntry);
+      DokanFree(deviceEntry);
       return NULL;
     }
     deviceEntry->MountPoint.MaximumLength = MountPoint->MaximumLength;
@@ -364,7 +364,7 @@ VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   InitializeListHead(&mountEntry->ListEntry);
   ExReleaseResourceLite(&mountEntry->Resource);
   ExDeleteResourceLite(&mountEntry->Resource);
-  ExFreePool(mountEntry);
+  DokanFree(mountEntry);
 
   ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
 }
@@ -565,7 +565,7 @@ PMOUNT_ENTRY FindMountEntryByName(__in PDOKAN_GLOBAL DokanGlobal,
     RtlCopyMemory(dokanControl->UNCName, UNCName->Buffer, UNCName->Length);
   }
   mountEntry = FindMountEntry(DokanGlobal, dokanControl, ExclusiveLock);
-  ExFreePool(dokanControl);
+  DokanFree(dokanControl);
   return mountEntry;
 }
 
@@ -888,7 +888,7 @@ VOID DokanDeleteMountPoint(__in_opt PREQUEST_CONTEXT RequestContext,
           SendDirectoryFsctl(RequestContext, Dcb->MountPoint,
                              FSCTL_DELETE_REPARSE_POINT, removeReparseInput,
                              removeReparseInputlength);
-          ExFreePool(removeReparseInput);
+          DokanFree(removeReparseInput);
         }
         // Inform MountManager we are removing the reparse point.
         NotifyDirectoryMountPointDeleted(Dcb);
@@ -1171,11 +1171,11 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
     DokanControl->SessionId = dcb->SessionId;
   } __finally {
     if (diskDeviceNameBuf)
-      ExFreePool(diskDeviceNameBuf);
+      DokanFree(diskDeviceNameBuf);
     if (symbolicLinkNameBuf)
-      ExFreePool(symbolicLinkNameBuf);
+      DokanFree(symbolicLinkNameBuf);
     if (mountPointBuf)
-      ExFreePool(mountPointBuf);
+      DokanFree(mountPointBuf);
   }
 
   return status;

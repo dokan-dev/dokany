@@ -54,7 +54,7 @@ Because the original Dokan Legacy (less than v0.6.0) project is no longer mainta
 
 Since version 0.8.0, dokany break dokan API compatibility. See Choose a version for more informations.
 
-Signed x86 / x64 drivers are provided at each release.	
+Signed x64 / ARM64 drivers are provided at each release.	
 
 ### Environment
 
@@ -62,12 +62,10 @@ Dokan works on
 
 * Windows 11
 * Windows 10
-* Windows Server 2012 R2
-* Windows 8.1
-* Windows Server 2012
-* Windows 8
-* Windows Server 2008 R2 SP1
-* Windows 7 SP1
+* Windows Server 2025
+* Windows Server 2022
+* Windows Server 2019
+* Windows Server 2016
 
 ### How it works
 

@@ -3,7 +3,7 @@
     AccessTokenDokanDoc:
       secure: Omu2AD4ooK5Owx+v4XS3VPuWc0xJyZXGZlgv4ipJqmt0wY2LN7bzev8y3OLHsARU
     SONAR_TOKEN:
-      secure: CU8bNHSUY/Dly217K9j3u0TAyDmt6EVkEWH9XTcC1+xspn3b/zy0LAWNdx9Fg0zv
+      secure: Q7XGQVB02t1XKb3d6NqEdLEszhIYtZqLZbE6LTbQCBVzYYyL5MfW7KvCpxtJ8xRV
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
@@ -11,7 +11,7 @@
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2-cache'
 #     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
-      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2019; Configuration: All"
+      DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: All"
 
   skip_tags: true
   version: 2.3.0-{build}
@@ -22,29 +22,30 @@
   - Documentation
 
   image:
+    - Visual Studio 2026
+    - Visual Studio 2022
     - Visual Studio 2019
     - Visual Studio 2017
-    - Visual Studio 2015
-    - Visual Studio 2022
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
+#    - Previous Visual Studio 2026
+#    - Previous Visual Studio 2022
 #    - Previous Visual Studio 2019
-#    - Previous Visual Studio 2015
 #    - Previous Visual Studio 2017
   matrix:
     exclude:
       - configuration: All
-        image: Visual Studio 2015
+        image: Visual Studio 2017
       - configuration: SonarQube
-        image: Visual Studio 2015
+        image: Visual Studio 2017
       - configuration: Documentation
-        image: Visual Studio 2015
+        image: Visual Studio 2017
       - configuration: All
-        image: Visual Studio 2017
+        image: Visual Studio 2019
       - configuration: SonarQube
-        image: Visual Studio 2017
+        image: Visual Studio 2019
       - configuration: Documentation
-        image: Visual Studio 2017
+        image: Visual Studio 2019
       - configuration: All
         image: Visual Studio 2022
       - configuration: SonarQube
@@ -86,6 +87,23 @@
         }
     - ps: |
         . .\scripts\build_helper.ps1
+    - ps: |
+        if ($env:CONFIGURATION -eq "All" -or ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master" -and !$env:APPVEYOR_PULL_REQUEST_NUMBER)) {
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (!$vsPath) {
+            throw "Visual Studio with MSBuild not found"
+          }
+          Write-Host "Installing Visual Studio WDK component into $vsPath..."
+          $proc = Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" -ArgumentList @("modify", "--installPath", "`"$vsPath`"", "--add", "Component.Microsoft.Windows.DriverKit", "--quiet", "--norestart", "--nocache") -Wait -PassThru
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+            Get-ChildItem "$env:TEMP\dd_installer_*.log","$env:TEMP\dd_setup_*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object {
+              Write-Host "=== $($_.FullName) (last 40 lines) ==="
+              Get-Content $_.FullName -Tail 40 -ErrorAction SilentlyContinue
+            }
+            throw "Visual Studio Installer failed with exit code $($proc.ExitCode)"
+          }
+          Exec-External { & nuget restore .\sys\packages.config -PackagesDirectory .\packages }
+        }
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           Exec-External {& net user dokan_ifstest D0kan_1fstest /ADD }
@@ -136,6 +154,7 @@
             Write-Host "[ OK ]" -ForegroundColor Green
           }
 
+          New-Item -ItemType Directory -Force -Path "C:\cygwin64", $env:CYG_CACHE | Out-Null
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
 
@@ -177,7 +196,7 @@
   build_script:
   - ps: |
       Write-Host Start building...
-      $buildCmd = $(cmd /c where msbuild)
+      $buildCmd = $(cmd /c where msbuild) | Select-Object -First 1
 
   - ps: |
       if ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
@@ -202,10 +221,14 @@
       $installer_version = $env:APPVEYOR_BUILD_VERSION.Split("-")[0] + '.' + $mm_version;
   - ps: |
       if ($env:CONFIGURATION -eq "All") {
-        $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\"
+        $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.0.*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+        if (!$signtool) {
+          throw "signtool.exe not found under C:\Program Files (x86)\Windows Kits\10\bin"
+        }
+        $env:Path += ";$($signtool.DirectoryName)"
         $env:CERTISSUER="DokanCA"
         $env:ADDITIONALCERT="$pwd\cert\DokanCA.cer"
-        $env:SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe"
+        $env:SIGNTOOL=$signtool.FullName
 
         cd dokan_wix
         $Platform = "Any CPU"
@@ -228,7 +251,6 @@
 
         cd dokan_wix
 
-        Exec-External {& dotnet tool install --global wix }
         # Nuget restore sln fails to restore all the project of the solution for some reason so lets do it manually
         dir .\* -include ('*.wixproj', '*.vcxproj') -recurse | ForEach-Object { nuget restore $_.FullName -SolutionDirectory . }
 
@@ -246,7 +268,7 @@
         Exec-External {& $buildCmd $buildArgs}
 
         Write-Host Build archive ...
-        Exec-External { 7z a -tzip dokan.zip ..\Win32 ..\x64 ..\ARM ..\ARM64 }
+        Exec-External { 7z a -tzip dokan.zip ..\Win32 ..\x64 ..\ARM64 }
         Write-Host Build archive done !
 
         Write-Host Upload Artifact...
@@ -323,10 +345,15 @@
         # events are sorted descendingly by time, so $bugchecks[0] is the latest BSOD
         $memory_dmp = $bugchecks[0].ReplacementStrings[1]
 
-        Write-Host Calling KD to get more information...
-        # somehow the env-var-changes by the installer are sometimes lost after the BSOD. Hardcode the path!
-        $driver_and_pdb_path = Resolve-Path 'C:\Program Files\Dokan\Dokan Library-*\driver\'
-        & "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\kd.exe" -lines -z $memory_dmp -y "SRV*;${driver_and_pdb_path};http://msdl.microsoft.com/download/symbols" -c "!analyze -v; kp; dv /t /i /V; q"
+        $kdPath = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\kd.exe"
+        if (Test-Path $kdPath) {
+          Write-Host Calling KD to get more information...
+          # somehow the env-var-changes by the installer are sometimes lost after the BSOD. Hardcode the path!
+          $driver_and_pdb_path = Resolve-Path 'C:\Program Files\Dokan\Dokan Library-*\driver\'
+          & $kdPath -lines -z $memory_dmp -y "SRV*;${driver_and_pdb_path};http://msdl.microsoft.com/download/symbols" -c "!analyze -v; kp; dv /t /i /V; q"
+        } else {
+          Write-Host "kd.exe not installed on this image; skipping inline dump analysis."
+        }
         $memdumpArchive = "memory_dmp_$(& git rev-parse --short HEAD)_${env:APPVEYOR_BUILD_VERSION}.7z"
         Write-Host "Compressing $memory_dmp"
         Exec-External { &7z a -t7z $memdumpArchive $memory_dmp }
@@ -353,8 +380,14 @@
 
           # Python 3 is needed by git clang-format
           # https://help.appveyor.com/discussions/problems/6832-appveyor-doesnt-recognizes-python3-command
-          Copy-Item -Path "C:\Python38\python.exe" -Destination "C:\Python38\python3.exe"
-          $env:PATH ="C:\Python38;$env:PATH"
+          $pyDir = (Get-ChildItem "C:\Python3*" -Directory | Where-Object { $_.Name -match '^Python3\d+(-x64)?$' -and (Test-Path "$($_.FullName)\python.exe") } | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          if (!$pyDir) {
+            throw "Python 3 installation not found under C:\Python3*"
+          }
+          if (!(Test-Path "$pyDir\python3.exe")) {
+            Copy-Item -Path "$pyDir\python.exe" -Destination "$pyDir\python3.exe"
+          }
+          $env:PATH = "$pyDir;$env:PATH"
 
           $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
           Exec-External {& git config --global core.autocrlf true }

@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - 2.4.0.1000
+
+### Added
+- Documentation - Add `winget` installation instructions (#1319).
+
+### Changed
+- Library - Improve `AddMissingCurrentAndParentFolder` efficiency by inserting `.` and `..` in a single `DokanVector_PushFrontArray` operation.
+- Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
+- Installer - Migrate WiX v5 bundle signing in `Bootstrapper.wixproj` to native `SignOutput` / `SignBundleEngine` / `SignBundle` targets (removing WiX v3 `insignia.exe`), retarget `SetAssemblyVersion` to .NET Framework 4.8, and update Chocolatey packaging for 64-bit Windows 10+.
+- CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, update SonarScanner CLI to 8.5 with hardened SonarCloud analysis, and update `winfstest` to the Python 3 test suite.
+
+### Removed
+- Build / Installer - Drop support for Windows 7, Windows 8, and Windows 8.1; minimum supported OS is now Windows 10 (1507) / Windows Server 2016.
+- Build / Installer - Drop ARM32 and 32-bit (x86) kernel driver support and remove `Dokan_x86.msi` (32-bit applications on 64-bit Windows remain supported via WOW64 DLLs included in `Dokan_x64.msi`).
+
+### Fixed
+- Kernel - Fix IRP cancellation race condition in `RegisterPendingIrpMain` and `IRQL_NOT_LESS_OR_EQUAL` BSOD in `DokanIrpCancelRoutine` by deferring `DokanExecuteCleanup` until after releasing the spinlock.
+- Library - `DokanStart` - Move large `EVENT_START` struct from stack to heap.
+- Library - Fix `DOKAN_OPTION_ALLOW_IPC_BATCHING` flag truncation to zero when cast to `BOOLEAN` in `DokanCreateFileSystem` (#1340).
+- Library - Do not wait for the `WM_DEVICECHANGE` broadcast when closing an instance or shutting down, preventing 5-10s unmount stalls caused by hung windows (#1342).
+- Kernel - Fix CodeQL and static analysis findings: replace untagged `ExFreePool` calls with tagged `DokanFree`, use `%hs` for narrow IOCTL log strings, fix volume label lock/critical region handling and leak on allocation failure, stack-allocate `EVENT_INFORMATION` in `DokanCancelCreateIrp`, and bound `StartsWith` by prefix length.
+- Kernel - Fix MSVC/WDK `10.0.28000` compile errors and warnings and define `NT_INLINE_GET_CURRENT_IRQL` on x64 to preserve Windows 10 compatibility without Windows 11-only kernel imports.
+
 ## [2.3.1.1000] - 2025-09-28
 
 ### Changed
@@ -759,6 +782,7 @@ Latest Dokan version from Hiroki Asakawa.
  [http://dokan-dev.net/en]( http://web.archive.org/web/20150419082954/http://dokan-dev.net/en/)
 
 
+[Unreleased]: https://github.com/dokan-dev/dokany/compare/v2.3.1.1000...HEAD
 [2.3.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.3.0.1000...v2.3.1.1000
 [2.3.0.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.1.1000...v2.3.0.1000
 [2.2.1.1000]: https://github.com/dokan-dev/dokany/compare/v2.2.0.1000...v2.2.1.1000

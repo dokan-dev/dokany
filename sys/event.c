@@ -634,7 +634,7 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
 // Gets the binary owner information from the security descriptor of the device.
 // Returns either the information or NULL if it cannot be read. Logs the reason
 // for any failure. If the result is not NULL then the caller must free it via
-// ExFreePool.
+// DokanFree.
 char* GetDeviceOwner(__in PDOKAN_LOGGER Logger,
                      __in const WCHAR* DeviceNameForLog,
                      __in PDEVICE_OBJECT DeviceObject,
@@ -666,7 +666,7 @@ char* GetDeviceOwner(__in PDOKAN_LOGGER Logger,
       DokanLogInfo(Logger, L"Failed to query for owner of device: %s,"
                    L" status: 0x%x",
                    DeviceNameForLog, status);
-      ExFreePool(result);
+      DokanFree(result);
       result = NULL;
       __leave;
     }
@@ -707,10 +707,10 @@ BOOLEAN HasSameOwner(__in PDOKAN_LOGGER Logger,
     result = TRUE;
   } __finally {
     if (newOwner != NULL) {
-      ExFreePool(newOwner);
+      DokanFree(newOwner);
     }
     if (oldOwner != NULL) {
-      ExFreePool(oldOwner);
+      DokanFree(oldOwner);
     }
   }
   return result;
@@ -812,9 +812,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   baseGuidString = DokanAllocZero(64 * sizeof(WCHAR));
   if (eventStart == NULL || baseGuidString == NULL) {
     if (eventStart)
-      ExFreePool(eventStart);
+      DokanFree(eventStart);
     if (baseGuidString)
-      ExFreePool(baseGuidString);
+      DokanFree(baseGuidString);
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate buffers in event start.");
   }
@@ -849,8 +849,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     driverInfo->Status = DOKAN_START_FAILED;
     RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
     RequestContext->Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     return STATUS_SUCCESS;
   }
 
@@ -937,8 +937,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     ExReleaseResourceLite(&foundPrevEntry->Resource);
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     return STATUS_SUCCESS;
   }
 
@@ -954,8 +954,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     return DokanLogError(&logger, status, L"Failed to convert GUID to string.");
   }
 
@@ -985,8 +985,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     }
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     return DokanLogError(&logger, status, L"Disk device creation failed.");
   }
 
@@ -1043,8 +1043,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   if (!InsertMountEntry(RequestContext->DokanGlobal, &dokanControl)) {
     ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
     KeLeaveCriticalRegion();
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     DokanDeleteDeviceObject(RequestContext, dcb);
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Failed to allocate new mount entry.");
@@ -1116,8 +1116,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
                      /*ExclusiveLock=*/FALSE);
   if (!mountEntry) {
     // The device was removed right after being mounted and before we finish.
-    ExFreePool(eventStart);
-    ExFreePool(baseGuidString);
+    DokanFree(eventStart);
+    DokanFree(baseGuidString);
     return DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                          L"Unable to find mount entry after insert and "
                          L"IoVerifyVolume. The device must have been removed.");
@@ -1175,7 +1175,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
         status = SendDirectoryFsctl(RequestContext, dcb->MountPoint,
                                     FSCTL_SET_REPARSE_POINT, setReparseInput,
                                     setReparseInputlength);
-        ExFreePool(setReparseInput);
+        DokanFree(setReparseInput);
         if (NT_SUCCESS(status)) {
           // Inform MountManager of the new mount point.
           NotifyDirectoryMountPointCreated(dcb);
@@ -1194,8 +1194,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
   RequestContext->Irp->IoStatus.Information = sizeof(EVENT_DRIVER_INFO);
 
-  ExFreePool(eventStart);
-  ExFreePool(baseGuidString);
+  DokanFree(eventStart);
+  DokanFree(baseGuidString);
 
   PDEVICE_OBJECT volumeDeviceObject =
       mountEntry->MountControl.VolumeDeviceObject;

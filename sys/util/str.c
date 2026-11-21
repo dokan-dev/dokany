@@ -41,15 +41,15 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
   length = (ULONG)(wcslen(String) + 1) * sizeof(WCHAR);
   buffer = DokanAlloc(length);
   if (buffer == NULL) {
-    ExFreePool(unicode);
+    DokanFree(unicode);
     return NULL;
   }
   RtlCopyMemory(buffer, String, length);
   NTSTATUS result = RtlUnicodeStringInitEx(unicode, buffer, 0);
   if (!NT_SUCCESS(result)) {
     DOKAN_LOG("Invalid string size received.");
-    ExFreePool(buffer);
-    ExFreePool(unicode);
+    DokanFree(buffer);
+    DokanFree(unicode);
     return NULL;
   }
   return unicode;
@@ -57,8 +57,8 @@ DokanAllocateUnicodeString(__in PCWSTR String) {
 
 VOID DokanFreeUnicodeString(PUNICODE_STRING UnicodeString) {
   if (UnicodeString != NULL) {
-    ExFreePool(UnicodeString->Buffer);
-    ExFreePool(UnicodeString);
+    DokanFree(UnicodeString->Buffer);
+    DokanFree(UnicodeString);
   }
 }
 
@@ -68,7 +68,7 @@ PUNICODE_STRING DokanAllocDuplicateString(__in const PUNICODE_STRING Src) {
     return NULL;
   }
   if (!DokanDuplicateUnicodeString(result, Src)) {
-    ExFreePool(result);
+    DokanFree(result);
     return NULL;
   }
   return result;
@@ -77,7 +77,7 @@ PUNICODE_STRING DokanAllocDuplicateString(__in const PUNICODE_STRING Src) {
 BOOLEAN DokanDuplicateUnicodeString(__out PUNICODE_STRING Dest,
                                     __in const PUNICODE_STRING Src) {
   if (Dest->Buffer) {
-    ExFreePool(Dest->Buffer);
+    DokanFree(Dest->Buffer);
   }
   Dest->Buffer = DokanAlloc(Src->MaximumLength);
   if (!Dest->Buffer) {
@@ -101,13 +101,11 @@ BOOLEAN StartsWith(__in const UNICODE_STRING* Str,
     return FALSE;
   }
 
-  LPCWSTR prefixToUse, stringToCompareTo;
-  prefixToUse = Prefix->Buffer;
-  stringToCompareTo = Str->Buffer;
-
-  while (*prefixToUse) {
-    if (*prefixToUse++ != *stringToCompareTo++)
+  USHORT charCount = Prefix->Length / sizeof(WCHAR);
+  for (USHORT i = 0; i < charCount; ++i) {
+    if (Str->Buffer[i] != Prefix->Buffer[i]) {
       return FALSE;
+    }
   }
 
   return TRUE;
@@ -149,7 +147,7 @@ PUNICODE_STRING ChangePrefix(const UNICODE_STRING* Str,
   newStr->Buffer = DokanAllocZero(length);
   if (!newStr->Buffer) {
     DOKAN_LOG("Failed to allocate unicode_string buffer");
-    ExFreePool(newStr);
+    DokanFree(newStr);
     return NULL;
   }
 

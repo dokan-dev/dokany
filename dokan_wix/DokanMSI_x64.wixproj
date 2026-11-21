@@ -47,7 +47,7 @@
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(SIGNTOOL)' != '' and '$(SHA2_CERTTHUMBPRINT)' != ''">
     <Exec Command="if /I &quot;$(ConfigurationName)&quot; == &quot;Release&quot; &quot;%25SIGNTOOL%25&quot; sign /v /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 &quot;%25SHA2_CERTTHUMBPRINT%25&quot; &quot;$(TargetDir)$(TargetFileName)&quot;" />
   </Target>
 </Project>

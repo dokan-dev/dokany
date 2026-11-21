@@ -953,7 +953,7 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
                                 FILE_ACTION_ADDED);
       }
       // free old file name
-      ExFreePool(oldFileName.Buffer);
+      DokanFree(oldFileName.Buffer);
     } break;
     case FileValidDataLengthInformation:
       DokanNotifyReportChange(RequestContext, fcb, FILE_NOTIFY_CHANGE_SIZE,

@@ -323,21 +323,25 @@ DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
       }
 
       PFILE_FS_LABEL_INFORMATION Info = (PFILE_FS_LABEL_INFORMATION)buffer;
-      ExAcquireResourceExclusiveLite(&RequestContext->Dcb->Resource, TRUE);
-      if (RequestContext->Dcb->VolumeLabel != NULL)
-        ExFreePool(RequestContext->Dcb->VolumeLabel);
-      RequestContext->Dcb->VolumeLabel =
+      PWCHAR newVolumeLabel =
           DokanAlloc(Info->VolumeLabelLength + sizeof(WCHAR));
-      if (RequestContext->Dcb->VolumeLabel == NULL) {
+      if (newVolumeLabel == NULL) {
         DOKAN_LOG_FINE_IRP(RequestContext, "Can't allocate VolumeLabel");
         return STATUS_INSUFFICIENT_RESOURCES;
       }
 
-      RtlCopyMemory(RequestContext->Dcb->VolumeLabel, Info->VolumeLabel,
-                    Info->VolumeLabelLength);
-      RequestContext->Dcb
-          ->VolumeLabel[Info->VolumeLabelLength / sizeof(WCHAR)] = '\0';
+      RtlCopyMemory(newVolumeLabel, Info->VolumeLabel, Info->VolumeLabelLength);
+      newVolumeLabel[Info->VolumeLabelLength / sizeof(WCHAR)] = L'\0';
+
+      KeEnterCriticalRegion();
+      ExAcquireResourceExclusiveLite(&RequestContext->Dcb->Resource, TRUE);
+      if (RequestContext->Dcb->VolumeLabel != NULL) {
+        DokanFree(RequestContext->Dcb->VolumeLabel);
+      }
+      RequestContext->Dcb->VolumeLabel = newVolumeLabel;
       ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+      KeLeaveCriticalRegion();
+
       DOKAN_LOG_FINE_IRP(RequestContext, "Volume label changed to %ws",
                          RequestContext->Dcb->VolumeLabel);
 

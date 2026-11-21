@@ -60,10 +60,11 @@ void DokanMaybeLogOplockRequest(__in PDOKAN_LOGGER Logger,
                  RequestedLevel, Flags);
     return;
   }
-  DokanLogInfo(Logger, L"Oplock request %s for file \"%wZ\"; oplock count %d;"
+  DokanLogInfo(Logger,
+               L"Oplock request %hs for file \"%wZ\"; oplock count %d;"
                L" acquired FCB %d; acquired VCB %d",
-               DokanGetIoctlStr(FsControlCode),
-               &Fcb->FileName, OplockCount, AcquiredFcb, AcquiredVcb);
+               DokanGetIoctlStr(FsControlCode), &Fcb->FileName, OplockCount,
+               AcquiredFcb, AcquiredVcb);
 }
 
 void DokanMaybeLogOplockResult(__in PDOKAN_LOGGER Logger,
@@ -81,9 +82,9 @@ void DokanMaybeLogOplockResult(__in PDOKAN_LOGGER Logger,
                  &Fcb->FileName, RequestedLevel, Flags, Status);
     return;
   }
-  DokanLogInfo(Logger, L"Oplock result for %s for file \"%wZ\"; status = 0x%I32x",
-               DokanGetIoctlStr(FsControlCode), &Fcb->FileName,
-               Status);
+  DokanLogInfo(Logger,
+               L"Oplock result for %hs for file \"%wZ\"; status = 0x%I32x",
+               DokanGetIoctlStr(FsControlCode), &Fcb->FileName, Status);
 }
 
 NTSTATUS DokanOplockRequest(__in PREQUEST_CONTEXT RequestContext) {
@@ -490,7 +491,7 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
     currentIoctlBufferBytesRemaining -= workItemBytes;
     currentIoctlBuffer += workItemBytes;
     RequestContext->Irp->IoStatus.Information += workItemBytes;
-    ExFreePool(workItem);
+    DokanFree(workItem);
     if (!RequestContext->Dcb->AllowIpcBatching) {
       break;
     }
