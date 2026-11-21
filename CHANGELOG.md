@@ -3,12 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 2.4.0.1000
+## [Unreleased] - 3.0.0.1000
 
 ### Added
 - Documentation - Add `winget` installation instructions (#1319).
 
 ### Changed
+- Breaking / Major Version - Bump major version from `dokan2` to `dokan3` (`dokan3.sys`, `dokan3.dll`, `dokannp3.dll`, `dokanfuse3.dll`, `DokanLibrary3`, `DOKAN_VERSION`/`DOKAN_MINIMUM_COMPATIBLE_VERSION` = `300`, new `DOKAN_BASE_GUID`, `DCB` identifier tag, and installer GUIDs) to enable side-by-side installation with Dokan 2.x.
 - Library - Improve `AddMissingCurrentAndParentFolder` efficiency by inserting `.` and `..` in a single `DokanVector_PushFrontArray` operation.
 - Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
 - Installer - Migrate WiX v5 bundle signing in `Bootstrapper.wixproj` to native `SignOutput` / `SignBundleEngine` / `SignBundle` targets (removing WiX v3 `insignia.exe`), retarget `SetAssemblyVersion` to .NET Framework 4.8, and update Chocolatey packaging for 64-bit Windows 10+.

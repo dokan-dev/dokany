@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include>
 <?define ProductName="Dokan Library" ?>
-<?define ProductCodeX64="{9A7325EA-D3C9-0203-0001-250928162350}" ?>
-<?define UpgradeCodeX64="{31A8F445-2AC6-494B-819C-4F4E1B2AECF1}" ?>
-<?define ProductCodeX86="{D1680D5B-295F-0203-0001-250928162350}" ?>
-<?define UpgradeCodeX86="{B08DE90A-F064-4ADC-99AC-2EC933417CC5}" ?>
-<?define ProductCodeARM64="{24671A98-9A6B-0203-0001-250928162350}" ?>
-<?define UpgradeCodeARM64="{BD055051-AFAD-497D-8297-C4389835870A}" ?>
-<?define ProviderKey="{6DE61B71-BBFA-4007-8660-BD13A0DF9004}" ?>
-<?define BundleUpgradeCode="{F9DD32AC-C2BA-4B2C-841F-B34ABED0A0F1}" ?>
-<?define BaseVersion="2.3.1" ?>
-<?define MajorVersion="2" ?>
+<?define ProductCodeX64="{182C144F-B7FC-41BC-90AA-04BE7571299A}" ?>
+<?define UpgradeCodeX64="{8B1AFC87-833E-45AB-A28E-A5C35BFEFF8C}" ?>
+<?define ProductCodeARM64="{FE223531-25E1-4E97-AA42-F73FB302E42A}" ?>
+<?define UpgradeCodeARM64="{DFC9202B-E1D1-4779-9E06-7964A15FE817}" ?>
+<?define ProviderKey="{9CEE2379-285C-4D18-A9BF-829BAD2CBC45}" ?>
+<?define BundleUpgradeCode="{256D8EFB-C76D-40F5-8446-4F11E6B96188}" ?>
+<?define BaseVersion="3.0.0" ?>
+<?define MajorVersion="3" ?>
 <?define BuildVersion="1000" ?>
 <?define CompanyName="Dokany Project" ?>
 <?define ShortCompanyName="Dokany Project" ?>

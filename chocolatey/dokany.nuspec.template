@@ -8,7 +8,7 @@
     <!-- This section is about this package, although id and version have ties back to the software -->
     <!-- id is lowercase and if you want a good separator for words, use '-', not '.'. Dots are only acceptable as suffixes for certain types of packages, e.g. .install, .portable, .extension, .template -->
     <!-- If the software is cross-platform, attempt to use the same id as the debian/rpm package(s) if possible. -->
-    <id>dokany2</id>
+    <id>dokany3</id>
     <!-- version should MATCH as closely as possible with the underlying software -->
     <!-- Is the version a prerelease of a version? https://docs.nuget.org/create/versioning#creating-prerelease-packages -->
     <!-- Note that unstable versions like 0.0.1 can be considered a released version, but it's possible that one can release a 0.0.1-beta before you release a 0.0.1 version. If the version number is final, that is considered a released version and not a prerelease. -->
@@ -33,9 +33,9 @@
     <docsUrl>https://github.com/dokan-dev/dokany/wiki</docsUrl>
     <!--<mailingListUrl></mailingListUrl>-->
     <bugTrackerUrl>https://github.com/dokan-dev/dokany/issues</bugTrackerUrl>
-    <tags>dokany2 fs vfs filesystem dokan admin fuse</tags>
+    <tags>dokany3 fs vfs filesystem dokan admin fuse</tags>
     <summary>User mode file system driver for windows with FUSE Wrapper</summary>
-    <description>### [choco://dokany2](choco://dokany2)
+    <description>### [choco://dokany3](choco://dokany3)
 To use choco:// protocol URLs, install [(unofficial) choco:// Protocol support ](https://chocolatey.org/packages/choco-protocol-support)
 
 ---
@@ -69,9 +69,9 @@ Dokan works on
 
 ### How it works
 
-Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file system driver (dokan2.sys). Once Dokan file system driver is installed, you can create file systems which can be seen as normal file systems in Windows. The application that creates file systems using Dokan library is called File system application.
+Dokan library contains a user mode DLL (dokan3.dll) and a kernel mode file system driver (dokan3.sys). Once Dokan file system driver is installed, you can create file systems which can be seen as normal file systems in Windows. The application that creates file systems using Dokan library is called File system application.
 
-File operation requests from user programs (e.g., CreateFile, ReadFile, WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode) which will subsequently forward the requests to the Dokan file system driver (dokan1.sys). By using functions provided by the Dokan user mode library (dokan1.dll), file system applications are able to register callback functions to the file system driver. The file system driver will invoke these callback routines in order to response to the requests it received. The results of the callback routines will be sent back to the user program.
+File operation requests from user programs (e.g., CreateFile, ReadFile, WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode) which will subsequently forward the requests to the Dokan file system driver (dokan3.sys). By using functions provided by the Dokan user mode library (dokan3.dll), file system applications are able to register callback functions to the file system driver. The file system driver will invoke these callback routines in order to response to the requests it received. The results of the callback routines will be sent back to the user program.
 
 For example, when Windows Explorer requests to open a directory, the CreateFile with Direction option request will be sent to Dokan file system driver and the driver will invoke the CreateFile callback provided by the file system application. The results of this routine are sent back to Windows Explorer as the response to the CreateFile request. Therefore, the Dokan file system driver acts as a proxy between user programs and file system applications. The advantage of this approach is that it allows programmers to develop file systems in user mode which is safe and easy to debug.
 

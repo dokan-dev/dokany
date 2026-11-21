@@ -1,9 +1,9 @@
 ﻿Dokan contains LGPL and MIT licensed programs.
 
-    user-mode library (dokan2.dll) LGPL
-    driver (dokan2.sys) LGPL
-    network library (dokannp2.dll) LGPL
-    fuse library (dokanfuse2.dll) LGPL
+    user-mode library (dokan3.dll) LGPL
+    driver (dokan3.sys) LGPL
+    network library (dokannp3.dll) LGPL
+    fuse library (dokanfuse3.dll) LGPL
     installer (DokanSetup.exe) LGPL
     control program (dokanctl.exe) MIT
     samples (mirror.exe / memfs.exe) MIT

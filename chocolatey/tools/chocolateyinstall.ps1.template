@@ -1,6 +1,6 @@
 ﻿$ErrorActionPreference = 'Stop';
 
-$packageName    = 'dokany2'
+$packageName    = 'dokany3'
 $toolsDir       = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
 $file64         = "$toolsDir\Dokan_x64.msi"
 
@@ -10,7 +10,7 @@ $packageArgs = @{
   silentArgs    = "/passive /norestart"
   file64        = $file64
   validExitCodes= @(0, 3010, 1641)
-  softwareName  = 'Dokan Library*'
+  softwareName  = 'Dokan Library 3*'
 }
 
 Install-ChocolateyInstallPackage @packageArgs

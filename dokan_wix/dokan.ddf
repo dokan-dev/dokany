@@ -1,4 +1,4 @@
-; *** dokan2.ddf example ***
+; *** dokan3.ddf example ***
 ;
 .OPTION EXPLICIT     ; Generate errors
 .Set CabinetFileCountThreshold=0
@@ -14,21 +14,21 @@
 .Set DiskDirectory1=dokan_wix
 .Set DestinationDir=Releasex64
 x64\Release\Driver\sys\dokan.inf
-x64\Release\Driver\sys\dokan2.sys
-x64\Release\Driver\sys\dokan2.cat
-x64\Release\Driver\dokan2.pdb
+x64\Release\Driver\sys\dokan3.sys
+x64\Release\Driver\sys\dokan3.cat
+x64\Release\Driver\dokan3.pdb
 .Set DestinationDir=ReleaseARM64
 ARM64\Release\Driver\sys\dokan.inf
-ARM64\Release\Driver\sys\dokan2.sys
-ARM64\Release\Driver\sys\dokan2.cat
-ARM64\Release\Driver\dokan2.pdb
+ARM64\Release\Driver\sys\dokan3.sys
+ARM64\Release\Driver\sys\dokan3.cat
+ARM64\Release\Driver\dokan3.pdb
 .Set DestinationDir=Debugx64
 x64\Debug\Driver\sys\dokan.inf
-x64\Debug\Driver\sys\dokan2.sys
-x64\Debug\Driver\sys\dokan2.cat
-x64\Debug\Driver\dokan2.pdb
+x64\Debug\Driver\sys\dokan3.sys
+x64\Debug\Driver\sys\dokan3.cat
+x64\Debug\Driver\dokan3.pdb
 .Set DestinationDir=DebugARM64
 ARM64\Debug\Driver\sys\dokan.inf
-ARM64\Debug\Driver\sys\dokan2.sys
-ARM64\Debug\Driver\sys\dokan2.cat
-ARM64\Debug\Driver\dokan2.pdb
+ARM64\Debug\Driver\sys\dokan3.sys
+ARM64\Debug\Driver\sys\dokan3.cat
+ARM64\Debug\Driver\dokan3.pdb

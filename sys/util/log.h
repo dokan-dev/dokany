@@ -67,9 +67,9 @@ VOID IncrementVcbLogCacheCount();
 #define STR(x) #x
 
 // Main print function which should not be used directly.
-#define DDbgPrint(Format, ...)                        \
-  KdPrintEx((DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, \
-             "[dokan2]" Format "\n", __VA_ARGS__));
+#define DDbgPrint(Format, ...)                                                 \
+  KdPrintEx((DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[dokan3]" Format "\n",  \
+             __VA_ARGS__));
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 #define DokanQuerySystemTime KeQuerySystemTimePrecise

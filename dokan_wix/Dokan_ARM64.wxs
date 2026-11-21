@@ -85,7 +85,7 @@
 		<StandardDirectory Id="ProgramFiles64Folder">
 			<Directory Id="DOKANDIR" Name="Dokan">
 				<Directory Id="INSTALLDIR" Name="DokanLibrary-$(var.BaseVersion)">
-					<Component Id="ProgramFilesComponent" Guid="{C2C81F15-C46C-4CE3-97BB-B782CB1E571C}" Bitness="always64">
+					<Component Id="ProgramFilesComponent" Guid="{93D1CD4D-CB36-43D1-8C68-6C954A927D59}" Bitness="always64">
 						<Environment Id="DokanLibraryEnvPath" Name="DokanLibrary$(var.MajorVersion)" Value="[INSTALLDIR]" Permanent="no" Part="all" Action="set" System="yes"/>
 						<RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductCodeARM64)">
 							<RegistryValue Type="string" Name="AppLocation" Value="[INSTALLDIR]" KeyPath="no"/>
@@ -101,13 +101,13 @@
 						<File Id="licensemitTXT" Source="..\license.mit.txt" Name="license.mit.txt" KeyPath="no"/>
 						<RemoveFolder Id="RemoveINSTALLDIR" On="uninstall"/>
 					</Component>
-					<Component Id="SysPDBFiles" Guid="{13A9BCAF-229C-468B-A48D-237A4147B823}">
+					<Component Id="SysPDBFiles" Guid="{C9390D9A-A8E7-460E-AABD-A8593CAD7AEB}">
 						<File Id="DokanPDB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
 						<File Id="DokanfusePDB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).pdb" Name="dokanfuse$(var.MajorVersion).pdb" KeyPath="no"/>
 						<File Id="DokannpPDB" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).pdb" Name="dokannp$(var.MajorVersion).pdb" KeyPath="no"/>
 					</Component>
 					<Directory Id="LIBDIR" Name="lib">
-						<Component Id="LibFilesComponent" Guid="{953AC0EA-3436-4FBD-8B9E-5960F09CEC34}" Bitness="always64">
+						<Component Id="LibFilesComponent" Guid="{4BDDA451-B980-44FA-BD8A-3B8BFD62181C}" Bitness="always64">
 							<Environment Id="DokanLibraryLibARM64EnvPath" Name="DokanLibrary$(var.MajorVersion)_LibraryPath_ARM64" Value="[LIBDIR]" Permanent="no" Part="all" Action="set" System="yes"/>
 							<File Id="dokanLIB" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).lib" Name="dokan$(var.MajorVersion).lib" KeyPath="yes"/>
 							<File Id="dokanfuseLIB" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).lib" Name="dokanfuse$(var.MajorVersion).lib" KeyPath="no"/>
@@ -115,28 +115,28 @@
 						</Component>
 					</Directory>
 					<Directory Id="DRIVERDIR" Name="driver">
-						<Component Id="Driver_ARM64" Guid="{87F2159C-3E84-4629-ACD9-A8EA07C84F6C}">
+						<Component Id="Driver_ARM64" Guid="{AD14596D-8CD4-4EEA-842B-A4B15AB863C3}">
 							<File Id="Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
 							<File Id="Driver_Cat" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).cat" Name="dokan$(var.MajorVersion).cat" KeyPath="no"/>
 							<File Id="Driver_Inf" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan.inf" Name="dokan.inf" KeyPath="no"/>
 						</Component>
-						<Component Id="Driver_ARM64pdb" Guid="{4BD9696D-0EE6-4305-8FF6-CA5885E62348}">
+						<Component Id="Driver_ARM64pdb" Guid="{7BC4B938-9048-4E03-BB48-77814290543D}">
 							<File Id="Driver_Syspdb" Source="..\ARM64\$(var.Configuration)\Driver\dokan$(var.MajorVersion).pdb" Name="dokan$(var.MajorVersion).pdb" KeyPath="yes"/>
 						</Component>
 					</Directory>
 					<Directory Id="INCLUDEDIR" Name="include">
 						<Directory Id="DOKANINCLUDEDIR" Name="dokan">
-							<Component Id="IncludeDokanFilesComponent" Guid="{7830FCFE-101A-49A9-BF04-DB8FBAC41EFD}" Bitness="always64">
+							<Component Id="IncludeDokanFilesComponent" Guid="{E27BB1A8-7D1C-4F46-AF39-D3BC8A6D4AC7}" Bitness="always64">
 								<File Id="dokanH" Source="..\dokan\dokan.h" Name="dokan.h" KeyPath="yes"/>
 								<File Id="fileinfoH" Source="..\dokan\fileinfo.h" Name="fileinfo.h" KeyPath="no"/>
 								<File Id="publicH" Source="..\sys\public.h " Name="public.h" KeyPath="no"/>
 							</Component>
 						</Directory>
-						<Component Id="IncludeFuseCompatFilesComponent" Guid="{E9820CFD-7AB8-4953-94E2-76548605A626}" Bitness="always64">
+						<Component Id="IncludeFuseCompatFilesComponent" Guid="{1A747A8E-D88B-40B2-8B09-1AAF7F696CBD}" Bitness="always64">
 							<File Id="fuse_include_H" Source="..\dokan_fuse\include\old\fuse.h" Name="fuse.h" KeyPath="yes"/>
 						</Component>
 						<Directory Id="FUSEINCLUDEDIR" Name="fuse">
-							<Component Id="IncludeFuseFilesComponent" Guid="{F483EFF5-700D-44AC-893B-650519BFFBFE}" Bitness="always64">
+							<Component Id="IncludeFuseFilesComponent" Guid="{501A9E8B-5B22-4183-8398-9C106BE2A92B}" Bitness="always64">
 								<File Id="fuseH" Source="..\dokan_fuse\include\fuse.h" Name="fuse.h" KeyPath="yes"/>
 								<File Id="fuse_commonH" Source="..\dokan_fuse\include\fuse_common.h" Name="fuse_common.h" KeyPath="no"/>
 								<File Id="fuse_optH" Source="..\dokan_fuse\include\fuse_opt.h" Name="fuse_opt.h" KeyPath="no"/>
@@ -148,7 +148,7 @@
 					</Directory>
 					<Directory Id="SAMPLEDIR" Name="sample">
 						<Directory Id="MIRRORDIR" Name="mirror">
-							<Component Id="SampleMirrorFilesComponent" Guid="{F3DF60AD-3A7D-4678-91C9-097E561A8311}" Bitness="always64">
+							<Component Id="SampleMirrorFilesComponent" Guid="{6B0E260C-7E20-411D-B493-F376EF071DED}" Bitness="always64">
 								<File Id="mirrorEXE" Source="..\ARM64\$(var.Configuration)\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
 								<File Id="dokanMirrorDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
 								<File Id="dokan_mirrorvcxproj" Source="..\samples\dokan_mirror\dokan_mirror.vcxproj" Name="dokan_mirror.vcxproj" KeyPath="no"/>
@@ -156,7 +156,7 @@
 							</Component>
 						</Directory>
 						<Directory Id="MEMFSDIR" Name="memfs">
-							<Component Id="SampleMemFSFilesComponent" Guid="{F6487723-7E5B-4E8D-889D-C4B0ACEEA43D}" Bitness="always64">
+							<Component Id="SampleMemFSFilesComponent" Guid="{A3AD7356-A4E1-4967-A7E9-31481C27A9E2}" Bitness="always64">
 								<File Id="memfsEXE" Source="..\ARM64\$(var.Configuration)\memfs.exe" Name="memfs.exe" KeyPath="yes"/>
 								<File Id="dokanMemFSDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
 								<File Id="dokan_memfsvcxproj" Source="..\samples\dokan_memfs\dokan_memfs.vcxproj" Name="dokan_memfs.vcxproj" KeyPath="no"/>
@@ -180,13 +180,13 @@
 		</StandardDirectory>
 		<StandardDirectory Id="WindowsFolder">
 			<Directory Id="Sys32Folder" Name="System32">
-				<Component Id="Sys32Files" Guid="{3A47A4F3-45ED-4E73-977B-D09426B5CDED}">
+				<Component Id="Sys32Files" Guid="{97678D03-C446-4EA3-9641-4A01A972254E}">
 					<File Id="DokanSysDLL" Source="..\ARM64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="yes"/>
 					<File Id="DokannpDLL" Source="..\ARM64\$(var.Configuration)\dokannp$(var.MajorVersion).dll" Name="dokannp$(var.MajorVersion).dll"/>
 					<File Id="DokanfuseSysDLL" Source="..\ARM64\$(var.Configuration)\dokanfuse$(var.MajorVersion).dll" Name="dokanfuse$(var.MajorVersion).dll"/>
 				</Component>
 				<Directory Id="DriversFolder" Name="drivers">
-					<Component Id="Sys32DriversFiles" Guid="{B4BA8943-57A0-4625-82E9-F0A19D316551}">
+					<Component Id="Sys32DriversFiles" Guid="{05C16EB1-071A-4BBE-A576-45B9268EB503}">
 						<File Id="Registered_Driver_Sys" Source="..\ARM64\$(var.Configuration)\Driver\sys\dokan$(var.MajorVersion).sys" Name="dokan$(var.MajorVersion).sys" KeyPath="yes"/>
 					</Component>
 				</Directory>

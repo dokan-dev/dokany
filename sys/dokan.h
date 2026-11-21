@@ -94,14 +94,10 @@ extern DokanPtr_FsRtlAreThereWaitingFileLocks
 #define VOLUME_LABEL L"DOKAN"
 #endif
 
-// {D6CC17C5-1734-4085-BCE7-964F1E9F5DE9}
+// {9819C768-44BA-4BE7-90F4-FDB87ADD2FDD}
 #ifndef DOKAN_BASE_GUID
 #define DOKAN_BASE_GUID                                                        \
-  {                                                                            \
-    0xd6cc17c5, 0x1734, 0x4085, {                                              \
-      0xbc, 0xe7, 0x96, 0x4f, 0x1e, 0x9f, 0x5d, 0xe9                           \
-    }                                                                          \
-  }
+  {0x9819c768, 0x44ba, 0x4be7, {0x90, 0xf4, 0xfd, 0xb8, 0x7a, 0xdd, 0x2f, 0xdd}}
 #endif
 
 #define TAG (ULONG)'AKOD'
@@ -153,7 +149,7 @@ extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
 //
 typedef enum _FSD_IDENTIFIER_TYPE {
   DGL = ':DGL',       // Dokan Global
-  DCB = ':DDC',       // Disk Control Block
+  DCB = ':D3C',       // Disk Control Block
   VCB = ':VCB',       // Volume Control Block
   FCB = ':FCB',       // File Control Block
   CCB = ':CCB',       // Context Control Block
