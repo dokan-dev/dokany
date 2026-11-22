@@ -41,10 +41,10 @@ if (Test-Path -LiteralPath (Join-Path $cygwinDir 'bin\bash.exe') -PathType Leaf)
 
 $msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
 if (Test-Path -LiteralPath (Join-Path $msys2Dir 'usr\bin\bash.exe') -PathType Leaf) {
-	Write-Host Include MSYS2 binaries in installer
+	Write-Output "Include MSYS2 binaries in installer"
 	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="false"', 'BuildMsys2="true"' | sc .\dokan_wix\version.xml
 } else {
-	Write-Host Exclude MSYS2 binaries from installer
+	Write-Output "Exclude MSYS2 binaries from installer"
 	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="true"', 'BuildMsys2="false"' | sc .\dokan_wix\version.xml
 }
 
