@@ -84,7 +84,7 @@ foreach ($kv in $dl_files.GetEnumerator()) {
     $out_file = Join-Path $temp_dir $dl_filename
     $url = "$($base_url.TrimEnd('/'))/$([System.Uri]::EscapeDataString($dl_filename))"
     if ( !(Test-Path $out_file) -Or $(Get-FileHash -Algorithm SHA256 $out_file).Hash -ne $expected_sha256) {
-        Write-Host "File $out_file not existing or hash not matching, downloading from $url..."
+        Write-Output "File $out_file not existing or hash not matching, downloading from $url..."
         $maxAttempts = 4
         $downloaded = $false
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
