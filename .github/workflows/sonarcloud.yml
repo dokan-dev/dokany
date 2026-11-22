@@ -1,0 +1,81 @@
+name: SonarCloud
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.md'
+      - 'documentations/**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - 'README.md'
+      - 'documentations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonarcloud-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sonarcloud:
+    name: Build & Analyze (SonarCloud)
+    # Skip fork PRs where repository secrets are unavailable.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout dokany
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Cache WDK NuGet packages
+        id: cache-wdk
+        uses: actions/cache@v6
+        with:
+          path: packages
+          key: wdk-nuget-${{ hashFiles('sys/packages.config') }}
+
+      - name: Restore WDK NuGet packages
+        if: steps.cache-wdk.outputs.cache-hit != 'true'
+        shell: powershell
+        run: nuget restore .\sys\packages.config -PackagesDirectory .\packages
+
+      - name: Cache SonarCloud scanner cache
+        uses: actions/cache@v6
+        with:
+          path: ~\.sonar\cache
+          key: sonar-cache-${{ runner.os }}-${{ hashFiles('scripts/sonar-build.ps1') }}
+          restore-keys: sonar-cache-${{ runner.os }}-
+
+      - name: Build and run SonarCloud analysis
+        shell: powershell
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:SONAR_TOKEN)) {
+            if ($env:GITHUB_EVENT_NAME -eq "pull_request") {
+              Write-Host "::notice::SONAR_TOKEN is not configured; skipping SonarCloud scan on pull request."
+              return
+            }
+            throw "SONAR_TOKEN secret is required for SonarCloud analysis."
+          }
+
+          if ([string]::IsNullOrEmpty($env:JAVA_HOME_21_X64)) {
+            throw "JAVA_HOME_21_X64 is not set on this runner."
+          }
+          $env:JAVA_HOME = $env:JAVA_HOME_21_X64
+          $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+
+          $dokanVersion = (([xml](Get-Content .\Dokan.props)).Project.PropertyGroup | Where-Object { $_.DOKANVersion } | Select-Object -First 1).DOKANVersion
+          if ([string]::IsNullOrEmpty($dokanVersion)) {
+            throw "Could not read DOKANVersion from Dokan.props"
+          }
+          $buildVersion = "$dokanVersion-$env:GITHUB_RUN_NUMBER"
+          Write-Host "Running SonarCloud analysis for version $buildVersion..."
+          .\scripts\sonar-build.ps1 $buildVersion

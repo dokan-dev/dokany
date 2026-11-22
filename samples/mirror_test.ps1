@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe")
+    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe"),
+    [Parameter(Mandatory=$false)][string[]] $ConfigNames = @()
 )
 #TODO: enable specifying own mirror-commands and own test-commands
 #TODO: move compilation of test tools to separate scripts in scripts
@@ -146,9 +147,19 @@ if (!(Test-Path $fsTestPath2)) { New-Item $fsTestPath2 -type directory | Out-Nul
 
 add-type -AssemblyName System.Windows.Forms
 
+$activeConfigs = $Configs
+if ($ConfigNames.Count -gt 0) {
+	$validNames = @($Configs | ForEach-Object { $_.Item("Name") })
+	$unknownNames = @($ConfigNames | Where-Object { $validNames -notcontains $_ })
+	if ($unknownNames.Count -gt 0) {
+		throw ("Unknown config name(s): $($unknownNames -join ', '). Valid names: $($validNames -join ', ')")
+	}
+	$activeConfigs = @($Configs | Where-Object { $ConfigNames -contains $_.Item("Name") })
+}
+
 $mirrorCount = 1;
 foreach ($mirror in $Mirrors) {
-	foreach ($Config in $Configs) {
+	foreach ($Config in $activeConfigs) {
 		$command = $Config.Item("MirrorArguments")
 		$destination = $Config.Item("Destination")
 		$Name  = "$mirrorCount\$($Config.Item("Name"))"

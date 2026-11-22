@@ -1,0 +1,87 @@
+name: Clang-Format
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clang-format-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  clang-format:
+    name: Check C/C++ formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Ensure clang-format and git-clang-format are installed
+        run: |
+          if ! command -v clang-format >/dev/null 2>&1 || ! command -v git-clang-format >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends clang-format
+          fi
+          clang-format --version
+
+      - name: Run git clang-format on C/C++ changes
+        id: format
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          DIFF_FILE="clang-format-pr-${PR_NUMBER}.diff"
+          echo "diff_file=${DIFF_FILE}" >> "$GITHUB_OUTPUT"
+
+          # HEAD^1 is the base branch parent of GitHub's PR merge commit.
+          set +e
+          git clang-format --quiet --style=file --diff \
+            --extensions c,h,cc,cpp,cxx,hpp,hxx HEAD^1 > "$DIFF_FILE"
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ] && [ ! -s "$DIFF_FILE" ]; then
+            echo "::error::git clang-format failed with exit code ${status}"
+            exit "$status"
+          fi
+
+          if [ -s "$DIFF_FILE" ]; then
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Formatting suggestions::clang-format suggested changes for this PR. Download the diff artifact or run 'git clang-format --style=file ${BASE_SHA}' locally."
+            {
+              echo "### clang-format suggestions"
+              echo ""
+              echo "Formatting differences were found in modified C/C++ lines. Run locally:"
+              echo '```bash'
+              echo "git clang-format --style=file --extensions c,h,cc,cpp,cxx,hpp,hxx ${BASE_SHA}"
+              echo '```'
+              echo ""
+              echo "The full patch is uploaded as the \`clang-format-diff\` workflow artifact."
+              echo ""
+              echo "<details><summary>Diff preview (first 200 lines)</summary>"
+              echo ""
+              echo '```diff'
+              head -n 200 "$DIFF_FILE"
+              echo '```'
+              echo "</details>"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+            echo "Your indentation is fine. clang-format did not suggest any changes."
+            echo "### clang-format" >> "$GITHUB_STEP_SUMMARY"
+            echo "No formatting changes suggested." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload formatting diff artifact
+        if: steps.format.outputs.has_diff == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-format-diff
+          path: ${{ steps.format.outputs.diff_file }}
+          if-no-files-found: error
+          retention-days: 14

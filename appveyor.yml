@@ -1,12 +1,7 @@
 -
   environment:
-    AccessTokenDokanDoc:
-      secure: Omu2AD4ooK5Owx+v4XS3VPuWc0xJyZXGZlgv4ipJqmt0wY2LN7bzev8y3OLHsARU
-    SONAR_TOKEN:
-      secure: Q7XGQVB02t1XKb3d6NqEdLEszhIYtZqLZbE6LTbQCBVzYYyL5MfW7KvCpxtJ8xRV
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
-      DOXYGEN_INST_DIR: '%DOKAN_CI_CACHE%\doxygen'
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2-cache'
 #     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
@@ -17,41 +12,19 @@
   version: 3.0.0-{build}
   configuration:
   - All
-  - SonarQube
   - FsTest
-  - Documentation
 
   image:
     - Visual Studio 2026
-    - Visual Studio 2022
-    - Visual Studio 2019
     - Visual Studio 2017
 # If you suspect some changes on the AppVeyor-side breaking things,
 # uncomment below. https://www.appveyor.com/updates/
 #    - Previous Visual Studio 2026
-#    - Previous Visual Studio 2022
-#    - Previous Visual Studio 2019
 #    - Previous Visual Studio 2017
   matrix:
     exclude:
       - configuration: All
         image: Visual Studio 2017
-      - configuration: SonarQube
-        image: Visual Studio 2017
-      - configuration: Documentation
-        image: Visual Studio 2017
-      - configuration: All
-        image: Visual Studio 2019
-      - configuration: SonarQube
-        image: Visual Studio 2019
-      - configuration: Documentation
-        image: Visual Studio 2019
-      - configuration: All
-        image: Visual Studio 2022
-      - configuration: SonarQube
-        image: Visual Studio 2022
-      - configuration: Documentation
-        image: Visual Studio 2022
   max_jobs: 1
   cache:
   - '%DOKAN_CI_CACHE% -> appveyor.yml'
@@ -88,7 +61,7 @@
     - ps: |
         . .\scripts\build_helper.ps1
     - ps: |
-        if ($env:CONFIGURATION -eq "All" -or ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master" -and !$env:APPVEYOR_PULL_REQUEST_NUMBER)) {
+        if ($env:CONFIGURATION -eq "All") {
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
           if (!$vsPath) {
             throw "Visual Studio with MSBuild not found"
@@ -111,29 +84,6 @@
     - ps: |
         if ($env:CONFIGURATION -eq "FsTest") {
           Exec-External {& powershell .\scripts\install_wlk_ifstest.ps1 }
-        }
-    - ps: |
-        if ($env:CONFIGURATION -eq "Documentation") {
-          # choco doxygen.portable has ftp download issue for now
-          # Exec-External {& choco install "--cache-location=${env:CHOCO_CACHE}" doxygen.portable}
-          $env:PATH = "$env:DOXYGEN_INST_DIR;$env:PATH"
-          if (Test-Path $env:DOXYGEN_INST_DIR) {
-            Write-Host "Doxygen in cache, skipping."
-            return
-          }
-          New-Item -Force -Type Directory $env:DOXYGEN_INST_DIR | Out-Null
-          cd $env:DOXYGEN_INST_DIR
-          $doxygen_zip = "$env:TEMP\doxygen.zip"
-          # Version has to be < 1.8.12 because doxyboot theme is incompatible with later versions
-          # https://github.com/Velron/doxygen-bootstrapped/issues/20
-          # https://github.com/Velron/doxygen-bootstrapped/issues/27
-          Write-Host "Downloading Doxygen..."
-          Invoke-WebRequest https://netcologne.dl.sourceforge.net/project/doxygen/rel-1.8.11/doxygen-1.8.11.windows.x64.bin.zip -OutFile $doxygen_zip -UserAgent [Microsoft.PowerShell.Commands.PSUserAgent]::FireFox
-          if ($(Get-FileHash -Algorithm SHA256 $doxygen_zip).Hash -ne "6CE7C259975FB3DC449313913DE71B89665D15C49CF674DB6952F304BB3DFAAA") {
-            throw "Hash mismatch while downloading Doxygen"
-          }
-          Exec-External {& 7z x -y "$doxygen_zip"}
-          cd $env:APPVEYOR_BUILD_FOLDER
         }
     - git submodule update --init --recursive
     - ps: |
@@ -197,18 +147,6 @@
   - ps: |
       Write-Host Start building...
       $buildCmd = $(cmd /c where msbuild) | Select-Object -First 1
-
-  - ps: |
-      if ($env:CONFIGURATION -eq "SonarQube" -and "$env:APPVEYOR_REPO_BRANCH" -eq "master") {
-       
-        if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
-          Add-AppveyorMessage -Message "Not running SonarQube on pull request." -Category Information
-          return;
-        }
-
-        $env:JAVA_HOME = "C:\Program Files\Java\jdk21"
-        .\scripts\sonar-build.ps1 $env:APPVEYOR_BUILD_VERSION
-      }
 
   - ps: |
       # Available in all configurations
@@ -308,11 +246,11 @@
         Write-Host Running tests...
         $env:DokanLibrary3 = [System.Environment]::GetEnvironmentVariable("DokanLibrary3", "Machine")
         $memfs = @("${env:DokanLibrary3}\sample\memfs\memfs.exe", "${env:DokanLibrary3}\x86\sample\memfs\memfs.exe")
-        $mirrors = @("${env:DokanLibrary3}\sample\mirror\mirror.exe", "${env:DokanLibrary3}\x86\sample\mirror\mirror.exe")
 
         cd .\samples
         .\memfs_test.ps1 -Memfs $memfs
-        .\mirror_test.ps1 -Mirrors $mirrors
+        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\sample\mirror\mirror.exe")
+        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\x86\sample\mirror\mirror.exe") -ConfigNames @("drive", "netUnc")
       }
   - ps: |
       if ($env:CONFIGURATION -eq "FsTest") {
@@ -367,68 +305,3 @@
 
         throw "Build failed due to BSOD during $env:CONFIGURATION"
       }
-
-  on_success:
-    - ps: |
-        # AppVeyor does not provide us with the SHA1 before the push
-        # Thus we have no baseline for pushes and can only run this for PRs
-        if ($env:CONFIGURATION -eq "All" -and $env:APPVEYOR_PULL_REQUEST_NUMBER) {
-          $parents = (Exec-External {& git rev-list --parents -n1 HEAD}).Split()
-          $head = $parents[0]
-          $mergeBranchHead = $parents[1]
-          $prBranchHead = $parents[2]
-
-          # Python 3 is needed by git clang-format
-          # https://help.appveyor.com/discussions/problems/6832-appveyor-doesnt-recognizes-python3-command
-          $pyDir = (Get-ChildItem "C:\Python3*" -Directory | Where-Object { $_.Name -match '^Python3\d+(-x64)?$' -and (Test-Path "$($_.FullName)\python.exe") } | Sort-Object Name -Descending | Select-Object -First 1).FullName
-          if (!$pyDir) {
-            throw "Python 3 installation not found under C:\Python3*"
-          }
-          if (!(Test-Path "$pyDir\python3.exe")) {
-            Copy-Item -Path "$pyDir\python.exe" -Destination "$pyDir\python3.exe"
-          }
-          $env:PATH = "$pyDir;$env:PATH"
-
-          $diffFile = "clang_format_$(& git rev-parse --short $prBranchHead)_into_$(& git rev-parse --short $mergeBranchHead).diff"
-          Exec-External {& git config --global core.autocrlf true }
-          Exec-External {& git clang-format --quiet --style=file --diff $mergeBranchHead} |
-            Select-String -NotMatch "^no modified files to format$" > $diffFile
-          if ((Get-Item $diffFile).length -gt 0) {
-            Write-Host "Ran git clang-format on PR, found changes, uploading as artifact"
-            Add-AppveyorMessage `
-              -Category Warning `
-              -Message "Please check your indentation." `
-              -Details ("You may want to run ``git clang-format --style file`` on each of your commits.`n" + `
-                "A diff of the suggested changes is available here:`n" + `
-                "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($diffFile))")
-            Push-AppveyorArtifact $diffFile
-          }
-          else {
-            Write-Host "Ran git clang-format on PR, no changes necessary"
-            Add-AppveyorMessage `
-              -Category Information `
-              -Message "Your indentation is fine. clang-format did not suggest any changes."
-          }
-        }
-    - ps: |
-        if ($env:CONFIGURATION -eq "Documentation") {
-            if (!$env:AccessTokenDokanDoc -or "$env:APPVEYOR_PULL_REQUEST_TITLE" -or "$env:APPVEYOR_REPO_BRANCH" -ne "master") {
-              return;
-            }
-
-            cd $env:APPVEYOR_BUILD_FOLDER\documentations
-            Exec-External {& git config --global user.email "appveyor@appveyor.org"}
-            Exec-External {& git config --global user.name "appveyor"}
-            Exec-External {& git clone -b gh-pages --single-branch https://$($env:AccessTokenDokanDoc)@github.com/dokan-dev/dokany-doc.git doc}
-            Exec-External {& doxygen Doxyfile}
-            cd doc
-            if ($(git status --porcelain)) {
-              Write-Host "Update documentation..." -ForegroundColor Green
-              Exec-External {& git add -A}
-              Exec-External {& git commit -m "Latest documentation on successful appveyor build $env:APPVEYOR_BUILD_VERSION auto-pushed to gh-pages"}
-              Exec-External {& git push -fq origin gh-pages}
-              Write-Host "Documentation updated!" -ForegroundColor Green
-            } else {
-              Write-Host "No documentation changes detected." -ForegroundColor Green
-            }
-        }

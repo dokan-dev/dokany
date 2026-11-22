@@ -46,7 +46,7 @@ try {
 	  -D"sonar.projectKey=dokany" `
 	  -D"sonar.projectVersion=$BUILD_VERSION" `
 	  -D"sonar.sources=." `
-	  -D"sonar.exclusions=.sonar/**,bw-output/**,packages/**,samples/dokan_memfs/spdlog/**,documentations/resources/**" `
+	  -D"sonar.exclusions=.sonar/**,bw-output/**,packages/**,samples/dokan_memfs/spdlog/**" `
 	  -D"sonar.cfamily.compile-commands=$compileCommands" `
 	  -D"sonar.host.url=https://sonarcloud.io"
 	$scannerExitCode = $LASTEXITCODE
