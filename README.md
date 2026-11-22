@@ -51,10 +51,10 @@ RandomOpenClose | +173.05% |               |          | Delete        |  +90.83%
 
 Dokan contains LGPL and MIT licensed programs.
 
-- user-mode library (dokan2.dll)   **LGPL**
-- driver (dokan2.sys)              **LGPL**
-- network library (dokannp2.dll)   **LGPL**
-- fuse library (dokanfuse2.dll)    **LGPL**
+- user-mode library (dokan3.dll)   **LGPL**
+- driver (dokan3.sys)              **LGPL**
+- network library (dokannp3.dll)   **LGPL**
+- fuse library (dokanfuse3.dll)    **LGPL**
 - installer (DokanSetup.exe)       **LGPL**
 - control program (dokanctl.exe)   **MIT**
 - samples (mirror.exe / memfs.exe) **MIT**
@@ -79,8 +79,8 @@ Platform
 
 ## How it works
 
-Dokan library contains a user mode DLL (dokan2.dll) and a kernel mode file
-system driver (dokan2.sys). Once the Dokan file system driver is installed, you can
+Dokan library contains a user mode DLL (dokan3.dll) and a kernel mode file
+system driver (dokan3.sys). Once the Dokan file system driver is installed, you can
 create file systems which can be seen as normal file systems in Windows. The
 application that creates file systems using Dokan library is called File system
 application.
@@ -88,8 +88,8 @@ application.
 File operation requests from user programs (e.g., CreateFile, ReadFile,
 WriteFile, ...) will be sent to the Windows I/O subsystem (runs in kernel mode)
 which will subsequently forward the requests to the Dokan file system driver
-(dokan2.sys). By using functions provided by the Dokan user mode library
-(dokan2.dll), file system applications are able to register callback functions
+(dokan3.sys). By using functions provided by the Dokan user mode library
+(dokan3.dll), file system applications are able to register callback functions
 to the file system driver. The file system driver will invoke these callback
 routines in order to respond to the requests it received. The results of the
 callback routines will be sent back to the user program.
@@ -118,7 +118,7 @@ For details, see the
 
 The latest official and signed build can be downloaded from:
 * [Github release page](https://github.com/dokan-dev/dokany/releases)
-* `choco install dokany2` or
+* `choco install dokany3` or
 * `winget install dokan-dev.dokany`
 
 For manual installation, see the

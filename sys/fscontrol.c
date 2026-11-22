@@ -767,41 +767,55 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   DOKAN_INIT_LOGGER(logger, driverObject, IRP_MJ_FILE_SYSTEM_CONTROL);
   DOKAN_LOG_FINE_IRP(RequestContext, "Mounting disk device.");
 
-  PDEVICE_OBJECT deviceObject =
+  PDEVICE_OBJECT currentDeviceObject =
       RequestContext->IrpSp->Parameters.MountVolume.DeviceObject;
-  dcb = deviceObject->DeviceExtension;
   PDEVICE_OBJECT lowerDeviceObject = NULL;
-  while (!MatchDokanDCBType(RequestContext, dcb, &logger,
+  while (currentDeviceObject != NULL) {
+    // Only inspect DeviceExtension after verifying the device belongs to this
+    // driver; foreign drivers may have smaller or unrelated extensions.
+    if (currentDeviceObject->DriverObject == driverObject) {
+      PDokanDCB candidateDcb = currentDeviceObject->DeviceExtension;
+      if (MatchDokanDCBType(RequestContext, candidateDcb, &logger,
                             /*LogFailures=*/!hasMountedAnyDisk)) {
-    PDEVICE_OBJECT parentDeviceObject =
-        lowerDeviceObject ? lowerDeviceObject : deviceObject;
-    lowerDeviceObject = IoGetLowerDeviceObject(parentDeviceObject);
-    if (parentDeviceObject != deviceObject) {
-      ObDereferenceObject(parentDeviceObject);
-    }
-    if (!lowerDeviceObject) {
-      if (!hasMountedAnyDisk) {
-        // We stop logging wrapped devices once we successfully mount any disk,
-        // because otherwise these messages generate useless noise when the file
-        // system gets random mount requests for non-dokan disks.
-        DOKAN_LOG_FINE_IRP(
-            RequestContext,
-            "Not mounting because there is no matching DCB. This is"
-            " expected, if a non-DriveFS device is being mounted. If"
-            " this prevents DriveFS startup, it may mean the DriveFS"
-            " device has its identity obscured by a filter driver.");
+        dcb = candidateDcb;
+        break;
       }
-      return STATUS_UNRECOGNIZED_VOLUME;
+    } else if (!hasMountedAnyDisk) {
+      DOKAN_LOG_FINE_IRP(
+          RequestContext,
+          "Skipping DeviceObject %p owned by a different driver (%p).",
+          currentDeviceObject, currentDeviceObject->DriverObject);
     }
-    if (!hasMountedAnyDisk) {
+
+    PDEVICE_OBJECT nextDeviceObject =
+        IoGetLowerDeviceObject(currentDeviceObject);
+    if (lowerDeviceObject != NULL) {
+      ObDereferenceObject(lowerDeviceObject);
+    }
+    lowerDeviceObject = nextDeviceObject;
+    currentDeviceObject = lowerDeviceObject;
+    if (currentDeviceObject != NULL && !hasMountedAnyDisk) {
       DOKAN_LOG_FINE_IRP(RequestContext,
                          "Processing the lower level DeviceObject, in case"
                          " this is a DriveFS device wrapped by a filter.");
     }
-    dcb = lowerDeviceObject->DeviceExtension;
   }
-  if (lowerDeviceObject) {
+  if (lowerDeviceObject != NULL) {
     ObDereferenceObject(lowerDeviceObject);
+  }
+  if (dcb == NULL) {
+    if (!hasMountedAnyDisk) {
+      // We stop logging wrapped devices once we successfully mount any disk,
+      // because otherwise these messages generate useless noise when the file
+      // system gets random mount requests for non-dokan disks.
+      DOKAN_LOG_FINE_IRP(
+          RequestContext,
+          "Not mounting because there is no matching DCB. This is"
+          " expected, if a non-DriveFS device is being mounted. If"
+          " this prevents DriveFS startup, it may mean the DriveFS"
+          " device has its identity obscured by a filter driver.");
+    }
+    return STATUS_UNRECOGNIZED_VOLUME;
   }
 
   if (dcb->Global->DriverVersion != DOKAN_DRIVER_VERSION) {

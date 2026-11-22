@@ -24,11 +24,11 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define PUBLIC_H_
 
 #ifndef DOKAN_MAJOR_API_VERSION
-#define DOKAN_MAJOR_API_VERSION L"2"
+#define DOKAN_MAJOR_API_VERSION L"3"
 #include <minwindef.h>
 #endif
 
-#define DOKAN_DRIVER_VERSION 0x0000190
+#define DOKAN_DRIVER_VERSION 0x0000300
 
 #define EVENT_CONTEXT_MAX_SIZE (1024 * 32)
 // This is arbitrary. There isn't really an absolute max, but we marshal it in
