@@ -3,7 +3,6 @@
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
-      MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2-cache'
 #     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: All"
@@ -109,41 +108,6 @@
 
           New-Item -ItemType Directory -Force -Path "C:\cygwin64", $env:CYG_CACHE | Out-Null
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
-        }
-
-    - ps: |
-        if ($env:CONFIGURATION -eq "All") {
-          function bash($bash_command) {
-            Write-Host "MSYS2-Bash: $bash_command"
-            Exec-External {& C:\msys64\usr\bin\bash.exe --login -c $bash_command }
-            Write-Host "MSYS2-Bash $bash_command " -NoNewLine
-            Write-Host "[ OK ]" -ForegroundColor Green
-          }
-          New-Item -Force -Type Directory $env:MSYS2_CACHE
-          $unix_msys2_cache = (Exec-External {& C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'"})
-
-          # Update keyring to fix possible package signatures we faced in the past.
-          bash "pacman -Sy --noconfirm --cache `"$unix_msys2_cache`" msys2-keyring"
-
-          # We run the upgrade three times, because MSYS2 cannot upgrade itself without restarting
-          # TODO: detect if restart is necessary and only run as many times as needed.
-          #       Maybe two times is enough in all cases, but better be safe than sorry and run it three times.
-          # See https://github.com/msys2/msys2/wiki/MSYS2-installation#iii-updating-packages
-          # For the `--ask 20` option, see
-          # <https://github.com/Alexpux/MSYS2-packages/issues/1141>.
-          #
-          # Otherwise the message
-          #
-          #     :: msys2-runtime and catgets are in conflict. Remove catgets? [y/N]
-          #
-          # is displayed when trying to update followed by an exit rather
-          # than selecting yes.
-
-          for ($i = 0; $i -lt 3; $i++) {
-            bash "pacman -Syuu --ask 20 --noconfirm --cache `"$unix_msys2_cache`""
-          }
-          # install MinGW toolchain
-          bash "pacman --sync --needed --noconfirm --cache `"$unix_msys2_cache`" mingw-w64-{x86_64,i686}-toolchain mingw-w64-{x86_64,i686}-cmake make"
         }
 
   build_script:
