@@ -3,6 +3,9 @@
 <?ifndef BuildCygwin ?>
 <?define BuildCygwin="false" ?>
 <?endif?>
+<?ifndef BuildMsys2 ?>
+<?define BuildMsys2="false" ?>
+<?endif?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 	<Package Name="$(var.ProductName) $(var.BaseVersion).$(var.BuildVersion) (x64)" Language="1033" Version="$(var.BaseVersion).$(var.BuildVersion)" Manufacturer="$(var.CompanyName)" UpgradeCode="$(var.UpgradeCodeX64)" ProductCode="$(var.ProductCodeX64)">
 		<Icon Id="DokanIcon" SourceFile="Dokan.ico"/>
@@ -68,7 +71,10 @@
 			<ComponentRef Id="X86PROGRAMFiles"/>
 			<?if $(var.BuildCygwin)=true ?>
 			<ComponentRef Id="ProgramFilesCygwinComponent"/>
-			<ComponentRef Id="X86CygwinFiles"/>
+			<?endif?>
+			<?if $(var.BuildMsys2)=true ?>
+			<ComponentRef Id="ProgramFilesMsys2Component"/>
+			<ComponentRef Id="X86Msys2Files"/>
 			<?endif?>
 		</Feature>
 		<Feature Id="DokanDevFeature" Title="Development" Description="Dokan development files" Level="2" Display="expand">
@@ -85,7 +91,6 @@
 				<ComponentRef Id="SampleMemFSFilesComponent"/>
 				<ComponentRef Id="SampleMemFSFilesComponentX86"/>
 				<?if $(var.BuildCygwin)=true ?>
-				<ComponentRef Id="SampleFuseCygwinFilesComponentX86"/>
 				<ComponentRef Id="SampleFuseMirrorCygwinComponent"/>
 				<?endif?>
 			</Feature>
@@ -179,8 +184,6 @@
 									<File Id="memfs_operationsX86H" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
 								</Component>
 							</Directory>
-							<Directory Id="FUSEMIRRORX86DIR" Name="fuse_mirror">
-							</Directory>
 						</Directory>
 					</Directory>
 					<Directory Id="DRIVERDIR" Name="driver">
@@ -272,23 +275,20 @@
 	<Fragment>
 		<Component Id="ProgramFilesCygwinComponent" Guid="{862C83AA-B7FB-4215-9DF9-2C2203D26781}" Directory="INSTALLDIR" Bitness="always64">
 			<File Id="DokanfuseCygwinDLL" Source="..\x64\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
-			<File Id="DokanfuseMsys2DLL" Source="..\x64\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-		</Component>
-		<Component Id="X86CygwinFiles" Guid="{C4DE48EA-066C-47F2-9778-DFD2ADD4B867}" Directory="X86PROGRAMSDIR">
-			<File Id="X86DokanCygFuseDLL" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
-			<File Id="X86DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-		</Component>
-		<Component Id="SampleFuseCygwinFilesComponentX86" Guid="{AE921CCF-2CC6-4584-8AAF-B338B5E7D2FF}" Directory="FUSEMIRRORX86DIR" Bitness="always64">
-			<File Id="fuseMirrorEXEX86" Source="..\Win32\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
-			<File Id="dokanFuseMirrorDLLX86" Source="..\Win32\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
-			<File Id="dokanCygFuseMirrorDLLX86" Source="..\Win32\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
-			<File Id="fuseMirrorX86C" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
 		</Component>
 		<Component Id="SampleFuseMirrorCygwinComponent" Guid="{FAB44AC9-67FE-4794-9B4C-2191F43703E8}" Directory="FUSEMIRRORDIR" Bitness="always64">
 			<File Id="fuseMirrorEXE" Source="..\x64\Cygwin\mirror.exe" Name="mirror.exe" KeyPath="yes"/>
 			<File Id="dokanFuseMirrorDLL" Source="..\x64\$(var.Configuration)\dokan$(var.MajorVersion).dll" Name="dokan$(var.MajorVersion).dll" KeyPath="no"/>
 			<File Id="dokanCygFuseMirrorDLL" Source="..\x64\Cygwin\cygdokanfuse$(var.MajorVersion).dll" Name="cygdokanfuse$(var.MajorVersion).dll" KeyPath="no"/>
 			<File Id="fuseMirrorC" Source="..\samples\fuse_mirror\fusexmp.c" Name="fusexmp.c" KeyPath="no"/>
+		</Component>
+	</Fragment>
+	<Fragment>
+		<Component Id="ProgramFilesMsys2Component" Guid="{234FAE65-2CC5-4C30-A8D4-37449BD22C2C}" Directory="INSTALLDIR" Bitness="always64">
+			<File Id="DokanfuseMsys2DLL" Source="..\x64\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
+		</Component>
+		<Component Id="X86Msys2Files" Guid="{3BF47C35-DC62-49FC-AE18-31A74F4C4E98}" Directory="X86PROGRAMSDIR">
+			<File Id="X86DokanfuseMsys2DLL" Source="..\Win32\Msys2\libdokanfuse$(var.MajorVersion).dll" Name="libdokanfuse$(var.MajorVersion).dll" KeyPath="yes"/>
 		</Component>
 	</Fragment>
 </Wix>

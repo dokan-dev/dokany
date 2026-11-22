@@ -30,12 +30,22 @@ if (-not ([string]::IsNullOrEmpty($env:EV_CERTTHUMBPRINT)))
 }
 else { Write-Host EV_CERTTHUMBPRINT env variable is missing. EV Signature cab is needed for developer hardware dashboard submission. }
 
-if (Test-Path -Path C:\cygwin64) {
+$cygwinDir = if (-not [string]::IsNullOrWhiteSpace($env:CYGWIN_INST_DIR)) { $env:CYGWIN_INST_DIR } else { 'C:\cygwin64' }
+if (Test-Path -LiteralPath (Join-Path $cygwinDir 'bin\bash.exe') -PathType Leaf) {
 	Write-Host Include Cygwin binaries in installer
 	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc .\dokan_wix\version.xml
 } else {
 	Write-Host Exclude Cygwin binaries from installer
 	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="true"', 'BuildCygwin="false"' | sc .\dokan_wix\version.xml
+}
+
+$msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
+if (Test-Path -LiteralPath (Join-Path $msys2Dir 'usr\bin\bash.exe') -PathType Leaf) {
+	Write-Host Include MSYS2 binaries in installer
+	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="false"', 'BuildMsys2="true"' | sc .\dokan_wix\version.xml
+} else {
+	Write-Host Exclude MSYS2 binaries from installer
+	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="true"', 'BuildMsys2="false"' | sc .\dokan_wix\version.xml
 }
 
 Write-Host Build installer ...
