@@ -37,7 +37,7 @@ if ($BuildPart -contains 'cygwin') {
 	if (Test-Path -LiteralPath $cygwinBash -PathType Leaf) {
 		$fuseTargets += 'cygwin'
 	} else {
-		Write-Host "Cygwin build disabled ($cygwinBash not found)"
+		Write-Output "Cygwin build disabled ($cygwinBash not found)"
 	}
 }
 
@@ -47,7 +47,7 @@ if ($BuildPart -contains 'msys2') {
 	if (Test-Path -LiteralPath $msys2Bash -PathType Leaf) {
 		$fuseTargets += 'msys2'
 	} else {
-		Write-Host "MSYS2 build disabled ($msys2Bash not found)"
+		Write-Output "MSYS2 build disabled ($msys2Bash not found)"
 	}
 }
 
