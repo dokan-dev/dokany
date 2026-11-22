@@ -9,6 +9,7 @@
 #    files to be downloaded.
 #
 Set-StrictMode -Version 2
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 # TODO: I have not managed to change the installation path
 # $installation_dir = ''
 $log_file = "ifstest_install.log"
@@ -22,7 +23,7 @@ $hlks = @(
         # Anything older than Win10 (8.1, 8, 7). Only tested with 8.1. We might need an older one for Win7
         'suitable_for_os_version' = [Environment]::OSVersion.Version -lt (New-Object 'Version' 10, 0, 0, 0);
         'name' = 'Windows HCK for Windows 8.1 QFE Update 014 (Build ID: 8.100.27024)';
-        'base_url' = 'http://download.microsoft.com/download/6/6/B/66B3BE98-DD33-4860-A404-8F2F77EDF622/HCK/Installers/';
+        'base_url' = 'https://download.microsoft.com/download/6/6/B/66B3BE98-DD33-4860-A404-8F2F77EDF622/HCK/Installers';
         'installer_file' = 'HCK Filter.Driver Content-x86_en-us.msi';
         'nttest_path' = "C:\Program Files (x86)\Windows Kits\8.1\Hardware Certification Kit\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST";
         'files' = @{
@@ -41,7 +42,7 @@ $hlks = @(
         # See https://technet.microsoft.com/en-us/windows/release-info.aspx
         'suitable_for_os_version' = [Environment]::OSVersion.Version -ge (New-Object 'Version' 10, 0, 14393, 0);
         'name' = 'Windows HLK for Windows 10, version 1607';
-        'base_url' = 'http://download.microsoft.com/download/7/A/F/7AFE783C-59E6-49F9-80B4-D2F49917FFE6/hlk/Installers/';
+        'base_url' = 'https://download.microsoft.com/download/7/A/F/7AFE783C-59E6-49F9-80B4-D2F49917FFE6/hlk/Installers';
         'installer_file' = 'HLK Filter.Driver Content-x86_en-us.msi';
         'nttest_path' = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST";
         'files' = @{
@@ -56,7 +57,7 @@ $hlks = @(
         # This checks for Windows 10 1809
         'suitable_for_os_version' = [Environment]::OSVersion.Version -ge (New-Object 'Version' 10, 0, 17763, 0);
         'name' = 'Windows HLK for Windows 10, version 1809';
-        'base_url' = 'http://download.microsoft.com/download/9/D/E/9DE48D44-C2D0-4706-8EBC-552F1A47BB06/hlk/Installers/';
+        'base_url' = 'https://download.microsoft.com/download/9/D/E/9DE48D44-C2D0-4706-8EBC-552F1A47BB06/hlk/Installers';
         'installer_file' = 'HLK Filter.Driver Content-x86_en-us.msi';
         'nttest_path' = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST";
         'files' = @{
@@ -80,14 +81,32 @@ New-Item -Type Directory -Force $temp_dir | Out-Null
 foreach ($kv in $dl_files.GetEnumerator()) {
     $dl_filename = $kv.Name
     $expected_sha256 = $kv.Value
-    $out_file = "${temp_dir}/${dl_filename}"
-    $url = "${base_url}/${dl_filename}"
+    $out_file = Join-Path $temp_dir $dl_filename
+    $url = "$($base_url.TrimEnd('/'))/$([System.Uri]::EscapeDataString($dl_filename))"
     if ( !(Test-Path $out_file) -Or $(Get-FileHash -Algorithm SHA256 $out_file).Hash -ne $expected_sha256) {
-        Write-Host "File $out_file not existing or hash not matching, downloading..."
-        Invoke-WebRequest $url -OutFile $out_file
-        $actual_sha256 = $(Get-FileHash -Algorithm SHA256 $out_file).Hash
-        if ($expected_sha256 -ne $actual_sha256) {
-            throw "Hash mismatch: $out_file, expected: $expected_sha256, actual: $actual_sha256"
+        Write-Host "File $out_file not existing or hash not matching, downloading from $url..."
+        $maxAttempts = 4
+        $downloaded = $false
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                Remove-Item -Force -ErrorAction SilentlyContinue $out_file
+                Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $out_file
+                $actual_sha256 = $(Get-FileHash -Algorithm SHA256 $out_file).Hash
+                if ($expected_sha256 -ne $actual_sha256) {
+                    throw "Hash mismatch: $out_file, expected: $expected_sha256, actual: $actual_sha256"
+                }
+                $downloaded = $true
+                break
+            } catch {
+                Write-Warning "Attempt $attempt/$maxAttempts failed for ${dl_filename}: $($_.Exception.Message)"
+                if ($attempt -eq $maxAttempts) {
+                    throw
+                }
+                Start-Sleep -Seconds (5 * [Math]::Pow(2, $attempt - 1))
+            }
+        }
+        if (!$downloaded) {
+            throw "Failed to download $dl_filename"
         }
     }
     else {
