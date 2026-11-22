@@ -1,0 +1,87 @@
+name: Documentation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOXYGEN_VERSION: 1.18.0
+  DOXYGEN_TAG: Release_1_18_0
+  DOXYGEN_SHA256: 14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90
+
+jobs:
+  docs:
+    name: Build & Publish Doxygen Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dokany
+        uses: actions/checkout@v7
+
+      - name: Cache Doxygen binary
+        id: cache-doxygen
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/doxygen-${{ env.DOXYGEN_VERSION }}
+          key: doxygen-linux-${{ env.DOXYGEN_VERSION }}-${{ env.DOXYGEN_SHA256 }}
+
+      - name: Install Doxygen ${{ env.DOXYGEN_VERSION }}
+        if: steps.cache-doxygen.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.cache/doxygen-${DOXYGEN_VERSION}"
+          ARCHIVE="/tmp/doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz"
+          URL="https://github.com/doxygen/doxygen/releases/download/${DOXYGEN_TAG}/doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz"
+          curl -fsSL --retry 3 --retry-delay 5 "$URL" -o "$ARCHIVE"
+          echo "${DOXYGEN_SHA256}  ${ARCHIVE}" | sha256sum -c -
+          tar -xzf "$ARCHIVE" -C "$HOME/.cache/doxygen-${DOXYGEN_VERSION}" --strip-components=1
+          rm -f "$ARCHIVE"
+
+      - name: Add Doxygen to PATH
+        run: |
+          echo "$HOME/.cache/doxygen-${DOXYGEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Checkout dokan-dev/dokany-doc (gh-pages)
+        if: github.repository == 'dokan-dev/dokany' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+        uses: actions/checkout@v7
+        with:
+          repository: dokan-dev/dokany-doc
+          ref: gh-pages
+          path: documentations/doc
+          ssh-key: ${{ secrets.DOKANY_DOC_DEPLOY_KEY }}
+          persist-credentials: true
+
+      - name: Clean existing generated HTML before publish
+        if: github.repository == 'dokan-dev/dokany' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+        run: rm -rf documentations/doc/html
+
+      - name: Generate documentation
+        working-directory: documentations
+        run: |
+          doxygen --version
+          doxygen Doxyfile
+          test -s doc/html/index.html
+          test -s doc/html/doxygen-awesome.css
+
+      - name: Publish documentation to dokan-dev/dokany-doc
+        if: github.repository == 'dokan-dev/dokany' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+        working-directory: documentations/doc
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Update documentation for dokany ${GITHUB_SHA::7} (run ${GITHUB_RUN_NUMBER})"
+            git push origin gh-pages
+            echo "Documentation updated."
+          else
+            echo "No documentation changes detected."
+          fi
