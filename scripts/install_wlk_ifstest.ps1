@@ -18,29 +18,13 @@ if (Get-Item env:WLK_INST_CACHE -ErrorAction SilentlyContinue) {
     $temp_dir = $env:WLK_INST_CACHE
 }
 
+$os_version = [Environment]::OSVersion.Version
+
 $hlks = @(
-    @{
-        # Anything older than Win10 (8.1, 8, 7). Only tested with 8.1. We might need an older one for Win7
-        'suitable_for_os_version' = [Environment]::OSVersion.Version -lt (New-Object 'Version' 10, 0, 0, 0);
-        'name' = 'Windows HCK for Windows 8.1 QFE Update 014 (Build ID: 8.100.27024)';
-        'base_url' = 'https://download.microsoft.com/download/6/6/B/66B3BE98-DD33-4860-A404-8F2F77EDF622/HCK/Installers';
-        'installer_file' = 'HCK Filter.Driver Content-x86_en-us.msi';
-        'nttest_path' = "C:\Program Files (x86)\Windows Kits\8.1\Hardware Certification Kit\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST";
-        'files' = @{
-            'HCK Filter.Driver Content-x86_en-us.msi' = '6E5987DE75ABE1258C775A6B6C60062F5BEE2DE7FDF38F94F1E4B23EEFF50730';
-            '6119459287e24c3503279ff684647c83.cab' = 'F40471EA4F6E90A6D6B698C910E3B817BD672A288ED45C52A1DB57B734A10810';
-            '9ddb34978b4f0879d46fa6380d941d00.cab' = '9FD8C0435CF17726A6D4A31475412B526653624330D9046B678155E5A73E9CD5';
-            'dc7239f1f797bdd32e0262f2556b253f.cab' = 'E279B34736495772CE464F3E25C6CD49A2BA97C4AD69D2A449F175B70323D6F0';
-            'e54a669f7bfb1c6c6ee7bba08b02a6dc.cab' = 'D7139ADC54303EB6A6B7F4F14CE875A307F268669FFCD54C7BFEAA75F00705D2';
-            'f1e419e00f0b2f836bdd5f3d26ae111d.cab' = 'C67F07F6533B4C64E69C5E2C60850490AF92459907F8CE10A108A2AD2B2184BC';
-            'fd0d8d2173424e55667bc3e935e1e376.cab' = 'FA63584DCCA98976544EF9DC5E66979B06F67A99187FEC9275599F7F258F8213';
-        };
-    },
-    #TODO: Need to find information about whether WLK is backward/forward-compatible within Win10-releases
     @{
         # This checks for Windows 10 "Anniversary" 1607
         # See https://technet.microsoft.com/en-us/windows/release-info.aspx
-        'suitable_for_os_version' = [Environment]::OSVersion.Version -ge (New-Object 'Version' 10, 0, 14393, 0);
+        'suitable_for_os_version' = $os_version -ge (New-Object 'Version' 10, 0, 14393, 0);
         'name' = 'Windows HLK for Windows 10, version 1607';
         'base_url' = 'https://download.microsoft.com/download/7/A/F/7AFE783C-59E6-49F9-80B4-D2F49917FFE6/hlk/Installers';
         'installer_file' = 'HLK Filter.Driver Content-x86_en-us.msi';
@@ -53,9 +37,9 @@ $hlks = @(
             'fd0d8d2173424e55667bc3e935e1e376.cab' = 'ADBC46F9064B5DFCC94681B1210ACDCA255646DD434EF3AFDF3FD9BFB303BFA4';
         };
     },
-	@{
+    @{
         # This checks for Windows 10 1809
-        'suitable_for_os_version' = [Environment]::OSVersion.Version -ge (New-Object 'Version' 10, 0, 17763, 0);
+        'suitable_for_os_version' = $os_version -ge (New-Object 'Version' 10, 0, 17763, 0);
         'name' = 'Windows HLK for Windows 10, version 1809';
         'base_url' = 'https://download.microsoft.com/download/9/D/E/9DE48D44-C2D0-4706-8EBC-552F1A47BB06/hlk/Installers';
         'installer_file' = 'HLK Filter.Driver Content-x86_en-us.msi';
@@ -70,7 +54,10 @@ $hlks = @(
     }
 )
 
-$hlk_info = $hlks | Where-Object {$_['suitable_for_os_version']} | select-object -last 1
+$hlk_info = $hlks | Where-Object {$_['suitable_for_os_version']} | Select-Object -Last 1
+if ($null -eq $hlk_info) {
+    throw "Unsupported Windows version: $os_version. No matching Windows HLK entry found."
+}
 Write-Host "Using $($hlk_info['name'])"
 $base_url = $hlk_info['base_url']
 $installer_file = $hlk_info['installer_file']
