@@ -27,7 +27,10 @@
         image: Visual Studio 2017
   max_jobs: 1
   cache:
-  - '%DOKAN_CI_CACHE% -> appveyor.yml'
+  - '%CYG_CACHE% -> appveyor.yml'
+  - '%MSYS2_CACHE% -> appveyor.yml'
+  - '%DOKAN_CI_CACHE%\setup-x86_64.exe -> appveyor.yml'
+  - '%WLK_INST_CACHE% -> scripts/install_wlk_ifstest.ps1'
 
 # To debug build issues, add your own fork to AppVeyor and uncomment below.
 # Connection details will be printed to the console output.
