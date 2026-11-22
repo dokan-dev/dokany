@@ -18,6 +18,9 @@ env:
   DOXYGEN_VERSION: 1.18.0
   DOXYGEN_TAG: Release_1_18_0
   DOXYGEN_SHA256: 14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90
+  THEME_VERSION: 2.5.0
+  THEME_CSS_SHA256: ea37516ec7a7a7780719b9d9a285fe3268a8d5411523d8b93af98d77e67cd1a1
+  THEME_SIDEBAR_CSS_SHA256: 909d17055552149555fc87c5e0cf171a41d09a9e358c389a51b25ddfafd462af
 
 jobs:
   docs:
@@ -27,14 +30,16 @@ jobs:
       - name: Checkout dokany
         uses: actions/checkout@v7
 
-      - name: Cache Doxygen binary
+      - name: Cache Doxygen binary and theme
         id: cache-doxygen
         uses: actions/cache@v6
         with:
-          path: ~/.cache/doxygen-${{ env.DOXYGEN_VERSION }}
-          key: doxygen-linux-${{ env.DOXYGEN_VERSION }}-${{ env.DOXYGEN_SHA256 }}
+          path: |
+            ~/.cache/doxygen-${{ env.DOXYGEN_VERSION }}
+            ~/.cache/doxygen-awesome-${{ env.THEME_VERSION }}
+          key: doxygen-linux-${{ env.DOXYGEN_VERSION }}-${{ env.DOXYGEN_SHA256 }}-theme-${{ env.THEME_VERSION }}-${{ env.THEME_CSS_SHA256 }}-${{ env.THEME_SIDEBAR_CSS_SHA256 }}
 
-      - name: Install Doxygen ${{ env.DOXYGEN_VERSION }}
+      - name: Install Doxygen ${{ env.DOXYGEN_VERSION }} and doxygen-awesome-css v${{ env.THEME_VERSION }}
         if: steps.cache-doxygen.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$HOME/.cache/doxygen-${DOXYGEN_VERSION}"
@@ -44,6 +49,15 @@ jobs:
           echo "${DOXYGEN_SHA256}  ${ARCHIVE}" | sha256sum -c -
           tar -xzf "$ARCHIVE" -C "$HOME/.cache/doxygen-${DOXYGEN_VERSION}" --strip-components=1
           rm -f "$ARCHIVE"
+
+          THEME_DIR="$HOME/.cache/doxygen-awesome-${THEME_VERSION}"
+          mkdir -p "$THEME_DIR"
+          THEME_BASE_URL="https://raw.githubusercontent.com/jothepro/doxygen-awesome-css/v${THEME_VERSION}"
+          curl -fsSL --retry 3 --retry-delay 5 "${THEME_BASE_URL}/doxygen-awesome.css" -o "${THEME_DIR}/doxygen-awesome.css"
+          curl -fsSL --retry 3 --retry-delay 5 "${THEME_BASE_URL}/doxygen-awesome-sidebar-only.css" -o "${THEME_DIR}/doxygen-awesome-sidebar-only.css"
+          printf '%s  %s/doxygen-awesome.css\n%s  %s/doxygen-awesome-sidebar-only.css\n' \
+            "${THEME_CSS_SHA256}" "${THEME_DIR}" \
+            "${THEME_SIDEBAR_CSS_SHA256}" "${THEME_DIR}" | sha256sum -c -
 
       - name: Add Doxygen to PATH
         run: |
@@ -66,10 +80,12 @@ jobs:
       - name: Generate documentation
         working-directory: documentations
         run: |
+          THEME_DIR="$HOME/.cache/doxygen-awesome-${THEME_VERSION}"
           doxygen --version
-          doxygen Doxyfile
+          (cat Doxyfile; printf '\nHTML_EXTRA_STYLESHEET = "%s/doxygen-awesome.css" "%s/doxygen-awesome-sidebar-only.css"\n' "$THEME_DIR" "$THEME_DIR") | doxygen -
           test -s doc/html/index.html
           test -s doc/html/doxygen-awesome.css
+          test -s doc/html/doxygen-awesome-sidebar-only.css
 
       - name: Publish documentation to dokan-dev/dokany-doc
         if: github.repository == 'dokan-dev/dokany' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
