@@ -9,11 +9,6 @@
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: All"
 
   skip_tags: true
-  skip_commits:
-    files:
-      - .github/
-      - documentations/
-      - README.md
   version: 3.0.0-{build}
   configuration:
   - All
