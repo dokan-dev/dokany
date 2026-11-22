@@ -1,5 +1,5 @@
 param (
-	[string[]]$BuildPart = @('win', 'cygwin'),
+	[string[]]$BuildPart = @('win', 'cygwin', 'msys2'),
 	[string[]]$Platforms = @('Win32', 'x64', 'ARM64'),
 	[string[]]$Configurations = @('Release', 'Debug')
 )
@@ -30,12 +30,32 @@ if ($BuildPart -contains 'win') {
 	}
 }
 
+$fuseTargets = @()
 if ($BuildPart -contains 'cygwin') {
-	if ((Test-Path -Path env:CYGWIN_INST_DIR) -or (Test-Path -Path 'C:\cygwin64')) {
-		$ErrorActionPreference = "Continue" #cmake has normal stdout through stderr...
-		Exec-External { ./dokan_fuse/build.ps1 }
-		$ErrorActionPreference = "Stop"
+	$cygwinDir = if (-not [string]::IsNullOrWhiteSpace($env:CYGWIN_INST_DIR)) { $env:CYGWIN_INST_DIR } else { 'C:\cygwin64' }
+	$cygwinBash = Join-Path $cygwinDir 'bin\bash.exe'
+	if (Test-Path -LiteralPath $cygwinBash -PathType Leaf) {
+		$fuseTargets += 'cygwin'
 	} else {
-		Write-Host "Cygwin/Msys2 build disabled"
+		Write-Host "Cygwin build disabled ($cygwinBash not found)"
+	}
+}
+
+if ($BuildPart -contains 'msys2') {
+	$msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
+	$msys2Bash = Join-Path $msys2Dir 'usr\bin\bash.exe'
+	if (Test-Path -LiteralPath $msys2Bash -PathType Leaf) {
+		$fuseTargets += 'msys2'
+	} else {
+		Write-Host "MSYS2 build disabled ($msys2Bash not found)"
+	}
+}
+
+if ($fuseTargets.Count -gt 0) {
+	$ErrorActionPreference = "Continue" #cmake writes some status output to stderr
+	try {
+		Exec-External { ./dokan_fuse/build.ps1 -Targets $fuseTargets }
+	} finally {
+		$ErrorActionPreference = "Stop"
 	}
 }

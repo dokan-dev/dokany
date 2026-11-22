@@ -172,8 +172,6 @@
 								<File Id="memfs_operationsH" Source="..\samples\dokan_memfs\memfs_operations.h" Name="memfs_operations.h" KeyPath="no"/>
 							</Component>
 						</Directory>
-						<Directory Id="FUSEMIRRORDIR" Name="fuse_mirror">
-						</Directory>
 					</Directory>
 				</Directory>
 			</Directory>

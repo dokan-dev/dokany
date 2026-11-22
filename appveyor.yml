@@ -3,6 +3,7 @@
     global:
       DOKAN_CI_CACHE: C:\dokan_ci_cache
       CYG_CACHE: '%DOKAN_CI_CACHE%\cygwin'
+      MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2-cache'
 #     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: All"
@@ -109,6 +110,24 @@
           New-Item -ItemType Directory -Force -Path "C:\cygwin64", $env:CYG_CACHE | Out-Null
           updateCygwin "${env:DOKAN_CI_CACHE}\setup-x86_64.exe" C:/cygwin64 $env:CYG_CACHE
         }
+    - ps: |
+        if ($env:CONFIGURATION -eq "All" -and -not (Test-Path -LiteralPath 'C:\msys64\ucrt64\bin\gcc.exe')) {
+          function msys2Bash($bash_command) {
+            Write-Host "MSYS2-Bash: $bash_command"
+            Exec-External { & C:\msys64\usr\bin\bash.exe --login -c $bash_command }
+            Write-Host "MSYS2-Bash $bash_command " -NoNewLine
+            Write-Host "[ OK ]" -ForegroundColor Green
+          }
+
+          New-Item -ItemType Directory -Force -Path $env:MSYS2_CACHE | Out-Null
+          $unix_msys2_cache = (Exec-External { & C:\msys64\usr\bin\bash.exe --login -c "cygpath '${env:MSYS2_CACHE}'" })
+
+          # AppVeyor's Visual Studio 2026 image preinstalls MINGW32/MINGW64 but not UCRT64.
+          # Refresh the keyring and install only the UCRT64 GCC compiler (avoiding a full
+          # pacman -Syuu upgrade; dokan_fuse/build.ps1 uses preinstalled Windows CMake and MSYS make).
+          msys2Bash "pacman -Sy --needed --noconfirm --cache '$unix_msys2_cache' msys2-keyring"
+          msys2Bash "pacman -S --needed --noconfirm --cache '$unix_msys2_cache' mingw-w64-ucrt-x86_64-gcc"
+        }
 
   build_script:
   - ps: |
@@ -160,6 +179,7 @@
         dir .\* -include ('*.wixproj', '*.vcxproj') -recurse | ForEach-Object { nuget restore $_.FullName -SolutionDirectory . }
 
         (gc version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc version.xml
+        (gc version.xml) -replace 'BuildMsys2="false"', 'BuildMsys2="true"' | sc version.xml
         (gc version.xml) -replace 'Compressed="no"', 'Compressed="yes"' | sc version.xml
 
         $Platform = "Mixed Platforms"
