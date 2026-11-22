@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe")
+    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe"),
+    [Parameter(Mandatory=$false)][string[]] $ConfigNames = @()
 )
 #TODO: enable specifying own mirror-commands and own test-commands
 #TODO: move compilation of test tools to separate scripts in scripts
@@ -144,41 +145,20 @@ Write-Host Build test tools done. -ForegroundColor Green
 if (!(Test-Path $fsTestPath)) { New-Item $fsTestPath -type directory | Out-Null }
 if (!(Test-Path $fsTestPath2)) { New-Item $fsTestPath2 -type directory | Out-Null }
 
-function Test-IsX86Binary {
-  param(
-	[Parameter(Position=0,Mandatory=1)][string] $Path
-  )
-  $stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).Path)
-  try {
-	$reader = New-Object System.IO.BinaryReader($stream)
-	try {
-	  if ($reader.ReadUInt16() -ne 0x5A4D) { return $false } # 'MZ'
-	  $stream.Seek(0x3C, [System.IO.SeekOrigin]::Begin) | Out-Null
-	  $peOffset = $reader.ReadInt32()
-	  $stream.Seek($peOffset, [System.IO.SeekOrigin]::Begin) | Out-Null
-	  if ($reader.ReadUInt32() -ne 0x00004550) { return $false } # 'PE\0\0'
-	  return ($reader.ReadUInt16() -eq 0x014C) # IMAGE_FILE_MACHINE_I386
-	} finally {
-	  $reader.Dispose()
-	}
-  } finally {
-	$stream.Dispose()
-  }
-}
-
 add-type -AssemblyName System.Windows.Forms
 
-# On 64-bit Windows, run a focused WOW64 subset for 32-bit mirror.exe to verify
-# 32-bit dokan3.dll IPC/thunking, IFSTest, and MPR/UNC without repeating
-# redundant kernel mount modes already covered by x64.
-$Wow64ConfigNames = @("drive", "netUnc")
+$activeConfigs = $Configs
+if ($ConfigNames.Count -gt 0) {
+	$validNames = @($Configs | ForEach-Object { $_.Item("Name") })
+	$unknownNames = @($ConfigNames | Where-Object { $validNames -notcontains $_ })
+	if ($unknownNames.Count -gt 0) {
+		throw ("Unknown config name(s): $($unknownNames -join ', '). Valid names: $($validNames -join ', ')")
+	}
+	$activeConfigs = @($Configs | Where-Object { $ConfigNames -contains $_.Item("Name") })
+}
 
 $mirrorCount = 1;
 foreach ($mirror in $Mirrors) {
-	$activeConfigs = $Configs
-	if ([System.Environment]::Is64BitOperatingSystem -and (Test-IsX86Binary $mirror)) {
-		$activeConfigs = $Configs | Where-Object { $Wow64ConfigNames -contains $_.Item("Name") }
-	}
 	foreach ($Config in $activeConfigs) {
 		$command = $Config.Item("MirrorArguments")
 		$destination = $Config.Item("Destination")
