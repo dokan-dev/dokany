@@ -1,11 +1,10 @@
 Set-StrictMode -Version 2
 #TODO: Get Path via some MSI-CmdLet or Registry instead of hardcoding it
-if (([Version]$((Get-CimInstance Win32_OperatingSystem).Version)).Major -eq 10) {
-    $hlk_path = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit"
+$os_version = [Version](Get-CimInstance Win32_OperatingSystem).Version
+if ($os_version -lt [Version]'10.0.10240') {
+    throw "Unsupported Windows version: $os_version. Windows 10 (build 10240) or newer is required."
 }
-else {
-    $hlk_path = "C:\Program Files (x86)\Windows Kits\8.1\Hardware Certification Kit"
-}
+$hlk_path = "C:\Program Files (x86)\Windows Kits\10\Hardware Lab Kit"
 
 $nttest_path = "${hlk_path}\Tests\${env:PROCESSOR_ARCHITECTURE}\NTTEST"
 $ifstest_exe = "${nttest_path}\BASETEST\core_file_services\ifs_test_kit\ifstest.exe"
