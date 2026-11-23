@@ -33,6 +33,15 @@ if(FUSE_PKG_CONFIG)
     endfunction()
 
     set(pkg_config_file "${CMAKE_CURRENT_BINARY_DIR}/fuse.pc")
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+        set(PKG_CONFIG_PREFIX "${CMAKE_INSTALL_PREFIX}")
+    else()
+        file(RELATIVE_PATH _pc_to_prefix
+            "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+            "${CMAKE_CURRENT_BINARY_DIR}")
+        string(REGEX REPLACE "/$" "" _pc_to_prefix "${_pc_to_prefix}")
+        set(PKG_CONFIG_PREFIX "\${pcfiledir}/${_pc_to_prefix}")
+    endif()
     make_pkg_config_absolute(PKG_CONFIG_LIBDIR CMAKE_INSTALL_LIBDIR)
     make_pkg_config_absolute(PKG_CONFIG_INCLUDEDIR CMAKE_INSTALL_INCLUDEDIR)
 
