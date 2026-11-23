@@ -32,7 +32,7 @@ Since version 0.8.0, dokany broke compatibility with the dokan API. See
 [Choose a version](https://github.com/dokan-dev/dokany/wiki/Installation#choose-a-version)
 for more information.
 
-The API has then again changed over time in [1.1.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.0.0-application-to-Dokany-1.1.0) and [2.0.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0).
+The API has then again changed over time in [1.1.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.0.0-application-to-Dokany-1.1.0), [2.0.0](https://github.com/dokan-dev/dokany/wiki/Update-Dokan-1.1.0-application-to-Dokany-2.0.0), and [3.0.0](https://github.com/dokan-dev/dokany/wiki/Installation#updating-from-dokany-2x-to-30) (upcoming binary/driver major bump; C API unchanged).
 
 ## Benchmark v1.5.1.1000 vs v2.0.3.1000
 
@@ -118,7 +118,7 @@ For details, see the
 
 The latest official and signed build can be downloaded from:
 * [Github release page](https://github.com/dokan-dev/dokany/releases)
-* `choco install dokany3` or
+* `choco install dokany2` (or `dokany3` starting with 3.0.0) or
 * `winget install dokan-dev.dokany`
 
 For manual installation, see the

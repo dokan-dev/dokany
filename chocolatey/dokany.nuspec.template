@@ -14,7 +14,7 @@
     <!-- Note that unstable versions like 0.0.1 can be considered a released version, but it's possible that one can release a 0.0.1-beta before you release a 0.0.1 version. If the version number is final, that is considered a released version and not a prerelease. -->
     <version>[[PackageVersion]]</version>
     <!--PackageSourceUrl - Where is this Chocolatey package located (think GitHub)? packageSourceUrl is highly recommended for the community feed-->
-    <packageSourceUrl>http://github.com/dokan-dev/dokany</packageSourceUrl>
+    <packageSourceUrl>https://github.com/dokan-dev/dokany</packageSourceUrl>
     <!-- owners is a poor name for maintainers of the package. It sticks around by this name for compatibility reasons. It basically means you. -->
     <owners>dokan-dev</owners>
     <!-- ============================== -->
@@ -24,12 +24,12 @@
     <title>Dokany (Install)</title>
     <authors>Adrien J. and Maxime C.</authors>
     <!-- projectUrl is required for the community feed -->
-    <projectUrl>http://dokan-dev.github.io/</projectUrl>
-    <iconUrl>http://cdn.rawgit.com/dokan-dev/dokany/master/dokan_wix/Bootstrapper/Resources/dokan.png</iconUrl>
+    <projectUrl>https://dokan-dev.github.io/</projectUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/dokan-dev/dokany@master/dokan_wix/Bootstrapper/Resources/dokan.png</iconUrl>
     <!-- <copyright>Year Software Vendor</copyright> -->
     <!-- If there is a license Url available, it is is required for the community feed -->
     <licenseUrl>https://github.com/dokan-dev/dokany/blob/master/license.mit.txt</licenseUrl>
-    <projectSourceUrl>http://github.com/dokan-dev/dokany</projectSourceUrl>
+    <projectSourceUrl>https://github.com/dokan-dev/dokany</projectSourceUrl>
     <docsUrl>https://github.com/dokan-dev/dokany/wiki</docsUrl>
     <!--<mailingListUrl></mailingListUrl>-->
     <bugTrackerUrl>https://github.com/dokan-dev/dokany/issues</bugTrackerUrl>
