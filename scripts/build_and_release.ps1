@@ -32,25 +32,25 @@ else { Write-Host EV_CERTTHUMBPRINT env variable is missing. EV Signature cab is
 
 $cygwinDir = if (-not [string]::IsNullOrWhiteSpace($env:CYGWIN_INST_DIR)) { $env:CYGWIN_INST_DIR } else { 'C:\cygwin64' }
 if (Test-Path -LiteralPath (Join-Path $cygwinDir 'bin\bash.exe') -PathType Leaf) {
-	Write-Host Include Cygwin binaries in installer
-	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | sc .\dokan_wix\version.xml
+	Write-Output "Include Cygwin binaries in installer"
+	(Get-Content .\dokan_wix\version.xml) -replace 'BuildCygwin="false"', 'BuildCygwin="true"' | Set-Content .\dokan_wix\version.xml
 } else {
-	Write-Host Exclude Cygwin binaries from installer
-	(gc .\dokan_wix\version.xml) -replace 'BuildCygwin="true"', 'BuildCygwin="false"' | sc .\dokan_wix\version.xml
+	Write-Output "Exclude Cygwin binaries in installer"
+	(Get-Content .\dokan_wix\version.xml) -replace 'BuildCygwin="true"', 'BuildCygwin="false"' | Set-Content .\dokan_wix\version.xml
 }
 
 $msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
 if (Test-Path -LiteralPath (Join-Path $msys2Dir 'usr\bin\bash.exe') -PathType Leaf) {
 	Write-Output "Include MSYS2 binaries in installer"
-	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="false"', 'BuildMsys2="true"' | sc .\dokan_wix\version.xml
+	(Get-Content .\dokan_wix\version.xml) -replace 'BuildMsys2="false"', 'BuildMsys2="true"' | Set-Content .\dokan_wix\version.xml
 } else {
 	Write-Output "Exclude MSYS2 binaries from installer"
-	(gc .\dokan_wix\version.xml) -replace 'BuildMsys2="true"', 'BuildMsys2="false"' | sc .\dokan_wix\version.xml
+	(Get-Content .\dokan_wix\version.xml) -replace 'BuildMsys2="true"', 'BuildMsys2="false"' | Set-Content .\dokan_wix\version.xml
 }
 
-Write-Host Build installer ...
+Write-Output "Build installer ..."
 # Nuget restore sln fails to restore all the project of the solution for some reason so lets do it manually
-dir .\dokan_wix -include ('*.wixproj', '*.vcxproj') -recurse | ForEach-Object { .\nuget restore $_.FullName -SolutionDirectory .\dokan_wix }
+Get-ChildItem .\dokan_wix -Include ('*.wixproj', '*.vcxproj') -Recurse | ForEach-Object { nuget restore $_.FullName -SolutionDirectory .\dokan_wix }
 Exec-External { msbuild .\dokan_wix\Dokan_WiX.sln /p:Configuration=Release /p:Platform="Mixed Platforms" /t:rebuild /fileLogger }
 copy .\dokan_wix\Bootstrapper\bin\x86\Release\DokanSetup.exe .\dokan_wix\
 copy .\dokan_wix\bin\x64\Release\Dokan_x64.msi .\dokan_wix\

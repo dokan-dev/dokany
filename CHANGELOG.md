@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Improve `AddMissingCurrentAndParentFolder` efficiency by inserting `.` and `..` in a single `DokanVector_PushFrontArray` operation.
 - Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
 - Installer - Migrate WiX v5 bundle signing in `Bootstrapper.wixproj` to native `SignOutput` / `SignBundleEngine` / `SignBundle` targets (removing WiX v3 `insignia.exe`), retarget `SetAssemblyVersion` to .NET Framework 4.8, and update Chocolatey packaging for 64-bit Windows 10+.
-- CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, update SonarScanner CLI to 8.5 with hardened SonarCloud analysis, and update `winfstest` to the Python 3 test suite.
+- CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, move SonarCloud (SonarScanner CLI 8.5), Doxygen (`1.18.0` with `doxygen-awesome-css`), and `clang-format` checks to GitHub Actions (#1358), refresh HLK IFSTest kits (dropping Windows 8.1 HCK and adding OS-matched multi-MSI support) (#1360), and update `winfstest` to the Python 3 test suite.
 - FUSE / Build - Decouple Cygwin and MSYS2 builds and installer components (`BuildCygwin` / `BuildMsys2`), migrate 64-bit MSYS2 (`x64/Msys2/libdokanfuse3.dll`) from deprecated `MINGW64` (`msvcrt.dll`) to `UCRT64` (`ucrtbase.dll`) while keeping `Win32/Msys2` on `MINGW32` (#1362), and make `fuse.pc` relocatable via `${pcfiledir}`.
 
 ### Removed
@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Do not wait for the `WM_DEVICECHANGE` broadcast when closing an instance or shutting down, preventing 5-10s unmount stalls caused by hung windows (#1342).
 - Kernel - Fix CodeQL and static analysis findings: replace untagged `ExFreePool` calls with tagged `DokanFree`, use `%hs` for narrow IOCTL log strings, fix volume label lock/critical region handling and leak on allocation failure, stack-allocate `EVENT_INFORMATION` in `DokanCancelCreateIrp`, and bound `StartsWith` by prefix length.
 - Kernel - Fix MSVC/WDK `10.0.28000` compile errors and warnings and define `NT_INLINE_GET_CURRENT_IRQL` on x64 to preserve Windows 10 compatibility without Windows 11-only kernel imports.
+- Kernel - Verify `DriverObject` ownership before inspecting a candidate `DCB` during volume mount (#1357).
 
 ## [2.3.1.1000] - 2025-09-28
 
