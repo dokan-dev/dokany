@@ -6,7 +6,9 @@
       MSYS2_CACHE: '%DOKAN_CI_CACHE%\msys2-cache'
 #     CHOCO_CACHE: '%DOKAN_CI_CACHE%\choco'
       WLK_INST_CACHE: '%DOKAN_CI_CACHE%\wlk_inst'
+      FSTEST_DEPS_CACHE: '%DOKAN_CI_CACHE%\deps'
       DOKAN_MAIN_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: All"
+      DOKAN_FSTEST_BUILD_JOB_NAME: "Image: Visual Studio 2026; Configuration: FsTest"
 
   skip_tags: true
   version: 3.0.0-{build}
@@ -31,6 +33,7 @@
   - '%MSYS2_CACHE% -> appveyor.yml'
   - '%DOKAN_CI_CACHE%\setup-x86_64.exe -> appveyor.yml'
   - '%WLK_INST_CACHE% -> scripts/install_wlk_ifstest.ps1'
+  - '%FSTEST_DEPS_CACHE% -> tests/fstest/deps.json'
 
 # To debug build issues, add your own fork to AppVeyor and uncomment below.
 # Connection details will be printed to the console output.
@@ -223,6 +226,73 @@
           Get-Content dokan_install*.log   # wildcard for getting both MSI and bundle log
           throw "Dokan-Installation failed. Log above this line"
         }
+
+        $fstestZip = "${env:APPVEYOR_BUILD_FOLDER}\dokan-fstest.zip"
+        if ($env:APPVEYOR_JOB_NAME -eq $env:DOKAN_FSTEST_BUILD_JOB_NAME -or $env:APPVEYOR_BUILD_WORKER_IMAGE -like "*Visual Studio 2026") {
+          $fstestBuildConfig = "Release"
+          Set-Location ${env:APPVEYOR_BUILD_FOLDER}
+          Exec-External { & .\scripts\build_fstest.ps1 -Configuration $fstestBuildConfig -CacheDir $env:FSTEST_DEPS_CACHE -VerifyStaticCrt }
+          $fstestStageDir = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\build\stage"
+          Remove-Item -Recurse -Force $fstestStageDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $fstestStageDir | Out-Null
+          Copy-Item -LiteralPath "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\build\bin\${fstestBuildConfig}\dokan_fstest.exe" -Destination $fstestStageDir -Force
+          Copy-Item -LiteralPath "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\baselines" -Destination $fstestStageDir -Recurse -Force
+          $fstestLicense = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\LICENSE"
+          $gtestLicense = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\build\_deps\googletest-src\LICENSE"
+          $jsonLicense = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\LICENSE-nlohmann-json.txt"
+          if (!(Test-Path -LiteralPath $fstestLicense -PathType Leaf)) {
+            throw "fstest LICENSE not found at $fstestLicense"
+          }
+          if (!(Test-Path -LiteralPath $gtestLicense -PathType Leaf)) {
+            throw "GoogleTest BSD-3-Clause LICENSE not found at $gtestLicense"
+          }
+          if (!(Test-Path -LiteralPath $jsonLicense -PathType Leaf)) {
+            throw "nlohmann/json MIT LICENSE not found at $jsonLicense"
+          }
+          Copy-Item -LiteralPath $fstestLicense -Destination "$fstestStageDir\LICENSE" -Force
+          Copy-Item -LiteralPath $gtestLicense -Destination "$fstestStageDir\LICENSE-googletest.txt" -Force
+          Copy-Item -LiteralPath $jsonLicense -Destination "$fstestStageDir\LICENSE-nlohmann-json.txt" -Force
+          $fstestZip = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\build\dokan-fstest.zip"
+          Remove-Item -Force $fstestZip -ErrorAction SilentlyContinue
+          Exec-External { & 7z a -tzip $fstestZip "$fstestStageDir\*" }
+          Push-AppveyorArtifact $fstestZip -FileName ("dokan-fstest-" + $installer_version + ".zip")
+        } else {
+          if ($PSVersionTable.PSVersion.Major -lt 6) {
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+          }
+          $ProgressPreference = 'SilentlyContinue'
+          $fstest_build_job_id = ($build_info.Build.jobs | Where-Object {$_.name -eq $env:DOKAN_FSTEST_BUILD_JOB_NAME}).jobId
+          if ([string]::IsNullOrWhiteSpace($fstest_build_job_id)) {
+            throw "Could not find fstest build job '$($env:DOKAN_FSTEST_BUILD_JOB_NAME)' in AppVeyor build ${env:APPVEYOR_BUILD_VERSION}"
+          }
+          $fstest_url = "${env:APPVEYOR_URL}/api/buildjobs/${fstest_build_job_id}/artifacts/dokan-fstest-${installer_version}.zip"
+          Write-Host "Downloading fstest artifact from fstest build job ${fstest_build_job_id}..."
+          $maxAttempts = 4
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              Remove-Item -Force -ErrorAction SilentlyContinue $fstestZip
+              Invoke-WebRequest -UseBasicParsing -Uri $fstest_url -OutFile $fstestZip
+              break
+            } catch {
+              Write-Warning "Attempt $attempt/$maxAttempts failed downloading dokan-fstest.zip: $($_.Exception.Message)"
+              if ($attempt -eq $maxAttempts) { throw }
+              Start-Sleep -Seconds (5 * [Math]::Pow(2, $attempt - 1))
+            }
+          }
+        }
+        $fstestBinDir = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\ci-bin"
+        Remove-Item -Recurse -Force $fstestBinDir -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $fstestBinDir | Out-Null
+        Exec-External { & 7z x -y "-o$fstestBinDir" $fstestZip }
+        if (!(Test-Path -LiteralPath "$fstestBinDir\dokan_fstest.exe" -PathType Leaf)) {
+          throw "dokan_fstest.exe missing after extracting dokan-fstest.zip"
+        }
+        if (!(Test-Path -LiteralPath "$fstestBinDir\baselines\dokan_memfs.json" -PathType Leaf) -or !(Test-Path -LiteralPath "$fstestBinDir\baselines\dokan_mirror.json" -PathType Leaf)) {
+          throw "Baseline manifests missing after extracting dokan-fstest.zip"
+        }
+        if (!(Test-Path -LiteralPath "$fstestBinDir\LICENSE" -PathType Leaf) -or !(Test-Path -LiteralPath "$fstestBinDir\LICENSE-googletest.txt" -PathType Leaf) -or !(Test-Path -LiteralPath "$fstestBinDir\LICENSE-nlohmann-json.txt" -PathType Leaf)) {
+          throw "License files missing after extracting dokan-fstest.zip"
+        }
       }
   - ps: |
       Write-Host Build finished!
@@ -231,13 +301,47 @@
   - ps: |
       if ($env:CONFIGURATION -eq "FsTest") {
         Write-Host Running tests...
+        if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+          foreach ($excl in @("C:\fstest_ntfs", "C:\FSTMP", "C:\FSTMP2", "C:\DokanMount", "M:\")) {
+            try {
+              Add-MpPreference -ExclusionPath $excl -ErrorAction Stop
+            } catch {
+              Write-Warning "Defender exclusion skipped for ${excl}: $($_.Exception.Message)"
+            }
+          }
+        }
+
+        $resultsDir = "${env:APPVEYOR_BUILD_FOLDER}\fstest-results"
+        New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
+        $fsTestExe = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\ci-bin\dokan_fstest.exe"
+        $baselinesDir = "${env:APPVEYOR_BUILD_FOLDER}\tests\fstest\ci-bin\baselines"
+
+        $ntfsRoot = "C:\fstest_ntfs"
+        if (Test-Path -LiteralPath $ntfsRoot) {
+          Exec-External { & $fsTestExe "--cleanup-dir=$ntfsRoot" }
+        }
+        New-Item -ItemType Directory -Force -Path $ntfsRoot | Out-Null
+        try {
+          Write-Host "Start Real NTFS --strict Gate ($ntfsRoot)" -ForegroundColor Green
+          Exec-External { & $fsTestExe "--root=$ntfsRoot" "--strict" "--json-out=$resultsDir\ntfs_strict.json" }
+          Write-Host "Real NTFS --strict Gate passed!" -ForegroundColor Green
+        } finally {
+          if (Test-Path -LiteralPath $ntfsRoot) {
+            & $fsTestExe "--cleanup-dir=$ntfsRoot"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "dokan_fstest --cleanup-dir failed (exit $LASTEXITCODE); falling back to cmd rmdir \\?\$ntfsRoot"
+              & cmd.exe /d /c "rmdir /s /q \\?\$ntfsRoot"
+            }
+          }
+        }
+
         $env:DokanLibrary3 = [System.Environment]::GetEnvironmentVariable("DokanLibrary3", "Machine")
         $memfs = @("${env:DokanLibrary3}\sample\memfs\memfs.exe", "${env:DokanLibrary3}\x86\sample\memfs\memfs.exe")
 
-        cd .\samples
-        .\memfs_test.ps1 -Memfs $memfs
-        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\sample\mirror\mirror.exe")
-        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\x86\sample\mirror\mirror.exe") -ConfigNames @("drive", "netUnc")
+        Set-Location "${env:APPVEYOR_BUILD_FOLDER}\samples"
+        .\memfs_test.ps1 -Memfs $memfs -FsTestExe $fsTestExe -BaselinesDir $baselinesDir -ResultsDir $resultsDir
+        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\sample\mirror\mirror.exe") -FsTestExe $fsTestExe -BaselinesDir $baselinesDir -ResultsDir $resultsDir
+        .\mirror_test.ps1 -Mirrors @("${env:DokanLibrary3}\x86\sample\mirror\mirror.exe") -ConfigNames @("drive", "netUnc") -FsTestExe $fsTestExe -BaselinesDir $baselinesDir -ResultsDir $resultsDir
       }
   - ps: |
       if ($env:CONFIGURATION -eq "FsTest") {
@@ -291,4 +395,23 @@
             "https://ci.appveyor.com/api/buildjobs/$([System.Web.HttpUtility]::UrlEncode($env:APPVEYOR_JOB_ID))/artifacts/$([System.Web.HttpUtility]::UrlEncode($memdumpArchive))")
 
         throw "Build failed due to BSOD during $env:CONFIGURATION"
+      }
+
+  on_finish:
+  - ps: |
+      if ($env:CONFIGURATION -eq "FsTest") {
+        $resultsDir = "${env:APPVEYOR_BUILD_FOLDER}\fstest-results"
+        if (Test-Path -LiteralPath $resultsDir -PathType Container) {
+          $jsonFiles = @(Get-ChildItem -LiteralPath $resultsDir -Filter "*.json" -ErrorAction SilentlyContinue)
+          if ($jsonFiles.Count -gt 0) {
+            $imageSlug = ($env:APPVEYOR_BUILD_WORKER_IMAGE -replace '[^A-Za-z0-9]+', '_').Trim('_')
+            $resultsZip = "${env:APPVEYOR_BUILD_FOLDER}\fstest-results-${imageSlug}-${env:APPVEYOR_BUILD_VERSION}.zip"
+            Remove-Item -LiteralPath $resultsZip -Force -ErrorAction SilentlyContinue
+            & 7z a -tzip $resultsZip "$resultsDir\*.json" | Out-Null
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $resultsZip -PathType Leaf)) {
+              Push-AppveyorArtifact $resultsZip
+              Write-Host "Uploaded fstest scorecards: $resultsZip"
+            }
+          }
+        }
       }

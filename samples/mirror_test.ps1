@@ -1,6 +1,10 @@
-param(
+﻿param(
     [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe"),
-    [Parameter(Mandatory=$false)][string[]] $ConfigNames = @()
+    [Parameter(Mandatory=$false)][string[]] $ConfigNames = @(),
+    [Parameter(Mandatory=$false)][string] $FsTestExe = "",
+    [Parameter(Mandatory=$false)][string] $BaselinesDir = "",
+    [Parameter(Mandatory=$false)][string] $ResultsDir = "",
+    [Parameter(Mandatory=$false)][ValidateSet("fail", "warn")][string] $XpassPolicy = "fail"
 )
 #TODO: enable specifying own mirror-commands and own test-commands
 #TODO: move compilation of test tools to separate scripts in scripts
@@ -29,31 +33,37 @@ $Configs = @(
 		"MirrorArguments" = "/l $DokanDriverLetter";
 		"Destination" = "$($DokanDriverLetter):";
 		"Name" = "drive";
+		"Target" = "mirror_drive";
 	},
 	@{
 		"MirrorArguments" = "/l C:\DokanMount";
 		"Destination" = "C:\DokanMount";
 		"Name" = "dirJunction";
+		"Target" = "mirror_junction";
 	},
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /m";
 		"Destination" = "$($DokanDriverLetter):";
 		"Name" = "driveRemovable";
+		"Target" = "mirror_removable";
 	},
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /o";
 		"Destination" = "$($DokanDriverLetter):";
-		"Name" = "driveRemovableMntMgr";
+		"Name" = "driveMntMgr";
+		"Target" = "mirror_mntmgr";
 	},
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /o /m";
 		"Destination" = "$($DokanDriverLetter):";
-		"Name" = "driveMntMgr";
+		"Name" = "driveRemovableMntMgr";
+		"Target" = "mirror_removable_mntmgr";
 	},
 	@{
 		"MirrorArguments" = "/l $DokanDriverLetter /n \myfs\dokan";
 		"Destination" = "\\myfs\dokan";
 		"Name" = "netUnc";
+		"Target" = "mirror_unc";
 	}
 )
 
@@ -97,7 +107,6 @@ $ifstestParameters = @(
 )
 
 $fstoolsRevision="f010a68f96e004e8ef76436c0582e64216f400a0"
-$winfstestRevision="9ec0e51ab89be6a2229b519a7d5ff39f6199c515"
 $buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
 $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $vswhere) {
@@ -128,24 +137,20 @@ if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 	Exec-External {& $buildCmd $buildArgs}
 }
 
-if (!(Test-Path .\winfstest\TestSuite\winfstest.exe))
-{
-	Exec-External {if (!(Test-Path winfstest)) { git clone -q https://github.com/Liryna/winfstest.git } }
-	Exec-External {cd winfstest; git reset --hard $winfstestRevision; cd .. }
-	$buildArgs = @(
-	".\winfstest\winfstest.sln",
-	"/m",
-	"/p:Configuration=Release",
-	"/p:Platform=x64",
-	"$env:CI_BUILD_ARG")
-	Exec-External {& $buildCmd $buildArgs}
-}
+$repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $repoRoot 'scripts\fstest_common.ps1')
+$fsTestPaths = Resolve-DokanFsTestPaths `
+	-RepoRoot $repoRoot `
+	-BaselineFileName 'dokan_mirror.json' `
+	-FsTestExe $FsTestExe `
+	-BaselinesDir $BaselinesDir
+$FsTestExe = $fsTestPaths.FsTestExe
+$BaselinesDir = $fsTestPaths.BaselinesDir
+$baselineFile = $fsTestPaths.BaselineFile
 Write-Host Build test tools done. -ForegroundColor Green
 
 if (!(Test-Path $fsTestPath)) { New-Item $fsTestPath -type directory | Out-Null }
 if (!(Test-Path $fsTestPath2)) { New-Item $fsTestPath2 -type directory | Out-Null }
-
-add-type -AssemblyName System.Windows.Forms
 
 $activeConfigs = $Configs
 if ($ConfigNames.Count -gt 0) {
@@ -159,9 +164,12 @@ if ($ConfigNames.Count -gt 0) {
 
 $mirrorCount = 1;
 foreach ($mirror in $Mirrors) {
+	$archTag = if ($mirror -match '(?i)(^|[\\/])(x86|Win32)[\\/]') { 'x86' } elseif ($mirror -match '(?i)(^|[\\/])arm64[\\/]') { 'arm64' } else { 'x64' }
 	foreach ($Config in $activeConfigs) {
 		$command = $Config.Item("MirrorArguments")
 		$destination = $Config.Item("Destination")
+		$targetName = $Config.Item("Target")
+		$rootArg = if ($destination -match '^[a-zA-Z]:$') { "$destination\" } else { $destination }
 		$Name  = "$mirrorCount\$($Config.Item("Name"))"
 		$MirrorDir = "$fsTestPath\$Name"
 		New-Item -Force -Type Directory $MirrorDir | Out-Null
@@ -180,34 +188,50 @@ foreach ($mirror in $Mirrors) {
 		}
 		
 		$app = Start-Process -passthru $mirror -ArgumentList "/r $MirrorDir $command"
-		
-		# When mirror finished mounting, Test-Path will return success.
-		$count = 20;
-		while (!(Test-Path "$($destination)\tmp") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
-		
-		if ($count -eq 0) {
-			throw ("Impossible to mount for command $command")
+		try {
+			# When mirror finished mounting, Test-Path will return success.
+			$count = 20;
+			while (!(Test-Path "$($destination)\tmp") -and ($count -ne 0)) { Start-Sleep -m 250; $count -= 1 }
+
+			if ($count -eq 0) {
+				throw ("Impossible to mount for command $command")
+			}
+
+			Write-Host "Start FSX Test" -ForegroundColor Green
+			Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$($destination)\fsxtest"}
+			Write-Host "FSX Test finished" -ForegroundColor Green
+
+			$fsTestArgs = @(
+				"--root=$rootArg",
+				"--baseline=$baselineFile",
+				"--target=$targetName",
+				"--target-arch=$archTag",
+				"--xpass-policy=$XpassPolicy"
+			)
+			if (-not [string]::IsNullOrWhiteSpace($ResultsDir)) {
+				New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
+				$jsonOut = Join-Path $ResultsDir "mirror_${archTag}_$($Config.Item('Name')).json"
+				$fsTestArgs += "--json-out=$jsonOut"
+			}
+
+			Write-Host "Start Dokan FsTest ($targetName / $archTag)" -ForegroundColor Green
+			Exec-External { & $FsTestExe @fsTestArgs }
+			Write-Host "Dokan FsTest finished" -ForegroundColor Green
+
+			if ($destination -match "[a-zA-Z]:") {
+				Write-Host "Start IFSTest" -ForegroundColor Green
+				Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
+				Write-Host "IFSTest finished" -ForegroundColor Green
+			} else {
+				Write-Host "Skipping IFSTest, because it cannot be run against UNC-Paths" -ForegroundColor Green
+			}
+		} finally {
+			Stop-DokanMountProcess `
+				-Process $app `
+				-Destination $destination `
+				-DokanDriveLetter $DokanDriverLetter `
+				-RepoRoot $repoRoot
 		}
-
-		Write-Host "Start FSX Test" -ForegroundColor Green
-		Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$($destination)\fsxtest"}
-		Write-Host "FSX Test finished" -ForegroundColor Green
-
-		Write-Host "Start WinFSTest" -ForegroundColor Green
-		Exec-External {& .\winfstest\TestSuite\run-winfstest.bat . "$($destination)\"}
-		Write-Host "WinFSTest finished" -ForegroundColor Green
-
-		if ($destination -match "[a-zA-Z]:") {
-			Write-Host "Start IFSTest" -ForegroundColor Green
-			Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
-			Write-Host "IFSTest finished" -ForegroundColor Green
-		} else {
-			Write-Host "Skipping IFSTest, because it cannot be run against UNC-Paths" -ForegroundColor Green
-		}
-
-		#TODO: can we use dokanctl to unmount?
-		[System.Windows.Forms.SendKeys]::SendWait("^{c}") 
-		$app.WaitForExit()
 		Write-Host Test mirror $mirror ended. -ForegroundColor Green
 	}
 	$mirrorCount += 1;

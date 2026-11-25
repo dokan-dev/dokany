@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased] - 3.0.0.1000
 
 ### Added
+- FsTest - Add standalone C++20 NTFS conformance test suite and CLI runner (`tests/fstest/`: `ntfs_helpers`, 472-test `ntfs_suite` across 12 NTFS domains, `dokan_fstest.exe` baseline/scorecard runner, `memfs`/`mirror` baseline manifests, and `CONFORMANCE_GAPS.md` defect catalog) (#1365).
 - Documentation - Add `winget` installation instructions (#1319).
 
 ### Changed
@@ -13,7 +14,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Library - Improve `AddMissingCurrentAndParentFolder` efficiency by inserting `.` and `..` in a single `DokanVector_PushFrontArray` operation.
 - Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
 - Installer - Migrate WiX v5 bundle signing in `Bootstrapper.wixproj` to native `SignOutput` / `SignBundleEngine` / `SignBundle` targets (removing WiX v3 `insignia.exe`), retarget `SetAssemblyVersion` to .NET Framework 4.8, and update Chocolatey packaging for 64-bit Windows 10+.
-- CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, move SonarCloud (SonarScanner CLI 8.5), Doxygen (`1.18.0` with `doxygen-awesome-css`), and `clang-format` checks to GitHub Actions (#1358), refresh HLK IFSTest kits (dropping Windows 8.1 HCK and adding OS-matched multi-MSI support) (#1360), and update `winfstest` to the Python 3 test suite.
+- CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, move SonarCloud (SonarScanner CLI 8.5), Doxygen (`1.18.0` with `doxygen-awesome-css`), and `clang-format` checks to GitHub Actions (#1358), refresh HLK IFSTest kits (dropping Windows 8.1 HCK and adding OS-matched multi-MSI support) (#1360), and replace `winfstest` with `dokan_fstest` across AppVeyor, GitHub Actions, and sample test scripts (#1365).
 - FUSE / Build - Decouple Cygwin and MSYS2 builds and installer components (`BuildCygwin` / `BuildMsys2`), migrate 64-bit MSYS2 (`x64/Msys2/libdokanfuse3.dll`) from deprecated `MINGW64` (`msvcrt.dll`) to `UCRT64` (`ucrtbase.dll`) while keeping `Win32/Msys2` on `MINGW32` (#1362), and make `fuse.pc` relocatable via `${pcfiledir}`.
 
 ### Removed
