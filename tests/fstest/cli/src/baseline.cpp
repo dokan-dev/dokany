@@ -4,6 +4,7 @@
 #include "baseline.h"
 
 #include "cli_args.h"
+#include "fstest/core/file_ops.h"
 #include "fstest/core/handle.h"
 #include "fstest/core/status.h"
 #include "fstest/core/win_headers.h"
@@ -829,24 +830,9 @@ bool WriteTextFileUtf8(const std::string &file_path, std::string_view content,
                               "\": " + core::FormatWin32Error(err));
       return false;
     }
-    constexpr std::size_t kMaxChunk = std::size_t{1} << 30;
-    DWORD write_err = ERROR_SUCCESS;
-    std::size_t offset = 0;
-    while (offset < content.size()) {
-      const DWORD chunk =
-          static_cast<DWORD>(std::min(content.size() - offset, kMaxChunk));
-      DWORD written = 0;
-      if (::WriteFile(file.get(), content.data() + offset, chunk, &written,
-                      nullptr) == FALSE) {
-        write_err = ::GetLastError();
-        break;
-      }
-      if (written == 0) {
-        write_err = ERROR_WRITE_FAULT;
-        break;
-      }
-      offset += written;
-    }
+    auto write_res =
+        core::WriteAllBytes(file.get(), content.data(), content.size());
+    DWORD write_err = write_res.error;
     // Persist the data before the rename publishes it, so a crash or power
     // loss cannot leave a renamed but empty/truncated manifest.
     if (write_err == ERROR_SUCCESS && ::FlushFileBuffers(file.get()) == FALSE) {

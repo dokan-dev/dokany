@@ -507,6 +507,44 @@ TEST(CoreHelpersTest, UniqueHandleSelfResetAndInvalidHandlePut) {
   EXPECT_EQ(find.get(), raw_find);
 }
 
+TEST(CoreHelpersTest, UniqueViewOfFileMappingSelfResetMoveAndRelease) {
+  UniqueHandle mapping(::CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr,
+                                            PAGE_READWRITE, 0, 4096, nullptr));
+  ASSERT_TRUE(mapping.valid()) << FormatWin32Error(::GetLastError());
+
+  UniqueViewOfFile view(
+      ::MapViewOfFile(mapping.get(), FILE_MAP_ALL_ACCESS, 0, 0, 4096));
+  ASSERT_TRUE(view.valid()) << FormatWin32Error(::GetLastError());
+  EXPECT_TRUE(static_cast<bool>(view));
+  void *const raw = view.get();
+  static_cast<uint8_t *>(raw)[0] = 0xAB;
+
+  // Self-reset must be a no-op and keep the mapped view valid.
+  view.reset(raw);
+  EXPECT_EQ(view.get(), raw);
+  EXPECT_EQ(static_cast<uint8_t *>(view.get())[0], 0xAB);
+
+  // Move transfers ownership cleanly.
+  UniqueViewOfFile moved(std::move(view));
+  EXPECT_FALSE(view.valid());
+  EXPECT_EQ(view.get(), nullptr);
+  ASSERT_EQ(moved.get(), raw);
+  EXPECT_EQ(static_cast<uint8_t *>(moved.get())[0], 0xAB);
+
+  // release() relinquishes without unmapping; reset() re-takes ownership.
+  void *const released = moved.release();
+  EXPECT_EQ(released, raw);
+  EXPECT_FALSE(moved.valid());
+  moved.reset(released);
+  EXPECT_EQ(moved.get(), raw);
+
+  // put() unmaps the previous view and accepts a new mapped address.
+  *moved.put() =
+      ::MapViewOfFile(mapping.get(), FILE_MAP_ALL_ACCESS, 0, 0, 4096);
+  ASSERT_TRUE(moved.valid()) << FormatWin32Error(::GetLastError());
+  EXPECT_EQ(static_cast<uint8_t *>(moved.get())[0], 0xAB);
+}
+
 TEST(CoreHelpersTest, NtPathOverMaxLengthRejectedWithStatusNameTooLong) {
   const std::wstring huge_path(32767u, L'a');
 

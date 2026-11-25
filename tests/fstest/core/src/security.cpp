@@ -3,6 +3,7 @@
 
 #include "fstest/core/security.h"
 
+#include "fstest/core/file_ops.h"
 #include "fstest/core/ntdll.h"
 #include "fstest/core/path.h"
 
@@ -119,46 +120,13 @@ DWORD NtStatusToDosErrorSafe(const NtdllApi &ntdll, NTSTATUS st) noexcept {
              : static_cast<DWORD>(ERROR_GEN_FAILURE);
 }
 
-UniqueHandle OpenNtSecurityHandle(const std::wstring &nt_path,
-                                  ACCESS_MASK access, ULONG open_options,
-                                  NTSTATUS *status_out) noexcept {
-  const auto &ntdll = Ntdll();
-  if (ntdll.NtOpenFile == nullptr) {
-    if (status_out != nullptr) {
-      *status_out = STATUS_NOT_IMPLEMENTED;
-    }
-    return UniqueHandle{};
-  }
-  if (nt_path.size() > nt::kMaxUnicodeStringChars) {
-    if (status_out != nullptr) {
-      *status_out = STATUS_NAME_TOO_LONG;
-    }
-    return UniqueHandle{};
-  }
-
-  nt::UnicodeString ustr{};
-  ustr.length = static_cast<USHORT>(nt_path.size() * sizeof(wchar_t));
-  ustr.maximum_length = ustr.length;
-  ustr.buffer = const_cast<wchar_t *>(nt_path.data());
-
-  nt::ObjectAttributes oa{};
-  oa.length = sizeof(oa);
-  oa.object_name = &ustr;
-  oa.attributes = nt::kObjCaseInsensitive;
-
-  nt::IoStatusBlock iosb{};
-  constexpr ULONG kShareAll =
-      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-  UniqueHandle h;
-  const NTSTATUS st =
-      ntdll.NtOpenFile(h.put(), access, &oa, &iosb, kShareAll, open_options);
+UniqueHandle OpenNtSecurityHandle(std::wstring_view nt_path, ACCESS_MASK access,
+                                  ULONG open_options, NTSTATUS *status_out) {
+  auto res = NtOpenFilePath(nt_path, access, kShareAll, open_options);
   if (status_out != nullptr) {
-    *status_out = st;
+    *status_out = res.status;
   }
-  if (!nt::NtSuccess(st)) {
-    h.reset();
-  }
-  return h;
+  return res ? std::move(*res.value) : UniqueHandle{};
 }
 
 // Enables privileges on a private impersonation token of the calling thread
@@ -559,11 +527,10 @@ ScopedDaclRestore ScopedDaclRestore::Arm(std::wstring_view nt_path,
     return guard;
   }
 
-  const std::wstring nt_str(nt_path);
   NTSTATUS st = STATUS_UNSUCCESSFUL;
   // FILE_OPEN_REPARSE_POINT: guard the link itself, never its target.
   UniqueHandle h =
-      OpenNtSecurityHandle(nt_str, WRITE_DAC, nt::kFileOpenReparsePoint, &st);
+      OpenNtSecurityHandle(nt_path, WRITE_DAC, nt::kFileOpenReparsePoint, &st);
   if (!nt::NtSuccess(st) || !h.valid()) {
     return guard;
   }
