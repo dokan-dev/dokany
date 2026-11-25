@@ -1025,6 +1025,9 @@ WARN_LOGFILE           =
 # directories like /usr/src/myproject. Separate the files or directories with
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
+# Note: tests/fstest/ headers are intentionally excluded from INPUT; the
+# NTFS conformance suite is standalone C++20 test tooling outside Dokan's
+# public C library API documentation.
 
 INPUT                  = mainpage.md \
                          ../dokan/

@@ -124,6 +124,16 @@ The latest official and signed build can be downloaded from:
 For manual installation, see the
 [installation page](https://github.com/dokan-dev/dokany/wiki/Installation).
 
+## Testing
+
+Dokany includes a standalone, MIT-licensed C++20/GoogleTest NTFS conformance
+framework in [`tests/fstest/`](tests/fstest/README.md) spanning 12 filesystem
+domains that validates Win32 and native NT semantics against real NTFS volumes
+and the `memfs` and `mirror` samples across x64 and x86 targets. Tracked Dokan
+bugs and unimplemented NTFS features are cataloged with Microsoft specification
+references in
+[`tests/fstest/CONFORMANCE_GAPS.md`](tests/fstest/CONFORMANCE_GAPS.md).
+
 ## Contribute
 
 You want Dokan to get better? Contribute!
