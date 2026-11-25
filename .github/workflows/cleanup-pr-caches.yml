@@ -1,0 +1,33 @@
+name: Cleanup PR Caches
+
+# Deletes Actions caches scoped to a pull request as soon as it is closed or merged,
+# keeping repository cache usage well below quota (especially after VM-image PRs).
+# Uses pull_request_target solely so fork PR caches can be deleted; checks out no code
+# and never reads any untrusted PR fields beyond the integer PR number.
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Delete caches for closed PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete PR-scoped caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: invalid PR number '$PR_NUMBER'" >&2
+            exit 1
+          fi
+          ref="refs/pull/${PR_NUMBER}/merge"
+          echo "Cleaning up Actions caches for ${ref}"
+          gh cache delete --all --ref "$ref" --succeed-on-no-caches

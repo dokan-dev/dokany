@@ -1,0 +1,33 @@
+name: Set up QEMU/KVM
+description: Installs QEMU and the helper tools used by scripts/ci/vm and gives the runner user access to /dev/kvm.
+
+runs:
+  using: composite
+  steps:
+    - name: Install QEMU and helper tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        for attempt in 1 2 3; do
+          if sudo -E apt-get update -qq -o Acquire::Retries=3 \
+              && sudo -E apt-get install -y -qq --no-install-recommends -o Acquire::Retries=3 \
+                qemu-system-x86 qemu-utils genisoimage libxml2-utils openssh-client p7zip-full socat unzip; then
+            break
+          fi
+          if [[ $attempt -eq 3 ]]; then
+            echo "ERROR: apt-get failed after 3 attempts." >&2
+            exit 1
+          fi
+          echo "WARNING: apt-get attempt $attempt failed; retrying in 10s..." >&2
+          sleep 10
+        done
+
+    - name: Allow the runner user to use /dev/kvm
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        sudo udevadm settle
+        ls -l /dev/kvm
