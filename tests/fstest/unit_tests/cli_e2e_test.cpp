@@ -13,6 +13,7 @@
 #include "fstest/core/win_headers.h"
 #include "fstest/suite/test_metadata.h"
 #include "json_util.h"
+#include "test_support.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -46,13 +47,7 @@ std::wstring W(std::string_view utf8) {
   return core::Utf8ToWide(std::string(utf8));
 }
 
-std::wstring GetHostTempDir() {
-  wchar_t buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, buf);
-  return (len > 0 && len < MAX_PATH)
-             ? core::NormalizeWin32Path(std::wstring_view(buf, len))
-             : L"";
-}
+using test_support::GetHostTempDir;
 
 std::wstring GetCurrentExecutablePath() {
   std::wstring buf(MAX_PATH, L'\0');

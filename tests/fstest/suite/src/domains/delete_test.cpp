@@ -21,11 +21,6 @@
 namespace fstest {
 namespace {
 
-// FILE_SUPPORTS_POSIX_UNLINK_RENAME (FileFsAttributeInformation /
-// GetVolumeInformationW): the filesystem implements POSIX unlink/rename
-// (FileDispositionInformationEx / FileRenameInformationEx POSIX_SEMANTICS).
-constexpr DWORD kFileSupportsPosixUnlinkRename = 0x00000400UL;
-
 NTSTATUS CallNtDeleteFile(const std::wstring &nt_path) {
   const auto &ntdll = core::Ntdll();
   if (ntdll.NtDeleteFile == nullptr) {
@@ -399,7 +394,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenKeepsHandleUsableUntilLastClose) {
 // such filesystems instead of being skipped by an OS-build gate).
 TEST_F(DeleteTest, DeleteFileWhileOpenLegacy) {
   if (Os().build >= core::kBuildWin10_1903 &&
-      (Caps().fs_flags & kFileSupportsPosixUnlinkRename) != 0UL) {
+      (Caps().fs_flags & nt::kFileSupportsPosixUnlinkRename) != 0UL) {
     RecordSkipCategory("fs_capability");
     GTEST_SKIP() << "Filesystem advertises FILE_SUPPORTS_POSIX_UNLINK_RENAME "
                     "on Windows 10 1903+ (host build: "

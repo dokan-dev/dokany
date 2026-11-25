@@ -16,27 +16,6 @@
 #include <string>
 
 namespace fstest {
-namespace {
-
-core::NtResult<ACCESS_MASK> QueryFileAccessMask(HANDLE h) {
-  core::NtResult<ACCESS_MASK> res{};
-  const auto &ntdll = core::Ntdll();
-  if (ntdll.NtQueryInformationFile == nullptr) {
-    res.status = STATUS_NOT_IMPLEMENTED;
-    return res;
-  }
-  nt::IoStatusBlock iosb{};
-  nt::FileAccessInfo info{};
-  res.status = ntdll.NtQueryInformationFile(
-      h, &iosb, &info, sizeof(info), nt::FileInfoClass::FileAccessInformation);
-  res.information = iosb.information;
-  if (nt::NtSuccess(res.status)) {
-    res.value = info.access_flags;
-  }
-  return res;
-}
-
-} // namespace
 
 void ForceLink_CreateOpenSecurity() {}
 
@@ -602,7 +581,7 @@ TEST_F(CreateOpenTest,
                                          nt::kFileOpen, kSyncFile);
     ASSERT_NT_STATUS(h_norm.status, STATUS_SUCCESS);
 
-    auto access = QueryFileAccessMask(h_norm.value->get());
+    auto access = helpers::QueryFileAccessMask(h_norm.value->get());
     ASSERT_NT_STATUS(access.status, STATUS_SUCCESS);
     EXPECT_NE(*access.value & FILE_READ_DATA, 0UL);
     EXPECT_NE(*access.value & FILE_WRITE_DATA, 0UL);
@@ -624,7 +603,7 @@ TEST_F(CreateOpenTest,
                                        nt::kFileOpen, kSyncFile);
     ASSERT_NT_STATUS(h_ro.status, STATUS_SUCCESS);
 
-    auto access = QueryFileAccessMask(h_ro.value->get());
+    auto access = helpers::QueryFileAccessMask(h_ro.value->get());
     ASSERT_NT_STATUS(access.status, STATUS_SUCCESS);
     EXPECT_NE(*access.value & FILE_READ_DATA, 0UL);
     EXPECT_NE(*access.value & FILE_READ_ATTRIBUTES, 0UL);

@@ -10,6 +10,7 @@
 #include "fstest/core/security.h"
 #include "fstest/core/status.h"
 #include "fstest/core/temp_dir.h"
+#include "test_support.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -26,13 +27,7 @@
 namespace fstest::core {
 namespace {
 
-std::wstring GetHostTempDir() {
-  wchar_t buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, buf);
-  return (len > 0 && len < MAX_PATH)
-             ? NormalizeWin32Path(std::wstring_view(buf, len))
-             : L"";
-}
+using test_support::GetHostTempDir;
 
 template <typename T>
 void StoreAt(std::vector<uint8_t> *buf, size_t offset, T v) {

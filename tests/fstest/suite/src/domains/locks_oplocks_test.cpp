@@ -825,34 +825,17 @@ public:
 
   core::Win32Result<void> Start() {
     core::Win32Result<void> res{};
-    std::wstring self_exe(1024, L'\0');
-    for (;;) {
-      ::SetLastError(ERROR_SUCCESS);
-      const DWORD len = ::GetModuleFileNameW(
-          nullptr, self_exe.data(), static_cast<DWORD>(self_exe.size()));
-      if (len == 0) {
-        res.error = ::GetLastError();
-        if (res.error == ERROR_SUCCESS) {
-          res.error = ERROR_GEN_FAILURE;
-        }
-        return res;
-      }
-      if (len < self_exe.size()) {
-        self_exe.resize(len);
-        break;
-      }
-      if (self_exe.size() >= 32768) {
-        res.error = ERROR_INSUFFICIENT_BUFFER;
-        return res;
-      }
-      self_exe.assign(self_exe.size() * 2, L'\0');
+    auto self_exe = helpers::GetCurrentExecutablePath();
+    if (!self_exe) {
+      res.error = self_exe.error;
+      return res;
     }
 
     STARTUPINFOW si{};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
     ::SetLastError(ERROR_SUCCESS);
-    if (::CreateProcessW(self_exe.c_str(), nullptr, nullptr, nullptr,
+    if (::CreateProcessW(self_exe.value->c_str(), nullptr, nullptr, nullptr,
                          /*bInheritHandles=*/FALSE,
                          CREATE_SUSPENDED | CREATE_NO_WINDOW, nullptr, nullptr,
                          &si, &pi) == FALSE) {

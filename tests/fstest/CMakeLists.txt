@@ -424,6 +424,8 @@ if(FSTEST_BUILD_CLI)
 
   target_compile_definitions(fstest_self_test PRIVATE
       "FSTEST_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")
+  target_include_directories(fstest_self_test PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/suite/src")
   target_link_libraries(fstest_self_test PRIVATE
       fstest_cli_lib
       GTest::gtest_main)

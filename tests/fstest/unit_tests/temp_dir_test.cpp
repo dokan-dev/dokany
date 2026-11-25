@@ -9,6 +9,7 @@
 #include "fstest/core/security.h"
 #include "fstest/core/status.h"
 #include "fstest/core/temp_dir.h"
+#include "test_support.h"
 
 #include "gtest/gtest.h"
 
@@ -18,13 +19,7 @@
 namespace fstest::core {
 namespace {
 
-std::wstring GetHostTempDir() {
-  wchar_t buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, buf);
-  return (len > 0 && len < MAX_PATH)
-             ? NormalizeWin32Path(std::wstring_view(buf, len))
-             : L"";
-}
+using test_support::GetHostTempDir;
 
 bool PathExists(const std::wstring &ext_path) {
   return ::GetFileAttributesW(ext_path.c_str()) != INVALID_FILE_ATTRIBUTES;

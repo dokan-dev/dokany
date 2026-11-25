@@ -7,6 +7,7 @@
 #include "fstest/core/temp_dir.h"
 #include "json_util.h"
 #include "scorecard.h"
+#include "test_support.h"
 #include "xfail_listener.h"
 
 #include <sstream>
@@ -20,6 +21,24 @@
 
 namespace fstest::cli {
 namespace {
+
+TestRecord MakeTestRecord(std::string id, std::string domain,
+                          TestOutcome outcome, int64_t duration_ms,
+                          bool fatal_teardown = false,
+                          std::string xfail_reason = {},
+                          std::string skip_reason = {},
+                          std::vector<std::string> failures = {}) {
+  TestRecord r;
+  r.id = std::move(id);
+  r.domain = std::move(domain);
+  r.outcome = outcome;
+  r.fatal_teardown = fatal_teardown;
+  r.duration_ms = duration_ms;
+  r.xfail_reason = std::move(xfail_reason);
+  r.skip_reason = std::move(skip_reason);
+  r.failure_messages = std::move(failures);
+  return r;
+}
 
 TEST(ScorecardTest, ClassificationStateMachine) {
   XfailEntry regular_xfail;
@@ -79,30 +98,17 @@ TEST(ScorecardTest, RepeatWorstOutcomeAggregation) {
   EXPECT_GT(OutcomeSeverity(TestOutcome::kPass),
             OutcomeSeverity(TestOutcome::kSkip));
 
-  auto make_rec = [](std::string id, std::string domain, TestOutcome outcome,
-                     int64_t duration_ms, bool fatal_teardown = false,
-                     std::string xfail_reason = {},
-                     std::string skip_reason = {},
-                     std::vector<std::string> failures = {}) {
-    TestRecord r;
-    r.id = std::move(id);
-    r.domain = std::move(domain);
-    r.outcome = outcome;
-    r.fatal_teardown = fatal_teardown;
-    r.duration_ms = duration_ms;
-    r.xfail_reason = std::move(xfail_reason);
-    r.skip_reason = std::move(skip_reason);
-    r.failure_messages = std::move(failures);
-    return r;
-  };
-
   Scorecard sc;
-  sc.RecordTest(make_rec("DataIoTest.Flaky", "data_io", TestOutcome::kPass, 5));
-  sc.RecordTest(make_rec("DataIoTest.Flaky", "data_io", TestOutcome::kXFail, 7,
-                         false, "known", "", {"iter 2 failed"}));
-  sc.RecordTest(make_rec("DataIoTest.Flaky", "data_io", TestOutcome::kFail, 11,
-                         true, "", "", {"iter 3 teardown debris"}));
-  sc.RecordTest(make_rec("DataIoTest.Flaky", "data_io", TestOutcome::kPass, 4));
+  sc.RecordTest(
+      MakeTestRecord("DataIoTest.Flaky", "data_io", TestOutcome::kPass, 5));
+  sc.RecordTest(MakeTestRecord("DataIoTest.Flaky", "data_io",
+                               TestOutcome::kXFail, 7, false, "known", "",
+                               {"iter 2 failed"}));
+  sc.RecordTest(MakeTestRecord("DataIoTest.Flaky", "data_io",
+                               TestOutcome::kFail, 11, true, "", "",
+                               {"iter 3 teardown debris"}));
+  sc.RecordTest(
+      MakeTestRecord("DataIoTest.Flaky", "data_io", TestOutcome::kPass, 4));
 
   const std::vector<TestRecord> tests = sc.Tests();
   ASSERT_EQ(tests.size(), 1u);
@@ -116,11 +122,11 @@ TEST(ScorecardTest, RepeatWorstOutcomeAggregation) {
 
   // Skip followed by pass/fail must clear stale skip_reason.
   Scorecard skip_upgrade;
-  skip_upgrade.RecordTest(make_rec("StreamsTest.SkipThenPass", "streams",
-                                   TestOutcome::kSkip, 1, false, "",
-                                   "[env] skipped on iter 1"));
-  skip_upgrade.RecordTest(
-      make_rec("StreamsTest.SkipThenPass", "streams", TestOutcome::kPass, 3));
+  skip_upgrade.RecordTest(MakeTestRecord("StreamsTest.SkipThenPass", "streams",
+                                         TestOutcome::kSkip, 1, false, "",
+                                         "[env] skipped on iter 1"));
+  skip_upgrade.RecordTest(MakeTestRecord("StreamsTest.SkipThenPass", "streams",
+                                         TestOutcome::kPass, 3));
   ASSERT_EQ(skip_upgrade.Tests().size(), 1u);
   EXPECT_EQ(skip_upgrade.Tests()[0].outcome, TestOutcome::kPass);
   EXPECT_EQ(skip_upgrade.Tests()[0].iterations, 2u);
@@ -128,11 +134,11 @@ TEST(ScorecardTest, RepeatWorstOutcomeAggregation) {
 
   // Repeated skips preserve skip_reason.
   Scorecard all_skip;
-  all_skip.RecordTest(make_rec("StreamsTest.AlwaysSkip", "streams",
-                               TestOutcome::kSkip, 0, false, "",
-                               "[env] kept reason"));
-  all_skip.RecordTest(
-      make_rec("StreamsTest.AlwaysSkip", "streams", TestOutcome::kSkip, 0));
+  all_skip.RecordTest(MakeTestRecord("StreamsTest.AlwaysSkip", "streams",
+                                     TestOutcome::kSkip, 0, false, "",
+                                     "[env] kept reason"));
+  all_skip.RecordTest(MakeTestRecord("StreamsTest.AlwaysSkip", "streams",
+                                     TestOutcome::kSkip, 0));
   ASSERT_EQ(all_skip.Tests().size(), 1u);
   EXPECT_EQ(all_skip.Tests()[0].outcome, TestOutcome::kSkip);
   EXPECT_EQ(all_skip.Tests()[0].skip_reason, "[env] kept reason");
@@ -269,36 +275,20 @@ TEST(ScorecardTest, UnmaskableFlagsPropagateToObservedResultsAndReports) {
 }
 
 TEST(ScorecardTest, TableFormattingAndJsonReportSchema) {
-  auto make_rec = [](std::string id, std::string domain, TestOutcome outcome,
-                     int64_t duration_ms, bool fatal_teardown = false,
-                     std::string xfail_reason = {},
-                     std::string skip_reason = {},
-                     std::vector<std::string> failures = {}) {
-    TestRecord r;
-    r.id = std::move(id);
-    r.domain = std::move(domain);
-    r.outcome = outcome;
-    r.fatal_teardown = fatal_teardown;
-    r.duration_ms = duration_ms;
-    r.xfail_reason = std::move(xfail_reason);
-    r.skip_reason = std::move(skip_reason);
-    r.failure_messages = std::move(failures);
-    return r;
-  };
-
   Scorecard sc;
-  sc.RecordTest(
-      make_rec("CreateOpenTest.Basic", "create_open", TestOutcome::kPass, 12));
-  sc.RecordTest(make_rec("DeleteTest.Posix", "delete", TestOutcome::kXFail, 8,
-                         false, "legacy delete-pending"));
-  sc.RecordTest(make_rec("DeleteTest.Fixed", "delete", TestOutcome::kXPass, 4,
-                         false, "old bug"));
-  sc.RecordTest(make_rec("StreamsTest.Regression", "streams",
-                         TestOutcome::kFail, 20, true, "", "",
-                         {"streams_test.cpp:42: leftover debris"}));
-  sc.RecordTest(make_rec("LinksReparseTest.Skipped", "links_reparse",
-                         TestOutcome::kSkip, 0, false, "",
-                         "[privilege] requires symlink privilege"));
+  sc.RecordTest(MakeTestRecord("CreateOpenTest.Basic", "create_open",
+                               TestOutcome::kPass, 12));
+  sc.RecordTest(MakeTestRecord("DeleteTest.Posix", "delete",
+                               TestOutcome::kXFail, 8, false,
+                               "legacy delete-pending"));
+  sc.RecordTest(MakeTestRecord("DeleteTest.Fixed", "delete",
+                               TestOutcome::kXPass, 4, false, "old bug"));
+  sc.RecordTest(MakeTestRecord("StreamsTest.Regression", "streams",
+                               TestOutcome::kFail, 20, true, "", "",
+                               {"streams_test.cpp:42: leftover debris"}));
+  sc.RecordTest(MakeTestRecord("LinksReparseTest.Skipped", "links_reparse",
+                               TestOutcome::kSkip, 0, false, "",
+                               "[privilege] requires symlink privilege"));
 
   const DomainCounts summary = sc.Summary();
   ASSERT_EQ(summary.total, 5u);
@@ -407,13 +397,10 @@ TEST(ScorecardTest, CollectRegisteredTestIdsFindsCompiledTests) {
 }
 
 TEST(ScorecardTest, WriteScorecardJsonFileHandlesInvalidUtf8WithoutThrowing) {
-  wchar_t temp_buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, temp_buf);
-  ASSERT_GT(len, 0u);
-  ASSERT_LT(len, static_cast<DWORD>(MAX_PATH));
+  const std::wstring host_tmp = test_support::GetHostTempDir();
+  ASSERT_FALSE(host_tmp.empty());
 
-  auto dir = core::ScopedTempDir::Create(
-      core::NormalizeWin32Path(std::wstring_view(temp_buf, len)), L"fstsc");
+  auto dir = core::ScopedTempDir::Create(host_tmp, L"fstsc");
   ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
 
   Scorecard sc;

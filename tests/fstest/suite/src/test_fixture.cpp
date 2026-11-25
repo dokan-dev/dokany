@@ -314,7 +314,7 @@ void NtfsTestBase::SetUp() {
 
 void NtfsTestBase::TearDown() {
   const auto &state = RuntimeState();
-  if (state.setup_failed) {
+  if (state.setup_failed || state.setup_skipped) {
     return;
   }
 

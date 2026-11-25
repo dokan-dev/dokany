@@ -188,16 +188,16 @@ TEST_F(StreamsTest, PerStreamDataAndSizeIndependentOfDefaultStream) {
             MaskPolicyAttributes(info_a.value->dwFileAttributes));
   EXPECT_EQ(MaskPolicyAttributes(info_main.value->dwFileAttributes),
             MaskPolicyAttributes(info_b.value->dwFileAttributes));
-  EXPECT_EQ(helpers::FileTimeToU64(info_main.value->ftCreationTime),
+  EXPECT_EQ(core::FileTimeToU64(info_main.value->ftCreationTime),
             static_cast<uint64_t>(backdated_time));
-  EXPECT_EQ(helpers::FileTimeToU64(info_main.value->ftCreationTime),
-            helpers::FileTimeToU64(info_a.value->ftCreationTime));
-  EXPECT_EQ(helpers::FileTimeToU64(info_main.value->ftCreationTime),
-            helpers::FileTimeToU64(info_b.value->ftCreationTime));
-  EXPECT_EQ(helpers::FileTimeToU64(info_main.value->ftLastWriteTime),
-            helpers::FileTimeToU64(info_a.value->ftLastWriteTime));
-  EXPECT_EQ(helpers::FileTimeToU64(info_main.value->ftLastWriteTime),
-            helpers::FileTimeToU64(info_b.value->ftLastWriteTime));
+  EXPECT_EQ(core::FileTimeToU64(info_main.value->ftCreationTime),
+            core::FileTimeToU64(info_a.value->ftCreationTime));
+  EXPECT_EQ(core::FileTimeToU64(info_main.value->ftCreationTime),
+            core::FileTimeToU64(info_b.value->ftCreationTime));
+  EXPECT_EQ(core::FileTimeToU64(info_main.value->ftLastWriteTime),
+            core::FileTimeToU64(info_a.value->ftLastWriteTime));
+  EXPECT_EQ(core::FileTimeToU64(info_main.value->ftLastWriteTime),
+            core::FileTimeToU64(info_b.value->ftLastWriteTime));
 
   // FindFirstStreamW reports accurate per-stream StreamSize as well.
   auto streams = core::ListStreamsWin32(base);

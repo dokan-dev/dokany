@@ -407,25 +407,6 @@ core::Win32Result<core::UniqueHandle> CreateLowIntegrityImpersonationToken() {
   return result;
 }
 
-// Queries FileAccessInformation: the access mask granted to handle `h`.
-core::NtResult<ACCESS_MASK> QueryFileAccessMask(HANDLE h) {
-  core::NtResult<ACCESS_MASK> result{};
-  const auto &ntdll = core::Ntdll();
-  if (ntdll.NtQueryInformationFile == nullptr) {
-    result.status = STATUS_NOT_IMPLEMENTED;
-    return result;
-  }
-  nt::IoStatusBlock iosb{};
-  nt::FileAccessInfo info{};
-  result.status = ntdll.NtQueryInformationFile(
-      h, &iosb, &info, sizeof(info), nt::FileInfoClass::FileAccessInformation);
-  result.information = iosb.information;
-  if (nt::NtSuccess(result.status)) {
-    result.value = info.access_flags;
-  }
-  return result;
-}
-
 struct DaclInspection {
   bool present = false;
   bool is_null = false;
@@ -2292,7 +2273,7 @@ TEST_F(SecurityAclTest, FileAccessInformationReportsMappedGenericRead) {
   ASSERT_NT_SUCCESS(h.status);
   ASSERT_TRUE(h.value.has_value());
 
-  auto access = QueryFileAccessMask(h.value->get());
+  auto access = helpers::QueryFileAccessMask(h.value->get());
   ASSERT_NT_SUCCESS(access.status);
   ASSERT_TRUE(access.value.has_value());
   EXPECT_EQ(*access.value, static_cast<ACCESS_MASK>(FILE_GENERIC_READ));
@@ -2331,7 +2312,7 @@ TEST_F(SecurityAclTest, MaximumAllowedGrantsOnlyDaclPermittedRights) {
     ASSERT_NT_SUCCESS(h.status);
     ASSERT_TRUE(h.value.has_value());
 
-    auto access = QueryFileAccessMask(h.value->get());
+    auto access = helpers::QueryFileAccessMask(h.value->get());
     ASSERT_NT_SUCCESS(access.status);
     ASSERT_TRUE(access.value.has_value());
     EXPECT_EQ(*access.value & kDaclControlledMask, kExpectedGranted);
