@@ -85,26 +85,39 @@ bool IsBlank(std::string_view s) {
   });
 }
 
+struct ParseState {
+  ParseState(const std::vector<std::string> &args_in, CliOptions *opts_in)
+      : args(args_in), opts(opts_in) {}
+
+  const std::vector<std::string> &args;
+  CliOptions *opts;
+  std::size_t index = 1;
+  int non_utility_flag_count = 0;
+  std::set<std::string, std::less<>> seen_value_flags;
+  bool saw_target_arch = false;
+  std::string error;
+};
+
 // Splits "--flag=value" into flag/value, or consumes args[++index] for
 // "--flag value". Returns false if a required value is missing or looks like
 // another option ("--json-out --verbose" must not create a file "--verbose").
-bool ExtractFlagValue(const std::vector<std::string> &args, std::size_t *index,
-                      std::string_view flag_name, bool has_equals,
-                      std::string_view inline_value, std::string *value_out,
-                      std::string *error_out) {
+bool ExtractFlagValue(ParseState *state, std::string_view flag_name,
+                      bool has_equals, std::string_view inline_value,
+                      std::string *value_out) {
   if (has_equals) {
     *value_out = std::string(inline_value);
   } else {
-    if (*index + 1 >= args.size()) {
-      *error_out = "Missing value for flag '" + std::string(flag_name) + "'";
+    if (state->index + 1 >= state->args.size()) {
+      state->error = "Missing value for flag '" + std::string(flag_name) + "'";
       return false;
     }
-    ++(*index);
-    *value_out = args[*index];
+    ++state->index;
+    *value_out = state->args[state->index];
   }
   if (std::string_view(*value_out).starts_with("--")) {
-    *error_out = "Invalid value for flag '" + std::string(flag_name) + "': '" +
-                 *value_out + "' looks like an option (missing value?)";
+    state->error = "Invalid value for flag '" + std::string(flag_name) +
+                   "': '" + *value_out +
+                   "' looks like an option (missing value?)";
     return false;
   }
   return true;
@@ -115,6 +128,394 @@ CliParseResult MakeError(std::string message) {
   result.ok = false;
   result.error = std::move(message);
   return result;
+}
+
+enum class FlagStatus {
+  kNotMatched,
+  kOk,
+  kError,
+};
+
+struct BoolFlagSpec {
+  std::string_view name;
+  bool CliOptions::*member;
+};
+
+constexpr BoolFlagSpec kBoolFlags[] = {
+    {"--strict", &CliOptions::strict},
+    {"--respect-fs-caps", &CliOptions::respect_fs_caps},
+    {"--allow-unknown-xfails", &CliOptions::allow_unknown_xfails},
+    {"--verbose", &CliOptions::verbose},
+    {"--prune-passing", &CliOptions::prune_passing},
+};
+
+struct NonEmptyStringFlagSpec {
+  std::string_view name;
+  std::string CliOptions::*member;
+  bool counts_as_non_utility;
+  std::string_view empty_noun;
+};
+
+constexpr NonEmptyStringFlagSpec kNonEmptyStringFlags[] = {
+    {"--root", &CliOptions::root, true, "path"},
+    {"--cleanup-dir", &CliOptions::cleanup_dir, false, "path"},
+    {"--validate-baseline", &CliOptions::validate_baseline_path, false, "path"},
+    {"--baseline", &CliOptions::baseline_path, true, "path"},
+    {"--target", &CliOptions::target, true, "name"},
+    {"--json-out", &CliOptions::json_out_path, true, "path"},
+};
+
+bool HandleTargetArch(std::string val, ParseState *state) {
+  if (!IsValidTargetArch(val)) {
+    state->error = "Invalid value for '--target-arch': '" + val +
+                   "' (expected one of: x64, x86, arm64)";
+    return false;
+  }
+  state->opts->target_arch = std::move(val);
+  state->saw_target_arch = true;
+  return true;
+}
+
+bool HandleXpassPolicy(std::string val, ParseState *state) {
+  if (val == "fail") {
+    state->opts->xpass_policy = XpassPolicy::kFail;
+    return true;
+  }
+  if (val == "warn") {
+    state->opts->xpass_policy = XpassPolicy::kWarn;
+    return true;
+  }
+  state->error = "Invalid value for '--xpass-policy': '" + val +
+                 "' (expected 'fail' or 'warn')";
+  return false;
+}
+
+bool HandleDefaultReason(std::string val, ParseState *state) {
+  if (IsBlank(val)) {
+    state->error = "Flag '--default-reason' requires a non-empty string";
+    return false;
+  }
+  state->opts->default_reason = std::move(val);
+  return true;
+}
+
+bool HandleVolumeRootMode(std::string val, ParseState *state) {
+  if (val == "auto") {
+    state->opts->is_volume_root = VolumeRootMode::kAuto;
+    return true;
+  }
+  if (val == "true") {
+    state->opts->is_volume_root = VolumeRootMode::kTrue;
+    return true;
+  }
+  if (val == "false") {
+    state->opts->is_volume_root = VolumeRootMode::kFalse;
+    return true;
+  }
+  state->error = "Invalid value for '--is-volume-root': '" + val +
+                 "' (expected 'auto', 'true', or 'false')";
+  return false;
+}
+
+bool HandleTempPrefix(std::string val, ParseState *state) {
+  if (!IsValidTempPrefix(val)) {
+    state->error = "Invalid value for '--temp-prefix': '" + val + "'";
+    return false;
+  }
+  state->opts->temp_prefix = std::move(val);
+  return true;
+}
+
+bool HandleLargeDirCount(std::string val, ParseState *state) {
+  uint32_t count = 0;
+  if (!ParseUint32Strict(val, &count) || count < 10) {
+    state->error = "Invalid value for '--large-dir-count': '" + val +
+                   "' (expected integer >= 10)";
+    return false;
+  }
+  state->opts->large_dir_count = count;
+  return true;
+}
+
+bool HandleAsyncTimeoutMs(std::string val, ParseState *state) {
+  uint32_t ms = 0;
+  if (!ParseUint32Strict(val, &ms) || ms == 0) {
+    state->error = "Invalid value for '--async-timeout-ms': '" + val +
+                   "' (expected positive integer)";
+    return false;
+  }
+  state->opts->async_timeout_ms = ms;
+  return true;
+}
+
+struct ValueFlagSpec {
+  std::string_view name;
+  bool (*handler)(std::string val, ParseState *state);
+};
+
+constexpr ValueFlagSpec kValueFlags[] = {
+    {"--target-arch", &HandleTargetArch},
+    {"--xpass-policy", &HandleXpassPolicy},
+    {"--default-reason", &HandleDefaultReason},
+    {"--is-volume-root", &HandleVolumeRootMode},
+    {"--temp-prefix", &HandleTempPrefix},
+    {"--large-dir-count", &HandleLargeDirCount},
+    {"--async-timeout-ms", &HandleAsyncTimeoutMs},
+};
+
+bool HandleGtestFlag(std::string_view arg, const std::string &raw,
+                     ParseState *state) {
+  CliOptions *opts = state->opts;
+  opts->gtest_args.push_back(raw);
+  if (arg == "--gtest_list_tests") {
+    opts->gtest_list_tests = true;
+  } else if (arg.starts_with("--gtest_list_tests=")) {
+    opts->gtest_list_tests = ParseGtestBoolValue(
+        arg.substr(std::string_view("--gtest_list_tests=").size()));
+  } else if (arg.starts_with("--gtest_filter=")) {
+    // Only GoogleTest's default "*" selects every test; anything else
+    // (including an empty filter, which selects nothing) is a filter.
+    opts->gtest_has_filter =
+        arg.substr(std::string_view("--gtest_filter=").size()) != "*";
+  } else if (arg == "--gtest_fail_fast") {
+    opts->gtest_fail_fast = true;
+  } else if (arg.starts_with("--gtest_fail_fast=")) {
+    opts->gtest_fail_fast = ParseGtestBoolValue(
+        arg.substr(std::string_view("--gtest_fail_fast=").size()));
+  } else if (arg.starts_with("--gtest_repeat=")) {
+    int repeat_val = 1;
+    const std::string_view num_str =
+        arg.substr(std::string_view("--gtest_repeat=").size());
+    if (!ParseIntStrict(num_str, &repeat_val)) {
+      state->error = "Invalid integer value for --gtest_repeat: '" +
+                     std::string(num_str) + "'";
+      return false;
+    }
+    opts->gtest_repeat = repeat_val;
+  }
+  return true;
+}
+
+FlagStatus TryHandleBoolFlag(std::string_view flag, bool has_eq,
+                             ParseState *state) {
+  for (const BoolFlagSpec &spec : kBoolFlags) {
+    if (flag != spec.name) {
+      continue;
+    }
+    ++state->non_utility_flag_count;
+    if (has_eq) {
+      state->error = "Flag '" + std::string(flag) + "' does not take a value";
+      return FlagStatus::kError;
+    }
+    state->opts->*(spec.member) = true;
+    return FlagStatus::kOk;
+  }
+  return FlagStatus::kNotMatched;
+}
+
+bool HandleOptionalUpdateBaseline(bool has_eq, std::string_view inline_val,
+                                  ParseState *state) {
+  state->opts->update_baseline = true;
+  if (has_eq) {
+    if (inline_val.empty()) {
+      state->error = "Flag '--update-baseline=' requires a non-empty path";
+      return false;
+    }
+    if (inline_val.starts_with("--")) {
+      state->error = "Invalid value for flag '--update-baseline': '" +
+                     std::string(inline_val) +
+                     "' looks like an option (missing value?)";
+      return false;
+    }
+    state->opts->update_baseline_path = std::string(inline_val);
+  } else if (state->index + 1 < state->args.size() &&
+             !state->args[state->index + 1].empty() &&
+             state->args[state->index + 1][0] != '-') {
+    ++state->index;
+    state->opts->update_baseline_path = state->args[state->index];
+  }
+  return true;
+}
+
+FlagStatus TryHandleNonEmptyStringFlag(std::string_view flag, bool has_eq,
+                                       std::string_view inline_val,
+                                       ParseState *state) {
+  for (const NonEmptyStringFlagSpec &spec : kNonEmptyStringFlags) {
+    if (flag != spec.name) {
+      continue;
+    }
+    if (spec.counts_as_non_utility) {
+      ++state->non_utility_flag_count;
+    }
+    std::string val;
+    if (!ExtractFlagValue(state, flag, has_eq, inline_val, &val)) {
+      return FlagStatus::kError;
+    }
+    if (val.empty()) {
+      state->error = "Flag '" + std::string(flag) + "' requires a non-empty " +
+                     std::string(spec.empty_noun);
+      return FlagStatus::kError;
+    }
+    state->opts->*(spec.member) = std::move(val);
+    return FlagStatus::kOk;
+  }
+  return FlagStatus::kNotMatched;
+}
+
+bool HandleValueFlag(std::string_view flag, bool has_eq,
+                     std::string_view inline_val, ParseState *state) {
+  for (const ValueFlagSpec &spec : kValueFlags) {
+    if (flag != spec.name) {
+      continue;
+    }
+    ++state->non_utility_flag_count;
+    std::string val;
+    if (!ExtractFlagValue(state, flag, has_eq, inline_val, &val)) {
+      return false;
+    }
+    return spec.handler(std::move(val), state);
+  }
+  state->error = "Unknown flag: '" + std::string(flag) + "'";
+  return false;
+}
+
+bool ValidateUpdateBaselineOptions(const CliOptions &opts,
+                                   std::string *error_out) {
+  if (opts.prune_passing && !opts.update_baseline) {
+    *error_out = "Flag '--prune-passing' requires '--update-baseline'";
+    return false;
+  }
+  if (!opts.update_baseline) {
+    return true;
+  }
+  if (opts.baseline_path.empty()) {
+    *error_out = "Flag '--update-baseline' requires '--baseline=<path>'";
+    return false;
+  }
+  if (opts.gtest_has_filter) {
+    *error_out = "Flag '--update-baseline' cannot be used with a "
+                 "non-default '--gtest_filter' (only '*' is allowed)";
+    return false;
+  }
+  if (opts.gtest_repeat != 1) {
+    *error_out =
+        "Flag '--update-baseline' cannot be used with '--gtest_repeat != 1'";
+    return false;
+  }
+  return true;
+}
+
+bool ValidateStrictAndBaselineFlags(const CliOptions &opts,
+                                    std::string *error_out) {
+  if (opts.strict && (!opts.baseline_path.empty() || !opts.target.empty() ||
+                      opts.update_baseline)) {
+    *error_out = "Flag '--strict' is mutually exclusive with '--baseline', "
+                 "'--target', and '--update-baseline'";
+    return false;
+  }
+  if (!opts.target.empty() && opts.baseline_path.empty()) {
+    *error_out = "Flag '--target' requires '--baseline=<path>'";
+    return false;
+  }
+  if (opts.gtest_fail_fast && !opts.baseline_path.empty()) {
+    *error_out =
+        "Flag '--gtest_fail_fast' cannot be used with '--baseline' (the first "
+        "expected XFAIL would skip every remaining test)";
+    return false;
+  }
+  return true;
+}
+
+bool ValidateExecutionOptions(CliOptions *opts, std::string_view env_root,
+                              std::string *error_out) {
+  if (opts->root.empty() && !env_root.empty()) {
+    opts->root = std::string(env_root);
+  }
+  if (opts->root.empty()) {
+    *error_out = "Missing required flag '--root=<path>' (or set FSTEST_ROOT)";
+    return false;
+  }
+  if (!ValidateStrictAndBaselineFlags(*opts, error_out)) {
+    return false;
+  }
+  return ValidateUpdateBaselineOptions(*opts, error_out);
+}
+
+bool ValidateAllParsedOptions(CliOptions *opts, std::string_view env_root,
+                              int non_utility_flag_count,
+                              std::string *error_out) {
+  if (opts->show_help || opts->show_version) {
+    return true;
+  }
+  if (!opts->cleanup_dir.empty()) {
+    if (!opts->validate_baseline_path.empty() || non_utility_flag_count > 0) {
+      *error_out = "Flag '--cleanup-dir' cannot be combined with other flags";
+      return false;
+    }
+    return true;
+  }
+  if (!opts->validate_baseline_path.empty()) {
+    if (non_utility_flag_count > 0) {
+      *error_out =
+          "Flag '--validate-baseline' cannot be combined with other flags";
+      return false;
+    }
+    return true;
+  }
+  if (opts->gtest_list_tests) {
+    return true;
+  }
+  return ValidateExecutionOptions(opts, env_root, error_out);
+}
+
+bool ProcessDashDashFlag(std::string_view arg, ParseState *state) {
+  const std::size_t eq_pos = arg.find('=');
+  const bool has_eq = (eq_pos != std::string_view::npos);
+  const std::string_view flag = has_eq ? arg.substr(0, eq_pos) : arg;
+  const std::string_view inline_val =
+      has_eq ? arg.substr(eq_pos + 1) : std::string_view{};
+
+  const FlagStatus bool_status = TryHandleBoolFlag(flag, has_eq, state);
+  if (bool_status != FlagStatus::kNotMatched) {
+    return bool_status == FlagStatus::kOk;
+  }
+  if (!state->seen_value_flags.emplace(flag).second) {
+    state->error =
+        "Flag '" + std::string(flag) + "' may only be specified once";
+    return false;
+  }
+  if (flag == "--update-baseline") {
+    ++state->non_utility_flag_count;
+    return HandleOptionalUpdateBaseline(has_eq, inline_val, state);
+  }
+  const FlagStatus str_status =
+      TryHandleNonEmptyStringFlag(flag, has_eq, inline_val, state);
+  if (str_status != FlagStatus::kNotMatched) {
+    return str_status == FlagStatus::kOk;
+  }
+  return HandleValueFlag(flag, has_eq, inline_val, state);
+}
+
+bool ProcessSingleCliArg(ParseState *state) {
+  const std::string &raw = state->args[state->index];
+  const std::string_view arg(raw);
+  if (arg.starts_with("--gtest_")) {
+    ++state->non_utility_flag_count;
+    return HandleGtestFlag(arg, raw, state);
+  }
+  if (arg == "-h" || arg == "--help") {
+    state->opts->show_help = true;
+    return true;
+  }
+  if (arg == "--version") {
+    state->opts->show_version = true;
+    return true;
+  }
+  if (!arg.starts_with("--")) {
+    state->error = "Unknown argument: '" + raw + "'";
+    return false;
+  }
+  return ProcessDashDashFlag(arg, state);
 }
 
 } // namespace
@@ -156,358 +557,22 @@ CliParseResult ParseCliArgs(const std::vector<std::string> &args,
   CliParseResult result;
   CliOptions &opts = result.options;
   opts.gtest_list_tests = env_gtest_list_tests;
+  opts.gtest_args.push_back(args.empty() ? "dokan_fstest" : args[0]);
 
-  if (!args.empty()) {
-    opts.gtest_args.push_back(args[0]);
-  } else {
-    opts.gtest_args.push_back("dokan_fstest");
-  }
-
-  bool saw_target_arch = false;
-  int non_utility_flag_count = 0;
-  std::set<std::string, std::less<>> seen_value_flags;
-
-  for (std::size_t i = 1; i < args.size(); ++i) {
-    const std::string &raw = args[i];
-    const std::string_view arg(raw);
-
-    // Forward all --gtest_* flags untouched while inspecting filter/list/repeat
-    if (arg.starts_with("--gtest_")) {
-      ++non_utility_flag_count;
-      opts.gtest_args.push_back(raw);
-      if (arg == "--gtest_list_tests") {
-        opts.gtest_list_tests = true;
-      } else if (arg.starts_with("--gtest_list_tests=")) {
-        opts.gtest_list_tests = ParseGtestBoolValue(
-            arg.substr(std::string_view("--gtest_list_tests=").size()));
-      } else if (arg.starts_with("--gtest_filter=")) {
-        // Only GoogleTest's default "*" selects every test; anything else
-        // (including an empty filter, which selects nothing) is a filter.
-        opts.gtest_has_filter =
-            arg.substr(std::string_view("--gtest_filter=").size()) != "*";
-      } else if (arg == "--gtest_fail_fast") {
-        opts.gtest_fail_fast = true;
-      } else if (arg.starts_with("--gtest_fail_fast=")) {
-        opts.gtest_fail_fast = ParseGtestBoolValue(
-            arg.substr(std::string_view("--gtest_fail_fast=").size()));
-      } else if (arg.starts_with("--gtest_repeat=")) {
-        int repeat_val = 1;
-        const std::string_view num_str =
-            arg.substr(std::string_view("--gtest_repeat=").size());
-        if (!ParseIntStrict(num_str, &repeat_val)) {
-          return MakeError("Invalid integer value for --gtest_repeat: '" +
-                           std::string(num_str) + "'");
-        }
-        opts.gtest_repeat = repeat_val;
-      }
-      continue;
-    }
-
-    if (arg == "-h" || arg == "--help") {
-      opts.show_help = true;
-      continue;
-    }
-    if (arg == "--version") {
-      opts.show_version = true;
-      continue;
-    }
-
-    if (!arg.starts_with("--")) {
-      return MakeError("Unknown argument: '" + raw + "'");
-    }
-
-    const std::size_t eq_pos = arg.find('=');
-    const bool has_eq = (eq_pos != std::string_view::npos);
-    const std::string_view flag = has_eq ? arg.substr(0, eq_pos) : arg;
-    const std::string_view inline_val =
-        has_eq ? arg.substr(eq_pos + 1) : std::string_view{};
-
-    // Boolean flags (reject "=value")
-    if (flag == "--strict" || flag == "--respect-fs-caps" ||
-        flag == "--allow-unknown-xfails" || flag == "--verbose" ||
-        flag == "--prune-passing") {
-      ++non_utility_flag_count;
-      if (has_eq) {
-        return MakeError("Flag '" + std::string(flag) +
-                         "' does not take a value");
-      }
-      if (flag == "--strict") {
-        opts.strict = true;
-      } else if (flag == "--respect-fs-caps") {
-        opts.respect_fs_caps = true;
-      } else if (flag == "--allow-unknown-xfails") {
-        opts.allow_unknown_xfails = true;
-      } else if (flag == "--verbose") {
-        opts.verbose = true;
-      } else if (flag == "--prune-passing") {
-        opts.prune_passing = true;
-      }
-      continue;
-    }
-
-    // Every remaining flag takes (at most) one value: reject duplicates instead
-    // of silently letting the last occurrence win.
-    if (!seen_value_flags.emplace(flag).second) {
-      return MakeError("Flag '" + std::string(flag) +
-                       "' may only be specified once");
-    }
-
-    // Optional-value flag: --update-baseline[=<path>]
-    if (flag == "--update-baseline") {
-      ++non_utility_flag_count;
-      opts.update_baseline = true;
-      if (has_eq) {
-        if (inline_val.empty()) {
-          return MakeError(
-              "Flag '--update-baseline=' requires a non-empty path");
-        }
-        if (inline_val.starts_with("--")) {
-          return MakeError("Invalid value for flag '--update-baseline': '" +
-                           std::string(inline_val) +
-                           "' looks like an option (missing value?)");
-        }
-        opts.update_baseline_path = std::string(inline_val);
-      } else if (i + 1 < args.size() && !args[i + 1].empty() &&
-                 args[i + 1][0] != '-') {
-        ++i;
-        opts.update_baseline_path = args[i];
-      }
-      continue;
-    }
-
-    // Value-taking flags
-    std::string val;
-    std::string val_err;
-    if (flag == "--root") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError("Flag '--root' requires a non-empty path");
-      }
-      opts.root = std::move(val);
-    } else if (flag == "--cleanup-dir") {
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError("Flag '--cleanup-dir' requires a non-empty path");
-      }
-      opts.cleanup_dir = std::move(val);
-    } else if (flag == "--validate-baseline") {
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError(
-            "Flag '--validate-baseline' requires a non-empty path");
-      }
-      opts.validate_baseline_path = std::move(val);
-    } else if (flag == "--baseline") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError("Flag '--baseline' requires a non-empty path");
-      }
-      opts.baseline_path = std::move(val);
-    } else if (flag == "--target") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError("Flag '--target' requires a non-empty name");
-      }
-      opts.target = std::move(val);
-    } else if (flag == "--target-arch") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (!IsValidTargetArch(val)) {
-        return MakeError("Invalid value for '--target-arch': '" + val +
-                         "' (expected one of: x64, x86, arm64)");
-      }
-      opts.target_arch = std::move(val);
-      saw_target_arch = true;
-    } else if (flag == "--xpass-policy") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val == "fail") {
-        opts.xpass_policy = XpassPolicy::kFail;
-      } else if (val == "warn") {
-        opts.xpass_policy = XpassPolicy::kWarn;
-      } else {
-        return MakeError("Invalid value for '--xpass-policy': '" + val +
-                         "' (expected 'fail' or 'warn')");
-      }
-    } else if (flag == "--json-out") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val.empty()) {
-        return MakeError("Flag '--json-out' requires a non-empty path");
-      }
-      opts.json_out_path = std::move(val);
-    } else if (flag == "--default-reason") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (IsBlank(val)) {
-        return MakeError("Flag '--default-reason' requires a non-empty string");
-      }
-      opts.default_reason = std::move(val);
-    } else if (flag == "--is-volume-root") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (val == "auto") {
-        opts.is_volume_root = VolumeRootMode::kAuto;
-      } else if (val == "true") {
-        opts.is_volume_root = VolumeRootMode::kTrue;
-      } else if (val == "false") {
-        opts.is_volume_root = VolumeRootMode::kFalse;
-      } else {
-        return MakeError("Invalid value for '--is-volume-root': '" + val +
-                         "' (expected 'auto', 'true', or 'false')");
-      }
-    } else if (flag == "--temp-prefix") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      if (!IsValidTempPrefix(val)) {
-        return MakeError("Invalid value for '--temp-prefix': '" + val + "'");
-      }
-      opts.temp_prefix = std::move(val);
-    } else if (flag == "--large-dir-count") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      uint32_t count = 0;
-      if (!ParseUint32Strict(val, &count) || count < 10) {
-        return MakeError("Invalid value for '--large-dir-count': '" + val +
-                         "' (expected integer >= 10)");
-      }
-      opts.large_dir_count = count;
-    } else if (flag == "--async-timeout-ms") {
-      ++non_utility_flag_count;
-      if (!ExtractFlagValue(args, &i, flag, has_eq, inline_val, &val,
-                            &val_err)) {
-        return MakeError(val_err);
-      }
-      uint32_t ms = 0;
-      if (!ParseUint32Strict(val, &ms) || ms == 0) {
-        return MakeError("Invalid value for '--async-timeout-ms': '" + val +
-                         "' (expected positive integer)");
-      }
-      opts.async_timeout_ms = ms;
-    } else {
-      return MakeError("Unknown flag: '" + std::string(flag) + "'");
+  ParseState state(args, &opts);
+  for (state.index = 1; state.index < args.size(); ++state.index) {
+    if (!ProcessSingleCliArg(&state)) {
+      return MakeError(std::move(state.error));
     }
   }
 
-  if (!saw_target_arch) {
+  if (!state.saw_target_arch) {
     opts.target_arch = DefaultBinaryArch();
   }
 
-  // Early-exit modes do not require --root or cross-flag checks.
-  if (opts.show_help || opts.show_version) {
-    result.ok = true;
-    return result;
-  }
-
-  // Utility mode: --cleanup-dir=<path>
-  if (!opts.cleanup_dir.empty()) {
-    if (!opts.validate_baseline_path.empty() || non_utility_flag_count > 0) {
-      return MakeError(
-          "Flag '--cleanup-dir' cannot be combined with other flags");
-    }
-    result.ok = true;
-    return result;
-  }
-
-  // Utility mode: --validate-baseline=<path>
-  if (!opts.validate_baseline_path.empty()) {
-    if (non_utility_flag_count > 0) {
-      return MakeError(
-          "Flag '--validate-baseline' cannot be combined with other flags");
-    }
-    result.ok = true;
-    return result;
-  }
-
-  // Listing mode: --gtest_list_tests does not require --root.
-  if (opts.gtest_list_tests) {
-    result.ok = true;
-    return result;
-  }
-
-  // Normal test execution validation.
-  if (opts.root.empty() && !env_root.empty()) {
-    opts.root = std::string(env_root);
-  }
-  if (opts.root.empty()) {
-    return MakeError(
-        "Missing required flag '--root=<path>' (or set FSTEST_ROOT)");
-  }
-
-  if (opts.strict) {
-    if (!opts.baseline_path.empty() || !opts.target.empty() ||
-        opts.update_baseline) {
-      return MakeError(
-          "Flag '--strict' is mutually exclusive with '--baseline', "
-          "'--target', and '--update-baseline'");
-    }
-  }
-
-  if (!opts.target.empty() && opts.baseline_path.empty()) {
-    return MakeError("Flag '--target' requires '--baseline=<path>'");
-  }
-
-  if (opts.gtest_fail_fast && !opts.baseline_path.empty()) {
-    return MakeError(
-        "Flag '--gtest_fail_fast' cannot be used with '--baseline' (the first "
-        "expected XFAIL would skip every remaining test)");
-  }
-
-  if (opts.prune_passing && !opts.update_baseline) {
-    return MakeError("Flag '--prune-passing' requires '--update-baseline'");
-  }
-
-  if (opts.update_baseline) {
-    if (opts.baseline_path.empty()) {
-      return MakeError("Flag '--update-baseline' requires '--baseline=<path>'");
-    }
-    if (opts.gtest_has_filter) {
-      return MakeError("Flag '--update-baseline' cannot be used with a "
-                       "non-default '--gtest_filter' (only '*' is allowed)");
-    }
-    if (opts.gtest_repeat != 1) {
-      return MakeError(
-          "Flag '--update-baseline' cannot be used with '--gtest_repeat != 1'");
-    }
+  if (!ValidateAllParsedOptions(&opts, env_root, state.non_utility_flag_count,
+                                &state.error)) {
+    return MakeError(std::move(state.error));
   }
 
   result.ok = true;
