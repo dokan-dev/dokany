@@ -178,12 +178,12 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   auto initial_info = core::GetByHandleInfo(h.value->get());
   ASSERT_WIN32_OK(initial_info);
   const uint64_t orig_write =
-      helpers::FileTimeToU64(initial_info.value->ftLastWriteTime);
+      core::FileTimeToU64(initial_info.value->ftLastWriteTime);
 
   const FILETIME ft_create = core::MakeUtcFileTime(2134, 1, 1, 0, 0, 0);
   const FILETIME ft_access = core::MakeUtcFileTime(2134, 10, 11, 12, 34, 56);
-  const uint64_t target_create = helpers::FileTimeToU64(ft_create);
-  const uint64_t target_access = helpers::FileTimeToU64(ft_access);
+  const uint64_t target_create = core::FileTimeToU64(ft_create);
+  const uint64_t target_access = core::FileTimeToU64(ft_access);
   ASSERT_GT(target_create, 0u);
   ASSERT_GT(target_access, 0u);
 
@@ -195,7 +195,7 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   // advance LastAccessTime before a reopen could observe the explicit value.
   auto set_handle_info = core::GetByHandleInfo(h.value->get());
   ASSERT_WIN32_OK(set_handle_info);
-  EXPECT_EQ(helpers::FileTimeToU64(set_handle_info.value->ftLastAccessTime),
+  EXPECT_EQ(core::FileTimeToU64(set_handle_info.value->ftLastAccessTime),
             target_access);
   h.value->reset();
 
@@ -207,10 +207,9 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
 
   auto after_info = core::GetByHandleInfo(h_verify.value->get());
   ASSERT_WIN32_OK(after_info);
-  EXPECT_EQ(helpers::FileTimeToU64(after_info.value->ftCreationTime),
+  EXPECT_EQ(core::FileTimeToU64(after_info.value->ftCreationTime),
             target_create);
-  EXPECT_EQ(helpers::FileTimeToU64(after_info.value->ftLastWriteTime),
-            orig_write);
+  EXPECT_EQ(core::FileTimeToU64(after_info.value->ftLastWriteTime), orig_write);
 
   h_verify.value->reset();
   ASSERT_WIN32_TRUE(::DeleteFileW(path.c_str()));
@@ -659,9 +658,9 @@ TEST_F(TimestampsAttrsTest, DirectoryTimestampsSetAndQuery) {
 
   auto bhfi = core::GetByHandleInfo(h_verify.value->get());
   ASSERT_WIN32_OK(bhfi);
-  EXPECT_EQ(helpers::FileTimeToU64(bhfi.value->ftCreationTime),
+  EXPECT_EQ(core::FileTimeToU64(bhfi.value->ftCreationTime),
             static_cast<uint64_t>(t_create));
-  EXPECT_EQ(helpers::FileTimeToU64(bhfi.value->ftLastWriteTime),
+  EXPECT_EQ(core::FileTimeToU64(bhfi.value->ftLastWriteTime),
             static_cast<uint64_t>(t_write));
 
   auto basic = core::QueryBasicInfo(h_verify.value->get());
@@ -758,7 +757,7 @@ TEST_F(TimestampsAttrsTest,
 
     auto info = core::GetByHandleInfo(h1.value->get());
     ASSERT_WIN32_OK(info);
-    EXPECT_EQ(helpers::FileTimeToU64(info.value->ftLastWriteTime),
+    EXPECT_EQ(core::FileTimeToU64(info.value->ftLastWriteTime),
               static_cast<uint64_t>(kPast));
   }
 
@@ -840,13 +839,13 @@ TEST_F(TimestampsAttrsTest,
   // LastAccessTime is intentionally not compared: the two queries use separate
   // opens, and an antivirus scanner or indexer touching the file in between
   // (or since the SetFileTime handle closed) may legitimately advance it.
-  EXPECT_EQ(helpers::FileTimeToU64(attr_ex.ftCreationTime),
-            helpers::FileTimeToU64(bhfi.value->ftCreationTime));
-  EXPECT_EQ(helpers::FileTimeToU64(attr_ex.ftLastWriteTime),
-            helpers::FileTimeToU64(bhfi.value->ftLastWriteTime));
-  EXPECT_EQ(helpers::FileTimeToU64(attr_ex.ftCreationTime),
+  EXPECT_EQ(core::FileTimeToU64(attr_ex.ftCreationTime),
+            core::FileTimeToU64(bhfi.value->ftCreationTime));
+  EXPECT_EQ(core::FileTimeToU64(attr_ex.ftLastWriteTime),
+            core::FileTimeToU64(bhfi.value->ftLastWriteTime));
+  EXPECT_EQ(core::FileTimeToU64(attr_ex.ftCreationTime),
             static_cast<uint64_t>(t_create));
-  EXPECT_EQ(helpers::FileTimeToU64(attr_ex.ftLastWriteTime),
+  EXPECT_EQ(core::FileTimeToU64(attr_ex.ftLastWriteTime),
             static_cast<uint64_t>(t_write));
 }
 

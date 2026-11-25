@@ -65,18 +65,13 @@ std::wstring RootOpenPath(const core::NormalizedRoot &root, bool use_extended) {
   return p;
 }
 
+// Opens an existing file or directory with FILE_FLAG_BACKUP_SEMANTICS (for
+// directory metadata operations and SeRestorePrivilege backup intent such as
+// SetFileShortNameW).
 core::Win32Result<core::UniqueHandle>
-OpenDirForMetadata(std::wstring_view dir_path, DWORD access) {
-  return core::CreateWin32File(dir_path, access, core::kShareAll, OPEN_EXISTING,
+OpenWithBackupSemantics(std::wstring_view path, DWORD access) {
+  return core::CreateWin32File(path, access, core::kShareAll, OPEN_EXISTING,
                                FILE_FLAG_BACKUP_SEMANTICS);
-}
-
-// Opens a regular file with FILE_FLAG_BACKUP_SEMANTICS (required by Win32
-// SetFileShortNameW so SeRestorePrivilege backup intent is honored).
-core::Win32Result<core::UniqueHandle>
-OpenFileForBackupAccess(std::wstring_view file_path, DWORD access) {
-  return core::CreateWin32File(file_path, access, core::kShareAll,
-                               OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
 }
 
 bool IsMetadataTunnelingDisabledByRegistry(std::string *reason_out) {
@@ -142,7 +137,7 @@ core::NtResult<ULONG> QueryCaseSensitiveFlag(HANDLE dir_handle) {
 }
 
 NTSTATUS SetCaseSensitiveFlagByPath(std::wstring_view dir_path, ULONG flags) {
-  auto h = OpenDirForMetadata(
+  auto h = OpenWithBackupSemantics(
       dir_path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE);
   EXPECT_WIN32_OK(h);
   if (!h) {
@@ -153,7 +148,8 @@ NTSTATUS SetCaseSensitiveFlagByPath(std::wstring_view dir_path, ULONG flags) {
 
 core::NtResult<ULONG> QueryCaseSensitiveFlagByPath(std::wstring_view dir_path) {
   core::NtResult<ULONG> result{};
-  auto h = OpenDirForMetadata(dir_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
+  auto h =
+      OpenWithBackupSemantics(dir_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
   EXPECT_WIN32_OK(h);
   if (!h) {
     result.status = STATUS_UNSUCCESSFUL;
@@ -236,9 +232,10 @@ OpenMountRoot(const core::NormalizedRoot &root, DWORD access) {
   if (!ext.empty() && ext.back() != L'\\') {
     ext.push_back(L'\\');
   }
-  auto h = OpenDirForMetadata(ext, access);
+  auto h = OpenWithBackupSemantics(ext, access);
   if (!h && root.kind == core::RootKind::kUncShare) {
-    h = OpenDirForMetadata(RootOpenPath(root, /*use_extended=*/false), access);
+    h = OpenWithBackupSemantics(RootOpenPath(root, /*use_extended=*/false),
+                                access);
   }
   return h;
 }
@@ -910,9 +907,10 @@ TEST_F(NamingPathsTest, MountRootOpensAsDirectory) {
   const std::wstring root_win = RootOpenPath(Root(), /*use_extended=*/false);
 
   auto root_h =
-      OpenDirForMetadata(root_ext, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
+      OpenWithBackupSemantics(root_ext, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
   if (!root_h && Root().kind == core::RootKind::kUncShare) {
-    root_h = OpenDirForMetadata(root_win, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
+    root_h =
+        OpenWithBackupSemantics(root_win, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
   }
   ASSERT_WIN32_OK(root_h);
   root_h.value->reset();
@@ -1189,9 +1187,9 @@ TEST_F(NamingPathsTest, PerDirectoryCaseSensitivityFlag) {
   const std::wstring cs_dir = TestPath(L"case_sens_dir");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(cs_dir.c_str(), nullptr));
 
-  auto dh =
-      OpenDirForMetadata(cs_dir, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES |
-                                     DELETE | SYNCHRONIZE);
+  auto dh = OpenWithBackupSemantics(cs_dir, FILE_READ_ATTRIBUTES |
+                                                FILE_WRITE_ATTRIBUTES | DELETE |
+                                                SYNCHRONIZE);
   ASSERT_WIN32_OK(dh);
 
   ASSERT_NT_SUCCESS(
@@ -1463,7 +1461,7 @@ TEST_F(NamingPathsTest, SetFileShortNameExplicit) {
   ASSERT_WIN32_OK(orig_id);
 
   {
-    auto fh = OpenFileForBackupAccess(long_path, GENERIC_WRITE | DELETE);
+    auto fh = OpenWithBackupSemantics(long_path, GENERIC_WRITE | DELETE);
     ASSERT_WIN32_OK(fh);
     ASSERT_WIN32_TRUE(::SetFileShortNameW(fh.value->get(), L"CUST~1.TXT"));
   }
@@ -1579,7 +1577,7 @@ TEST_F(NamingPathsTest,
 
   // Inside case-sensitive parent, both obj_attrs==0 and OBJ_CASE_INSENSITIVE
   // resolve exact case (Alpha.txt != alpha.txt).
-  auto parent_h = OpenDirForMetadata(
+  auto parent_h = OpenWithBackupSemantics(
       parent_dir, FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE);
   ASSERT_WIN32_OK(parent_h);
 

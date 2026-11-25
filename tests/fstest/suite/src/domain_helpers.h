@@ -234,47 +234,6 @@ inline bool BackdateAllTimes(const std::wstring &path, int64_t time_100ns,
   return core::SetBasicInfo(opened.value->get(), info).ok();
 }
 
-// Copies the currently running executable image to dest_path using a growable
-// buffer up to 32768 wide characters for GetModuleFileNameW.
-inline core::Win32Result<void>
-CopyCurrentExecutableTo(const std::wstring &dest_path) {
-  core::Win32Result<void> result{};
-  std::wstring self_exe(1024, L'\0');
-  for (;;) {
-    ::SetLastError(ERROR_SUCCESS);
-    const DWORD len = ::GetModuleFileNameW(nullptr, self_exe.data(),
-                                           static_cast<DWORD>(self_exe.size()));
-    if (len == 0) {
-      result.error = ::GetLastError();
-      if (result.error == ERROR_SUCCESS) {
-        result.error = ERROR_GEN_FAILURE;
-      }
-      return result;
-    }
-    if (len < self_exe.size()) {
-      self_exe.resize(len);
-      break;
-    }
-    if (self_exe.size() >= 32768) {
-      result.error = ERROR_INSUFFICIENT_BUFFER;
-      return result;
-    }
-    self_exe.assign(self_exe.size() * 2, L'\0');
-  }
-
-  ::SetLastError(ERROR_SUCCESS);
-  if (::CopyFileW(self_exe.c_str(), dest_path.c_str(),
-                  /*bFailIfExists=*/FALSE) == FALSE) {
-    result.error = ::GetLastError();
-    if (result.error == ERROR_SUCCESS) {
-      result.error = ERROR_GEN_FAILURE;
-    }
-    return result;
-  }
-  result.error = ERROR_SUCCESS;
-  return result;
-}
-
 namespace detail {
 
 inline std::string FormatBytesPreview(std::string_view data) {
@@ -301,6 +260,36 @@ inline std::string FormatBytesPreview(std::string_view data) {
 } // namespace detail
 
 namespace helpers {
+
+// Returns the full Win32 path of the currently running executable image using a
+// growable buffer up to 32768 wide characters for GetModuleFileNameW.
+inline core::Win32Result<std::wstring> GetCurrentExecutablePath() {
+  core::Win32Result<std::wstring> result{};
+  std::wstring self_exe(1024, L'\0');
+  for (;;) {
+    ::SetLastError(ERROR_SUCCESS);
+    const DWORD len = ::GetModuleFileNameW(nullptr, self_exe.data(),
+                                           static_cast<DWORD>(self_exe.size()));
+    if (len == 0) {
+      result.error = ::GetLastError();
+      if (result.error == ERROR_SUCCESS) {
+        result.error = ERROR_GEN_FAILURE;
+      }
+      return result;
+    }
+    if (len < self_exe.size()) {
+      self_exe.resize(len);
+      result.error = ERROR_SUCCESS;
+      result.value = std::move(self_exe);
+      return result;
+    }
+    if (self_exe.size() >= 32768) {
+      result.error = ERROR_INSUFFICIENT_BUFFER;
+      return result;
+    }
+    self_exe.assign(self_exe.size() * 2, L'\0');
+  }
+}
 
 // Verifies that `path` does not exist and querying its Win32 attributes fails
 // specifically with ERROR_FILE_NOT_FOUND.
@@ -533,19 +522,39 @@ inline PathBasicInfoResult QueryPathBasicInfo(std::wstring_view path) {
 // buffer address is misaligned iff `(address & mask) != 0`.
 inline core::NtResult<ULONG> QueryAlignmentRequirement(HANDLE h) {
   core::NtResult<ULONG> res{};
-  const auto &api = core::Ntdll();
-  if (api.NtQueryInformationFile == nullptr) {
-    res.status = STATUS_NOT_SUPPORTED;
+  const auto &ntdll = core::Ntdll();
+  if (ntdll.NtQueryInformationFile == nullptr) {
+    res.status = STATUS_NOT_IMPLEMENTED;
     return res;
   }
   nt::FileAlignmentInfo info{};
   nt::IoStatusBlock iosb{};
-  res.status = api.NtQueryInformationFile(
+  res.status = ntdll.NtQueryInformationFile(
       h, &iosb, &info, static_cast<ULONG>(sizeof(info)),
       nt::FileInfoClass::FileAlignmentInformation);
+  res.information = iosb.information;
   if (nt::NtSuccess(res.status)) {
-    res.information = iosb.information;
     res.value = info.alignment_requirement;
+  }
+  return res;
+}
+
+// Queries FileAccessInformation: the access mask granted to handle `h`.
+inline core::NtResult<ACCESS_MASK> QueryFileAccessMask(HANDLE h) {
+  core::NtResult<ACCESS_MASK> res{};
+  const auto &ntdll = core::Ntdll();
+  if (ntdll.NtQueryInformationFile == nullptr) {
+    res.status = STATUS_NOT_IMPLEMENTED;
+    return res;
+  }
+  nt::IoStatusBlock iosb{};
+  nt::FileAccessInfo info{};
+  res.status = ntdll.NtQueryInformationFile(
+      h, &iosb, &info, static_cast<ULONG>(sizeof(info)),
+      nt::FileInfoClass::FileAccessInformation);
+  res.information = iosb.information;
+  if (nt::NtSuccess(res.status)) {
+    res.value = info.access_flags;
   }
   return res;
 }
@@ -563,11 +572,6 @@ inline constexpr FILETIME Int64ToFileTime(int64_t ticks) noexcept {
   return U64ToFileTime(static_cast<uint64_t>(ticks));
 }
 
-// Unpacks a Win32 FILETIME into an unsigned 64-bit 100ns tick count.
-inline constexpr uint64_t FileTimeToU64(const FILETIME &ft) noexcept {
-  return core::FileTimeToU64(ft);
-}
-
 // Creates a new empty file at `path` (CREATE_NEW) and immediately closes the
 // handle, returning the Win32 status without embedding ASSERT_* macros.
 inline core::Win32Result<void> CreateEmptyFileResult(std::wstring_view path) {
@@ -583,4 +587,28 @@ inline core::Win32Result<void> CreateEmptyFileResult(std::wstring_view path) {
 }
 
 } // namespace helpers
+
+// Copies the currently running executable image to dest_path.
+inline core::Win32Result<void>
+CopyCurrentExecutableTo(const std::wstring &dest_path) {
+  core::Win32Result<void> result{};
+  auto self_exe = helpers::GetCurrentExecutablePath();
+  if (!self_exe) {
+    result.error = self_exe.error;
+    return result;
+  }
+
+  ::SetLastError(ERROR_SUCCESS);
+  if (::CopyFileW(self_exe.value->c_str(), dest_path.c_str(),
+                  /*bFailIfExists=*/FALSE) == FALSE) {
+    result.error = ::GetLastError();
+    if (result.error == ERROR_SUCCESS) {
+      result.error = ERROR_GEN_FAILURE;
+    }
+    return result;
+  }
+  result.error = ERROR_SUCCESS;
+  return result;
+}
+
 } // namespace fstest

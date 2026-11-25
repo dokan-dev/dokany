@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Dokan Project Contributors
 
+#include "assertions.h"
 #include "fstest/core/capabilities.h"
 #include "fstest/core/file_ops.h"
 #include "fstest/core/nt_types.h"
@@ -12,7 +13,11 @@
 #include "fstest/suite/test_fixture.h"
 #include "fstest/suite/test_metadata.h"
 #include "mount_guard.h"
+#include "test_support.h"
 
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
 #include <optional>
 #include <set>
 #include <string>
@@ -25,13 +30,7 @@
 namespace fstest {
 namespace {
 
-std::wstring GetHostTempDir() {
-  wchar_t buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, buf);
-  return (len > 0 && len < MAX_PATH)
-             ? core::NormalizeWin32Path(std::wstring_view(buf, len))
-             : L"";
-}
+using test_support::GetHostTempDir;
 
 class ScopedSuiteConfigReset {
 public:
@@ -99,6 +98,53 @@ TEST(StatusFormattingTest, FormatWin32ErrorIncludesNameDecimalAndHex) {
   const std::string unknown = core::FormatWin32Error(999999UL);
   EXPECT_NE(unknown.find("ERROR_999999 (999999 / 0xF423F)"), std::string::npos)
       << unknown;
+}
+
+TEST(AssertionsTest, Win32OkCoversWin32ResultAndOpenResult) {
+  core::Win32Result<int> int_ok{};
+  int_ok.error = ERROR_SUCCESS;
+  int_ok.value = 42;
+  EXPECT_WIN32_OK(int_ok);
+
+  core::Win32Result<int> int_err{};
+  int_err.error = ERROR_ACCESS_DENIED;
+  const ::testing::AssertionResult int_fail =
+      detail::CheckWin32Ok("int_err", int_err);
+  EXPECT_FALSE(int_fail);
+  EXPECT_NE(std::string(int_fail.message()).find("ERROR_ACCESS_DENIED"),
+            std::string::npos)
+      << int_fail.message();
+
+  core::Win32Result<void> void_ok{};
+  void_ok.error = ERROR_SUCCESS;
+  EXPECT_WIN32_OK(void_ok);
+
+  core::Win32Result<void> void_err{};
+  void_err.error = ERROR_SHARING_VIOLATION;
+  const ::testing::AssertionResult void_fail =
+      detail::CheckWin32Ok("void_err", void_err);
+  EXPECT_FALSE(void_fail);
+  EXPECT_NE(std::string(void_fail.message()).find("ERROR_SHARING_VIOLATION"),
+            std::string::npos)
+      << void_fail.message();
+
+  // CREATE_ALWAYS / OPEN_ALWAYS return a valid handle with
+  // ERROR_ALREADY_EXISTS; EXPECT_WIN32_OK must treat that as ok().
+  core::Win32OpenResult open_already{};
+  open_already.handle.reset(::CreateEventW(nullptr, /*bManualReset=*/TRUE,
+                                           /*bInitialState=*/FALSE, nullptr));
+  ASSERT_TRUE(open_already.handle.valid());
+  open_already.last_error = ERROR_ALREADY_EXISTS;
+  EXPECT_WIN32_OK(open_already);
+
+  core::Win32OpenResult open_err{};
+  open_err.last_error = ERROR_FILE_NOT_FOUND;
+  const ::testing::AssertionResult open_fail =
+      detail::CheckWin32Ok("open_err", open_err);
+  EXPECT_FALSE(open_fail);
+  EXPECT_NE(std::string(open_fail.message()).find("ERROR_FILE_NOT_FOUND"),
+            std::string::npos)
+      << open_fail.message();
 }
 
 TEST(SecurityHelpersTest, ScopedDaclRestoreRestoresAccessOnDestruction) {
@@ -597,6 +643,62 @@ TEST(LifecycleHooksTest, BeforeSuiteFailureFailsSetUpAndSkipsOtherHooks) {
   EXPECT_EQ(before_test_calls, 0);
   // after_suite is skipped when before_suite was set but did not succeed.
   EXPECT_EQ(after_suite_calls, 0);
+}
+
+void TriggerBeforeSuiteSkip(std::string_view reason) { GTEST_SKIP() << reason; }
+
+TEST(LifecycleHooksTest,
+     BeforeSuiteSkipDoesNotInvokeAfterTestWithoutBeforeTest) {
+  // Runs in a death-test child process because GTEST_SKIP() inside
+  // before_suite marks the current GoogleTest TestResult as skipped.
+  EXPECT_EXIT(
+      {
+        ScopedSuiteConfigReset reset_guard;
+        int after_test_calls = 0;
+        int after_suite_calls = 0;
+        TestConfig cfg;
+        cfg.root_path = L"C:\\";
+        cfg.hooks.before_suite = [](std::string_view, std::wstring *,
+                                    std::string *error_out) {
+          *error_out = "suite skipped in before_suite";
+          TriggerBeforeSuiteSkip(*error_out);
+          return true;
+        };
+        // Deliberately leave before_test unset to verify TearDown() checks
+        // state.setup_skipped before invoking after_test.
+        cfg.hooks.after_test = [&](const TestLifecycleInfo &, bool,
+                                   std::string *) {
+          ++after_test_calls;
+          return true;
+        };
+        cfg.hooks.after_suite = [&](std::string_view) { ++after_suite_calls; };
+        ConfigureSuite(std::move(cfg));
+
+        FixtureHarness::SetUpTestSuite();
+        bool saw_skip = false;
+        bool teardown_clean = false;
+        {
+          FixtureHarness h;
+          const std::vector<::testing::TestPartResult> setup_parts =
+              RunSetUpCapturingFailures(&h);
+          saw_skip = setup_parts.size() == 1u && setup_parts[0].skipped();
+          teardown_clean = RunTearDownCapturingFailures(&h).empty();
+        }
+        FixtureHarness::TearDownTestSuite();
+
+        if (!saw_skip || !teardown_clean || after_test_calls != 0 ||
+            after_suite_calls != 0) {
+          std::cerr << "saw_skip=" << saw_skip
+                    << " teardown_clean=" << teardown_clean
+                    << " after_test_calls=" << after_test_calls
+                    << " after_suite_calls=" << after_suite_calls << "\n";
+          std::fflush(nullptr);
+          std::_Exit(1);
+        }
+        std::fflush(nullptr);
+        std::_Exit(0);
+      },
+      ::testing::ExitedWithCode(0), "");
 }
 
 TEST(LifecycleHooksTest, TempDirCreationFailureRecordsFatalSetup) {

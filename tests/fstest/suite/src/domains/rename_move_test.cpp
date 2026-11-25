@@ -200,42 +200,12 @@ PrepareBackdatedCrossDirRename(std::wstring_view src_parent,
   return ::testing::AssertionSuccess();
 }
 
-// Scratch directory on a volume other than the one under test (the host temp
-// directory), with best-effort cleanup of every tracked file on destruction.
-struct OtherVolumeScratch {
-  OtherVolumeScratch() = default;
-  OtherVolumeScratch(const OtherVolumeScratch &) = delete;
-  OtherVolumeScratch &operator=(const OtherVolumeScratch &) = delete;
-
-  ~OtherVolumeScratch() {
-    for (const auto &file : files) {
-      ::SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_NORMAL);
-      ::DeleteFileW(file.c_str());
-    }
-    if (!dir.empty()) {
-      ::RemoveDirectoryW(dir.c_str());
-    }
-  }
-
-  // Returns <dir>\<name> and registers it for deletion on destruction.
-  std::wstring Track(std::wstring_view name) {
-    std::wstring path = dir;
-    path.push_back(L'\\');
-    path.append(name);
-    files.push_back(path);
-    return path;
-  }
-
-  std::wstring dir;
-  std::vector<std::wstring> files;
-};
-
 // Creates a scratch directory under the host temp directory when that
 // directory is provably on a different volume than `test_dir` (different
 // volume serial number). Returns false with `*reason` set when no second
 // volume can be determined; cross-volume tests then skip.
 bool AcquireOtherVolumeScratch(std::wstring_view test_dir,
-                               OtherVolumeScratch *out, std::string *reason) {
+                               core::ScopedTempDir *out, std::string *reason) {
   auto test_info = core::QueryInfoByPath(test_dir, /*backup_semantics=*/true);
   if (!test_info) {
     *reason = "Cannot query the volume serial number of the test directory: " +
@@ -272,20 +242,14 @@ bool AcquireOtherVolumeScratch(std::wstring_view test_dir,
     return false;
   }
 
-  std::wstring scratch = temp_root;
-  if (scratch.back() != L'\\') {
-    scratch.push_back(L'\\');
-  }
-  scratch += L"fstest_xvol_" + std::to_wstring(::GetCurrentProcessId()) + L"_" +
-             std::to_wstring(::GetTickCount64());
-  ::SetLastError(ERROR_SUCCESS);
-  if (::CreateDirectoryW(scratch.c_str(), nullptr) == FALSE) {
-    const DWORD err = ::GetLastError();
-    *reason = "Cannot create a scratch directory on the second volume ('" +
-              core::WideToUtf8(scratch) + "'): " + core::FormatWin32Error(err);
+  auto dir_res = core::ScopedTempDir::Create(temp_root, L"fstxvol");
+  if (!dir_res) {
+    *reason = "Cannot create a scratch directory on the second volume under '" +
+              core::WideToUtf8(temp_root) +
+              "': " + core::FormatWin32Error(dir_res.error);
     return false;
   }
-  out->dir = std::move(scratch);
+  *out = std::move(*dir_res.value);
   return true;
 }
 
@@ -1549,7 +1513,7 @@ TEST_F(RenameMoveTest, RenameOntoDeletePendingTargetFailsAccessDenied) {
 // target. (The cross-device check itself is made by the I/O manager; this is
 // the control for the MOVEFILE_COPY_ALLOWED tests below.)
 TEST_F(RenameMoveTest, CrossVolumeMoveWithoutCopyAllowedFailsNotSameDevice) {
-  OtherVolumeScratch other;
+  core::ScopedTempDir other;
   std::string skip_reason;
   if (!AcquireOtherVolumeScratch(TempDir().Path(), &other, &skip_reason)) {
     RecordSkipCategory("volume_policy");
@@ -1557,7 +1521,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveWithoutCopyAllowedFailsNotSameDevice) {
   }
 
   const std::wstring src = TestPath(L"xvol_plain_src.dat");
-  const std::wstring dst = other.Track(L"xvol_plain_dst.dat");
+  const std::wstring dst = other.ChildPath(L"xvol_plain_dst.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(src, "cross_volume_payload"));
 
   EXPECT_WIN32_ERROR(::MoveFileExW(src.c_str(), dst.c_str(), 0),
@@ -1583,7 +1547,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveWithoutCopyAllowedFailsNotSameDevice) {
 // Spec: Win32 MoveFileExW(MOVEFILE_COPY_ALLOWED) -- moving a file off the
 // volume under test copies it to the other volume and then deletes the source.
 TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedOutOfVolumeDeletesSource) {
-  OtherVolumeScratch other;
+  core::ScopedTempDir other;
   std::string skip_reason;
   if (!AcquireOtherVolumeScratch(TempDir().Path(), &other, &skip_reason)) {
     RecordSkipCategory("volume_policy");
@@ -1591,7 +1555,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedOutOfVolumeDeletesSource) {
   }
 
   const std::wstring src = TestPath(L"xvol_out_src.dat");
-  const std::wstring dst = other.Track(L"xvol_out_dst.dat");
+  const std::wstring dst = other.ChildPath(L"xvol_out_dst.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(src, "moved_out_payload"));
 
   ASSERT_WIN32_TRUE(
@@ -1605,14 +1569,14 @@ TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedOutOfVolumeDeletesSource) {
 // volume onto the volume under test creates the target with the full contents
 // and removes the source.
 TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedIntoVolumeCreatesTarget) {
-  OtherVolumeScratch other;
+  core::ScopedTempDir other;
   std::string skip_reason;
   if (!AcquireOtherVolumeScratch(TempDir().Path(), &other, &skip_reason)) {
     RecordSkipCategory("volume_policy");
     GTEST_SKIP() << skip_reason;
   }
 
-  const std::wstring src = other.Track(L"xvol_in_src.dat");
+  const std::wstring src = other.ChildPath(L"xvol_in_src.dat");
   const std::wstring dst = TestPath(L"xvol_in_dst.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(src, "moved_in_payload"));
 

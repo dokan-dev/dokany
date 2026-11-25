@@ -318,17 +318,17 @@ TEST_F(StreamsTest, BaseTimestampChangeVisibleThroughStream) {
 
   auto base_info = core::QueryInfoByPath(base);
   ASSERT_WIN32_OK(base_info);
-  EXPECT_EQ(helpers::FileTimeToU64(base_info.value->ftCreationTime),
-            helpers::FileTimeToU64(ft_create));
-  EXPECT_EQ(helpers::FileTimeToU64(base_info.value->ftLastWriteTime),
-            helpers::FileTimeToU64(ft_write));
+  EXPECT_EQ(core::FileTimeToU64(base_info.value->ftCreationTime),
+            core::FileTimeToU64(ft_create));
+  EXPECT_EQ(core::FileTimeToU64(base_info.value->ftLastWriteTime),
+            core::FileTimeToU64(ft_write));
 
   auto stream_info = core::QueryInfoByPath(foo);
   ASSERT_WIN32_OK(stream_info);
-  EXPECT_EQ(helpers::FileTimeToU64(stream_info.value->ftCreationTime),
-            helpers::FileTimeToU64(ft_create));
-  EXPECT_EQ(helpers::FileTimeToU64(stream_info.value->ftLastWriteTime),
-            helpers::FileTimeToU64(ft_write));
+  EXPECT_EQ(core::FileTimeToU64(stream_info.value->ftCreationTime),
+            core::FileTimeToU64(ft_create));
+  EXPECT_EQ(core::FileTimeToU64(stream_info.value->ftLastWriteTime),
+            core::FileTimeToU64(ft_write));
 
   EXPECT_WIN32_TRUE(::DeleteFileW(base.c_str()));
 }

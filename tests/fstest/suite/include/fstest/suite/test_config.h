@@ -94,8 +94,9 @@ struct LifecycleHooks {
       before_test;
 
   /// Runs in `NtfsTestBase::TearDown()` after the `ScopedTempDir` zero-debris
-  /// check whenever `before_test` is unset or returned `true`. Returning
-  /// `false` records `fstest_fatal_teardown = "1"` (never masked as XFAIL).
+  /// check whenever suite setup succeeded (neither failed nor skipped) and
+  /// `before_test` is unset or returned `true`. Returning `false` records
+  /// `fstest_fatal_teardown = "1"` (never masked as XFAIL).
   std::function<bool(const TestLifecycleInfo &info, bool test_passed,
                      std::string *error_out)>
       after_test;

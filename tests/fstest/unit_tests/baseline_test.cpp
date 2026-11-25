@@ -7,6 +7,7 @@
 #include "fstest/core/path.h"
 #include "fstest/core/status.h"
 #include "fstest/core/temp_dir.h"
+#include "test_support.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -22,13 +23,7 @@
 namespace fstest::cli {
 namespace {
 
-std::wstring GetHostTempDir() {
-  wchar_t buf[MAX_PATH + 1]{};
-  const DWORD len = ::GetTempPathW(MAX_PATH, buf);
-  return (len > 0 && len < MAX_PATH)
-             ? core::NormalizeWin32Path(std::wstring_view(buf, len))
-             : L"";
-}
+using test_support::GetHostTempDir;
 
 class ScopedTestDirectory {
 public:
