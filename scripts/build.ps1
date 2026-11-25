@@ -10,7 +10,6 @@ $ErrorActionPreference = "Stop"
 
 Add-VisualStudio-Path
 
-if ($env:APPVEYOR -eq "True") { $CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
 $msBuildPath=& Get-Command msbuild | Select-Object -ExpandProperty Definition
 if (!([bool](Get-Command -Name buildWrapper -ErrorAction SilentlyContinue))) {
 	set-alias buildWrapper "$msBuildPath"
@@ -24,7 +23,7 @@ if ($BuildPart -contains 'win') {
 	foreach ($Configuration in $Configurations) {
 		foreach ($Platform in $Platforms) {
 			Write-Host Build dokan $Configuration $Platform ...
-			Exec-External { buildWrapper .\dokan.sln /p:Configuration=$Configuration /p:Platform=$Platform /t:Build $CI_BUILD_ARG }
+			Exec-External { buildWrapper .\dokan.sln /p:Configuration=$Configuration /p:Platform=$Platform /t:Build }
 			Write-Host Build dokan $Configuration $Platform done !
 		}
 	}

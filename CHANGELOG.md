@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Documentation - Add `winget` installation instructions (#1319).
 
 ### Changed
+- CI - Replace AppVeyor with the GitHub Actions `Build and Test` workflow (`build-and-test.yml`, plus `cleanup-pr-caches.yml`): builds, test-signs, and packages Dokan (Win32/x64/ARM64, Cygwin/MSYS2 `dokan_fuse`, `DokanSetup-<version>.exe`, `dokan-<version>.zip`) and test tools (`dokan-fstest-<version>.zip`, `fsx.exe`) in parallel, then installs Dokan with Driver Verifier in cached Windows Server 2016-2025 QEMU/KVM VMs (two shards per OS) to run the NTFS `--strict` gate and `memfs`/`mirror` `fsx`, `dokan_fstest`, and IFSTest suites, with automatic `kd.exe` crash/NMI-hang dump analysis.
 - Breaking / Major Version - Bump major version from `dokan2` to `dokan3` (`dokan3.sys`, `dokan3.dll`, `dokannp3.dll`, `dokanfuse3.dll`, `DokanLibrary3`, `DOKAN_VERSION`/`DOKAN_MINIMUM_COMPATIBLE_VERSION` = `300`, new `DOKAN_BASE_GUID`, `DCB` identifier tag, and installer GUIDs) to enable side-by-side installation with Dokan 2.x.
 - Library - Improve `AddMissingCurrentAndParentFolder` efficiency by inserting `.` and `..` in a single `DokanVector_PushFrontArray` operation.
 - Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
@@ -18,6 +19,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - FUSE / Build - Decouple Cygwin and MSYS2 builds and installer components (`BuildCygwin` / `BuildMsys2`), migrate 64-bit MSYS2 (`x64/Msys2/libdokanfuse3.dll`) from deprecated `MINGW64` (`msvcrt.dll`) to `UCRT64` (`ucrtbase.dll`) while keeping `Win32/Msys2` on `MINGW32` (#1362), and make `fuse.pc` relocatable via `${pcfiledir}`.
 
 ### Removed
+- CI - Remove AppVeyor configuration (`appveyor.yml`).
 - Build / Installer - Drop support for Windows 7, Windows 8, and Windows 8.1; minimum supported OS is now Windows 10 (1507) / Windows Server 2016.
 - Build / Installer - Drop ARM32 and 32-bit (x86) kernel driver support and remove `Dokan_x86.msi` (32-bit applications on 64-bit Windows remain supported via WOW64 DLLs included in `Dokan_x64.msi`).
 - FUSE / Installer - Remove the broken duplicate 64-bit `Win32/Cygwin` FUSE build and its x86 installer entries (32-bit Cygwin was discontinued upstream; 64-bit Cygwin remains supported in `x64/Cygwin`) (#1362).

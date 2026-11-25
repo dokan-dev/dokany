@@ -133,7 +133,7 @@ If Network Redirector is setup using a UNC Name, Dokan Network Provider will ass
 File systems can be tested using different tools.
 Microsoft has their own tools like [Runkarr](https://msdn.microsoft.com/en-us/library/windows/hardware/hh998457%28v=vs.85%29.aspx), [IFSTest](https://msdn.microsoft.com/en-us/library/gg607473%28v=vs.85%29.aspx) or [Device Fundamentals](https://msdn.microsoft.com/windows/hardware/drivers/develop/how-to-select-and-configure-the-device-fundamental-tests).
 
-Dokany also includes an in-repo C++20 NTFS conformance test suite in [tests/fstest](https://github.com/dokan-dev/dokany/blob/master/tests/fstest/README.md), which runs in AppVeyor and GitHub Actions CI against real NTFS volumes as well as the `memfs` and `mirror` samples across x64 and x86 targets. Known Dokan conformance gaps and Microsoft specification references are tracked in [tests/fstest/CONFORMANCE_GAPS.md](https://github.com/dokan-dev/dokany/blob/master/tests/fstest/CONFORMANCE_GAPS.md).
+Dokany also includes an in-repo C++20 NTFS conformance test suite in [tests/fstest](https://github.com/dokan-dev/dokany/blob/master/tests/fstest/README.md), which runs in GitHub Actions CI against real NTFS volumes as well as the `memfs` and `mirror` samples across x64 and x86 targets. Known Dokan conformance gaps and Microsoft specification references are tracked in [tests/fstest/CONFORMANCE_GAPS.md](https://github.com/dokan-dev/dokany/blob/master/tests/fstest/CONFORMANCE_GAPS.md).
 
 For C# developers, there is [DokanNet.Tests](https://github.com/dokan-dev/dokan-dotnet/tree/master/DokanNet.Tests) made by viciousviper that currently only test C# Mirror sample but can easily be changed to test a C# Dokan FS.
 

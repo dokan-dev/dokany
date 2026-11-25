@@ -115,14 +115,12 @@ if (Test-Path $vswhere) {
 		$tmpBuildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
 		if (test-path $tmpBuildCmd) {
 			$buildCmd = $tmpBuildCmd
+			# Keep in sync with scripts/fstest_common.ps1 and scripts/ci/build_test_tools.ps1.
 			$fstoolsRevision="9e378a7745a7dcb6fbfc1f649975e7a47c8f952e"
 		}
 	}
 }
 
-$env:CI_BUILD_ARG = ""
-if ($env:APPVEYOR) { $env:CI_BUILD_ARG="/l:C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" }
- 
 Write-Host Build test tools -ForegroundColor Green
 if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 {
@@ -132,8 +130,7 @@ if (!(Test-Path .\fstools\src\fsx\fsx.exe))
 	".\fstools\winfstest.sln",
 	"/m",
 	"/p:Configuration=Release",
-	"/p:Platform=x64",
-	"$env:CI_BUILD_ARG")
+	"/p:Platform=x64")
 	Exec-External {& $buildCmd $buildArgs}
 }
 
