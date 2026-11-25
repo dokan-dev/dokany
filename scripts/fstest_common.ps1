@@ -1,5 +1,17 @@
 # Shared PowerShell 5.1+ helpers for running dokan_fstest against Dokan mounts.
 
+# Single source of truth for the pinned Liryna/fstools commit used in CI.
+# Keep in sync with $fstoolsRevision in samples/memfs_test.ps1 and samples/mirror_test.ps1.
+$script:DokanFsToolsRevision = '9e378a7745a7dcb6fbfc1f649975e7a47c8f952e'
+
+function Get-DokanFsToolsRevision {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    return $script:DokanFsToolsRevision
+}
+
 function Resolve-DokanFsTestPaths {
     [CmdletBinding()]
     [OutputType([hashtable])]
@@ -28,8 +40,8 @@ function Resolve-DokanFsTestPaths {
             }
         }
         if ([string]::IsNullOrWhiteSpace($FsTestExe)) {
-            if ($env:APPVEYOR -eq 'True') {
-                throw 'dokan_fstest.exe not found in CI (expected tests\fstest\ci-bin\dokan_fstest.exe)'
+            if ($env:CI) {
+                throw 'dokan_fstest.exe not found in CI; pass -FsTestExe (or stage it at tests\fstest\ci-bin\dokan_fstest.exe)'
             }
             Write-Information -MessageData 'Building dokan_fstest.exe via scripts\build_fstest.ps1...' -InformationAction Continue
             $buildScript = Join-Path -Path $RepoRoot -ChildPath 'scripts\build_fstest.ps1'

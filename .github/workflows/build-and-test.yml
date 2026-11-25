@@ -1,0 +1,629 @@
+name: Build and Test
+
+# Builds, test-signs and packages Dokan, then installs it with Driver Verifier enabled in Windows
+# Server 2016 / 2019 / 2022 / 2025 VMs (QEMU/KVM on Linux runners) and runs the file system test suites.
+# See scripts/ci/README.md.
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.md'
+      - 'documentations/**'
+  pull_request:
+  schedule:
+    # Keep cached VM images warm on master (Actions evicts caches after 7 days without access).
+    - cron: '0 5 */5 * *'
+  workflow_dispatch:
+    inputs:
+      crash_selftest:
+        description: 'Run the crash-capture self-test (crash or hang a VM and analyze the dump)'
+        type: choice
+        options:
+          - none
+          - bugcheck
+          - hang
+        default: none
+      os:
+        description: 'Limit VM OS matrix (useful on personal forks with a 10 GB cache cap)'
+        type: choice
+        options:
+          - all
+          - server2016
+          - server2019
+          - server2022
+          - server2025
+        default: all
+
+permissions: {}
+
+concurrency:
+  group: build-and-test-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event_name == 'schedule' && 'schedule' || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Added to version.xml BuildVersion (1000) + GITHUB_RUN_NUMBER -> 3.0.0.2001+, continuing after
+  # AppVeyor (3.0.0.1947) while honoring future BuildVersion hotfix bumps.
+  BUILD_NUMBER_OFFSET: 1000
+
+jobs:
+  build:
+    name: Build, sign and package
+    if: github.event_name != 'schedule'
+    permissions:
+      contents: read
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    env:
+      ARTIFACT_PREFIX: ${{ github.event_name == 'pull_request' && format('pr-{0}-', github.event.pull_request.number) || '' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Restore WDK NuGet packages cache
+        id: wdk-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: packages
+          key: wdk-nuget-${{ hashFiles('sys/packages.config') }}
+
+      - name: Restore WDK NuGet packages
+        if: steps.wdk-cache.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & nuget restore .\sys\packages.config -PackagesDirectory .\packages
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -eq 3) { throw "nuget restore failed after 3 attempts (exit code $LASTEXITCODE)" }
+            Write-Warning "nuget restore attempt $attempt failed (exit code $LASTEXITCODE); retrying in 10s..."
+            Start-Sleep -Seconds 10
+          }
+
+      - name: Save WDK NuGet packages cache
+        if: github.event_name != 'pull_request' && steps.wdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: packages
+          key: ${{ steps.wdk-cache.outputs.cache-primary-key }}
+
+      - name: Compute Cygwin package cache key
+        id: cygwin-cache-key
+        shell: powershell
+        run: |
+          $utc = [DateTime]::UtcNow.Date
+          $thu = $utc.AddDays(3 - (([int]$utc.DayOfWeek + 6) % 7))
+          $week = [System.Globalization.CultureInfo]::InvariantCulture.Calendar.GetWeekOfYear(
+            $thu,
+            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
+            [DayOfWeek]::Monday
+          )
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ("week={0:D4}-w{1:D2}" -f $thu.Year, $week)
+
+      - name: Restore Cygwin package cache
+        id: cygwin-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/cygwin-packages
+          key: cygwin-packages-${{ steps.cygwin-cache-key.outputs.week }}
+
+      - name: Install Cygwin toolchain
+        shell: powershell
+        env:
+          CYGWIN_CACHE_HIT: ${{ steps.cygwin-cache.outputs.cache-hit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $packageDir = (Join-Path $env:RUNNER_TEMP 'cygwin-packages').TrimEnd('\')
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+          $setup = Join-Path $packageDir 'setup-x86_64.exe'
+          $setupSig = Join-Path $packageDir 'setup-x86_64.exe.sig'
+          $pubring = Join-Path $packageDir 'pubring.asc'
+
+          function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile) {
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              try {
+                Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $OutFile
+                return
+              } catch {
+                Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                if ($attempt -eq 3) { throw }
+                Write-Warning "Download of $Uri failed (attempt $attempt): $($_.Exception.Message); retrying in 10s..."
+                Start-Sleep -Seconds 10
+              }
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf) -or -not (Test-Path -LiteralPath $setupSig -PathType Leaf)) {
+            Invoke-DownloadWithRetry 'https://cygwin.com/setup-x86_64.exe' $setup
+            Invoke-DownloadWithRetry 'https://cygwin.com/setup-x86_64.exe.sig' $setupSig
+          }
+          if (-not (Test-Path -LiteralPath $pubring -PathType Leaf)) {
+            Invoke-DownloadWithRetry 'https://cygwin.com/key/pubring.asc' $pubring
+          }
+
+          $gpg = (Get-Command gpg.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+          if (-not $gpg) {
+            $gpg = @('C:\Program Files\Git\usr\bin\gpg.exe', 'C:\msys64\usr\bin\gpg.exe') |
+              Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+              Select-Object -First 1
+          }
+          if (-not $gpg) { throw 'gpg.exe not found to verify Cygwin setup-x86_64.exe' }
+
+          $cygpath = Join-Path (Split-Path -Parent $gpg) 'cygpath.exe'
+          $useCygpath = Test-Path -LiteralPath $cygpath -PathType Leaf
+          function Convert-GpgPath([string]$Path) {
+            if (-not $useCygpath) { return $Path }
+            $converted = (& $cygpath -u $Path).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($converted)) {
+              throw "cygpath failed for $Path (exit code $LASTEXITCODE)"
+            }
+            return $converted
+          }
+
+          $gpgHome = Join-Path $env:RUNNER_TEMP "cygwin-gpg-$PID"
+          Remove-Item -LiteralPath $gpgHome -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $gpgHome | Out-Null
+          try {
+            $gpgHomeArg = Convert-GpgPath $gpgHome
+            $pubringArg = Convert-GpgPath $pubring
+            $setupSigArg = Convert-GpgPath $setupSig
+            $setupArg = Convert-GpgPath $setup
+
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+              $importOut = @(& $gpg --homedir $gpgHomeArg --batch --import $pubringArg 2>&1 | ForEach-Object { "$_" })
+              $importRc = $LASTEXITCODE
+            } finally {
+              $ErrorActionPreference = $prevEap
+            }
+            if ($importRc -ne 0) {
+              Write-Host ($importOut -join "`n")
+              throw "gpg --import failed with exit code $importRc"
+            }
+
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+              $verifyOut = @(& $gpg --homedir $gpgHomeArg --batch --status-fd=1 --verify $setupSigArg $setupArg 2>&1 | ForEach-Object { "$_" })
+              $verifyRc = $LASTEXITCODE
+            } finally {
+              $ErrorActionPreference = $prevEap
+            }
+            $verifyText = $verifyOut -join "`n"
+            if ($verifyRc -ne 0 -or $verifyText -notmatch '(?m)^\[GNUPG:\] VALIDSIG 56405CF6FCC81574682A5D561A698DE9E2E56300\b') {
+              Write-Host $verifyText
+              throw "GPG verification of Cygwin setup-x86_64.exe failed (exit code $verifyRc)"
+            }
+          } finally {
+            Remove-Item -LiteralPath $gpgHome -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          $setupArgs = @('-gqnNdO', '-R', 'C:\cygwin64', '-l', "`"$packageDir`"",
+                         '-P', 'cmake', '-P', 'make', '-P', 'gcc-core', '-P', 'gcc-g++', '-P', 'pkg-config')
+          # Packages downloaded this week are installed offline; otherwise (or if that fails) fall back to HTTPS mirrors.
+          if ($env:CYGWIN_CACHE_HIT -eq 'true') {
+            $p = Start-Process -FilePath $setup -ArgumentList ($setupArgs + '-L') -Wait -PassThru
+            if ($p.ExitCode -eq 0) { exit 0 }
+            Write-Warning "Offline Cygwin install failed with exit code $($p.ExitCode); falling back to HTTPS mirrors."
+          }
+          $mirrors = @(
+            'https://mirrors.kernel.org/sourceware/cygwin/',
+            'https://mirrors.rit.edu/cygwin/'
+          )
+          foreach ($mirror in $mirrors) {
+            $p = Start-Process -FilePath $setup -ArgumentList ($setupArgs + @('-s', $mirror)) -Wait -PassThru
+            if ($p.ExitCode -eq 0) { exit 0 }
+            Write-Warning "Cygwin setup failed with mirror $mirror (exit code $($p.ExitCode))."
+          }
+          throw "Cygwin setup failed across all mirrors (last exit code $($p.ExitCode))"
+
+      - name: Save Cygwin package cache
+        if: github.event_name != 'pull_request' && steps.cygwin-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/cygwin-packages
+          key: ${{ steps.cygwin-cache.outputs.cache-primary-key }}
+
+      - name: Install MSYS2 toolchains (MINGW32, UCRT64)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & C:\msys64\usr\bin\bash.exe --login -c "pacman -Sy --needed --noconfirm msys2-keyring && pacman -S --needed --noconfirm make mingw-w64-i686-gcc mingw-w64-ucrt-x86_64-gcc"
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -eq 3) { throw "pacman failed after 3 attempts (exit code $LASTEXITCODE)" }
+            Write-Warning "pacman attempt $attempt failed (exit code $LASTEXITCODE); retrying in 10s..."
+            Start-Sleep -Seconds 10
+          }
+
+      - name: Build, sign and package Dokan
+        id: build
+        shell: powershell
+        run: |
+          .\scripts\ci\build_and_package.ps1 `
+            -BuildNumber ([int]$env:GITHUB_RUN_NUMBER + [int]$env:BUILD_NUMBER_OFFSET) `
+            -PayloadDir ci-payload `
+            -ReleaseDir ci-release `
+            -ArtifactPrefix "$env:ARTIFACT_PREFIX" `
+            -RequireFuse `
+            -InstallTestCert
+
+      - name: Upload VM test payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: dokan-test-payload
+          path: ci-payload/
+          retention-days: 7
+
+      - name: Upload Dokan installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_PREFIX }}DokanSetup-${{ steps.build.outputs.version }}.exe
+          path: ci-release/${{ env.ARTIFACT_PREFIX }}DokanSetup-${{ steps.build.outputs.version }}.exe
+          archive: false
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+      - name: Upload Dokan binary archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_PREFIX }}dokan-${{ steps.build.outputs.version }}.zip
+          path: ci-release/${{ env.ARTIFACT_PREFIX }}dokan-${{ steps.build.outputs.version }}.zip
+          archive: false
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+  build-test-tools:
+    name: Build test tools
+    if: github.event_name != 'schedule' && inputs.crash_selftest != 'bugcheck' && inputs.crash_selftest != 'hang'
+    permissions:
+      contents: read
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 30
+    env:
+      ARTIFACT_PREFIX: ${{ github.event_name == 'pull_request' && format('pr-{0}-', github.event.pull_request.number) || '' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Restore dokan_fstest dependencies cache
+        id: fstest-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/fstest-deps
+          key: fstest-deps-${{ hashFiles('tests/fstest/deps.json') }}
+
+      - name: Build dokan_fstest and fsx
+        id: build
+        shell: powershell
+        run: |
+          .\scripts\ci\build_test_tools.ps1 `
+            -BuildNumber ([int]$env:GITHUB_RUN_NUMBER + [int]$env:BUILD_NUMBER_OFFSET) `
+            -OutputDir ci-test-tools `
+            -ReleaseDir ci-release-fstest `
+            -ArtifactPrefix "$env:ARTIFACT_PREFIX" `
+            -FsTestDepsCacheDir "$env:RUNNER_TEMP\fstest-deps"
+
+      - name: Save dokan_fstest dependencies cache
+        if: github.event_name != 'pull_request' && steps.fstest-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/fstest-deps
+          key: ${{ steps.fstest-cache.outputs.cache-primary-key }}
+
+      - name: Upload test tools for the VMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: dokan-test-tools
+          path: ci-test-tools/
+          retention-days: 7
+
+      - name: Upload dokan-fstest release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_PREFIX }}dokan-fstest-${{ steps.build.outputs.version }}.zip
+          path: ci-release-fstest/${{ env.ARTIFACT_PREFIX }}dokan-fstest-${{ steps.build.outputs.version }}.zip
+          archive: false
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+  vm-image:
+    name: Prepare VM image (${{ matrix.os }})
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((inputs.crash_selftest == 'bugcheck' || inputs.crash_selftest == 'hang') && '["server2022"]' || (inputs.os != '' && inputs.os != 'all') && format('[{0}]', toJSON(inputs.os)) || '["server2016","server2019","server2022","server2025"]') }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compute VM image cache key
+        id: image-key
+        env:
+          OS_ID: ${{ matrix.os }}
+        run: |
+          key="$(./scripts/ci/vm/image_cache_key.sh "$OS_ID")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Check / keep alive cached image
+        id: image-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/vm-image
+          key: ${{ steps.image-key.outputs.key }}
+          lookup-only: ${{ github.event_name != 'schedule' }}
+
+      - name: Set up QEMU/KVM
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/setup-qemu-kvm
+
+      - name: Install and provision Windows
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        env:
+          OS_ID: ${{ matrix.os }}
+        run: ./scripts/ci/vm/bake_image.sh "$OS_ID" "$RUNNER_TEMP/vm-image"
+
+      - name: Upload provisioning diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vm-image-diagnostics-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/vm-bake-${{ matrix.os }}/serial.log
+            ${{ runner.temp }}/vm-bake-${{ matrix.os }}/diag*/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Save image to cache
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/vm-image
+          key: ${{ steps.image-key.outputs.key }}
+
+  vm-test:
+    name: Test (${{ matrix.os }}, ${{ matrix.shard }})
+    needs: [vm-image, build, build-test-tools]
+    if: always() && !cancelled() && github.event_name != 'schedule' && needs.build.result == 'success' && needs.build-test-tools.result == 'success' && inputs.crash_selftest != 'bugcheck' && inputs.crash_selftest != 'hang'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((inputs.os != '' && inputs.os != 'all') && format('[{0}]', toJSON(inputs.os)) || '["server2016","server2019","server2022","server2025"]') }}
+        shard: [shard1, shard2]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compute VM image cache key
+        id: image-key
+        env:
+          OS_ID: ${{ matrix.os }}
+        run: |
+          key="$(./scripts/ci/vm/image_cache_key.sh "$OS_ID")"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU/KVM
+        uses: ./.github/actions/setup-qemu-kvm
+
+      - name: Restore VM image
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/vm-image
+          key: ${{ steps.image-key.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Download Dokan test payload
+        uses: actions/download-artifact@v7
+        with:
+          name: dokan-test-payload
+          path: ${{ runner.temp }}/payload
+
+      - name: Download test tools
+        uses: actions/download-artifact@v7
+        with:
+          name: dokan-test-tools
+          path: ${{ runner.temp }}/payload
+
+      - name: Run tests in VM
+        env:
+          SHARD: ${{ matrix.shard }}
+          # Known intermittent: PatchGuard (BugCheck 0x109, type 0x115) occasionally fires on
+          # Server 2025 under nested KVM during shard1. run_vm_tests.sh retries once on a fresh
+          # overlay and tolerates only a reproduced 0x109/0x115 (the dump is still uploaded and
+          # analyzed by kd.exe for review; other 7 legs fail hard on 0x109). All other failures fail hard.
+          ALLOW_PATCHGUARD_0X109: ${{ matrix.os == 'server2025' && matrix.shard == 'shard1' }}
+        run: |
+          ./scripts/ci/vm/run_vm_tests.sh \
+            "$RUNNER_TEMP/vm-image" \
+            "$RUNNER_TEMP/payload" \
+            "$RUNNER_TEMP/vm-results" \
+            "$SHARD"
+
+      - name: Upload test logs and scorecards
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vm-logs-${{ matrix.os }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/vm-results/
+            !${{ runner.temp }}/vm-results/MEMORY.DMP.7z
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stage crash dump for upload
+        if: always()
+        env:
+          OS_ID: ${{ matrix.os }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          rm -rf "$RUNNER_TEMP/crash-upload"
+          if [[ -f "$RUNNER_TEMP/vm-results/MEMORY.DMP.7z" ]]; then
+            dir="$RUNNER_TEMP/crash-upload/crash-dump-${OS_ID}-${SHARD}-a${GITHUB_RUN_ATTEMPT}"
+            mkdir -p "$dir"
+            mv "$RUNNER_TEMP/vm-results/MEMORY.DMP.7z" "$dir/MEMORY.DMP.7z"
+          fi
+
+      - name: Upload crash dump
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-dump-${{ matrix.os }}-${{ matrix.shard }}-a${{ github.run_attempt }}
+          path: ${{ runner.temp }}/crash-upload/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  crash-selftest:
+    name: Crash-capture self-test (server2022)
+    needs: [vm-image, build]
+    if: inputs.crash_selftest == 'bugcheck' || inputs.crash_selftest == 'hang'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compute VM image cache key
+        id: image-key
+        run: |
+          key="$(./scripts/ci/vm/image_cache_key.sh server2022)"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU/KVM
+        uses: ./.github/actions/setup-qemu-kvm
+
+      - name: Restore VM image
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/vm-image
+          key: ${{ steps.image-key.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Download Dokan test payload
+        uses: actions/download-artifact@v7
+        with:
+          name: dokan-test-payload
+          path: ${{ runner.temp }}/payload
+
+      - name: Crash the VM and collect the dump
+        env:
+          SIMULATE: ${{ inputs.crash_selftest }}
+        run: |
+          ./scripts/ci/vm/run_vm_tests.sh \
+            "$RUNNER_TEMP/vm-image" \
+            "$RUNNER_TEMP/payload" \
+            "$RUNNER_TEMP/vm-results" \
+            shard1 \
+            "$SIMULATE"
+
+      - name: Stage crash dump for upload
+        if: always()
+        env:
+          SIMULATE: ${{ inputs.crash_selftest }}
+        run: |
+          rm -rf "$RUNNER_TEMP/crash-upload"
+          if [[ -f "$RUNNER_TEMP/vm-results/MEMORY.DMP.7z" ]]; then
+            dir="$RUNNER_TEMP/crash-upload/crash-dump-selftest-${SIMULATE}-a${GITHUB_RUN_ATTEMPT}"
+            mkdir -p "$dir"
+            mv "$RUNNER_TEMP/vm-results/MEMORY.DMP.7z" "$dir/MEMORY.DMP.7z"
+          fi
+
+      - name: Upload crash dump
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-dump-selftest-${{ inputs.crash_selftest }}-a${{ github.run_attempt }}
+          path: ${{ runner.temp }}/crash-upload/
+          if-no-files-found: error
+          retention-days: 7
+
+  find-crash-dumps:
+    name: Find crash dumps
+    needs: [vm-test, crash-selftest]
+    if: ${{ always() && !cancelled() && github.event_name != 'schedule' && (needs.vm-test.result != 'skipped' || needs.crash-selftest.result != 'skipped') }}
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+    steps:
+      - name: List crash dump artifacts
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" | \
+            jq -s --arg suffix "-a${GITHUB_RUN_ATTEMPT}" \
+              '[.[].artifacts[] | select(.expired == false and (.name | startswith("crash-dump-")) and (.name | endswith($suffix)))] | length')
+          echo "Crash dump artifacts (attempt ${GITHUB_RUN_ATTEMPT}): $count"
+          echo "found=$([[ $count -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  analyze-crash-dumps:
+    name: Analyze crash dumps
+    needs: [build, find-crash-dumps, crash-selftest]
+    if: ${{ always() && !cancelled() && github.event_name != 'schedule' && needs.build.result == 'success' && needs.find-crash-dumps.outputs.found == 'true' }}
+    permissions:
+      contents: read
+    # windows-2022 ships the Windows SDK debuggers (kd.exe); windows-2025 images do not.
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download symbols (dokan3.sys, dokan3.pdb)
+        uses: actions/download-artifact@v7
+        with:
+          name: dokan-test-payload
+          path: ${{ runner.temp }}/payload
+
+      - name: Download crash dumps
+        uses: actions/download-artifact@v7
+        with:
+          pattern: crash-dump-*-a${{ github.run_attempt }}
+          path: ${{ runner.temp }}/crash-dumps
+          merge-multiple: true
+
+      - name: Analyze crash dumps with kd.exe
+        shell: powershell
+        env:
+          CRASH_SELFTEST_RESULT: ${{ needs.crash-selftest.result }}
+        run: |
+          $requireDump = $env:CRASH_SELFTEST_RESULT -eq 'success'
+          .\scripts\ci\analyze_crash_dumps.ps1 `
+            -DumpsRoot "$env:RUNNER_TEMP\crash-dumps" `
+            -SymbolsDir "$env:RUNNER_TEMP\payload" `
+            -OutputDir "$env:RUNNER_TEMP\crash-analysis" `
+            -RequireDump:$requireDump
+
+      - name: Upload crash analysis reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-analysis
+          path: ${{ runner.temp }}/crash-analysis/
+          if-no-files-found: ignore
+          retention-days: 14
