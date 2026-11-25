@@ -510,7 +510,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
                                      nt::kFileOpen, kSyncFile);
     EXPECT_NT_STATUS(r1.status, STATUS_OBJECT_NAME_NOT_FOUND);
 
-    ASSERT_TRUE(core::WriteFileContents(path, "open_data"));
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "open_data"));
     auto r2 = core::NtCreateFilePath(nt_path, GENERIC_READ | SYNCHRONIZE,
                                      FILE_ATTRIBUTE_NORMAL, core::kShareAll,
                                      nt::kFileOpen, kSyncFile);
@@ -528,7 +528,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
                                      nt::kFileOpenIf, kSyncFile);
     ASSERT_NT_STATUS(r1.status, STATUS_SUCCESS);
     EXPECT_EQ(r1.information, nt::kFileCreated);
-    ASSERT_TRUE(core::WriteAllBytes(r1.value->get(), "keep_me", 7));
+    ASSERT_WIN32_OK(core::WriteAllBytes(r1.value->get(), "keep_me", 7));
     r1.value->reset();
 
     auto r2 = core::NtCreateFilePath(
@@ -552,7 +552,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
                                      nt::kFileOverwrite, kSyncFile);
     EXPECT_NT_STATUS(r1.status, STATUS_OBJECT_NAME_NOT_FOUND);
 
-    ASSERT_TRUE(core::WriteFileContents(path, "truncate_me"));
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "truncate_me"));
     auto r2 = core::NtCreateFilePath(nt_path, FILE_WRITE_DATA | SYNCHRONIZE,
                                      FILE_ATTRIBUTE_NORMAL, core::kShareAll,
                                      nt::kFileOverwrite, kSyncFile);
@@ -571,7 +571,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
                                      nt::kFileOverwriteIf, kSyncFile);
     ASSERT_NT_STATUS(r1.status, STATUS_SUCCESS);
     EXPECT_EQ(r1.information, nt::kFileCreated);
-    ASSERT_TRUE(core::WriteAllBytes(r1.value->get(), "old_bytes", 9));
+    ASSERT_WIN32_OK(core::WriteAllBytes(r1.value->get(), "old_bytes", 9));
     r1.value->reset();
 
     auto r2 = core::NtCreateFilePath(nt_path, FILE_WRITE_DATA | SYNCHRONIZE,
@@ -592,7 +592,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
         core::kShareAll, nt::kFileSupersede, kSyncFile);
     ASSERT_NT_STATUS(r1.status, STATUS_SUCCESS);
     EXPECT_EQ(r1.information, nt::kFileCreated);
-    ASSERT_TRUE(core::WriteAllBytes(r1.value->get(), "supersede_me", 12));
+    ASSERT_WIN32_OK(core::WriteAllBytes(r1.value->get(), "supersede_me", 12));
     r1.value->reset();
 
     auto r2 = core::NtCreateFilePath(
@@ -637,7 +637,7 @@ TEST_F(CreateOpenTest, NtCreateFileInitialAllocationSize) {
 
   // FILE_OVERWRITE_IF with initial AllocationSize on an existing populated
   // file truncates EOF to 0 and preallocates >= 65536 bytes.
-  ASSERT_TRUE(core::WriteFileContents(path, "before_overwrite_if"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "before_overwrite_if"));
   {
     auto h = core::NtCreateFilePath(
         nt_path, FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -655,7 +655,7 @@ TEST_F(CreateOpenTest, NtCreateFileInitialAllocationSize) {
 
   // FILE_SUPERSEDE with initial AllocationSize on an existing populated file
   // supersedes EOF to 0 and preallocates >= 65536 bytes.
-  ASSERT_TRUE(core::WriteFileContents(path, "before_supersede"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "before_supersede"));
   {
     auto h = core::NtCreateFilePath(
         nt_path, DELETE | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -682,7 +682,7 @@ TEST_F(CreateOpenTest, NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf) {
 
   const std::wstring path = TestPath(L"sup_vs_ovr_share.dat");
   const std::wstring nt_path = TestNtPath(L"sup_vs_ovr_share.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial_payload"));
 
   auto h_reader = core::CreateWin32File(path, GENERIC_READ, FILE_SHARE_WRITE,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -723,7 +723,7 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteIfMergeAttributes) {
   auto init = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                     CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY);
   ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
-  ASSERT_TRUE(core::WriteAllBytes(init.value->get(), "temp_data", 9));
+  ASSERT_WIN32_OK(core::WriteAllBytes(init.value->get(), "temp_data", 9));
   init.value->reset();
 
   EXPECT_TRUE(CheckPolicyAttributes(
@@ -740,7 +740,8 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteIfMergeAttributes) {
   EXPECT_TRUE(CheckPolicyAttributes(
       path, DWORD{FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_TEMPORARY}));
 
-  ASSERT_TRUE(core::WriteFileContents(path, "reseeded", FILE_ATTRIBUTE_NORMAL));
+  ASSERT_WIN32_OK(
+      core::WriteFileContents(path, "reseeded", FILE_ATTRIBUTE_NORMAL));
 
   auto sup = core::NtCreateFilePath(
       nt_path, DELETE | FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_OFFLINE,
@@ -771,16 +772,16 @@ TEST_F(CreateOpenTest, NtSupersedeVsOverwriteDaclAccess) {
   auto sub_dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"sup_acl_sub"));
   ASSERT_TRUE(sub_dacl_guard.armed());
-  ASSERT_TRUE(core::WriteFileContents(target, "acl_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "acl_payload"));
   auto target_dacl_guard = core::ScopedDaclRestore::Arm(nt_target);
   ASSERT_TRUE(target_dacl_guard.armed());
 
   // 0x001601BF grants all standard file/dir read+write+traverse+attr+WRITE_DAC
   // rights EXCEPT DELETE (0x10000) and FILE_DELETE_CHILD (0x40).
-  ASSERT_TRUE(core::SetFileSddl(sub, DACL_SECURITY_INFORMATION,
-                                L"D:P(A;;0x001601BF;;;WD)"));
-  ASSERT_TRUE(core::SetFileSddl(target, DACL_SECURITY_INFORMATION,
-                                L"D:P(D;;SD;;;WD)(A;;0x001601BF;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(sub, DACL_SECURITY_INFORMATION,
+                                    L"D:P(A;;0x001601BF;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(target, DACL_SECURITY_INFORMATION,
+                                    L"D:P(D;;SD;;;WD)(A;;0x001601BF;;;WD)"));
 
   auto sup_denied = core::NtCreateFilePath(
       nt_target, FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
@@ -799,13 +800,13 @@ TEST_F(CreateOpenTest, NtSupersedeVsOverwriteDaclAccess) {
 
   auto reset_target =
       core::SetFileSddl(target, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)");
-  EXPECT_TRUE(reset_target);
+  EXPECT_WIN32_OK(reset_target);
   if (reset_target) {
     target_dacl_guard.DisarmAndClose();
   }
   auto reset_sub =
       core::SetFileSddl(sub, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)");
-  EXPECT_TRUE(reset_sub);
+  EXPECT_WIN32_OK(reset_sub);
   if (reset_sub) {
     sub_dacl_guard.DisarmAndClose();
   }
@@ -825,7 +826,7 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch) {
     const std::wstring path = TestPath(rel);
     const std::wstring nt_path = TestNtPath(rel);
 
-    ASSERT_TRUE(core::WriteFileContents(path, "protected", protected_attr));
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "protected", protected_attr));
 
     auto ovr_bad = core::NtCreateFilePath(
         nt_path, FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
@@ -850,7 +851,7 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch) {
                                          nt::kFileOverwriteIf, kSyncFile);
     ASSERT_NT_STATUS(ovr_ok.status, STATUS_SUCCESS);
     EXPECT_EQ(ovr_ok.information, nt::kFileOverwritten);
-    ASSERT_TRUE(core::WriteAllBytes(ovr_ok.value->get(), "reseed", 6));
+    ASSERT_WIN32_OK(core::WriteAllBytes(ovr_ok.value->get(), "reseed", 6));
     ovr_ok.value->reset();
 
     auto sup_ok = core::NtCreateFilePath(
@@ -882,7 +883,7 @@ TEST_F(CreateOpenTest, CreateNewAndCreateAlwaysOnExistingDirectoryFail) {
   const std::wstring nt_dir = TestNtPath(L"dir_collision");
   const std::wstring child = TestPath(L"dir_collision\\keep.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "keep"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "keep"));
 
   auto create_new = core::CreateWin32FileEx(dir, GENERIC_WRITE, core::kShareAll,
                                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
@@ -951,7 +952,7 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   const std::wstring file = TestPath(L"trailing_slash.dat");
   const std::wstring file_slash = file + L"\\";
   const std::wstring nt_file_slash = TestNtPath(L"trailing_slash.dat") + L"\\";
-  ASSERT_TRUE(core::WriteFileContents(file, "slash_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file, "slash_payload"));
 
   // Existing file.
   auto win_open =
@@ -1006,7 +1007,7 @@ TEST_F(CreateOpenTest, OverwriteAndSupersedeOfUserMappedFileFail) {
 
   const std::wstring path = TestPath(L"mapped_overwrite.dat");
   const std::wstring nt_path = TestNtPath(L"mapped_overwrite.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, payload));
 
   // Declaration order: the view unmaps before the section handle closes.
   core::UniqueHandle mapping;

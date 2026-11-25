@@ -46,7 +46,7 @@ TEST_F(CreateOpenTest, OpenDirectoryRequiresBackupSemantics) {
   const std::wstring dir = TestPath(L"backup_sem_dir");
   const std::wstring file = TestPath(L"backup_sem_file.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(file, "regular"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file, "regular"));
 
   auto no_backup = core::CreateWin32File(dir, GENERIC_READ, core::kShareAll,
                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -74,7 +74,7 @@ TEST_F(CreateOpenTest, OpenDirectoryRequiresBackupSemantics) {
 // FILE_READ_ATTRIBUTES-only enforce granted access masks on ReadFile/WriteFile.
 TEST_F(CreateOpenTest, AccessMaskEnforcementReadOnlyAndWriteOnly) {
   const std::wstring path = TestPath(L"access_mask.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "hello world"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "hello world"));
 
   // Read-only handle: ReadFile OK, WriteFile -> ERROR_ACCESS_DENIED.
   {
@@ -136,7 +136,7 @@ TEST_F(CreateOpenTest, AccessMaskEnforcementReadOnlyAndWriteOnly) {
 // opens bypass active data share-mode restrictions held with share=0.
 TEST_F(CreateOpenTest, ShareModeAttributeOnlyHandleBypassesDataShare) {
   const std::wstring path = TestPath(L"attr_bypass.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "abcd"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "abcd"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -178,7 +178,7 @@ TEST_F(CreateOpenTest, ShareModeAttributeOnlyHandleBypassesDataShare) {
 TEST_F(CreateOpenTest, MetadataOnlyAccessBypassesZeroShareMode) {
   const std::wstring path = TestPath(L"meta_share_matrix.dat");
   const std::wstring nt_path = TestNtPath(L"meta_share_matrix.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "share_matrix_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "share_matrix_payload"));
 
   auto h_excl = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -236,7 +236,7 @@ TEST_F(CreateOpenTest, MetadataOnlyAccessBypassesZeroShareMode) {
 // and FILE_APPEND_DATA while permitting GENERIC_READ and FILE_WRITE_ATTRIBUTES.
 TEST_F(CreateOpenTest, ReadOnlyFileBlocksWriteOpenAllowsReadAndWriteAttr) {
   const std::wstring path = TestPath(L"ro_access.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "readonly_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "readonly_data"));
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_READONLY));
 
@@ -346,7 +346,7 @@ TEST_F(CreateOpenTest, CreateFileDeleteOnCloseLifecycle) {
 // fails ERROR_PATH_NOT_FOUND (NT: STATUS_OBJECT_PATH_NOT_FOUND).
 TEST_F(CreateOpenTest, ParentIsRegularFileReturnsPathNotFound) {
   const std::wstring file_parent = TestPath(L"parent_file.dat");
-  ASSERT_TRUE(core::WriteFileContents(file_parent, "not_a_dir"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_parent, "not_a_dir"));
 
   const std::wstring child = TestPath(L"parent_file.dat\\child.dat");
   auto open_res = core::CreateWin32File(child, GENERIC_WRITE, 0, CREATE_NEW,
@@ -386,7 +386,7 @@ TEST_F(CreateOpenTest, NtCreateFileRelativeToDirectoryHandle) {
                          core::kShareAll, nt::kFileCreate, kSyncFile);
   ASSERT_NT_STATUS(child_create.status, STATUS_SUCCESS);
   EXPECT_EQ(child_create.information, nt::kFileCreated);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(child_create.value->get(), "relative_io", 11));
   child_create.value->reset();
 
@@ -413,7 +413,7 @@ TEST_F(CreateOpenTest, NtCreateFileRelativeToDirectoryHandle) {
       dir_h.value->get(), L"nested\\deep.dat", GENERIC_WRITE | SYNCHRONIZE,
       core::kShareAll, nt::kFileCreate, kSyncFile);
   ASSERT_NT_STATUS(deep_file.status, STATUS_SUCCESS);
-  ASSERT_TRUE(core::WriteAllBytes(deep_file.value->get(), "deep", 4));
+  ASSERT_WIN32_OK(core::WriteAllBytes(deep_file.value->get(), "deep", 4));
   deep_file.value->reset();
   dir_h.value->reset();
 
@@ -428,7 +428,7 @@ TEST_F(CreateOpenTest, NtCreateFileRelativeToDirectoryHandle) {
 TEST_F(CreateOpenTest, TruncateExistingOnReadOnlyFileFails) {
   const std::wstring path = TestPath(L"ro_trunc.dat");
   const std::string payload = "cannot_truncate_me";
-  ASSERT_TRUE(core::WriteFileContents(path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, payload));
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_READONLY));
 
@@ -454,7 +454,7 @@ TEST_F(CreateOpenTest, CreateNewReadOnlyAllowsWriteOnCreationHandle) {
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_READONLY);
   ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), payload.data(), payload.size()));
   h.value->reset();
 
@@ -494,13 +494,13 @@ TEST_F(CreateOpenTest, ReadOnlyDirectoryAllowsChildCreateModifyDelete) {
   auto h_create = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                         CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h_create) << core::FormatWin32Error(h_create.error);
-  ASSERT_TRUE(core::WriteAllBytes(h_create.value->get(), "v1", 2));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h_create.value->get(), "v1", 2));
   h_create.value->reset();
 
   auto h_mod = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h_mod) << core::FormatWin32Error(h_mod.error);
-  ASSERT_TRUE(core::WriteAllBytes(h_mod.value->get(), "v2_mod", 6));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h_mod.value->get(), "v2_mod", 6));
   h_mod.value->reset();
 
   ASSERT_WIN32_TRUE(::MoveFileExW(child.c_str(), renamed.c_str(), 0));
@@ -521,7 +521,7 @@ TEST_F(CreateOpenTest,
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"zero_access.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "meta_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "meta_payload"));
 
   // Part 1: Succeeds while H1 holds exclusive share=0.
   {
@@ -556,7 +556,7 @@ TEST_F(CreateOpenTest,
   // Deny FILE_READ_DATA|FILE_WRITE_DATA (0x3) so GENERIC_READ fails
   // ERROR_ACCESS_DENIED, while allowing FILE_READ_ATTRIBUTES|READ_CONTROL|
   // WRITE_DAC|SYNCHRONIZE (0x00160080) so CreateFileW(..., 0, ...) succeeds.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000003;;;WD)(A;;0x00160080;;;WD)"));
 
@@ -576,7 +576,7 @@ TEST_F(CreateOpenTest,
 
   auto reset_res =
       core::ResetDaclToFullControl(TestExtendedPath(L"zero_access.dat"), false);
-  EXPECT_TRUE(reset_res);
+  EXPECT_WIN32_OK(reset_res);
   if (reset_res) {
     dacl_guard.DisarmAndClose();
   }
@@ -588,7 +588,7 @@ TEST_F(CreateOpenTest,
        MaximumAllowedGrantsEffectiveAccessAndQueriesFileAccessInfo) {
   const std::wstring path = TestPath(L"max_allowed.dat");
   const std::wstring nt_path = TestNtPath(L"max_allowed.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "max_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "max_data"));
 
   constexpr ULONG kSyncFile =
       nt::kFileNonDirectoryFile | nt::kFileSynchronousIoNonalert;
@@ -610,7 +610,7 @@ TEST_F(CreateOpenTest,
     EXPECT_NE(*access.value & FILE_READ_ATTRIBUTES, 0UL);
     EXPECT_NE(*access.value & FILE_WRITE_ATTRIBUTES, 0UL);
 
-    ASSERT_TRUE(core::WriteAllBytes(h_norm.value->get(), "updated!", 8));
+    ASSERT_WIN32_OK(core::WriteAllBytes(h_norm.value->get(), "updated!", 8));
     h_norm.value->reset();
   }
 
@@ -654,11 +654,11 @@ TEST_F(CreateOpenTest, BackupPrivilegeBypassesDenyDacl) {
   REQUIRE_PRIVILEGE(SE_BACKUP_NAME);
 
   const std::wstring path = TestPath(L"backup_deny.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "backup_secret_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "backup_secret_payload"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"backup_deny.dat"));
   ASSERT_TRUE(dacl_guard.armed());
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(D;;GR;;;WD)"));
 
   // Without FILE_FLAG_BACKUP_SEMANTICS, GENERIC_READ must be denied.
@@ -685,7 +685,7 @@ TEST_F(CreateOpenTest, BackupPrivilegeBypassesDenyDacl) {
 
   auto reset_res =
       core::ResetDaclToFullControl(TestExtendedPath(L"backup_deny.dat"), false);
-  EXPECT_TRUE(reset_res);
+  EXPECT_WIN32_OK(reset_res);
   if (reset_res) {
     dacl_guard.DisarmAndClose();
   }
@@ -698,7 +698,7 @@ TEST_F(CreateOpenTest, RestorePrivilegeBypassesWriteDenyDacl) {
   REQUIRE_PRIVILEGE(SE_RESTORE_NAME);
 
   const std::wstring path = TestPath(L"restore_deny.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "before_restore"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "before_restore"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"restore_deny.dat"));
   ASSERT_TRUE(dacl_guard.armed());
@@ -707,7 +707,7 @@ TEST_F(CreateOpenTest, RestorePrivilegeBypassesWriteDenyDacl) {
   // FILE_WRITE_ATTRIBUTES (0x00000116) to Everyone while allowing
   // FILE_GENERIC_READ | WRITE_DAC (0x00160089) so CreateFileW's implicit
   // FILE_READ_ATTRIBUTES | SYNCHRONIZE and read-back verification succeed.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000116;;;WD)(A;;0x00160089;;;WD)"));
 
@@ -741,7 +741,7 @@ TEST_F(CreateOpenTest, RestorePrivilegeBypassesWriteDenyDacl) {
 
   auto reset_res = core::ResetDaclToFullControl(
       TestExtendedPath(L"restore_deny.dat"), false);
-  EXPECT_TRUE(reset_res);
+  EXPECT_WIN32_OK(reset_res);
   if (reset_res) {
     dacl_guard.DisarmAndClose();
   }
@@ -752,7 +752,7 @@ TEST_F(CreateOpenTest, RestorePrivilegeBypassesWriteDenyDacl) {
 // the original handle and is released only when the last duplicate closes.
 TEST_F(CreateOpenTest, DuplicateHandlePreservesShareLock) {
   const std::wstring path = TestPath(L"dup_share.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "dup_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "dup_payload"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -790,7 +790,7 @@ TEST_F(CreateOpenTest, DuplicateHandlePreservesShareLock) {
 TEST_F(CreateOpenTest, ReOpenFileUpgradesAccessAfterRename) {
   const std::wstring orig = TestPath(L"reopen_orig.dat");
   const std::wstring moved = TestPath(L"reopen_moved.dat");
-  ASSERT_TRUE(core::WriteFileContents(orig, "before_reopen"));
+  ASSERT_WIN32_OK(core::WriteFileContents(orig, "before_reopen"));
 
   auto h_orig = core::CreateWin32File(orig, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -804,7 +804,7 @@ TEST_F(CreateOpenTest, ReOpenFileUpgradesAccessAfterRename) {
   const DWORD reopen_err = ::GetLastError();
   ASSERT_TRUE(h_reopened.valid()) << core::FormatWin32Error(reopen_err);
 
-  ASSERT_TRUE(core::WriteAllBytes(h_reopened.get(), "after_reopen!", 13));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h_reopened.get(), "after_reopen!", 13));
   h_reopened.reset();
   h_orig.value->reset();
 

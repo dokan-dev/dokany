@@ -165,8 +165,8 @@ TEST_F(InfoQueriesTest, FileIndexStabilityAndUniqueness) {
   const std::wstring path_a = TestPath(L"idx_a.dat");
   const std::wstring path_b = TestPath(L"idx_b.dat");
   const std::wstring path_a_renamed = TestPath(L"idx_a_renamed.dat");
-  ASSERT_TRUE(core::WriteFileContents(path_a, "alpha"));
-  ASSERT_TRUE(core::WriteFileContents(path_b, "beta"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_a, "alpha"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_b, "beta"));
 
   uint64_t id_a1 = 0;
   {
@@ -183,9 +183,9 @@ TEST_F(InfoQueriesTest, FileIndexStabilityAndUniqueness) {
     auto r_a1 = core::GetFileIndex(ha1.value->get());
     auto r_a2 = core::GetFileIndex(ha2.value->get());
     auto r_b = core::GetFileIndex(hb.value->get());
-    ASSERT_TRUE(r_a1);
-    ASSERT_TRUE(r_a2);
-    ASSERT_TRUE(r_b);
+    ASSERT_WIN32_OK(r_a1);
+    ASSERT_WIN32_OK(r_a2);
+    ASSERT_WIN32_OK(r_b);
 
     id_a1 = *r_a1.value;
     EXPECT_NE(id_a1, 0ULL);
@@ -199,7 +199,7 @@ TEST_F(InfoQueriesTest, FileIndexStabilityAndUniqueness) {
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(ha_after) << core::FormatWin32Error(ha_after.error);
   auto r_after = core::GetFileIndex(ha_after.value->get());
-  ASSERT_TRUE(r_after);
+  ASSERT_WIN32_OK(r_after);
   EXPECT_EQ(*r_after.value, id_a1);
 }
 
@@ -209,7 +209,7 @@ TEST_F(InfoQueriesTest, NtQueryFileBasicAndStandardInfo) {
   const std::wstring file_path = TestPath(L"basic_std.dat");
   const std::wstring dir_path = TestPath(L"basic_std_dir");
   const std::string payload(123, 'S');
-  ASSERT_TRUE(core::WriteFileContents(
+  ASSERT_WIN32_OK(core::WriteFileContents(
       file_path, payload, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir_path.c_str(), nullptr));
 
@@ -260,7 +260,7 @@ TEST_F(InfoQueriesTest, NtQueryFileBasicAndStandardInfo) {
 TEST_F(InfoQueriesTest, NtQueryFileInternalAndAllInfo) {
   const std::wstring file_path = TestPath(L"all_info.dat");
   const std::string payload(77, 'Q');
-  ASSERT_TRUE(core::WriteFileContents(file_path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, payload));
 
   auto fh = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -339,7 +339,7 @@ TEST_F(InfoQueriesTest, NtQueryFileNameAndNormalizedNameInfo) {
   const std::wstring sub = TestPath(L"SubDir");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
   const std::wstring canonical_file = core::JoinPath(sub, L"MixedFile.txt");
-  ASSERT_TRUE(core::WriteFileContents(canonical_file, "name-query"));
+  ASSERT_WIN32_OK(core::WriteFileContents(canonical_file, "name-query"));
 
   const std::wstring open_lower = TestPath(L"subdir\\mixedfile.txt");
   auto fh = core::CreateWin32File(
@@ -372,7 +372,7 @@ TEST_F(InfoQueriesTest, NtQueryFileNameAndNormalizedNameInfo) {
     if (ShortNamesEnabled()) {
       const std::wstring long_name = L"Normalized Long Filename Test.txt";
       const std::wstring long_path = core::JoinPath(sub, long_name);
-      ASSERT_TRUE(core::WriteFileContents(long_path, "short-norm"));
+      ASSERT_WIN32_OK(core::WriteFileContents(long_path, "short-norm"));
 
       WIN32_FIND_DATAW fd{};
       core::UniqueFindHandle find(::FindFirstFileW(long_path.c_str(), &fd));
@@ -404,7 +404,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStandardLinkInfo) {
 
   const std::wstring file_path = TestPath(L"std_link.dat");
   const std::wstring dir_path = TestPath(L"std_link_dir");
-  ASSERT_TRUE(core::WriteFileContents(file_path, "links"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "links"));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir_path.c_str(), nullptr));
 
   {
@@ -443,7 +443,7 @@ TEST_F(InfoQueriesTest, GetFinalPathNameByHandleWFormats) {
   const std::wstring orig = core::JoinPath(dir_a, L"orig.txt");
   const std::wstring case_renamed = core::JoinPath(dir_a, L"Orig.TXT");
   const std::wstring moved = core::JoinPath(dir_b, L"Moved.TXT");
-  ASSERT_TRUE(core::WriteFileContents(orig, "final-path-data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(orig, "final-path-data"));
 
   auto check_final = [&](std::wstring_view path,
                          std::wstring_view expected_rel_suffix) {
@@ -492,7 +492,7 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
 
   const std::wstring file_path = TestPath(L"by_id.dat");
   const std::string payload = "opened-by-file-id-payload";
-  ASSERT_TRUE(core::WriteFileContents(file_path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, payload));
 
   auto fh = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -526,7 +526,7 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_by_id.get());
-    ASSERT_TRUE(idx);
+    ASSERT_WIN32_OK(idx);
     EXPECT_EQ(*idx.value, *expected_idx.value);
   }
 
@@ -557,7 +557,7 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_nt.get());
-    ASSERT_TRUE(idx);
+    ASSERT_WIN32_OK(idx);
     EXPECT_EQ(*idx.value, *expected_idx.value);
   }
 }
@@ -571,8 +571,8 @@ TEST_F(InfoQueriesTest, FileId128BitInformation) {
   const std::wstring path_a = TestPath(L"id128_a.dat");
   const std::wstring path_b = TestPath(L"id128_b.dat");
   const std::wstring path_a_renamed = TestPath(L"id128_a_renamed.dat");
-  ASSERT_TRUE(core::WriteFileContents(path_a, "128a"));
-  ASSERT_TRUE(core::WriteFileContents(path_b, "128b"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_a, "128a"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_b, "128b"));
 
   auto query_id128 = [&](HANDLE h) -> nt::FileIdInfo {
     nt::IoStatusBlock iosb{};
@@ -595,8 +595,8 @@ TEST_F(InfoQueriesTest, FileId128BitInformation) {
                                     core::kShareAll, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(ha1);
-    ASSERT_TRUE(ha2);
-    ASSERT_TRUE(hb);
+    ASSERT_WIN32_OK(ha2);
+    ASSERT_WIN32_OK(hb);
 
     id_a1 = query_id128(ha1.value->get());
     const nt::FileIdInfo id_a2 = query_id128(ha2.value->get());
@@ -619,7 +619,7 @@ TEST_F(InfoQueriesTest, FileId128BitInformation) {
   auto ha_after = core::CreateWin32File(
       path_a_renamed, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(ha_after);
+  ASSERT_WIN32_OK(ha_after);
   const nt::FileIdInfo id_after = query_id128(ha_after.value->get());
   EXPECT_EQ(id_after.volume_serial_number, id_a1.volume_serial_number);
   EXPECT_EQ(std::memcmp(id_after.file_id.identifier, id_a1.file_id.identifier,
@@ -635,7 +635,7 @@ TEST_F(InfoQueriesTest, NtQueryAndSetFilePositionInformation) {
   ASSERT_NE(ntdll.NtSetInformationFile, nullptr);
 
   const std::wstring file_path = TestPath(L"pos_info.dat");
-  ASSERT_TRUE(core::WriteFileContents(file_path, "0123456789abcdef"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "0123456789abcdef"));
 
   auto query_pos = [&](HANDLE h) -> LONGLONG {
     nt::IoStatusBlock iosb{};
@@ -686,7 +686,7 @@ TEST_F(InfoQueriesTest, NtQueryFileModeAndAlignmentInformation) {
   ASSERT_NE(ntdll.NtQueryInformationFile, nullptr);
 
   const std::wstring file_path = TestPath(L"mode_align.dat");
-  ASSERT_TRUE(core::WriteFileContents(file_path, "mode-alignment"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "mode-alignment"));
 
   auto query_mode = [&](HANDLE h) -> ULONG {
     nt::IoStatusBlock iosb{};
@@ -751,7 +751,7 @@ TEST_F(InfoQueriesTest, NtQueryNetworkOpenAndPathAttributesFastQueries) {
 
   const std::wstring file_path = TestPath(L"fast_query.dat");
   const std::string payload(321, 'F');
-  ASSERT_TRUE(core::WriteFileContents(
+  ASSERT_WIN32_OK(core::WriteFileContents(
       file_path, payload, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE));
 
   auto fh = core::CreateWin32File(file_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -841,7 +841,7 @@ TEST_F(InfoQueriesTest, NtQueryFileAttributeTagRegularFile) {
   ASSERT_NE(ntdll.NtQueryInformationFile, nullptr);
 
   const std::wstring plain_path = TestPath(L"plain_tag.dat");
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteFileContents(plain_path, "no-reparse",
                               FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE));
 
@@ -911,7 +911,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStatAndStatLxInformation) {
 
   const std::wstring file_path = TestPath(L"stat_info.dat");
   const std::string payload(256, 'T');
-  ASSERT_TRUE(core::WriteFileContents(
+  ASSERT_WIN32_OK(core::WriteFileContents(
       file_path, payload, FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE));
 
   // FileStatLxInformation reads Linux EA metadata and requires FILE_READ_EA in
@@ -1176,8 +1176,8 @@ TEST_F(InfoQueriesTest, NtQueryFileAlternateNameInformation) {
 
   const std::wstring long_path = TestPath(L"AlternateNameQueryExample.txt");
   const std::wstring short_only_path = TestPath(L"ABC123.TXT");
-  ASSERT_TRUE(core::WriteFileContents(long_path, "alt-name-long"));
-  ASSERT_TRUE(core::WriteFileContents(short_only_path, "alt-name-83"));
+  ASSERT_WIN32_OK(core::WriteFileContents(long_path, "alt-name-long"));
+  ASSERT_WIN32_OK(core::WriteFileContents(short_only_path, "alt-name-83"));
 
   WIN32_FIND_DATAW fd{};
   ::SetLastError(ERROR_SUCCESS);
@@ -1258,8 +1258,8 @@ TEST_F(InfoQueriesTest, NtQueryFileCompressionInformation) {
   ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
 
   const std::string compressible(kLogicalSize, 'A');
-  ASSERT_TRUE(core::WriteAllBytes(fh.value->get(), compressible.data(),
-                                  compressible.size()));
+  ASSERT_WIN32_OK(core::WriteAllBytes(fh.value->get(), compressible.data(),
+                                      compressible.size()));
   ASSERT_WIN32_TRUE(::FlushFileBuffers(fh.value->get()));
 
   // Initially uncompressed.
@@ -1360,7 +1360,7 @@ TEST_F(InfoQueriesTest, NtQueryFileFsSectorSizeInformation) {
 // FALSE once the disposition is cleared.
 TEST_F(InfoQueriesTest, NtQueryFileStandardInfoDeletePendingTracksDisposition) {
   const std::wstring file_path = TestPath(L"delete_pending.dat");
-  ASSERT_TRUE(core::WriteFileContents(file_path, "delete-pending"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "delete-pending"));
 
   auto fh = core::CreateWin32File(
       file_path, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
@@ -1423,7 +1423,7 @@ TEST_F(InfoQueriesTest, ReadFileUsnDataMatchesFileIdParentAndName) {
 
   const std::wstring file_name = L"usn_record.dat";
   const std::wstring file_path = TestPath(file_name);
-  ASSERT_TRUE(core::WriteFileContents(file_path, "usn-data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "usn-data"));
 
   auto parent_idx =
       core::QueryPathFileIndex(TempDir().Path(), /*backup_semantics=*/true);

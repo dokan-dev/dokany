@@ -607,7 +607,7 @@ TEST_F(DataIoTest, SetEndOfFileExtendAndShrink) {
   ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
   EXPECT_EQ(core::FileSizeOf(*info.value), 42u);
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto data = core::ReadAllBytes(h.value->get());
   ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
   ASSERT_EQ(data.value->size(), 42u);
@@ -637,14 +637,16 @@ TEST_F(DataIoTest, ReadWriteBasicAndSeekOffsets) {
 
   const std::string part1 = "Hello, ";
   const std::string part2 = "NTFS world!";
-  ASSERT_TRUE(core::WriteAllBytes(h.value->get(), part1.data(), part1.size()));
-  ASSERT_TRUE(core::WriteAllBytes(h.value->get(), part2.data(), part2.size()));
+  ASSERT_WIN32_OK(
+      core::WriteAllBytes(h.value->get(), part1.data(), part1.size()));
+  ASSERT_WIN32_OK(
+      core::WriteAllBytes(h.value->get(), part2.data(), part2.size()));
 
   int64_t pos = -1;
-  ASSERT_TRUE(SeekTo(h.value->get(), 0, FILE_CURRENT, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), 0, FILE_CURRENT, &pos));
   EXPECT_EQ(pos, 18);
 
-  ASSERT_TRUE(SeekTo(h.value->get(), 0, FILE_BEGIN, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), 0, FILE_BEGIN, &pos));
   EXPECT_EQ(pos, 0);
 
   char buf[64]{};
@@ -653,14 +655,14 @@ TEST_F(DataIoTest, ReadWriteBasicAndSeekOffsets) {
   EXPECT_EQ(bytes_read, 5u);
   EXPECT_EQ(std::string(buf, bytes_read), "Hello");
 
-  ASSERT_TRUE(SeekTo(h.value->get(), 2, FILE_CURRENT, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), 2, FILE_CURRENT, &pos));
   EXPECT_EQ(pos, 7);
   ASSERT_WIN32_TRUE(::ReadFile(h.value->get(), buf, 4, &bytes_read, nullptr));
   EXPECT_EQ(bytes_read, 4u);
   EXPECT_EQ(std::string(buf, bytes_read), "NTFS");
 
   // Straddling EOF returns exact remaining bytes + TRUE.
-  ASSERT_TRUE(SeekTo(h.value->get(), -6, FILE_END, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), -6, FILE_END, &pos));
   EXPECT_EQ(pos, 12);
   ASSERT_WIN32_TRUE(
       ::ReadFile(h.value->get(), buf, sizeof(buf), &bytes_read, nullptr));
@@ -673,7 +675,7 @@ TEST_F(DataIoTest, ReadWriteBasicAndSeekOffsets) {
   EXPECT_EQ(bytes_read, 0u);
 
   // Reading past EOF returns 0 bytes + TRUE and does not extend file size.
-  ASSERT_TRUE(SeekTo(h.value->get(), 100, FILE_BEGIN, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), 100, FILE_BEGIN, &pos));
   EXPECT_EQ(pos, 100);
   bytes_read = 99;
   ASSERT_WIN32_TRUE(::ReadFile(h.value->get(), buf, 16, &bytes_read, nullptr));
@@ -694,13 +696,14 @@ TEST_F(DataIoTest, WriteBeyondEofZeroFillsGap) {
 
   constexpr int64_t kGapOffset = 65536;
   const std::string tail = "GAP_END_PAYLOAD!";
-  ASSERT_TRUE(SeekBegin(h.value->get(), kGapOffset));
-  ASSERT_TRUE(core::WriteAllBytes(h.value->get(), tail.data(), tail.size()));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), kGapOffset));
+  ASSERT_WIN32_OK(
+      core::WriteAllBytes(h.value->get(), tail.data(), tail.size()));
 
   EXPECT_TRUE(CheckStandardInfoEof(
       h.value->get(), kGapOffset + static_cast<int64_t>(tail.size())));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
   ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
   ASSERT_EQ(contents.value->size(),
@@ -726,9 +729,9 @@ TEST_F(DataIoTest, AppendOnlyHandleWritesAtCurrentEof) {
                                    FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
 
-    ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+    ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
     const std::string chunk = "BBBB";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), chunk.data(), chunk.size()));
   }
 
@@ -1050,23 +1053,25 @@ TEST_F(DataIoTest, SetEndOfFileShrinkAndReExtendZeroFillsOldData) {
   constexpr size_t kInitialSize = 16384;
   constexpr size_t kShrinkSize = 4096;
   std::vector<uint8_t> pattern(kInitialSize, 0xA5);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), pattern.data(), pattern.size()));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), static_cast<int64_t>(kShrinkSize)));
+  ASSERT_WIN32_TRUE(
+      SeekBegin(h.value->get(), static_cast<int64_t>(kShrinkSize)));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
 
   LARGE_INTEGER sz{};
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h.value->get(), &sz));
   EXPECT_EQ(sz.QuadPart, static_cast<LONGLONG>(kShrinkSize));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), static_cast<int64_t>(kInitialSize)));
+  ASSERT_WIN32_TRUE(
+      SeekBegin(h.value->get(), static_cast<int64_t>(kInitialSize)));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
 
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h.value->get(), &sz));
   EXPECT_EQ(sz.QuadPart, static_cast<LONGLONG>(kInitialSize));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
   ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
   ASSERT_EQ(contents.value->size(), kInitialSize);
@@ -1092,7 +1097,7 @@ TEST_F(DataIoTest, FileAllocationInfoPreallocateAndTruncate) {
 
   // Write 32 KiB, then shrink allocation to 4 KiB -> must truncate EOF to 4096.
   std::vector<uint8_t> payload(32768, 0x5C);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), payload.data(), payload.size()));
   EXPECT_TRUE(CheckStandardInfoEof(h.value->get(), 32768, 32768));
 
@@ -1121,25 +1126,25 @@ TEST_F(DataIoTest, MultiHandleReadWriteCoherence) {
   EXPECT_EQ(*read1.value, "INITIAL_0000");
 
   const std::string updated = "UPDATED_DATA_EXTENDED!";
-  ASSERT_TRUE(core::WriteAllBytes(h_write.value->get(), updated.data(),
-                                  updated.size()));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h_write.value->get(), updated.data(),
+                                      updated.size()));
 
   LARGE_INTEGER sz{};
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h_read.value->get(), &sz));
   EXPECT_EQ(sz.QuadPart, static_cast<LONGLONG>(updated.size()));
 
-  ASSERT_TRUE(SeekBegin(h_read.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h_read.value->get(), 0));
   auto read2 = core::ReadAllBytes(h_read.value->get());
   ASSERT_TRUE(read2) << core::FormatWin32Error(read2.error);
   EXPECT_EQ(*read2.value, updated);
 
   // Mid-file overwrite on H1 immediately visible on H2.
-  ASSERT_TRUE(SeekBegin(h_write.value->get(), 8));
+  ASSERT_WIN32_TRUE(SeekBegin(h_write.value->get(), 8));
   const std::string patch = "ABCD";
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(h_write.value->get(), patch.data(), patch.size()));
 
-  ASSERT_TRUE(SeekBegin(h_read.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h_read.value->get(), 0));
   auto read3 = core::ReadAllBytes(h_read.value->get());
   ASSERT_TRUE(read3) << core::FormatWin32Error(read3.error);
   EXPECT_EQ(*read3.value, "UPDATED_ABCD_EXTENDED!");
@@ -1163,7 +1168,7 @@ TEST_F(DataIoTest, NoBufferingAlignedRoundTrip) {
                                 nb.total_size, &transferred, nullptr));
   EXPECT_EQ(transferred, nb.total_size);
 
-  ASSERT_TRUE(SeekBegin(nb.handle.get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(nb.handle.get(), 0));
   transferred = 0;
   ASSERT_WIN32_TRUE(::ReadFile(nb.handle.get(), nb.read_buf.data(),
                                nb.total_size, &transferred, nullptr));
@@ -1173,7 +1178,8 @@ TEST_F(DataIoTest, NoBufferingAlignedRoundTrip) {
 
   // Aligned read of the second sector only.
   std::memset(nb.read_buf.data(), 0, nb.total_size);
-  ASSERT_TRUE(SeekBegin(nb.handle.get(), static_cast<int64_t>(nb.sector)));
+  ASSERT_WIN32_TRUE(
+      SeekBegin(nb.handle.get(), static_cast<int64_t>(nb.sector)));
   transferred = 0;
   ASSERT_WIN32_TRUE(::ReadFile(nb.handle.get(), nb.read_buf.data(), nb.sector,
                                &transferred, nullptr));
@@ -1273,7 +1279,7 @@ TEST_F(DataIoTest, NoBufferingBufferAddressHonorsAlignmentRequirement) {
                                 static_cast<uintptr_t>(mask)) != 0u;
 
   DWORD transferred = 0;
-  ASSERT_TRUE(SeekBegin(nb.handle.get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(nb.handle.get(), 0));
   if (write_misaligned) {
     EXPECT_WIN32_ERROR(::WriteFile(nb.handle.get(), odd_write, nb.sector,
                                    &transferred, nullptr),
@@ -1284,7 +1290,7 @@ TEST_F(DataIoTest, NoBufferingBufferAddressHonorsAlignmentRequirement) {
     EXPECT_EQ(transferred, nb.sector);
   }
 
-  ASSERT_TRUE(SeekBegin(nb.handle.get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(nb.handle.get(), 0));
   if (read_misaligned) {
     EXPECT_WIN32_ERROR(
         ::ReadFile(nb.handle.get(), odd_read, nb.sector, &transferred, nullptr),
@@ -1354,7 +1360,7 @@ TEST_F(DataIoTest, WriteThroughAndFlushFileBuffers) {
                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
 
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), payload.data(), payload.size()));
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h.value->get()));
   }
@@ -1390,20 +1396,20 @@ TEST_F(DataIoTest, NtFlushBuffersFileExModes) {
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
 
     nt::IoStatusBlock iosb{};
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), part1.data(), part1.size()));
     EXPECT_NT_STATUS(
         ntdll.NtFlushBuffersFileEx(h.value->get(), 0UL, nullptr, 0UL, &iosb),
         STATUS_SUCCESS);
 
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), part2.data(), part2.size()));
     EXPECT_NT_STATUS(ntdll.NtFlushBuffersFileEx(h.value->get(),
                                                 nt::kFlushFlagsFileDataOnly,
                                                 nullptr, 0UL, &iosb),
                      STATUS_SUCCESS);
 
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), part3.data(), part3.size()));
     EXPECT_NT_STATUS(ntdll.NtFlushBuffersFileEx(h.value->get(),
                                                 nt::kFlushFlagsFileDataSyncOnly,
@@ -1480,7 +1486,7 @@ TEST_F(DataIoTest, LargeReadWriteMultiMegabyteIntegrity) {
   std::vector<uint8_t> spot(4099u);
   for (size_t off : kSpotOffsets) {
     const size_t len = std::min(spot.size(), kTotalBytes - off);
-    ASSERT_TRUE(SeekBegin(h.value->get(), static_cast<int64_t>(off)));
+    ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), static_cast<int64_t>(off)));
     DWORD bytes_read = 0;
     ASSERT_WIN32_TRUE(::ReadFile(h.value->get(), spot.data(),
                                  static_cast<DWORD>(len), &bytes_read,
@@ -1493,7 +1499,7 @@ TEST_F(DataIoTest, LargeReadWriteMultiMegabyteIntegrity) {
   }
 
   // Full sequential verification.
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   std::vector<uint8_t> read_buf(65536u);
   size_t verified = 0;
   while (verified < kTotalBytes) {
@@ -1519,10 +1525,10 @@ TEST_F(DataIoTest, ZeroByteReadAndZeroByteWritePastEofDoesNotExtend) {
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
   ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), initial.data(), initial.size()));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   uint8_t dummy = 0x55;
   DWORD transferred = 42;
   ASSERT_WIN32_TRUE(
@@ -1530,7 +1536,7 @@ TEST_F(DataIoTest, ZeroByteReadAndZeroByteWritePastEofDoesNotExtend) {
   EXPECT_EQ(transferred, 0u);
 
   // Seek far past EOF and perform a 0-byte write -> must NOT extend EndOfFile.
-  ASSERT_TRUE(SeekBegin(h.value->get(), 65536));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 65536));
   transferred = 42;
   ASSERT_WIN32_TRUE(
       ::WriteFile(h.value->get(), &dummy, 0, &transferred, nullptr));
@@ -1539,7 +1545,7 @@ TEST_F(DataIoTest, ZeroByteReadAndZeroByteWritePastEofDoesNotExtend) {
   EXPECT_TRUE(CheckStandardInfoEof(h.value->get(),
                                    static_cast<int64_t>(initial.size())));
 
-  ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
   ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
   EXPECT_EQ(*contents.value, initial);
@@ -1558,7 +1564,7 @@ TEST_F(DataIoTest, OverlappedWriteToEndOfFileAtomicAppend) {
   {
     auto h = OpenRwFile(path, OPEN_EXISTING);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+    ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
 
     OVERLAPPED ov = MakeOffsetOverlapped(0xFFFFFFFFFFFFFFFFULL);
     const std::string tail1 = "TAIL1_";
@@ -1593,7 +1599,7 @@ TEST_F(DataIoTest, CopyFileExRespectsFailIfExists) {
   const std::wstring dst = TestPath(L"copy_dst.dat");
   const std::string main_payload = "COPY_SRC_CONTENT_12345";
 
-  ASSERT_TRUE(core::WriteFileContents(src, main_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, main_payload));
 
   CopyProgressState progress{};
   ASSERT_WIN32_TRUE(::CopyFileExW(
@@ -1607,7 +1613,7 @@ TEST_F(DataIoTest, CopyFileExRespectsFailIfExists) {
   // Update source, then verify COPY_FILE_FAIL_IF_EXISTS fails with
   // ERROR_FILE_EXISTS and preserves the existing destination content.
   const std::string updated_payload = "UPDATED_COPY_CONTENT_XYZ";
-  ASSERT_TRUE(core::WriteFileContents(src, updated_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, updated_payload));
   EXPECT_WIN32_ERROR(::CopyFileExW(src.c_str(), dst.c_str(), nullptr, nullptr,
                                    nullptr, COPY_FILE_FAIL_IF_EXISTS),
                      ERROR_FILE_EXISTS);
@@ -1629,7 +1635,7 @@ TEST_F(DataIoTest, CopyFileExPreservesAlternateStreams) {
   const std::string main_payload = "COPY_ADS_MAIN_CONTENT_12345";
   const std::string ads_payload = "ADS_META_PAYLOAD_98765";
 
-  ASSERT_TRUE(core::WriteFileContents(src, main_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, main_payload));
   auto ads_wr = core::WriteFileContents(src + L":meta", ads_payload);
   ASSERT_TRUE(ads_wr) << core::FormatWin32Error(ads_wr.error);
 
@@ -1648,8 +1654,8 @@ TEST_F(DataIoTest, CopyFileExOverReadOnlyDestinationFailsAccessDenied) {
   const std::string src_payload = "NEW_SRC_PAYLOAD_BLOCKED";
   const std::string dst_payload = "ORIGINAL_READONLY_DST_DATA";
 
-  ASSERT_TRUE(core::WriteFileContents(src, src_payload));
-  ASSERT_TRUE(core::WriteFileContents(dst, dst_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, src_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(dst, dst_payload));
   ASSERT_WIN32_TRUE(::SetFileAttributesW(dst.c_str(), FILE_ATTRIBUTE_READONLY));
 
   EXPECT_WIN32_ERROR(
@@ -1813,7 +1819,7 @@ TEST_F(DataIoTest, NtReadWriteFileUseFilePointerPosition) {
 
   // Two consecutive pointer-relative writes starting at offset 4 must land
   // back to back, proving the second one saw the advanced position.
-  ASSERT_TRUE(SeekBegin(h.value->get(), 4));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 4));
   ASSERT_NT_STATUS(NtTransferAt(h.value->get(), kUseFilePointerPosition,
                                 const_cast<char *>(part_b.data()),
                                 static_cast<ULONG>(part_b.size()),
@@ -1829,13 +1835,13 @@ TEST_F(DataIoTest, NtReadWriteFileUseFilePointerPosition) {
 
   EXPECT_TRUE(CheckStandardInfoEof(h.value->get(), 12));
   int64_t pos = -1;
-  ASSERT_TRUE(SeekTo(h.value->get(), 0, FILE_CURRENT, &pos));
+  ASSERT_WIN32_TRUE(SeekTo(h.value->get(), 0, FILE_CURRENT, &pos));
   EXPECT_EQ(pos, 12);
 
   // Pointer-relative reads: 4 bytes from offset 2, then the 6 remaining
   // bytes, then STATUS_END_OF_FILE.
   char buf[16]{};
-  ASSERT_TRUE(SeekBegin(h.value->get(), 2));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 2));
   ASSERT_NT_STATUS(NtTransferAt(h.value->get(), kUseFilePointerPosition, buf, 4,
                                 /*is_write=*/false, &info),
                    STATUS_SUCCESS);
@@ -1885,7 +1891,7 @@ TEST_F(DataIoTest, FileValidDataLengthExtend) {
   }
 
   constexpr LONGLONG kVdl1 = 65536;
-  ASSERT_TRUE(SeekBegin(h.value->get(), kVdl1));
+  ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), kVdl1));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
 
   // Negative check 1: handle opened without SeManageVolumePrivilege fails

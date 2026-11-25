@@ -721,12 +721,13 @@ TEST_F(SecurityAclTest, DaclInheritanceFromParentDirectory) {
   auto parent_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"inherit_parent"));
   ASSERT_TRUE(parent_guard.armed());
-  ASSERT_TRUE(SetProtectedInheritableDacl(parent, parent_sddl));
+  ASSERT_WIN32_OK(SetProtectedInheritableDacl(parent, parent_sddl));
 
   // Child file created with nullptr security descriptor inherits ACEs with ID.
   const std::wstring child_file = parent + L"\\child_file.dat";
-  ASSERT_TRUE(core::CreateWin32File(child_file, GENERIC_WRITE, core::kShareAll,
-                                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL));
+  ASSERT_WIN32_OK(core::CreateWin32File(child_file, GENERIC_WRITE,
+                                        core::kShareAll, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL));
   {
     auto buf = QueryRawFileSecurity(child_file, DACL_SECURITY_INFORMATION);
     ASSERT_TRUE(buf) << core::FormatWin32Error(buf.error);
@@ -784,13 +785,13 @@ TEST_F(SecurityAclTest, WriteDataAndAppendDataAccessEnforcement) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"write_append.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "seed"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "seed"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"write_append.dat"));
   ASSERT_TRUE(dacl_guard.armed());
 
   // DACL granting only FILE_GENERIC_READ blocks write and append.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FR;;;WD)"));
   {
     EXPECT_TRUE(helpers::CheckFileContents(path, "seed"));
@@ -802,8 +803,8 @@ TEST_F(SecurityAclTest, WriteDataAndAppendDataAccessEnforcement) {
   // DACL granting FILE_APPEND_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL |
   // SYNCHRONIZE (0x00120084) allows FILE_APPEND_DATA while blocking
   // FILE_WRITE_DATA.
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
-                                L"D:P(A;;0x00120084;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
+                                    L"D:P(A;;0x00120084;;;WD)"));
   {
     ExpectAccessDeniedOpen(path, FILE_WRITE_DATA);
 
@@ -814,7 +815,7 @@ TEST_F(SecurityAclTest, WriteDataAndAppendDataAccessEnforcement) {
     ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
   }
 
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   dacl_guard.DisarmAndClose();
   EXPECT_TRUE(helpers::CheckFileContents(path, "seed+tail"));
@@ -833,15 +834,15 @@ TEST_F(SecurityAclTest, DeleteRightVsParentDeleteChildRight) {
 
   // (a) Parent grants FILE_DELETE_CHILD (FA); child denies DELETE (0x00010000).
   //     DeleteFileW succeeds via parent's FILE_DELETE_CHILD right.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(parent, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   const std::wstring file_a = parent + L"\\a.dat";
-  ASSERT_TRUE(core::WriteFileContents(file_a, "a"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_a, "a"));
   {
     auto file_a_guard =
         core::ScopedDaclRestore::Arm(TestNtPath(L"del_rights_parent\\a.dat"));
     ASSERT_TRUE(file_a_guard.armed());
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::SetFileSddl(file_a, DACL_SECURITY_INFORMATION,
                           L"D:P(D;;0x00010000;;;WD)(A;;0x001E01FF;;;WD)"));
     ::SetLastError(ERROR_SUCCESS);
@@ -857,33 +858,33 @@ TEST_F(SecurityAclTest, DeleteRightVsParentDeleteChildRight) {
 
   // (b) Parent denies FILE_DELETE_CHILD (0x00000040); child grants DELETE (FA).
   //     DeleteFileW succeeds via child's DELETE right.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(parent, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000040;;;WD)(A;;0x001F01BF;;;WD)"));
   const std::wstring file_b = parent + L"\\b.dat";
-  ASSERT_TRUE(core::WriteFileContents(file_b, "b"));
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(core::WriteFileContents(file_b, "b"));
+  ASSERT_WIN32_OK(
       core::SetFileSddl(file_b, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   EXPECT_WIN32_TRUE(::DeleteFileW(file_b.c_str()));
 
   // (c) Neither parent (no FILE_DELETE_CHILD) nor child (no DELETE) grants
   //     delete -> DeleteFileW fails ERROR_ACCESS_DENIED.
   const std::wstring file_c = parent + L"\\c.dat";
-  ASSERT_TRUE(core::WriteFileContents(file_c, "c"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_c, "c"));
   auto file_c_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"del_rights_parent\\c.dat"));
   ASSERT_TRUE(file_c_guard.armed());
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(file_c, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00010000;;;WD)(A;;0x001E01FF;;;WD)"));
   EXPECT_WIN32_ERROR(::DeleteFileW(file_c.c_str()), ERROR_ACCESS_DENIED);
   EXPECT_NE(::GetFileAttributesW(file_c.c_str()), INVALID_FILE_ATTRIBUTES);
 
   // Restore permissive DACLs and clean up.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(file_c, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   file_c_guard.DisarmAndClose();
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(parent, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   parent_guard.DisarmAndClose();
   EXPECT_WIN32_TRUE(::DeleteFileW(file_c.c_str()));
@@ -898,10 +899,10 @@ TEST_F(SecurityAclTest, DirectoryListAndCreateFileAccessEnforcement) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
   auto dir_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"dir_acl_enforce"));
   ASSERT_TRUE(dir_guard.armed());
-  ASSERT_TRUE(core::WriteFileContents(dir + L"\\seed.dat", "seed"));
+  ASSERT_WIN32_OK(core::WriteFileContents(dir + L"\\seed.dat", "seed"));
 
   // Deny FILE_LIST_DIRECTORY (0x0001), allow all other directory rights.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000001;;;WD)(A;;0x001F01FE;;;WD)"));
   {
@@ -917,7 +918,7 @@ TEST_F(SecurityAclTest, DirectoryListAndCreateFileAccessEnforcement) {
   }
 
   // Deny FILE_ADD_FILE (0x0002), allow FILE_LIST_DIRECTORY and other rights.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000002;;;WD)(A;;0x001F01FD;;;WD)"));
   {
@@ -934,7 +935,7 @@ TEST_F(SecurityAclTest, DirectoryListAndCreateFileAccessEnforcement) {
         (std::vector<std::wstring>{L".", L"..", L"seed.dat", L"created.dat"}));
   }
 
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   dir_guard.DisarmAndClose();
 }
@@ -949,8 +950,8 @@ TEST_F(SecurityAclTest, DirectoryTraverseAccessEnforcement) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
   auto dir_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"traverse_dir"));
   ASSERT_TRUE(dir_guard.armed());
-  ASSERT_TRUE(core::WriteFileContents(child, "traverse-ok"));
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "traverse-ok"));
+  ASSERT_WIN32_OK(
       core::SetFileSddl(child, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
 
   auto no_bypass_token =
@@ -958,7 +959,7 @@ TEST_F(SecurityAclTest, DirectoryTraverseAccessEnforcement) {
   ASSERT_TRUE(no_bypass_token) << core::FormatWin32Error(no_bypass_token.error);
 
   // Deny FILE_TRAVERSE (0x0020) on dir while allowing other rights.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000020;;;WD)(A;;0x001F01DF;;;WD)"));
   {
@@ -969,7 +970,7 @@ TEST_F(SecurityAclTest, DirectoryTraverseAccessEnforcement) {
   }
 
   // Grant FILE_TRAVERSE (0x0020) while denying FILE_LIST_DIRECTORY (0x0001).
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000001;;;WD)(A;;0x001F01FE;;;WD)"));
   {
@@ -983,7 +984,7 @@ TEST_F(SecurityAclTest, DirectoryTraverseAccessEnforcement) {
     EXPECT_TRUE(helpers::CheckFileContents(child, "traverse-ok"));
   }
 
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(dir, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   dir_guard.DisarmAndClose();
 }
@@ -994,13 +995,13 @@ TEST_F(SecurityAclTest, OwnerImplicitReadControlAndWriteDac) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"owner_implicit.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "owner-secret"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "owner-secret"));
 
   // Empty protected DACL denies all explicit access.
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"owner_implicit.dat"));
   ASSERT_TRUE(dacl_guard.armed());
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P"));
 
   auto read_denied =
       core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
@@ -1050,7 +1051,7 @@ TEST_F(SecurityAclTest, SaclGetAndSet) {
   REQUIRE_PRIVILEGE(SE_SECURITY_NAME);
 
   const std::wstring path = TestPath(L"sacl_test.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "audit-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "audit-payload"));
 
   core::ScopedPrivilege sec_priv(SE_SECURITY_NAME, /*enable=*/true);
   ASSERT_TRUE(sec_priv.active()) << core::FormatWin32Error(sec_priv.error());
@@ -1095,11 +1096,11 @@ TEST_F(SecurityAclTest, NullDaclGrantsAllVsEmptyDaclDeniesAll) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"null_vs_empty_dacl.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial"));
 
   // NULL DACL (D:NO_ACCESS_CONTROL): present with nullptr PACL -> grants all.
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
-                                L"D:NO_ACCESS_CONTROL"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
+                                    L"D:NO_ACCESS_CONTROL"));
   {
     auto dacl_info = InspectFileDacl(path);
     ASSERT_TRUE(dacl_info) << core::FormatWin32Error(dacl_info.error);
@@ -1110,7 +1111,7 @@ TEST_F(SecurityAclTest, NullDaclGrantsAllVsEmptyDaclDeniesAll) {
     ASSERT_TRUE(r) << core::FormatWin32Error(r.error);
     EXPECT_EQ(*r.value, "initial");
 
-    ASSERT_TRUE(core::WriteFileContents(path, "updated-under-null-dacl"));
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "updated-under-null-dacl"));
   }
 
   // Empty protected DACL (D:P): present with non-null 0-ACE PACL -> denies all
@@ -1118,7 +1119,7 @@ TEST_F(SecurityAclTest, NullDaclGrantsAllVsEmptyDaclDeniesAll) {
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"null_vs_empty_dacl.dat"));
   ASSERT_TRUE(dacl_guard.armed());
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P"));
   {
     auto dacl_info = InspectFileDacl(path);
     ASSERT_TRUE(dacl_info) << core::FormatWin32Error(dacl_info.error);
@@ -1137,8 +1138,8 @@ TEST_F(SecurityAclTest, NullDaclGrantsAllVsEmptyDaclDeniesAll) {
   }
 
   // Switching back to NULL DACL allows delete directly.
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
-                                L"D:NO_ACCESS_CONTROL"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
+                                    L"D:NO_ACCESS_CONTROL"));
   dacl_guard.DisarmAndClose();
   EXPECT_WIN32_TRUE(::DeleteFileW(path.c_str()));
 }
@@ -1154,13 +1155,13 @@ TEST_F(SecurityAclTest,
 
   // Part A: Explicit Deny beats Explicit Allow on the same object.
   const std::wstring f1 = TestPath(L"explicit_deny_wins.dat");
-  ASSERT_TRUE(core::WriteFileContents(f1, "part-a"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f1, "part-a"));
   auto f1_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"explicit_deny_wins.dat"));
   ASSERT_TRUE(f1_guard.armed());
   // Deny FILE_READ_DATA (0x1), Allow FILE_ALL_ACCESS (FA).
-  ASSERT_TRUE(core::SetFileSddl(f1, DACL_SECURITY_INFORMATION,
-                                L"D:P(D;;0x00000001;;;WD)(A;;FA;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(f1, DACL_SECURITY_INFORMATION,
+                                    L"D:P(D;;0x00000001;;;WD)(A;;FA;;;WD)"));
   {
     ExpectAccessDeniedOpen(f1, GENERIC_READ);
 
@@ -1169,7 +1170,7 @@ TEST_F(SecurityAclTest,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     EXPECT_TRUE(w) << core::FormatWin32Error(w.error);
   }
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(f1, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   f1_guard.DisarmAndClose();
 
@@ -1179,7 +1180,7 @@ TEST_F(SecurityAclTest,
   auto parent_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"inherited_deny_parent"));
   ASSERT_TRUE(parent_guard.armed());
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(parent, DACL_SECURITY_INFORMATION,
                         L"D:P(D;OIIO;0x00000001;;;WD)(A;OICI;FA;;;WD)"));
 
@@ -1188,7 +1189,7 @@ TEST_F(SecurityAclTest,
     auto h = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(core::WriteAllBytes(h.value->get(), "explicit-wins", 13));
+    ASSERT_WIN32_OK(core::WriteAllBytes(h.value->get(), "explicit-wins", 13));
   }
   auto child_guard = core::ScopedDaclRestore::Arm(
       TestNtPath(L"inherited_deny_parent\\child.dat"));
@@ -1232,8 +1233,8 @@ TEST_F(SecurityAclTest,
   // Explicit Allow wins over inherited Deny: read now succeeds.
   EXPECT_TRUE(helpers::CheckFileContents(child, "explicit-wins"));
 
-  ASSERT_TRUE(core::SetFileSddl(parent, DACL_SECURITY_INFORMATION,
-                                L"D:P(A;OICI;FA;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(parent, DACL_SECURITY_INFORMATION,
+                                    L"D:P(A;OICI;FA;;;WD)"));
   child_guard.RestoreNow();
   parent_guard.DisarmAndClose();
 }
@@ -1254,7 +1255,7 @@ TEST_F(SecurityAclTest, InheritanceFlagsInheritOnlyAndNoPropagate) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(io_dir.c_str(), nullptr));
   auto io_dir_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"io_parent"));
   ASSERT_TRUE(io_dir_guard.armed());
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(io_dir, DACL_SECURITY_INFORMATION,
                         L"D:P(D;OIIO;0x00000001;;;WD)(A;OICI;FA;;;WD)"));
 
@@ -1266,18 +1267,18 @@ TEST_F(SecurityAclTest, InheritanceFlagsInheritOnlyAndNoPropagate) {
 
   // Child file inherits Deny FILE_READ_DATA (0x1) without IO, blocking reads.
   const std::wstring io_leaf = io_dir + L"\\leaf.dat";
-  ASSERT_TRUE(core::CreateWin32File(io_leaf, GENERIC_WRITE, core::kShareAll,
-                                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL));
+  ASSERT_WIN32_OK(core::CreateWin32File(io_leaf, GENERIC_WRITE, core::kShareAll,
+                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL));
   auto io_leaf_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"io_parent\\leaf.dat"));
   ASSERT_TRUE(io_leaf_guard.armed());
   ExpectAccessDeniedOpen(io_leaf, GENERIC_READ);
 
-  ASSERT_TRUE(core::SetFileSddl(io_leaf, DACL_SECURITY_INFORMATION,
-                                L"D:P(A;;FA;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(io_leaf, DACL_SECURITY_INFORMATION,
+                                    L"D:P(A;;FA;;;WD)"));
   io_leaf_guard.DisarmAndClose();
-  ASSERT_TRUE(core::SetFileSddl(io_dir, DACL_SECURITY_INFORMATION,
-                                L"D:P(A;OICI;FA;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(io_dir, DACL_SECURITY_INFORMATION,
+                                    L"D:P(A;OICI;FA;;;WD)"));
   io_dir_guard.DisarmAndClose();
 
   // Part B: NP (NO_PROPAGATE_INHERIT_ACE) propagates 1 level to child_dir
@@ -1287,7 +1288,7 @@ TEST_F(SecurityAclTest, InheritanceFlagsInheritOnlyAndNoPropagate) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(np_root.c_str(), nullptr));
   auto np_root_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"np_root"));
   ASSERT_TRUE(np_root_guard.armed());
-  ASSERT_TRUE(SetProtectedInheritableDacl(
+  ASSERT_WIN32_OK(SetProtectedInheritableDacl(
       np_root, L"D:P(A;OICINP;0x00000008;;;AU)(A;OICI;FA;;;WD)"));
 
   const std::wstring child_dir = np_root + L"\\child_dir";
@@ -1312,9 +1313,9 @@ TEST_F(SecurityAclTest, InheritanceFlagsInheritOnlyAndNoPropagate) {
   const std::wstring grandchild_dir = child_dir + L"\\grandchild_dir";
   const std::wstring grandchild_file = child_dir + L"\\grandchild.dat";
   ASSERT_WIN32_TRUE(::CreateDirectoryW(grandchild_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::CreateWin32File(grandchild_file, GENERIC_WRITE,
-                                    core::kShareAll, CREATE_NEW,
-                                    FILE_ATTRIBUTE_NORMAL));
+  ASSERT_WIN32_OK(core::CreateWin32File(grandchild_file, GENERIC_WRITE,
+                                        core::kShareAll, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL));
 
   // Neither grandchild receives the NP AU 0x8 ACE, while both receive WD FA.
   for (const std::wstring &gc : {grandchild_dir, grandchild_file}) {
@@ -1338,14 +1339,14 @@ TEST_F(SecurityAclTest, GranularAttributeAndEaAccessRightsEnforcement) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"granular_attr_ea.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "attr-ea-data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "attr-ea-data"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"granular_attr_ea.dat"));
   ASSERT_TRUE(dacl_guard.armed());
 
   // Deny FILE_WRITE_ATTRIBUTES (0x0100) and FILE_WRITE_EA (0x0010), allow FR.
-  ASSERT_TRUE(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
-                                L"D:P(D;;0x00000110;;;WD)(A;;FR;;;WD)"));
+  ASSERT_WIN32_OK(core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
+                                    L"D:P(D;;0x00000110;;;WD)(A;;FR;;;WD)"));
 
   // Reading data succeeds.
   EXPECT_TRUE(helpers::CheckFileContents(path, "attr-ea-data"));
@@ -1358,7 +1359,7 @@ TEST_F(SecurityAclTest, GranularAttributeAndEaAccessRightsEnforcement) {
 
   // Grant FILE_WRITE_ATTRIBUTES (FR | 0x100 = 0x00120189) while keeping
   // FILE_WRITE_EA (0x10) denied.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION,
                         L"D:P(D;;0x00000010;;;WD)(A;;0x00120189;;;WD)"));
 
@@ -1372,7 +1373,7 @@ TEST_F(SecurityAclTest, GranularAttributeAndEaAccessRightsEnforcement) {
   }
   ExpectAccessDeniedOpen(path, FILE_WRITE_EA);
 
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   dacl_guard.DisarmAndClose();
 }
@@ -1401,9 +1402,9 @@ TEST_F(SecurityAclTest, SecurityDescriptorPreservedAcrossIntraVolumeRename) {
   ASSERT_TRUE(dir_b_guard.armed());
 
   // Distinct inheritable marker ACEs on dir_a (AU 0x8) vs dir_b (BU 0x10).
-  ASSERT_TRUE(SetProtectedInheritableDacl(
+  ASSERT_WIN32_OK(SetProtectedInheritableDacl(
       dir_a, L"D:P(A;OICI;0x00000008;;;AU)(A;OICI;FA;;;WD)"));
-  ASSERT_TRUE(SetProtectedInheritableDacl(
+  ASSERT_WIN32_OK(SetProtectedInheritableDacl(
       dir_b, L"D:P(A;OICI;0x00000010;;;BU)(A;OICI;FA;;;WD)"));
 
   auto check_preserved_dir_a_dacl = [&](std::wstring_view target_path) {
@@ -1422,7 +1423,7 @@ TEST_F(SecurityAclTest, SecurityDescriptorPreservedAcrossIntraVolumeRename) {
   // 1. Win32 MoveFileExW across directories preserves original dir_a DACL.
   const std::wstring win32_src = dir_a + L"\\moved_win32.dat";
   const std::wstring win32_dst = dir_b + L"\\moved_win32.dat";
-  ASSERT_TRUE(core::WriteFileContents(win32_src, "move-win32-sd"));
+  ASSERT_WIN32_OK(core::WriteFileContents(win32_src, "move-win32-sd"));
   ASSERT_NO_FATAL_FAILURE(check_preserved_dir_a_dacl(win32_src));
   ASSERT_WIN32_TRUE(::MoveFileExW(win32_src.c_str(), win32_dst.c_str(), 0));
   ASSERT_NO_FATAL_FAILURE(check_preserved_dir_a_dacl(win32_dst));
@@ -1430,7 +1431,7 @@ TEST_F(SecurityAclTest, SecurityDescriptorPreservedAcrossIntraVolumeRename) {
   // 2. NT FileRenameInformation relative to dir_b preserves original dir_a DACL.
   const std::wstring nt_src = dir_a + L"\\moved_nt.dat";
   const std::wstring nt_dst = dir_b + L"\\moved_nt.dat";
-  ASSERT_TRUE(core::WriteFileContents(nt_src, "move-nt-sd"));
+  ASSERT_WIN32_OK(core::WriteFileContents(nt_src, "move-nt-sd"));
   {
     auto dir_b_h = core::CreateWin32File(
         dir_b, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
@@ -1484,13 +1485,13 @@ TEST_F(SecurityAclTest, TakeOwnershipWithPrivilegeAndWriteOwner) {
   ASSERT_TRUE(ba_sid) << core::FormatWin32Error(ba_sid.error);
 
   const std::wstring path = TestPath(L"take_ownership.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "owner-change"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "owner-change"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"take_ownership.dat"));
   ASSERT_TRUE(dacl_guard.armed());
   // Restrict DACL to read-only (no WRITE_OWNER) so opening WRITE_OWNER relies
   // on SeTakeOwnershipPrivilege.
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FR;;;WD)"));
 
   core::ScopedPrivilege take_own_priv(SE_TAKE_OWNERSHIP_NAME, /*enable=*/true);
@@ -1530,7 +1531,7 @@ TEST_F(SecurityAclTest, TakeOwnershipWithPrivilegeAndWriteOwner) {
   owner_guard.Disarm();
 
   h.value->reset();
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)"));
   dacl_guard.DisarmAndClose();
 }
@@ -1545,7 +1546,7 @@ TEST_F(SecurityAclTest, NtQueryAndSetSecurityObjectDirect) {
   ASSERT_NE(ntdll.NtSetSecurityObject, nullptr);
 
   const std::wstring path = TestPath(L"nt_sec_direct.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "nt-sec"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "nt-sec"));
   auto dacl_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"nt_sec_direct.dat"));
   ASSERT_TRUE(dacl_guard.armed());
@@ -1663,7 +1664,7 @@ TEST_F(SecurityAclTest, CopyFileInheritsDestinationDaclUnlikeMove) {
 
   // 1. CopyFileW of a file with inherited src_dir DACL inherits dst_dir DACL.
   const std::wstring src_inherited = src_dir + L"\\inherited_src.dat";
-  ASSERT_TRUE(core::WriteFileContents(src_inherited, "copy-dacl-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src_inherited, "copy-dacl-payload"));
   {
     auto buf = QueryRawFileSecurity(src_inherited, DACL_SECURITY_INFORMATION);
     ASSERT_TRUE(buf) << core::FormatWin32Error(buf.error);
@@ -1687,7 +1688,7 @@ TEST_F(SecurityAclTest, CopyFileInheritsDestinationDaclUnlikeMove) {
     auto h = CreateFileWithSddl(src_explicit, L"D:P(A;;FR;;;AU)(A;;FA;;;WD)",
                                 GENERIC_WRITE, core::kShareAll);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), "explicit-src-payload", 20));
   }
   const std::wstring dst_ex = dst_dir + L"\\copied_ex.dat";
@@ -1765,7 +1766,7 @@ TEST_F(SecurityAclTest, AccessSystemSecurityDeniedWithoutSeSecurityPrivilege) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"sacl_priv_check.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "sacl-priv-test"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "sacl-priv-test"));
 
   // Explicitly disable SeSecurityPrivilege on the current process token. If the
   // token does not possess SeSecurityPrivilege (e.g. non-elevated runs),
@@ -1818,7 +1819,8 @@ TEST_F(SecurityAclTest, CreatorOwnerSidExpandsOnInheritedAce) {
     auto h = core::CreateWin32File(child_file, GENERIC_WRITE, core::kShareAll,
                                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(core::WriteAllBytes(h.value->get(), "creator-owner-ok", 16));
+    ASSERT_WIN32_OK(
+        core::WriteAllBytes(h.value->get(), "creator-owner-ok", 16));
   }
   auto child_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"co_parent\\co_child.dat"));
@@ -1905,7 +1907,8 @@ TEST_F(SecurityAclTest, DirectoryAddFileVsAddSubdirectoryRightsDistinct) {
         core::CreateWin32File(allowed_file, GENERIC_WRITE, core::kShareAll,
                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(created_file) << core::FormatWin32Error(created_file.error);
-    ASSERT_TRUE(core::WriteAllBytes(created_file.value->get(), "file-ok", 7));
+    ASSERT_WIN32_OK(
+        core::WriteAllBytes(created_file.value->get(), "file-ok", 7));
 
     const std::wstring blocked_sub = dir_a + L"\\blocked_subdir";
     EXPECT_WIN32_ERROR(::CreateDirectoryW(blocked_sub.c_str(), nullptr),
@@ -1952,11 +1955,11 @@ TEST_F(SecurityAclTest, ObjectInheritOnlyVsContainerInheritOnly) {
     ASSERT_WIN32_TRUE(::CreateDirectoryW(oi_parent.c_str(), nullptr));
     auto oi_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"oi_only_parent"));
     ASSERT_TRUE(oi_guard.armed());
-    ASSERT_TRUE(SetProtectedInheritableDacl(
+    ASSERT_WIN32_OK(SetProtectedInheritableDacl(
         oi_parent, L"D:P(A;OI;0x00000008;;;AU)(A;OICI;FA;;;WD)"));
 
     const std::wstring child_file = oi_parent + L"\\child.dat";
-    ASSERT_TRUE(core::WriteFileContents(child_file, "oi-file"));
+    ASSERT_WIN32_OK(core::WriteFileContents(child_file, "oi-file"));
     {
       auto buf = QueryRawFileSecurity(child_file, DACL_SECURITY_INFORMATION);
       ASSERT_TRUE(buf) << core::FormatWin32Error(buf.error);
@@ -1983,7 +1986,7 @@ TEST_F(SecurityAclTest, ObjectInheritOnlyVsContainerInheritOnly) {
     }
 
     const std::wstring gc_file = child_dir + L"\\grandchild.dat";
-    ASSERT_TRUE(core::WriteFileContents(gc_file, "oi-gc-file"));
+    ASSERT_WIN32_OK(core::WriteFileContents(gc_file, "oi-gc-file"));
     {
       auto buf = QueryRawFileSecurity(gc_file, DACL_SECURITY_INFORMATION);
       ASSERT_TRUE(buf) << core::FormatWin32Error(buf.error);
@@ -2004,11 +2007,11 @@ TEST_F(SecurityAclTest, ObjectInheritOnlyVsContainerInheritOnly) {
     ASSERT_WIN32_TRUE(::CreateDirectoryW(ci_parent.c_str(), nullptr));
     auto ci_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"ci_only_parent"));
     ASSERT_TRUE(ci_guard.armed());
-    ASSERT_TRUE(SetProtectedInheritableDacl(
+    ASSERT_WIN32_OK(SetProtectedInheritableDacl(
         ci_parent, L"D:P(A;CI;0x00000010;;;AU)(A;OICI;FA;;;WD)"));
 
     const std::wstring child_file = ci_parent + L"\\child.dat";
-    ASSERT_TRUE(core::WriteFileContents(child_file, "ci-file"));
+    ASSERT_WIN32_OK(core::WriteFileContents(child_file, "ci-file"));
     {
       auto buf = QueryRawFileSecurity(child_file, DACL_SECURITY_INFORMATION);
       ASSERT_TRUE(buf) << core::FormatWin32Error(buf.error);
@@ -2032,7 +2035,7 @@ TEST_F(SecurityAclTest, ObjectInheritOnlyVsContainerInheritOnly) {
     const std::wstring gc_dir = child_dir + L"\\grandchild_dir";
     const std::wstring gc_file = child_dir + L"\\grandchild.dat";
     ASSERT_WIN32_TRUE(::CreateDirectoryW(gc_dir.c_str(), nullptr));
-    ASSERT_TRUE(core::WriteFileContents(gc_file, "ci-gc-file"));
+    ASSERT_WIN32_OK(core::WriteFileContents(gc_file, "ci-gc-file"));
     {
       auto dir_buf = QueryRawFileSecurity(gc_dir, DACL_SECURITY_INFORMATION);
       ASSERT_TRUE(dir_buf) << core::FormatWin32Error(dir_buf.error);
@@ -2067,7 +2070,7 @@ TEST_F(SecurityAclTest, SecurityObjectApisEnforceHandleAccessMasks) {
 
   const std::wstring path = TestPath(L"sec_handle_masks.dat");
   const std::wstring nt_path = TestNtPath(L"sec_handle_masks.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "mask-enforcement"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "mask-enforcement"));
   auto dacl_guard = core::ScopedDaclRestore::Arm(nt_path);
   ASSERT_TRUE(dacl_guard.armed());
 
@@ -2283,7 +2286,7 @@ TEST_F(SecurityAclTest, SetSecurityRejectsTruncatedDaclHeader) {
 // handle's granted access.
 TEST_F(SecurityAclTest, FileAccessInformationReportsMappedGenericRead) {
   const std::wstring path = TestPath(L"access_info_generic.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "access-info"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "access-info"));
 
   auto h = core::NtOpenFilePath(TestNtPath(L"access_info_generic.dat"),
                                 GENERIC_READ, core::kShareAll, 0);
@@ -2420,7 +2423,7 @@ TEST_F(SecurityAclTest, CreatorGroupSidExpandsOnInheritedAce) {
   ASSERT_TRUE(set_parent) << core::FormatWin32Error(set_parent.error);
 
   const std::wstring child_file = parent + L"\\cg_child.dat";
-  ASSERT_TRUE(core::WriteFileContents(child_file, "creator-group"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child_file, "creator-group"));
 
   // The child's group SID is the creating token's primary group.
   {
@@ -2517,7 +2520,7 @@ TEST_F(SecurityAclTest, RenameAllowedByParentDeleteChildWhenFileDeniesDelete) {
 
   const std::wstring src = parent + L"\\src.dat";
   const std::wstring dst = parent + L"\\renamed.dat";
-  ASSERT_TRUE(core::WriteFileContents(src, "rename-me"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "rename-me"));
   auto file_guard =
       core::ScopedDaclRestore::Arm(TestNtPath(L"ren_delchild_parent\\src.dat"));
   ASSERT_TRUE(file_guard.armed());
@@ -2558,7 +2561,7 @@ TEST_F(SecurityAclTest, RenameDeniedWithoutDeleteOrParentDeleteChild) {
 
   const std::wstring src = parent + L"\\src.dat";
   const std::wstring dst = parent + L"\\renamed.dat";
-  ASSERT_TRUE(core::WriteFileContents(src, "stay-put"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "stay-put"));
   auto file_guard = core::ScopedDaclRestore::Arm(
       TestNtPath(L"ren_no_delchild_parent\\src.dat"));
   ASSERT_TRUE(file_guard.armed());

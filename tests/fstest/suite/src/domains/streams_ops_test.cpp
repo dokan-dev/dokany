@@ -154,11 +154,11 @@ TEST_F(StreamsTest, PerStreamDataAndSizeIndependentOfDefaultStream) {
   const std::string data_a(250, 'A');
   const std::string data_b = "1234567";
 
-  ASSERT_TRUE(core::WriteFileContents(base, data_main));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, data_main));
   const int64_t backdated_time = core::MakeUtcFileTimeInt64(2020, 6, 1);
   ASSERT_TRUE(BackdateAllTimes(base, backdated_time));
-  ASSERT_TRUE(core::WriteFileContents(stream_a, data_a));
-  ASSERT_TRUE(core::WriteFileContents(stream_b, data_b));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_a, data_a));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_b, data_b));
 
   EXPECT_TRUE(helpers::CheckFileContents(base, data_main));
   EXPECT_TRUE(helpers::CheckFileContents(stream_a, data_a));
@@ -226,8 +226,8 @@ TEST_F(StreamsTest, StreamRenameReplaceAndNoReplace) {
   const std::wstring new_stream = base + L":new";
   const std::wstring dst_stream = base + L":dst";
 
-  ASSERT_TRUE(core::WriteFileContents(base, "primary"));
-  ASSERT_TRUE(core::WriteFileContents(old_stream, "payload-old"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "primary"));
+  ASSERT_WIN32_OK(core::WriteFileContents(old_stream, "payload-old"));
   // Per WDK / [MS-FSA] FILE_RENAME_INFORMATION, ReplaceIfExists=TRUE replaces
   // an existing stream when it is a zero-length data stream.
   {
@@ -273,8 +273,8 @@ TEST_F(StreamsTest, StreamRenameToNonStreamTargetFailsInvalidParameter) {
   const std::wstring base = TestPath(L"rename_nonstream.dat");
   const std::wstring src_stream = base + L":src";
 
-  ASSERT_TRUE(core::WriteFileContents(base, "primary"));
-  ASSERT_TRUE(core::WriteFileContents(src_stream, "payload-src"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "primary"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src_stream, "payload-src"));
 
   // Same-volume targets avoid CWD cross-device resolution.
   {
@@ -315,9 +315,9 @@ TEST_F(StreamsTest, StreamRenameReplaceNonEmptyTargetFailsInvalidParameter) {
   const std::string src_data = "source-stream-payload";
   const std::string dst_data = "non-empty-target-payload";
 
-  ASSERT_TRUE(core::WriteFileContents(base, base_data));
-  ASSERT_TRUE(core::WriteFileContents(src_stream, src_data));
-  ASSERT_TRUE(core::WriteFileContents(dst_stream, dst_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, base_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(src_stream, src_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(dst_stream, dst_data));
 
   {
     auto h =
@@ -358,9 +358,9 @@ TEST_F(StreamsTest, StreamTruncationIndependent) {
   const std::string payload_a(300, 'A');
   const std::string payload_b(200, 'B');
 
-  ASSERT_TRUE(core::WriteFileContents(base, payload_main));
-  ASSERT_TRUE(core::WriteFileContents(stream_a, payload_a));
-  ASSERT_TRUE(core::WriteFileContents(stream_b, payload_b));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, payload_main));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_a, payload_a));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_b, payload_b));
 
   // TRUNCATE_EXISTING on default stream leaves :a and :b intact.
   {
@@ -377,7 +377,7 @@ TEST_F(StreamsTest, StreamTruncationIndependent) {
     auto h = core::CreateWin32File(stream_a, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(SeekBegin(h.value->get(), 0));
+    ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
     ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
   }
   EXPECT_TRUE(helpers::CheckFileContents(stream_a, ""));
@@ -394,9 +394,9 @@ TEST_F(StreamsTest, StreamSharingModeIndependentPerStream) {
   const std::wstring stream_b = base + L":b";
   const std::wstring stream_default = base + L"::$DATA";
 
-  ASSERT_TRUE(core::WriteFileContents(base, "main"));
-  ASSERT_TRUE(core::WriteFileContents(stream_a, "alpha"));
-  ASSERT_TRUE(core::WriteFileContents(stream_b, "beta"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "main"));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_a, "alpha"));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_b, "beta"));
 
   // Exclusive write handle on :a.
   auto h_a1 = core::CreateWin32File(stream_a, GENERIC_WRITE, 0, OPEN_EXISTING,
@@ -429,8 +429,8 @@ TEST_F(StreamsTest, ReadOnlyFileBlocksStreamCreateModifyAndDelete) {
   const std::wstring existing_ads = base + L":existing";
   const std::wstring new_ads = base + L":newads";
 
-  ASSERT_TRUE(core::WriteFileContents(base, "base-ro"));
-  ASSERT_TRUE(core::WriteFileContents(existing_ads, "orig-ads"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "base-ro"));
+  ASSERT_WIN32_OK(core::WriteFileContents(existing_ads, "orig-ads"));
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(base.c_str(), FILE_ATTRIBUTE_READONLY));
 
@@ -456,7 +456,7 @@ TEST_F(StreamsTest, ReadOnlyFileBlocksStreamCreateModifyAndDelete) {
 
   // Clearing READONLY restores stream create/delete operations.
   ASSERT_WIN32_TRUE(::SetFileAttributesW(base.c_str(), FILE_ATTRIBUTE_NORMAL));
-  ASSERT_TRUE(core::WriteFileContents(new_ads, "now-writable"));
+  ASSERT_WIN32_OK(core::WriteFileContents(new_ads, "now-writable"));
   EXPECT_WIN32_TRUE(::DeleteFileW(existing_ads.c_str()));
 }
 
@@ -469,8 +469,8 @@ TEST_F(StreamsTest, StreamDeleteWhileOpenLegacyDeletePending) {
 
   const std::wstring base = TestPath(L"del_open_stream.dat");
   const std::wstring s = base + L":s";
-  ASSERT_TRUE(core::WriteFileContents(base, "default-payload"));
-  ASSERT_TRUE(core::WriteFileContents(s, "stream-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "default-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(s, "stream-payload"));
 
   {
     auto h1 = core::CreateWin32File(s, GENERIC_READ, core::kShareAll,
@@ -519,8 +519,8 @@ TEST_F(StreamsTest, StreamPosixDeleteWhileOpenStaysDeletePending) {
 
   const std::wstring base = TestPath(L"del_open_posix_stream.dat");
   const std::wstring p = base + L":p";
-  ASSERT_TRUE(core::WriteFileContents(base, "default-payload"));
-  ASSERT_TRUE(core::WriteFileContents(p, "posix-stream"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "default-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(p, "posix-stream"));
 
   {
     auto h1 = core::CreateWin32File(p, GENERIC_READ, core::kShareAll,
@@ -562,8 +562,8 @@ TEST_F(StreamsTest, PosixDeleteFileWhileStreamHandleOpenUnlinksName) {
 
   const std::wstring f2 = TestPath(L"del_open_posix_file.dat");
   const std::wstring f2_ads = f2 + L":keep";
-  ASSERT_TRUE(core::WriteFileContents(f2, "file-main"));
-  ASSERT_TRUE(core::WriteFileContents(f2_ads, "file-ads-alive"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f2, "file-main"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f2_ads, "file-ads-alive"));
   {
     auto h_ads = core::CreateWin32File(f2_ads, GENERIC_READ, core::kShareAll,
                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -597,7 +597,7 @@ TEST_F(StreamsTest, StreamCaseOnlyRenameAndSelfRename) {
   const std::wstring lower = base + L":mixed";
   const std::wstring mixed = base + L":MiXeD";
 
-  ASSERT_TRUE(core::WriteFileContents(lower, "preserve-bytes"));
+  ASSERT_WIN32_OK(core::WriteFileContents(lower, "preserve-bytes"));
 
   // On NTFS, a direct case-only stream rename (:mixed -> :MiXeD) succeeds as a
   // same-stream no-op (preserving bytes and original :mixed:$DATA casing),
@@ -642,7 +642,7 @@ TEST_F(StreamsTest, DefaultStreamRenameToNamedStreamMovesData) {
 
   const std::wstring base = TestPath(L"rename_default_to_named.dat");
   const std::string payload = "default-stream-payload";
-  ASSERT_TRUE(core::WriteFileContents(base, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, payload));
 
   {
     const auto renamed =
@@ -665,8 +665,8 @@ TEST_F(StreamsTest, NamedStreamRenameOntoEmptyDefaultStream) {
   const std::wstring base = TestPath(L"rename_named_to_default.dat");
   const std::wstring named = base + L":named";
   const std::string payload = "named-stream-payload";
-  ASSERT_TRUE(core::WriteFileContents(base, ""));
-  ASSERT_TRUE(core::WriteFileContents(named, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, ""));
+  ASSERT_WIN32_OK(core::WriteFileContents(named, payload));
 
   // The default stream always exists, so ReplaceIfExists=FALSE collides.
   {
@@ -700,8 +700,8 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
   const std::string base_payload = "base-unchanged-bytes";
   const std::string ads_updated = "ads-updated-payload-bytes";
 
-  ASSERT_TRUE(core::WriteFileContents(base, base_payload));
-  ASSERT_TRUE(core::WriteFileContents(ads, "ads-initial"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, base_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(ads, "ads-initial"));
 
   // Clear ARCHIVE and backdate all four timestamps on the base file.
   ASSERT_WIN32_TRUE(::SetFileAttributesW(base.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -729,8 +729,8 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
                                        FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h_ads) << core::FormatWin32Error(h_ads.error);
 
-    ASSERT_TRUE(core::WriteAllBytes(h_ads.value->get(), ads_updated.data(),
-                                    ads_updated.size()));
+    ASSERT_WIN32_OK(core::WriteAllBytes(h_ads.value->get(), ads_updated.data(),
+                                        ads_updated.size()));
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h_ads.value->get()));
 
     auto nt_name =
@@ -789,9 +789,9 @@ TEST_F(StreamsTest, StreamIndependentByteRangeLocks) {
   const std::wstring stream_b = base + L":b";
   const std::wstring stream_def = base + L"::$DATA";
 
-  ASSERT_TRUE(core::WriteFileContents(base, std::string(64, '0')));
-  ASSERT_TRUE(core::WriteFileContents(stream_a, std::string(64, 'A')));
-  ASSERT_TRUE(core::WriteFileContents(stream_b, std::string(64, 'B')));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, std::string(64, '0')));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_a, std::string(64, 'A')));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_b, std::string(64, 'B')));
 
   auto h_a1 = core::CreateWin32File(stream_a, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, OPEN_EXISTING,
@@ -838,10 +838,10 @@ TEST_F(StreamsTest, StreamIndependentByteRangeLocks) {
     ASSERT_WIN32_TRUE(::LockFileEx(
         sibling, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, 32, 0,
         &ov_sib));
-    ASSERT_TRUE(SeekBegin(sibling, 0));
+    ASSERT_WIN32_TRUE(SeekBegin(sibling, 0));
     ASSERT_WIN32_TRUE(::ReadFile(sibling, buf, 16, &xfer, nullptr));
     EXPECT_EQ(xfer, DWORD{16});
-    ASSERT_TRUE(SeekBegin(sibling, 0));
+    ASSERT_WIN32_TRUE(SeekBegin(sibling, 0));
     ASSERT_WIN32_TRUE(
         ::WriteFile(sibling, "fedcba9876543210", 16, &xfer, nullptr));
     EXPECT_EQ(xfer, DWORD{16});
@@ -871,7 +871,7 @@ TEST_F(StreamsTest, SparseNamedStreamZeroDataAndAllocatedRanges) {
 
   const std::wstring base = TestPath(L"sparse_ads.dat");
   const std::wstring sparse_ads = base + L":sparse";
-  ASSERT_TRUE(core::WriteFileContents(base, "primary-untouched"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "primary-untouched"));
 
   auto h =
       core::CreateWin32File(sparse_ads, GENERIC_READ | GENERIC_WRITE,
@@ -889,8 +889,8 @@ TEST_F(StreamsTest, SparseNamedStreamZeroDataAndAllocatedRanges) {
   // Allocate full 1 MiB in 64 KiB chunks.
   const std::vector<uint8_t> fill_chunk(static_cast<size_t>(kChunk), 0x5A);
   for (int i = 0; i < 16; ++i) {
-    ASSERT_TRUE(core::WriteAllBytes(h.value->get(), fill_chunk.data(),
-                                    fill_chunk.size()));
+    ASSERT_WIN32_OK(core::WriteAllBytes(h.value->get(), fill_chunk.data(),
+                                        fill_chunk.size()));
   }
 
   // Punch a 512 KiB sparse hole aligned to 64 KiB boundaries.
@@ -976,9 +976,9 @@ TEST_F(StreamsTest, BackupReadAndBackupWritePreservesStreams) {
   const std::string meta_payload = "Alternate stream :meta payload 12345.";
   const std::string extra_payload(4096, 'X');
 
-  ASSERT_TRUE(core::WriteFileContents(src, primary_payload));
-  ASSERT_TRUE(core::WriteFileContents(src + L":meta", meta_payload));
-  ASSERT_TRUE(core::WriteFileContents(src + L":extra", extra_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, primary_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":meta", meta_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":extra", extra_payload));
 
   // Read primary + all named ADS into memory via BackupRead.
   std::vector<uint8_t> backup_bytes;
@@ -1046,8 +1046,8 @@ TEST_F(StreamsTest, SecurityDescriptorSharedBetweenBaseFileAndAlternateStream) {
 
   const std::wstring base_path = TestPath(L"sd_ads.dat");
   const std::wstring stream_path = base_path + L":meta";
-  ASSERT_TRUE(core::WriteFileContents(base_path, "base-sd"));
-  ASSERT_TRUE(core::WriteFileContents(stream_path, "ads-sd"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base_path, "base-sd"));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream_path, "ads-sd"));
 
   auto dacl_guard = core::ScopedDaclRestore::Arm(TestNtPath(L"sd_ads.dat"));
   ASSERT_TRUE(dacl_guard.armed());

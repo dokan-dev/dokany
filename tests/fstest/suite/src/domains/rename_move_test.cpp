@@ -301,19 +301,19 @@ TEST_F(RenameMoveTest, MoveFileBasicReplaceAndReadOnlyTarget) {
   const std::wstring bar = TestPath(L"move_basic\\bar.dat");
   const std::wstring baz = TestPath(L"move_basic\\baz.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(foo, "foo_payload"));
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(core::WriteFileContents(foo, "foo_payload"));
+  ASSERT_WIN32_OK(
       core::WriteFileContents(baz, "baz_payload", FILE_ATTRIBUTE_READONLY));
 
   ASSERT_WIN32_TRUE(::MoveFileExW(foo.c_str(), bar.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(foo));
-  EXPECT_TRUE(core::QueryWin32Attributes(bar));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(bar));
 
   // Colliding without MOVEFILE_REPLACE_EXISTING fails ERROR_ALREADY_EXISTS.
   EXPECT_WIN32_ERROR(::MoveFileExW(bar.c_str(), baz.c_str(), 0),
                      ERROR_ALREADY_EXISTS);
-  EXPECT_TRUE(core::QueryWin32Attributes(bar));
-  EXPECT_TRUE(core::QueryWin32Attributes(baz));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(bar));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(baz));
 
   // Replacing a READONLY target fails ERROR_ACCESS_DENIED.
   EXPECT_WIN32_ERROR(
@@ -344,24 +344,24 @@ TEST_F(RenameMoveTest, MoveDirectoryReplaceFailsAndAfterRemoveSucceeds) {
 
   ASSERT_WIN32_TRUE(::MoveFileExW(foo.c_str(), bar.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(foo));
-  EXPECT_TRUE(core::QueryWin32Attributes(bar));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(bar));
 
   EXPECT_WIN32_ERROR(::MoveFileExW(bar.c_str(), baz.c_str(), 0),
                      ERROR_ALREADY_EXISTS);
-  EXPECT_TRUE(core::QueryWin32Attributes(bar));
-  EXPECT_TRUE(core::QueryWin32Attributes(baz));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(bar));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(baz));
 
   EXPECT_WIN32_ERROR(
       ::MoveFileExW(bar.c_str(), baz.c_str(), MOVEFILE_REPLACE_EXISTING),
       ERROR_ACCESS_DENIED);
-  EXPECT_TRUE(core::QueryWin32Attributes(bar));
-  EXPECT_TRUE(core::QueryWin32Attributes(baz));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(bar));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(baz));
 
   ASSERT_WIN32_TRUE(::RemoveDirectoryW(baz.c_str()));
   ASSERT_WIN32_TRUE(
       ::MoveFileExW(bar.c_str(), baz.c_str(), MOVEFILE_REPLACE_EXISTING));
   EXPECT_TRUE(helpers::CheckFileNotFound(bar));
-  EXPECT_TRUE(core::QueryWin32Attributes(baz));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(baz));
 
   EXPECT_WIN32_TRUE(::RemoveDirectoryW(baz.c_str()));
   EXPECT_WIN32_TRUE(::RemoveDirectoryW(dir.c_str()));
@@ -378,7 +378,7 @@ TEST_F(RenameMoveTest, MoveFileAcrossSubdirectories) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(foo.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(bar.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(src, "cross_dir_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "cross_dir_payload"));
 
   ASSERT_WIN32_TRUE(::MoveFileExW(src.c_str(), dst.c_str(), 0));
 
@@ -403,7 +403,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     const std::wstring p_mix = TestPath(L"case_file_dir\\Foo.DAT");
     const std::wstring p_alt = TestPath(L"case_file_dir\\fOo.DaT");
     ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
-    ASSERT_TRUE(core::WriteFileContents(p_low, "case_data"));
+    ASSERT_WIN32_OK(core::WriteFileContents(p_low, "case_data"));
 
     auto orig_idx = core::QueryPathFileIndex(p_low);
     ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
@@ -416,7 +416,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
       ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
       auto idx1 = core::GetFileIndex(h.value->get());
-      ASSERT_TRUE(idx1);
+      ASSERT_WIN32_OK(idx1);
       EXPECT_EQ(*idx1.value, *orig_idx.value);
 
       auto fp1 = core::QueryFinalPath(h.value->get(),
@@ -426,7 +426,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
           << "Final path: " << core::WideToUtf8(*fp1.value);
 
       auto data = core::ReadAllBytes(h.value->get());
-      ASSERT_TRUE(data);
+      ASSERT_WIN32_OK(data);
       EXPECT_EQ(*data.value, "case_data");
     }
 
@@ -435,7 +435,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     EXPECT_TRUE(helpers::CheckDirEntries(sub, {L".", L"..", L"fOo.DaT"}));
 
     auto idx2 = core::QueryPathFileIndex(p_alt);
-    ASSERT_TRUE(idx2);
+    ASSERT_WIN32_OK(idx2);
     EXPECT_EQ(*idx2.value, *orig_idx.value);
   }
 
@@ -458,7 +458,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
       auto h =
           core::CreateWin32File(d_up, FILE_READ_ATTRIBUTES, core::kShareAll,
                                 OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-      ASSERT_TRUE(h);
+      ASSERT_WIN32_OK(h);
       auto fp = core::QueryFinalPath(h.value->get(),
                                      VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
       ASSERT_TRUE(fp) << core::FormatWin32Error(fp.error);
@@ -471,7 +471,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     EXPECT_TRUE(helpers::CheckDirEntries(parent, {L".", L"..", L"Sub"}));
 
     auto idx2 = core::QueryPathFileIndex(d_mix, /*backup_semantics=*/true);
-    ASSERT_TRUE(idx2);
+    ASSERT_WIN32_OK(idx2);
     EXPECT_EQ(*idx2.value, *orig_idx.value);
   }
 }
@@ -486,21 +486,21 @@ TEST_F(RenameMoveTest, RenamePreservesFileIndexAndData) {
   const std::wstring p3 = TestPath(L"idx_dir_b\\other_dir.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir_a.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir_b.c_str(), nullptr));
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteFileContents(p1, "preserve_me_12345", FILE_ATTRIBUTE_HIDDEN));
 
   auto orig_idx = core::QueryPathFileIndex(p1);
   ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
   auto orig_attrs = core::QueryWin32Attributes(p1);
-  ASSERT_TRUE(orig_attrs);
+  ASSERT_WIN32_OK(orig_attrs);
 
   // Same-directory rename.
   ASSERT_WIN32_TRUE(::MoveFileExW(p1.c_str(), p2.c_str(), 0));
   auto idx2 = core::QueryPathFileIndex(p2);
-  ASSERT_TRUE(idx2);
+  ASSERT_WIN32_OK(idx2);
   EXPECT_EQ(*idx2.value, *orig_idx.value);
   auto attrs2 = core::QueryWin32Attributes(p2);
-  ASSERT_TRUE(attrs2);
+  ASSERT_WIN32_OK(attrs2);
   EXPECT_EQ(MaskPolicyAttributes(*attrs2.value),
             MaskPolicyAttributes(*orig_attrs.value));
   EXPECT_TRUE(helpers::CheckFileContents(p2, "preserve_me_12345"));
@@ -508,10 +508,10 @@ TEST_F(RenameMoveTest, RenamePreservesFileIndexAndData) {
   // Cross-directory move.
   ASSERT_WIN32_TRUE(::MoveFileExW(p2.c_str(), p3.c_str(), 0));
   auto idx3 = core::QueryPathFileIndex(p3);
-  ASSERT_TRUE(idx3);
+  ASSERT_WIN32_OK(idx3);
   EXPECT_EQ(*idx3.value, *orig_idx.value);
   auto attrs3 = core::QueryWin32Attributes(p3);
-  ASSERT_TRUE(attrs3);
+  ASSERT_WIN32_OK(attrs3);
   EXPECT_EQ(MaskPolicyAttributes(*attrs3.value),
             MaskPolicyAttributes(*orig_attrs.value));
   EXPECT_TRUE(helpers::CheckFileContents(p3, "preserve_me_12345"));
@@ -522,7 +522,7 @@ TEST_F(RenameMoveTest, RenamePreservesFileIndexAndData) {
 TEST_F(RenameMoveTest, RenameWhileOpenWithShareDelete) {
   const std::wstring src = TestPath(L"open_src.dat");
   const std::wstring dst = TestPath(L"open_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "hello"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "hello"));
 
   auto h1 =
       core::CreateWin32File(src, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
@@ -542,7 +542,7 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithShareDelete) {
   LARGE_INTEGER zero{};
   ASSERT_WIN32_TRUE(
       ::SetFilePointerEx(h1.value->get(), zero, nullptr, FILE_END));
-  ASSERT_TRUE(core::WriteAllBytes(h1.value->get(), "_world", 6));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "_world", 6));
   ASSERT_WIN32_TRUE(
       ::SetFilePointerEx(h1.value->get(), zero, nullptr, FILE_BEGIN));
   auto data = core::ReadAllBytes(h1.value->get());
@@ -558,7 +558,7 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithShareDelete) {
 TEST_F(RenameMoveTest, RenameWhileOpenWithoutShareDeleteFails) {
   const std::wstring src = TestPath(L"noshare_src.dat");
   const std::wstring dst = TestPath(L"noshare_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "locked"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "locked"));
 
   auto h1 = core::CreateWin32File(src, GENERIC_READ,
                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -568,7 +568,7 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithoutShareDeleteFails) {
   EXPECT_WIN32_ERROR(::MoveFileExW(src.c_str(), dst.c_str(), 0),
                      ERROR_SHARING_VIOLATION);
 
-  EXPECT_TRUE(core::QueryWin32Attributes(src));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(src));
   EXPECT_TRUE(helpers::CheckFileNotFound(dst));
 
   h1.value->reset();
@@ -584,7 +584,7 @@ TEST_F(RenameMoveTest, RenameDirectoryWithOpenDescendantFails) {
   const std::wstring renamed = TestPath(L"desc_top_renamed");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(top.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "descendant_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "descendant_data"));
 
   auto h_child = core::CreateWin32File(child, GENERIC_READ, core::kShareAll,
                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -592,7 +592,7 @@ TEST_F(RenameMoveTest, RenameDirectoryWithOpenDescendantFails) {
 
   EXPECT_WIN32_ERROR(::MoveFileExW(top.c_str(), renamed.c_str(), 0),
                      ERROR_ACCESS_DENIED);
-  EXPECT_TRUE(core::QueryWin32Attributes(top));
+  EXPECT_WIN32_OK(core::QueryWin32Attributes(top));
   EXPECT_TRUE(helpers::CheckFileNotFound(renamed));
 
   h_child.value->reset();
@@ -612,7 +612,7 @@ TEST_F(RenameMoveTest, RenameDirectoryIntoOwnSubtreeFails) {
   const std::wstring bad_direct = TestPath(L"self_tree\\moved");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(tree.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(keep, "intact"));
+  ASSERT_WIN32_OK(core::WriteFileContents(keep, "intact"));
 
   // On NTFS, moving a directory into a deeper descendant fails
   // ERROR_ACCESS_DENIED (open target-parent descendant), and moving into itself
@@ -646,9 +646,9 @@ TEST_F(RenameMoveTest, RenameFileOverExistingDirectoryFails) {
   const std::wstring existing_dir = TestPath(L"target_dir");
   const std::wstring inside = TestPath(L"target_dir\\inside.dat");
   const std::wstring empty_dir = TestPath(L"empty_target_dir");
-  ASSERT_TRUE(core::WriteFileContents(file, "file_bytes"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file, "file_bytes"));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(existing_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(inside, "dir_child"));
+  ASSERT_WIN32_OK(core::WriteFileContents(inside, "dir_child"));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(empty_dir.c_str(), nullptr));
 
   EXPECT_WIN32_ERROR(::MoveFileExW(file.c_str(), existing_dir.c_str(),
@@ -669,8 +669,8 @@ TEST_F(RenameMoveTest, RenameDirectoryOverExistingFileSemantics) {
   const std::wstring dir_item = TestPath(L"src_dir\\item.dat");
   const std::wstring target_file = TestPath(L"existing_file.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(src_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(dir_item, "dir_item"));
-  ASSERT_TRUE(core::WriteFileContents(target_file, "file_stays"));
+  ASSERT_WIN32_OK(core::WriteFileContents(dir_item, "dir_item"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target_file, "file_stays"));
 
   // Without MOVEFILE_REPLACE_EXISTING, colliding with an existing file fails
   // ERROR_ALREADY_EXISTS and leaves both intact.
@@ -702,21 +702,21 @@ TEST_F(RenameMoveTest, RenameDirectoryOverExistingFileSemantics) {
 // no-op preserving FileIndex and data with or without REPLACE_EXISTING.
 TEST_F(RenameMoveTest, RenameSameNameNoOp) {
   const std::wstring path = TestPath(L"same_name.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "same_content"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "same_content"));
 
   auto orig_idx = core::QueryPathFileIndex(path);
   ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(path.c_str(), path.c_str(), 0));
   auto idx1 = core::QueryPathFileIndex(path);
-  ASSERT_TRUE(idx1);
+  ASSERT_WIN32_OK(idx1);
   EXPECT_EQ(*idx1.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(path, "same_content"));
 
   ASSERT_WIN32_TRUE(
       ::MoveFileExW(path.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING));
   auto idx2 = core::QueryPathFileIndex(path);
-  ASSERT_TRUE(idx2);
+  ASSERT_WIN32_OK(idx2);
   EXPECT_EQ(*idx2.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(path, "same_content"));
 }
@@ -730,7 +730,7 @@ TEST_F(RenameMoveTest, NtFileRenameInfoRootDirectoryRelative) {
   const std::wstring dst_file = TestPath(L"nt_ren_dst\\moved_rel.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(src_dir.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dst_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(src_file, "relative_rename_bytes"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src_file, "relative_rename_bytes"));
 
   auto orig_idx = core::QueryPathFileIndex(src_file);
   ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
@@ -757,7 +757,7 @@ TEST_F(RenameMoveTest, NtFileRenameInfoRootDirectoryRelative) {
   EXPECT_TRUE(helpers::CheckFileNotFound(src_file));
 
   auto dst_idx = core::QueryPathFileIndex(dst_file);
-  ASSERT_TRUE(dst_idx);
+  ASSERT_WIN32_OK(dst_idx);
   EXPECT_EQ(*dst_idx.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(dst_file, "relative_rename_bytes"));
 }
@@ -767,8 +767,8 @@ TEST_F(RenameMoveTest, NtFileRenameInfoRootDirectoryRelative) {
 TEST_F(RenameMoveTest, FileRenameInfoReplaceOpenTargetNonPosixFails) {
   const std::wstring src = TestPath(L"nonposix_src.dat");
   const std::wstring dst = TestPath(L"nonposix_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "new_payload"));
-  ASSERT_TRUE(core::WriteFileContents(dst, "old_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "new_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(dst, "old_payload"));
 
   auto h_target = core::CreateWin32File(dst, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -797,21 +797,21 @@ TEST_F(RenameMoveTest, FileRenameInfoExPosixReplaceOpenTarget) {
 
   const std::wstring src = TestPath(L"posix_ren_src.dat");
   const std::wstring dst = TestPath(L"posix_ren_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "replacement_bytes"));
-  ASSERT_TRUE(core::WriteFileContents(dst, "original_open_bytes"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "replacement_bytes"));
+  ASSERT_WIN32_OK(core::WriteFileContents(dst, "original_open_bytes"));
 
   auto h_target = core::CreateWin32File(dst, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
   auto orig_idx = core::GetFileIndex(h_target.value->get());
-  ASSERT_TRUE(orig_idx);
+  ASSERT_WIN32_OK(orig_idx);
 
   auto h_src = core::CreateWin32File(
       src, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
   auto src_idx = core::GetFileIndex(h_src.value->get());
-  ASSERT_TRUE(src_idx);
+  ASSERT_WIN32_OK(src_idx);
 
   auto ren = core::SetRenameInfoEx(
       h_src.value->get(), TestNtPath(L"posix_ren_dst.dat"), nullptr,
@@ -823,14 +823,14 @@ TEST_F(RenameMoveTest, FileRenameInfoExPosixReplaceOpenTarget) {
 
   // New opens observe replacement bytes and source FileIndex.
   auto new_idx = core::QueryPathFileIndex(dst);
-  ASSERT_TRUE(new_idx);
+  ASSERT_WIN32_OK(new_idx);
   EXPECT_EQ(*new_idx.value, *src_idx.value);
   EXPECT_NE(*new_idx.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(dst, "replacement_bytes"));
 
   // Already-open handle to replaced target still reads original bytes.
   auto old_data = core::ReadAllBytes(h_target.value->get());
-  ASSERT_TRUE(old_data);
+  ASSERT_WIN32_OK(old_data);
   EXPECT_EQ(*old_data.value, "original_open_bytes");
 
   h_target.value->reset();
@@ -844,8 +844,8 @@ TEST_F(RenameMoveTest, FileRenameInfoExIgnoreReadOnlyTarget) {
 
   const std::wstring src = TestPath(L"ign_ro_src.dat");
   const std::wstring dst = TestPath(L"ign_ro_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "overwrite_ro_bytes"));
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "overwrite_ro_bytes"));
+  ASSERT_WIN32_OK(
       core::WriteFileContents(dst, "readonly_old", FILE_ATTRIBUTE_READONLY));
 
   auto h_src = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
@@ -884,17 +884,17 @@ TEST_F(RenameMoveTest, MoveNonEmptyDirectorySubtreeAcrossParents) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(parent_b.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(tree.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(nested.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(root_file, "root_payload"));
-  ASSERT_TRUE(core::WriteFileContents(deep_file, "deep_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(root_file, "root_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(deep_file, "deep_payload"));
 
   auto idx_tree = core::QueryPathFileIndex(tree, /*backup_semantics=*/true);
   auto idx_nested = core::QueryPathFileIndex(nested, /*backup_semantics=*/true);
   auto idx_root = core::QueryPathFileIndex(root_file);
   auto idx_deep = core::QueryPathFileIndex(deep_file);
-  ASSERT_TRUE(idx_tree);
-  ASSERT_TRUE(idx_nested);
-  ASSERT_TRUE(idx_root);
-  ASSERT_TRUE(idx_deep);
+  ASSERT_WIN32_OK(idx_tree);
+  ASSERT_WIN32_OK(idx_nested);
+  ASSERT_WIN32_OK(idx_root);
+  ASSERT_WIN32_OK(idx_deep);
 
   const std::wstring moved_tree = TestPath(L"sub_parent_b\\moved_tree");
   const std::wstring moved_nested =
@@ -918,10 +918,10 @@ TEST_F(RenameMoveTest, MoveNonEmptyDirectorySubtreeAcrossParents) {
       core::QueryPathFileIndex(moved_nested, /*backup_semantics=*/true);
   auto new_idx_root = core::QueryPathFileIndex(moved_root);
   auto new_idx_deep = core::QueryPathFileIndex(moved_deep);
-  ASSERT_TRUE(new_idx_tree);
-  ASSERT_TRUE(new_idx_nested);
-  ASSERT_TRUE(new_idx_root);
-  ASSERT_TRUE(new_idx_deep);
+  ASSERT_WIN32_OK(new_idx_tree);
+  ASSERT_WIN32_OK(new_idx_nested);
+  ASSERT_WIN32_OK(new_idx_root);
+  ASSERT_WIN32_OK(new_idx_deep);
   EXPECT_EQ(*new_idx_tree.value, *idx_tree.value);
   EXPECT_EQ(*new_idx_nested.value, *idx_nested.value);
   EXPECT_EQ(*new_idx_root.value, *idx_root.value);
@@ -936,7 +936,7 @@ TEST_F(RenameMoveTest, RenameDirectoryWhileDirectoryHandleOpen) {
   const std::wstring dst1 = TestPath(L"dir_self_blocked");
   const std::wstring dst2 = TestPath(L"dir_self_moved");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "still_here"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "still_here"));
 
   // Open handle on directory itself WITHOUT FILE_SHARE_DELETE blocks rename.
   {
@@ -977,7 +977,7 @@ TEST_F(RenameMoveTest, RenameDeletePendingFileFails) {
   const std::wstring src = TestPath(L"del_pend_src.dat");
   const std::wstring dst_a = TestPath(L"del_pend_dst_a.dat");
   const std::wstring dst_b = TestPath(L"del_pend_dst_b.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "doomed"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "doomed"));
 
   auto h1 = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -1073,8 +1073,8 @@ TEST_F(RenameMoveTest, RenameOverDataMappedTargetPreservesMappedView) {
   const std::wstring target = TestPath(L"map_ren_target.dat");
   const std::string src_bytes = "replacement_content";
   const std::string tgt_bytes = "mapped_target_content";
-  ASSERT_TRUE(core::WriteFileContents(src, src_bytes));
-  ASSERT_TRUE(core::WriteFileContents(target, tgt_bytes));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, src_bytes));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, tgt_bytes));
 
   auto h_target = core::CreateWin32File(target, GENERIC_READ | GENERIC_WRITE,
                                         core::kShareAll, OPEN_EXISTING,
@@ -1121,8 +1121,8 @@ TEST_F(RenameMoveTest, ReplaceFileWAtomicSwapPreservesCreationTimeAndBackup) {
   const std::wstring replacement = TestPath(L"replace_new.dat");
   const std::wstring backup = TestPath(L"replace_backup.dat");
 
-  ASSERT_TRUE(core::WriteFileContents(target, "original_target_v1"));
-  ASSERT_TRUE(core::WriteFileContents(replacement, "new_replacement_v2"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "original_target_v1"));
+  ASSERT_WIN32_OK(core::WriteFileContents(replacement, "new_replacement_v2"));
 
   const int64_t orig_ctime = core::MakeUtcFileTimeInt64(2020, 1, 1);
   const int64_t repl_ctime = core::MakeUtcFileTimeInt64(2021, 6, 15, 12, 0, 0);
@@ -1151,8 +1151,8 @@ TEST_F(RenameMoveTest, ConcurrentRenameAndEnumerateStress) {
   const std::wstring w0_b = TestPath(L"concurrent_ren_enum\\ren_w0_b.dat");
   const std::wstring w1_a = TestPath(L"concurrent_ren_enum\\ren_w1_a.dat");
   const std::wstring w1_b = TestPath(L"concurrent_ren_enum\\ren_w1_b.dat");
-  ASSERT_TRUE(core::WriteFileContents(w0_a, "w0_payload"));
-  ASSERT_TRUE(core::WriteFileContents(w1_a, "w1_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(w0_a, "w0_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(w1_a, "w1_payload"));
 
   // All worker state is heap-allocated and co-owned by each ScopedThread, so a
   // worker that is still running after a Join() timeout keeps its context (and
@@ -1242,7 +1242,7 @@ TEST_F(RenameMoveTest, RenameHardLinkOntoSiblingHardLink) {
   {
     const std::wstring link_a = TestPath(L"hl_ren_a.dat");
     const std::wstring link_b = TestPath(L"hl_ren_b.dat");
-    ASSERT_TRUE(core::WriteFileContents(link_a, "hardlink_rename_payload"));
+    ASSERT_WIN32_OK(core::WriteFileContents(link_a, "hardlink_rename_payload"));
     ASSERT_WIN32_TRUE(
         ::CreateHardLinkW(link_b.c_str(), link_a.c_str(), nullptr));
 
@@ -1270,7 +1270,8 @@ TEST_F(RenameMoveTest, RenameHardLinkOntoSiblingHardLink) {
   {
     const std::wstring link_c = TestPath(L"hl_ren_c.dat");
     const std::wstring link_d = TestPath(L"hl_ren_d.dat");
-    ASSERT_TRUE(core::WriteFileContents(link_c, "hardlink_same_fcb_payload"));
+    ASSERT_WIN32_OK(
+        core::WriteFileContents(link_c, "hardlink_same_fcb_payload"));
     ASSERT_WIN32_TRUE(
         ::CreateHardLinkW(link_d.c_str(), link_c.c_str(), nullptr));
 
@@ -1308,9 +1309,9 @@ TEST_F(RenameMoveTest, RenamePreservesAlternateDataStreams) {
   };
 
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(src, main_data));
-  ASSERT_TRUE(core::WriteFileContents(src + L":ads1", ads1_data));
-  ASSERT_TRUE(core::WriteFileContents(src + L":ads2", ads2_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, main_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":ads1", ads1_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":ads2", ads2_data));
   ASSERT_TRUE(CheckStreamsWithSizes(src, expected_streams));
 
   // Same-directory rename via Win32 MoveFileExW preserves all streams.
@@ -1353,8 +1354,8 @@ TEST_F(RenameMoveTest, PosixRenameReplacesDataMappedTarget) {
   const std::wstring nt_target = TestNtPath(L"posix_map_target.dat");
   const std::string src_bytes = "posix_replacement_bytes";
   const std::string tgt_bytes = "posix_mapped_old_target";
-  ASSERT_TRUE(core::WriteFileContents(src, src_bytes));
-  ASSERT_TRUE(core::WriteFileContents(target, tgt_bytes));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, src_bytes));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, tgt_bytes));
 
   auto h_target = core::CreateWin32File(target, GENERIC_READ | GENERIC_WRITE,
                                         core::kShareAll, OPEN_EXISTING,
@@ -1449,7 +1450,7 @@ TEST_F(RenameMoveTest, RenameMissingTargetParentFailsPathNotFound) {
   const std::wstring src = TestPath(L"no_parent_src.dat");
   const std::wstring missing_parent = TestPath(L"no_such_parent");
   const std::wstring dst = TestPath(L"no_such_parent\\moved.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "stay_put"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "stay_put"));
 
   EXPECT_WIN32_ERROR(::MoveFileExW(src.c_str(), dst.c_str(), 0),
                      ERROR_PATH_NOT_FOUND);
@@ -1482,8 +1483,8 @@ TEST_F(RenameMoveTest, RenameReadOnlySourceSucceedsAndKeepsReadOnly) {
   const std::wstring cross_dir_dst = TestPath(L"ro_src_other_dir\\moved.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(other_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(src, "readonly_payload",
-                                      FILE_ATTRIBUTE_READONLY));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "readonly_payload",
+                                          FILE_ATTRIBUTE_READONLY));
 
   auto orig_idx = core::QueryPathFileIndex(src);
   ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
@@ -1518,8 +1519,8 @@ TEST_F(RenameMoveTest, RenameReadOnlySourceSucceedsAndKeepsReadOnly) {
 TEST_F(RenameMoveTest, RenameOntoDeletePendingTargetFailsAccessDenied) {
   const std::wstring src = TestPath(L"dp_target_src.dat");
   const std::wstring target = TestPath(L"dp_target_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "replacement_payload"));
-  ASSERT_TRUE(core::WriteFileContents(target, "doomed_target"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "replacement_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "doomed_target"));
 
   auto h_target =
       core::CreateWin32File(target, DELETE | SYNCHRONIZE, core::kShareAll,
@@ -1557,7 +1558,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveWithoutCopyAllowedFailsNotSameDevice) {
 
   const std::wstring src = TestPath(L"xvol_plain_src.dat");
   const std::wstring dst = other.Track(L"xvol_plain_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "cross_volume_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "cross_volume_payload"));
 
   EXPECT_WIN32_ERROR(::MoveFileExW(src.c_str(), dst.c_str(), 0),
                      ERROR_NOT_SAME_DEVICE);
@@ -1591,7 +1592,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedOutOfVolumeDeletesSource) {
 
   const std::wstring src = TestPath(L"xvol_out_src.dat");
   const std::wstring dst = other.Track(L"xvol_out_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "moved_out_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "moved_out_payload"));
 
   ASSERT_WIN32_TRUE(
       ::MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_COPY_ALLOWED));
@@ -1613,7 +1614,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveCopyAllowedIntoVolumeCreatesTarget) {
 
   const std::wstring src = other.Track(L"xvol_in_src.dat");
   const std::wstring dst = TestPath(L"xvol_in_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "moved_in_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "moved_in_payload"));
 
   ASSERT_WIN32_TRUE(
       ::MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_COPY_ALLOWED));
