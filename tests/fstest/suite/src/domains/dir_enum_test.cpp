@@ -1303,7 +1303,7 @@ TEST_F(DirEnumTest, FindFilesMetadataMatchesGetFileInformation) {
   const std::wstring file_path = core::JoinPath(sub, L"sample.dat");
   const std::wstring nested_dir = core::JoinPath(sub, L"nested_dir");
   const std::string payload(1234, 'M');
-  ASSERT_TRUE(core::WriteFileContents(
+  ASSERT_WIN32_OK(core::WriteFileContents(
       file_path, payload, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(nested_dir.c_str(), nullptr));
 
@@ -1363,7 +1363,7 @@ TEST_F(DirEnumTest, FindFilesMetadataMatchesGetFileInformation) {
 // STATUS_INVALID_PARAMETER on NT handles and ERROR_DIRECTORY on FindFirstFileW.
 TEST_F(DirEnumTest, EnumerateRegularFileFailsNotDirectory) {
   const std::wstring file_path = TestPath(L"regular.dat");
-  ASSERT_TRUE(core::WriteFileContents(file_path, "not a directory"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "not a directory"));
 
   auto fh = core::CreateWin32File(file_path, FILE_READ_DATA | SYNCHRONIZE,
                                   core::kShareAll, OPEN_EXISTING,
@@ -1456,8 +1456,8 @@ TEST_F(DirEnumTest, NtQueryDirectoryIdFullAndIdExtdInfoClasses) {
   const std::wstring path_b = core::JoinPath(sub, L"file_b.dat");
   const std::wstring path_d = core::JoinPath(sub, L"nested");
 
-  ASSERT_TRUE(core::WriteFileContents(path_a, data_a));
-  ASSERT_TRUE(core::WriteFileContents(path_b, data_b));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_a, data_a));
+  ASSERT_WIN32_OK(core::WriteFileContents(path_b, data_b));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(path_d.c_str(), nullptr));
 
   const ExpectedFileIds ids_a =
@@ -1745,7 +1745,7 @@ TEST_F(DirEnumTest, FileIdExtdDirectoryInfoReportsReparseTag) {
   const std::wstring plain_path = core::JoinPath(sub, L"plain.dat");
   auto jres = core::CreateDirectoryJunction(junc_path, target_dir);
   ASSERT_TRUE(jres) << core::FormatWin32Error(jres.error);
-  ASSERT_TRUE(core::WriteFileContents(plain_path, "plain-file"));
+  ASSERT_WIN32_OK(core::WriteFileContents(plain_path, "plain-file"));
 
   const ExpectedFileIds junc_ids =
       QueryFileIds(junc_path, /*is_dir=*/true, /*include_id128=*/true,

@@ -287,7 +287,7 @@ TEST_F(TimestampsAttrsTest, DirectoryAttributesPreserveDirectoryBit) {
 // 100-nanosecond FILETIME resolution.
 TEST_F(TimestampsAttrsTest, HundredNanosecondFiletimePrecisionRoundTrip) {
   const std::wstring path = TestPath(L"precision_100ns.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "100ns_precision"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "100ns_precision"));
 
   const int64_t t_create =
       core::MakeUtcFileTimeInt64(2021, 3, 14, 15, 9, 26) + 1234567;
@@ -332,7 +332,7 @@ TEST_F(TimestampsAttrsTest, HundredNanosecondFiletimePrecisionRoundTrip) {
 // the other three timestamps.)
 TEST_F(TimestampsAttrsTest, ExplicitChangeTimeRoundTripsIndependently) {
   const std::wstring path = TestPath(L"explicit_change_time.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "explicit_change_time"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "explicit_change_time"));
 
   const int64_t t_write =
       core::MakeUtcFileTimeInt64(2023, 9, 17, 8, 42, 19) + 3141593;
@@ -364,7 +364,7 @@ TEST_F(TimestampsAttrsTest, ExplicitChangeTimeRoundTripsIndependently) {
 // LastWriteTime and ChangeTime while preserving CreationTime.
 TEST_F(TimestampsAttrsTest, WriteUpdatesLastWriteTimeAndChangeTime) {
   const std::wstring path = TestPath(L"write_updates_ts.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -374,7 +374,7 @@ TEST_F(TimestampsAttrsTest, WriteUpdatesLastWriteTimeAndChangeTime) {
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
     const std::string payload = "updated_payload";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), payload.data(), payload.size()));
   }
 
@@ -389,7 +389,7 @@ TEST_F(TimestampsAttrsTest, WriteUpdatesLastWriteTimeAndChangeTime) {
 // advances ChangeTime without modifying LastWriteTime or CreationTime.
 TEST_F(TimestampsAttrsTest, MetadataChangeUpdatesChangeTimeNotLastWriteTime) {
   const std::wstring path = TestPath(L"meta_updates_ctime.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "metadata_only"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "metadata_only"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -416,7 +416,7 @@ TEST_F(TimestampsAttrsTest, ParentDirLastWriteTimeOnChildCreateDeleteNotWrite) {
 
   // Creating a child file advances parent directory LastWriteTime.
   ASSERT_TRUE(BackdateAndVerifyAllTimes(dir, kPast, /*is_directory=*/true));
-  ASSERT_TRUE(core::WriteFileContents(child, "initial_child"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "initial_child"));
 
   auto after_create = helpers::QueryPathBasicInfo(dir);
   ASSERT_TRUE(after_create) << after_create.Describe();
@@ -429,7 +429,8 @@ TEST_F(TimestampsAttrsTest, ParentDirLastWriteTimeOnChildCreateDeleteNotWrite) {
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
     const std::string more = "additional_child_bytes_written";
-    ASSERT_TRUE(core::WriteAllBytes(h.value->get(), more.data(), more.size()));
+    ASSERT_WIN32_OK(
+        core::WriteAllBytes(h.value->get(), more.data(), more.size()));
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h.value->get()));
   }
 
@@ -449,7 +450,8 @@ TEST_F(TimestampsAttrsTest, ParentDirLastWriteTimeOnChildCreateDeleteNotWrite) {
 // both advance LastWriteTime and set FILE_ATTRIBUTE_ARCHIVE.
 TEST_F(TimestampsAttrsTest, SetEndOfFileAndTruncateUpdateLastWriteAndArchive) {
   const std::wstring path = TestPath(L"eof_trunc_ts_archive.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial_data_for_eof_truncation"));
+  ASSERT_WIN32_OK(
+      core::WriteFileContents(path, "initial_data_for_eof_truncation"));
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
 
   // Part 1: SetEndOfFile advances LastWriteTime and sets ARCHIVE.
@@ -461,7 +463,7 @@ TEST_F(TimestampsAttrsTest, SetEndOfFileAndTruncateUpdateLastWriteAndArchive) {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
-    ASSERT_TRUE(SeekBegin(h.value->get(), 10));
+    ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 10));
     ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
   }
 
@@ -494,7 +496,7 @@ TEST_F(TimestampsAttrsTest, SetEndOfFileAndTruncateUpdateLastWriteAndArchive) {
 // automatic LastWriteTime updates for that handle until a new handle writes.
 TEST_F(TimestampsAttrsTest, SentinelMinusOneFreezesTimestampUpdates) {
   const std::wstring path = TestPath(L"sentinel_minus_one.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "init"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "init"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -511,7 +513,8 @@ TEST_F(TimestampsAttrsTest, SentinelMinusOneFreezesTimestampUpdates) {
     ASSERT_NT_SUCCESS(core::SetBasicInfo(h2.value->get(), freeze).status);
 
     const std::string data = "frozen_write_on_h2";
-    ASSERT_TRUE(core::WriteAllBytes(h2.value->get(), data.data(), data.size()));
+    ASSERT_WIN32_OK(
+        core::WriteAllBytes(h2.value->get(), data.data(), data.size()));
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h2.value->get()));
   }
 
@@ -525,7 +528,8 @@ TEST_F(TimestampsAttrsTest, SentinelMinusOneFreezesTimestampUpdates) {
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
     const std::string data = "resumed_write_on_h3";
-    ASSERT_TRUE(core::WriteAllBytes(h3.value->get(), data.data(), data.size()));
+    ASSERT_WIN32_OK(
+        core::WriteAllBytes(h3.value->get(), data.data(), data.size()));
   }
 
   auto after_h3 = helpers::QueryPathBasicInfo(path);
@@ -547,7 +551,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusTwoRestoresTimestampUpdates) {
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1809);
 
   const std::wstring path = TestPath(L"sentinel_minus_two.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "init"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "init"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -564,7 +568,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusTwoRestoresTimestampUpdates) {
     ASSERT_NT_SUCCESS(core::SetBasicInfo(h2.value->get(), freeze).status);
 
     const std::string data1 = "step1_frozen";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), data1.data(), data1.size()));
 
     auto mid = core::QueryBasicInfo(h2.value->get());
@@ -578,7 +582,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusTwoRestoresTimestampUpdates) {
     ASSERT_NT_SUCCESS(core::SetBasicInfo(h2.value->get(), unfreeze).status);
 
     const std::string data2 = "step2_unfrozen";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), data2.data(), data2.size()));
   }
 
@@ -591,7 +595,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusTwoRestoresTimestampUpdates) {
 // strictly below -2 fail with STATUS_INVALID_PARAMETER.
 TEST_F(TimestampsAttrsTest, InvalidNegativeTimestampLessThanMinusTwoFails) {
   const std::wstring path = TestPath(L"sentinel_invalid.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "bad_sentinel"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "bad_sentinel"));
 
   auto h = core::CreateWin32File(
       path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
@@ -694,7 +698,7 @@ TEST_F(TimestampsAttrsTest, ArchiveBitSetOnCreateAndWriteAfterClear) {
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
     const std::string dirty = "dirty_archive_write";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), dirty.data(), dirty.size()));
   }
 
@@ -732,7 +736,7 @@ TEST_F(TimestampsAttrsTest, TemporaryAndNotContentIndexedAttributes) {
 TEST_F(TimestampsAttrsTest,
        HandleExplicitSetFileTimeFreezesSubsequentAutoUpdateOnSameHandle) {
   const std::wstring path = TestPath(L"explicit_sft_freeze.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   const FILETIME ft_past = helpers::Int64ToFileTime(kPast);
@@ -748,7 +752,7 @@ TEST_F(TimestampsAttrsTest,
 
     // Keep H1 open and write on H1 -> LastWriteTime stays frozen at kPast.
     const std::string data1 = "written_while_frozen_on_h1";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h1.value->get(), data1.data(), data1.size()));
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h1.value->get()));
 
@@ -769,7 +773,7 @@ TEST_F(TimestampsAttrsTest,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
     const std::string data2 = "written_on_h2_advances";
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), data2.data(), data2.size()));
   }
 
@@ -786,7 +790,7 @@ TEST_F(TimestampsAttrsTest,
        SetFileAttributesDirectoryBitIgnoredAndAttributesExMatches) {
   const std::wstring path = TestPath(L"attr_ex_match.dat");
   constexpr size_t kSize = 1234;
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(kSize, 'E')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(kSize, 'E')));
 
   const int64_t t_create =
       core::MakeUtcFileTimeInt64(2021, 2, 3, 4, 5, 6) + 1111111;
@@ -923,7 +927,7 @@ TEST_F(TimestampsAttrsTest, SetFileAttributesCannotClearSparseFlag) {
 TEST_F(TimestampsAttrsTest, RenameUpdatesChangeTimeNotLastWriteTime) {
   const std::wstring src = TestPath(L"ctime_rename_src.dat");
   const std::wstring dst = TestPath(L"ctime_rename_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "rename_ctime"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "rename_ctime"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(src, kPast));
@@ -945,7 +949,7 @@ TEST_F(TimestampsAttrsTest, HardLinkCreationUpdatesChangeTimeNotLastWriteTime) {
 
   const std::wstring path = TestPath(L"ctime_link_target.dat");
   const std::wstring link = TestPath(L"ctime_link_alias.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "link_ctime"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "link_ctime"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -965,7 +969,7 @@ TEST_F(TimestampsAttrsTest, SecurityChangeUpdatesChangeTimeNotLastWriteTime) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   const std::wstring path = TestPath(L"ctime_security.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "security_ctime"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "security_ctime"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -1008,7 +1012,7 @@ TEST_F(TimestampsAttrsTest, ReadKeepsLastAccessTimeWhenUpdatesDisabled) {
   REQUIRE_HOST_LAST_ACCESS_POLICY(LastAccessPolicy::kDisabled);
 
   const std::wstring path = TestPath(L"atime_policy_disabled.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "atime_policy"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "atime_policy"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));
@@ -1033,7 +1037,7 @@ TEST_F(TimestampsAttrsTest, ReadAdvancesLastAccessTimeWhenUpdatesEnabled) {
   REQUIRE_HOST_LAST_ACCESS_POLICY(LastAccessPolicy::kEnabled);
 
   const std::wstring path = TestPath(L"atime_policy_enabled.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "atime_policy"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "atime_policy"));
 
   const int64_t kPast = core::MakeUtcFileTimeInt64(2020, 1, 1);
   ASSERT_TRUE(BackdateAndVerifyAllTimes(path, kPast));

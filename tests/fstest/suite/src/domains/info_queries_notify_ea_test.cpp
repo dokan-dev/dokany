@@ -602,7 +602,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
       auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
       ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
-      ASSERT_TRUE(core::WriteAllBytes(fh.value->get(), "updated-body", 12));
+      ASSERT_WIN32_OK(core::WriteAllBytes(fh.value->get(), "updated-body", 12));
       ::FlushFileBuffers(fh.value->get());
     }
     std::vector<NotifyRecord> mod_events;
@@ -642,7 +642,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesRenameOldAndNewName) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring before = core::JoinPath(watch_dir, L"before.txt");
   const std::wstring after = core::JoinPath(watch_dir, L"after.txt");
-  ASSERT_TRUE(core::WriteFileContents(before, "rename-me"));
+  ASSERT_WIN32_OK(core::WriteFileContents(before, "rename-me"));
 
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   AsyncDirWatcher watcher;
@@ -684,7 +684,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSubtreeRecursive) {
   ASSERT_WIN32_ERROR_CODE(
       watcher.Arm(FILE_NOTIFY_CHANGE_FILE_NAME, /*watch_subtree=*/true),
       ERROR_SUCCESS);
-  ASSERT_TRUE(core::WriteFileContents(nested, "deep-notify"));
+  ASSERT_WIN32_OK(core::WriteFileContents(nested, "deep-notify"));
 
   std::vector<NotifyRecord> add_events;
   auto add_res = CollectUntil(
@@ -721,7 +721,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesAttributesFilter) {
   const std::wstring watch_dir = TestPath(L"watch_attributes");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring target = core::JoinPath(watch_dir, L"target.dat");
-  ASSERT_TRUE(core::WriteFileContents(target, "abc"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "abc"));
 
   AsyncDirWatcher watcher;
   ASSERT_WIN32_ERROR_CODE(watcher.Open(watch_dir), ERROR_SUCCESS);
@@ -752,7 +752,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSizeFilter) {
   const std::wstring watch_dir = TestPath(L"watch_size");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring target = core::JoinPath(watch_dir, L"target.dat");
-  ASSERT_TRUE(core::WriteFileContents(target, "abc"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "abc"));
 
   // A data write sets FILE_ATTRIBUTE_ARCHIVE on NTFS. Set it up front so the
   // write below changes no attribute and FILE_NOTIFY_CHANGE_SIZE is the only
@@ -788,7 +788,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSizeFilter) {
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
     const std::string grown(512, 'Z');
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(fh.value->get(), grown.data(), grown.size()));
     ::FlushFileBuffers(fh.value->get());
   }
@@ -820,7 +820,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSmallBufferOverflow) {
   ASSERT_WIN32_ERROR_CODE(
       watcher.Arm(FILE_NOTIFY_CHANGE_FILE_NAME, /*watch_subtree=*/false),
       ERROR_SUCCESS);
-  ASSERT_TRUE(
+  ASSERT_WIN32_OK(
       core::WriteFileContents(core::JoinPath(ovf_dir, L"seed.txt"), "seed"));
   std::vector<NotifyRecord> seed_events;
   ASSERT_WIN32_ERROR_CODE(watcher.Wait(timeout_ms, &seed_events),
@@ -890,7 +890,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesExExtendedInfo) {
   ASSERT_WIN32_ERROR_CODE(watcher.Arm(kFilter, /*watch_subtree=*/false),
                           ERROR_SUCCESS);
 
-  ASSERT_TRUE(core::WriteFileContents(file_path, "hello-ext-notify"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, "hello-ext-notify"));
 
   auto expected_id = core::QueryPathFileIndex(file_path);
   ASSERT_TRUE(expected_id) << core::FormatWin32Error(expected_id.error);
@@ -929,7 +929,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
   const std::wstring target = core::JoinPath(watch_dir, L"target.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub_dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(target, "seed"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "seed"));
 
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   const DWORD quiet_ms = std::min<DWORD>(timeout_ms, 250u);
@@ -960,7 +960,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
       // control (sub-cluster size growth is covered separately by
       // ReadDirectoryChangesSizeFilter).
       const std::string grown(8192, 'S');
-      ASSERT_TRUE(
+      ASSERT_WIN32_OK(
           core::WriteAllBytes(fh.value->get(), grown.data(), grown.size()));
       ::FlushFileBuffers(fh.value->get());
     }
@@ -983,7 +983,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
         watcher.Arm(FILE_NOTIFY_CHANGE_FILE_NAME, /*watch_subtree=*/false),
         ERROR_SUCCESS);
 
-    ASSERT_TRUE(core::WriteFileContents(
+    ASSERT_WIN32_OK(core::WriteFileContents(
         core::JoinPath(sub_dir, L"nested_ignored.txt"), "sub-only"));
     std::vector<NotifyRecord> unexpected;
     EXPECT_WIN32_ERROR_CODE(watcher.Wait(quiet_ms, &unexpected), ERROR_TIMEOUT);
@@ -992,7 +992,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
     ASSERT_WIN32_ERROR_CODE(
         watcher.Arm(FILE_NOTIFY_CHANGE_FILE_NAME, /*watch_subtree=*/false),
         ERROR_SUCCESS);
-    ASSERT_TRUE(core::WriteFileContents(
+    ASSERT_WIN32_OK(core::WriteFileContents(
         core::JoinPath(watch_dir, L"direct_child.txt"), "direct"));
     std::vector<NotifyRecord> direct_events;
     auto direct_res = CollectUntil(
@@ -1100,7 +1100,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSecurityFilter) {
   const std::wstring watch_dir = TestPath(L"watch_security");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring sec_file = core::JoinPath(watch_dir, L"sec_target.dat");
-  ASSERT_TRUE(core::WriteFileContents(sec_file, "sec-notify"));
+  ASSERT_WIN32_OK(core::WriteFileContents(sec_file, "sec-notify"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   AsyncDirWatcher watcher;
@@ -1138,7 +1138,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesCrossDirectoryMove) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir_b.c_str(), nullptr));
   const std::wstring src = core::JoinPath(dir_a, L"cross.dat");
   const std::wstring dst = core::JoinPath(dir_b, L"cross.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "cross-dir"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "cross-dir"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   AsyncDirWatcher watcher;
@@ -1251,7 +1251,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamNameAddedStream) {
   const std::wstring watch_dir = TestPath(L"watch_stream_add");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring host = core::JoinPath(watch_dir, L"host.txt");
-  ASSERT_TRUE(core::WriteFileContents(host, "host"));
+  ASSERT_WIN32_OK(core::WriteFileContents(host, "host"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   AsyncDirWatcher watcher;
@@ -1292,8 +1292,8 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamSizeWriteModifiedStream) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(watch_dir.c_str(), nullptr));
   const std::wstring host = core::JoinPath(watch_dir, L"host.txt");
   const std::wstring stream = host + L":side";
-  ASSERT_TRUE(core::WriteFileContents(host, "host"));
-  ASSERT_TRUE(core::WriteFileContents(stream, "side"));
+  ASSERT_WIN32_OK(core::WriteFileContents(host, "host"));
+  ASSERT_WIN32_OK(core::WriteFileContents(stream, "side"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   constexpr DWORD kFilter =
@@ -1307,7 +1307,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamSizeWriteModifiedStream) {
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(sh) << core::FormatWin32Error(sh.error);
     const std::string grown(256, 'S');
-    ASSERT_TRUE(
+    ASSERT_WIN32_OK(
         core::WriteAllBytes(sh.value->get(), grown.data(), grown.size()));
     ::FlushFileBuffers(sh.value->get());
   }
@@ -1702,7 +1702,7 @@ TEST_F(InfoQueriesTest, ObjectIdCreateGetAndOpenByObjectId) {
 
   const std::wstring file_path = TestPath(L"oid_target.dat");
   const std::string payload = "object-id-payload";
-  ASSERT_TRUE(core::WriteFileContents(file_path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(file_path, payload));
 
   auto fh = core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                                   core::kShareAll, OPEN_EXISTING,
@@ -1771,7 +1771,7 @@ TEST_F(InfoQueriesTest, ObjectIdCreateGetAndOpenByObjectId) {
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_oid.get());
-    ASSERT_TRUE(idx);
+    ASSERT_WIN32_OK(idx);
     EXPECT_EQ(*idx.value, *orig_idx.value);
   }
 

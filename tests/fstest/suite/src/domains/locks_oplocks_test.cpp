@@ -891,7 +891,7 @@ private:
 // ERROR_LOCK_VIOLATION.
 TEST_F(LocksOplocksTest, ExclusiveLockBlocksConflictingLocksFromOtherHandle) {
   const std::wstring path = TestPath(L"lock_exclusive_locks.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'A')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -915,7 +915,7 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksConflictingLocksFromOtherHandle) {
 // non-overlapping reads succeed.
 TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingReadFromOtherHandle) {
   const std::wstring path = TestPath(L"lock_exclusive_read.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'A')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -945,7 +945,7 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingReadFromOtherHandle) {
 // leaves the locked bytes unmodified.
 TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingWriteFromOtherHandle) {
   const std::wstring path = TestPath(L"lock_exclusive_write.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'A')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -971,7 +971,7 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingWriteFromOtherHandle) {
 // byte-range lock can still read and write inside the locked range.
 TEST_F(LocksOplocksTest, ExclusiveLockOwnerCanReadAndWriteLockedRange) {
   const std::wstring path = TestPath(L"lock_exclusive_owner.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'A')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1001,7 +1001,7 @@ TEST_F(LocksOplocksTest, ExclusiveLockOwnerCanReadAndWriteLockedRange) {
 // range coexist across handles and still allow every holder to read it.
 TEST_F(LocksOplocksTest, SharedLocksCoexistAcrossHandlesAndAllowReads) {
   const std::wstring path = TestPath(L"lock_shared_coexist.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'B')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1027,7 +1027,7 @@ TEST_F(LocksOplocksTest, SharedLocksCoexistAcrossHandlesAndAllowReads) {
 // byte-range locks held by other handles fails ERROR_LOCK_VIOLATION.
 TEST_F(LocksOplocksTest, SharedLocksBlockExclusiveLockFromOtherHandle) {
   const std::wstring path = TestPath(L"lock_shared_excl.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'B')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1052,7 +1052,7 @@ TEST_F(LocksOplocksTest, SharedLocksBlockExclusiveLockFromOtherHandle) {
 // the handles that hold the shared lock.
 TEST_F(LocksOplocksTest, SharedLocksBlockWritesOnAllHandles) {
   const std::wstring path = TestPath(L"lock_shared_write.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'B')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1080,7 +1080,7 @@ TEST_F(LocksOplocksTest, SharedLocksBlockWritesOnAllHandles) {
 // with ERROR_LOCK_VIOLATION.
 TEST_F(LocksOplocksTest, SharedLockStackingAndSameHandleUpgradeConflict) {
   const std::wstring path = TestPath(L"lock_shared_stack.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'S')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'S')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1118,7 +1118,8 @@ TEST_F(LocksOplocksTest, SharedLockStackingAndSameHandleUpgradeConflict) {
 TEST_F(LocksOplocksTest, ByteRangeLockDoesNotBlockSetEndOfFileOrMappedIo) {
   const std::wstring path = TestPath(L"lock_eof_mmap.dat");
   constexpr size_t kInitialSize = 8192u;
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(kInitialSize, 'L')));
+  ASSERT_WIN32_OK(
+      core::WriteFileContents(path, std::string(kInitialSize, 'L')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1157,13 +1158,13 @@ TEST_F(LocksOplocksTest, ByteRangeLockDoesNotBlockSetEndOfFileOrMappedIo) {
 
   // SetEndOfFile (both extend and truncate inside locked [0, 4096)) succeeds
   // from H2 while H1 still holds the exclusive lock.
-  ASSERT_TRUE(SeekBegin(h2.value->get(), 12288));
+  ASSERT_WIN32_TRUE(SeekBegin(h2.value->get(), 12288));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h2.value->get()));
   LARGE_INTEGER sz{};
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h2.value->get(), &sz));
   EXPECT_EQ(sz.QuadPart, 12288);
 
-  ASSERT_TRUE(SeekBegin(h2.value->get(), 2048));
+  ASSERT_WIN32_TRUE(SeekBegin(h2.value->get(), 2048));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h2.value->get()));
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h2.value->get(), &sz));
   EXPECT_EQ(sz.QuadPart, 2048);
@@ -1181,7 +1182,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockDoesNotBlockSetEndOfFileOrMappedIo) {
 // boundary-straddling requests conflict, and locks beyond EOF do not grow EOF.
 TEST_F(LocksOplocksTest, NonOverlappingRangesAndBeyondEofLock) {
   const std::wstring path = TestPath(L"lock_ranges.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'C')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'C')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1219,7 +1220,7 @@ TEST_F(LocksOplocksTest, NonOverlappingRangesAndBeyondEofLock) {
 // and closing the owning handle automatically releases remaining locks.
 TEST_F(LocksOplocksTest, UnlockAndAutoReleaseOnHandleClose) {
   const std::wstring path = TestPath(L"lock_release.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'R')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'R')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1253,7 +1254,7 @@ TEST_F(LocksOplocksTest, UnlockAndAutoReleaseOnHandleClose) {
 // range whose offset/length does not exactly match fails ERROR_NOT_LOCKED.
 TEST_F(LocksOplocksTest, UnlockNonExistentOrMismatchedRangeFails) {
   const std::wstring path = TestPath(L"lock_mismatch.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'M')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'M')));
 
   auto h = OpenRw(path);
   ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
@@ -1276,7 +1277,7 @@ TEST_F(LocksOplocksTest, UnlockNonExistentOrMismatchedRangeFails) {
 // pends until the conflicting holder unlocks, then acquires the range cleanly.
 TEST_F(LocksOplocksTest, BlockingLockUnblocksWhenUnlocked) {
   const std::wstring path = TestPath(L"lock_blocking.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'K')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'K')));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   ::SetLastError(ERROR_SUCCESS);
@@ -1324,7 +1325,7 @@ TEST_F(LocksOplocksTest, BlockingLockUnblocksWhenUnlocked) {
 // pending blocking LockFileEx IRP with ERROR_OPERATION_ABORTED.
 TEST_F(LocksOplocksTest, CancelIoExAbortsPendingBlockingLock) {
   const std::wstring path = TestPath(L"lock_cancel_pending.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'X')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'X')));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   ::SetLastError(ERROR_SUCCESS);
@@ -1375,7 +1376,7 @@ TEST_F(LocksOplocksTest, OplockRequestReadAndBreakOnConflictingWriteOpen) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_rh_break.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial_oplock_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial_oplock_data"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1407,7 +1408,7 @@ TEST_F(LocksOplocksTest, OplockReadSharedDoesNotBreakOnReadOpen) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_read_shared.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "shared_read_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "shared_read_data"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1430,7 +1431,7 @@ TEST_F(LocksOplocksTest, OplockReadSharedDoesNotBreakOnReadOpen) {
 // (100, 0) unlock.
 TEST_F(LocksOplocksTest, ZeroLengthByteRangeLockSemantics) {
   const std::wstring path = TestPath(L"lock_zero_len.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'Z')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'Z')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1469,7 +1470,7 @@ TEST_F(LocksOplocksTest, ZeroLengthByteRangeLockSemantics) {
 TEST_F(LocksOplocksTest,
        SameHandleExclusiveLockConflictAndDuplicateHandleOwnership) {
   const std::wstring path = TestPath(L"lock_dup_owner.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'D')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'D')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1521,7 +1522,7 @@ TEST_F(LocksOplocksTest,
 // a locked extent fails ERROR_NOT_LOCKED and leaves the full lock intact.
 TEST_F(LocksOplocksTest, UnlockPartialSubRangeFailsNotLocked) {
   const std::wstring path = TestPath(L"lock_partial_unlock.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'P')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'P')));
 
   auto h1 = OpenRw(path);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
@@ -1550,7 +1551,7 @@ TEST_F(LocksOplocksTest, OplockRwhDowngradeToReadOnConflictingReadOpen) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_rwh_downgrade.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "rwh_downgrade_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "rwh_downgrade_payload"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1584,7 +1585,7 @@ TEST_F(LocksOplocksTest, OplockCompleteIfOplockedFlag) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_cio.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "complete_if_oplocked_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "complete_if_oplocked_data"));
   const std::wstring nt_path = TestNtPath(L"oplock_cio.dat");
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
@@ -1659,7 +1660,7 @@ TEST_F(LocksOplocksTest, OpenRequiringOplockAtomicGrant) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_open_requiring.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "atomic_oplock_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "atomic_oplock_data"));
   const std::wstring nt_path = TestNtPath(L"oplock_open_requiring.dat");
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
@@ -1732,7 +1733,7 @@ TEST_F(LocksOplocksTest, OpenRequiringOplockAcceptsSynchronousCreateOptions) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_open_requiring_sync.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "sync_atomic_oplock_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "sync_atomic_oplock_data"));
   const std::wstring nt_path = TestNtPath(L"oplock_open_requiring_sync.dat");
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
@@ -1767,7 +1768,7 @@ TEST_F(LocksOplocksTest, OplockBreakAckNo2TransitionsToNone) {
   const std::wstring path = TestPath(L"oplock_ack_no2.dat");
   const std::string payload = "ack_no2_payload";
   const std::string updated = "ack_no2_written";
-  ASSERT_TRUE(core::WriteFileContents(path, payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, payload));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1808,7 +1809,7 @@ TEST_F(LocksOplocksTest, OplockOpbatchAckClosePendingReleasesOpener) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_batch_close_pending.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "batch_close_pending_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "batch_close_pending_payload"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1840,7 +1841,7 @@ TEST_F(LocksOplocksTest, ExclusiveOplockRejectedWithMultipleHandles) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_two_handles.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "two_open_handles"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "two_open_handles"));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -1872,7 +1873,7 @@ TEST_F(LocksOplocksTest, Level1DowngradeToLevel2BrokenByWrite) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_l1_to_l2.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "level1_to_level2_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "level1_to_level2_payload"));
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   OplockHarness harness;
@@ -1910,7 +1911,7 @@ TEST_F(LocksOplocksTest, FilterOplockGrantedAndBrokenByWriteOpen) {
   REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
 
   const std::wstring path = TestPath(L"oplock_filter.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "filter_oplock_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "filter_oplock_payload"));
   const std::wstring nt_path = TestNtPath(L"oplock_filter.dat");
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
@@ -1946,7 +1947,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerWrite) {
 
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   const std::wstring path = TestPath(L"oplock_break_write.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial_write_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial_write_payload"));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -1955,7 +1956,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerWrite) {
 
   auto h2 = OpenRw(path);
   ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
-  ASSERT_TRUE(WriteAt(h2.value->get(), 0, "PEER_WRITE"));
+  ASSERT_WIN32_OK(WriteAt(h2.value->get(), 0, "PEER_WRITE"));
 
   ASSERT_TRUE(harness.WaitBreak(timeout_ms));
   EXPECT_EQ(harness.out_buf.OriginalOplockLevel,
@@ -1970,7 +1971,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerSetEndOfFile) {
 
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   const std::wstring path = TestPath(L"oplock_break_trunc.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "initial_truncate_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "initial_truncate_payload"));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -1979,7 +1980,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerSetEndOfFile) {
 
   auto h2 = OpenRw(path);
   ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
-  ASSERT_TRUE(SeekBegin(h2.value->get(), 4));
+  ASSERT_WIN32_TRUE(SeekBegin(h2.value->get(), 4));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h2.value->get()));
 
   ASSERT_TRUE(harness.WaitBreak(timeout_ms));
@@ -1997,7 +1998,7 @@ TEST_F(LocksOplocksTest, OplockRhBrokenByMoveFileEx) {
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   const std::wstring src = TestPath(L"oplock_break_move_src.dat");
   const std::wstring dst = TestPath(L"oplock_break_move_dst.dat");
-  ASSERT_TRUE(core::WriteFileContents(src, "move_oplock_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "move_oplock_payload"));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -2025,7 +2026,7 @@ TEST_F(LocksOplocksTest, OplockRhBrokenByDeleteFile) {
 
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   const std::wstring path = TestPath(L"oplock_break_delete.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "delete_oplock_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "delete_oplock_payload"));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -2053,7 +2054,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockBreaksReadOplock) {
   const std::wstring path = TestPath(L"oplock_break_lock_r.dat");
   // Only locks that start inside the file's allocation interfere with oplocks,
   // so use a non-resident file and lock its first page.
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(8192, 'O')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(8192, 'O')));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -2086,7 +2087,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockBreaksLevel2Oplock) {
   const std::wstring path = TestPath(L"oplock_break_lock_l2.dat");
   // Only locks that start inside the file's allocation interfere with oplocks,
   // so use a non-resident file and lock its first page.
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(8192, 'O')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(8192, 'O')));
 
   OplockHarness harness;
   ASSERT_TRUE(harness.Init());
@@ -2124,7 +2125,7 @@ TEST_F(LocksOplocksTest, OplockNotBrokenBySameOpenIoAndLock) {
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
   constexpr size_t kSize = 8192;
   const std::wstring path = TestPath(L"oplock_same_key.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(kSize, 'K')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(kSize, 'K')));
 
   ::SetLastError(ERROR_SUCCESS);
   core::UniqueHandle io_event(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -2204,7 +2205,7 @@ TEST_F(LocksOplocksTest, OplockNotBrokenBySameOpenIoAndLock) {
 // everything asserted here is observed from the test process.
 TEST_F(LocksOplocksTest, LockReleasedWhenOwnerProcessClosesDuplicatedHandle) {
   const std::wstring path = TestPath(L"lock_xproc_owner.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(256, 'X')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'X')));
 
   // H1 omits FILE_SHARE_DELETE so that the survival of its open (through the
   // duplicate held by the other process) is observable as a sharing violation.
@@ -2263,7 +2264,7 @@ TEST_F(LocksOplocksTest, ConcurrentLockUnlockAndReadWriteStress) {
   constexpr int kNumThreads = 4;
   constexpr int kIterations = 25;
 
-  ASSERT_TRUE(core::WriteFileContents(path, std::string(kFileSize, '\0')));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(kFileSize, '\0')));
 
   // Heap-allocated shared state and per-worker contexts are co-owned by the
   // worker threads (ScopedThread), so a worker that fails to exit within the

@@ -521,8 +521,8 @@ TEST_F(StreamsTest, NtQueryFileStreamInformationSmallBufferAndDir) {
   const std::wstring base = TestPath(L"nt_stream_info.dat");
   const std::string main_data(17, 'P');
   const std::string alpha_data(43, 'Q');
-  ASSERT_TRUE(core::WriteFileContents(base, main_data));
-  ASSERT_TRUE(core::WriteFileContents(base + L":alpha", alpha_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, main_data));
+  ASSERT_WIN32_OK(core::WriteFileContents(base + L":alpha", alpha_data));
 
   auto file_h = core::CreateWin32File(base, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                       core::kShareAll, OPEN_EXISTING,
@@ -583,7 +583,7 @@ TEST_F(StreamsTest, StreamCaseInsensitiveLookupAndPreservation) {
   REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
 
   const std::wstring base = TestPath(L"case_stream.dat");
-  ASSERT_TRUE(core::WriteFileContents(base + L":MixedStream", "case-data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base + L":MixedStream", "case-data"));
 
   EXPECT_TRUE(helpers::CheckFileContents(base + L":mixedstream", "case-data"));
   EXPECT_TRUE(helpers::CheckFileContents(base + L":MIXEDSTREAM", "case-data"));
@@ -597,8 +597,8 @@ TEST_F(StreamsTest, DeleteDefaultStreamByExplicitName) {
   REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
 
   const std::wstring f1 = TestPath(L"del_default_1.dat");
-  ASSERT_TRUE(core::WriteFileContents(f1, "main-1"));
-  ASSERT_TRUE(core::WriteFileContents(f1 + L":a", "alt-a"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f1, "main-1"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f1 + L":a", "alt-a"));
 
   // Deleting :a leaves f1 intact.
   ASSERT_WIN32_TRUE(::DeleteFileW((f1 + L":a").c_str()));
@@ -606,7 +606,7 @@ TEST_F(StreamsTest, DeleteDefaultStreamByExplicitName) {
   EXPECT_TRUE(helpers::CheckFileContents(f1, "main-1"));
 
   // Deleting f1::$DATA deletes the entire file and attached alternate streams.
-  ASSERT_TRUE(core::WriteFileContents(f1 + L":b", "alt-b"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f1 + L":b", "alt-b"));
   ASSERT_WIN32_TRUE(::DeleteFileW((f1 + L"::$DATA").c_str()));
   EXPECT_TRUE(helpers::CheckFileNotFound(f1));
   auto r1_b = core::ReadFileContents(f1 + L":b");
@@ -615,8 +615,8 @@ TEST_F(StreamsTest, DeleteDefaultStreamByExplicitName) {
 
   // Deleting plain f2 also deletes all attached streams.
   const std::wstring f2 = TestPath(L"del_default_2.dat");
-  ASSERT_TRUE(core::WriteFileContents(f2, "main-2"));
-  ASSERT_TRUE(core::WriteFileContents(f2 + L":c", "alt-c"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f2, "main-2"));
+  ASSERT_WIN32_OK(core::WriteFileContents(f2 + L":c", "alt-c"));
   ASSERT_WIN32_TRUE(::DeleteFileW(f2.c_str()));
   auto r2_c = core::ReadFileContents(f2 + L":c");
   EXPECT_FALSE(r2_c);
@@ -629,7 +629,7 @@ TEST_F(StreamsTest, InvalidStreamSyntaxAndDirectoryDataStreamRejected) {
   REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
 
   const std::wstring base = TestPath(L"invalid_syntax.dat");
-  ASSERT_TRUE(core::WriteFileContents(base, "valid"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "valid"));
 
   for (const std::wstring &bad :
        {base + L"::", base + L":a:b", base + L":a:$BOGUS"}) {
@@ -666,7 +666,7 @@ TEST_F(StreamsTest, HandleRelativeAlternateStreamOpen) {
   const std::wstring base = TestPath(L"rel_ads_base.dat");
   const std::string base_payload = "base-stream-content";
   const std::string rel_payload = "handle-relative-ads-payload";
-  ASSERT_TRUE(core::WriteFileContents(base, base_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, base_payload));
 
   {
     auto h_base = core::CreateWin32File(
@@ -726,12 +726,12 @@ TEST_F(StreamsTest, StreamNameLengthLimit255) {
 
   // Extended-length path: base + ':' + 255 characters exceeds MAX_PATH.
   const std::wstring base = TestExtendedPath(L"name_len.dat");
-  ASSERT_TRUE(core::WriteFileContents(base, "base"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "base"));
 
   const std::wstring max_name = L":" + std::wstring(255, L'n');
   const std::wstring over_name = L":" + std::wstring(256, L'n');
 
-  ASSERT_TRUE(core::WriteFileContents(base + max_name, "max-name"));
+  ASSERT_WIN32_OK(core::WriteFileContents(base + max_name, "max-name"));
   EXPECT_TRUE(helpers::CheckFileContents(base + max_name, "max-name"));
   EXPECT_TRUE(streams_internal::CheckStreamNames(
       base, {L"::$DATA", max_name + L":$DATA"}));
@@ -755,7 +755,8 @@ TEST_F(StreamsTest, StreamNameAllowsControlCharacters) {
   const std::wstring stream_name =
       std::wstring(L":\x05") + L"SummaryInformation";
 
-  ASSERT_TRUE(core::WriteFileContents(base + stream_name, "ole-property-set"));
+  ASSERT_WIN32_OK(
+      core::WriteFileContents(base + stream_name, "ole-property-set"));
   EXPECT_TRUE(
       helpers::CheckFileContents(base + stream_name, "ole-property-set"));
   EXPECT_TRUE(streams_internal::CheckStreamNames(
@@ -773,9 +774,9 @@ TEST_F(StreamsTest, CopyFileWPreservesAlternateStreams) {
   const std::string meta_payload = "copy-meta-payload";
   const std::string extra_payload(4096, 'E');
 
-  ASSERT_TRUE(core::WriteFileContents(src, primary_payload));
-  ASSERT_TRUE(core::WriteFileContents(src + L":meta", meta_payload));
-  ASSERT_TRUE(core::WriteFileContents(src + L":extra", extra_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src, primary_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":meta", meta_payload));
+  ASSERT_WIN32_OK(core::WriteFileContents(src + L":extra", extra_payload));
 
   ASSERT_WIN32_TRUE(
       ::CopyFileW(src.c_str(), dst.c_str(), /*bFailIfExists=*/TRUE));

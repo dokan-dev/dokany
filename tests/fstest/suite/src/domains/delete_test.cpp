@@ -251,7 +251,7 @@ TEST_F(DeleteTest, ReadOnlyFileCannotBeDeleted) {
 // (ERROR_DIRECTORY) and DeleteFileW rejects directories (ERROR_ACCESS_DENIED).
 TEST_F(DeleteTest, DirectoryDeleteFileFailsAndRemoveDirectorySucceeds) {
   const std::wstring file = TestPath(L"regular_not_dir.dat");
-  ASSERT_TRUE(core::WriteFileContents(file, "file"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file, "file"));
   EXPECT_WIN32_ERROR(::RemoveDirectoryW(file.c_str()), ERROR_DIRECTORY);
   EXPECT_WIN32_TRUE(::DeleteFileW(file.c_str()));
 
@@ -270,7 +270,7 @@ TEST_F(DeleteTest, NonEmptyDirectoryCannotBeRemoved) {
   const std::wstring inner_sub = TestPath(L"nonempty_dir\\inner_sub");
 
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(inner_file, "child"));
+  ASSERT_WIN32_OK(core::WriteFileContents(inner_file, "child"));
 
   EXPECT_WIN32_ERROR(::RemoveDirectoryW(dir.c_str()), ERROR_DIR_NOT_EMPTY);
 
@@ -370,7 +370,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenKeepsHandleUsableUntilLastClose) {
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
-  ASSERT_TRUE(core::WriteAllBytes(h1.value->get(), "still_readable", 14));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "still_readable", 14));
 
   ASSERT_WIN32_TRUE(::DeleteFileW(file.c_str()));
 
@@ -444,7 +444,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenPosix) {
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
-  ASSERT_TRUE(core::WriteAllBytes(h1.value->get(), "original_bytes", 14));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "original_bytes", 14));
 
   auto orig_index = core::GetFileIndex(h1.value->get());
   ASSERT_TRUE(orig_index) << core::FormatWin32Error(orig_index.error);
@@ -466,7 +466,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenPosix) {
 TEST_F(DeleteTest, DispositionInfoCancelBeforeLastClose) {
   const std::wstring path = TestPath(L"cancel_delete.dat");
   const std::wstring nt_path = TestNtPath(L"cancel_delete.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "survive_cancel"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "survive_cancel"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -492,7 +492,7 @@ TEST_F(DeleteTest, DispositionInfoCancelBeforeLastClose) {
 TEST_F(DeleteTest, DeleteOnCloseWhileOtherHandleOpen) {
   const std::wstring path = TestPath(L"doc_other.dat");
   const std::wstring nt_path = TestNtPath(L"doc_other.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "doc_content"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "doc_content"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -549,7 +549,7 @@ TEST_F(DeleteTest, DeleteOnCloseNonEmptyDirectorySurvivesClose) {
   const std::wstring dir = TestPath(L"doc_nonempty_dir");
   const std::wstring child = TestPath(L"doc_nonempty_dir\\stay.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "stay_put"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "stay_put"));
 
   auto h = OpenForDelete(
       dir, DELETE, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_DELETE_ON_CLOSE);
@@ -565,7 +565,7 @@ TEST_F(DeleteTest, DeleteOnCloseNonEmptyDirectorySurvivesClose) {
 // blocks DeleteFileW and DELETE opens with ERROR_SHARING_VIOLATION.
 TEST_F(DeleteTest, DeleteWithoutShareDeleteFailsSharingViolation) {
   const std::wstring path = TestPath(L"no_share_delete.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "locked"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "locked"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ,
                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -597,7 +597,7 @@ TEST_F(DeleteTest, DispositionInfoExPosixUnlinkAndReuseName) {
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
-  ASSERT_TRUE(core::WriteAllBytes(h1.value->get(), "old_posix_data", 14));
+  ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "old_posix_data", 14));
 
   auto orig_index = core::GetFileIndex(h1.value->get());
   ASSERT_TRUE(orig_index) << core::FormatWin32Error(orig_index.error);
@@ -629,7 +629,7 @@ TEST_F(DeleteTest, DispositionInfoExIgnoreReadOnly) {
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1809);
 
   const std::wstring path = TestPath(L"ignore_ro_del.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "ro_ex_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "ro_ex_data"));
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_READONLY));
 
@@ -708,7 +708,7 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnEmptyDirectory) {
 TEST_F(DeleteTest, DeleteMappedFileFailsCannotDelete) {
   constexpr const char kMappedPayload[] = "mapped_file_content_bytes";
   const std::wstring path = TestPath(L"mapped_delete.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, kMappedPayload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, kMappedPayload));
 
   MappedFileGuard mapped;
   ASSERT_TRUE(CreateMappedView(path, GENERIC_READ | GENERIC_WRITE,
@@ -755,7 +755,7 @@ TEST_F(DeleteTest, DeleteFileWOnMappedFileFailsBeforeWin11_24H2) {
 
   constexpr const char kMappedPayload[] = "mapped_file_content_bytes";
   const std::wstring path = TestPath(L"mapped_delete_w_legacy.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, kMappedPayload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, kMappedPayload));
 
   MappedFileGuard mapped;
   ASSERT_TRUE(CreateMappedView(path, GENERIC_READ | GENERIC_WRITE,
@@ -780,7 +780,7 @@ TEST_F(DeleteTest, DeleteFileWOnMappedFilePosixUnlinksOnWin11_24H2) {
 
   constexpr const char kMappedPayload[] = "mapped_file_content_bytes";
   const std::wstring path = TestPath(L"mapped_delete_w_posix.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, kMappedPayload));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, kMappedPayload));
 
   MappedFileGuard mapped;
   ASSERT_TRUE(CreateMappedView(path, GENERIC_READ | GENERIC_WRITE,
@@ -830,7 +830,7 @@ TEST_F(DeleteTest, DeleteImageMappedFileFailsCannotDelete) {
 TEST_F(DeleteTest, DuplicateHandleKeepsDeletePendingAliveUntilLastClose) {
   const std::wstring path = TestPath(L"dup_delete_pending.dat");
   const std::wstring nt_path = TestNtPath(L"dup_delete_pending.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "dup_delete_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "dup_delete_payload"));
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
@@ -867,7 +867,7 @@ TEST_F(DeleteTest, DuplicateHandleKeepsDeletePendingAliveUntilLastClose) {
 TEST_F(DeleteTest, NtDeleteFileDeletesFileAndReportsMissingPath) {
   const std::wstring file = TestPath(L"nt_del_file.dat");
   const std::wstring nt_file = TestNtPath(L"nt_del_file.dat");
-  ASSERT_TRUE(core::WriteFileContents(file, "direct_nt_delete"));
+  ASSERT_WIN32_OK(core::WriteFileContents(file, "direct_nt_delete"));
 
   EXPECT_NT_STATUS(CallNtDeleteFile(nt_file), STATUS_SUCCESS);
   EXPECT_TRUE(helpers::CheckFileNotFound(file));
@@ -896,7 +896,7 @@ TEST_F(DeleteTest, NtDeleteFileLeavesNonEmptyDirectoryIntact) {
   const std::wstring nt_dir = TestNtPath(L"nt_del_dir");
   const std::wstring child = TestPath(L"nt_del_dir\\child.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "child"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "child"));
 
   EXPECT_NT_STATUS(CallNtDeleteFile(nt_dir), STATUS_SUCCESS);
   EXPECT_TRUE(CheckIsDirectory(dir));
@@ -910,7 +910,7 @@ TEST_F(DeleteTest, DispositionInfoExDeleteOnCloseFlag) {
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1809);
 
   const std::wstring path = TestPath(L"disp_ex_on_close.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "on_close_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "on_close_payload"));
 
   // Per [MS-FSCC] 2.4.12 / [MS-FSA], FILE_DISPOSITION_ON_CLOSE cannot be set on
   // a handle that was not originally opened with FILE_DELETE_ON_CLOSE.
@@ -950,7 +950,7 @@ TEST_F(DeleteTest, HardLinkLegacyDeletePreservesOtherLink) {
 
   const std::wstring hl_a = TestPath(L"hl_a.dat");
   const std::wstring hl_b = TestPath(L"hl_b.dat");
-  ASSERT_TRUE(core::WriteFileContents(hl_a, "hardlink_del_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(hl_a, "hardlink_del_payload"));
   ASSERT_WIN32_TRUE(::CreateHardLinkW(hl_b.c_str(), hl_a.c_str(), nullptr));
 
   auto info_init = core::QueryInfoByPath(hl_a);
@@ -986,7 +986,7 @@ TEST_F(DeleteTest, HardLinkPosixUnlinkPreservesOtherLink) {
 
   const std::wstring hl_b = TestPath(L"hl_posix_b.dat");
   const std::wstring hl_c = TestPath(L"hl_posix_c.dat");
-  ASSERT_TRUE(core::WriteFileContents(hl_b, "hardlink_del_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(hl_b, "hardlink_del_payload"));
   ASSERT_WIN32_TRUE(::CreateHardLinkW(hl_c.c_str(), hl_b.c_str(), nullptr));
 
   auto info_two = core::QueryInfoByPath(hl_b);
@@ -1028,7 +1028,7 @@ TEST_F(DeleteTest, DeleteOnCloseThroughHardLinkRemovesOnlyThatLink) {
 
   const std::wstring link_a = TestPath(L"doc_hl_a.dat");
   const std::wstring link_b = TestPath(L"doc_hl_b.dat");
-  ASSERT_TRUE(core::WriteFileContents(link_a, "doc_hardlink_payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(link_a, "doc_hardlink_payload"));
   ASSERT_WIN32_TRUE(::CreateHardLinkW(link_b.c_str(), link_a.c_str(), nullptr));
 
   {
@@ -1055,7 +1055,7 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnReadOnlyFailsCannotDelete) {
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
 
   const std::wstring path = TestPath(L"posix_ro_del.dat");
-  ASSERT_TRUE(core::WriteFileContents(path, "posix_ro_data"));
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "posix_ro_data"));
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_READONLY));
 
@@ -1113,7 +1113,7 @@ TEST_F(DeleteTest, DispositionInfoExForceImageSectionCheck) {
 
   // Plain data file (no image section): the flag does not block deletion.
   const std::wstring plain_path = TestPath(L"force_img_check_plain.dat");
-  ASSERT_TRUE(core::WriteFileContents(plain_path, "no_image_section"));
+  ASSERT_WIN32_OK(core::WriteFileContents(plain_path, "no_image_section"));
   {
     auto h_plain = OpenForDelete(plain_path);
     ASSERT_TRUE(h_plain) << core::FormatWin32Error(h_plain.error);
@@ -1130,7 +1130,7 @@ TEST_F(DeleteTest, FileDispositionInfoOnNonEmptyDirFailsImmediately) {
   const std::wstring dir = TestPath(L"disp_nonempty_dir");
   const std::wstring child = TestPath(L"disp_nonempty_dir\\child.dat");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
-  ASSERT_TRUE(core::WriteFileContents(child, "keep_dir_nonempty"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child, "keep_dir_nonempty"));
 
   {
     auto h_dir = OpenForDelete(dir, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
@@ -1213,7 +1213,7 @@ TEST_F(DeleteTest, CreateChildInDeletePendingDirFailsDeletePending) {
   h_del.value->reset();
   h_keep.value->reset();
 
-  ASSERT_TRUE(core::WriteFileContents(child_file, "restored_child"));
+  ASSERT_WIN32_OK(core::WriteFileContents(child_file, "restored_child"));
   ASSERT_WIN32_TRUE(::CreateDirectoryW(child_sub.c_str(), nullptr));
   EXPECT_TRUE(helpers::CheckFileContents(child_file, "restored_child"));
   EXPECT_TRUE(CheckIsDirectory(child_sub));

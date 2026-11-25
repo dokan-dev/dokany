@@ -2,13 +2,13 @@
 
 #pragma once
 
+#include "fstest/core/file_ops.h"
 #include "fstest/core/nt_types.h"
 #include "fstest/core/status.h"
 
 #include "gtest/gtest.h"
 
 #include <algorithm>
-#include <initializer_list>
 #include <map>
 #include <sstream>
 #include <string>
@@ -37,28 +37,6 @@ inline ::testing::AssertionResult CheckNtStatus(const char *expr,
          << "Expected " << expr << " == " << expected_expr << " ("
          << core::FormatNtStatus(expected) << "), got "
          << core::FormatNtStatus(actual);
-}
-
-inline ::testing::AssertionResult
-CheckNtStatusIn(const char *expr, NTSTATUS actual,
-                std::initializer_list<NTSTATUS> allowed) {
-  for (NTSTATUS s : allowed) {
-    if (actual == s) {
-      return ::testing::AssertionSuccess();
-    }
-  }
-  std::ostringstream oss;
-  oss << "Expected " << expr << " to be one of {";
-  bool first = true;
-  for (NTSTATUS s : allowed) {
-    if (!first) {
-      oss << ", ";
-    }
-    first = false;
-    oss << core::FormatNtStatus(s);
-  }
-  oss << "}, got " << core::FormatNtStatus(actual);
-  return ::testing::AssertionFailure() << oss.str();
 }
 
 inline ::testing::AssertionResult CheckWin32True(const char *expr, BOOL ok,
@@ -123,6 +101,27 @@ inline ::testing::AssertionResult CheckWin32ErrorCode(const char *expr,
          << "Expected " << expr << " == " << expected_expr << " ("
          << core::FormatWin32Error(expected_error) << "), got "
          << core::FormatWin32Error(actual_error);
+}
+
+template <typename T>
+inline ::testing::AssertionResult
+CheckWin32Ok(const char *expr, const core::Win32Result<T> &res) {
+  if (res.ok()) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure()
+         << "Expected " << expr << " to succeed, failed with "
+         << core::FormatWin32Error(res.error);
+}
+
+inline ::testing::AssertionResult
+CheckWin32Ok(const char *expr, const core::Win32OpenResult &res) {
+  if (res.ok()) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure()
+         << "Expected " << expr << " to succeed, failed with "
+         << core::FormatWin32Error(res.last_error);
 }
 
 inline std::string FormatElement(const std::wstring &s) {
@@ -198,11 +197,11 @@ CheckMultisetEq(const char *actual_expr, const char *expected_expr,
 #define ASSERT_NT_STATUS(expr, expected)                                       \
   ASSERT_PRED_FORMAT2(::fstest::detail::CheckNtStatus, (expr), (expected))
 
-#define EXPECT_NT_STATUS_IN(expr, ...)                                         \
-  EXPECT_TRUE(::fstest::detail::CheckNtStatusIn(#expr, (expr), __VA_ARGS__))
+#define EXPECT_WIN32_OK(expr)                                                  \
+  EXPECT_PRED_FORMAT1(::fstest::detail::CheckWin32Ok, (expr))
 
-#define ASSERT_NT_STATUS_IN(expr, ...)                                         \
-  ASSERT_TRUE(::fstest::detail::CheckNtStatusIn(#expr, (expr), __VA_ARGS__))
+#define ASSERT_WIN32_OK(expr)                                                  \
+  ASSERT_PRED_FORMAT1(::fstest::detail::CheckWin32Ok, (expr))
 
 #define EXPECT_WIN32_TRUE(expr)                                                \
   EXPECT_TRUE(::fstest::detail::EvalWin32True(#expr, [&]() { return (expr); }))
