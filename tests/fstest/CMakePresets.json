@@ -75,7 +75,8 @@
       "name": "clang-cl-portability",
       "configurePreset": "clang-cl-portability",
       "targets": [
-        "ntfs_helpers"
+        "ntfs_helpers",
+        "ntfs_suite"
       ]
     }
   ]

@@ -271,6 +271,57 @@ if(FSTEST_CORE_NO_EXCEPTIONS)
 endif()
 
 # ---------------------------------------------------------------------------
+# Layer 2a: ntfs_suite_base (Fixture, config, metadata — NO JSON, NO CLI)
+# ---------------------------------------------------------------------------
+add_library(ntfs_suite_base STATIC
+    suite/src/test_config.cpp
+    suite/src/test_fixture.cpp
+    suite/src/test_metadata.cpp)
+
+target_include_directories(ntfs_suite_base
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/suite/include"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/suite/src")
+target_link_libraries(ntfs_suite_base PUBLIC ntfs_helpers GTest::gtest)
+fstest_apply_compiler_flags(ntfs_suite_base)
+if(FSTEST_CORE_NO_EXCEPTIONS)
+  if(MSVC)
+    target_compile_options(ntfs_suite_base PRIVATE /EHs-c- /GR-)
+  endif()
+  target_compile_definitions(ntfs_suite_base PUBLIC _HAS_EXCEPTIONS=0
+                                                    GTEST_HAS_EXCEPTIONS=0)
+endif()
+
+# ---------------------------------------------------------------------------
+# Layer 2b: ntfs_suite (All 12 NTFS conformance domains + registry anchor)
+# ---------------------------------------------------------------------------
+add_library(ntfs_suite STATIC
+    suite/src/suite_registry.cpp
+    suite/src/domains/create_open_test.cpp
+    suite/src/domains/create_open_security_test.cpp
+    suite/src/domains/delete_test.cpp
+    suite/src/domains/dir_enum_test.cpp
+    suite/src/domains/rename_move_test.cpp
+    suite/src/domains/data_io_test.cpp
+    suite/src/domains/data_io_sparse_mmap_test.cpp
+    suite/src/domains/locks_oplocks_test.cpp
+    suite/src/domains/timestamps_attrs_test.cpp
+    suite/src/domains/streams_test.cpp
+    suite/src/domains/streams_ops_test.cpp
+    suite/src/domains/security_acl_test.cpp
+    suite/src/domains/links_reparse_test.cpp
+    suite/src/domains/naming_paths_test.cpp
+    suite/src/domains/info_queries_test.cpp
+    suite/src/domains/info_queries_notify_ea_test.cpp)
+
+target_include_directories(ntfs_suite PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/suite/src")
+target_link_libraries(ntfs_suite PUBLIC ntfs_suite_base)
+fstest_apply_compiler_flags(ntfs_suite)
+if(FSTEST_CORE_NO_EXCEPTIONS AND MSVC)
+  target_compile_options(ntfs_suite PRIVATE /EHs-c- /GR-)
+endif()
+
+# ---------------------------------------------------------------------------
 # Layer 1 self-tests (core unit tests)
 # ---------------------------------------------------------------------------
 if(FSTEST_BUILD_CLI)
