@@ -202,6 +202,52 @@ if(_fstest_acquired_gtest)
 endif()
 
 # ---------------------------------------------------------------------------
+# 3-Tier nlohmann/json Acquisition (CLI and unit_tests ONLY)
+# ---------------------------------------------------------------------------
+if(FSTEST_BUILD_CLI)
+  add_library(fstest_nlohmann_json INTERFACE)
+  if(TARGET nlohmann_json::nlohmann_json)
+    target_link_libraries(fstest_nlohmann_json INTERFACE
+                          nlohmann_json::nlohmann_json)
+  elseif(FSTEST_USE_SYSTEM_JSON)
+    find_package(nlohmann_json REQUIRED)
+    target_link_libraries(fstest_nlohmann_json INTERFACE
+                          nlohmann_json::nlohmann_json)
+  elseif(FSTEST_JSON_SOURCE_DIR)
+    if(EXISTS "${FSTEST_JSON_SOURCE_DIR}/include/nlohmann/json.hpp")
+      target_include_directories(
+          fstest_nlohmann_json SYSTEM
+          INTERFACE "${FSTEST_JSON_SOURCE_DIR}/include")
+    elseif(EXISTS "${FSTEST_JSON_SOURCE_DIR}/nlohmann/json.hpp")
+      target_include_directories(
+          fstest_nlohmann_json SYSTEM INTERFACE "${FSTEST_JSON_SOURCE_DIR}")
+    else()
+      message(FATAL_ERROR
+          "FSTEST_JSON_SOURCE_DIR ('${FSTEST_JSON_SOURCE_DIR}') does not "
+          "contain nlohmann/json.hpp or include/nlohmann/json.hpp")
+    endif()
+  else()
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        URL "${FSTEST_JSON_URL}"
+        URL_HASH "SHA256=${_fstest_json_sha256}"
+        ${_fstest_fetch_ts_arg})
+    FetchContent_MakeAvailable(nlohmann_json)
+    if(EXISTS "${nlohmann_json_SOURCE_DIR}/include/nlohmann/json.hpp")
+      target_include_directories(
+          fstest_nlohmann_json SYSTEM
+          INTERFACE "${nlohmann_json_SOURCE_DIR}/include")
+    elseif(EXISTS "${nlohmann_json_SOURCE_DIR}/nlohmann/json.hpp")
+      target_include_directories(
+          fstest_nlohmann_json SYSTEM INTERFACE "${nlohmann_json_SOURCE_DIR}")
+    else()
+      message(FATAL_ERROR
+          "Could not locate nlohmann/json.hpp inside '${nlohmann_json_SOURCE_DIR}'")
+    endif()
+  endif()
+endif()
+# ---------------------------------------------------------------------------
 # Common Compiler Flags and Compile Definitions
 # ---------------------------------------------------------------------------
 function(fstest_apply_compiler_flags target_name)
@@ -322,18 +368,64 @@ if(FSTEST_CORE_NO_EXCEPTIONS AND MSVC)
 endif()
 
 # ---------------------------------------------------------------------------
-# Layer 1 self-tests (core unit tests)
+# Layer 3: dokan_fstest CLI & fstest_self_test unit tests
 # ---------------------------------------------------------------------------
 if(FSTEST_BUILD_CLI)
+  add_library(fstest_cli_lib STATIC
+      cli/src/cli_args.cpp
+      cli/src/json_util.cpp
+      cli/src/gtest_filter.cpp
+      cli/src/baseline.cpp
+      cli/src/baseline_update.cpp
+      cli/src/scorecard.cpp
+      cli/src/xfail_listener.cpp
+      cli/src/mount_guard.cpp)
+
+  target_include_directories(fstest_cli_lib PUBLIC
+      "${CMAKE_CURRENT_SOURCE_DIR}/cli/src")
+  target_link_libraries(fstest_cli_lib PUBLIC
+      ntfs_suite_base
+      ntfs_helpers
+      GTest::gtest
+      fstest_nlohmann_json)
+  fstest_apply_compiler_flags(fstest_cli_lib)
+
+  add_executable(dokan_fstest
+      cli/src/main.cpp)
+
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    target_link_libraries(dokan_fstest PRIVATE
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,ntfs_suite>
+        fstest_cli_lib)
+  else()
+    target_link_libraries(dokan_fstest PRIVATE
+        ntfs_suite
+        fstest_cli_lib)
+  endif()
+  fstest_apply_compiler_flags(dokan_fstest)
+  if(MSVC)
+    target_link_options(dokan_fstest PRIVATE
+        $<$<CONFIG:Release>:/OPT:REF;/OPT:ICF>)
+  endif()
+
   add_executable(fstest_self_test
       unit_tests/path_test.cpp
       unit_tests/temp_dir_test.cpp
-      unit_tests/core_helpers_test.cpp)
+      unit_tests/json_test.cpp
+      unit_tests/baseline_test.cpp
+      unit_tests/scorecard_test.cpp
+      unit_tests/cli_args_test.cpp
+      unit_tests/xfail_listener_test.cpp
+      unit_tests/fixture_security_status_test.cpp
+      unit_tests/gtest_filter_test.cpp
+      unit_tests/core_helpers_test.cpp
+      unit_tests/cli_e2e_test.cpp)
+  add_dependencies(fstest_self_test dokan_fstest)
 
   target_compile_definitions(fstest_self_test PRIVATE
       "FSTEST_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")
   target_link_libraries(fstest_self_test PRIVATE
-      ntfs_helpers
+      fstest_cli_lib
       GTest::gtest_main)
   fstest_apply_compiler_flags(fstest_self_test)
   if(MSVC)

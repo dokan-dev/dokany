@@ -1,0 +1,917 @@
+{
+  "schema_version": 1,
+  "description": "Tracked NTFS conformance baseline for Dokan memfs sample (dokan-dev/dokany)",
+  "targets": {
+    "memfs_drive": {
+      "description": "memfs.exe mounted on a local drive letter (/l M)",
+      "xfails": {
+        "CreateOpenTest.BackupPrivilegeBypassesDenyDacl": {
+          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "CreateOpenTest.MaximumAllowedGrantsEffectiveAccessAndQueriesFileAccessInfo": {
+          "reason": "dokan3.sys/memfs MAXIMUM_ALLOWED does not strip FILE_WRITE_DATA/FILE_APPEND_DATA on READONLY files",
+          "gap": "GAP-06"
+        },
+        "CreateOpenTest.NtCreateFileInitialAllocationSize": {
+          "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and DokanFillFileStandardInfo derives AllocationSize from EndOfFile",
+          "gap": "GAP-09"
+        },
+        "CreateOpenTest.NtSupersedeAndOverwriteIfMergeAttributes": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_createfile drops FILE_ATTRIBUTE_TEMPORARY during FILE_SUPERSEDE attribute merge (reporting 0x1020 instead of 0x1120)",
+          "gap": "GAP-06"
+        },
+        "CreateOpenTest.NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch": {
+          "reason": "memfs_createfile returns STATUS_ACCESS_DENIED on hidden/system mismatch, but dokan/create.c DispatchCreate parent-folder DELETE fallback converts it into STATUS_SUCCESS",
+          "gap": "GAP-02"
+        },
+        "CreateOpenTest.NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf": {
+          "reason": "dokan3.sys/memfs FILE_SUPERSEDE does not enforce FILE_SHARE_DELETE sharing check",
+          "gap": "GAP-06"
+        },
+        "CreateOpenTest.NtSupersedeVsOverwriteDaclAccess": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c) and does not evaluate DACLs",
+          "gap": "GAP-20"
+        },
+        "CreateOpenTest.OverwriteAndSupersedeOfUserMappedFileFail": {
+          "reason": "dokan3.sys DokanDispatchCreate does not call MmCanFileBeTruncated on overwrite/supersede of a user-mapped file, allowing truncation instead of STATUS_USER_MAPPED_FILE",
+          "gap": "GAP-05"
+        },
+        "CreateOpenTest.ReadOnlyFileBlocksWriteOpenAllowsReadAndWriteAttr": {
+          "reason": "memfs allows FILE_APPEND_DATA open on READONLY files",
+          "gap": "GAP-06"
+        },
+        "CreateOpenTest.RestorePrivilegeBypassesWriteDenyDacl": {
+          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "CreateOpenTest.TrailingBackslashOnFileFailsNotADirectory": {
+          "reason": "dokan3.sys DokanDispatchCreate unconditionally strips trailing backslashes before checking directory status, allowing regular-file opens/creates with trailing '\\'",
+          "gap": "GAP-14"
+        },
+        "CreateOpenTest.ZeroDesiredAccessOpensMetadataThroughExclusiveAndDenyDacl": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "gap": "GAP-20"
+        },
+        "DataIoTest.CompressionSetGetAndCompressedFileSize": {
+          "reason": "Dokan does not support NTFS file compression (FSCTL_SET_COMPRESSION returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-25"
+        },
+        "DataIoTest.CopyFileExOverReadOnlyDestinationFailsAccessDenied": {
+          "reason": "memfs_createfile returns STATUS_ACCESS_DENIED on READONLY overwrite, but dokan/create.c DispatchCreate parent-folder DELETE fallback converts it into STATUS_SUCCESS",
+          "gap": "GAP-02"
+        },
+        "DataIoTest.CopyFileExPreservesAlternateStreams": {
+          "reason": "memfs CopyFileExW fails with ERROR_FILE_NOT_FOUND when copying files with alternate data streams",
+          "gap": "GAP-18"
+        },
+        "DataIoTest.DirectoryCompressionInheritanceAndNoCompressionOption": {
+          "reason": "Dokan does not support NTFS file compression (FSCTL_SET_COMPRESSION returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-25"
+        },
+        "DataIoTest.FileAllocationInfoPreallocateAndTruncate": {
+          "reason": "memfs does not persist preallocated FileAllocationInformation size separately from EOF",
+          "gap": "GAP-09"
+        },
+        "DataIoTest.FileValidDataLengthExtend": {
+          "reason": "dokan3.sys initializes ValidDataLength to MAXLONGLONG without privilege or range checks and dokan/setfile.c forwards FileValidDataLengthInformation straight to SetEndOfFile",
+          "gap": "GAP-09"
+        },
+        "DataIoTest.ImageMappedFileRejectsWriteOpen": {
+          "reason": "dokan3.sys DokanDispatchCreate does not call MmFlushImageSection(..., MmFlushForWrite) on write opens against an active SEC_IMAGE section, allowing GENERIC_WRITE instead of STATUS_SHARING_VIOLATION",
+          "gap": "GAP-05"
+        },
+        "DataIoTest.MemoryMappedWriteFileVisibleInView": {
+          "reason": "dokan3.sys/memfs does not synchronize WriteFile with active memory-mapped views",
+          "gap": "GAP-08"
+        },
+        "DataIoTest.QueryAllocatedRangesNegativeRangeFailsInvalidParameter": {
+          "reason": "Dokan does not support FSCTL_QUERY_ALLOCATED_RANGES (returns ERROR_INVALID_FUNCTION instead of ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.QueryAllocatedRangesOnNonSparseFileReportsWholeFile": {
+          "reason": "Dokan does not support FSCTL_QUERY_ALLOCATED_RANGES (returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.ReadWriteOnDirectoryHandleFailsInvalidFunction": {
+          "reason": "dokan3.sys DokanDispatchRead (sys/read.c:146) and DokanDispatchWrite (sys/write.c:75) return STATUS_INVALID_PARAMETER instead of STATUS_INVALID_DEVICE_REQUEST (ERROR_INVALID_FUNCTION) on directory handles",
+          "gap": "GAP-09"
+        },
+        "DataIoTest.SetEndOfFileAndAllocationOnDirectoryFails": {
+          "reason": "dokan3.sys/memfs accepts both FileEndOfFileInformation (memfs_setendoffile) and FileAllocationInformation (memfs_setallocationsize) on directory handles instead of returning STATUS_INVALID_PARAMETER",
+          "gap": "GAP-09"
+        },
+        "DataIoTest.SetZeroDataInvalidRangeFailsInvalidParameter": {
+          "reason": "Dokan does not support FSCTL_SET_ZERO_DATA (returns ERROR_INVALID_FUNCTION instead of ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SetZeroDataOnNonSparseFileZeroesWithoutSettingSparse": {
+          "reason": "Dokan does not support FSCTL_SET_ZERO_DATA (returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SetZeroDataPastEofDoesNotExtendFile": {
+          "reason": "Dokan does not support FSCTL_SET_ZERO_DATA (returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseClearFlagWithHoleSucceedsAndPreservesData": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseExtendWithSetEndOfFileLeavesHoleUnallocated": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseFile64BitOffsetsOver4GiB": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseQueryAllocatedRanges": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseQueryAllocatedRangesBufferPagination": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseSetAndQueryFlag": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseSetZeroDataSubClusterRangeZeroesOnlyRequestedBytes": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DataIoTest.SparseZeroDataDeallocatesAndReadsZeroes": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "DeleteTest.CreateChildInDeletePendingDirFailsDeletePending": {
+          "reason": "dokan3.sys DokanDispatchCreate only checks DOKAN_FCB_STATE_DELETE_PENDING (sys/public.h:108, via DokanFCBIsPendingDeletion at sys/create.c:294-295) on the target FCB, not on parent directory FCBs, and memfs_deletedirectory defers deletion to Cleanup without marking the directory delete-pending",
+          "gap": "GAP-06"
+        },
+        "DeleteTest.DeleteFileWOnMappedFilePosixUnlinksOnWin11_24H2": {
+          "reason": "Dokan does not implement POSIX immediate-unlink delete semantics expected by Windows 11 24H2+ DeleteFileW on data-mapped files",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.DeleteFileWhileOpenPosix": {
+          "reason": "Dokan does not implement Windows 10 1903+ POSIX immediate-unlink delete semantics",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.DeleteImageMappedFileFailsCannotDelete": {
+          "reason": "dokan3.sys/memfs leaves unmapped SEC_IMAGE file in STATUS_DELETE_PENDING (ERROR_ACCESS_DENIED) after DeleteFileW when MM retains a cached image section (passes on build 14393)",
+          "gap": "GAP-05",
+          "os_min_build": 17763,
+          "allow_xpass": true
+        },
+        "DeleteTest.DeleteOnCloseNonEmptyDirectorySurvivesClose": {
+          "reason": "memfs fs_filenodes::remove recursively removes non-empty directory on FILE_FLAG_DELETE_ON_CLOSE instead of preserving it",
+          "gap": "GAP-16"
+        },
+        "DeleteTest.DeleteOnCloseThroughHardLinkRemovesOnlyThatLink": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "DeleteTest.DispositionInfoExDeleteOnCloseFlag": {
+          "reason": "dokan3.sys accepts FILE_DISPOSITION_ON_CLOSE on non-delete-on-close handles instead of returning STATUS_NOT_SUPPORTED",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.DispositionInfoExForceImageSectionCheck": {
+          "reason": "dokan3.sys/memfs leaves unmapped SEC_IMAGE file in STATUS_DELETE_PENDING after FileDispositionInformationEx(FORCE_IMAGE_SECTION_CHECK) when MM retains a cached image section",
+          "gap": "GAP-05",
+          "allow_xpass": true
+        },
+        "DeleteTest.DispositionInfoExIgnoreReadOnly": {
+          "reason": "Dokan does not honor FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE in FileDispositionInformationEx",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.DispositionInfoExPosixOnEmptyDirectory": {
+          "reason": "Dokan does not unlink directory immediately under FILE_DISPOSITION_POSIX_SEMANTICS",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.DispositionInfoExPosixUnlinkAndReuseName": {
+          "reason": "Dokan does not unlink file immediately under FILE_DISPOSITION_POSIX_SEMANTICS",
+          "gap": "GAP-21"
+        },
+        "DeleteTest.HardLinkLegacyDeletePreservesOtherLink": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "DeleteTest.HardLinkPosixUnlinkPreservesOtherLink": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "DeleteTest.NtDeleteFileLeavesNonEmptyDirectoryIntact": {
+          "reason": "memfs deletes non-empty directory on NtDeleteFile instead of preserving it",
+          "gap": "GAP-16"
+        },
+        "DirEnumTest.EnumerateRegularFileFailsNotDirectory": {
+          "reason": "dokan3.sys DokanQueryDirectory does not reject non-directory handles, so memfs_findfiles returns STATUS_NO_MORE_FILES instead of STATUS_INVALID_PARAMETER",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.FileFullDirectoryInfoReportsEaSize": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "DirEnumTest.FileIdExtdDirectoryInfoReportsReparseTag": {
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillIdExtdDirInfo hardcodes ReparsePointTag = 0)",
+          "gap": "GAP-22"
+        },
+        "DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor": {
+          "reason": "dokan3.sys/dokan/directory.c does not return STATUS_BUFFER_OVERFLOW with a partial filename and advance the directory scan cursor on an undersized first entry",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.NtQueryDirectoryCaseInsensitiveWildcards": {
+          "reason": "memfs::start unconditionally sets DOKAN_OPTION_CASE_SENSITIVE, causing dokan/directory.c MatchFiles to invoke DokanIsNameInExpression with IgnoreCase=FALSE",
+          "gap": "GAP-15"
+        },
+        "DirEnumTest.NtQueryDirectoryDosWildcards": {
+          "reason": "dokan/directory.c DokanIsNameInExpression does not fully implement DOS_QM ('>') and DOS_DOT ('\"') wildcards",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
+          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx and always advances ccb->Context",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
+          "reason": "dokan/directory.c DokanFillIdBothDirInfo hardcodes FileId = 0 instead of reporting the file's 64-bit FileId",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses": {
+          "reason": "dokan/directory.c DokanFillIdFullDirInfo and DokanFillIdExtdDirInfo hardcode FileId = 0 instead of reporting real 64-bit and 128-bit FileIds",
+          "gap": "GAP-12"
+        },
+        "DirEnumTest.Win32WildcardQuestionMarkMatchesSingleCharacter": {
+          "reason": "memfs sets FindFilesWithPattern = nullptr; dokan/directory.c DokanIsNameInExpression advances ni++ for '?' and DOS_QM without checking Name[ni] != L'\\0', reading stale trailing bytes left in memfs_findfiles's reused WIN32_FIND_DATAW::cFileName buffer depending on std::set<std::shared_ptr<filenode>> heap pointer order",
+          "gap": "GAP-12",
+          "allow_xpass": true
+        },
+        "InfoQueriesTest.ExtendedAttributesCreateWithEaBuffer": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesDeleteAndEmptyQuery": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesEaListQueryReturnsRequestedSubset": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesInconsistentEaListRejected": {
+          "reason": "dokan3.sys does not implement IRP_MJ_SET_EA and returns STATUS_INVALID_DEVICE_REQUEST before validating the EA buffer instead of STATUS_EA_LIST_INCONSISTENT",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesInvalidEaNameRejected": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesNeedEaBlocksNoEaKnowledgeOpen": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesOnDirectory": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesOptionalEaAllowsNoEaKnowledgeOpen": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesOversizedEaSetRejected": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.ExtendedAttributesSetAndQuery": {
+          "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
+          "gap": "GAP-26"
+        },
+        "InfoQueriesTest.GetVolumeInformationNtfsFeatureFlags": {
+          "reason": "memfs does not advertise full NTFS volume capability flags (persistent ACLs, sparse, reparse, hard links, EAs)",
+          "gap": "GAP-28"
+        },
+        "InfoQueriesTest.NtQueryFileAttributeTagJunctionReparsePoint": {
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillFileAttributeTagInfo hardcodes ReparseTag = 0)",
+          "gap": "GAP-22"
+        },
+        "InfoQueriesTest.NtQueryFileCompressionInformation": {
+          "reason": "dokan/fileinfo.c DokanEndDispatchGetFileInformation returns STATUS_NOT_IMPLEMENTED for FileCompressionInformation",
+          "gap": "GAP-25"
+        },
+        "InfoQueriesTest.NtQueryFileFsSectorSizeInformation": {
+          "reason": "dokan3.sys DokanDispatchQueryVolumeInformation does not handle FileFsSectorSizeInformation (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "InfoQueriesTest.NtQueryFileInternalAndAllInfo": {
+          "reason": "dokan/fileinfo.c DokanFillFileAllInfo leaves AccessInformation/ModeInformation fields zeroed",
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.NtQueryFileNameAndNormalizedNameInfo": {
+          "reason": "memfs case-insensitive open or FileNormalizedNameInformation does not preserve canonical case",
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.NtQueryFileStandardLinkInfo": {
+          "reason": "dokan3.sys does not support FileStandardLinkInformation (STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "InfoQueriesTest.NtQueryFileStatAndStatLxInformation": {
+          "reason": "dokan3.sys does not support FileStatInformation / FileStatLxInformation (STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "InfoQueriesTest.NtQueryVolumeFsControlInformation": {
+          "reason": "dokan3.sys DokanDispatchQueryVolumeInformation (sys/volume.c) does not handle FileFsControlInformation (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "InfoQueriesTest.ObjectIdCreateGetAndOpenByObjectId": {
+          "reason": "Dokan does not support NTFS Object IDs (FSCTL_GET_OBJECT_ID returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-27"
+        },
+        "InfoQueriesTest.OpenFileByIdAndNtOpenByFileId": {
+          "reason": "Dokan does not support FILE_OPEN_BY_FILE_ID / OpenFileById",
+          "gap": "GAP-27"
+        },
+        "InfoQueriesTest.ReadDirectoryChangesExExtendedInfo": {
+          "reason": "dokan3.sys does not support ReadDirectoryChangesExW extended notifications (ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.ReadDirectoryChangesSecurityFilter": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "gap": "GAP-20"
+        },
+        "InfoQueriesTest.ReadDirectoryChangesSizeFilter": {
+          "reason": "dokan3.sys DokanAllocateFCB (sys/util/fcb.c:62) initializes AdvancedFCBHeader.FileSize to 4096 and DokanCompleteWrite (sys/write.c:352) only emits FILE_NOTIFY_CHANGE_SIZE when CurrentByteOffset exceeds FileSize, suppressing sub-4 KiB growth notifications unless a host minifilter first updates FileSize via FileStandardInformation (sys/fileinfo.c:311)",
+          "allow_xpass": true,
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.ReadDirectoryChangesWatchedDirectoryDeletePendingCompletesWatch": {
+          "reason": "dokan3.sys does not complete pending ReadDirectoryChangesW watches when the watched directory becomes delete-pending",
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.ReadFileUsnDataMatchesFileIdParentAndName": {
+          "reason": "Dokan does not support FSCTL_READ_FILE_USN_DATA (returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-28"
+        },
+        "LinksReparseTest.BrokenSymlinkOpenFailsAndOpenReparsePointSucceeds": {
+          "reason": "Dokan does not support reparse points / symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.ChainedSymlinksAndIntermediateComponentTraversal": {
+          "reason": "Dokan does not support symbolic links (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.CustomApplicationReparseTagRoundTrip": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.DeleteReparsePointWithMismatchedGuidFails": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT / FSCTL_DELETE_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.DeleteReparsePointWithMismatchedTagFails": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT / FSCTL_DELETE_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.DirectoryJunctionCreateFollowAndRemove": {
+          "reason": "Dokan does not support directory junction reparse points",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.DirectorySymlinkFollowAndRemove": {
+          "reason": "Dokan does not support directory symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.DirectorySymlinkToFileFailsDirectoryOpen": {
+          "reason": "Dokan does not support symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.FileHardLinkInformationListsAllLinks": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.FileSymlinkFollowAndOpenReparsePoint": {
+          "reason": "Dokan does not support file symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.FileSymlinkToAlternateDataStream": {
+          "reason": "Dokan does not support symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.FileSymlinkToDirectoryFailsDataOpen": {
+          "reason": "Dokan does not support symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.FindFilesReportsReparseTagInReserved0": {
+          "reason": "Dokan does not support reparse points",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.FindFilesReportsSymlinkReparseTagInReserved0": {
+          "reason": "Dokan does not support reparse points / symbolic links (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.GetAndDeleteReparsePointFsctl": {
+          "reason": "Dokan does not support FSCTL_GET_REPARSE_POINT / FSCTL_DELETE_REPARSE_POINT",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.GetReparsePointSmallBufferFailsMoreData": {
+          "reason": "Dokan does not support reparse points / directory junctions",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.HardLinkCountLimitFailsTooManyLinks": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkCreateSharedDataAndFileIndex": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkFileNameEnumeration": {
+          "reason": "Dokan does not support hard links",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkOnDirectoryFailsAccessDenied": {
+          "reason": "Dokan returns ERROR_INVALID_PARAMETER instead of ERROR_ACCESS_DENIED for hard link on directory",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkOnReadOnlyFile": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkOverExistingFileFailsAlreadyExists": {
+          "reason": "Dokan does not support FileLinkInformation (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkRenameOneLinkPreservesOtherLinks": {
+          "reason": "Dokan does not support hard links",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkSharedMetadataAndUnlink": {
+          "reason": "Dokan does not support hard links",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.HardLinkSharesAlternateDataStreams": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.JunctionIntermediateComponentTraversal": {
+          "reason": "Dokan does not support directory junction reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.JunctionOnNonEmptyDirectoryFailsNotEmpty": {
+          "reason": "Dokan does not support directory junction reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.LinkInfoExPosixReplacesOpenTarget": {
+          "reason": "Dokan does not support FileLinkInformationEx (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "LinksReparseTest.RelativeSymlinkResolution": {
+          "reason": "Dokan does not support relative symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.RemoveJunctionPointingToNonEmptyDirectorySucceeds": {
+          "reason": "Dokan does not support directory junctions",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.RenameSymlinkRenamesLinkNotTargetAndIndependentMetadata": {
+          "reason": "Dokan does not support symbolic links",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.ReparseDataAtMaximumSizeRoundTrips": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.ReparseDataOverMaximumSizeFailsInvalidReparseData": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT (returns ERROR_INVALID_FUNCTION instead of ERROR_INVALID_REPARSE_DATA)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.ReparsePointMatchingTagAndGuidUpdatesAndDeletes": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT / FSCTL_DELETE_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.SetReparsePointWithMismatchedGuidFails": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.SetReparsePointWithMismatchedTagFails": {
+          "reason": "Dokan does not support FSCTL_SET_REPARSE_POINT (ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-22"
+        },
+        "LinksReparseTest.SymlinkLoopDetectedAsCantResolveFilename": {
+          "reason": "Dokan does not support symbolic links",
+          "gap": "GAP-22"
+        },
+        "LocksOplocksTest.DirectoryOplockBreaksOnChildCreate": {
+          "reason": "dokan3.sys does not break directory RH oplocks on child file creation",
+          "gap": "GAP-11"
+        },
+        "LocksOplocksTest.ExclusiveLockBlocksOverlappingWriteFromOtherHandle": {
+          "reason": "dokan3.sys DokanDispatchWrite omits FsRtlCheckLockForWriteAccess (unlike DokanDispatchRead, which checks FsRtlCheckLockForReadAccess), allowing conflicting WriteFile across exclusive byte-range locks",
+          "gap": "GAP-07"
+        },
+        "LocksOplocksTest.OplockCompleteIfOplockedFlag": {
+          "reason": "dokan3.sys DokanDispatchCreate overwrites FsRtlCheckOplock's STATUS_OPLOCK_BREAK_IN_PROGRESS via FsRtlCheckOplockEx(OPLOCK_FLAG_OPLOCK_KEY_CHECK_ONLY) and DokanCompleteCreate returns user-mode STATUS_SUCCESS",
+          "gap": "GAP-11"
+        },
+        "LocksOplocksTest.OplockOpbatchAckClosePendingReleasesOpener": {
+          "reason": "dokan3.sys evaluates share access before breaking Batch oplock on conflicting ShareMode=0 open, never signaling oplock break",
+          "gap": "GAP-11"
+        },
+        "LocksOplocksTest.SharedLocksBlockWritesOnAllHandles": {
+          "reason": "dokan3.sys DokanDispatchWrite omits FsRtlCheckLockForWriteAccess, allowing WriteFile on handles holding shared byte-range locks",
+          "gap": "GAP-07"
+        },
+        "NamingPathsTest.CaseInsensitiveLookupAndCasePreservation": {
+          "reason": "memfs filenode map uses case-sensitive lookup by default",
+          "gap": "GAP-15"
+        },
+        "NamingPathsTest.InvalidFilenameCharactersRejected": {
+          "reason": "memfs accepts invalid Win32/NTFS filename characters",
+          "gap": "GAP-15"
+        },
+        "NamingPathsTest.MetadataTunnelingPreservesCreationTime": {
+          "reason": "memfs does not implement an NTFS 15-second metadata tunneling cache, assigning a fresh CreationTime when a deleted or renamed file is immediately recreated",
+          "gap": "GAP-10"
+        },
+        "NamingPathsTest.MountRootRenameRejected": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move infinitely recurses and crashes memfs.exe when moving root '\\'",
+          "gap": "GAP-01",
+          "skip_crash": true
+        },
+        "NamingPathsTest.ParentIsFilePathErrorsAllApis": {
+          "reason": "memfs_createfile and memfs_getfileInformation translate fs_filenodes::find nullptr into STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) without checking whether an ancestor component is a regular file",
+          "gap": "GAP-15"
+        },
+        "NamingPathsTest.PerDirectoryCaseSensitivityFlag": {
+          "reason": "dokan3.sys does not implement FileCaseSensitiveInformation (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "NamingPathsTest.PerDirectoryCaseSensitivityInheritanceAndMoveSemantics": {
+          "reason": "dokan3.sys does not implement FileCaseSensitiveInformation (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "NamingPathsTest.PerDirectoryCaseSensitivityRejectedOnNonEmptyDirectory": {
+          "reason": "dokan3.sys does not implement FileCaseSensitiveInformation (returns STATUS_INVALID_PARAMETER)",
+          "gap": "GAP-28"
+        },
+        "NamingPathsTest.TrailingBackslashOnRegularFileFails": {
+          "reason": "dokan3.sys/memfs allows opening a regular file path with a trailing backslash",
+          "gap": "GAP-14"
+        },
+        "NamingPathsTest.UnicodeCaseFoldingInsensitive": {
+          "reason": "memfs filenode lookup is case-sensitive and does not perform NTFS Unicode $UpCase folding",
+          "gap": "GAP-15"
+        },
+        "RenameMoveTest.FileRenameInfoExIgnoreReadOnlyTarget": {
+          "reason": "Dokan does not honor FILE_RENAME_IGNORE_READONLY_ATTRIBUTE in FileRenameInformationEx",
+          "gap": "GAP-21"
+        },
+        "RenameMoveTest.FileRenameInfoExPosixReplaceOpenTarget": {
+          "reason": "Dokan does not support FILE_RENAME_POSIX_SEMANTICS replacing an open target",
+          "gap": "GAP-21"
+        },
+        "RenameMoveTest.FileRenameInfoReplaceOpenTargetNonPosixFails": {
+          "reason": "memfs allows non-POSIX FileRenameInformation overwrite of an open target instead of failing STATUS_ACCESS_DENIED",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.PosixRenameReplacesDataMappedTarget": {
+          "reason": "memfs allows non-POSIX FileRenameInformation overwrite of an open data-mapped target, and Dokan ignores FILE_RENAME_POSIX_SEMANTICS in FileRenameInformationEx",
+          "gap": "GAP-21"
+        },
+        "RenameMoveTest.RenameDeletePendingFileFails": {
+          "reason": "memfs allows renaming a delete-pending file instead of failing STATUS_DELETE_PENDING/STATUS_ACCESS_DENIED",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameDirectoryIntoOwnSubtreeFails": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move infinitely recurses and crashes memfs.exe when moving a directory into its own subtree",
+          "gap": "GAP-01",
+          "skip_crash": true
+        },
+        "RenameMoveTest.RenameDirectoryOverExistingFileSemantics": {
+          "reason": "memfs rejects replacing an existing writable file with a directory under MOVEFILE_REPLACE_EXISTING",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameDirectoryWithOpenDescendantFails": {
+          "reason": "memfs allows renaming a directory while a descendant handle is open",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameHardLinkOntoSiblingHardLink": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "RenameMoveTest.RenameMissingSourceFailsNotFound": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp returns ERROR_FILE_NOT_FOUND instead of ERROR_PATH_NOT_FOUND when MoveFileExW names a source under a missing parent directory",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameMissingTargetParentFailsPathNotFound": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_movefile returns STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) instead of STATUS_OBJECT_PATH_NOT_FOUND (ERROR_PATH_NOT_FOUND) when the target parent directory does not exist",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameOntoDeletePendingTargetFailsAccessDenied": {
+          "reason": "memfs fs_filenodes::move does not check delete-pending state on rename targets",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameOverDataMappedTargetPreservesMappedView": {
+          "reason": "memfs does not preserve data-mapped view contents when replacing a mapped target",
+          "gap": "GAP-04"
+        },
+        "RenameMoveTest.RenamePreservesAlternateDataStreams": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move renames only the base filenode and never moves its attached alternate data streams in _filenodes",
+          "gap": "GAP-18"
+        },
+        "RenameMoveTest.RenameSameNameNoOp": {
+          "reason": "memfs fails MoveFileExW(path, path, 0) instead of treating same-name rename as a no-op",
+          "gap": "GAP-16"
+        },
+        "RenameMoveTest.RenameUpdatesBothParentDirLastWriteTimes": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move does not update source/destination parent directory LastWriteTime on rename",
+          "gap": "GAP-10"
+        },
+        "RenameMoveTest.RenameUpdatesFileChangeTime": {
+          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so memfs never reports an updated file ChangeTime after rename",
+          "gap": "GAP-09"
+        },
+        "SecurityAclTest.CopyFileInheritsDestinationDaclUnlikeMove": {
+          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.CreatorGroupSidExpandsOnInheritedAce": {
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.CreatorOwnerSidExpandsOnInheritedAce": {
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DaclInheritanceFromParentDirectory": {
+          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DeleteRightVsParentDeleteChildRight": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DirectoryAddFileVsAddSubdirectoryRightsDistinct": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DirectoryGenericRightsMapToSpecificRights": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DirectoryListAndCreateFileAccessEnforcement": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.DirectoryTraverseAccessEnforcement": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.ExplicitDenyOverridesAllowAndExplicitChildAllowOverridesInheritedDeny": {
+          "reason": "memfs does not evaluate DACLs or inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.FileExecuteOnlyAllowsImageMappingDeniesReadData": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.GranularAttributeAndEaAccessRightsEnforcement": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.InheritanceFlagsInheritOnlyAndNoPropagate": {
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.LowIntegrityCallerDeniedWriteUpToUnlabeledFile": {
+          "reason": "memfs does not evaluate DACLs or mandatory integrity labels during memfs_createfile",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.MaximumAllowedGrantsOnlyDaclPermittedRights": {
+          "reason": "dokan3.sys/memfs does not evaluate DACLs when resolving MAXIMUM_ALLOWED",
+          "gap": "GAP-06"
+        },
+        "SecurityAclTest.NtQueryAndSetSecurityObjectDirect": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.NullDaclGrantsAllVsEmptyDaclDeniesAll": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.ObjectInheritOnlyVsContainerInheritOnly": {
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.OwnerImplicitReadControlAndWriteDac": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.RenameAllowedByParentDeleteChildWhenFileDeniesDelete": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.RenameDeniedWithoutDeleteOrParentDeleteChild": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.SaclGetAndSet": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.SecurityDescriptorPreservedAcrossIntraVolumeRename": {
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.SecurityObjectApisEnforceHandleAccessMasks": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.SetDenyReadDaclEnforcesAccessDenied": {
+          "reason": "memfs does not enforce deny-read DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner": {
+          "reason": "memfs does not evaluate DACLs/ownership and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "SecurityAclTest.WriteDataAndAppendDataAccessEnforcement": {
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "StreamsTest.BackupReadAndBackupWritePreservesStreams": {
+          "reason": "memfs BackupRead fails on alternate data streams",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.BaseAttributeChangeVisibleThroughStream": {
+          "reason": "memfs models alternate streams as separate filenodes and does not synchronize file attributes across streams",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.BaseTimestampChangeVisibleThroughStream": {
+          "reason": "memfs models alternate streams as separate filenodes and does not synchronize timestamps across streams",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.CopyFileWPreservesAlternateStreams": {
+          "reason": "memfs CopyFileW fails with ERROR_FILE_NOT_FOUND when copying files with alternate data streams",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.DefaultDataStreamAliasCreateNewFailsFileExists": {
+          "reason": "memfs does not recognize explicit '::$DATA' default-stream alias as the existing base file on CREATE_NEW",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.DefaultStreamRenameToNamedStreamMovesData": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_movefile renames the default stream away from the base filenode, leaving an orphaned entry in _directoryPaths invisible to memfs_findfiles and poisoning temp-directory teardown with ERROR_DIR_NOT_EMPTY",
+          "gap": "GAP-18",
+          "skip_crash": true
+        },
+        "StreamsTest.DeleteDefaultStreamByExplicitName": {
+          "reason": "memfs fails DeleteFileW on explicit '::$DATA' default stream syntax",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.DirectoryDefaultIndexAllocationAliases": {
+          "reason": "memfs does not handle '::$INDEX_ALLOCATION' / ':$I30:$INDEX_ALLOCATION' directory stream aliases",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.FileStreamInternalAttributeTypesRejected": {
+          "reason": "memfs does not reject internal NTFS stream attribute types such as ':$EA'",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.FindStreamsOnStreamPathEnumeratesAllStreams": {
+          "reason": "memfs_findstreams (samples/dokan_memfs/memfs_operations.cpp:742-772) looks up the stream filenode instead of its base file when FindFirstStreamW is called on a stream path",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.InvalidStreamSyntaxAndDirectoryDataStreamRejected": {
+          "reason": "memfs does not reject invalid stream syntax or '::$DATA' on directories",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.NamedStreamRenameOntoEmptyDefaultStream": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_movefile accepts non-replacing rename of a named stream onto '::$DATA' and leaves an orphaned entry in _directoryPaths invisible to memfs_findfiles, poisoning temp-directory teardown with ERROR_DIR_NOT_EMPTY",
+          "gap": "GAP-18",
+          "skip_crash": true
+        },
+        "StreamsTest.NtQueryFileStreamInformationSmallBufferAndDir": {
+          "reason": "memfs_findstreams returns STATUS_END_OF_FILE instead of STATUS_SUCCESS for FileStreamInformation on a directory with no named streams",
+          "gap": "GAP-17"
+        },
+        "StreamsTest.PerStreamDataAndSizeIndependentOfDefaultStream": {
+          "reason": "memfs stamps per-stream filenode timestamps independently instead of sharing MFT timestamps",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.PosixDeleteFileWhileStreamHandleOpenUnlinksName": {
+          "reason": "Dokan does not unlink a file immediately under POSIX FileDispositionInformationEx while a named stream handle is open",
+          "gap": "GAP-21"
+        },
+        "StreamsTest.ReadOnlyFileBlocksStreamCreateModifyAndDelete": {
+          "reason": "memfs does not block alternate stream creation/modification on READONLY files",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.SecurityDescriptorSharedBetweenBaseFileAndAlternateStream": {
+          "reason": "memfs models streams as separate filenodes with null default security descriptors, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "gap": "GAP-20"
+        },
+        "StreamsTest.SparseNamedStreamZeroDataAndAllocatedRanges": {
+          "reason": "Dokan does not support sparse files or sparse alternate data streams",
+          "gap": "GAP-24"
+        },
+        "StreamsTest.StreamCaseInsensitiveLookupAndPreservation": {
+          "reason": "memfs alternate data stream names are case-sensitive",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamCaseOnlyRenameAndSelfRename": {
+          "reason": "memfs stream rename creates duplicate stream entries instead of NTFS no-op/rename",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamDeleteWhileOpenLegacyDeletePending": {
+          "reason": "memfs default stream becomes inaccessible when deleting an open alternate data stream",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamIndependentByteRangeLocks": {
+          "reason": "dokan3.sys DokanDispatchWrite omits FsRtlCheckLockForWriteAccess, and memfs fails independent open/locking on default stream alongside a named stream",
+          "gap": "GAP-07"
+        },
+        "StreamsTest.StreamNameLengthLimit255": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp accepts a 256-character alternate stream name instead of rejecting it with ERROR_INVALID_NAME",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamRenameReplaceNonEmptyTargetFailsInvalidParameter": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move unconditionally replaces a non-empty target stream when ReplaceIfExists=TRUE instead of failing STATUS_INVALID_PARAMETER",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamRenameToNonStreamTargetFailsInvalidParameter": {
+          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_movefile accepts renaming an alternate stream to a non-stream path without a leading ':', leaving a filenode with main_stream != nullptr orphaned in _directoryPaths (invisible to memfs_findfiles) and poisoning temp-directory teardown with ERROR_DIR_NOT_EMPTY",
+          "gap": "GAP-18",
+          "skip_crash": true
+        },
+        "StreamsTest.StreamSharingModeIndependentPerStream": {
+          "reason": "memfs does not track sharing modes independently per stream",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.StreamWriteUpdatesBaseMetadataAndQueriesStreamName": {
+          "reason": "memfs_writefile does not set FILE_ATTRIBUTE_ARCHIVE on the base file when writing to an alternate data stream",
+          "gap": "GAP-18"
+        },
+        "TimestampsAttrsTest.ArchiveBitSetOnCreateAndWriteAfterClear": {
+          "reason": "memfs_createfile sets FILE_ATTRIBUTE_ARCHIVE on create/truncate, but memfs_writefile does not re-set FILE_ATTRIBUTE_ARCHIVE on write after it is cleared",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently": {
+          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so memfs does not persist ChangeTime independently",
+          "gap": "GAP-09"
+        },
+        "TimestampsAttrsTest.HandleExplicitSetFileTimeFreezesSubsequentAutoUpdateOnSameHandle": {
+          "reason": "memfs does not implement NTFS per-handle timestamp freeze semantics",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.HardLinkCreationUpdatesChangeTimeNotLastWriteTime": {
+          "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-23"
+        },
+        "TimestampsAttrsTest.InvalidNegativeTimestampLessThanMinusTwoFails": {
+          "reason": "memfs accepts negative FILETIME values < -2 instead of returning STATUS_INVALID_PARAMETER",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.MetadataChangeUpdatesChangeTimeNotLastWriteTime": {
+          "reason": "memfs does not update ChangeTime on metadata changes",
+          "gap": "GAP-09"
+        },
+        "TimestampsAttrsTest.ParentDirLastWriteTimeOnChildCreateDeleteNotWrite": {
+          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::add and fs_filenodes::remove do not update the parent directory filenode's LastWriteTime on child creation or deletion",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.ReadAdvancesLastAccessTimeWhenUpdatesEnabled": {
+          "reason": "memfs_readfile does not update LastAccessTime on reads when volume last-access updates are enabled",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
+          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so memfs never reports an updated ChangeTime after rename",
+          "gap": "GAP-09"
+        },
+        "TimestampsAttrsTest.SecurityChangeUpdatesChangeTimeNotLastWriteTime": {
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c), and dokan/fileinfo.c:48-49 aliases ChangeTime to LastWriteTime",
+          "gap": "GAP-20"
+        },
+        "TimestampsAttrsTest.SentinelMinusOneFreezesTimestampUpdates": {
+          "reason": "memfs does not implement -1 sentinel timestamp freeze semantics",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.SentinelMinusTwoRestoresTimestampUpdates": {
+          "reason": "memfs does not implement -2 sentinel timestamp unfreeze semantics",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.SetEndOfFileAndTruncateUpdateLastWriteAndArchive": {
+          "reason": "memfs_setendoffile and memfs_setallocationsize resize _data without updating LastWriteTime/ChangeTime or setting FILE_ATTRIBUTE_ARCHIVE",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.SetFileAttributesCannotClearSparseFlag": {
+          "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
+          "gap": "GAP-24"
+        },
+        "TimestampsAttrsTest.TemporaryAttributeRejectedOnDirectory": {
+          "reason": "memfs_setfileattributes accepts FILE_ATTRIBUTE_TEMPORARY on directories instead of returning STATUS_INVALID_PARAMETER",
+          "gap": "GAP-10"
+        },
+        "TimestampsAttrsTest.WriteUpdatesLastWriteTimeAndChangeTime": {
+          "reason": "memfs does not update LastWriteTime and ChangeTime on WriteFile",
+          "gap": "GAP-10"
+        }
+      }
+    }
+  }
+}
