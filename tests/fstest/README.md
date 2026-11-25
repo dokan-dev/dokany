@@ -449,36 +449,32 @@ Supported `-ConfigNames` and baseline targets:
 
 <!-- markdownlint-enable MD013 -->
 
-### AppVeyor CI (`appveyor.yml`)
+### GitHub Actions: Build and Test (`.github/workflows/build-and-test.yml`)
 
-Under `max_jobs: 1`, AppVeyor runs jobs sequentially so driver signing and
-installer packaging stay completely decoupled from fstest builds:
-
-- **`All` job (`Visual Studio 2026`):** Builds, signs, and packages the Dokan
-  driver, libraries, samples, and `DokanSetup-<version>.exe` **without**
-  building or running `dokan_fstest`.
-- **`Visual Studio 2026; FsTest` job:** Builds `dokan_fstest.exe` via
-  `scripts\build_fstest.ps1` with `-Configuration Release`,
-  `-CacheDir $env:FSTEST_DEPS_CACHE`, and `-VerifyStaticCrt` (compiling `/MT`,
-  running `fstest_self_test.exe`, and enforcing the Windows Server 2016 base-OS
-  import gate, without `-WarningsAsErrors`), stages `dokan_fstest.exe`,
-  `tests/fstest/baselines/`, `tests/fstest/LICENSE` (`LICENSE`), and
-  GoogleTest's BSD-3-Clause `LICENSE` (`LICENSE-googletest.txt`) into the
-  `dokan-fstest-<version>.zip` artifact, extracts it into
-  `tests\fstest\ci-bin\`, installs `DokanSetup-<version>.exe` with Driver
-  Verifier enabled on `dokan3.sys`, and executes the test matrix below.
-- **`Visual Studio 2017; FsTest` job:** Downloads `dokan-fstest-<version>.zip`
-  from `Visual Studio 2026; FsTest`, extracts it into `tests\fstest\ci-bin\`
-  (verifying the binary, baselines, and both `LICENSE` files), installs
-  `DokanSetup-<version>.exe` with Driver Verifier enabled, and executes the
-  same test matrix:
+- **`Build, sign and package` job (`windows-2025-vs2026`):** Builds,
+  test-signs, and packages the Dokan driver, libraries, samples, and installer
+  (`DokanSetup-<version>.exe`, `dokan-<version>.zip`, and `dokan-test-payload`)
+  **without** building or running `dokan_fstest`.
+- **`Build test tools` job (`windows-2025-vs2026`):** Runs in parallel with
+  `Build, sign and package`. Builds `fsx.exe` and `dokan_fstest.exe` via
+  `scripts\build_fstest.ps1` with `-Configuration Release`, a cached
+  `-CacheDir`, and `-VerifyStaticCrt` (compiling `/MT`, running
+  `fstest_self_test.exe`, and enforcing the Windows Server 2016 base-OS import
+  gate, without `-WarningsAsErrors`). Stages `dokan-test-tools` for the VM
+  jobs and publishes `dokan-fstest-<version>.zip` containing
+  `dokan_fstest.exe`, `baselines/`, `LICENSE`, `LICENSE-googletest.txt`, and
+  `LICENSE-nlohmann-json.txt` (prefixed `pr-<N>-` on pull requests).
+- **`Test (<os>, <shard>)` jobs:** Boot Windows Server 2016, 2019, 2022, and
+  2025 VMs (QEMU/KVM on Linux runners), install `DokanSetup.exe` with Driver
+  Verifier enabled on `dokan3.sys`, and run the test matrix split across two
+  shards per OS (see `scripts/ci/README.md`):
   1. Real NTFS `--strict` gate on `C:\fstest_ntfs` (`ntfs_strict.json`,
      skipping `REQUIRE_VOLUME_ROOT()` and legacy-OS/8.3-gated tests).
   2. `samples\memfs_test.ps1` against both x64 and x86 `memfs.exe`.
   3. `samples\mirror_test.ps1` against x64 `mirror.exe` (all 6 mount configs)
      and x86 `mirror.exe` (`-ConfigNames @("drive", "netUnc")`).
-  4. Scorecard archive upload (`fstest-results-<image>-<build>.zip`) in
-     `on_finish`.
+  4. Scorecards uploaded in the `vm-logs-<os>-<shard>` artifacts
+     (`fstest-results/*.json`).
 
 ### GitHub Actions (`.github/workflows/fstest-ntfs.yml`)
 
