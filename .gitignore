@@ -44,7 +44,6 @@ ReleasePS
 /dokan_wix/setup.inf
 /dokan_wix/setup.rpt
 /fstools
-/winfstest
 /dokan_wix/UpgradeLog.htm
 /.vs
 /dokan_wix/.vs
@@ -62,3 +61,7 @@ ReleasePS
 /.sonar
 /bw-output
 /.scannerwork
+/tests/fstest/build/
+/tests/fstest/build-*/
+/tests/fstest/ci-bin/
+/fstest-results/

@@ -7,11 +7,13 @@ on:
     paths-ignore:
       - 'README.md'
       - 'documentations/**'
+      - 'tests/fstest/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths-ignore:
       - 'README.md'
       - 'documentations/**'
+      - 'tests/fstest/**'
   workflow_dispatch:
 
 permissions:

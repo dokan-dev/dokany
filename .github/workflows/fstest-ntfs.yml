@@ -1,0 +1,184 @@
+name: FsTest Real NTFS Conformance
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'tests/fstest/**'
+      - 'scripts/build_fstest.ps1'
+      - 'scripts/fstest_common.ps1'
+      - '.github/workflows/fstest-ntfs.yml'
+  pull_request:
+    paths:
+      - 'tests/fstest/**'
+      - 'scripts/build_fstest.ps1'
+      - 'scripts/fstest_common.ps1'
+      - '.github/workflows/fstest-ntfs.yml'
+  schedule:
+    # Weekly run (Mondays 06:00 UTC) to catch hosted-runner NTFS/MSVC image drift.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fstest-ntfs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ntfs-strict:
+    name: Real NTFS --strict (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - windows-2025-vs2026
+    steps:
+      - name: Checkout dokany
+        uses: actions/checkout@v7
+
+      - name: Cache fstest dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/fstest-deps
+          key: fstest-deps-${{ hashFiles('tests/fstest/deps.json') }}
+
+      - name: Check conformance docs, spec citations, baselines, and SPDX headers
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & python tests/fstest/scripts/check_conformance_docs.py
+          if ($LASTEXITCODE -ne 0) {
+            throw "check_conformance_docs.py failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Build dokan_fstest (MSVC x64 /MT) and run self-tests
+        shell: powershell
+        env:
+          DEPS_CACHE_DIR: ${{ runner.temp }}\fstest-deps
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build_fstest.ps1 `
+            -Configuration Release `
+            -CacheDir $env:DEPS_CACHE_DIR `
+            -VerifyStaticCrt `
+            -WarningsAsErrors
+
+      - name: Validate baseline manifests against compiled suite
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fsTestExe = '.\tests\fstest\build\bin\Release\dokan_fstest.exe'
+          & $fsTestExe '--validate-baseline=tests/fstest/baselines/dokan_memfs.json'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Baseline validation failed for dokan_memfs.json (exit $LASTEXITCODE)"
+          }
+          & $fsTestExe '--validate-baseline=tests/fstest/baselines/dokan_mirror.json'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Baseline validation failed for dokan_mirror.json (exit $LASTEXITCODE)"
+          }
+
+      - name: Add Windows Defender exclusion for test root (best-effort)
+        shell: powershell
+        run: |
+          if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+            try {
+              Add-MpPreference -ExclusionPath 'C:\fstest_ntfs' -ErrorAction Stop
+            } catch {
+              Write-Warning "Windows Defender exclusion skipped: $($_.Exception.Message)"
+            }
+          }
+
+      - name: Run real NTFS --strict conformance suite
+        shell: powershell
+        env:
+          RUNNER_IMAGE: ${{ matrix.os }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fsTestExe = '.\tests\fstest\build\bin\Release\dokan_fstest.exe'
+          $resultsDir = '.\fstest-results'
+          $ntfsRoot = 'C:\fstest_ntfs'
+          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
+
+          if (Test-Path -LiteralPath $ntfsRoot) {
+            & $fsTestExe "--cleanup-dir=$ntfsRoot"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Pre-cleanup of $ntfsRoot failed with exit code $LASTEXITCODE"
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $ntfsRoot | Out-Null
+
+          $jsonOut = Join-Path $resultsDir "ntfs_strict_$($env:RUNNER_IMAGE).json"
+          try {
+            & $fsTestExe "--root=$ntfsRoot" '--strict' "--json-out=$jsonOut"
+            if ($LASTEXITCODE -ne 0) {
+              throw "dokan_fstest --strict failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            if (Test-Path -LiteralPath $ntfsRoot) {
+              & $fsTestExe "--cleanup-dir=$ntfsRoot"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "dokan_fstest --cleanup-dir failed (exit $LASTEXITCODE); falling back to cmd rmdir \\?\$ntfsRoot"
+                & cmd.exe /d /c "rmdir /s /q \\?\$ntfsRoot"
+              }
+            }
+          }
+
+      - name: Upload NTFS conformance scorecard
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fstest-ntfs-scorecard-${{ matrix.os }}
+          path: fstest-results/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  clang-cl-portability:
+    name: Portability & clang-cl Build (Win8 no-exceptions + CLI)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout dokany
+        uses: actions/checkout@v7
+
+      - name: Cache fstest dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/fstest-deps
+          key: fstest-deps-${{ hashFiles('tests/fstest/deps.json') }}
+
+      - name: Build Layer 1 + Layer 2 with clang-cl (Win8 / UNICODE-only / no-exceptions)
+        shell: powershell
+        env:
+          DEPS_CACHE_DIR: ${{ runner.temp }}\fstest-deps
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build_fstest.ps1 `
+            -Configuration Release `
+            -Compiler clang-cl `
+            -BuildDir tests\fstest\build-clang-win8 `
+            -CacheDir $env:DEPS_CACHE_DIR `
+            -SkipCli `
+            -WarningsAsErrors `
+            -CMakeExtraArgs @(
+              '-DFSTEST_WIN32_WINNT=0x0602',
+              '-DFSTEST_NTDDI_VERSION=',
+              '-DFSTEST_DEFINE_UNDERSCORE_UNICODE=OFF',
+              '-DFSTEST_CORE_NO_EXCEPTIONS=ON'
+            )
+
+      - name: Build full suite + CLI with clang-cl and run self-tests
+        shell: powershell
+        env:
+          DEPS_CACHE_DIR: ${{ runner.temp }}\fstest-deps
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build_fstest.ps1 `
+            -Configuration Release `
+            -Compiler clang-cl `
+            -BuildDir tests\fstest\build-clang-cli `
+            -CacheDir $env:DEPS_CACHE_DIR `
+            -WarningsAsErrors
