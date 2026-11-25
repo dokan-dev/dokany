@@ -1,0 +1,82 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msvc-x64-release",
+      "displayName": "MSVC x64 Release (Ninja, /MT)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "msvc-x64-debug",
+      "displayName": "MSVC x64 Debug (Ninja, /MTd)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "clang-cl-x64",
+      "displayName": "clang-cl x64 Release (Ninja, /MT)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-clang-cl",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "FSTEST_WERROR": "ON"
+      }
+    },
+    {
+      "name": "clang-cl-portability",
+      "displayName": "clang-cl core+suite portability (_WIN32_WINNT=0x0602, UNICODE-only, no-exceptions)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-clang-cl-portability",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "FSTEST_WERROR": "ON",
+        "FSTEST_BUILD_CLI": "OFF",
+        "FSTEST_WIN32_WINNT": "0x0602",
+        "FSTEST_NTDDI_VERSION": "",
+        "FSTEST_DEFINE_UNDERSCORE_UNICODE": "OFF",
+        "FSTEST_CORE_NO_EXCEPTIONS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc-x64-release",
+      "configurePreset": "msvc-x64-release"
+    },
+    {
+      "name": "msvc-x64-debug",
+      "configurePreset": "msvc-x64-debug"
+    },
+    {
+      "name": "clang-cl-x64",
+      "configurePreset": "clang-cl-x64"
+    },
+    {
+      "name": "clang-cl-portability",
+      "configurePreset": "clang-cl-portability",
+      "targets": [
+        "ntfs_helpers"
+      ]
+    }
+  ]
+}

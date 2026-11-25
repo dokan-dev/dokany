@@ -1,0 +1,14 @@
+{
+  "googletest": {
+    "version": "1.17.0",
+    "url": "https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz",
+    "filename": "googletest-1.17.0.tar.gz",
+    "sha256": "65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c"
+  },
+  "nlohmann_json": {
+    "version": "3.12.0",
+    "url": "https://github.com/nlohmann/json/releases/download/v3.12.0/include.zip",
+    "filename": "nlohmann-json-3.12.0-include.zip",
+    "sha256": "b8cb0ef2dd7f57f18933997c9934bb1fa962594f701cd5a8d3c2c80541559372"
+  }
+}
