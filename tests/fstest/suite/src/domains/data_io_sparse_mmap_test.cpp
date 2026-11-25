@@ -308,13 +308,13 @@ TEST_F(DataIoTest, MemoryMappedViewWriteVisibleToReadFile) {
   const std::wstring path = TestPath(L"mmap_view_to_read.dat");
   constexpr size_t kMapSize = 8192;
   auto wr = core::WriteFileContents(path, std::string(kMapSize, 'A'));
-  ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+  ASSERT_WIN32_OK(wr);
 
   MappedFileView mv;
   auto open_res =
       OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                      FILE_MAP_ALL_ACCESS, kMapSize, &mv);
-  ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+  ASSERT_WIN32_OK(open_res);
 
   char *mapped = mv.bytes();
   EXPECT_TRUE(helpers::AllBytesEqual(std::string_view(mapped, kMapSize), 'A'));
@@ -341,13 +341,13 @@ TEST_F(DataIoTest, MemoryMappedWriteFileVisibleInView) {
   const std::wstring path = TestPath(L"mmap_write_to_view.dat");
   constexpr size_t kMapSize = 8192;
   auto wr = core::WriteFileContents(path, std::string(kMapSize, 'A'));
-  ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+  ASSERT_WIN32_OK(wr);
 
   MappedFileView mv;
   auto open_res =
       OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                      FILE_MAP_ALL_ACCESS, kMapSize, &mv);
-  ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+  ASSERT_WIN32_OK(open_res);
 
   // Touch every page first so the view holds the pre-write image.
   char *mapped = mv.bytes();
@@ -370,13 +370,13 @@ TEST_F(DataIoTest, TruncateMappedFileFailsUserMappedFile) {
   constexpr int64_t kShrinkSize = 4096;
 
   auto init = core::WriteFileContents(path, std::string(kInitialSize, 'M'));
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   MappedFileView mv;
   auto open_res =
       OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                      FILE_MAP_ALL_ACCESS, kInitialSize, &mv);
-  ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+  ASSERT_WIN32_OK(open_res);
 
   ASSERT_WIN32_TRUE(SeekBegin(mv.file.get(), kShrinkSize));
   EXPECT_WIN32_ERROR(::SetEndOfFile(mv.file.get()), ERROR_USER_MAPPED_FILE);
@@ -401,13 +401,13 @@ TEST_F(DataIoTest, MemoryMappedCreateFileMappingExtendsEof) {
   constexpr DWORD kExtendedSize = 8192;
 
   auto init = core::WriteFileContents(path, initial);
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   {
     auto h = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     ::SetLastError(ERROR_SUCCESS);
     core::UniqueHandle mapping(::CreateFileMappingW(
@@ -418,11 +418,11 @@ TEST_F(DataIoTest, MemoryMappedCreateFileMappingExtendsEof) {
 
   auto h_verify = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_verify) << core::FormatWin32Error(h_verify.error);
+  ASSERT_WIN32_OK(h_verify);
   EXPECT_TRUE(CheckFileSize(h_verify.value->get(), kExtendedSize));
 
   auto contents = core::ReadAllBytes(h_verify.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   ASSERT_EQ(contents.value->size(), static_cast<size_t>(kExtendedSize));
   EXPECT_EQ(contents.value->substr(0, initial.size()), initial);
   EXPECT_TRUE(helpers::AllBytesEqual(
@@ -437,13 +437,13 @@ TEST_F(DataIoTest, MemoryMappedWriteCopyDoesNotModifyFile) {
   const std::string original(kMapSize, 'C');
 
   auto init = core::WriteFileContents(path, original);
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   {
     MappedFileView mv;
     auto open_res = OpenMappedView(path, GENERIC_READ, PAGE_WRITECOPY,
                                    FILE_MAP_COPY, kMapSize, &mv);
-    ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+    ASSERT_WIN32_OK(open_res);
 
     char *mapped = mv.bytes();
     EXPECT_TRUE(
@@ -472,7 +472,7 @@ TEST_F(DataIoTest, MemoryMappedZeroByteFileFailsFileInvalid) {
 
   auto h_ro = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_ro) << core::FormatWin32Error(h_ro.error);
+  ASSERT_WIN32_OK(h_ro);
 
   ::SetLastError(ERROR_SUCCESS);
   core::UniqueHandle mapping(::CreateFileMappingW(
@@ -498,7 +498,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFilePersistsData) {
   constexpr char kInitByte = 'F';
 
   auto init = core::WriteFileContents(path, std::string(kMapSize, kInitByte));
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   const std::string mark0 = "FLUSH_PAGE_0_DATA";
   const std::string mark1 = "FLUSH_PAGE_1_DATA";
@@ -509,7 +509,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFilePersistsData) {
     auto open_res =
         OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                        FILE_MAP_WRITE, kMapSize, &mv);
-    ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+    ASSERT_WIN32_OK(open_res);
 
     char *mapped = mv.bytes();
     std::memcpy(mapped, mark0.data(), mark0.size());
@@ -519,7 +519,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFilePersistsData) {
   }
 
   auto data = core::ReadFileContents(path);
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   ASSERT_EQ(data.value->size(), kMapSize);
   EXPECT_EQ(data.value->substr(0, mark0.size()), mark0);
   EXPECT_EQ(data.value->substr(4096, mark1.size()), mark1);
@@ -542,7 +542,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFileReachesUnbufferedReader) {
 
   std::string expected(map_size, kInitByte);
   auto init = core::WriteFileContents(path, expected);
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   const std::string mark0 = "UNBUF_PAGE_0_DATA";
   const std::string mark1 = "UNBUF_PAGE_1_DATA";
@@ -554,7 +554,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFileReachesUnbufferedReader) {
   MappedFileView mv;
   auto open_res = OpenMappedView(path, GENERIC_READ | GENERIC_WRITE,
                                  PAGE_READWRITE, FILE_MAP_WRITE, map_size, &mv);
-  ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+  ASSERT_WIN32_OK(open_res);
 
   char *mapped = mv.bytes();
   std::memcpy(mapped, mark0.data(), mark0.size());
@@ -569,7 +569,7 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFileReachesUnbufferedReader) {
   auto h_unbuffered =
       core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
-  ASSERT_TRUE(h_unbuffered) << core::FormatWin32Error(h_unbuffered.error);
+  ASSERT_WIN32_OK(h_unbuffered);
 
   DWORD bytes_read = 0;
   ASSERT_WIN32_TRUE(::ReadFile(h_unbuffered.value->get(), buf.data(),
@@ -598,7 +598,7 @@ TEST_F(DataIoTest, MemoryMappedDirtyPagesPersistAfterCloseWithoutFlush) {
 
   std::string expected(kMapSize, kInitByte);
   auto init = core::WriteFileContents(path, expected);
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   const std::string mark0 = "DIRTY_PAGE_0_DATA";
   const std::string mark1 = "DIRTY_PAGE_1_DATA";
@@ -612,7 +612,7 @@ TEST_F(DataIoTest, MemoryMappedDirtyPagesPersistAfterCloseWithoutFlush) {
     auto open_res =
         OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                        FILE_MAP_WRITE, kMapSize, &mv);
-    ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+    ASSERT_WIN32_OK(open_res);
 
     char *mapped = mv.bytes();
     std::memcpy(mapped + 100, mark0.data(), mark0.size());
@@ -638,13 +638,13 @@ TEST_F(DataIoTest, ExtendMappedFileSucceedsWithActiveSection) {
   constexpr int64_t kNtExtendedSize = 24576;
 
   auto init = core::WriteFileContents(path, std::string(kInitialSize, 'M'));
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   MappedFileView mv;
   auto open_res =
       OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
                      FILE_MAP_ALL_ACCESS, kInitialSize, &mv);
-  ASSERT_TRUE(open_res) << core::FormatWin32Error(open_res.error);
+  ASSERT_WIN32_OK(open_res);
 
   ASSERT_WIN32_TRUE(SeekBegin(mv.file.get(), kWin32ExtendedSize));
   ASSERT_WIN32_TRUE(::SetEndOfFile(mv.file.get()));
@@ -674,12 +674,12 @@ TEST_F(DataIoTest, ExtendMappedFileSucceedsWithActiveSection) {
 TEST_F(DataIoTest, ImageMappedFileRejectsWriteOpen) {
   const std::wstring img_path = TestPath(L"sec_image_write_reject.exe");
   auto copy_res = CopyCurrentExecutableTo(img_path);
-  ASSERT_TRUE(copy_res) << core::FormatWin32Error(copy_res.error);
+  ASSERT_WIN32_OK(copy_res);
 
   auto h_img = core::CreateWin32File(img_path, GENERIC_READ | GENERIC_EXECUTE,
                                      core::kShareAll, OPEN_EXISTING,
                                      FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_img) << core::FormatWin32Error(h_img.error);
+  ASSERT_WIN32_OK(h_img);
 
   // Declare mapping before view so RAII unmaps view before closing section.
   ::SetLastError(ERROR_SUCCESS);
@@ -709,7 +709,7 @@ TEST_F(DataIoTest, ImageMappedFileRejectsWriteOpen) {
   {
     auto h_read = core::CreateWin32File(img_path, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_read) << core::FormatWin32Error(h_read.error);
+    ASSERT_WIN32_OK(h_read);
   }
 
   // Unmap and close section -> write open succeeds once unmapped.
@@ -719,7 +719,7 @@ TEST_F(DataIoTest, ImageMappedFileRejectsWriteOpen) {
   auto h_write_after =
       core::CreateWin32File(img_path, GENERIC_WRITE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  EXPECT_TRUE(h_write_after) << core::FormatWin32Error(h_write_after.error);
+  EXPECT_WIN32_OK(h_write_after);
 }
 
 // Spec: [MS-FSA] 2.1.5.10 / [MS-FSCC] 2.3 -- FSCTL_SET_SPARSE sets and clears
@@ -731,7 +731,7 @@ TEST_F(DataIoTest, SparseSetAndQueryFlag) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
@@ -744,12 +744,12 @@ TEST_F(DataIoTest, SparseSetAndQueryFlag) {
                                       FILE_ATTRIBUTE_SPARSE_FILE, true));
 
   auto path_attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(path_attrs) << core::FormatWin32Error(path_attrs.error);
+  ASSERT_WIN32_OK(path_attrs);
   EXPECT_NE(*path_attrs.value & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
 
   // Clear sparse flag via FILE_SET_SPARSE_BUFFER{FALSE} on a 0-byte file.
   auto cleared = core::SetSparseFile(h.value->get(), false);
-  ASSERT_TRUE(cleared) << core::FormatWin32Error(cleared.error);
+  ASSERT_WIN32_OK(cleared);
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
 
@@ -777,18 +777,18 @@ TEST_F(DataIoTest, SparseZeroDataDeallocatesAndReadsZeroes) {
 
   {
     auto h = CreateSparseFile(path);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     // Fully write 1 MiB of non-zero bytes first and flush so cached pages are
     // committed before punching holes.
     auto wr = WriteFilledBytes(h.value->get(), kFileSize, 0x5A, kChunk);
-    ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr);
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h.value->get()));
 
     // Zero [64 KiB, 512 KiB) (448 KiB hole, 64 KiB aligned).
     auto z1 = core::SetZeroData(h.value->get(), static_cast<int64_t>(kChunk),
                                 static_cast<int64_t>(8u * kChunk));
-    ASSERT_TRUE(z1) << core::FormatWin32Error(z1.error);
+    ASSERT_WIN32_OK(z1);
 
     // Verify [0, 64 KiB) intact, [64 KiB, 512 KiB) zeroed, [512 KiB, 576 KiB)
     // intact.
@@ -803,7 +803,7 @@ TEST_F(DataIoTest, SparseZeroDataDeallocatesAndReadsZeroes) {
     // Zero [0, 256 KiB) across allocated and already-sparse regions.
     auto z2 =
         core::SetZeroData(h.value->get(), 0, static_cast<int64_t>(4u * kChunk));
-    ASSERT_TRUE(z2) << core::FormatWin32Error(z2.error);
+    ASSERT_WIN32_OK(z2);
     ASSERT_TRUE(VerifyFilledChunkAt(h.value->get(), 0, kChunk, 0x00));
   }
 
@@ -811,7 +811,7 @@ TEST_F(DataIoTest, SparseZeroDataDeallocatesAndReadsZeroes) {
   // 64 KiB chunks) and [0, 64 KiB) by the second, so at least seven chunks of
   // the 1 MiB file must no longer be allocated.
   auto comp = QueryCompressedSize(path);
-  ASSERT_TRUE(comp) << core::FormatWin32Error(comp.error);
+  ASSERT_WIN32_OK(comp);
   EXPECT_LE(*comp.value, static_cast<uint64_t>(kFileSize - 7u * kChunk));
 }
 
@@ -825,7 +825,7 @@ TEST_F(DataIoTest, SparseQueryAllocatedRanges) {
   constexpr int64_t kFileSize = 1024 * 1024;
 
   auto h = CreateSparseFile(path, kFileSize);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // Write non-zero data at [0, 64 KiB), [256 KiB, 320 KiB), and [512 KiB, 576
   // KiB), then punch out [64 KiB, 512 KiB).
@@ -837,10 +837,10 @@ TEST_F(DataIoTest, SparseQueryAllocatedRanges) {
   }
 
   auto zero_res = core::SetZeroData(h.value->get(), kChunk, 8 * kChunk);
-  ASSERT_TRUE(zero_res) << core::FormatWin32Error(zero_res.error);
+  ASSERT_WIN32_OK(zero_res);
 
   auto ranges = core::QueryAllocatedRanges(h.value->get(), 0, kFileSize);
-  ASSERT_TRUE(ranges) << core::FormatWin32Error(ranges.error);
+  ASSERT_WIN32_OK(ranges);
 
   ASSERT_GE(ranges.value->size(), 2u);
   EXPECT_TRUE(RangeCoveredBy(*ranges.value, 0, kChunk));
@@ -860,10 +860,10 @@ TEST_F(DataIoTest, SparseExtendWithSetEndOfFileLeavesHoleUnallocated) {
 
   {
     auto h = CreateSparseFile(path, kFileSize);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto ranges = core::QueryAllocatedRanges(h.value->get(), 0, kFileSize);
-    ASSERT_TRUE(ranges) << core::FormatWin32Error(ranges.error);
+    ASSERT_WIN32_OK(ranges);
     EXPECT_TRUE(ranges.value->empty());
 
     // Full 1 MiB read must return all zeroes.
@@ -883,7 +883,7 @@ TEST_F(DataIoTest, SparseExtendWithSetEndOfFileLeavesHoleUnallocated) {
   }
 
   auto comp = QueryCompressedSize(path);
-  ASSERT_TRUE(comp) << core::FormatWin32Error(comp.error);
+  ASSERT_WIN32_OK(comp);
   EXPECT_EQ(*comp.value, 0u);
 }
 
@@ -899,7 +899,7 @@ TEST_F(DataIoTest, SparseQueryAllocatedRangesBufferPagination) {
                                                      9 * kChunk, 12 * kChunk};
 
   auto h = CreateSparseFile(path, kFileSize);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   std::vector<uint8_t> block(static_cast<size_t>(kChunk), 0x6D);
   for (int64_t off : kExtentOffsets) {
@@ -925,8 +925,7 @@ TEST_F(DataIoTest, SparseQueryAllocatedRangesBufferPagination) {
         page.data(), static_cast<DWORD>(sizeof(page)), &bytes_ret, nullptr);
     const DWORD err = (ok != FALSE) ? ERROR_SUCCESS : ::GetLastError();
     if (ok == FALSE) {
-      ASSERT_EQ(err, static_cast<DWORD>(ERROR_MORE_DATA))
-          << core::FormatWin32Error(err);
+      ASSERT_WIN32_ERROR_CODE(err, ERROR_MORE_DATA);
       saw_more_data = true;
     }
 
@@ -970,28 +969,28 @@ TEST_F(DataIoTest, SetZeroDataOnNonSparseFileZeroesWithoutSettingSparse) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto wr = WriteFilledBytes(h.value->get(), kFileSize,
                              static_cast<uint8_t>('Z'), kFileSize);
-  ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+  ASSERT_WIN32_OK(wr);
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
 
   auto zero_res =
       core::SetZeroData(h.value->get(), static_cast<int64_t>(kZeroStart),
                         static_cast<int64_t>(kZeroEnd));
-  ASSERT_TRUE(zero_res) << core::FormatWin32Error(zero_res.error);
+  ASSERT_WIN32_OK(zero_res);
 
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
   auto attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_EQ(*attrs.value & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   ASSERT_EQ(contents.value->size(), kFileSize);
 
   const std::string_view sv(*contents.value);
@@ -1018,9 +1017,9 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
   // before this test asks it to extend the file to 5 GiB.
   constexpr int64_t kProbeSize = 1024 * 1024;
   auto h = CreateSparseFile(path, kProbeSize);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   auto probe_ranges = core::QueryAllocatedRanges(h.value->get(), 0, kProbeSize);
-  ASSERT_TRUE(probe_ranges) << core::FormatWin32Error(probe_ranges.error);
+  ASSERT_WIN32_OK(probe_ranges);
   ASSERT_TRUE(probe_ranges.value->empty())
       << "A 1 MiB sparse probe reports " << probe_ranges.value->size()
       << " allocated range(s); refusing to extend the file to 5 GiB";
@@ -1036,7 +1035,7 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), kFiveGiB));
   auto wr = core::WriteAllBytes(h.value->get(), pattern.data(), pattern.size());
-  ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+  ASSERT_WIN32_OK(wr);
 
   // Read back via SetFilePointerEx.
   std::vector<uint8_t> sync_buf(kPatternLen, 0);
@@ -1052,7 +1051,7 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
     auto h_ov = core::CreateWin32File(
         path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-    ASSERT_TRUE(h_ov) << core::FormatWin32Error(h_ov.error);
+    ASSERT_WIN32_OK(h_ov);
 
     ::SetLastError(ERROR_SUCCESS);
     core::UniqueHandle ev(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -1068,7 +1067,7 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
         ::ReadFile(h_ov.value->get(), ov_buf.data(), kPatternLen, nullptr, &ov);
     auto ov_res = helpers::CompleteOverlappedIo(
         h_ov.value->get(), &ov, ev.get(), ok, Config().timing.async_timeout_ms);
-    ASSERT_TRUE(ov_res) << core::FormatWin32Error(ov_res.error);
+    ASSERT_WIN32_OK(ov_res);
     EXPECT_EQ(*ov_res.value, kPatternLen);
     EXPECT_EQ(ov_buf, pattern);
   }
@@ -1079,7 +1078,7 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
     auto h2 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
 
     OVERLAPPED lock_ov = MakeOffsetOverlapped(static_cast<uint64_t>(kFiveGiB));
     ASSERT_WIN32_TRUE(::LockFileEx(
@@ -1109,13 +1108,13 @@ TEST_F(DataIoTest, SparseFile64BitOffsetsOver4GiB) {
   // Allocated range query must cover [5 GiB, 5 GiB + 4096) and leave [0, 5 GiB)
   // unallocated.
   auto ranges = core::QueryAllocatedRanges(h.value->get(), 0, kTotalSize);
-  ASSERT_TRUE(ranges) << core::FormatWin32Error(ranges.error);
+  ASSERT_WIN32_OK(ranges);
   EXPECT_TRUE(RangeCoveredBy(*ranges.value, kFiveGiB, kPatternLen));
   EXPECT_FALSE(RangeOverlapsAny(*ranges.value, 0, kFiveGiB));
 
   // Zero out [5 GiB, 5 GiB + 4096) and verify zeroed readback.
   auto z = core::SetZeroData(h.value->get(), kFiveGiB, kTotalSize);
-  ASSERT_TRUE(z) << core::FormatWin32Error(z.error);
+  ASSERT_WIN32_OK(z);
   ASSERT_TRUE(VerifyFilledChunkAt(h.value->get(), kFiveGiB, kPatternLen, 0x00));
 }
 
@@ -1138,24 +1137,23 @@ TEST_F(DataIoTest, SparseClearFlagWithHoleSucceedsAndPreservesData) {
   constexpr size_t kFileSize = 2u * kChunk; // 128 KiB
 
   auto h = CreateSparseFile(path);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   ASSERT_WIN32_OK(WriteFilledBytes(h.value->get(), kFileSize, 0x55, kChunk));
   auto punch =
       core::SetZeroData(h.value->get(), 0, static_cast<int64_t>(kChunk));
-  ASSERT_TRUE(punch) << core::FormatWin32Error(punch.error);
+  ASSERT_WIN32_OK(punch);
   ASSERT_WIN32_TRUE(::FlushFileBuffers(h.value->get()));
 
   // Confirm a real sparse hole exists before testing FSCTL_SET_SPARSE(FALSE).
   auto ranges_with_hole = core::QueryAllocatedRanges(
       h.value->get(), 0, static_cast<int64_t>(kFileSize));
-  ASSERT_TRUE(ranges_with_hole)
-      << core::FormatWin32Error(ranges_with_hole.error);
+  ASSERT_WIN32_OK(ranges_with_hole);
   ASSERT_FALSE(RangeOverlapsAny(*ranges_with_hole.value, 0,
                                 static_cast<int64_t>(kChunk)));
 
   auto clear_with_hole = core::SetSparseFile(h.value->get(), false);
-  ASSERT_TRUE(clear_with_hole) << core::FormatWin32Error(clear_with_hole.error);
+  ASSERT_WIN32_OK(clear_with_hole);
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
   EXPECT_TRUE(VerifyFilledChunkAt(h.value->get(), 0, kChunk, 0x00));
@@ -1174,7 +1172,7 @@ TEST_F(DataIoTest, SparseSetZeroDataSubClusterRangeZeroesOnlyRequestedBytes) {
   constexpr size_t kFileSize = 2u * kChunk; // 128 KiB
 
   auto h = CreateSparseFile(path);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   ASSERT_WIN32_OK(WriteFilledBytes(h.value->get(), kFileSize, 0xA7, kChunk));
 
   constexpr size_t kZeroStart = 1000u;
@@ -1182,11 +1180,11 @@ TEST_F(DataIoTest, SparseSetZeroDataSubClusterRangeZeroesOnlyRequestedBytes) {
   auto sub_zero =
       core::SetZeroData(h.value->get(), static_cast<int64_t>(kZeroStart),
                         static_cast<int64_t>(kZeroEnd));
-  ASSERT_TRUE(sub_zero) << core::FormatWin32Error(sub_zero.error);
+  ASSERT_WIN32_OK(sub_zero);
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   ASSERT_EQ(contents.value->size(), kFileSize);
 
   const auto *bytes = reinterpret_cast<const uint8_t *>(contents.value->data());
@@ -1211,7 +1209,7 @@ TEST_F(DataIoTest, SetZeroDataInvalidRangeFailsInvalidParameter) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto inverted = core::SetZeroData(h.value->get(), 8192, 4096);
   EXPECT_FALSE(inverted);
@@ -1240,20 +1238,20 @@ TEST_F(DataIoTest, SetZeroDataPastEofDoesNotExtendFile) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // [32 KiB, 256 KiB) straddles EndOfFile (64 KiB).
   auto straddle =
       core::SetZeroData(h.value->get(), static_cast<int64_t>(kZeroStart),
                         static_cast<int64_t>(4u * kFileSize));
-  ASSERT_TRUE(straddle) << core::FormatWin32Error(straddle.error);
+  ASSERT_WIN32_OK(straddle);
   EXPECT_TRUE(CheckFileSize(h.value->get(), static_cast<int64_t>(kFileSize)));
 
   // [128 KiB, 256 KiB) lies entirely past EndOfFile.
   auto beyond =
       core::SetZeroData(h.value->get(), static_cast<int64_t>(2u * kFileSize),
                         static_cast<int64_t>(4u * kFileSize));
-  EXPECT_TRUE(beyond) << core::FormatWin32Error(beyond.error);
+  EXPECT_WIN32_OK(beyond);
   EXPECT_TRUE(CheckFileSize(h.value->get(), static_cast<int64_t>(kFileSize)));
 
   h.value->reset();
@@ -1274,7 +1272,7 @@ TEST_F(DataIoTest, QueryAllocatedRangesOnNonSparseFileReportsWholeFile) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   ASSERT_WIN32_OK(WriteFilledBytes(h.value->get(), kFileSize, 0x52));
   ASSERT_WIN32_TRUE(::FlushFileBuffers(h.value->get()));
   ASSERT_TRUE(CheckHandleAttributeBit(h.value->get(),
@@ -1282,7 +1280,7 @@ TEST_F(DataIoTest, QueryAllocatedRangesOnNonSparseFileReportsWholeFile) {
 
   auto ranges = core::QueryAllocatedRanges(h.value->get(), 0,
                                            static_cast<int64_t>(kFileSize));
-  ASSERT_TRUE(ranges) << core::FormatWin32Error(ranges.error);
+  ASSERT_WIN32_OK(ranges);
   ASSERT_FALSE(ranges.value->empty());
   EXPECT_EQ(ranges.value->front().FileOffset.QuadPart, 0);
   EXPECT_TRUE(
@@ -1301,7 +1299,7 @@ TEST_F(DataIoTest, QueryAllocatedRangesNegativeRangeFailsInvalidParameter) {
   const std::wstring path = TestPath(L"ranges_negative.dat");
   constexpr int64_t kFileSize = 1024 * 1024;
   auto h = CreateSparseFile(path, kFileSize);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // Control: the same raw request with a valid range succeeds.
   EXPECT_WIN32_ERROR_CODE(
@@ -1329,16 +1327,16 @@ TEST_F(DataIoTest, CompressionSetGetAndCompressedFileSize) {
     auto h = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, CREATE_ALWAYS,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto set_comp =
         core::SetCompressionState(h.value->get(), COMPRESSION_FORMAT_DEFAULT);
-    ASSERT_TRUE(set_comp) << core::FormatWin32Error(set_comp.error);
+    ASSERT_WIN32_OK(set_comp);
     EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                         FILE_ATTRIBUTE_COMPRESSED, true));
 
     auto got_comp = core::GetCompressionState(h.value->get());
-    ASSERT_TRUE(got_comp) << core::FormatWin32Error(got_comp.error);
+    ASSERT_WIN32_OK(got_comp);
     EXPECT_EQ(*got_comp.value, static_cast<USHORT>(COMPRESSION_FORMAT_LZNT1));
 
     ASSERT_WIN32_OK(
@@ -1347,12 +1345,12 @@ TEST_F(DataIoTest, CompressionSetGetAndCompressedFileSize) {
   }
 
   auto comp = QueryCompressedSize(path);
-  ASSERT_TRUE(comp) << core::FormatWin32Error(comp.error);
+  ASSERT_WIN32_OK(comp);
   EXPECT_LT(*comp.value, static_cast<uint64_t>(kFileSize));
 
   // Verify compressed content readback integrity.
   auto content = core::ReadFileContents(path);
-  ASSERT_TRUE(content) << core::FormatWin32Error(content.error);
+  ASSERT_WIN32_OK(content);
   ASSERT_EQ(content.value->size(), kFileSize);
   EXPECT_TRUE(helpers::AllBytesEqual(*content.value, 'A'));
 
@@ -1361,28 +1359,28 @@ TEST_F(DataIoTest, CompressionSetGetAndCompressedFileSize) {
     auto h = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto clear_comp =
         core::SetCompressionState(h.value->get(), COMPRESSION_FORMAT_NONE);
-    ASSERT_TRUE(clear_comp) << core::FormatWin32Error(clear_comp.error);
+    ASSERT_WIN32_OK(clear_comp);
     EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                         FILE_ATTRIBUTE_COMPRESSED, false));
 
     auto got_comp = core::GetCompressionState(h.value->get());
-    ASSERT_TRUE(got_comp) << core::FormatWin32Error(got_comp.error);
+    ASSERT_WIN32_OK(got_comp);
     EXPECT_EQ(*got_comp.value, static_cast<USHORT>(COMPRESSION_FORMAT_NONE));
   }
 
   // After clearing compression, data remains intact and physical size is
   // uncompressed (>= logical file size).
   auto after_clear = core::ReadFileContents(path);
-  ASSERT_TRUE(after_clear) << core::FormatWin32Error(after_clear.error);
+  ASSERT_WIN32_OK(after_clear);
   ASSERT_EQ(after_clear.value->size(), kFileSize);
   EXPECT_TRUE(helpers::AllBytesEqual(*after_clear.value, 'A'));
 
   auto comp_after = QueryCompressedSize(path);
-  ASSERT_TRUE(comp_after) << core::FormatWin32Error(comp_after.error);
+  ASSERT_WIN32_OK(comp_after);
   EXPECT_GE(*comp_after.value, static_cast<uint64_t>(kFileSize));
 }
 
@@ -1399,15 +1397,15 @@ TEST_F(DataIoTest, DirectoryCompressionInheritanceAndNoCompressionOption) {
     auto h_dir = core::CreateWin32File(dir, GENERIC_READ | GENERIC_WRITE,
                                        core::kShareAll, OPEN_EXISTING,
                                        FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_dir) << core::FormatWin32Error(h_dir.error);
+    ASSERT_WIN32_OK(h_dir);
 
     auto set_comp = core::SetCompressionState(h_dir.value->get(),
                                               COMPRESSION_FORMAT_DEFAULT);
-    ASSERT_TRUE(set_comp) << core::FormatWin32Error(set_comp.error);
+    ASSERT_WIN32_OK(set_comp);
     EXPECT_TRUE(CheckHandleAttributeBit(h_dir.value->get(),
                                         FILE_ATTRIBUTE_COMPRESSED, true));
     auto got_dir_comp = core::GetCompressionState(h_dir.value->get());
-    ASSERT_TRUE(got_dir_comp) << core::FormatWin32Error(got_dir_comp.error);
+    ASSERT_WIN32_OK(got_dir_comp);
     EXPECT_EQ(*got_dir_comp.value,
               static_cast<USHORT>(COMPRESSION_FORMAT_LZNT1));
   }
@@ -1419,11 +1417,11 @@ TEST_F(DataIoTest, DirectoryCompressionInheritanceAndNoCompressionOption) {
     auto h_child = core::CreateWin32File(
         inherited_path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
         CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_child) << core::FormatWin32Error(h_child.error);
+    ASSERT_WIN32_OK(h_child);
     EXPECT_TRUE(CheckHandleAttributeBit(h_child.value->get(),
                                         FILE_ATTRIBUTE_COMPRESSED, true));
     auto got_comp = core::GetCompressionState(h_child.value->get());
-    ASSERT_TRUE(got_comp) << core::FormatWin32Error(got_comp.error);
+    ASSERT_WIN32_OK(got_comp);
     EXPECT_EQ(*got_comp.value, static_cast<USHORT>(COMPRESSION_FORMAT_LZNT1));
   }
 
@@ -1444,7 +1442,7 @@ TEST_F(DataIoTest, DirectoryCompressionInheritanceAndNoCompressionOption) {
     EXPECT_TRUE(CheckHandleAttributeBit(h_no_comp.value->get(),
                                         FILE_ATTRIBUTE_COMPRESSED, false));
     auto got_comp = core::GetCompressionState(h_no_comp.value->get());
-    ASSERT_TRUE(got_comp) << core::FormatWin32Error(got_comp.error);
+    ASSERT_WIN32_OK(got_comp);
     EXPECT_EQ(*got_comp.value, static_cast<USHORT>(COMPRESSION_FORMAT_NONE));
   }
 }

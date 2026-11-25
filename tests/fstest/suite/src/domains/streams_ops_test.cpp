@@ -167,9 +167,9 @@ TEST_F(StreamsTest, PerStreamDataAndSizeIndependentOfDefaultStream) {
   auto info_main = core::QueryInfoByPath(base);
   auto info_a = core::QueryInfoByPath(stream_a);
   auto info_b = core::QueryInfoByPath(stream_b);
-  ASSERT_TRUE(info_main) << core::FormatWin32Error(info_main.error);
-  ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
-  ASSERT_TRUE(info_b) << core::FormatWin32Error(info_b.error);
+  ASSERT_WIN32_OK(info_main);
+  ASSERT_WIN32_OK(info_a);
+  ASSERT_WIN32_OK(info_b);
 
   // Sizes are independent per stream.
   EXPECT_EQ(core::FileSizeOf(*info_main.value), uint64_t{100});
@@ -201,7 +201,7 @@ TEST_F(StreamsTest, PerStreamDataAndSizeIndependentOfDefaultStream) {
 
   // FindFirstStreamW reports accurate per-stream StreamSize as well.
   auto streams = core::ListStreamsWin32(base);
-  ASSERT_TRUE(streams) << core::FormatWin32Error(streams.error);
+  ASSERT_WIN32_OK(streams);
   EXPECT_MULTISET_EQ(
       streams_internal::ExtractStreamNames(*streams.value),
       (std::vector<std::wstring>{L"::$DATA", L":a:$DATA", L":b:$DATA"}));
@@ -234,7 +234,7 @@ TEST_F(StreamsTest, StreamRenameReplaceAndNoReplace) {
     auto dst_h =
         core::CreateWin32File(dst_stream, GENERIC_WRITE, core::kShareAll,
                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(dst_h) << core::FormatWin32Error(dst_h.error);
+    ASSERT_WIN32_OK(dst_h);
   }
 
   // Rename :old -> :new (no collision).
@@ -281,7 +281,7 @@ TEST_F(StreamsTest, StreamRenameToNonStreamTargetFailsInvalidParameter) {
     auto h =
         core::CreateWin32File(src_stream, DELETE | SYNCHRONIZE, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto nt_bad =
         core::SetRenameInfo(h.value->get(), TestNtPath(L"missing_colon"),
@@ -323,7 +323,7 @@ TEST_F(StreamsTest, StreamRenameReplaceNonEmptyTargetFailsInvalidParameter) {
     auto h =
         core::CreateWin32File(src_stream, DELETE | SYNCHRONIZE, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto nt_res = core::SetRenameInfo(h.value->get(), L":dst",
                                       /*root_dir=*/nullptr,
@@ -366,7 +366,7 @@ TEST_F(StreamsTest, StreamTruncationIndependent) {
   {
     auto h = core::CreateWin32File(base, GENERIC_WRITE, core::kShareAll,
                                    TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
   }
   EXPECT_TRUE(helpers::CheckFileContents(base, ""));
   EXPECT_TRUE(helpers::CheckFileContents(stream_a, payload_a));
@@ -376,7 +376,7 @@ TEST_F(StreamsTest, StreamTruncationIndependent) {
   {
     auto h = core::CreateWin32File(stream_a, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
     ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
   }
@@ -401,7 +401,7 @@ TEST_F(StreamsTest, StreamSharingModeIndependentPerStream) {
   // Exclusive write handle on :a.
   auto h_a1 = core::CreateWin32File(stream_a, GENERIC_WRITE, 0, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_a1) << core::FormatWin32Error(h_a1.error);
+  ASSERT_WIN32_OK(h_a1);
 
   // Second open of :a fails sharing violation.
   auto h_a2 = core::CreateWin32File(stream_a, GENERIC_READ, core::kShareAll,
@@ -412,12 +412,12 @@ TEST_F(StreamsTest, StreamSharingModeIndependentPerStream) {
   // Exclusive opens on :b and ::$DATA succeed independently.
   auto h_b = core::CreateWin32File(stream_b, GENERIC_READ | GENERIC_WRITE, 0,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  EXPECT_TRUE(h_b) << core::FormatWin32Error(h_b.error);
+  EXPECT_WIN32_OK(h_b);
 
   auto h_def =
       core::CreateWin32File(stream_default, GENERIC_READ | GENERIC_WRITE, 0,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  EXPECT_TRUE(h_def) << core::FormatWin32Error(h_def.error);
+  EXPECT_WIN32_OK(h_def);
 }
 
 // Spec: [MS-FSA] 2.1.5.1.2 & 2.1.5.15.3 — FILE_ATTRIBUTE_READONLY blocks
@@ -475,12 +475,12 @@ TEST_F(StreamsTest, StreamDeleteWhileOpenLegacyDeletePending) {
   {
     auto h1 = core::CreateWin32File(s, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+    ASSERT_WIN32_OK(h1);
 
     {
       auto h2 = core::CreateWin32File(s, DELETE, core::kShareAll, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+      ASSERT_WIN32_OK(h2);
       auto disp = core::SetDisposition(h2.value->get(), /*delete_file=*/true);
       ASSERT_NT_SUCCESS(disp.status);
     }
@@ -498,7 +498,7 @@ TEST_F(StreamsTest, StreamDeleteWhileOpenLegacyDeletePending) {
 
     // Existing handle H1 continues reading stream bytes.
     auto read_h1 = core::ReadAllBytes(h1.value->get());
-    ASSERT_TRUE(read_h1) << core::FormatWin32Error(read_h1.error);
+    ASSERT_WIN32_OK(read_h1);
     EXPECT_EQ(*read_h1.value, "stream-payload");
   }
 
@@ -525,11 +525,11 @@ TEST_F(StreamsTest, StreamPosixDeleteWhileOpenStaysDeletePending) {
   {
     auto h1 = core::CreateWin32File(p, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+    ASSERT_WIN32_OK(h1);
     {
       auto h2 = core::CreateWin32File(p, DELETE, core::kShareAll, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+      ASSERT_WIN32_OK(h2);
       auto disp = core::SetDispositionEx(
           h2.value->get(),
           nt::kFileDispositionDelete | nt::kFileDispositionPosixSemantics);
@@ -544,7 +544,7 @@ TEST_F(StreamsTest, StreamPosixDeleteWhileOpenStaysDeletePending) {
     EXPECT_NT_STATUS(reopen_p.status, STATUS_DELETE_PENDING);
 
     auto read_h1 = core::ReadAllBytes(h1.value->get());
-    ASSERT_TRUE(read_h1) << core::FormatWin32Error(read_h1.error);
+    ASSERT_WIN32_OK(read_h1);
     EXPECT_EQ(*read_h1.value, "posix-stream");
   }
 
@@ -567,11 +567,11 @@ TEST_F(StreamsTest, PosixDeleteFileWhileStreamHandleOpenUnlinksName) {
   {
     auto h_ads = core::CreateWin32File(f2_ads, GENERIC_READ, core::kShareAll,
                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_ads) << core::FormatWin32Error(h_ads.error);
+    ASSERT_WIN32_OK(h_ads);
     {
       auto h_del = core::CreateWin32File(f2, DELETE, core::kShareAll,
                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(h_del) << core::FormatWin32Error(h_del.error);
+      ASSERT_WIN32_OK(h_del);
       auto disp = core::SetDispositionEx(
           h_del.value->get(),
           nt::kFileDispositionDelete | nt::kFileDispositionPosixSemantics);
@@ -582,7 +582,7 @@ TEST_F(StreamsTest, PosixDeleteFileWhileStreamHandleOpenUnlinksName) {
     EXPECT_TRUE(helpers::CheckFileNotFound(f2));
 
     auto read_ads = core::ReadAllBytes(h_ads.value->get());
-    ASSERT_TRUE(read_ads) << core::FormatWin32Error(read_ads.error);
+    ASSERT_WIN32_OK(read_ads);
     EXPECT_EQ(*read_ads.value, "file-ads-alive");
   }
   EXPECT_TRUE(helpers::CheckFileNotFound(f2));
@@ -712,7 +712,7 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
     auto h_check = core::CreateWin32File(
         base, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_check) << core::FormatWin32Error(h_check.error);
+    ASSERT_WIN32_OK(h_check);
     auto before = core::QueryBasicInfo(h_check.value->get());
     ASSERT_NT_SUCCESS(before.status);
     ASSERT_TRUE(before.value.has_value());
@@ -727,7 +727,7 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
     auto h_ads = core::CreateWin32File(ads, GENERIC_READ | GENERIC_WRITE,
                                        core::kShareAll, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_ads) << core::FormatWin32Error(h_ads.error);
+    ASSERT_WIN32_OK(h_ads);
 
     ASSERT_WIN32_OK(core::WriteAllBytes(h_ads.value->get(), ads_updated.data(),
                                         ads_updated.size()));
@@ -744,7 +744,7 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
 
     auto final_none = core::QueryFinalPath(
         h_ads.value->get(), VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-    ASSERT_TRUE(final_none) << core::FormatWin32Error(final_none.error);
+    ASSERT_WIN32_OK(final_none);
     EXPECT_TRUE(HasStreamSuffix(*final_none.value, expected_suffix))
         << "GetFinalPathNameByHandleW(VOLUME_NAME_NONE) '"
         << core::WideToUtf8(*final_none.value) << "' missing stream suffix '"
@@ -752,7 +752,7 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
 
     auto final_dos = core::QueryFinalPath(
         h_ads.value->get(), VOLUME_NAME_DOS | FILE_NAME_NORMALIZED);
-    ASSERT_TRUE(final_dos) << core::FormatWin32Error(final_dos.error);
+    ASSERT_WIN32_OK(final_dos);
     EXPECT_TRUE(HasStreamSuffix(*final_dos.value, expected_suffix))
         << "GetFinalPathNameByHandleW(VOLUME_NAME_DOS) '"
         << core::WideToUtf8(*final_dos.value) << "' missing stream suffix '"
@@ -765,7 +765,7 @@ TEST_F(StreamsTest, StreamWriteUpdatesBaseMetadataAndQueriesStreamName) {
     auto h_base = core::CreateWin32File(
         base, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_base) << core::FormatWin32Error(h_base.error);
+    ASSERT_WIN32_OK(h_base);
     auto after = core::QueryBasicInfo(h_base.value->get());
     ASSERT_NT_SUCCESS(after.status);
     ASSERT_TRUE(after.value.has_value());
@@ -805,10 +805,10 @@ TEST_F(StreamsTest, StreamIndependentByteRangeLocks) {
   auto h_b = core::CreateWin32File(stream_b, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_a1) << core::FormatWin32Error(h_a1.error);
-  ASSERT_TRUE(h_a2) << core::FormatWin32Error(h_a2.error);
-  ASSERT_TRUE(h_def) << core::FormatWin32Error(h_def.error);
-  ASSERT_TRUE(h_b) << core::FormatWin32Error(h_b.error);
+  ASSERT_WIN32_OK(h_a1);
+  ASSERT_WIN32_OK(h_a2);
+  ASSERT_WIN32_OK(h_def);
+  ASSERT_WIN32_OK(h_b);
 
   // Exclusive lock on [0, 32) of f:a via h_a1.
   OVERLAPPED ov{};
@@ -876,13 +876,13 @@ TEST_F(StreamsTest, SparseNamedStreamZeroDataAndAllocatedRanges) {
   auto h =
       core::CreateWin32File(sparse_ads, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto set_sparse = core::SetSparseFile(h.value->get(), /*sparse=*/true);
-  ASSERT_TRUE(set_sparse) << core::FormatWin32Error(set_sparse.error);
+  ASSERT_WIN32_OK(set_sparse);
 
   auto info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_NE(info.value->dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE,
             DWORD{0});
 
@@ -895,11 +895,11 @@ TEST_F(StreamsTest, SparseNamedStreamZeroDataAndAllocatedRanges) {
 
   // Punch a 512 KiB sparse hole aligned to 64 KiB boundaries.
   auto zero_res = core::SetZeroData(h.value->get(), kHoleStart, kHoleEnd);
-  ASSERT_TRUE(zero_res) << core::FormatWin32Error(zero_res.error);
+  ASSERT_WIN32_OK(zero_res);
 
   // Query allocated ranges across the full 1 MiB stream.
   auto ranges = core::QueryAllocatedRanges(h.value->get(), 0, kTotalSize);
-  ASSERT_TRUE(ranges) << core::FormatWin32Error(ranges.error);
+  ASSERT_WIN32_OK(ranges);
   ASSERT_GE(ranges.value->size(), size_t{2});
 
   int64_t total_allocated = 0;
@@ -986,7 +986,7 @@ TEST_F(StreamsTest, BackupReadAndBackupWritePreservesStreams) {
     auto h_src =
         core::CreateWin32File(src, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
                               FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+    ASSERT_WIN32_OK(h_src);
     ScopedBackupContext read_ctx(h_src.value->get(), /*is_write=*/false);
 
     std::vector<uint8_t> chunk(8192, 0);
@@ -1009,7 +1009,7 @@ TEST_F(StreamsTest, BackupReadAndBackupWritePreservesStreams) {
   {
     auto h_dst = core::CreateWin32File(dst, GENERIC_WRITE, core::kShareAll,
                                        CREATE_NEW, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_dst) << core::FormatWin32Error(h_dst.error);
+    ASSERT_WIN32_OK(h_dst);
     ScopedBackupContext write_ctx(h_dst.value->get(), /*is_write=*/true);
 
     size_t offset = 0;
@@ -1042,7 +1042,7 @@ TEST_F(StreamsTest, SecurityDescriptorSharedBetweenBaseFileAndAlternateStream) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
   auto user_sid = core::GetCurrentUserSidString();
-  ASSERT_TRUE(user_sid) << core::FormatWin32Error(user_sid.error);
+  ASSERT_WIN32_OK(user_sid);
 
   const std::wstring base_path = TestPath(L"sd_ads.dat");
   const std::wstring stream_path = base_path + L":meta";
@@ -1069,16 +1069,16 @@ TEST_F(StreamsTest, SecurityDescriptorSharedBetweenBaseFileAndAlternateStream) {
   const std::wstring sddl_one =
       L"D:P(A;;FA;;;" + *user_sid.value + L")(A;;FR;;;WD)";
   auto expected_one = canonicalize_dacl(sddl_one);
-  ASSERT_TRUE(expected_one) << core::FormatWin32Error(expected_one.error);
+  ASSERT_WIN32_OK(expected_one);
 
   auto set_stream =
       core::SetFileSddl(stream_path, DACL_SECURITY_INFORMATION, sddl_one);
-  ASSERT_TRUE(set_stream) << core::FormatWin32Error(set_stream.error);
+  ASSERT_WIN32_OK(set_stream);
 
   auto base_sddl1 = core::GetFileSddl(base_path, DACL_SECURITY_INFORMATION);
   auto stream_sddl1 = core::GetFileSddl(stream_path, DACL_SECURITY_INFORMATION);
-  ASSERT_TRUE(base_sddl1) << core::FormatWin32Error(base_sddl1.error);
-  ASSERT_TRUE(stream_sddl1) << core::FormatWin32Error(stream_sddl1.error);
+  ASSERT_WIN32_OK(base_sddl1);
+  ASSERT_WIN32_OK(stream_sddl1);
   EXPECT_EQ(*base_sddl1.value, *expected_one.value);
   EXPECT_EQ(*stream_sddl1.value, *base_sddl1.value);
 
@@ -1086,16 +1086,16 @@ TEST_F(StreamsTest, SecurityDescriptorSharedBetweenBaseFileAndAlternateStream) {
   // alternate stream immediately reflects the change.
   const std::wstring sddl_two = L"D:P(A;;FA;;;" + *user_sid.value + L")";
   auto expected_two = canonicalize_dacl(sddl_two);
-  ASSERT_TRUE(expected_two) << core::FormatWin32Error(expected_two.error);
+  ASSERT_WIN32_OK(expected_two);
 
   auto set_base =
       core::SetFileSddl(base_path, DACL_SECURITY_INFORMATION, sddl_two);
-  ASSERT_TRUE(set_base) << core::FormatWin32Error(set_base.error);
+  ASSERT_WIN32_OK(set_base);
 
   auto base_sddl2 = core::GetFileSddl(base_path, DACL_SECURITY_INFORMATION);
   auto stream_sddl2 = core::GetFileSddl(stream_path, DACL_SECURITY_INFORMATION);
-  ASSERT_TRUE(base_sddl2) << core::FormatWin32Error(base_sddl2.error);
-  ASSERT_TRUE(stream_sddl2) << core::FormatWin32Error(stream_sddl2.error);
+  ASSERT_WIN32_OK(base_sddl2);
+  ASSERT_WIN32_OK(stream_sddl2);
   EXPECT_EQ(*base_sddl2.value, *expected_two.value);
   EXPECT_EQ(*stream_sddl2.value, *base_sddl2.value);
   EXPECT_NE(*stream_sddl2.value, *stream_sddl1.value);

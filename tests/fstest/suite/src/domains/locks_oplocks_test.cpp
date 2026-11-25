@@ -894,9 +894,9 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksConflictingLocksFromOtherHandle) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -918,9 +918,9 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingReadFromOtherHandle) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -934,7 +934,7 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingReadFromOtherHandle) {
 
   // Non-overlapping read from H2 succeeds.
   auto rd_nonoverlap = ReadAt(h2.value->get(), 100, 16);
-  ASSERT_TRUE(rd_nonoverlap) << core::FormatWin32Error(rd_nonoverlap.error);
+  ASSERT_WIN32_OK(rd_nonoverlap);
   EXPECT_EQ(*rd_nonoverlap.value, std::string(16, 'A'));
 
   ASSERT_WIN32_TRUE(UnlockRange(h1.value->get(), 0, 100));
@@ -948,9 +948,9 @@ TEST_F(LocksOplocksTest, ExclusiveLockBlocksOverlappingWriteFromOtherHandle) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -974,24 +974,24 @@ TEST_F(LocksOplocksTest, ExclusiveLockOwnerCanReadAndWriteLockedRange) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'A')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
                 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY));
 
   auto rd_owner = ReadAt(h1.value->get(), 0, 16);
-  ASSERT_TRUE(rd_owner) << core::FormatWin32Error(rd_owner.error);
+  ASSERT_WIN32_OK(rd_owner);
   EXPECT_EQ(*rd_owner.value, std::string(16, 'A'));
 
   const std::string owner_write = "LOCKED_BY_H1";
   auto wr_owner = WriteAt(h1.value->get(), 0, owner_write);
-  ASSERT_TRUE(wr_owner) << core::FormatWin32Error(wr_owner.error);
+  ASSERT_WIN32_OK(wr_owner);
   EXPECT_EQ(*wr_owner.value, static_cast<DWORD>(owner_write.size()));
 
   auto rd_back =
       ReadAt(h1.value->get(), 0, static_cast<DWORD>(owner_write.size()));
-  ASSERT_TRUE(rd_back) << core::FormatWin32Error(rd_back.error);
+  ASSERT_WIN32_OK(rd_back);
   EXPECT_EQ(*rd_back.value, owner_write);
 
   ASSERT_WIN32_TRUE(UnlockRange(h1.value->get(), 0, 100));
@@ -1004,9 +1004,9 @@ TEST_F(LocksOplocksTest, SharedLocksCoexistAcrossHandlesAndAllowReads) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100, LOCKFILE_FAIL_IMMEDIATELY));
@@ -1015,7 +1015,7 @@ TEST_F(LocksOplocksTest, SharedLocksCoexistAcrossHandlesAndAllowReads) {
 
   for (HANDLE h : {h1.value->get(), h2.value->get()}) {
     auto rd = ReadAt(h, 0, 32);
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, std::string(32, 'B'));
   }
 
@@ -1030,11 +1030,11 @@ TEST_F(LocksOplocksTest, SharedLocksBlockExclusiveLockFromOtherHandle) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   auto h3 = OpenRw(path);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100, LOCKFILE_FAIL_IMMEDIATELY));
@@ -1055,11 +1055,11 @@ TEST_F(LocksOplocksTest, SharedLocksBlockWritesOnAllHandles) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'B')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   auto h3 = OpenRw(path);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100, LOCKFILE_FAIL_IMMEDIATELY));
@@ -1083,9 +1083,9 @@ TEST_F(LocksOplocksTest, SharedLockStackingAndSameHandleUpgradeConflict) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'S')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   // Stack two identical shared locks on [0, 64) via H1.
   ASSERT_WIN32_TRUE(
@@ -1122,9 +1122,9 @@ TEST_F(LocksOplocksTest, ByteRangeLockDoesNotBlockSetEndOfFileOrMappedIo) {
       core::WriteFileContents(path, std::string(kInitialSize, 'L')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 4096,
@@ -1172,7 +1172,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockDoesNotBlockSetEndOfFileOrMappedIo) {
   // H1 sees the mapped write written by H2.
   auto rd1 =
       ReadAt(h1.value->get(), 0, static_cast<DWORD>(mapped_patch.size()));
-  ASSERT_TRUE(rd1) << core::FormatWin32Error(rd1.error);
+  ASSERT_WIN32_OK(rd1);
   EXPECT_EQ(*rd1.value, mapped_patch);
 
   ASSERT_WIN32_TRUE(UnlockRange(h1.value->get(), 0, 4096));
@@ -1185,9 +1185,9 @@ TEST_F(LocksOplocksTest, NonOverlappingRangesAndBeyondEofLock) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'C')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -1223,9 +1223,9 @@ TEST_F(LocksOplocksTest, UnlockAndAutoReleaseOnHandleClose) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'R')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -1257,7 +1257,7 @@ TEST_F(LocksOplocksTest, UnlockNonExistentOrMismatchedRangeFails) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'M')));
 
   auto h = OpenRw(path);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   EXPECT_WIN32_ERROR(UnlockRange(h.value->get(), 0, 100), ERROR_NOT_LOCKED);
 
@@ -1287,9 +1287,9 @@ TEST_F(LocksOplocksTest, BlockingLockUnblocksWhenUnlocked) {
   OVERLAPPED lock_ov = MakeOffsetOverlapped(0, lock_ev.get());
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   PendingIoGuard lock_guard;
 
   ASSERT_WIN32_TRUE(
@@ -1335,9 +1335,9 @@ TEST_F(LocksOplocksTest, CancelIoExAbortsPendingBlockingLock) {
   OVERLAPPED lock_ov = MakeOffsetOverlapped(0, lock_ev.get());
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   PendingIoGuard lock_guard;
 
   ASSERT_WIN32_TRUE(
@@ -1434,9 +1434,9 @@ TEST_F(LocksOplocksTest, ZeroLengthByteRangeLockSemantics) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'Z')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 100, 0,
@@ -1447,11 +1447,11 @@ TEST_F(LocksOplocksTest, ZeroLengthByteRangeLockSemantics) {
   // (ReadStart < 100 < ReadEnd), while boundary-adjacent reads ending at 100
   // or starting at 100 succeed.
   auto rd_before = ReadAt(h2.value->get(), 0, 100);
-  ASSERT_TRUE(rd_before) << core::FormatWin32Error(rd_before.error);
+  ASSERT_WIN32_OK(rd_before);
   EXPECT_EQ(rd_before.value->size(), 100u);
 
   auto rd_after = ReadAt(h2.value->get(), 100, 50);
-  ASSERT_TRUE(rd_after) << core::FormatWin32Error(rd_after.error);
+  ASSERT_WIN32_OK(rd_after);
   EXPECT_EQ(rd_after.value->size(), 50u);
 
   EXPECT_WIN32_ERROR_CODE(ReadAt(h2.value->get(), 99, 2).error,
@@ -1473,9 +1473,9 @@ TEST_F(LocksOplocksTest,
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'D')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h3 = OpenRw(path);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -1491,12 +1491,12 @@ TEST_F(LocksOplocksTest,
                                       FALSE, DUPLICATE_SAME_ACCESS));
 
   auto rd_dup = ReadAt(h1_dup.get(), 0, 16);
-  ASSERT_TRUE(rd_dup) << core::FormatWin32Error(rd_dup.error);
+  ASSERT_WIN32_OK(rd_dup);
   EXPECT_EQ(*rd_dup.value, std::string(16, 'D'));
 
   const std::string dup_payload = "DUP_WRITE_OK____";
   auto wr_dup = WriteAt(h1_dup.get(), 0, dup_payload);
-  ASSERT_TRUE(wr_dup) << core::FormatWin32Error(wr_dup.error);
+  ASSERT_WIN32_OK(wr_dup);
   EXPECT_EQ(*wr_dup.value, 16u);
 
   // Closing original H1 while h1_dup stays open must keep the lock active.
@@ -1513,7 +1513,7 @@ TEST_F(LocksOplocksTest,
       LockRange(h3.value->get(), 0, 100,
                 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY));
   auto rd_h3 = ReadAt(h3.value->get(), 0, 16);
-  ASSERT_TRUE(rd_h3) << core::FormatWin32Error(rd_h3.error);
+  ASSERT_WIN32_OK(rd_h3);
   EXPECT_EQ(*rd_h3.value, dup_payload);
   ASSERT_WIN32_TRUE(UnlockRange(h3.value->get(), 0, 100));
 }
@@ -1525,9 +1525,9 @@ TEST_F(LocksOplocksTest, UnlockPartialSubRangeFailsNotLocked) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(256, 'P')));
 
   auto h1 = OpenRw(path);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -1789,12 +1789,12 @@ TEST_F(LocksOplocksTest, OplockBreakAckNo2TransitionsToNone) {
   // cleanly while H1 remains open.
   {
     auto h3 = OpenRw(path);
-    ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+    ASSERT_WIN32_OK(h3);
     auto wr3 = WriteAt(h3.value->get(), 0, updated);
-    ASSERT_TRUE(wr3) << core::FormatWin32Error(wr3.error);
+    ASSERT_WIN32_OK(wr3);
     EXPECT_EQ(*wr3.value, static_cast<DWORD>(updated.size()));
     auto rd3 = ReadAt(h3.value->get(), 0, static_cast<DWORD>(updated.size()));
-    ASSERT_TRUE(rd3) << core::FormatWin32Error(rd3.error);
+    ASSERT_WIN32_OK(rd3);
     EXPECT_EQ(*rd3.value, updated);
   }
   harness.CloseHandle();
@@ -1848,7 +1848,7 @@ TEST_F(LocksOplocksTest, ExclusiveOplockRejectedWithMultipleHandles) {
   ASSERT_TRUE(harness.Open(path, GENERIC_READ | GENERIC_WRITE));
 
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   // Legacy Level 1 must be rejected with ERROR_OPLOCK_NOT_GRANTED.
   EXPECT_TRUE(harness.ExpectRequestRejected(
@@ -1892,11 +1892,11 @@ TEST_F(LocksOplocksTest, Level1DowngradeToLevel2BrokenByWrite) {
 
   // Opening a peer RW handle does not break Level 2; WriteFile breaks it.
   auto h3 = OpenRw(path);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
   EXPECT_EQ(::WaitForSingleObject(harness.ack_event.get(), 0), kWaitTimeout);
 
   auto wr = WriteAt(h3.value->get(), 0, "BREAK_LEVEL2!");
-  ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+  ASSERT_WIN32_OK(wr);
 
   ASSERT_TRUE(harness.WaitPendingAckBreak(timeout_ms));
   h3.value->reset();
@@ -1955,7 +1955,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerWrite) {
   ASSERT_TRUE(harness.RequestModern(OPLOCK_LEVEL_CACHE_READ));
 
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   ASSERT_WIN32_OK(WriteAt(h2.value->get(), 0, "PEER_WRITE"));
 
   ASSERT_TRUE(harness.WaitBreak(timeout_ms));
@@ -1979,7 +1979,7 @@ TEST_F(LocksOplocksTest, OplockReadBrokenByPeerSetEndOfFile) {
   ASSERT_TRUE(harness.RequestModern(OPLOCK_LEVEL_CACHE_READ));
 
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   ASSERT_WIN32_TRUE(SeekBegin(h2.value->get(), 4));
   ASSERT_WIN32_TRUE(::SetEndOfFile(h2.value->get()));
 
@@ -2063,7 +2063,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockBreaksReadOplock) {
 
   // Opening a peer read/write handle alone does not break the R oplock.
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0), kWaitTimeout);
 
   ASSERT_WIN32_TRUE(
@@ -2096,7 +2096,7 @@ TEST_F(LocksOplocksTest, ByteRangeLockBreaksLevel2Oplock) {
 
   // Opening a peer read/write handle alone does not break Level 2.
   auto h2 = OpenRw(path);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0), kWaitTimeout);
 
   ASSERT_WIN32_TRUE(
@@ -2212,9 +2212,9 @@ TEST_F(LocksOplocksTest, LockReleasedWhenOwnerProcessClosesDuplicatedHandle) {
   auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h3 = OpenRw(path);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
 
   ASSERT_WIN32_TRUE(
       LockRange(h1.value->get(), 0, 100,
@@ -2222,8 +2222,7 @@ TEST_F(LocksOplocksTest, LockReleasedWhenOwnerProcessClosesDuplicatedHandle) {
 
   SuspendedSelfProcess child;
   auto started = child.Start();
-  ASSERT_TRUE(started) << "Failed to create the suspended helper process: "
-                       << core::FormatWin32Error(started.error);
+  ASSERT_WIN32_OK(started) << "Failed to create the suspended helper process";
 
   // The duplicate lives in (and is owned by) the child process; it is closed
   // when `child` terminates the process.
@@ -2250,7 +2249,7 @@ TEST_F(LocksOplocksTest, LockReleasedWhenOwnerProcessClosesDuplicatedHandle) {
       LockRange(h3.value->get(), 0, 100,
                 LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY));
   auto rd = ReadAt(h3.value->get(), 0, 16);
-  ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+  ASSERT_WIN32_OK(rd);
   EXPECT_EQ(*rd.value, std::string(16, 'X'));
   ASSERT_WIN32_TRUE(UnlockRange(h3.value->get(), 0, 100));
 }
@@ -2318,7 +2317,7 @@ TEST_F(LocksOplocksTest, ConcurrentLockUnlockAndReadWriteStress) {
             kNumThreads * kIterations);
 
   auto final_data = core::ReadFileContents(path);
-  ASSERT_TRUE(final_data) << core::FormatWin32Error(final_data.error);
+  ASSERT_WIN32_OK(final_data);
   ASSERT_EQ(final_data.value->size(), kFileSize);
   EXPECT_TRUE(helpers::AllBytesEqual(
       std::string_view(*final_data.value).substr(kRegionSize), '\0'));

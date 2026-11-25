@@ -580,7 +580,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
     {
       auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
                                       CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+      ASSERT_WIN32_OK(fh);
     }
     std::vector<NotifyRecord> added_events;
     auto added_res = CollectUntil(
@@ -588,8 +588,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
         [](const std::vector<NotifyRecord> &recs) {
           return HasNotifyEvent(recs, FILE_ACTION_ADDED, L"note.txt");
         });
-    EXPECT_TRUE(added_res) << "Waiting for FILE_ACTION_ADDED on note.txt: "
-                           << core::FormatWin32Error(added_res.error);
+    EXPECT_WIN32_OK(added_res) << "Waiting for FILE_ACTION_ADDED on note.txt";
   }
 
   // 2. Modify -> FILE_ACTION_MODIFIED
@@ -601,7 +600,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
     {
       auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+      ASSERT_WIN32_OK(fh);
       ASSERT_WIN32_OK(core::WriteAllBytes(fh.value->get(), "updated-body", 12));
       ::FlushFileBuffers(fh.value->get());
     }
@@ -611,8 +610,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
         [](const std::vector<NotifyRecord> &recs) {
           return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"note.txt");
         });
-    EXPECT_TRUE(mod_res) << "Waiting for FILE_ACTION_MODIFIED on note.txt: "
-                         << core::FormatWin32Error(mod_res.error);
+    EXPECT_WIN32_OK(mod_res) << "Waiting for FILE_ACTION_MODIFIED on note.txt";
   }
 
   // 3. Delete -> FILE_ACTION_REMOVED
@@ -628,8 +626,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFileCreateModifyDelete) {
         [](const std::vector<NotifyRecord> &recs) {
           return HasNotifyEvent(recs, FILE_ACTION_REMOVED, L"note.txt");
         });
-    EXPECT_TRUE(rem_res) << "Waiting for FILE_ACTION_REMOVED on note.txt: "
-                         << core::FormatWin32Error(rem_res.error);
+    EXPECT_WIN32_OK(rem_res) << "Waiting for FILE_ACTION_REMOVED on note.txt";
   }
 }
 
@@ -661,9 +658,8 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesRenameOldAndNewName) {
                               L"before.txt") &&
                HasNotifyEvent(recs, FILE_ACTION_RENAMED_NEW_NAME, L"after.txt");
       });
-  EXPECT_TRUE(rename_res)
-      << "Waiting for RENAMED_OLD_NAME/RENAMED_NEW_NAME pair: "
-      << core::FormatWin32Error(rename_res.error);
+  EXPECT_WIN32_OK(rename_res)
+      << "Waiting for RENAMED_OLD_NAME/RENAMED_NEW_NAME pair";
 }
 
 // Spec: ReadDirectoryChangesW with bWatchSubtree=TRUE reports relative nested
@@ -692,9 +688,8 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSubtreeRecursive) {
       timeout_ms, &add_events, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_ADDED, L"sub\\nested.txt");
       });
-  EXPECT_TRUE(add_res)
-      << "Waiting for recursive FILE_ACTION_ADDED on sub\\nested.txt: "
-      << core::FormatWin32Error(add_res.error);
+  EXPECT_WIN32_OK(add_res)
+      << "Waiting for recursive FILE_ACTION_ADDED on sub\\nested.txt";
 
   ASSERT_WIN32_ERROR_CODE(
       watcher.Arm(FILE_NOTIFY_CHANGE_FILE_NAME, /*watch_subtree=*/true),
@@ -707,9 +702,8 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSubtreeRecursive) {
       timeout_ms, &del_events, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_REMOVED, L"sub\\nested.txt");
       });
-  EXPECT_TRUE(del_res)
-      << "Waiting for recursive FILE_ACTION_REMOVED on sub\\nested.txt: "
-      << core::FormatWin32Error(del_res.error);
+  EXPECT_WIN32_OK(del_res)
+      << "Waiting for recursive FILE_ACTION_REMOVED on sub\\nested.txt";
 }
 
 // Spec: ReadDirectoryChangesW with FILE_NOTIFY_CHANGE_ATTRIBUTES reports
@@ -737,8 +731,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesAttributesFilter) {
       timeout_ms, &attr_events, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
       });
-  EXPECT_TRUE(attr_res) << "Waiting for FILE_NOTIFY_CHANGE_ATTRIBUTES: "
-                        << core::FormatWin32Error(attr_res.error);
+  EXPECT_WIN32_OK(attr_res) << "Waiting for FILE_NOTIFY_CHANGE_ATTRIBUTES";
 }
 
 // Spec: ReadDirectoryChangesW with FILE_NOTIFY_CHANGE_SIZE alone reports
@@ -760,7 +753,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSizeFilter) {
   ASSERT_WIN32_TRUE(
       ::SetFileAttributesW(target.c_str(), FILE_ATTRIBUTE_ARCHIVE));
   auto attrs = core::QueryWin32Attributes(target);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   ASSERT_NE(*attrs.value & FILE_ATTRIBUTE_ARCHIVE, 0u);
 
   // This directory handle only ever carries the SIZE filter: the kernel
@@ -786,7 +779,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSizeFilter) {
   {
     auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
     const std::string grown(512, 'Z');
     ASSERT_WIN32_OK(
         core::WriteAllBytes(fh.value->get(), grown.data(), grown.size()));
@@ -798,8 +791,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSizeFilter) {
       &size_events, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
       });
-  EXPECT_TRUE(size_res) << "Waiting for FILE_NOTIFY_CHANGE_SIZE: "
-                        << core::FormatWin32Error(size_res.error);
+  EXPECT_WIN32_OK(size_res) << "Waiting for FILE_NOTIFY_CHANGE_SIZE";
 }
 
 // Spec: when more changes occur between two ReadDirectoryChangesW calls than
@@ -835,7 +827,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSmallBufferOverflow) {
     auto fh = core::CreateWin32File(core::JoinPath(ovf_dir, name_buf),
                                     GENERIC_WRITE, core::kShareAll, CREATE_NEW,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
   }
 
   const DWORD arm_err =
@@ -893,7 +885,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesExExtendedInfo) {
   ASSERT_WIN32_OK(core::WriteFileContents(file_path, "hello-ext-notify"));
 
   auto expected_id = core::QueryPathFileIndex(file_path);
-  ASSERT_TRUE(expected_id) << core::FormatWin32Error(expected_id.error);
+  ASSERT_WIN32_OK(expected_id);
   ASSERT_NE(*expected_id.value, 0ULL);
 
   std::vector<NotifyRecord> events;
@@ -902,10 +894,9 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesExExtendedInfo) {
       [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_ADDED, L"ext_notify.dat");
       });
-  EXPECT_TRUE(found_added)
+  EXPECT_WIN32_OK(found_added)
       << "Waiting for FILE_ACTION_ADDED extended notification on "
-         "ext_notify.dat: "
-      << core::FormatWin32Error(found_added.error);
+         "ext_notify.dat";
 
   const NotifyRecord *rec =
       FindNotifyEvent(events, FILE_ACTION_ADDED, L"ext_notify.dat");
@@ -955,7 +946,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
     {
       auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+      ASSERT_WIN32_OK(fh);
       // Grow past a 4 KiB cluster/page boundary for the positive filter-armed
       // control (sub-cluster size growth is covered separately by
       // ReadDirectoryChangesSizeFilter).
@@ -970,8 +961,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
         &size_events, [](const std::vector<NotifyRecord> &recs) {
           return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
         });
-    EXPECT_TRUE(size_res) << "Waiting for active FILE_NOTIFY_CHANGE_SIZE: "
-                          << core::FormatWin32Error(size_res.error);
+    EXPECT_WIN32_OK(size_res) << "Waiting for active FILE_NOTIFY_CHANGE_SIZE";
   }
 
   // 2. Subdirectory creation must NOT trigger a bWatchSubtree=FALSE watch,
@@ -1000,8 +990,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesFilterExclusionAndSubtreeFlag) {
         timeout_ms, &direct_events, [](const std::vector<NotifyRecord> &recs) {
           return HasNotifyEvent(recs, FILE_ACTION_ADDED, L"direct_child.txt");
         });
-    EXPECT_TRUE(direct_res) << "Waiting for direct_child.txt add: "
-                            << core::FormatWin32Error(direct_res.error);
+    EXPECT_WIN32_OK(direct_res) << "Waiting for direct_child.txt add";
   }
 }
 
@@ -1028,8 +1017,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesDirNameAdded) {
       timeout_ms, &add_recs, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_ADDED, L"sub_a");
       });
-  EXPECT_TRUE(add_res) << "Waiting for DIR_NAME ADDED: "
-                       << core::FormatWin32Error(add_res.error);
+  EXPECT_WIN32_OK(add_res) << "Waiting for DIR_NAME ADDED";
 }
 
 // Spec: ReadDirectoryChangesW with FILE_NOTIFY_CHANGE_DIR_NAME reports
@@ -1056,8 +1044,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesDirNameRemoved) {
       timeout_ms, &rem_recs, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_REMOVED, L"sub_b");
       });
-  EXPECT_TRUE(rem_res) << "Waiting for DIR_NAME REMOVED: "
-                       << core::FormatWin32Error(rem_res.error);
+  EXPECT_WIN32_OK(rem_res) << "Waiting for DIR_NAME REMOVED";
 }
 
 // Spec: ReadDirectoryChangesW with FILE_NOTIFY_CHANGE_DIR_NAME reports paired
@@ -1087,8 +1074,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesDirNameRenamed) {
         return HasNotifyEvent(recs, FILE_ACTION_RENAMED_OLD_NAME, L"sub_a") &&
                HasNotifyEvent(recs, FILE_ACTION_RENAMED_NEW_NAME, L"sub_b");
       });
-  EXPECT_TRUE(ren_res) << "Waiting for DIR_NAME RENAMED pair: "
-                       << core::FormatWin32Error(ren_res.error);
+  EXPECT_WIN32_OK(ren_res) << "Waiting for DIR_NAME RENAMED pair";
 }
 
 // Spec: ReadDirectoryChangesW with FILE_NOTIFY_CHANGE_SECURITY reports
@@ -1111,7 +1097,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSecurityFilter) {
 
   auto set_dacl = core::SetFileSddl(sec_file, DACL_SECURITY_INFORMATION,
                                     L"D:P(A;;FA;;;WD)");
-  ASSERT_TRUE(set_dacl) << core::FormatWin32Error(set_dacl.error);
+  ASSERT_WIN32_OK(set_dacl);
 
   std::vector<NotifyRecord> sec_recs;
   auto sec_res = CollectUntil(
@@ -1119,8 +1105,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesSecurityFilter) {
       timeout_ms, &sec_recs, [](const std::vector<NotifyRecord> &recs) {
         return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"sec_target.dat");
       });
-  EXPECT_TRUE(sec_res) << "Waiting for FILE_NOTIFY_CHANGE_SECURITY: "
-                       << core::FormatWin32Error(sec_res.error);
+  EXPECT_WIN32_OK(sec_res) << "Waiting for FILE_NOTIFY_CHANGE_SECURITY";
 }
 
 // Spec: a recursive ReadDirectoryChangesW watch reports a move between two
@@ -1156,8 +1141,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesCrossDirectoryMove) {
                               L"move_a\\cross.dat") &&
                HasNotifyEvent(recs, FILE_ACTION_ADDED, L"move_b\\cross.dat");
       });
-  EXPECT_TRUE(move_res) << "Waiting for cross-directory REMOVED+ADDED: "
-                        << core::FormatWin32Error(move_res.error);
+  EXPECT_WIN32_OK(move_res) << "Waiting for cross-directory REMOVED+ADDED";
   EXPECT_FALSE(HasNotifyEvent(move_recs, FILE_ACTION_RENAMED_OLD_NAME,
                               L"move_a\\cross.dat"));
   EXPECT_FALSE(HasNotifyEvent(move_recs, FILE_ACTION_RENAMED_NEW_NAME,
@@ -1233,7 +1217,7 @@ TEST_F(InfoQueriesTest,
   auto del_h =
       core::CreateWin32File(watch_dir, DELETE | SYNCHRONIZE, core::kShareAll,
                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(del_h) << core::FormatWin32Error(del_h.error);
+  ASSERT_WIN32_OK(del_h);
   ASSERT_NT_SUCCESS(
       core::SetDisposition(del_h.value->get(), /*delete_file=*/true).status);
 
@@ -1263,7 +1247,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamNameAddedStream) {
     auto sh =
         core::CreateWin32File(host + L":side", GENERIC_WRITE, core::kShareAll,
                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(sh) << core::FormatWin32Error(sh.error);
+    ASSERT_WIN32_OK(sh);
   }
 
   std::vector<NotifyRecord> recs;
@@ -1272,8 +1256,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamNameAddedStream) {
       timeout_ms, &recs, [](const std::vector<NotifyRecord> &r) {
         return HasStreamNotifyEvent(r, kFileActionAddedStream, L"host.txt");
       });
-  EXPECT_TRUE(res) << "Waiting for FILE_ACTION_ADDED_STREAM on host.txt: "
-                   << core::FormatWin32Error(res.error);
+  EXPECT_WIN32_OK(res) << "Waiting for FILE_ACTION_ADDED_STREAM on host.txt";
 }
 
 // Note: Real Windows 11 NTFS does not deliver FILE_ACTION_REMOVED_STREAM via
@@ -1305,7 +1288,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamSizeWriteModifiedStream) {
   {
     auto sh = core::CreateWin32File(stream, GENERIC_WRITE, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(sh) << core::FormatWin32Error(sh.error);
+    ASSERT_WIN32_OK(sh);
     const std::string grown(256, 'S');
     ASSERT_WIN32_OK(
         core::WriteAllBytes(sh.value->get(), grown.data(), grown.size()));
@@ -1318,8 +1301,7 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesStreamSizeWriteModifiedStream) {
       [](const std::vector<NotifyRecord> &r) {
         return HasStreamNotifyEvent(r, kFileActionModifiedStream, L"host.txt");
       });
-  EXPECT_TRUE(res) << "Waiting for FILE_ACTION_MODIFIED_STREAM on host.txt: "
-                   << core::FormatWin32Error(res.error);
+  EXPECT_WIN32_OK(res) << "Waiting for FILE_ACTION_MODIFIED_STREAM on host.txt";
 }
 
 // Spec: [MS-FSCC] 2.4.16 — NtSetEaFile/NtQueryEaFile preserve binary values,
@@ -1334,7 +1316,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesSetAndQuery) {
   auto fh =
       core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   const std::vector<uint8_t> bin_val = {0x00, 0x01, 0x7F, 0x80, 0xFF};
   const std::vector<uint8_t> text_val = {'a', 'l', 'i', 'c', 'e'};
@@ -1439,7 +1421,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesCreateWithEaBuffer) {
   auto reopened = core::CreateWin32File(TestPath(L"ea_create.dat"),
                                         GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(reopened) << core::FormatWin32Error(reopened.error);
+  ASSERT_WIN32_OK(reopened);
   check_eas(reopened.value->get());
 }
 
@@ -1452,7 +1434,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesDeleteAndEmptyQuery) {
   auto fh =
       core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto initial_size = QueryEaSize(fh.value->get());
   ASSERT_NT_SUCCESS(initial_size.status);
@@ -1488,7 +1470,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesEaListQueryReturnsRequestedSubset) {
   auto fh =
       core::CreateWin32File(list_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   const std::vector<uint8_t> val_one = {'1', '1', '1'};
   const std::vector<uint8_t> val_two = {'2', '2', '2', '2'};
@@ -1533,7 +1515,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesOptionalEaAllowsNoEaKnowledgeOpen) {
     auto fh = core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, CREATE_NEW,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
     ASSERT_NT_SUCCESS(
         SetEaEntries(fh.value->get(), {{0, "opt_ea", {'o', 'k'}}}));
     auto ea_size = QueryEaSize(fh.value->get());
@@ -1592,7 +1574,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesInconsistentEaListRejected) {
   auto fh =
       core::CreateWin32File(invalid_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   // NextEntryOffset pointing far past buffer end is structurally inconsistent.
   std::vector<uint8_t> bad_buf(32, 0);
@@ -1626,7 +1608,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesOversizedEaSetRejected) {
   auto fh =
       core::CreateWin32File(big_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   const std::vector<uint8_t> large_chunk(40000, 0x41);
   std::vector<uint8_t> oversized = core::BuildEaBuffer({
@@ -1655,7 +1637,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesInvalidEaNameRejected) {
   auto fh =
       core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   EXPECT_NT_STATUS(SetEaEntries(fh.value->get(), {{0, "bad?name", {'x'}}}),
                    STATUS_INVALID_EA_NAME);
@@ -1677,7 +1659,7 @@ TEST_F(InfoQueriesTest, ExtendedAttributesOnDirectory) {
       dir_path,
       FILE_READ_EA | FILE_WRITE_EA | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   const std::vector<uint8_t> dir_val = {'d', 'i', 'r', 0x00, 0xFF};
   ASSERT_NT_SUCCESS(SetEaEntries(dh.value->get(), {{0, "dir_meta", dir_val}}));
@@ -1707,10 +1689,10 @@ TEST_F(InfoQueriesTest, ObjectIdCreateGetAndOpenByObjectId) {
   auto fh = core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                                   core::kShareAll, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto orig_idx = core::GetFileIndex(fh.value->get());
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
 
   // Fresh file has no Object ID yet.
   {
@@ -1751,7 +1733,7 @@ TEST_F(InfoQueriesTest, ObjectIdCreateGetAndOpenByObjectId) {
     auto dir_h = core::CreateWin32File(
         TempDir().ExtendedPath(), FILE_READ_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+    ASSERT_WIN32_OK(dir_h);
 
     FILE_ID_DESCRIPTOR desc{};
     desc.dwSize = sizeof(desc);
@@ -1767,7 +1749,7 @@ TEST_F(InfoQueriesTest, ObjectIdCreateGetAndOpenByObjectId) {
                        << core::FormatWin32Error(open_err);
 
     auto rd = core::ReadAllBytes(h_oid.get());
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_oid.get());
