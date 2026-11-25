@@ -406,7 +406,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     ASSERT_WIN32_OK(core::WriteFileContents(p_low, "case_data"));
 
     auto orig_idx = core::QueryPathFileIndex(p_low);
-    ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+    ASSERT_WIN32_OK(orig_idx);
 
     ASSERT_WIN32_TRUE(::MoveFileExW(p_low.c_str(), p_mix.c_str(), 0));
     EXPECT_TRUE(helpers::CheckDirEntries(sub, {L".", L"..", L"Foo.DAT"}));
@@ -414,14 +414,14 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     {
       auto h = core::CreateWin32File(p_mix, GENERIC_READ, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+      ASSERT_WIN32_OK(h);
       auto idx1 = core::GetFileIndex(h.value->get());
       ASSERT_WIN32_OK(idx1);
       EXPECT_EQ(*idx1.value, *orig_idx.value);
 
       auto fp1 = core::QueryFinalPath(h.value->get(),
                                       VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-      ASSERT_TRUE(fp1) << core::FormatWin32Error(fp1.error);
+      ASSERT_WIN32_OK(fp1);
       EXPECT_TRUE(fp1.value->ends_with(L"\\Foo.DAT"))
           << "Final path: " << core::WideToUtf8(*fp1.value);
 
@@ -449,7 +449,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
     ASSERT_WIN32_TRUE(::CreateDirectoryW(d_low.c_str(), nullptr));
 
     auto orig_idx = core::QueryPathFileIndex(d_low, /*backup_semantics=*/true);
-    ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+    ASSERT_WIN32_OK(orig_idx);
 
     ASSERT_WIN32_TRUE(::MoveFileExW(d_low.c_str(), d_up.c_str(), 0));
     EXPECT_TRUE(helpers::CheckDirEntries(parent, {L".", L"..", L"SUB"}));
@@ -461,7 +461,7 @@ TEST_F(RenameMoveTest, CaseOnlyRenameFileAndDirectory) {
       ASSERT_WIN32_OK(h);
       auto fp = core::QueryFinalPath(h.value->get(),
                                      VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-      ASSERT_TRUE(fp) << core::FormatWin32Error(fp.error);
+      ASSERT_WIN32_OK(fp);
       EXPECT_TRUE(fp.value->ends_with(L"\\SUB"))
           << "Final path: " << core::WideToUtf8(*fp.value);
     }
@@ -490,7 +490,7 @@ TEST_F(RenameMoveTest, RenamePreservesFileIndexAndData) {
       core::WriteFileContents(p1, "preserve_me_12345", FILE_ATTRIBUTE_HIDDEN));
 
   auto orig_idx = core::QueryPathFileIndex(p1);
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
   auto orig_attrs = core::QueryWin32Attributes(p1);
   ASSERT_WIN32_OK(orig_attrs);
 
@@ -527,14 +527,14 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithShareDelete) {
   auto h1 =
       core::CreateWin32File(src, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(src.c_str(), dst.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(src));
 
   auto fp = core::QueryFinalPath(h1.value->get(),
                                  VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-  ASSERT_TRUE(fp) << core::FormatWin32Error(fp.error);
+  ASSERT_WIN32_OK(fp);
   EXPECT_TRUE(fp.value->ends_with(L"\\open_dst.dat"))
       << "Final path: " << core::WideToUtf8(*fp.value);
 
@@ -546,7 +546,7 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithShareDelete) {
   ASSERT_WIN32_TRUE(
       ::SetFilePointerEx(h1.value->get(), zero, nullptr, FILE_BEGIN));
   auto data = core::ReadAllBytes(h1.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "hello_world");
 
   h1.value->reset();
@@ -563,7 +563,7 @@ TEST_F(RenameMoveTest, RenameWhileOpenWithoutShareDeleteFails) {
   auto h1 = core::CreateWin32File(src, GENERIC_READ,
                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   EXPECT_WIN32_ERROR(::MoveFileExW(src.c_str(), dst.c_str(), 0),
                      ERROR_SHARING_VIOLATION);
@@ -588,7 +588,7 @@ TEST_F(RenameMoveTest, RenameDirectoryWithOpenDescendantFails) {
 
   auto h_child = core::CreateWin32File(child, GENERIC_READ, core::kShareAll,
                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_child) << core::FormatWin32Error(h_child.error);
+  ASSERT_WIN32_OK(h_child);
 
   EXPECT_WIN32_ERROR(::MoveFileExW(top.c_str(), renamed.c_str(), 0),
                      ERROR_ACCESS_DENIED);
@@ -692,7 +692,7 @@ TEST_F(RenameMoveTest, RenameDirectoryOverExistingFileSemantics) {
   ASSERT_WIN32_TRUE(::MoveFileExW(src_dir.c_str(), target_file.c_str(),
                                   MOVEFILE_REPLACE_EXISTING));
   auto attrs = core::QueryWin32Attributes(target_file);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_DIRECTORY, 0UL);
   EXPECT_TRUE(
       helpers::CheckFileContents(target_file + L"\\item.dat", "dir_item"));
@@ -705,7 +705,7 @@ TEST_F(RenameMoveTest, RenameSameNameNoOp) {
   ASSERT_WIN32_OK(core::WriteFileContents(path, "same_content"));
 
   auto orig_idx = core::QueryPathFileIndex(path);
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(path.c_str(), path.c_str(), 0));
   auto idx1 = core::QueryPathFileIndex(path);
@@ -733,18 +733,18 @@ TEST_F(RenameMoveTest, NtFileRenameInfoRootDirectoryRelative) {
   ASSERT_WIN32_OK(core::WriteFileContents(src_file, "relative_rename_bytes"));
 
   auto orig_idx = core::QueryPathFileIndex(src_file);
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
 
   auto h_dst_dir = core::CreateWin32File(
       dst_dir,
       FILE_ADD_FILE | FILE_LIST_DIRECTORY | FILE_TRAVERSE | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_dst_dir) << core::FormatWin32Error(h_dst_dir.error);
+  ASSERT_WIN32_OK(h_dst_dir);
 
   auto h_src =
       core::CreateWin32File(src_file, DELETE | SYNCHRONIZE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+  ASSERT_WIN32_OK(h_src);
 
   auto ren = core::SetRenameInfo(h_src.value->get(), L"moved_rel.dat",
                                  h_dst_dir.value->get(),
@@ -772,11 +772,11 @@ TEST_F(RenameMoveTest, FileRenameInfoReplaceOpenTargetNonPosixFails) {
 
   auto h_target = core::CreateWin32File(dst, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
+  ASSERT_WIN32_OK(h_target);
 
   auto h_src = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+  ASSERT_WIN32_OK(h_src);
 
   auto ren =
       core::SetRenameInfo(h_src.value->get(), TestNtPath(L"nonposix_dst.dat"),
@@ -802,14 +802,14 @@ TEST_F(RenameMoveTest, FileRenameInfoExPosixReplaceOpenTarget) {
 
   auto h_target = core::CreateWin32File(dst, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
+  ASSERT_WIN32_OK(h_target);
   auto orig_idx = core::GetFileIndex(h_target.value->get());
   ASSERT_WIN32_OK(orig_idx);
 
   auto h_src = core::CreateWin32File(
       src, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+  ASSERT_WIN32_OK(h_src);
   auto src_idx = core::GetFileIndex(h_src.value->get());
   ASSERT_WIN32_OK(src_idx);
 
@@ -850,7 +850,7 @@ TEST_F(RenameMoveTest, FileRenameInfoExIgnoreReadOnlyTarget) {
 
   auto h_src = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+  ASSERT_WIN32_OK(h_src);
 
   // Without IGNORE_READONLY_ATTRIBUTE, replacing READONLY target fails.
   auto fail_ren =
@@ -944,7 +944,7 @@ TEST_F(RenameMoveTest, RenameDirectoryWhileDirectoryHandleOpen) {
         core::CreateWin32File(dir, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
                               FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING,
                               FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_locked) << core::FormatWin32Error(h_locked.error);
+    ASSERT_WIN32_OK(h_locked);
 
     EXPECT_WIN32_ERROR(::MoveFileExW(dir.c_str(), dst1.c_str(), 0),
                        ERROR_SHARING_VIOLATION);
@@ -955,13 +955,13 @@ TEST_F(RenameMoveTest, RenameDirectoryWhileDirectoryHandleOpen) {
     auto h_shared = core::CreateWin32File(
         dir, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, core::kShareAll,
         OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_shared) << core::FormatWin32Error(h_shared.error);
+    ASSERT_WIN32_OK(h_shared);
 
     ASSERT_WIN32_TRUE(::MoveFileExW(dir.c_str(), dst2.c_str(), 0));
 
     auto fp = core::QueryFinalPath(h_shared.value->get(),
                                    VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-    ASSERT_TRUE(fp) << core::FormatWin32Error(fp.error);
+    ASSERT_WIN32_OK(fp);
     EXPECT_TRUE(fp.value->ends_with(L"\\dir_self_moved"))
         << "Final path: " << core::WideToUtf8(*fp.value);
   }
@@ -981,7 +981,7 @@ TEST_F(RenameMoveTest, RenameDeletePendingFileFails) {
 
   auto h1 = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto disp = core::SetDisposition(h1.value->get(), /*delete_file=*/true);
   ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
@@ -1079,7 +1079,7 @@ TEST_F(RenameMoveTest, RenameOverDataMappedTargetPreservesMappedView) {
   auto h_target = core::CreateWin32File(target, GENERIC_READ | GENERIC_WRITE,
                                         core::kShareAll, OPEN_EXISTING,
                                         FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
+  ASSERT_WIN32_OK(h_target);
 
   // Declare h_map before view so RAII unmaps view before closing h_map.
   ::SetLastError(ERROR_SUCCESS);
@@ -1248,8 +1248,8 @@ TEST_F(RenameMoveTest, RenameHardLinkOntoSiblingHardLink) {
 
     auto info_a = core::QueryInfoByPath(link_a);
     auto info_b = core::QueryInfoByPath(link_b);
-    ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
-    ASSERT_TRUE(info_b) << core::FormatWin32Error(info_b.error);
+    ASSERT_WIN32_OK(info_a);
+    ASSERT_WIN32_OK(info_b);
     const uint64_t orig_index = core::FileIndexOf(*info_a.value);
     EXPECT_EQ(core::FileIndexOf(*info_b.value), orig_index);
     EXPECT_EQ(info_a.value->nNumberOfLinks, 2UL);
@@ -1259,7 +1259,7 @@ TEST_F(RenameMoveTest, RenameHardLinkOntoSiblingHardLink) {
 
     EXPECT_TRUE(helpers::CheckFileNotFound(link_a));
     auto info_after = core::QueryInfoByPath(link_b);
-    ASSERT_TRUE(info_after) << core::FormatWin32Error(info_after.error);
+    ASSERT_WIN32_OK(info_after);
     EXPECT_EQ(core::FileIndexOf(*info_after.value), orig_index);
     EXPECT_EQ(info_after.value->nNumberOfLinks, 1UL);
     EXPECT_TRUE(helpers::CheckFileContents(link_b, "hardlink_rename_payload"));
@@ -1276,13 +1276,13 @@ TEST_F(RenameMoveTest, RenameHardLinkOntoSiblingHardLink) {
         ::CreateHardLinkW(link_d.c_str(), link_c.c_str(), nullptr));
 
     auto info_c = core::QueryInfoByPath(link_c);
-    ASSERT_TRUE(info_c) << core::FormatWin32Error(info_c.error);
+    ASSERT_WIN32_OK(info_c);
     const uint64_t orig_index = core::FileIndexOf(*info_c.value);
 
     ASSERT_WIN32_TRUE(::MoveFileExW(link_c.c_str(), link_d.c_str(), 0));
     EXPECT_TRUE(helpers::CheckFileNotFound(link_c));
     auto info_after = core::QueryInfoByPath(link_d);
-    ASSERT_TRUE(info_after) << core::FormatWin32Error(info_after.error);
+    ASSERT_WIN32_OK(info_after);
     EXPECT_EQ(core::FileIndexOf(*info_after.value), orig_index);
     EXPECT_EQ(info_after.value->nNumberOfLinks, 1UL);
     EXPECT_TRUE(
@@ -1328,7 +1328,7 @@ TEST_F(RenameMoveTest, RenamePreservesAlternateDataStreams) {
     auto h_mid =
         core::CreateWin32File(mid, DELETE | SYNCHRONIZE, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_mid) << core::FormatWin32Error(h_mid.error);
+    ASSERT_WIN32_OK(h_mid);
     auto ren = core::SetRenameInfo(
         h_mid.value->get(), TestNtPath(L"ads_ren_sub\\ads_ren_final.dat"),
         nullptr, /*replace_if_exists=*/false);
@@ -1360,9 +1360,9 @@ TEST_F(RenameMoveTest, PosixRenameReplacesDataMappedTarget) {
   auto h_target = core::CreateWin32File(target, GENERIC_READ | GENERIC_WRITE,
                                         core::kShareAll, OPEN_EXISTING,
                                         FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
+  ASSERT_WIN32_OK(h_target);
   auto orig_idx = core::GetFileIndex(h_target.value->get());
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
 
   // Declare h_map before view so RAII unmaps view before closing h_map.
   ::SetLastError(ERROR_SUCCESS);
@@ -1380,9 +1380,9 @@ TEST_F(RenameMoveTest, PosixRenameReplacesDataMappedTarget) {
   auto h_src = core::CreateWin32File(
       src, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+  ASSERT_WIN32_OK(h_src);
   auto src_idx = core::GetFileIndex(h_src.value->get());
-  ASSERT_TRUE(src_idx) << core::FormatWin32Error(src_idx.error);
+  ASSERT_WIN32_OK(src_idx);
 
   // Non-POSIX replace fails while target handle is open.
   auto non_posix = core::SetRenameInfo(h_src.value->get(), nt_target, nullptr,
@@ -1398,7 +1398,7 @@ TEST_F(RenameMoveTest, PosixRenameReplacesDataMappedTarget) {
 
   EXPECT_TRUE(helpers::CheckFileNotFound(src));
   auto new_idx = core::QueryPathFileIndex(target);
-  ASSERT_TRUE(new_idx) << core::FormatWin32Error(new_idx.error);
+  ASSERT_WIN32_OK(new_idx);
   EXPECT_EQ(*new_idx.value, *src_idx.value);
   EXPECT_NE(*new_idx.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(target, src_bytes));
@@ -1413,7 +1413,7 @@ TEST_F(RenameMoveTest, PosixRenameReplacesDataMappedTarget) {
   const DWORD seek_err = ::GetLastError();
   ASSERT_TRUE(sought) << core::FormatWin32Error(seek_err);
   auto old_read = core::ReadAllBytes(h_target.value->get());
-  ASSERT_TRUE(old_read) << core::FormatWin32Error(old_read.error);
+  ASSERT_WIN32_OK(old_read);
   EXPECT_EQ(*old_read.value, tgt_bytes);
 
   view.reset();
@@ -1462,7 +1462,7 @@ TEST_F(RenameMoveTest, RenameMissingTargetParentFailsPathNotFound) {
     auto h_src =
         core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+    ASSERT_WIN32_OK(h_src);
     auto nt_ren = core::SetRenameInfo(h_src.value->get(),
                                       TestNtPath(L"no_such_parent\\moved.dat"),
                                       nullptr, /*replace_if_exists=*/false);
@@ -1487,13 +1487,13 @@ TEST_F(RenameMoveTest, RenameReadOnlySourceSucceedsAndKeepsReadOnly) {
                                           FILE_ATTRIBUTE_READONLY));
 
   auto orig_idx = core::QueryPathFileIndex(src);
-  ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+  ASSERT_WIN32_OK(orig_idx);
 
   // Same-directory rename.
   ASSERT_WIN32_TRUE(::MoveFileExW(src.c_str(), same_dir_dst.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(src));
   auto attrs1 = core::QueryWin32Attributes(same_dir_dst);
-  ASSERT_TRUE(attrs1) << core::FormatWin32Error(attrs1.error);
+  ASSERT_WIN32_OK(attrs1);
   EXPECT_NE(*attrs1.value & FILE_ATTRIBUTE_READONLY, 0UL);
 
   // Cross-directory move.
@@ -1501,11 +1501,11 @@ TEST_F(RenameMoveTest, RenameReadOnlySourceSucceedsAndKeepsReadOnly) {
       ::MoveFileExW(same_dir_dst.c_str(), cross_dir_dst.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(same_dir_dst));
   auto attrs2 = core::QueryWin32Attributes(cross_dir_dst);
-  ASSERT_TRUE(attrs2) << core::FormatWin32Error(attrs2.error);
+  ASSERT_WIN32_OK(attrs2);
   EXPECT_NE(*attrs2.value & FILE_ATTRIBUTE_READONLY, 0UL);
 
   auto new_idx = core::QueryPathFileIndex(cross_dir_dst);
-  ASSERT_TRUE(new_idx) << core::FormatWin32Error(new_idx.error);
+  ASSERT_WIN32_OK(new_idx);
   EXPECT_EQ(*new_idx.value, *orig_idx.value);
   EXPECT_TRUE(helpers::CheckFileContents(cross_dir_dst, "readonly_payload"));
 
@@ -1525,7 +1525,7 @@ TEST_F(RenameMoveTest, RenameOntoDeletePendingTargetFailsAccessDenied) {
   auto h_target =
       core::CreateWin32File(target, DELETE | SYNCHRONIZE, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_target) << core::FormatWin32Error(h_target.error);
+  ASSERT_WIN32_OK(h_target);
   auto disp = core::SetDisposition(h_target.value->get(), /*delete_file=*/true);
   ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
 
@@ -1570,7 +1570,7 @@ TEST_F(RenameMoveTest, CrossVolumeMoveWithoutCopyAllowedFailsNotSameDevice) {
     auto h_src =
         core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_src) << core::FormatWin32Error(h_src.error);
+    ASSERT_WIN32_OK(h_src);
     auto nt_ren = core::SetRenameInfo(h_src.value->get(), L"\\??\\" + dst,
                                       nullptr, /*replace_if_exists=*/false);
     EXPECT_NT_STATUS(nt_ren.status, STATUS_NOT_SAME_DEVICE);

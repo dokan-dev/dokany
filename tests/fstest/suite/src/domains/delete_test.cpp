@@ -228,7 +228,7 @@ TEST_F(DeleteTest, ReadOnlyFileCannotBeDeleted) {
   const std::wstring path = TestPath(L"readonly_del.dat");
   auto h = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                  FILE_ATTRIBUTE_READONLY);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   h.value->reset();
 
   auto doc_delete = core::CreateWin32File(
@@ -239,7 +239,7 @@ TEST_F(DeleteTest, ReadOnlyFileCannotBeDeleted) {
   EXPECT_WIN32_ERROR(::DeleteFileW(path.c_str()), ERROR_ACCESS_DENIED);
 
   auto still_there = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(still_there) << core::FormatWin32Error(still_there.error);
+  ASSERT_WIN32_OK(still_there);
   EXPECT_NE(*still_there.value & FILE_ATTRIBUTE_READONLY, 0UL);
 
   ASSERT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -304,19 +304,19 @@ TEST_F(DeleteTest, DispositionInfoLegacyDeletePendingBlocksOpen) {
   auto h1 =
       core::CreateWin32File(path, GENERIC_WRITE | FILE_READ_ATTRIBUTES,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   // Before marking delete, concurrent shared opens succeed.
   auto h_read = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, 0);
-  ASSERT_TRUE(h_read) << core::FormatWin32Error(h_read.error);
+  ASSERT_WIN32_OK(h_read);
   h_read.value->reset();
 
   // Explicitly use legacy FileDispositionInformation (class 13) so behavior is
   // deterministic across all Windows builds.
   {
     auto h_del = OpenForDelete(path);
-    ASSERT_TRUE(h_del) << core::FormatWin32Error(h_del.error);
+    ASSERT_WIN32_OK(h_del);
     auto disp = core::SetDisposition(h_del.value->get(), /*delete_file=*/true);
     ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
   }
@@ -338,11 +338,11 @@ TEST_F(DeleteTest, DispositionInfoLegacyDeletePendingDirVisibility) {
 
   auto h1 = core::CreateWin32File(file, GENERIC_WRITE, core::kShareAll,
                                   CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   {
     auto h_del = OpenForDelete(file);
-    ASSERT_TRUE(h_del) << core::FormatWin32Error(h_del.error);
+    ASSERT_WIN32_OK(h_del);
     auto disp = core::SetDisposition(h_del.value->get(), /*delete_file=*/true);
     ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
   }
@@ -369,7 +369,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenKeepsHandleUsableUntilLastClose) {
   auto h1 =
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "still_readable", 14));
 
   ASSERT_WIN32_TRUE(::DeleteFileW(file.c_str()));
@@ -377,7 +377,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenKeepsHandleUsableUntilLastClose) {
   // The surviving handle still reads the original bytes.
   ASSERT_WIN32_TRUE(fstest::SeekBegin(h1.value->get(), 0));
   auto data = core::ReadAllBytes(h1.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "still_readable");
 
   h1.value->reset();
@@ -416,7 +416,7 @@ TEST_F(DeleteTest, DeleteFileWhileOpenLegacy) {
   auto h1 =
       core::CreateWin32File(file, GENERIC_WRITE | FILE_READ_ATTRIBUTES,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   ASSERT_WIN32_TRUE(::DeleteFileW(file.c_str()));
 
@@ -443,11 +443,11 @@ TEST_F(DeleteTest, DeleteFileWhileOpenPosix) {
   auto h1 =
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "original_bytes", 14));
 
   auto orig_index = core::GetFileIndex(h1.value->get());
-  ASSERT_TRUE(orig_index) << core::FormatWin32Error(orig_index.error);
+  ASSERT_WIN32_OK(orig_index);
 
   ASSERT_WIN32_TRUE(::DeleteFileW(file.c_str()));
 
@@ -470,7 +470,7 @@ TEST_F(DeleteTest, DispositionInfoCancelBeforeLastClose) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto mark = core::SetDisposition(h1.value->get(), /*delete_file=*/true);
   ASSERT_NT_STATUS(mark.status, STATUS_SUCCESS);
@@ -496,10 +496,10 @@ TEST_F(DeleteTest, DeleteOnCloseWhileOtherHandleOpen) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto h2 = OpenForDelete(path, DELETE, FILE_FLAG_DELETE_ON_CLOSE);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   // Per [MS-FSA] 2.1.5.15.3, FileDispositionInformation({FALSE}) succeeds
   // (STATUS_SUCCESS) by clearing the link disposition flag, yet cannot cancel
@@ -518,7 +518,7 @@ TEST_F(DeleteTest, DeleteOnCloseWhileOtherHandleOpen) {
   EXPECT_TRUE(CheckDeletePending(h1.value->get(), true));
 
   auto read_h1 = core::ReadAllBytes(h1.value->get());
-  ASSERT_TRUE(read_h1) << core::FormatWin32Error(read_h1.error);
+  ASSERT_WIN32_OK(read_h1);
   EXPECT_EQ(*read_h1.value, "doc_content");
 
   h1.value->reset();
@@ -533,7 +533,7 @@ TEST_F(DeleteTest, DeleteOnCloseEmptyDirectoryRemovedOnClose) {
 
   auto h = OpenForDelete(
       dir, DELETE, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_DELETE_ON_CLOSE);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // Still present while the delete-on-close handle is open.
   EXPECT_TRUE(CheckIsDirectory(dir));
@@ -553,7 +553,7 @@ TEST_F(DeleteTest, DeleteOnCloseNonEmptyDirectorySurvivesClose) {
 
   auto h = OpenForDelete(
       dir, DELETE, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_DELETE_ON_CLOSE);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   h.value->reset();
 
   EXPECT_TRUE(CheckIsDirectory(dir));
@@ -570,7 +570,7 @@ TEST_F(DeleteTest, DeleteWithoutShareDeleteFailsSharingViolation) {
   auto h1 = core::CreateWin32File(path, GENERIC_READ,
                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   EXPECT_WIN32_ERROR(::DeleteFileW(path.c_str()), ERROR_SHARING_VIOLATION);
 
@@ -596,14 +596,14 @@ TEST_F(DeleteTest, DispositionInfoExPosixUnlinkAndReuseName) {
   auto h1 =
       core::CreateWin32File(file, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "old_posix_data", 14));
 
   auto orig_index = core::GetFileIndex(h1.value->get());
-  ASSERT_TRUE(orig_index) << core::FormatWin32Error(orig_index.error);
+  ASSERT_WIN32_OK(orig_index);
 
   auto h2 = OpenForDelete(file);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   auto disp = core::SetDispositionEx(h2.value->get(),
                                      nt::kFileDispositionDelete |
@@ -637,7 +637,7 @@ TEST_F(DeleteTest, DispositionInfoExIgnoreReadOnly) {
   // STATUS_CANNOT_DELETE on a READONLY file.
   {
     auto h_plain = OpenForDelete(path, DELETE | FILE_WRITE_ATTRIBUTES);
-    ASSERT_TRUE(h_plain) << core::FormatWin32Error(h_plain.error);
+    ASSERT_WIN32_OK(h_plain);
     auto fail_res = core::SetDispositionEx(h_plain.value->get(),
                                            nt::kFileDispositionDelete);
     EXPECT_NT_STATUS(fail_res.status, STATUS_CANNOT_DELETE);
@@ -647,7 +647,7 @@ TEST_F(DeleteTest, DispositionInfoExIgnoreReadOnly) {
   // without clearing FILE_ATTRIBUTE_READONLY first.
   {
     auto h_ok = OpenForDelete(path, DELETE | FILE_WRITE_ATTRIBUTES);
-    ASSERT_TRUE(h_ok) << core::FormatWin32Error(h_ok.error);
+    ASSERT_WIN32_OK(h_ok);
     auto ok_res = core::SetDispositionEx(
         h_ok.value->get(), nt::kFileDispositionDelete |
                                nt::kFileDispositionIgnoreReadonlyAttribute);
@@ -670,13 +670,13 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnEmptyDirectory) {
   auto h1 = core::CreateWin32File(
       sub, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, core::kShareAll,
       OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto orig_index = core::GetFileIndex(h1.value->get());
-  ASSERT_TRUE(orig_index) << core::FormatWin32Error(orig_index.error);
+  ASSERT_WIN32_OK(orig_index);
 
   {
     auto h2 = OpenForDelete(sub, DELETE, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
     auto disp = core::SetDispositionEx(h2.value->get(),
                                        nt::kFileDispositionDelete |
                                            nt::kFileDispositionPosixSemantics);
@@ -690,9 +690,9 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnEmptyDirectory) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
   auto h_new = core::CreateWin32File(sub, FILE_READ_ATTRIBUTES, core::kShareAll,
                                      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_new) << core::FormatWin32Error(h_new.error);
+  ASSERT_WIN32_OK(h_new);
   auto new_index = core::GetFileIndex(h_new.value->get());
-  ASSERT_TRUE(new_index) << core::FormatWin32Error(new_index.error);
+  ASSERT_WIN32_OK(new_index);
   EXPECT_NE(*new_index.value, *orig_index.value);
 
   h_new.value->reset();
@@ -717,7 +717,7 @@ TEST_F(DeleteTest, DeleteMappedFileFailsCannotDelete) {
 
   {
     auto h_del = OpenForDelete(path, DELETE | FILE_READ_ATTRIBUTES);
-    ASSERT_TRUE(h_del) << core::FormatWin32Error(h_del.error);
+    ASSERT_WIN32_OK(h_del);
     auto disp = core::SetDisposition(h_del.value->get(), /*delete_file=*/true);
     ASSERT_NT_STATUS(disp.status, STATUS_CANNOT_DELETE);
     EXPECT_TRUE(CheckDeletePending(h_del.value->get(), false));
@@ -801,7 +801,7 @@ TEST_F(DeleteTest, DeleteFileWOnMappedFilePosixUnlinksOnWin11_24H2) {
 TEST_F(DeleteTest, DeleteImageMappedFileFailsCannotDelete) {
   const std::wstring img_path = TestPath(L"mapped_image.exe");
   auto copy_res = fstest::CopyCurrentExecutableTo(img_path);
-  ASSERT_TRUE(copy_res) << core::FormatWin32Error(copy_res.error);
+  ASSERT_WIN32_OK(copy_res);
 
   MappedFileGuard mapped;
   ASSERT_TRUE(CreateMappedView(img_path, GENERIC_READ | GENERIC_EXECUTE,
@@ -812,7 +812,7 @@ TEST_F(DeleteTest, DeleteImageMappedFileFailsCannotDelete) {
 
   {
     auto h_img_del = OpenForDelete(img_path);
-    ASSERT_TRUE(h_img_del) << core::FormatWin32Error(h_img_del.error);
+    ASSERT_WIN32_OK(h_img_del);
     auto img_disp =
         core::SetDisposition(h_img_del.value->get(), /*delete_file=*/true);
     EXPECT_NT_STATUS(img_disp.status, STATUS_CANNOT_DELETE);
@@ -834,7 +834,7 @@ TEST_F(DeleteTest, DuplicateHandleKeepsDeletePendingAliveUntilLastClose) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | DELETE, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   core::UniqueHandle h_dup;
   ASSERT_WIN32_TRUE(::DuplicateHandle(::GetCurrentProcess(), h1.value->get(),
@@ -853,7 +853,7 @@ TEST_F(DeleteTest, DuplicateHandleKeepsDeletePendingAliveUntilLastClose) {
   EXPECT_TRUE(CheckDeletePending(h_dup.get(), true));
 
   auto data = core::ReadAllBytes(h_dup.get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "dup_delete_payload");
 
   // Closing the final duplicate handle completes deletion.
@@ -917,7 +917,7 @@ TEST_F(DeleteTest, DispositionInfoExDeleteOnCloseFlag) {
   {
     auto h = OpenForDelete(path, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                            FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto disp =
         core::SetDispositionEx(h.value->get(), nt::kFileDispositionDelete |
@@ -931,7 +931,7 @@ TEST_F(DeleteTest, DispositionInfoExDeleteOnCloseFlag) {
   {
     auto h = OpenForDelete(path, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto clear_doc =
         core::SetDispositionEx(h.value->get(), nt::kFileDispositionDoNotDelete |
@@ -954,14 +954,14 @@ TEST_F(DeleteTest, HardLinkLegacyDeletePreservesOtherLink) {
   ASSERT_WIN32_TRUE(::CreateHardLinkW(hl_b.c_str(), hl_a.c_str(), nullptr));
 
   auto info_init = core::QueryInfoByPath(hl_a);
-  ASSERT_TRUE(info_init) << core::FormatWin32Error(info_init.error);
+  ASSERT_WIN32_OK(info_init);
   EXPECT_EQ(info_init.value->nNumberOfLinks, 2UL);
 
   // Legacy delete-pending on hl_a must leave sibling link hl_b readable while
   // h_a remains open.
   auto h_a = core::CreateWin32File(hl_a, GENERIC_READ | DELETE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_a) << core::FormatWin32Error(h_a.error);
+  ASSERT_WIN32_OK(h_a);
   auto disp = core::SetDisposition(h_a.value->get(), /*delete_file=*/true);
   ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
 
@@ -971,7 +971,7 @@ TEST_F(DeleteTest, HardLinkLegacyDeletePreservesOtherLink) {
   EXPECT_TRUE(helpers::CheckFileNotFound(hl_a));
 
   auto info_b1 = core::QueryInfoByPath(hl_b);
-  ASSERT_TRUE(info_b1) << core::FormatWin32Error(info_b1.error);
+  ASSERT_WIN32_OK(info_b1);
   EXPECT_EQ(info_b1.value->nNumberOfLinks, 1UL);
   EXPECT_TRUE(helpers::CheckFileContents(hl_b, "hardlink_del_payload"));
 }
@@ -990,16 +990,16 @@ TEST_F(DeleteTest, HardLinkPosixUnlinkPreservesOtherLink) {
   ASSERT_WIN32_TRUE(::CreateHardLinkW(hl_c.c_str(), hl_b.c_str(), nullptr));
 
   auto info_two = core::QueryInfoByPath(hl_b);
-  ASSERT_TRUE(info_two) << core::FormatWin32Error(info_two.error);
+  ASSERT_WIN32_OK(info_two);
   EXPECT_EQ(info_two.value->nNumberOfLinks, 2UL);
 
   auto h_c_keep = core::CreateWin32File(hl_c, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_c_keep) << core::FormatWin32Error(h_c_keep.error);
+  ASSERT_WIN32_OK(h_c_keep);
 
   {
     auto h_c = OpenForDelete(hl_c, DELETE | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_c) << core::FormatWin32Error(h_c.error);
+    ASSERT_WIN32_OK(h_c);
     auto posix_disp = core::SetDispositionEx(
         h_c.value->get(),
         nt::kFileDispositionDelete | nt::kFileDispositionPosixSemantics);
@@ -1009,11 +1009,11 @@ TEST_F(DeleteTest, HardLinkPosixUnlinkPreservesOtherLink) {
   EXPECT_TRUE(helpers::CheckFileNotFound(hl_c));
 
   auto info_b2 = core::QueryInfoByPath(hl_b);
-  ASSERT_TRUE(info_b2) << core::FormatWin32Error(info_b2.error);
+  ASSERT_WIN32_OK(info_b2);
   EXPECT_EQ(info_b2.value->nNumberOfLinks, 1UL);
 
   auto keep_data = core::ReadAllBytes(h_c_keep.value->get());
-  ASSERT_TRUE(keep_data) << core::FormatWin32Error(keep_data.error);
+  ASSERT_WIN32_OK(keep_data);
   EXPECT_EQ(*keep_data.value, "hardlink_del_payload");
 
   h_c_keep.value->reset();
@@ -1034,7 +1034,7 @@ TEST_F(DeleteTest, DeleteOnCloseThroughHardLinkRemovesOnlyThatLink) {
   {
     auto h_doc = OpenForDelete(link_b, DELETE | FILE_READ_ATTRIBUTES,
                                FILE_FLAG_DELETE_ON_CLOSE);
-    ASSERT_TRUE(h_doc) << core::FormatWin32Error(h_doc.error);
+    ASSERT_WIN32_OK(h_doc);
     auto std_info = core::QueryStandardInfo(h_doc.value->get());
     ASSERT_TRUE(std_info) << core::FormatNtStatus(std_info.status);
     EXPECT_EQ(std_info.value->number_of_links, 2UL);
@@ -1042,7 +1042,7 @@ TEST_F(DeleteTest, DeleteOnCloseThroughHardLinkRemovesOnlyThatLink) {
 
   EXPECT_TRUE(helpers::CheckFileNotFound(link_b));
   auto info_a = core::QueryInfoByPath(link_a);
-  ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
+  ASSERT_WIN32_OK(info_a);
   EXPECT_EQ(info_a.value->nNumberOfLinks, 1UL);
   EXPECT_TRUE(helpers::CheckFileContents(link_a, "doc_hardlink_payload"));
 }
@@ -1061,7 +1061,7 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnReadOnlyFailsCannotDelete) {
 
   {
     auto h = OpenForDelete(path, DELETE | FILE_READ_ATTRIBUTES);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     auto disp = core::SetDispositionEx(h.value->get(),
                                        nt::kFileDispositionDelete |
                                            nt::kFileDispositionPosixSemantics);
@@ -1071,7 +1071,7 @@ TEST_F(DeleteTest, DispositionInfoExPosixOnReadOnlyFailsCannotDelete) {
 
   EXPECT_TRUE(helpers::CheckFileContents(path, "posix_ro_data"));
   auto attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_READONLY, 0UL);
 
   ASSERT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -1092,7 +1092,7 @@ TEST_F(DeleteTest, DispositionInfoExForceImageSectionCheck) {
   // Image-mapped file: the forced image-section check rejects deletion.
   const std::wstring img_path = TestPath(L"force_img_check.exe");
   auto copy_res = fstest::CopyCurrentExecutableTo(img_path);
-  ASSERT_TRUE(copy_res) << core::FormatWin32Error(copy_res.error);
+  ASSERT_WIN32_OK(copy_res);
   {
     MappedFileGuard mapped;
     ASSERT_TRUE(CreateMappedView(img_path, GENERIC_READ | GENERIC_EXECUTE,
@@ -1100,7 +1100,7 @@ TEST_F(DeleteTest, DispositionInfoExForceImageSectionCheck) {
                                  &mapped));
 
     auto h_img = OpenForDelete(img_path, DELETE | FILE_READ_ATTRIBUTES);
-    ASSERT_TRUE(h_img) << core::FormatWin32Error(h_img.error);
+    ASSERT_WIN32_OK(h_img);
     auto disp = core::SetDispositionEx(h_img.value->get(), kForcedDelete);
     EXPECT_NT_STATUS(disp.status, STATUS_CANNOT_DELETE);
     auto posix_disp = core::SetDispositionEx(
@@ -1109,14 +1109,14 @@ TEST_F(DeleteTest, DispositionInfoExForceImageSectionCheck) {
     EXPECT_TRUE(CheckDeletePending(h_img.value->get(), false));
   }
   auto img_attrs = core::QueryWin32Attributes(img_path);
-  EXPECT_TRUE(img_attrs) << core::FormatWin32Error(img_attrs.error);
+  EXPECT_WIN32_OK(img_attrs);
 
   // Plain data file (no image section): the flag does not block deletion.
   const std::wstring plain_path = TestPath(L"force_img_check_plain.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(plain_path, "no_image_section"));
   {
     auto h_plain = OpenForDelete(plain_path);
-    ASSERT_TRUE(h_plain) << core::FormatWin32Error(h_plain.error);
+    ASSERT_WIN32_OK(h_plain);
     auto disp = core::SetDispositionEx(h_plain.value->get(), kForcedDelete);
     ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
   }
@@ -1135,7 +1135,7 @@ TEST_F(DeleteTest, FileDispositionInfoOnNonEmptyDirFailsImmediately) {
   {
     auto h_dir = OpenForDelete(dir, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_dir) << core::FormatWin32Error(h_dir.error);
+    ASSERT_WIN32_OK(h_dir);
 
     auto disp = core::SetDisposition(h_dir.value->get(), /*delete_file=*/true);
     EXPECT_NT_STATUS(disp.status, STATUS_DIRECTORY_NOT_EMPTY);
@@ -1151,7 +1151,7 @@ TEST_F(DeleteTest, FileDispositionInfoOnNonEmptyDirFailsImmediately) {
   {
     auto h_dir = OpenForDelete(dir, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h_dir) << core::FormatWin32Error(h_dir.error);
+    ASSERT_WIN32_OK(h_dir);
     auto disp = core::SetDisposition(h_dir.value->get(), /*delete_file=*/true);
     ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
     EXPECT_TRUE(CheckDeletePending(h_dir.value->get(), true));
@@ -1174,11 +1174,11 @@ TEST_F(DeleteTest, CreateChildInDeletePendingDirFailsDeletePending) {
   auto h_keep = core::CreateWin32File(
       dir, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_keep) << core::FormatWin32Error(h_keep.error);
+  ASSERT_WIN32_OK(h_keep);
 
   auto h_del = OpenForDelete(dir, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                              FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_del) << core::FormatWin32Error(h_del.error);
+  ASSERT_WIN32_OK(h_del);
 
   auto mark = core::SetDisposition(h_del.value->get(), /*delete_file=*/true);
   ASSERT_NT_STATUS(mark.status, STATUS_SUCCESS);

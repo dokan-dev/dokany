@@ -173,10 +173,10 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto initial_info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(initial_info) << core::FormatWin32Error(initial_info.error);
+  ASSERT_WIN32_OK(initial_info);
   const uint64_t orig_write =
       helpers::FileTimeToU64(initial_info.value->ftLastWriteTime);
 
@@ -194,7 +194,7 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   // closed, an antivirus scanner or indexer may open the file and legitimately
   // advance LastAccessTime before a reopen could observe the explicit value.
   auto set_handle_info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(set_handle_info) << core::FormatWin32Error(set_handle_info.error);
+  ASSERT_WIN32_OK(set_handle_info);
   EXPECT_EQ(helpers::FileTimeToU64(set_handle_info.value->ftLastAccessTime),
             target_access);
   h.value->reset();
@@ -203,10 +203,10 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   auto h_verify = core::CreateWin32File(
       path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll, OPEN_EXISTING,
       FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_verify) << core::FormatWin32Error(h_verify.error);
+  ASSERT_WIN32_OK(h_verify);
 
   auto after_info = core::GetByHandleInfo(h_verify.value->get());
-  ASSERT_TRUE(after_info) << core::FormatWin32Error(after_info.error);
+  ASSERT_WIN32_OK(after_info);
   EXPECT_EQ(helpers::FileTimeToU64(after_info.value->ftCreationTime),
             target_create);
   EXPECT_EQ(helpers::FileTimeToU64(after_info.value->ftLastWriteTime),
@@ -224,7 +224,7 @@ TEST_F(TimestampsAttrsTest, SetGetFileAttributesTransitionMatrix) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
   }
 
   ASSERT_TRUE(ExpectMaskedFileAttrs(path, FILE_ATTRIBUTE_ARCHIVE));
@@ -300,7 +300,7 @@ TEST_F(TimestampsAttrsTest, HundredNanosecondFiletimePrecisionRoundTrip) {
     auto h = core::CreateWin32File(
         path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     nt::FileBasicInfo set_info{};
     set_info.creation_time.QuadPart = t_create;
@@ -343,7 +343,7 @@ TEST_F(TimestampsAttrsTest, ExplicitChangeTimeRoundTripsIndependently) {
     auto h = core::CreateWin32File(
         path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     nt::FileBasicInfo set_info{};
     set_info.last_write_time.QuadPart = t_write;
@@ -372,7 +372,7 @@ TEST_F(TimestampsAttrsTest, WriteUpdatesLastWriteTimeAndChangeTime) {
   {
     auto h2 = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
     const std::string payload = "updated_payload";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), payload.data(), payload.size()));
@@ -427,7 +427,7 @@ TEST_F(TimestampsAttrsTest, ParentDirLastWriteTimeOnChildCreateDeleteNotWrite) {
   {
     auto h = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const std::string more = "additional_child_bytes_written";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), more.data(), more.size()));
@@ -462,7 +462,7 @@ TEST_F(TimestampsAttrsTest, SetEndOfFileAndTruncateUpdateLastWriteAndArchive) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 10));
     ASSERT_WIN32_TRUE(::SetEndOfFile(h.value->get()));
   }
@@ -481,7 +481,7 @@ TEST_F(TimestampsAttrsTest, SetEndOfFileAndTruncateUpdateLastWriteAndArchive) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
   }
 
   auto after_trunc = helpers::QueryPathBasicInfo(path);
@@ -506,7 +506,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusOneFreezesTimestampUpdates) {
     auto h2 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
 
     nt::FileBasicInfo freeze{};
     freeze.last_write_time.QuadPart = -1;
@@ -526,7 +526,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusOneFreezesTimestampUpdates) {
   {
     auto h3 = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+    ASSERT_WIN32_OK(h3);
     const std::string data = "resumed_write_on_h3";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h3.value->get(), data.data(), data.size()));
@@ -560,7 +560,7 @@ TEST_F(TimestampsAttrsTest, SentinelMinusTwoRestoresTimestampUpdates) {
     auto h2 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
 
     // Freeze via -1 and write -> LastWriteTime stays at kPast.
     nt::FileBasicInfo freeze{};
@@ -600,7 +600,7 @@ TEST_F(TimestampsAttrsTest, InvalidNegativeTimestampLessThanMinusTwoFails) {
   auto h = core::CreateWin32File(
       path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   nt::FileBasicInfo bad_write{};
   bad_write.last_write_time.QuadPart = -3;
@@ -636,7 +636,7 @@ TEST_F(TimestampsAttrsTest, DirectoryTimestampsSetAndQuery) {
     auto h = core::CreateWin32File(
         dir, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     const FILETIME ft_c = helpers::Int64ToFileTime(t_create);
     const FILETIME ft_a = helpers::Int64ToFileTime(t_access);
@@ -655,10 +655,10 @@ TEST_F(TimestampsAttrsTest, DirectoryTimestampsSetAndQuery) {
   auto h_verify = core::CreateWin32File(dir, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                         core::kShareAll, OPEN_EXISTING,
                                         FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_verify) << core::FormatWin32Error(h_verify.error);
+  ASSERT_WIN32_OK(h_verify);
 
   auto bhfi = core::GetByHandleInfo(h_verify.value->get());
-  ASSERT_TRUE(bhfi) << core::FormatWin32Error(bhfi.error);
+  ASSERT_WIN32_OK(bhfi);
   EXPECT_EQ(helpers::FileTimeToU64(bhfi.value->ftCreationTime),
             static_cast<uint64_t>(t_create));
   EXPECT_EQ(helpers::FileTimeToU64(bhfi.value->ftLastWriteTime),
@@ -679,16 +679,16 @@ TEST_F(TimestampsAttrsTest, ArchiveBitSetOnCreateAndWriteAfterClear) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
   }
 
   auto attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_ARCHIVE, 0u);
 
   ASSERT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
   attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_EQ(*attrs.value & FILE_ATTRIBUTE_ARCHIVE, 0u);
   EXPECT_EQ(MaskPolicyAttributes(*attrs.value),
             static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL));
@@ -696,14 +696,14 @@ TEST_F(TimestampsAttrsTest, ArchiveBitSetOnCreateAndWriteAfterClear) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const std::string dirty = "dirty_archive_write";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), dirty.data(), dirty.size()));
   }
 
   attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_ARCHIVE, 0u);
 }
 
@@ -715,7 +715,7 @@ TEST_F(TimestampsAttrsTest, TemporaryAndNotContentIndexedAttributes) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
   }
 
   constexpr DWORD kTemp = FILE_ATTRIBUTE_TEMPORARY;
@@ -745,7 +745,7 @@ TEST_F(TimestampsAttrsTest,
     auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+    ASSERT_WIN32_OK(h1);
 
     ASSERT_WIN32_TRUE(
         ::SetFileTime(h1.value->get(), &ft_past, &ft_past, &ft_past));
@@ -757,7 +757,7 @@ TEST_F(TimestampsAttrsTest,
     ASSERT_WIN32_TRUE(::FlushFileBuffers(h1.value->get()));
 
     auto info = core::GetByHandleInfo(h1.value->get());
-    ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+    ASSERT_WIN32_OK(info);
     EXPECT_EQ(helpers::FileTimeToU64(info.value->ftLastWriteTime),
               static_cast<uint64_t>(kPast));
   }
@@ -771,7 +771,7 @@ TEST_F(TimestampsAttrsTest,
   {
     auto h2 = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
     const std::string data2 = "written_on_h2_advances";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h2.value->get(), data2.data(), data2.size()));
@@ -803,7 +803,7 @@ TEST_F(TimestampsAttrsTest,
     auto h = core::CreateWin32File(
         path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const FILETIME ft_c = helpers::Int64ToFileTime(t_create);
     const FILETIME ft_a = helpers::Int64ToFileTime(t_access);
     const FILETIME ft_w = helpers::Int64ToFileTime(t_write);
@@ -816,7 +816,7 @@ TEST_F(TimestampsAttrsTest,
       path.c_str(), FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_ARCHIVE));
 
   auto raw_attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(raw_attrs) << core::FormatWin32Error(raw_attrs.error);
+  ASSERT_WIN32_OK(raw_attrs);
   EXPECT_EQ(*raw_attrs.value & FILE_ATTRIBUTE_DIRECTORY, 0u);
   EXPECT_EQ(MaskPolicyAttributes(*raw_attrs.value),
             static_cast<DWORD>(FILE_ATTRIBUTE_ARCHIVE));
@@ -828,9 +828,9 @@ TEST_F(TimestampsAttrsTest,
   auto h = core::CreateWin32File(path, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                  core::kShareAll, OPEN_EXISTING,
                                  FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   auto bhfi = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(bhfi) << core::FormatWin32Error(bhfi.error);
+  ASSERT_WIN32_OK(bhfi);
 
   EXPECT_EQ(attr_ex.dwFileAttributes, bhfi.value->dwFileAttributes);
   EXPECT_EQ(attr_ex.nFileSizeHigh, bhfi.value->nFileSizeHigh);
@@ -861,18 +861,18 @@ TEST_F(TimestampsAttrsTest, SetFileAttributesCannotClearSparseFlag) {
     auto h = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, CREATE_ALWAYS,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto sp = core::SetSparseFile(h.value->get(), true);
-    ASSERT_TRUE(sp) << core::FormatWin32Error(sp.error);
+    ASSERT_WIN32_OK(sp);
 
     auto info = core::GetByHandleInfo(h.value->get());
-    ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+    ASSERT_WIN32_OK(info);
     EXPECT_NE(info.value->dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
   }
 
   auto attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
 
   // SetFileAttributesW(FILE_ATTRIBUTE_NORMAL) must NOT clear SPARSE_FILE.
@@ -886,7 +886,7 @@ TEST_F(TimestampsAttrsTest, SetFileAttributesCannotClearSparseFlag) {
     auto h = core::CreateWin32File(
         path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
         core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     nt::FileBasicInfo info{};
     info.file_attributes = FILE_ATTRIBUTE_NORMAL;
@@ -899,7 +899,7 @@ TEST_F(TimestampsAttrsTest, SetFileAttributesCannotClearSparseFlag) {
   }
 
   attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
 
   // FSCTL_SET_SPARSE(FALSE) DOES clear FILE_ATTRIBUTE_SPARSE_FILE.
@@ -907,18 +907,18 @@ TEST_F(TimestampsAttrsTest, SetFileAttributesCannotClearSparseFlag) {
     auto h = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                    core::kShareAll, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto cleared = core::SetSparseFile(h.value->get(), false);
-    ASSERT_TRUE(cleared) << core::FormatWin32Error(cleared.error);
+    ASSERT_WIN32_OK(cleared);
 
     auto info = core::GetByHandleInfo(h.value->get());
-    ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+    ASSERT_WIN32_OK(info);
     EXPECT_EQ(info.value->dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
   }
 
   attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_EQ(*attrs.value & FILE_ATTRIBUTE_SPARSE_FILE, 0u);
 }
 
@@ -978,7 +978,7 @@ TEST_F(TimestampsAttrsTest, SecurityChangeUpdatesChangeTimeNotLastWriteTime) {
   // the temp-dir cleanup) out of the file and needs no restore guard.
   auto set_dacl =
       core::SetFileSddl(path, DACL_SECURITY_INFORMATION, L"D:P(A;;FA;;;WD)");
-  ASSERT_TRUE(set_dacl) << core::FormatWin32Error(set_dacl.error);
+  ASSERT_WIN32_OK(set_dacl);
 
   auto got = helpers::QueryPathBasicInfo(path);
   ASSERT_TRUE(got) << got.Describe();
@@ -999,7 +999,7 @@ TEST_F(TimestampsAttrsTest, TemporaryAttributeRejectedOnDirectory) {
       ERROR_INVALID_PARAMETER);
 
   auto attrs = core::QueryWin32Attributes(dir);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_DIRECTORY, 0u);
   EXPECT_EQ(*attrs.value & FILE_ATTRIBUTE_TEMPORARY, 0u);
 }

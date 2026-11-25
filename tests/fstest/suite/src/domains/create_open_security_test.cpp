@@ -56,7 +56,7 @@ TEST_F(CreateOpenTest, OpenDirectoryRequiresBackupSemantics) {
   auto with_backup =
       core::CreateWin32File(dir, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
                             FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(with_backup) << core::FormatWin32Error(with_backup.error);
+  ASSERT_WIN32_OK(with_backup);
   with_backup.value->reset();
 
   auto file_as_dir = core::NtCreateFilePath(
@@ -80,9 +80,9 @@ TEST_F(CreateOpenTest, AccessMaskEnforcementReadOnlyAndWriteOnly) {
   {
     auto h = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     auto data = core::ReadAllBytes(h.value->get());
-    ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+    ASSERT_WIN32_OK(data);
     EXPECT_EQ(*data.value, "hello world");
 
     DWORD written = 0;
@@ -95,7 +95,7 @@ TEST_F(CreateOpenTest, AccessMaskEnforcementReadOnlyAndWriteOnly) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     char buf[16]{};
     DWORD bytes_read = 0;
@@ -115,10 +115,10 @@ TEST_F(CreateOpenTest, AccessMaskEnforcementReadOnlyAndWriteOnly) {
   {
     auto h = core::CreateWin32File(path, FILE_READ_ATTRIBUTES, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto info = core::GetByHandleInfo(h.value->get());
-    ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+    ASSERT_WIN32_OK(info);
     EXPECT_EQ(info.value->nFileSizeLow, 11UL);
 
     char buf[16]{};
@@ -140,7 +140,7 @@ TEST_F(CreateOpenTest, ShareModeAttributeOnlyHandleBypassesDataShare) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto data_blocked =
       core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
@@ -150,17 +150,17 @@ TEST_F(CreateOpenTest, ShareModeAttributeOnlyHandleBypassesDataShare) {
 
   auto h_attr = core::CreateWin32File(path, FILE_READ_ATTRIBUTES, 0,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_attr) << core::FormatWin32Error(h_attr.error);
+  ASSERT_WIN32_OK(h_attr);
   auto info1 = core::GetByHandleInfo(h_attr.value->get());
-  ASSERT_TRUE(info1) << core::FormatWin32Error(info1.error);
+  ASSERT_WIN32_OK(info1);
   EXPECT_EQ(info1.value->nFileSizeLow, 4UL);
   h_attr.value->reset();
 
   auto h_zero =
       core::CreateWin32File(path, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_zero) << core::FormatWin32Error(h_zero.error);
+  ASSERT_WIN32_OK(h_zero);
   auto info2 = core::GetByHandleInfo(h_zero.value->get());
-  ASSERT_TRUE(info2) << core::FormatWin32Error(info2.error);
+  ASSERT_WIN32_OK(info2);
   EXPECT_EQ(info2.value->nFileSizeLow, 4UL);
   char buf[8]{};
   DWORD bytes_read = 0;
@@ -182,7 +182,7 @@ TEST_F(CreateOpenTest, MetadataOnlyAccessBypassesZeroShareMode) {
 
   auto h_excl = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_excl) << core::FormatWin32Error(h_excl.error);
+  ASSERT_WIN32_OK(h_excl);
 
   struct AccessCase {
     const char *label;
@@ -200,7 +200,7 @@ TEST_F(CreateOpenTest, MetadataOnlyAccessBypassesZeroShareMode) {
     SCOPED_TRACE(c.label);
     auto win_open = core::CreateWin32File(path, c.access, 0, OPEN_EXISTING,
                                           FILE_ATTRIBUTE_NORMAL);
-    EXPECT_TRUE(win_open) << core::FormatWin32Error(win_open.error);
+    EXPECT_WIN32_OK(win_open);
 
     auto nt_open = core::NtCreateFilePath(
         nt_path, c.access, FILE_ATTRIBUTE_NORMAL, /*share_access=*/0,
@@ -252,16 +252,16 @@ TEST_F(CreateOpenTest, ReadOnlyFileBlocksWriteOpenAllowsReadAndWriteAttr) {
 
   auto r_open = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(r_open) << core::FormatWin32Error(r_open.error);
+  ASSERT_WIN32_OK(r_open);
   auto bytes = core::ReadAllBytes(r_open.value->get());
-  ASSERT_TRUE(bytes) << core::FormatWin32Error(bytes.error);
+  ASSERT_WIN32_OK(bytes);
   EXPECT_EQ(*bytes.value, "readonly_data");
   r_open.value->reset();
 
   auto wa_open =
       core::CreateWin32File(path, FILE_WRITE_ATTRIBUTES, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(wa_open) << core::FormatWin32Error(wa_open.error);
+  ASSERT_WIN32_OK(wa_open);
   wa_open.value->reset();
 
   EXPECT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -275,10 +275,10 @@ TEST_F(CreateOpenTest, CreateFileDeleteOnCloseLifecycle) {
     const std::wstring path = TestPath(L"doc_life.dat");
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    CREATE_ALWAYS, FILE_FLAG_DELETE_ON_CLOSE);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     auto listing = core::ListDirectoryWin32(TempDir().Path());
-    ASSERT_TRUE(listing) << core::FormatWin32Error(listing.error);
+    ASSERT_WIN32_OK(listing);
     EXPECT_NE(std::find(listing.value->begin(), listing.value->end(),
                         std::wstring(L"doc_life.dat")),
               listing.value->end());
@@ -292,7 +292,7 @@ TEST_F(CreateOpenTest, CreateFileDeleteOnCloseLifecycle) {
     const std::wstring path = TestPath(L"doc_ro.dat");
     auto h = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                    FILE_ATTRIBUTE_READONLY);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     h.value->reset();
 
     // DELETE-only access: a GENERIC_WRITE open of a READONLY file is denied
@@ -309,7 +309,7 @@ TEST_F(CreateOpenTest, CreateFileDeleteOnCloseLifecycle) {
     auto plain_del = core::CreateWin32File(path, DELETE | FILE_READ_ATTRIBUTES,
                                            core::kShareAll, OPEN_EXISTING,
                                            FILE_ATTRIBUTE_NORMAL);
-    EXPECT_TRUE(plain_del) << core::FormatWin32Error(plain_del.error);
+    EXPECT_WIN32_OK(plain_del);
     if (plain_del) {
       plain_del.value->reset();
     }
@@ -396,7 +396,7 @@ TEST_F(CreateOpenTest, NtCreateFileRelativeToDirectoryHandle) {
   ASSERT_NT_STATUS(child_open.status, STATUS_SUCCESS);
   EXPECT_EQ(child_open.information, nt::kFileOpened);
   auto content = core::ReadAllBytes(child_open.value->get());
-  ASSERT_TRUE(content) << core::FormatWin32Error(content.error);
+  ASSERT_WIN32_OK(content);
   EXPECT_EQ(*content.value, "relative_io");
   child_open.value->reset();
 
@@ -419,7 +419,7 @@ TEST_F(CreateOpenTest, NtCreateFileRelativeToDirectoryHandle) {
 
   auto verify =
       core::ReadFileContents(TestPath(L"rel_parent\\nested\\deep.dat"));
-  ASSERT_TRUE(verify) << core::FormatWin32Error(verify.error);
+  ASSERT_WIN32_OK(verify);
   EXPECT_EQ(*verify.value, "deep");
 }
 
@@ -438,7 +438,7 @@ TEST_F(CreateOpenTest, TruncateExistingOnReadOnlyFileFails) {
   EXPECT_WIN32_ERROR_CODE(trunc_res.error, ERROR_ACCESS_DENIED);
 
   auto read_back = core::ReadFileContents(path);
-  ASSERT_TRUE(read_back) << core::FormatWin32Error(read_back.error);
+  ASSERT_WIN32_OK(read_back);
   EXPECT_EQ(*read_back.value, payload);
 
   EXPECT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -453,17 +453,17 @@ TEST_F(CreateOpenTest, CreateNewReadOnlyAllowsWriteOnCreationHandle) {
   auto h =
       core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_READONLY);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), payload.data(), payload.size()));
   h.value->reset();
 
   auto attrs = core::QueryWin32Attributes(path);
-  ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+  ASSERT_WIN32_OK(attrs);
   EXPECT_NE(*attrs.value & FILE_ATTRIBUTE_READONLY, 0UL);
 
   auto read_back = core::ReadFileContents(path);
-  ASSERT_TRUE(read_back) << core::FormatWin32Error(read_back.error);
+  ASSERT_WIN32_OK(read_back);
   EXPECT_EQ(*read_back.value, payload);
 
   auto reopen_write =
@@ -483,7 +483,7 @@ TEST_F(CreateOpenTest, ReadOnlyDirectoryAllowsChildCreateModifyDelete) {
   ASSERT_WIN32_TRUE(::SetFileAttributesW(dir.c_str(), FILE_ATTRIBUTE_READONLY));
 
   auto dir_attrs = core::QueryWin32Attributes(dir);
-  ASSERT_TRUE(dir_attrs) << core::FormatWin32Error(dir_attrs.error);
+  ASSERT_WIN32_OK(dir_attrs);
   EXPECT_EQ(*dir_attrs.value &
                 (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_READONLY),
             DWORD{FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_READONLY});
@@ -493,20 +493,20 @@ TEST_F(CreateOpenTest, ReadOnlyDirectoryAllowsChildCreateModifyDelete) {
 
   auto h_create = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                         CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_create) << core::FormatWin32Error(h_create.error);
+  ASSERT_WIN32_OK(h_create);
   ASSERT_WIN32_OK(core::WriteAllBytes(h_create.value->get(), "v1", 2));
   h_create.value->reset();
 
   auto h_mod = core::CreateWin32File(child, GENERIC_WRITE, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_mod) << core::FormatWin32Error(h_mod.error);
+  ASSERT_WIN32_OK(h_mod);
   ASSERT_WIN32_OK(core::WriteAllBytes(h_mod.value->get(), "v2_mod", 6));
   h_mod.value->reset();
 
   ASSERT_WIN32_TRUE(::MoveFileExW(child.c_str(), renamed.c_str(), 0));
 
   auto read_back = core::ReadFileContents(renamed);
-  ASSERT_TRUE(read_back) << core::FormatWin32Error(read_back.error);
+  ASSERT_WIN32_OK(read_back);
   EXPECT_EQ(*read_back.value, "v2_mod");
 
   ASSERT_WIN32_TRUE(::DeleteFileW(renamed.c_str()));
@@ -527,14 +527,14 @@ TEST_F(CreateOpenTest,
   {
     auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+    ASSERT_WIN32_OK(h1);
 
     auto h_zero =
         core::CreateWin32File(path, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_zero) << core::FormatWin32Error(h_zero.error);
+    ASSERT_WIN32_OK(h_zero);
 
     auto info = core::GetByHandleInfo(h_zero.value->get());
-    ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+    ASSERT_WIN32_OK(info);
     EXPECT_EQ(info.value->nFileSizeLow, 12UL);
 
     char buf[8]{};
@@ -567,10 +567,10 @@ TEST_F(CreateOpenTest,
 
   auto h_zero = core::CreateWin32File(path, 0, core::kShareAll, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_zero) << core::FormatWin32Error(h_zero.error);
+  ASSERT_WIN32_OK(h_zero);
 
   auto info = core::GetByHandleInfo(h_zero.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_EQ(info.value->nFileSizeLow, 12UL);
   h_zero.value->reset();
 
@@ -633,7 +633,7 @@ TEST_F(CreateOpenTest,
     EXPECT_EQ(*access.value & FILE_APPEND_DATA, 0UL);
 
     auto read_res = core::ReadAllBytes(h_ro.value->get());
-    ASSERT_TRUE(read_res) << core::FormatWin32Error(read_res.error);
+    ASSERT_WIN32_OK(read_res);
     EXPECT_EQ(*read_res.value, "updated!");
 
     DWORD written = 0;
@@ -675,10 +675,10 @@ TEST_F(CreateOpenTest, BackupPrivilegeBypassesDenyDacl) {
   auto h_backup =
       core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
                             FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_backup) << core::FormatWin32Error(h_backup.error);
+  ASSERT_WIN32_OK(h_backup);
 
   auto data = core::ReadAllBytes(h_backup.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "backup_secret_payload");
   h_backup.value->reset();
   backup_priv.Restore();
@@ -726,17 +726,17 @@ TEST_F(CreateOpenTest, RestorePrivilegeBypassesWriteDenyDacl) {
   auto h_restore = core::CreateWin32File(
       path, FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h_restore) << core::FormatWin32Error(h_restore.error);
+  ASSERT_WIN32_OK(h_restore);
 
   constexpr const char kUpdatedPayload[] = "after_restore_write!";
   auto write_res = core::WriteAllBytes(h_restore.value->get(), kUpdatedPayload,
                                        sizeof(kUpdatedPayload) - 1);
-  ASSERT_TRUE(write_res) << core::FormatWin32Error(write_res.error);
+  ASSERT_WIN32_OK(write_res);
   h_restore.value->reset();
   restore_priv.Restore();
 
   auto read_back = core::ReadFileContents(path);
-  ASSERT_TRUE(read_back) << core::FormatWin32Error(read_back.error);
+  ASSERT_WIN32_OK(read_back);
   EXPECT_EQ(*read_back.value, kUpdatedPayload);
 
   auto reset_res = core::ResetDaclToFullControl(
@@ -756,7 +756,7 @@ TEST_F(CreateOpenTest, DuplicateHandlePreservesShareLock) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE, 0,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   core::UniqueHandle h_dup;
   ASSERT_WIN32_TRUE(::DuplicateHandle(::GetCurrentProcess(), h1.value->get(),
@@ -774,14 +774,14 @@ TEST_F(CreateOpenTest, DuplicateHandlePreservesShareLock) {
   EXPECT_WIN32_ERROR_CODE(blocked.error, ERROR_SHARING_VIOLATION);
 
   auto data = core::ReadAllBytes(h_dup.get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "dup_payload");
 
   h_dup.reset();
 
   auto unblocked = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(unblocked) << core::FormatWin32Error(unblocked.error);
+  ASSERT_WIN32_OK(unblocked);
 }
 
 // Spec: Win32 ReOpenFile / [MS-FSA] 2.1.5.1 -- ReOpenFile opens the file
@@ -794,7 +794,7 @@ TEST_F(CreateOpenTest, ReOpenFileUpgradesAccessAfterRename) {
 
   auto h_orig = core::CreateWin32File(orig, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_orig) << core::FormatWin32Error(h_orig.error);
+  ASSERT_WIN32_OK(h_orig);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(orig.c_str(), moved.c_str(), 0));
 

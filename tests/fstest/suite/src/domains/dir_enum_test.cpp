@@ -132,7 +132,7 @@ ExpectedFileIds QueryFileIds(std::wstring_view path, bool is_dir,
   }
   auto h = core::CreateWin32File(path, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                  core::kShareAll, OPEN_EXISTING, flags);
-  EXPECT_TRUE(h) << core::FormatWin32Error(h.error);
+  EXPECT_WIN32_OK(h);
   if (!h) {
     return res;
   }
@@ -822,7 +822,7 @@ void ExpectByHandleExEnumeration(std::wstring_view dir,
   }
 
   auto dh = OpenDirForEnum(d.dir);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   // 512 bytes hold only a few records, forcing several continuation calls.
   std::vector<NtDirEntry> entries;
@@ -911,11 +911,11 @@ TEST_F(DirEnumTest, MountRootOmitsDotAndDotDot) {
   REQUIRE_VOLUME_ROOT();
 
   auto win32_res = core::ListDirectoryWin32(VolumeRootPath(), L"*");
-  ASSERT_TRUE(win32_res) << core::FormatWin32Error(win32_res.error);
+  ASSERT_WIN32_OK(win32_res);
   VerifyVolumeRootEntries(*win32_res.value, TempDir().Basename(), "Win32");
 
   auto root_h = OpenRootForEnum(Root());
-  ASSERT_TRUE(root_h) << core::FormatWin32Error(root_h.error);
+  ASSERT_WIN32_OK(root_h);
 
   std::vector<NtDirEntry> nt_entries;
   const NTSTATUS st = EnumerateDirClass<nt::FileBothDirInfo>(
@@ -1016,7 +1016,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryReturnSingleEntry) {
   }
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   std::vector<NtDirEntry> actual;
   const NTSTATUS st = EnumerateDirClass<nt::FileBothDirInfo>(
@@ -1040,7 +1040,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryRestartScan) {
   }
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   // Partially consume two entries.
   std::vector<uint8_t> buf(4096, 0);
@@ -1084,7 +1084,7 @@ TEST_F(DirEnumTest, NtQueryDirectorySmallBufferPagination) {
   // STATUS_INFO_LENGTH_MISMATCH.
   {
     auto dh = OpenDirForEnum(sub);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
     alignas(8) std::array<uint8_t, 16> tiny_buf{};
     nt::IoStatusBlock iosb{};
     const NTSTATUS st = ntdll.NtQueryDirectoryFile(
@@ -1102,7 +1102,7 @@ TEST_F(DirEnumTest, NtQueryDirectorySmallBufferPagination) {
   // NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor.
   {
     auto dh = OpenDirForEnum(sub);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
     std::wstring pat = L"item_00.txt";
     nt::UnicodeString pat_us = nt::MakeUnicodeString(pat.data(), pat.size());
     std::vector<uint8_t> short_buf(sizeof(nt::FileBothDirInfo), 0);
@@ -1120,7 +1120,7 @@ TEST_F(DirEnumTest, NtQueryDirectorySmallBufferPagination) {
   //    across all 20 files with zero duplicates and zero omissions.
   {
     auto dh = OpenDirForEnum(sub);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
     constexpr size_t kTightBufferSize = 224;
     std::vector<NtDirEntry> entries;
     size_t call_count = 0;
@@ -1155,12 +1155,12 @@ TEST_F(DirEnumTest, LargeDirectoryEntriesStrictMultiset) {
   }
 
   auto win32_res = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(win32_res) << core::FormatWin32Error(win32_res.error);
+  ASSERT_WIN32_OK(win32_res);
   EXPECT_EQ(win32_res.value->size(), static_cast<size_t>(count) + 2);
   EXPECT_MULTISET_EQ(*win32_res.value, expected);
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
   std::vector<NtDirEntry> nt_entries;
   const NTSTATUS st = EnumerateDirClass<nt::FileIdBothDirInfo>(
       dh.value->get(), /*buffer_size=*/4096, /*return_single_entry=*/false, L"",
@@ -1229,7 +1229,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryNoMatchFailsNoSuchFile) {
   ASSERT_TRUE(CreateWildcardDir(sub));
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
   std::vector<NtDirEntry> entries;
   const NTSTATUS st = EnumerateDirClass<nt::FileBothDirInfo>(
       dh.value->get(), /*buffer_size=*/4096, /*return_single_entry=*/false,
@@ -1312,7 +1312,7 @@ TEST_F(DirEnumTest, FindFilesMetadataMatchesGetFileInformation) {
     auto fh =
         core::CreateWin32File(file_path, FILE_WRITE_ATTRIBUTES, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
     const FILETIME ft_create = helpers::U64ToFileTime(132223104001234567ULL);
     const FILETIME ft_access = helpers::U64ToFileTime(132223140002345678ULL);
     const FILETIME ft_write = helpers::U64ToFileTime(132223176003456789ULL);
@@ -1321,9 +1321,9 @@ TEST_F(DirEnumTest, FindFilesMetadataMatchesGetFileInformation) {
   }
 
   auto file_bhfi = core::QueryInfoByPath(file_path, /*backup_semantics=*/false);
-  ASSERT_TRUE(file_bhfi) << core::FormatWin32Error(file_bhfi.error);
+  ASSERT_WIN32_OK(file_bhfi);
   auto dir_bhfi = core::QueryInfoByPath(nested_dir, /*backup_semantics=*/true);
-  ASSERT_TRUE(dir_bhfi) << core::FormatWin32Error(dir_bhfi.error);
+  ASSERT_WIN32_OK(dir_bhfi);
 
   bool saw_file = false;
   bool saw_dir = false;
@@ -1368,7 +1368,7 @@ TEST_F(DirEnumTest, EnumerateRegularFileFailsNotDirectory) {
   auto fh = core::CreateWin32File(file_path, FILE_READ_DATA | SYNCHRONIZE,
                                   core::kShareAll, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   std::vector<NtDirEntry> unused_entries;
   const NTSTATUS st = EnumerateDirClass<nt::FileBothDirInfo>(
@@ -1407,7 +1407,7 @@ TEST_F(DirEnumTest, MutationDuringEnumerationNoCrashNoDuplicates) {
   }
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   std::map<std::wstring, size_t> seen_counts;
   bool mutated = false;
@@ -1531,7 +1531,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryPatternImmutabilityAndRestartScan) {
   ASSERT_TRUE(CreateEmptyFile(core::JoinPath(sub, L"b2.dat")));
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   std::vector<uint8_t> buf(4096, 0);
   std::vector<std::wstring> pass1;
@@ -1588,9 +1588,9 @@ TEST_F(DirEnumTest, NtQueryDirectoryIndependentCursorsTwoHandles) {
   }
 
   auto h1 = OpenDirForEnum(sub);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   auto h2 = OpenDirForEnum(sub);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
 
   std::vector<uint8_t> buf(4096, 0);
   std::vector<std::wstring> out1;
@@ -1670,7 +1670,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate) {
   // 1. Single-entry enumeration with SL_RETURN_SINGLE_ENTRY + SL_RESTART_SCAN.
   {
     auto dh = OpenDirForEnum(sub);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
 
     std::vector<NtDirEntry> walked;
     ASSERT_NT_STATUS(EnumerateDirClassEx<nt::FileBothDirInfo>(
@@ -1685,7 +1685,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate) {
   // sequential enumeration cursor undisturbed, and SL_RESTART_SCAN resets it.
   {
     auto dh = OpenDirForEnum(sub);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
 
     std::vector<uint8_t> buf(4096, 0);
     std::vector<NtDirEntry> seq_entries;
@@ -1744,7 +1744,7 @@ TEST_F(DirEnumTest, FileIdExtdDirectoryInfoReportsReparseTag) {
   const std::wstring junc_path = core::JoinPath(sub, L"junc_entry");
   const std::wstring plain_path = core::JoinPath(sub, L"plain.dat");
   auto jres = core::CreateDirectoryJunction(junc_path, target_dir);
-  ASSERT_TRUE(jres) << core::FormatWin32Error(jres.error);
+  ASSERT_WIN32_OK(jres);
   ASSERT_WIN32_OK(core::WriteFileContents(plain_path, "plain-file"));
 
   const ExpectedFileIds junc_ids =
@@ -1800,7 +1800,7 @@ TEST_F(DirEnumTest, FileFullDirectoryInfoReportsEaSize) {
     auto fh = core::CreateWin32File(with_ea_path, GENERIC_READ | GENERIC_WRITE,
                                     core::kShareAll, CREATE_NEW,
                                     FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
 
     std::vector<uint8_t> ea_buf = core::BuildEaBuffer({
         {0, "meta_a", {'h', 'e', 'l', 'l', 'o'}},
@@ -1896,7 +1896,7 @@ TEST_F(DirEnumTest,
   ASSERT_NE(ntdll.NtQueryDirectoryFile, nullptr);
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   constexpr size_t kHeaderBytes = offsetof(nt::FileBothDirInfo, file_name);
   constexpr size_t kPartialChars = 4; // "ovf_"
@@ -1970,7 +1970,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryOverlappedHandleCompletesViaEvent) {
   auto dh = core::CreateWin32File(
       sub, FILE_LIST_DIRECTORY, core::kShareAll, OPEN_EXISTING,
       FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   ::SetLastError(ERROR_SUCCESS);
   core::UniqueHandle event(::CreateEventW(nullptr, /*bManualReset=*/TRUE,
@@ -2040,7 +2040,7 @@ TEST_F(DirEnumTest, NtQueryDirectoryInfoClassSwitchMidScanKeepsCursor) {
   ASSERT_TRUE(CreateNumberedFilesDir(sub, L"sw_", 6, &expected));
 
   auto dh = OpenDirForEnum(sub);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   std::vector<uint8_t> buf(4096, 0);
   std::vector<std::wstring> seen;

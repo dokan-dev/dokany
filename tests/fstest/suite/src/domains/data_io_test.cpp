@@ -592,10 +592,10 @@ TEST_F(DataIoTest, SetEndOfFileExtendAndShrink) {
   const std::wstring path = TestPath(L"eof_extend_shrink.dat");
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_EQ(core::FileSizeOf(*info.value), 0u);
 
   FILE_END_OF_FILE_INFO eof_info{};
@@ -604,12 +604,12 @@ TEST_F(DataIoTest, SetEndOfFileExtendAndShrink) {
       h.value->get(), FileEndOfFileInfo, &eof_info, sizeof(eof_info)));
 
   info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_EQ(core::FileSizeOf(*info.value), 42u);
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto data = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   ASSERT_EQ(data.value->size(), 42u);
   EXPECT_TRUE(helpers::AllBytesEqual(*data.value, '\0'));
 
@@ -618,7 +618,7 @@ TEST_F(DataIoTest, SetEndOfFileExtendAndShrink) {
       h.value->get(), FileEndOfFileInfo, &eof_info, sizeof(eof_info)));
 
   info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_EQ(core::FileSizeOf(*info.value), 13u);
 
   h.value->reset();
@@ -633,7 +633,7 @@ TEST_F(DataIoTest, ReadWriteBasicAndSeekOffsets) {
   const std::wstring path = TestPath(L"rw_seek.dat");
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   const std::string part1 = "Hello, ";
   const std::string part2 = "NTFS world!";
@@ -692,7 +692,7 @@ TEST_F(DataIoTest, WriteBeyondEofZeroFillsGap) {
   const std::wstring path = TestPath(L"write_gap.dat");
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   constexpr int64_t kGapOffset = 65536;
   const std::string tail = "GAP_END_PAYLOAD!";
@@ -705,7 +705,7 @@ TEST_F(DataIoTest, WriteBeyondEofZeroFillsGap) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   ASSERT_EQ(contents.value->size(),
             static_cast<size_t>(kGapOffset) + tail.size());
   EXPECT_TRUE(helpers::AllBytesEqual(
@@ -720,14 +720,14 @@ TEST_F(DataIoTest, AppendOnlyHandleWritesAtCurrentEof) {
   const std::wstring path = TestPath(L"append_only.dat");
 
   auto init = core::WriteFileContents(path, "AAAA");
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   // Synchronous append-only handle: seek to 0 must be ignored on WriteFile.
   {
     auto h = core::CreateWin32File(path, FILE_APPEND_DATA | SYNCHRONIZE,
                                    core::kShareAll, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
     const std::string chunk = "BBBB";
@@ -741,13 +741,13 @@ TEST_F(DataIoTest, AppendOnlyHandleWritesAtCurrentEof) {
     auto h = core::CreateWin32File(
         path, FILE_APPEND_DATA | SYNCHRONIZE, core::kShareAll, OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     const std::string chunk = "CCCC";
     auto wr = OverlappedWriteAt(h.value->get(), 0, chunk.data(),
                                 static_cast<DWORD>(chunk.size()),
                                 Config().timing.async_timeout_ms);
-    ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr);
     EXPECT_EQ(*wr.value, static_cast<DWORD>(chunk.size()));
   }
 
@@ -766,7 +766,7 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteExplicitOffsets) {
 
   auto h1 = OpenRwFile(path, CREATE_ALWAYS,
                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   struct ChunkSpec {
     uint64_t offset;
@@ -781,19 +781,19 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteExplicitOffsets) {
     auto wr =
         OverlappedWriteAt(h1.value->get(), chunk.offset, chunk.data.data(),
                           static_cast<DWORD>(chunk.data.size()), timeout_ms);
-    ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr);
     EXPECT_EQ(*wr.value, static_cast<DWORD>(chunk.data.size()));
   }
 
   // Second overlapped handle writing another offset must not disturb H1.
   auto h2 = OpenRwFile(path, OPEN_EXISTING,
                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   constexpr ChunkSpec kH2Write = {24576u, "HANDLE2_CHUNK16!"};
   auto wr3 =
       OverlappedWriteAt(h2.value->get(), kH2Write.offset, kH2Write.data.data(),
                         static_cast<DWORD>(kH2Write.data.size()), timeout_ms);
-  ASSERT_TRUE(wr3) << core::FormatWin32Error(wr3.error);
+  ASSERT_WIN32_OK(wr3);
   EXPECT_EQ(*wr3.value, static_cast<DWORD>(kH2Write.data.size()));
 
   // Read back out of order from H1 and verify zero-filled gap too.
@@ -808,7 +808,7 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteExplicitOffsets) {
     auto rd =
         OverlappedReadAt(h1.value->get(), expected.offset, buf,
                          static_cast<DWORD>(expected.data.size()), timeout_ms);
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, static_cast<DWORD>(expected.data.size()));
     EXPECT_EQ(std::string_view(buf, *rd.value), expected.data);
   }
@@ -816,7 +816,7 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteExplicitOffsets) {
   std::vector<uint8_t> gap(4096, 0xFF);
   auto rd_gap = OverlappedReadAt(h1.value->get(), 16, gap.data(),
                                  static_cast<DWORD>(gap.size()), timeout_ms);
-  ASSERT_TRUE(rd_gap) << core::FormatWin32Error(rd_gap.error);
+  ASSERT_WIN32_OK(rd_gap);
   EXPECT_EQ(*rd_gap.value, static_cast<DWORD>(gap.size()));
   EXPECT_TRUE(helpers::AllBytesEqual(gap, 0x00));
 }
@@ -838,7 +838,7 @@ TEST_F(DataIoTest, OverlappedConcurrentWritesAndReadsOnOneHandle) {
 
   auto h = OpenRwFile(path, CREATE_ALWAYS,
                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   {
     OverlappedBatch writes(h.value->get());
@@ -851,14 +851,12 @@ TEST_F(DataIoTest, OverlappedConcurrentWritesAndReadsOnOneHandle) {
       }
       auto submitted = writes.Submit(static_cast<uint64_t>(file_offset),
                                      std::move(chunk), /*is_write=*/true);
-      ASSERT_TRUE(submitted) << "WriteFile for chunk " << chunk_index << ": "
-                             << core::FormatWin32Error(submitted.error);
+      ASSERT_WIN32_OK(submitted) << "WriteFile for chunk " << chunk_index;
       slot_of[chunk_index] = *submitted.value;
     }
     for (size_t chunk_index = 0; chunk_index < kRequests; ++chunk_index) {
       auto done = writes.Wait(slot_of[chunk_index], timeout_ms);
-      ASSERT_TRUE(done) << "Write completion for chunk " << chunk_index << ": "
-                        << core::FormatWin32Error(done.error);
+      ASSERT_WIN32_OK(done) << "Write completion for chunk " << chunk_index;
       EXPECT_EQ(*done.value, static_cast<DWORD>(kChunk))
           << "chunk " << chunk_index;
     }
@@ -874,14 +872,12 @@ TEST_F(DataIoTest, OverlappedConcurrentWritesAndReadsOnOneHandle) {
       auto submitted =
           reads.Submit(static_cast<uint64_t>(chunk_index * kChunk),
                        std::vector<uint8_t>(kChunk, 0xEE), /*is_write=*/false);
-      ASSERT_TRUE(submitted) << "ReadFile for chunk " << chunk_index << ": "
-                             << core::FormatWin32Error(submitted.error);
+      ASSERT_WIN32_OK(submitted) << "ReadFile for chunk " << chunk_index;
       slot_of[chunk_index] = *submitted.value;
     }
     for (size_t chunk_index = 0; chunk_index < kRequests; ++chunk_index) {
       auto done = reads.Wait(slot_of[chunk_index], timeout_ms);
-      ASSERT_TRUE(done) << "Read completion for chunk " << chunk_index << ": "
-                        << core::FormatWin32Error(done.error);
+      ASSERT_WIN32_OK(done) << "Read completion for chunk " << chunk_index;
       ASSERT_EQ(*done.value, static_cast<DWORD>(kChunk))
           << "chunk " << chunk_index;
       const std::vector<uint8_t> &data = reads.Buffer(slot_of[chunk_index]);
@@ -917,7 +913,7 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteIocpAndCancelIoEx) {
 
   auto h = OpenRwFile(path, CREATE_ALWAYS,
                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   ::SetLastError(ERROR_SUCCESS);
   HANDLE attached =
@@ -963,7 +959,7 @@ TEST_F(DataIoTest, OverlappedAsyncReadWriteIocpAndCancelIoEx) {
   // delivers ERROR_OPERATION_ABORTED to the bound IOCP.
   {
     auto h_blocker = OpenRwFile(path, OPEN_EXISTING);
-    ASSERT_TRUE(h_blocker) << core::FormatWin32Error(h_blocker.error);
+    ASSERT_WIN32_OK(h_blocker);
     OVERLAPPED blk_ov = MakeOffsetOverlapped(0);
     ASSERT_WIN32_TRUE(
         ::LockFileEx(h_blocker.value->get(),
@@ -1048,7 +1044,7 @@ TEST_F(DataIoTest, SetEndOfFileShrinkAndReExtendZeroFillsOldData) {
   const std::wstring path = TestPath(L"shrink_reextend.dat");
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   constexpr size_t kInitialSize = 16384;
   constexpr size_t kShrinkSize = 4096;
@@ -1073,7 +1069,7 @@ TEST_F(DataIoTest, SetEndOfFileShrinkAndReExtendZeroFillsOldData) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   ASSERT_EQ(contents.value->size(), kInitialSize);
 
   const auto *bytes = reinterpret_cast<const uint8_t *>(contents.value->data());
@@ -1088,7 +1084,7 @@ TEST_F(DataIoTest, FileAllocationInfoPreallocateAndTruncate) {
   const std::wstring path = TestPath(L"alloc_info.dat");
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // Preallocate 64 KiB (guaranteed non-resident) and query on the SAME open
   // handle before closing (NTFS truncates excess preallocation on cleanup).
@@ -1111,18 +1107,18 @@ TEST_F(DataIoTest, MultiHandleReadWriteCoherence) {
   const std::wstring path = TestPath(L"coherence.dat");
 
   auto init = core::WriteFileContents(path, "INITIAL_0000");
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   auto h_write = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_write) << core::FormatWin32Error(h_write.error);
+  ASSERT_WIN32_OK(h_write);
 
   auto h_read = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_read) << core::FormatWin32Error(h_read.error);
+  ASSERT_WIN32_OK(h_read);
 
   auto read1 = core::ReadAllBytes(h_read.value->get());
-  ASSERT_TRUE(read1) << core::FormatWin32Error(read1.error);
+  ASSERT_WIN32_OK(read1);
   EXPECT_EQ(*read1.value, "INITIAL_0000");
 
   const std::string updated = "UPDATED_DATA_EXTENDED!";
@@ -1135,7 +1131,7 @@ TEST_F(DataIoTest, MultiHandleReadWriteCoherence) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h_read.value->get(), 0));
   auto read2 = core::ReadAllBytes(h_read.value->get());
-  ASSERT_TRUE(read2) << core::FormatWin32Error(read2.error);
+  ASSERT_WIN32_OK(read2);
   EXPECT_EQ(*read2.value, updated);
 
   // Mid-file overwrite on H1 immediately visible on H2.
@@ -1146,7 +1142,7 @@ TEST_F(DataIoTest, MultiHandleReadWriteCoherence) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h_read.value->get(), 0));
   auto read3 = core::ReadAllBytes(h_read.value->get());
-  ASSERT_TRUE(read3) << core::FormatWin32Error(read3.error);
+  ASSERT_WIN32_OK(read3);
   EXPECT_EQ(*read3.value, "UPDATED_ABCD_EXTENDED!");
 }
 
@@ -1160,7 +1156,7 @@ TEST_F(DataIoTest, NoBufferingAlignedRoundTrip) {
 
   auto h = OpenRwFile(path, CREATE_ALWAYS,
                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   nb.handle = std::move(*h.value);
 
   DWORD transferred = 0;
@@ -1324,12 +1320,12 @@ TEST_F(DataIoTest, NoBufferingShortReadAtNonSectorMultipleEof) {
     short_payload[i] = static_cast<char>(PatternByte(i + 7u));
   }
   auto wr_short = core::WriteFileContents(path, short_payload);
-  ASSERT_TRUE(wr_short) << core::FormatWin32Error(wr_short.error);
+  ASSERT_WIN32_OK(wr_short);
 
   auto h_short =
       core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
-  ASSERT_TRUE(h_short) << core::FormatWin32Error(h_short.error);
+  ASSERT_WIN32_OK(h_short);
   nb.handle = std::move(*h_short.value);
 
   DWORD transferred = 0;
@@ -1358,7 +1354,7 @@ TEST_F(DataIoTest, WriteThroughAndFlushFileBuffers) {
   {
     auto h = OpenRwFile(path, CREATE_ALWAYS,
                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h.value->get(), payload.data(), payload.size()));
@@ -1367,10 +1363,10 @@ TEST_F(DataIoTest, WriteThroughAndFlushFileBuffers) {
 
   auto h_ro = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_ro) << core::FormatWin32Error(h_ro.error);
+  ASSERT_WIN32_OK(h_ro);
 
   auto data = core::ReadAllBytes(h_ro.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, payload);
 
   EXPECT_WIN32_ERROR(::FlushFileBuffers(h_ro.value->get()),
@@ -1393,7 +1389,7 @@ TEST_F(DataIoTest, NtFlushBuffersFileExModes) {
 
   {
     auto h = OpenRwFile(path, CREATE_ALWAYS);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     nt::IoStatusBlock iosb{};
     ASSERT_WIN32_OK(
@@ -1427,7 +1423,7 @@ TEST_F(DataIoTest, NtFlushBuffersFileExModes) {
 
   auto h_ro = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_ro) << core::FormatWin32Error(h_ro.error);
+  ASSERT_WIN32_OK(h_ro);
 
   nt::IoStatusBlock ro_iosb{};
   EXPECT_NT_STATUS(ntdll.NtFlushBuffersFileEx(h_ro.value->get(),
@@ -1440,7 +1436,7 @@ TEST_F(DataIoTest, NtFlushBuffersFileExModes) {
                    STATUS_ACCESS_DENIED);
 
   auto data = core::ReadAllBytes(h_ro.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, part1 + part2 + part3);
 }
 
@@ -1454,7 +1450,7 @@ TEST_F(DataIoTest, LargeReadWriteMultiMegabyteIntegrity) {
   {
     auto h = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     std::vector<uint8_t> chunk_buf(131072u);
     size_t offset = 0;
@@ -1466,7 +1462,7 @@ TEST_F(DataIoTest, LargeReadWriteMultiMegabyteIntegrity) {
         chunk_buf[i] = PatternByte(offset + i);
       }
       auto wr = core::WriteAllBytes(h.value->get(), chunk_buf.data(), len);
-      ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+      ASSERT_WIN32_OK(wr);
       offset += len;
       ++step;
     }
@@ -1474,7 +1470,7 @@ TEST_F(DataIoTest, LargeReadWriteMultiMegabyteIntegrity) {
 
   auto h = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   LARGE_INTEGER sz{};
   ASSERT_WIN32_TRUE(::GetFileSizeEx(h.value->get(), &sz));
@@ -1524,7 +1520,7 @@ TEST_F(DataIoTest, ZeroByteReadAndZeroByteWritePastEofDoesNotExtend) {
   const std::string initial = "1234567890";
 
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   ASSERT_WIN32_OK(
       core::WriteAllBytes(h.value->get(), initial.data(), initial.size()));
 
@@ -1547,7 +1543,7 @@ TEST_F(DataIoTest, ZeroByteReadAndZeroByteWritePastEofDoesNotExtend) {
 
   ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
   auto contents = core::ReadAllBytes(h.value->get());
-  ASSERT_TRUE(contents) << core::FormatWin32Error(contents.error);
+  ASSERT_WIN32_OK(contents);
   EXPECT_EQ(*contents.value, initial);
 }
 
@@ -1558,12 +1554,12 @@ TEST_F(DataIoTest, OverlappedWriteToEndOfFileAtomicAppend) {
   const DWORD timeout_ms = Config().timing.async_timeout_ms;
 
   auto init = core::WriteFileContents(path, "HEAD_");
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   // Synchronous handle with seek at 0 + OVERLAPPED(-1) appends at EOF.
   {
     auto h = OpenRwFile(path, OPEN_EXISTING);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     ASSERT_WIN32_TRUE(SeekBegin(h.value->get(), 0));
 
     OVERLAPPED ov = MakeOffsetOverlapped(0xFFFFFFFFFFFFFFFFULL);
@@ -1579,13 +1575,13 @@ TEST_F(DataIoTest, OverlappedWriteToEndOfFileAtomicAppend) {
   {
     auto h = OpenRwFile(path, OPEN_EXISTING,
                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     const std::string tail2 = "TAIL2";
     auto wr =
         OverlappedWriteAt(h.value->get(), 0xFFFFFFFFFFFFFFFFULL, tail2.data(),
                           static_cast<DWORD>(tail2.size()), timeout_ms);
-    ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr);
     EXPECT_EQ(*wr.value, static_cast<DWORD>(tail2.size()));
   }
 
@@ -1637,7 +1633,7 @@ TEST_F(DataIoTest, CopyFileExPreservesAlternateStreams) {
 
   ASSERT_WIN32_OK(core::WriteFileContents(src, main_payload));
   auto ads_wr = core::WriteFileContents(src + L":meta", ads_payload);
-  ASSERT_TRUE(ads_wr) << core::FormatWin32Error(ads_wr.error);
+  ASSERT_WIN32_OK(ads_wr);
 
   ASSERT_WIN32_TRUE(
       ::CopyFileExW(src.c_str(), dst.c_str(), nullptr, nullptr, nullptr, 0));
@@ -1665,7 +1661,7 @@ TEST_F(DataIoTest, CopyFileExOverReadOnlyDestinationFailsAccessDenied) {
   auto dst_data = core::ReadFileContents(dst);
   EXPECT_WIN32_TRUE(::SetFileAttributesW(dst.c_str(), FILE_ATTRIBUTE_NORMAL));
 
-  ASSERT_TRUE(dst_data) << core::FormatWin32Error(dst_data.error);
+  ASSERT_WIN32_OK(dst_data);
   EXPECT_EQ(*dst_data.value, dst_payload);
 }
 
@@ -1878,16 +1874,16 @@ TEST_F(DataIoTest, FileValidDataLengthExtend) {
 
   const std::wstring path = TestPath(L"vdl_extend.dat");
   auto h = OpenRwFile(path, CREATE_ALWAYS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // Ensure file is not inherited-compressed (SetFileValidData rejects
   // compressed files on NTFS).
   auto info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   if ((info.value->dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED) != 0) {
     auto decompress =
         core::SetCompressionState(h.value->get(), COMPRESSION_FORMAT_NONE);
-    ASSERT_TRUE(decompress) << core::FormatWin32Error(decompress.error);
+    ASSERT_WIN32_OK(decompress);
   }
 
   constexpr LONGLONG kVdl1 = 65536;
@@ -1897,12 +1893,12 @@ TEST_F(DataIoTest, FileValidDataLengthExtend) {
   // Negative check 1: handle opened without SeManageVolumePrivilege fails
   // SetFileValidData with ERROR_PRIVILEGE_NOT_HELD (1314).
   auto unpriv_token = core::CreateTokenWithoutPrivilege(SE_MANAGE_VOLUME_NAME);
-  ASSERT_TRUE(unpriv_token) << core::FormatWin32Error(unpriv_token.error);
+  ASSERT_WIN32_OK(unpriv_token);
   {
     core::ScopedImpersonation imp(unpriv_token.value->get());
     ASSERT_TRUE(imp) << core::FormatWin32Error(imp.error());
     auto h_unpriv = OpenRwFile(path, OPEN_EXISTING);
-    ASSERT_TRUE(h_unpriv) << core::FormatWin32Error(h_unpriv.error);
+    ASSERT_WIN32_OK(h_unpriv);
     EXPECT_WIN32_ERROR(::SetFileValidData(h_unpriv.value->get(), kVdl1),
                        ERROR_PRIVILEGE_NOT_HELD);
   }
@@ -1995,7 +1991,7 @@ TEST_F(DataIoTest, SetEndOfFileAndAllocationOnDirectoryFails) {
   auto h = core::CreateWin32File(
       dir, FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   EXPECT_NT_STATUS(core::SetEndOfFileNt(h.value->get(), 64).status,
                    STATUS_INVALID_PARAMETER);
@@ -2016,7 +2012,7 @@ TEST_F(DataIoTest, ReadWriteOnDirectoryHandleFailsInvalidFunction) {
   auto h = core::CreateWin32File(
       dir, FILE_LIST_DIRECTORY | FILE_ADD_FILE | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   char buf[16] = "DIR_DATA_IO_REQ";
   DWORD transferred = 0;

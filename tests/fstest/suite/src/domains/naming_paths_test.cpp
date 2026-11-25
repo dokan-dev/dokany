@@ -144,7 +144,7 @@ core::NtResult<ULONG> QueryCaseSensitiveFlag(HANDLE dir_handle) {
 NTSTATUS SetCaseSensitiveFlagByPath(std::wstring_view dir_path, ULONG flags) {
   auto h = OpenDirForMetadata(
       dir_path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE);
-  EXPECT_TRUE(h) << core::FormatWin32Error(h.error);
+  EXPECT_WIN32_OK(h);
   if (!h) {
     return STATUS_UNSUCCESSFUL;
   }
@@ -154,7 +154,7 @@ NTSTATUS SetCaseSensitiveFlagByPath(std::wstring_view dir_path, ULONG flags) {
 core::NtResult<ULONG> QueryCaseSensitiveFlagByPath(std::wstring_view dir_path) {
   core::NtResult<ULONG> result{};
   auto h = OpenDirForMetadata(dir_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
-  EXPECT_TRUE(h) << core::FormatWin32Error(h.error);
+  EXPECT_WIN32_OK(h);
   if (!h) {
     result.status = STATUS_UNSUCCESSFUL;
     return result;
@@ -329,14 +329,14 @@ TEST_F(NamingPathsTest, CaseInsensitiveLookupAndCasePreservation) {
   auto id_mixed = core::QueryPathFileIndex(mixed);
   auto id_lower = core::QueryPathFileIndex(lower);
   auto id_upper = core::QueryPathFileIndex(upper);
-  ASSERT_TRUE(id_mixed) << core::FormatWin32Error(id_mixed.error);
-  ASSERT_TRUE(id_lower) << core::FormatWin32Error(id_lower.error);
-  ASSERT_TRUE(id_upper) << core::FormatWin32Error(id_upper.error);
+  ASSERT_WIN32_OK(id_mixed);
+  ASSERT_WIN32_OK(id_lower);
+  ASSERT_WIN32_OK(id_upper);
   EXPECT_EQ(*id_lower.value, *id_mixed.value);
   EXPECT_EQ(*id_upper.value, *id_mixed.value);
 
   auto read_lower = core::ReadFileContents(lower);
-  ASSERT_TRUE(read_lower) << core::FormatWin32Error(read_lower.error);
+  ASSERT_WIN32_OK(read_lower);
   EXPECT_EQ(*read_lower.value, "case-payload");
 
   auto dup = core::CreateWin32File(lower, GENERIC_WRITE, core::kShareAll,
@@ -345,7 +345,7 @@ TEST_F(NamingPathsTest, CaseInsensitiveLookupAndCasePreservation) {
   EXPECT_WIN32_ERROR_CODE(dup.error, ERROR_FILE_EXISTS);
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", L"MiXeD_CaSe.TxT"};
   EXPECT_MULTISET_EQ(*listed.value, expected);
 }
@@ -368,15 +368,15 @@ TEST_F(NamingPathsTest, UnicodeBmpAndNonAsciiScripts) {
   for (const auto &[name, content] : fixtures) {
     const std::wstring full = core::JoinPath(sub, name);
     auto wr = core::WriteFileContents(full, content);
-    ASSERT_TRUE(wr) << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr);
     auto rd = core::ReadFileContents(full);
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, content);
     expected.push_back(name);
   }
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   EXPECT_MULTISET_EQ(*listed.value, expected);
 
   for (const auto &[name, unused_content] : fixtures) {
@@ -385,7 +385,7 @@ TEST_F(NamingPathsTest, UnicodeBmpAndNonAsciiScripts) {
   }
 
   auto after = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(after) << core::FormatWin32Error(after.error);
+  ASSERT_WIN32_OK(after);
   const std::vector<std::wstring> dots = {L".", L".."};
   EXPECT_MULTISET_EQ(*after.value, dots);
 }
@@ -409,15 +409,15 @@ TEST_F(NamingPathsTest, UnicodeSurrogatePairsSupplementaryPlane) {
   ASSERT_WIN32_OK(core::WriteFileContents(deseret_path, "surrogate-deseret"));
 
   auto rd1 = core::ReadFileContents(emoji_path);
-  ASSERT_TRUE(rd1) << core::FormatWin32Error(rd1.error);
+  ASSERT_WIN32_OK(rd1);
   EXPECT_EQ(*rd1.value, "surrogate-emoji");
 
   auto rd2 = core::ReadFileContents(deseret_path);
-  ASSERT_TRUE(rd2) << core::FormatWin32Error(rd2.error);
+  ASSERT_WIN32_OK(rd2);
   EXPECT_EQ(*rd2.value, "surrogate-deseret");
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", emoji_name,
                                               deseret_name};
   EXPECT_MULTISET_EQ(*listed.value, expected);
@@ -456,11 +456,9 @@ TEST_F(NamingPathsTest, UnpairedSurrogateCodeUnitsRoundTrip) {
   for (const auto &[name, content] : fixtures) {
     const std::wstring full = core::JoinPath(sub, name);
     auto wr = core::WriteFileContents(full, content);
-    ASSERT_TRUE(wr) << "Create [" << FormatCodeUnits(name)
-                    << "] failed: " << core::FormatWin32Error(wr.error);
+    ASSERT_WIN32_OK(wr) << "Create [" << FormatCodeUnits(name) << "] failed";
     auto rd = core::ReadFileContents(full);
-    ASSERT_TRUE(rd) << "Read [" << FormatCodeUnits(name)
-                    << "] failed: " << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd) << "Read [" << FormatCodeUnits(name) << "] failed";
     EXPECT_EQ(*rd.value, content);
     expected.push_back(name);
   }
@@ -473,7 +471,7 @@ TEST_F(NamingPathsTest, UnpairedSurrogateCodeUnitsRoundTrip) {
       helpers::CheckFileNotFound(core::JoinPath(sub, L"lone_lo_\uFFFD.txt")));
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   std::vector<std::wstring> actual = *listed.value;
   std::sort(actual.begin(), actual.end());
   std::sort(expected.begin(), expected.end());
@@ -514,12 +512,12 @@ TEST_F(NamingPathsTest, UnicodeCaseFoldingInsensitive) {
 
     auto id_upper = core::QueryPathFileIndex(upper_path);
     auto id_lower = core::QueryPathFileIndex(lower_path);
-    ASSERT_TRUE(id_upper) << core::FormatWin32Error(id_upper.error);
-    ASSERT_TRUE(id_lower) << core::FormatWin32Error(id_lower.error);
+    ASSERT_WIN32_OK(id_upper);
+    ASSERT_WIN32_OK(id_lower);
     EXPECT_EQ(*id_lower.value, *id_upper.value);
 
     auto rd = core::ReadFileContents(lower_path);
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, payload);
   }
 }
@@ -549,17 +547,16 @@ TEST_F(NamingPathsTest, UpcaseTableNonFoldingCharactersStayDistinct) {
       auto second =
           core::CreateWin32File(second_path, GENERIC_WRITE, core::kShareAll,
                                 CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(second) << "'" << core::WideToUtf8(second_name)
-                          << "' must not collide with '"
-                          << core::WideToUtf8(first_name)
-                          << "': " << core::FormatWin32Error(second.error);
+      ASSERT_WIN32_OK(second)
+          << "'" << core::WideToUtf8(second_name) << "' must not collide with '"
+          << core::WideToUtf8(first_name) << "'";
       ASSERT_WIN32_OK(core::WriteAllBytes(second.value->get(), "second", 6));
     }
 
     auto id_first = core::QueryPathFileIndex(first_path);
     auto id_second = core::QueryPathFileIndex(second_path);
-    ASSERT_TRUE(id_first) << core::FormatWin32Error(id_first.error);
-    ASSERT_TRUE(id_second) << core::FormatWin32Error(id_second.error);
+    ASSERT_WIN32_OK(id_first);
+    ASSERT_WIN32_OK(id_second);
     EXPECT_NE(*id_first.value, *id_second.value);
 
     EXPECT_TRUE(helpers::CheckFileContents(first_path, "first"));
@@ -569,7 +566,7 @@ TEST_F(NamingPathsTest, UpcaseTableNonFoldingCharactersStayDistinct) {
   }
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   EXPECT_MULTISET_EQ(*listed.value, expected);
 }
 
@@ -629,7 +626,7 @@ TEST_F(NamingPathsTest, TrailingDotsAndSpacesWin32VsVerbatim) {
   ASSERT_WIN32_OK(
       core::WriteFileContents(core::JoinPath(sub, L"foo. "), "win32-foo"));
   auto rd_foo = core::ReadFileContents(core::JoinPath(sub, L"foo"));
-  ASSERT_TRUE(rd_foo) << core::FormatWin32Error(rd_foo.error);
+  ASSERT_WIN32_OK(rd_foo);
   EXPECT_EQ(*rd_foo.value, "win32-foo");
 
   // Extended verbatim \\?\ paths preserve literal trailing dot and space.
@@ -640,8 +637,8 @@ TEST_F(NamingPathsTest, TrailingDotsAndSpacesWin32VsVerbatim) {
 
   auto rd_bar = core::ReadFileContents(bar_dot);
   auto rd_baz = core::ReadFileContents(baz_space);
-  ASSERT_TRUE(rd_bar) << core::FormatWin32Error(rd_bar.error);
-  ASSERT_TRUE(rd_baz) << core::FormatWin32Error(rd_baz.error);
+  ASSERT_WIN32_OK(rd_bar);
+  ASSERT_WIN32_OK(rd_baz);
   EXPECT_EQ(*rd_bar.value, "verbatim-dot");
   EXPECT_EQ(*rd_baz.value, "verbatim-space");
 
@@ -656,7 +653,7 @@ TEST_F(NamingPathsTest, TrailingDotsAndSpacesWin32VsVerbatim) {
   EXPECT_NE(*id_bar.value, *id_baz.value);
 
   auto listed = core::ListDirectoryWin32(sub_ext, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", L"foo", L"bar.",
                                               L"baz "};
   EXPECT_MULTISET_EQ(*listed.value, expected);
@@ -664,7 +661,7 @@ TEST_F(NamingPathsTest, TrailingDotsAndSpacesWin32VsVerbatim) {
   ASSERT_WIN32_TRUE(::DeleteFileW(bar_dot.c_str()));
   ASSERT_WIN32_TRUE(::DeleteFileW(baz_space.c_str()));
   auto after = core::ListDirectoryWin32(sub_ext, L"*");
-  ASSERT_TRUE(after) << core::FormatWin32Error(after.error);
+  ASSERT_WIN32_OK(after);
   const std::vector<std::wstring> remaining = {L".", L"..", L"foo"};
   EXPECT_MULTISET_EQ(*after.value, remaining);
 }
@@ -705,7 +702,7 @@ TEST_F(NamingPathsTest, Win32NulDeviceNameNeverReachesFilesystem) {
     auto nul_dev = core::CreateWin32File(win32_nul, GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE,
                                          OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(nul_dev) << core::FormatWin32Error(nul_dev.error);
+    ASSERT_WIN32_OK(nul_dev);
     ASSERT_WIN32_OK(core::WriteAllBytes(nul_dev.value->get(), "discard", 7));
   }
 
@@ -728,13 +725,13 @@ TEST_F(NamingPathsTest, VerbatimReservedDosDeviceNamesAreLiteralFiles) {
 
   auto rd_nul = core::ReadFileContents(verb_nul);
   auto rd_aux = core::ReadFileContents(verb_aux);
-  ASSERT_TRUE(rd_nul) << core::FormatWin32Error(rd_nul.error);
-  ASSERT_TRUE(rd_aux) << core::FormatWin32Error(rd_aux.error);
+  ASSERT_WIN32_OK(rd_nul);
+  ASSERT_WIN32_OK(rd_aux);
   EXPECT_EQ(*rd_nul.value, "real-nul-data");
   EXPECT_EQ(*rd_aux.value, "real-aux-data");
 
   auto listed = core::ListDirectoryWin32(sub_ext, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", L"NUL", L"AUX"};
   EXPECT_MULTISET_EQ(*listed.value, expected);
 
@@ -769,22 +766,22 @@ TEST_F(NamingPathsTest, ExtendedLengthLongPathsOverMaxPath) {
   ASSERT_WIN32_OK(
       core::WriteFileContents(file_path, "extended-long-path-content"));
   auto rd = core::ReadFileContents(file_path);
-  ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+  ASSERT_WIN32_OK(rd);
   EXPECT_EQ(*rd.value, "extended-long-path-content");
 
   auto listed = core::ListDirectoryWin32(cur, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected1 = {L".", L"..",
                                                L"deep_payload_file.dat"};
   EXPECT_MULTISET_EQ(*listed.value, expected1);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(file_path.c_str(), renamed_path.c_str(), 0));
   auto rd2 = core::ReadFileContents(renamed_path);
-  ASSERT_TRUE(rd2) << core::FormatWin32Error(rd2.error);
+  ASSERT_WIN32_OK(rd2);
   EXPECT_EQ(*rd2.value, "extended-long-path-content");
 
   auto listed2 = core::ListDirectoryWin32(cur, L"*");
-  ASSERT_TRUE(listed2) << core::FormatWin32Error(listed2.error);
+  ASSERT_WIN32_OK(listed2);
   const std::vector<std::wstring> expected2 = {L".", L"..",
                                                L"deep_renamed_file.dat"};
   EXPECT_MULTISET_EQ(*listed2.value, expected2);
@@ -809,11 +806,11 @@ TEST_F(NamingPathsTest, MaxComponentLength255And256Rejected) {
 
   ASSERT_WIN32_OK(core::WriteFileContents(path255, "max-component-255"));
   auto rd = core::ReadFileContents(path255);
-  ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+  ASSERT_WIN32_OK(rd);
   EXPECT_EQ(*rd.value, "max-component-255");
 
   auto listed = core::ListDirectoryWin32(TempDir().ExtendedPath(), L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", name255};
   EXPECT_MULTISET_EQ(*listed.value, expected);
   ASSERT_WIN32_TRUE(::DeleteFileW(path255.c_str()));
@@ -846,8 +843,8 @@ TEST_F(NamingPathsTest, DotAndDotDotPathTraversal) {
 
   auto sub_id = core::QueryPathFileIndex(sub_file);
   auto top_id = core::QueryPathFileIndex(top_file);
-  ASSERT_TRUE(sub_id) << core::FormatWin32Error(sub_id.error);
-  ASSERT_TRUE(top_id) << core::FormatWin32Error(top_id.error);
+  ASSERT_WIN32_OK(sub_id);
+  ASSERT_WIN32_OK(top_id);
 
   const std::wstring dot_path = TestPath(L"trav_sub\\.\\file.txt");
   const std::wstring dotdot_top = TestPath(L"trav_sub\\..\\top.txt");
@@ -859,10 +856,10 @@ TEST_F(NamingPathsTest, DotAndDotDotPathTraversal) {
   auto id2 = core::QueryPathFileIndex(dotdot_top);
   auto id3 = core::QueryPathFileIndex(dotdot_roundtrip);
   auto id4 = core::QueryPathFileIndex(double_slash);
-  ASSERT_TRUE(id1) << core::FormatWin32Error(id1.error);
-  ASSERT_TRUE(id2) << core::FormatWin32Error(id2.error);
-  ASSERT_TRUE(id3) << core::FormatWin32Error(id3.error);
-  ASSERT_TRUE(id4) << core::FormatWin32Error(id4.error);
+  ASSERT_WIN32_OK(id1);
+  ASSERT_WIN32_OK(id2);
+  ASSERT_WIN32_OK(id3);
+  ASSERT_WIN32_OK(id4);
 
   EXPECT_EQ(*id1.value, *sub_id.value);
   EXPECT_EQ(*id2.value, *top_id.value);
@@ -917,14 +914,14 @@ TEST_F(NamingPathsTest, MountRootOpensAsDirectory) {
   if (!root_h && Root().kind == core::RootKind::kUncShare) {
     root_h = OpenDirForMetadata(root_win, FILE_READ_ATTRIBUTES | SYNCHRONIZE);
   }
-  ASSERT_TRUE(root_h) << core::FormatWin32Error(root_h.error);
+  ASSERT_WIN32_OK(root_h);
   root_h.value->reset();
 
   auto root_attrs = core::QueryWin32Attributes(root_ext);
   if (!root_attrs && Root().kind == core::RootKind::kUncShare) {
     root_attrs = core::QueryWin32Attributes(root_win);
   }
-  ASSERT_TRUE(root_attrs) << core::FormatWin32Error(root_attrs.error);
+  ASSERT_WIN32_OK(root_attrs);
   EXPECT_NE(*root_attrs.value & FILE_ATTRIBUTE_DIRECTORY, 0u);
 }
 
@@ -964,8 +961,7 @@ TEST_F(NamingPathsTest, MountRootDeleteDispositionRejected) {
 
   auto del_h =
       OpenMountRoot(Root(), DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE);
-  ASSERT_TRUE(del_h) << "Opening the volume root with DELETE access failed: "
-                     << core::FormatWin32Error(del_h.error);
+  ASSERT_WIN32_OK(del_h) << "Opening the volume root with DELETE access failed";
 
   const auto disp =
       core::SetDisposition(del_h.value->get(), /*delete_file=*/true);
@@ -1070,7 +1066,7 @@ TEST_F(NamingPathsTest, ShortName8dot3GenerationAndLookup) {
   ASSERT_WIN32_OK(core::WriteFileContents(long_path, "short-name-payload"));
 
   auto long_id = core::QueryPathFileIndex(long_path);
-  ASSERT_TRUE(long_id) << core::FormatWin32Error(long_id.error);
+  ASSERT_WIN32_OK(long_id);
 
   WIN32_FIND_DATAW data{};
   ::SetLastError(ERROR_SUCCESS);
@@ -1084,7 +1080,7 @@ TEST_F(NamingPathsTest, ShortName8dot3GenerationAndLookup) {
 
   const std::wstring short_path = core::JoinPath(sub, short_name);
   auto short_id = core::QueryPathFileIndex(short_path);
-  ASSERT_TRUE(short_id) << core::FormatWin32Error(short_id.error);
+  ASSERT_WIN32_OK(short_id);
   EXPECT_EQ(*short_id.value, *long_id.value);
 
   EXPECT_TRUE(helpers::CheckFileContents(short_path, "short-name-payload"));
@@ -1143,15 +1139,15 @@ TEST_F(NamingPathsTest, ShortName8dot3CollisionSequence) {
     ASSERT_WIN32_OK(core::WriteFileContents(long_path, "collision"));
 
     auto alt = QueryAlternateName(long_path);
-    ASSERT_TRUE(alt) << core::FormatWin32Error(alt.error);
+    ASSERT_WIN32_OK(alt);
     ASSERT_FALSE(alt.value->empty())
         << "File #" << i << " has no 8.3 alternate name";
 
     auto long_id = core::QueryPathFileIndex(long_path);
     auto short_id = core::QueryPathFileIndex(core::JoinPath(sub, *alt.value));
-    ASSERT_TRUE(long_id) << core::FormatWin32Error(long_id.error);
-    ASSERT_TRUE(short_id) << "Alias '" << core::WideToUtf8(*alt.value)
-                          << "': " << core::FormatWin32Error(short_id.error);
+    ASSERT_WIN32_OK(long_id);
+    ASSERT_WIN32_OK(short_id)
+        << "Alias '" << core::WideToUtf8(*alt.value) << "'";
     EXPECT_EQ(*short_id.value, *long_id.value);
 
     short_names.push_back(*alt.value);
@@ -1196,7 +1192,7 @@ TEST_F(NamingPathsTest, PerDirectoryCaseSensitivityFlag) {
   auto dh =
       OpenDirForMetadata(cs_dir, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES |
                                      DELETE | SYNCHRONIZE);
-  ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+  ASSERT_WIN32_OK(dh);
 
   ASSERT_NT_SUCCESS(
       SetCaseSensitiveFlag(dh.value->get(), nt::kFileCsFlagCaseSensitiveDir));
@@ -1211,8 +1207,8 @@ TEST_F(NamingPathsTest, PerDirectoryCaseSensitivityFlag) {
 
   auto id_lower = core::QueryPathFileIndex(lower_path);
   auto id_upper = core::QueryPathFileIndex(upper_path);
-  ASSERT_TRUE(id_lower) << core::FormatWin32Error(id_lower.error);
-  ASSERT_TRUE(id_upper) << core::FormatWin32Error(id_upper.error);
+  ASSERT_WIN32_OK(id_lower);
+  ASSERT_WIN32_OK(id_upper);
   EXPECT_NE(*id_lower.value, *id_upper.value);
 
   EXPECT_TRUE(helpers::CheckFileContents(lower_path, "lowercase-content"));
@@ -1256,31 +1252,31 @@ TEST_F(NamingPathsTest, UnicodeNfcAndNfdAreDistinctFiles) {
   {
     auto h1 = core::CreateWin32File(nfc_path, GENERIC_WRITE, core::kShareAll,
                                     CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+    ASSERT_WIN32_OK(h1);
     ASSERT_WIN32_OK(core::WriteAllBytes(h1.value->get(), "nfc-bytes", 9));
   }
   {
     auto h2 = core::CreateWin32File(nfd_path, GENERIC_WRITE, core::kShareAll,
                                     CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+    ASSERT_WIN32_OK(h2);
     ASSERT_WIN32_OK(core::WriteAllBytes(h2.value->get(), "nfd-bytes", 9));
   }
 
   auto id_nfc = core::QueryPathFileIndex(nfc_path);
   auto id_nfd = core::QueryPathFileIndex(nfd_path);
-  ASSERT_TRUE(id_nfc) << core::FormatWin32Error(id_nfc.error);
-  ASSERT_TRUE(id_nfd) << core::FormatWin32Error(id_nfd.error);
+  ASSERT_WIN32_OK(id_nfc);
+  ASSERT_WIN32_OK(id_nfd);
   EXPECT_NE(*id_nfc.value, *id_nfd.value);
 
   auto rd_nfc = core::ReadFileContents(nfc_path);
   auto rd_nfd = core::ReadFileContents(nfd_path);
-  ASSERT_TRUE(rd_nfc) << core::FormatWin32Error(rd_nfc.error);
-  ASSERT_TRUE(rd_nfd) << core::FormatWin32Error(rd_nfd.error);
+  ASSERT_WIN32_OK(rd_nfc);
+  ASSERT_WIN32_OK(rd_nfd);
   EXPECT_EQ(*rd_nfc.value, "nfc-bytes");
   EXPECT_EQ(*rd_nfd.value, "nfd-bytes");
 
   auto listed = core::ListDirectoryWin32(sub, L"*");
-  ASSERT_TRUE(listed) << core::FormatWin32Error(listed.error);
+  ASSERT_WIN32_OK(listed);
   const std::vector<std::wstring> expected = {L".", L"..", nfc_name, nfd_name};
   EXPECT_MULTISET_EQ(*listed.value, expected);
 }
@@ -1303,7 +1299,7 @@ TEST_F(NamingPathsTest, Win32DosDeviceNameWithExtensionRedirectedBefore24H2) {
     auto nul_h = core::CreateWin32File(win32_nul_txt, GENERIC_WRITE,
                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
                                        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(nul_h) << core::FormatWin32Error(nul_h.error);
+    ASSERT_WIN32_OK(nul_h);
     ASSERT_WIN32_OK(core::WriteAllBytes(nul_h.value->get(), "null-sink", 9));
   }
 
@@ -1425,7 +1421,7 @@ TEST_F(NamingPathsTest, MultipleConsecutiveSlashesAndForwardSlashesNormalized) {
   ASSERT_WIN32_OK(core::WriteFileContents(canonical, "slash-payload"));
 
   auto expected_id = core::QueryPathFileIndex(canonical);
-  ASSERT_TRUE(expected_id) << core::FormatWin32Error(expected_id.error);
+  ASSERT_WIN32_OK(expected_id);
 
   const std::vector<std::wstring> variants = {
       sub + L"///file.txt",
@@ -1435,8 +1431,8 @@ TEST_F(NamingPathsTest, MultipleConsecutiveSlashesAndForwardSlashesNormalized) {
 
   for (const auto &variant : variants) {
     auto id = core::QueryPathFileIndex(variant);
-    ASSERT_TRUE(id) << "Variant '" << core::WideToUtf8(variant)
-                    << "' failed: " << core::FormatWin32Error(id.error);
+    ASSERT_WIN32_OK(id) << "Variant '" << core::WideToUtf8(variant)
+                        << "' failed";
     EXPECT_EQ(*id.value, *expected_id.value);
 
     EXPECT_TRUE(helpers::CheckFileContents(variant, "slash-payload"));
@@ -1464,17 +1460,17 @@ TEST_F(NamingPathsTest, SetFileShortNameExplicit) {
   ASSERT_WIN32_OK(core::WriteFileContents(long_path, "explicit-8dot3"));
 
   auto orig_id = core::QueryPathFileIndex(long_path);
-  ASSERT_TRUE(orig_id) << core::FormatWin32Error(orig_id.error);
+  ASSERT_WIN32_OK(orig_id);
 
   {
     auto fh = OpenFileForBackupAccess(long_path, GENERIC_WRITE | DELETE);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
     ASSERT_WIN32_TRUE(::SetFileShortNameW(fh.value->get(), L"CUST~1.TXT"));
   }
 
   const std::wstring custom_short_path = core::JoinPath(sub, L"CUST~1.TXT");
   auto short_id = core::QueryPathFileIndex(custom_short_path);
-  ASSERT_TRUE(short_id) << core::FormatWin32Error(short_id.error);
+  ASSERT_WIN32_OK(short_id);
   EXPECT_EQ(*short_id.value, *orig_id.value);
 
   EXPECT_TRUE(helpers::CheckFileContents(custom_short_path, "explicit-8dot3"));
@@ -1554,8 +1550,8 @@ TEST_F(NamingPathsTest,
   ASSERT_WIN32_OK(core::WriteFileContents(child_upper, "child-upper"));
   auto id_mixed = core::QueryPathFileIndex(child_mixed);
   auto id_upper = core::QueryPathFileIndex(child_upper);
-  ASSERT_TRUE(id_mixed) << core::FormatWin32Error(id_mixed.error);
-  ASSERT_TRUE(id_upper) << core::FormatWin32Error(id_upper.error);
+  ASSERT_WIN32_OK(id_mixed);
+  ASSERT_WIN32_OK(id_upper);
   EXPECT_NE(*id_upper.value, *id_mixed.value);
   ASSERT_WIN32_TRUE(::DeleteFileW(child_mixed.c_str()));
   ASSERT_WIN32_TRUE(::DeleteFileW(child_upper.c_str()));
@@ -1576,8 +1572,8 @@ TEST_F(NamingPathsTest,
   ASSERT_WIN32_OK(core::WriteFileContents(moved_mixed, "moved-insensitive"));
   auto moved_id_mixed = core::QueryPathFileIndex(moved_mixed);
   auto moved_id_upper = core::QueryPathFileIndex(moved_upper);
-  ASSERT_TRUE(moved_id_mixed) << core::FormatWin32Error(moved_id_mixed.error);
-  ASSERT_TRUE(moved_id_upper) << core::FormatWin32Error(moved_id_upper.error);
+  ASSERT_WIN32_OK(moved_id_mixed);
+  ASSERT_WIN32_OK(moved_id_upper);
   EXPECT_EQ(*moved_id_upper.value, *moved_id_mixed.value);
   EXPECT_TRUE(helpers::CheckFileContents(moved_upper, "moved-insensitive"));
 
@@ -1585,7 +1581,7 @@ TEST_F(NamingPathsTest,
   // resolve exact case (Alpha.txt != alpha.txt).
   auto parent_h = OpenDirForMetadata(
       parent_dir, FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE);
-  ASSERT_TRUE(parent_h) << core::FormatWin32Error(parent_h.error);
+  ASSERT_WIN32_OK(parent_h);
 
   ASSERT_TRUE(CheckCreateRelativeCaseFile(parent_h.value->get(), L"Alpha.txt",
                                           /*obj_attrs=*/0, "upper-alpha"));
@@ -1647,7 +1643,7 @@ TEST_F(NamingPathsTest, DotDotTraversalClampsAtVolumeRoot) {
   ASSERT_WIN32_OK(core::WriteFileContents(target, payload));
 
   auto expected_id = core::QueryPathFileIndex(target);
-  ASSERT_TRUE(expected_id) << core::FormatWin32Error(expected_id.error);
+  ASSERT_WIN32_OK(expected_id);
 
   std::wstring_view temp_path = TempDir().Path();
   if (temp_path.rfind(L"\\\\?\\", 0) == 0) {
@@ -1668,8 +1664,8 @@ TEST_F(NamingPathsTest, DotDotTraversalClampsAtVolumeRoot) {
 
   for (const auto &clamped : clamped_paths) {
     auto id = core::QueryPathFileIndex(clamped);
-    ASSERT_TRUE(id) << "Clamped path '" << core::WideToUtf8(clamped)
-                    << "' failed: " << core::FormatWin32Error(id.error);
+    ASSERT_WIN32_OK(id) << "Clamped path '" << core::WideToUtf8(clamped)
+                        << "' failed";
     EXPECT_EQ(*id.value, *expected_id.value);
 
     EXPECT_TRUE(helpers::CheckFileContents(clamped, payload));
@@ -1707,7 +1703,7 @@ TEST_F(NamingPathsTest, MetadataTunnelingPreservesCreationTime) {
 
     auto h_new = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_new) << core::FormatWin32Error(h_new.error);
+    ASSERT_WIN32_OK(h_new);
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h_new.value->get(), "after_delete", 12));
     h_new.value->reset();
@@ -1730,18 +1726,18 @@ TEST_F(NamingPathsTest, MetadataTunnelingPreservesCreationTime) {
     ASSERT_TRUE(fstest::BackdateAllTimes(path, backdate));
 
     auto orig_idx = core::QueryPathFileIndex(path);
-    ASSERT_TRUE(orig_idx) << core::FormatWin32Error(orig_idx.error);
+    ASSERT_WIN32_OK(orig_idx);
 
     ASSERT_WIN32_TRUE(::MoveFileExW(path.c_str(), moved.c_str(), 0));
 
     auto h_new = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_new) << core::FormatWin32Error(h_new.error);
+    ASSERT_WIN32_OK(h_new);
     ASSERT_WIN32_OK(core::WriteAllBytes(h_new.value->get(), "safe_saved", 10));
     h_new.value->reset();
 
     auto new_idx = core::QueryPathFileIndex(path);
-    ASSERT_TRUE(new_idx) << core::FormatWin32Error(new_idx.error);
+    ASSERT_WIN32_OK(new_idx);
     EXPECT_NE(*new_idx.value, *orig_idx.value);
 
     auto after_info = helpers::QueryPathBasicInfo(path);

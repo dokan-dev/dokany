@@ -57,7 +57,7 @@ constexpr ULONG kFileVcValidMask = 0x000003FFUL;
 // on filesystem name, MaxComponentLength (255), and volume capability flags.
 TEST_F(InfoQueriesTest, GetVolumeInformationBasicFields) {
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   wchar_t vol_name[MAX_PATH + 1]{};
   wchar_t fs_name[MAX_PATH + 1]{};
@@ -104,7 +104,7 @@ TEST_F(InfoQueriesTest, GetVolumeInformationNtfsFeatureFlags) {
   REQUIRE_FULL_NTFS_FLAGS();
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   DWORD max_comp = 0;
   DWORD flags = 0;
@@ -141,7 +141,7 @@ TEST_F(InfoQueriesTest, GetDiskFreeSpaceExValidGeometry) {
   EXPECT_LE(total_free.QuadPart, total_bytes.QuadPart);
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   const auto &ntdll = core::Ntdll();
   ASSERT_NE(ntdll.NtQueryVolumeInformationFile, nullptr);
@@ -176,9 +176,9 @@ TEST_F(InfoQueriesTest, FileIndexStabilityAndUniqueness) {
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
     auto hb = core::CreateWin32File(path_b, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(ha1) << core::FormatWin32Error(ha1.error);
-    ASSERT_TRUE(ha2) << core::FormatWin32Error(ha2.error);
-    ASSERT_TRUE(hb) << core::FormatWin32Error(hb.error);
+    ASSERT_WIN32_OK(ha1);
+    ASSERT_WIN32_OK(ha2);
+    ASSERT_WIN32_OK(hb);
 
     auto r_a1 = core::GetFileIndex(ha1.value->get());
     auto r_a2 = core::GetFileIndex(ha2.value->get());
@@ -197,7 +197,7 @@ TEST_F(InfoQueriesTest, FileIndexStabilityAndUniqueness) {
   auto ha_after =
       core::CreateWin32File(path_a_renamed, GENERIC_READ, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(ha_after) << core::FormatWin32Error(ha_after.error);
+  ASSERT_WIN32_OK(ha_after);
   auto r_after = core::GetFileIndex(ha_after.value->get());
   ASSERT_WIN32_OK(r_after);
   EXPECT_EQ(*r_after.value, id_a1);
@@ -217,7 +217,7 @@ TEST_F(InfoQueriesTest, NtQueryFileBasicAndStandardInfo) {
     auto fh = core::CreateWin32File(
         file_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
 
     auto basic = core::QueryBasicInfo(fh.value->get());
     ASSERT_NT_SUCCESS(basic.status);
@@ -241,7 +241,7 @@ TEST_F(InfoQueriesTest, NtQueryFileBasicAndStandardInfo) {
 
   {
     auto dh = OpenDirectoryForQuery(dir_path);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
 
     auto basic = core::QueryBasicInfo(dh.value->get());
     ASSERT_NT_SUCCESS(basic.status);
@@ -264,10 +264,10 @@ TEST_F(InfoQueriesTest, NtQueryFileInternalAndAllInfo) {
 
   auto fh = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto win32_idx = core::GetFileIndex(fh.value->get());
-  ASSERT_TRUE(win32_idx) << core::FormatWin32Error(win32_idx.error);
+  ASSERT_WIN32_OK(win32_idx);
 
   auto internal = core::QueryInternalInfo(fh.value->get());
   ASSERT_NT_SUCCESS(internal.status);
@@ -345,7 +345,7 @@ TEST_F(InfoQueriesTest, NtQueryFileNameAndNormalizedNameInfo) {
   auto fh = core::CreateWin32File(
       open_lower, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   const std::wstring expected_suffix =
       L"\\" + TempDir().Basename() + L"\\SubDir\\MixedFile.txt";
@@ -385,7 +385,7 @@ TEST_F(InfoQueriesTest, NtQueryFileNameAndNormalizedNameInfo) {
           core::JoinPath(sub, fd.cAlternateFileName),
           FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll, OPEN_EXISTING,
           FILE_ATTRIBUTE_NORMAL);
-      ASSERT_TRUE(sh) << core::FormatWin32Error(sh.error);
+      ASSERT_WIN32_OK(sh);
       auto long_norm =
           core::QueryFileNameInfo(sh.value->get(), /*normalized=*/true);
       ASSERT_NT_SUCCESS(long_norm.status);
@@ -411,7 +411,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStandardLinkInfo) {
     auto fh = core::CreateWin32File(
         file_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
     auto info = core::QueryStandardLinkInfo(fh.value->get());
     ASSERT_NT_SUCCESS(info.status);
     EXPECT_EQ(info.value->number_of_accessible_links, 1u);
@@ -422,7 +422,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStandardLinkInfo) {
 
   {
     auto dh = OpenDirectoryForQuery(dir_path);
-    ASSERT_TRUE(dh) << core::FormatWin32Error(dh.error);
+    ASSERT_WIN32_OK(dh);
     auto info = core::QueryStandardLinkInfo(dh.value->get());
     ASSERT_NT_SUCCESS(info.status);
     EXPECT_EQ(info.value->number_of_accessible_links, 1u);
@@ -449,11 +449,11 @@ TEST_F(InfoQueriesTest, GetFinalPathNameByHandleWFormats) {
                          std::wstring_view expected_rel_suffix) {
     auto fh = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
 
     auto dos = core::QueryFinalPath(fh.value->get(),
                                     VOLUME_NAME_DOS | FILE_NAME_NORMALIZED);
-    ASSERT_TRUE(dos) << core::FormatWin32Error(dos.error);
+    ASSERT_WIN32_OK(dos);
     EXPECT_EQ(dos.value->rfind(L"\\\\?\\", 0), size_t{0})
         << "VOLUME_NAME_DOS path: " << core::WideToUtf8(*dos.value);
     EXPECT_TRUE(core::EndsWithExact(*dos.value, expected_rel_suffix))
@@ -463,7 +463,7 @@ TEST_F(InfoQueriesTest, GetFinalPathNameByHandleWFormats) {
 
     auto none = core::QueryFinalPath(fh.value->get(),
                                      VOLUME_NAME_NONE | FILE_NAME_NORMALIZED);
-    ASSERT_TRUE(none) << core::FormatWin32Error(none.error);
+    ASSERT_WIN32_OK(none);
     ASSERT_FALSE(none.value->empty());
     EXPECT_EQ((*none.value)[0], L'\\');
     EXPECT_NE(none.value->rfind(L"\\\\?\\", 0), size_t{0});
@@ -496,16 +496,16 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
 
   auto fh = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto internal = core::QueryInternalInfo(fh.value->get());
   ASSERT_NT_SUCCESS(internal.status);
   auto expected_idx = core::GetFileIndex(fh.value->get());
-  ASSERT_TRUE(expected_idx) << core::FormatWin32Error(expected_idx.error);
+  ASSERT_WIN32_OK(expected_idx);
   fh.value->reset();
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   // 1. Win32 OpenFileById (64-bit FileIdType)
   {
@@ -522,7 +522,7 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
                          << core::FormatWin32Error(open_err);
 
     auto rd = core::ReadAllBytes(h_by_id.get());
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_by_id.get());
@@ -553,7 +553,7 @@ TEST_F(InfoQueriesTest, OpenFileByIdAndNtOpenByFileId) {
     ASSERT_TRUE(h_nt);
 
     auto rd = core::ReadAllBytes(h_nt.get());
-    ASSERT_TRUE(rd) << core::FormatWin32Error(rd.error);
+    ASSERT_WIN32_OK(rd);
     EXPECT_EQ(*rd.value, payload);
 
     auto idx = core::GetFileIndex(h_nt.get());
@@ -650,7 +650,7 @@ TEST_F(InfoQueriesTest, NtQueryAndSetFilePositionInformation) {
   auto fh = core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                                   core::kShareAll, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
   EXPECT_EQ(query_pos(fh.value->get()), 0LL);
 
   char buf[8]{};
@@ -701,7 +701,7 @@ TEST_F(InfoQueriesTest, NtQueryFileModeAndAlignmentInformation) {
   {
     auto h = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const ULONG mode = query_mode(h.value->get());
     EXPECT_NE(mode & nt::kFileSynchronousIoNonalert, 0u);
     EXPECT_EQ(mode & nt::kFileWriteThrough, 0u);
@@ -723,7 +723,7 @@ TEST_F(InfoQueriesTest, NtQueryFileModeAndAlignmentInformation) {
     auto h = core::CreateWin32File(
         file_path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
         FILE_FLAG_WRITE_THROUGH | FILE_FLAG_NO_BUFFERING);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const ULONG mode = query_mode(h.value->get());
     EXPECT_NE(mode & nt::kFileSynchronousIoNonalert, 0u);
     EXPECT_NE(mode & nt::kFileWriteThrough, 0u);
@@ -734,7 +734,7 @@ TEST_F(InfoQueriesTest, NtQueryFileModeAndAlignmentInformation) {
   {
     auto h = core::CreateWin32File(file_path, GENERIC_READ, core::kShareAll,
                                    OPEN_EXISTING, FILE_FLAG_OVERLAPPED);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
     const ULONG mode = query_mode(h.value->get());
     EXPECT_EQ(mode & nt::kFileSynchronousIoNonalert, 0u);
     EXPECT_EQ(mode & nt::kFileSynchronousIoAlert, 0u);
@@ -757,10 +757,10 @@ TEST_F(InfoQueriesTest, NtQueryNetworkOpenAndPathAttributesFastQueries) {
   auto fh = core::CreateWin32File(file_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                   core::kShareAll, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto bhfi = core::GetByHandleInfo(fh.value->get());
-  ASSERT_TRUE(bhfi) << core::FormatWin32Error(bhfi.error);
+  ASSERT_WIN32_OK(bhfi);
   auto basic = core::QueryBasicInfo(fh.value->get());
   ASSERT_NT_SUCCESS(basic.status);
 
@@ -848,7 +848,7 @@ TEST_F(InfoQueriesTest, NtQueryFileAttributeTagRegularFile) {
   auto fh = core::CreateWin32File(
       plain_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto basic = core::QueryBasicInfo(fh.value->get());
   ASSERT_NT_SUCCESS(basic.status);
@@ -877,14 +877,14 @@ TEST_F(InfoQueriesTest, NtQueryFileAttributeTagJunctionReparsePoint) {
   const std::wstring junc_dir = TestPath(L"tag_junction");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(target_dir.c_str(), nullptr));
   auto jres = core::CreateDirectoryJunction(junc_dir, target_dir);
-  ASSERT_TRUE(jres) << core::FormatWin32Error(jres.error);
+  ASSERT_WIN32_OK(jres);
 
   {
     auto jh = core::CreateWin32File(
         junc_dir, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
-    ASSERT_TRUE(jh) << core::FormatWin32Error(jh.error);
+    ASSERT_WIN32_OK(jh);
 
     nt::IoStatusBlock iosb{};
     nt::FileAttributeTagInfo tag_info{};
@@ -919,7 +919,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStatAndStatLxInformation) {
   auto fh = core::CreateWin32File(
       file_path, FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE,
       core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto basic = core::QueryBasicInfo(fh.value->get());
   auto std_info = core::QueryStandardInfo(fh.value->get());
@@ -984,7 +984,7 @@ TEST_F(InfoQueriesTest, NtQueryVolumeFsVolumeDeviceAndFullSizeInfo) {
   ASSERT_NE(ntdll.NtQueryVolumeInformationFile, nullptr);
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   DWORD win32_serial = 0;
   ASSERT_WIN32_TRUE(::GetVolumeInformationByHandleW(dir_h.value->get(), nullptr,
@@ -1054,7 +1054,7 @@ TEST_F(InfoQueriesTest, OverlappedHandleFilePositionRemainsZero) {
   auto fh = core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                                   core::kShareAll, CREATE_NEW,
                                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   ::SetLastError(ERROR_SUCCESS);
   core::UniqueHandle ev(::CreateEventW(nullptr, /*bManualReset=*/TRUE,
@@ -1078,7 +1078,7 @@ TEST_F(InfoQueriesTest, OverlappedHandleFilePositionRemainsZero) {
                     static_cast<DWORD>(payload.size()), nullptr, &write_ov);
     auto written = helpers::CompleteOverlappedIo(fh.value->get(), &write_ov,
                                                  ev.get(), ok, timeout_ms);
-    ASSERT_TRUE(written) << core::FormatWin32Error(written.error);
+    ASSERT_WIN32_OK(written);
     EXPECT_EQ(*written.value, static_cast<DWORD>(payload.size()));
   }
 
@@ -1092,7 +1092,7 @@ TEST_F(InfoQueriesTest, OverlappedHandleFilePositionRemainsZero) {
                    static_cast<DWORD>(read_buf.size()), nullptr, &read_ov);
     auto bytes_read = helpers::CompleteOverlappedIo(fh.value->get(), &read_ov,
                                                     ev.get(), ok, timeout_ms);
-    ASSERT_TRUE(bytes_read) << core::FormatWin32Error(bytes_read.error);
+    ASSERT_WIN32_OK(bytes_read);
     EXPECT_EQ(*bytes_read.value, 32u);
     EXPECT_EQ(read_buf, payload.substr(16, 32));
   }
@@ -1115,7 +1115,7 @@ TEST_F(InfoQueriesTest, FileFsAttributeInfoSmallBufferOverflow) {
   ASSERT_NE(ntdll.NtQueryVolumeInformationFile, nullptr);
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   std::vector<uint8_t> full_buf(1024, 0);
   nt::IoStatusBlock full_iosb{};
@@ -1191,7 +1191,7 @@ TEST_F(InfoQueriesTest, NtQueryFileAlternateNameInformation) {
     auto fh = core::CreateWin32File(
         long_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+    ASSERT_WIN32_OK(fh);
 
     std::vector<uint8_t> buf(512, 0);
     nt::IoStatusBlock iosb{};
@@ -1220,7 +1220,7 @@ TEST_F(InfoQueriesTest, NtQueryFileAlternateNameInformation) {
     auto sh = core::CreateWin32File(
         short_only_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(sh) << core::FormatWin32Error(sh.error);
+    ASSERT_WIN32_OK(sh);
 
     std::vector<uint8_t> buf(512, 0);
     nt::IoStatusBlock iosb{};
@@ -1255,7 +1255,7 @@ TEST_F(InfoQueriesTest, NtQueryFileCompressionInformation) {
   auto fh =
       core::CreateWin32File(file_path, GENERIC_READ | GENERIC_WRITE,
                             core::kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   const std::string compressible(kLogicalSize, 'A');
   ASSERT_WIN32_OK(core::WriteAllBytes(fh.value->get(), compressible.data(),
@@ -1278,7 +1278,7 @@ TEST_F(InfoQueriesTest, NtQueryFileCompressionInformation) {
   // Enable LZNT1 compression and verify FileCompressionInformation updates.
   auto set_comp =
       core::SetCompressionState(fh.value->get(), COMPRESSION_FORMAT_LZNT1);
-  ASSERT_TRUE(set_comp) << core::FormatWin32Error(set_comp.error);
+  ASSERT_WIN32_OK(set_comp);
   ASSERT_WIN32_TRUE(::FlushFileBuffers(fh.value->get()));
 
   {
@@ -1298,7 +1298,7 @@ TEST_F(InfoQueriesTest, NtQueryFileCompressionInformation) {
   // Disable compression and confirm format returns to COMPRESSION_FORMAT_NONE.
   auto clear_comp =
       core::SetCompressionState(fh.value->get(), COMPRESSION_FORMAT_NONE);
-  ASSERT_TRUE(clear_comp) << core::FormatWin32Error(clear_comp.error);
+  ASSERT_WIN32_OK(clear_comp);
   {
     nt::IoStatusBlock iosb{};
     nt::FileCompressionInfo restored{};
@@ -1318,7 +1318,7 @@ TEST_F(InfoQueriesTest, NtQueryFileFsSectorSizeInformation) {
   ASSERT_NE(ntdll.NtQueryVolumeInformationFile, nullptr);
 
   auto dir_h = OpenDirectoryForQuery(TempDir().ExtendedPath());
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   nt::IoStatusBlock size_iosb{};
   nt::FileFsSizeInfo fs_size{};
@@ -1365,7 +1365,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStandardInfoDeletePendingTracksDisposition) {
   auto fh = core::CreateWin32File(
       file_path, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
 
   auto before = core::QueryStandardInfo(fh.value->get());
   ASSERT_NT_SUCCESS(before.status);
@@ -1400,7 +1400,7 @@ TEST_F(InfoQueriesTest, NtQueryVolumeFsControlInformation) {
       TempDir().ExtendedPath(),
       FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   nt::IoStatusBlock iosb{};
   FileFsControlInfo control{};
@@ -1427,12 +1427,12 @@ TEST_F(InfoQueriesTest, ReadFileUsnDataMatchesFileIdParentAndName) {
 
   auto parent_idx =
       core::QueryPathFileIndex(TempDir().Path(), /*backup_semantics=*/true);
-  ASSERT_TRUE(parent_idx) << core::FormatWin32Error(parent_idx.error);
+  ASSERT_WIN32_OK(parent_idx);
 
   auto fh = core::CreateWin32File(file_path, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                   core::kShareAll, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(fh) << core::FormatWin32Error(fh.error);
+  ASSERT_WIN32_OK(fh);
   auto internal = core::QueryInternalInfo(fh.value->get());
   ASSERT_NT_SUCCESS(internal.status);
 

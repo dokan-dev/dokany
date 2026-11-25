@@ -460,7 +460,7 @@ TEST_F(LinksReparseTest, HardLinkCreateSharedDataAndFileIndex) {
 
   ASSERT_WIN32_OK(core::WriteFileContents(link_a, "initial-hl-data"));
   auto info_a = core::QueryInfoByPath(link_a);
-  ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
+  ASSERT_WIN32_OK(info_a);
   const uint64_t expected_index = core::FileIndexOf(*info_a.value);
   EXPECT_EQ(info_a.value->nNumberOfLinks, DWORD{1});
 
@@ -477,7 +477,7 @@ TEST_F(LinksReparseTest, HardLinkCreateSharedDataAndFileIndex) {
   {
     auto h_b = core::CreateWin32File(link_b, GENERIC_WRITE, core::kShareAll,
                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_b) << core::FormatWin32Error(h_b.error);
+    ASSERT_WIN32_OK(h_b);
     const std::string updated = "written-through-link-b";
     ASSERT_WIN32_OK(
         core::WriteAllBytes(h_b.value->get(), updated.data(), updated.size()));
@@ -499,7 +499,7 @@ TEST_F(LinksReparseTest, HardLinkSharedMetadataAndUnlink) {
   ASSERT_WIN32_TRUE(::CreateHardLinkW(link_b.c_str(), link_a.c_str(), nullptr));
 
   auto info_a = core::QueryInfoByPath(link_a);
-  ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
+  ASSERT_WIN32_OK(info_a);
   const uint64_t expected_index = core::FileIndexOf(*info_a.value);
 
   // Attribute changes on A immediately reflect on B.
@@ -523,12 +523,12 @@ TEST_F(LinksReparseTest, HardLinkSharedMetadataAndUnlink) {
     auto h_a =
         core::CreateWin32File(link_a, FILE_WRITE_ATTRIBUTES, core::kShareAll,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_a) << core::FormatWin32Error(h_a.error);
+    ASSERT_WIN32_OK(h_a);
     ASSERT_WIN32_TRUE(
         ::SetFileTime(h_a.value->get(), nullptr, nullptr, &custom_write));
   }
   auto info_b = core::QueryInfoByPath(link_b);
-  ASSERT_TRUE(info_b) << core::FormatWin32Error(info_b.error);
+  ASSERT_WIN32_OK(info_b);
   EXPECT_EQ(core::FileTimeToU64(info_b.value->ftLastWriteTime),
             core::FileTimeToU64(custom_write));
 
@@ -573,14 +573,14 @@ TEST_F(LinksReparseTest, HardLinkFileNameEnumeration) {
   auto h = core::CreateWin32File(link_a, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                  core::kShareAll, OPEN_EXISTING,
                                  FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
   auto std_info = core::QueryStandardInfo(h.value->get());
   ASSERT_NT_SUCCESS(std_info.status);
   ASSERT_TRUE(std_info.value.has_value());
   EXPECT_EQ(std_info.value->number_of_links, ULONG{3});
 
   auto links = EnumerateHardLinks(link_a);
-  ASSERT_TRUE(links) << core::FormatWin32Error(links.error);
+  ASSERT_WIN32_OK(links);
   EXPECT_EQ(links.value->size(),
             static_cast<size_t>(std_info.value->number_of_links));
 
@@ -602,23 +602,23 @@ TEST_F(LinksReparseTest, FileSymlinkFollowAndOpenReparsePoint) {
   ASSERT_WIN32_OK(core::WriteFileContents(target, "sym-target-bytes"));
 
   auto target_info = core::QueryInfoByPath(target);
-  ASSERT_TRUE(target_info) << core::FormatWin32Error(target_info.error);
+  ASSERT_WIN32_OK(target_info);
   const uint64_t target_index = core::FileIndexOf(*target_info.value);
 
   auto created =
       core::CreateSymlink(link, target, /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   // Normal open follows symlink to target.
   {
     auto followed = core::CreateWin32File(link, GENERIC_READ, core::kShareAll,
                                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(followed) << core::FormatWin32Error(followed.error);
+    ASSERT_WIN32_OK(followed);
     auto followed_info = core::GetByHandleInfo(followed.value->get());
-    ASSERT_TRUE(followed_info) << core::FormatWin32Error(followed_info.error);
+    ASSERT_WIN32_OK(followed_info);
     EXPECT_EQ(core::FileIndexOf(*followed_info.value), target_index);
     auto data = core::ReadAllBytes(followed.value->get());
-    ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+    ASSERT_WIN32_OK(data);
     EXPECT_EQ(*data.value, "sym-target-bytes");
   }
 
@@ -649,7 +649,7 @@ TEST_F(LinksReparseTest, DirectorySymlinkFollowAndRemove) {
 
   auto created = core::CreateSymlink(link_dir, target_dir,
                                      /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   const DWORD link_attrs = ::GetFileAttributesW(link_dir.c_str());
   ASSERT_NE(link_attrs, INVALID_FILE_ATTRIBUTES);
@@ -680,15 +680,15 @@ TEST_F(LinksReparseTest, RelativeSymlinkResolution) {
 
   auto created = core::CreateSymlink(link, L"..\\rel_target.dat",
                                      /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   // Verify the reparse buffer records kSymlinkFlagRelative.
   {
     auto rp_h = OpenReparsePointHandle(link, FILE_READ_ATTRIBUTES,
                                        /*is_directory=*/false);
-    ASSERT_TRUE(rp_h) << core::FormatWin32Error(rp_h.error);
+    ASSERT_WIN32_OK(rp_h);
     auto rp_data = core::GetReparsePointData(rp_h.value->get());
-    ASSERT_TRUE(rp_data) << core::FormatWin32Error(rp_data.error);
+    ASSERT_WIN32_OK(rp_data);
     using SymlinkReparse = decltype(nt::ReparseDataBuffer::symbolic_link);
     ASSERT_GE(rp_data.value->size(), nt::kReparseDataBufferHeaderSize +
                                          offsetof(SymlinkReparse, path_buffer));
@@ -713,7 +713,7 @@ TEST_F(LinksReparseTest, BrokenSymlinkOpenFailsAndOpenReparsePointSucceeds) {
 
   auto created =
       core::CreateSymlink(link, target, /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   ASSERT_WIN32_TRUE(::DeleteFileW(target.c_str()));
 
@@ -746,7 +746,7 @@ TEST_F(LinksReparseTest, DirectoryJunctionCreateFollowAndRemove) {
   ASSERT_WIN32_OK(core::WriteFileContents(child, "junction-payload"));
 
   auto created = core::CreateDirectoryJunction(junction_dir, target_dir);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   EXPECT_TRUE(CheckReparsePointTag(junction_dir, /*is_directory=*/true,
                                    IO_REPARSE_TAG_MOUNT_POINT));
@@ -769,7 +769,7 @@ TEST_F(LinksReparseTest, GetAndDeleteReparsePointFsctl) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(target_dir.c_str(), nullptr));
 
   auto created = core::CreateDirectoryJunction(junc_dir, target_dir);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   const DWORD attrs_before = ::GetFileAttributesW(junc_dir.c_str());
   ASSERT_NE(attrs_before, INVALID_FILE_ATTRIBUTES);
@@ -777,11 +777,11 @@ TEST_F(LinksReparseTest, GetAndDeleteReparsePointFsctl) {
 
   auto h = OpenReparsePointHandle(junc_dir, GENERIC_READ | GENERIC_WRITE,
                                   /*is_directory=*/true);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   // FSCTL_GET_REPARSE_POINT returns matching tag and substitute name.
   auto rp_data = core::GetReparsePointData(h.value->get());
-  ASSERT_TRUE(rp_data) << core::FormatWin32Error(rp_data.error);
+  ASSERT_WIN32_OK(rp_data);
   using MountPointReparse = decltype(nt::ReparseDataBuffer::mount_point);
   const size_t path_buf_off = nt::kReparseDataBufferHeaderSize +
                               offsetof(MountPointReparse, path_buffer);
@@ -807,10 +807,10 @@ TEST_F(LinksReparseTest, GetAndDeleteReparsePointFsctl) {
   // normal empty directory.
   auto del_res =
       core::DeleteReparsePoint(h.value->get(), IO_REPARSE_TAG_MOUNT_POINT);
-  ASSERT_TRUE(del_res) << core::FormatWin32Error(del_res.error);
+  ASSERT_WIN32_OK(del_res);
 
   auto info_after = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info_after) << core::FormatWin32Error(info_after.error);
+  ASSERT_WIN32_OK(info_after);
   EXPECT_EQ(info_after.value->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT,
             DWORD{0});
   EXPECT_NE(info_after.value->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY,
@@ -835,10 +835,10 @@ TEST_F(LinksReparseTest, FindFilesReportsReparseTagInReserved0) {
   const std::wstring junc_dir = TestPath(L"find_rp_junc");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(target_dir.c_str(), nullptr));
   auto junc_res = core::CreateDirectoryJunction(junc_dir, target_dir);
-  ASSERT_TRUE(junc_res) << core::FormatWin32Error(junc_res.error);
+  ASSERT_WIN32_OK(junc_res);
 
   auto entries = CollectFindEntryInfos(TempDir().Path());
-  ASSERT_TRUE(entries) << core::FormatWin32Error(entries.error);
+  ASSERT_WIN32_OK(entries);
 
   const auto junc_it = entries.value->find(L"find_rp_junc");
   ASSERT_NE(junc_it, entries.value->end());
@@ -867,13 +867,13 @@ TEST_F(LinksReparseTest, FindFilesReportsSymlinkReparseTagInReserved0) {
 
   auto sym_file_res = core::CreateSymlink(sym_file, target_file,
                                           /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(sym_file_res) << core::FormatWin32Error(sym_file_res.error);
+  ASSERT_WIN32_OK(sym_file_res);
   auto sym_dir_res = core::CreateSymlink(sym_dir, target_dir,
                                          /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(sym_dir_res) << core::FormatWin32Error(sym_dir_res.error);
+  ASSERT_WIN32_OK(sym_dir_res);
 
   auto entries = CollectFindEntryInfos(TempDir().Path());
-  ASSERT_TRUE(entries) << core::FormatWin32Error(entries.error);
+  ASSERT_WIN32_OK(entries);
 
   const auto file_it = entries.value->find(L"find_sym_file.dat");
   ASSERT_NE(file_it, entries.value->end());
@@ -919,14 +919,14 @@ TEST_F(LinksReparseTest, CustomApplicationReparseTagRoundTrip) {
 
   auto h = OpenReparsePointHandle(path, GENERIC_READ | GENERIC_WRITE,
                                   /*is_directory=*/false);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   auto set_res = SetCustomReparsePoint(h.value->get(), kCustomTag, kCustomGuid,
                                        kPayload, sizeof(kPayload));
-  ASSERT_TRUE(set_res) << core::FormatWin32Error(set_res.error);
+  ASSERT_WIN32_OK(set_res);
 
   auto info = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info) << core::FormatWin32Error(info.error);
+  ASSERT_WIN32_OK(info);
   EXPECT_NE(info.value->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT,
             DWORD{0});
 
@@ -943,17 +943,17 @@ TEST_F(LinksReparseTest, CustomApplicationReparseTagRoundTrip) {
 
   // Delete the custom reparse point and verify normal open works again.
   auto del = core::DeleteReparsePoint(h.value->get(), kCustomTag, &kCustomGuid);
-  ASSERT_TRUE(del) << core::FormatWin32Error(del.error);
+  ASSERT_WIN32_OK(del);
 
   auto info_after = core::GetByHandleInfo(h.value->get());
-  ASSERT_TRUE(info_after) << core::FormatWin32Error(info_after.error);
+  ASSERT_WIN32_OK(info_after);
   EXPECT_EQ(info_after.value->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT,
             DWORD{0});
   h.value->reset();
 
   auto normal = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  EXPECT_TRUE(normal) << core::FormatWin32Error(normal.error);
+  EXPECT_WIN32_OK(normal);
 }
 
 // Spec: [MS-FSA] 2.1.5.15.7 & Win32 CreateHardLinkW — creating a hard link to
@@ -971,8 +971,8 @@ TEST_F(LinksReparseTest, HardLinkOnReadOnlyFile) {
   ASSERT_WIN32_TRUE(::CreateHardLinkW(link_b.c_str(), link_a.c_str(), nullptr));
   auto info_a = core::QueryInfoByPath(link_a);
   auto info_b = core::QueryInfoByPath(link_b);
-  ASSERT_TRUE(info_a) << core::FormatWin32Error(info_a.error);
-  ASSERT_TRUE(info_b) << core::FormatWin32Error(info_b.error);
+  ASSERT_WIN32_OK(info_a);
+  ASSERT_WIN32_OK(info_b);
   EXPECT_EQ(core::FileIndexOf(*info_a.value), core::FileIndexOf(*info_b.value));
   EXPECT_EQ(info_b.value->nNumberOfLinks, DWORD{2});
   EXPECT_NE(info_b.value->dwFileAttributes & FILE_ATTRIBUTE_READONLY, DWORD{0});
@@ -1016,8 +1016,8 @@ TEST_F(LinksReparseTest, HardLinkOverExistingFileFailsAlreadyExists) {
 
   auto src_info = core::QueryInfoByPath(src);
   auto dst_info = core::QueryInfoByPath(dst);
-  ASSERT_TRUE(src_info) << core::FormatWin32Error(src_info.error);
-  ASSERT_TRUE(dst_info) << core::FormatWin32Error(dst_info.error);
+  ASSERT_WIN32_OK(src_info);
+  ASSERT_WIN32_OK(dst_info);
   const uint64_t src_index = core::FileIndexOf(*src_info.value);
   const uint64_t dst_index = core::FileIndexOf(*dst_info.value);
   EXPECT_NE(src_index, dst_index);
@@ -1045,22 +1045,22 @@ TEST_F(LinksReparseTest, LinkInfoExPosixReplacesOpenTarget) {
   ASSERT_WIN32_OK(core::WriteFileContents(dst, "existing-dst-bytes"));
 
   auto src_info = core::QueryInfoByPath(src);
-  ASSERT_TRUE(src_info) << core::FormatWin32Error(src_info.error);
+  ASSERT_WIN32_OK(src_info);
   const uint64_t src_index = core::FileIndexOf(*src_info.value);
 
   auto h_old_dst = core::CreateWin32File(dst, GENERIC_READ, core::kShareAll,
                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_old_dst) << core::FormatWin32Error(h_old_dst.error);
+  ASSERT_WIN32_OK(h_old_dst);
 
   auto dir_h = core::CreateWin32File(
       TempDir().Path(), FILE_ADD_FILE | SYNCHRONIZE, core::kShareAll,
       OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
 
   auto src_h = core::CreateWin32File(src, FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
                                      core::kShareAll, OPEN_EXISTING,
                                      FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(src_h) << core::FormatWin32Error(src_h.error);
+  ASSERT_WIN32_OK(src_h);
 
   auto link_ex = core::SetLinkInfoEx(
       src_h.value->get(), L"hl_existing_dst.dat", dir_h.value->get(),
@@ -1073,7 +1073,7 @@ TEST_F(LinksReparseTest, LinkInfoExPosixReplacesOpenTarget) {
 
   // Pre-existing handle h_old_dst continues reading the replaced file.
   auto old_data = core::ReadAllBytes(h_old_dst.value->get());
-  ASSERT_TRUE(old_data) << core::FormatWin32Error(old_data.error);
+  ASSERT_WIN32_OK(old_data);
   EXPECT_EQ(*old_data.value, "existing-dst-bytes");
 }
 
@@ -1089,7 +1089,7 @@ TEST_F(LinksReparseTest, HardLinkCountLimitFailsTooManyLinks) {
   ASSERT_WIN32_OK(core::WriteFileContents(base, "link-limit"));
 
   auto base_info = core::QueryInfoByPath(base);
-  ASSERT_TRUE(base_info) << core::FormatWin32Error(base_info.error);
+  ASSERT_WIN32_OK(base_info);
   const uint64_t base_index = core::FileIndexOf(*base_info.value);
 
   for (DWORD i = 1; i < kMaxLinksPerFile; ++i) {
@@ -1118,7 +1118,7 @@ TEST_F(LinksReparseTest, HardLinkRenameOneLinkPreservesOtherLinks) {
   ASSERT_WIN32_OK(core::WriteFileContents(link_a, "rename-one-link"));
   ASSERT_WIN32_TRUE(::CreateHardLinkW(link_b.c_str(), link_a.c_str(), nullptr));
   auto orig_info = core::QueryInfoByPath(link_a);
-  ASSERT_TRUE(orig_info) << core::FormatWin32Error(orig_info.error);
+  ASSERT_WIN32_OK(orig_info);
   const uint64_t expected_index = core::FileIndexOf(*orig_info.value);
 
   ASSERT_WIN32_TRUE(::MoveFileExW(link_a.c_str(), link_a2.c_str(), 0));
@@ -1128,7 +1128,7 @@ TEST_F(LinksReparseTest, HardLinkRenameOneLinkPreservesOtherLinks) {
   EXPECT_TRUE(CheckLinkFileIndexAndCount(link_b, expected_index, DWORD{2}));
 
   auto links = EnumerateHardLinks(link_b);
-  ASSERT_TRUE(links) << core::FormatWin32Error(links.error);
+  ASSERT_WIN32_OK(links);
   EXPECT_MULTISET_EQ(
       ExtractTempRelativePaths(*links.value, TempDir().Basename()),
       (std::vector<std::wstring>{L"hl_ren_a_moved.dat", L"hl_ren_b.dat"}));
@@ -1175,7 +1175,7 @@ TEST_F(LinksReparseTest,
 
   ASSERT_WIN32_OK(core::WriteFileContents(target, "target-stays-put"));
   auto target_info = core::QueryInfoByPath(target);
-  ASSERT_TRUE(target_info) << core::FormatWin32Error(target_info.error);
+  ASSERT_WIN32_OK(target_info);
   const uint64_t target_index = core::FileIndexOf(*target_info.value);
 
   ASSERT_WIN32_OK(core::CreateSymlink(link1, L"sym_ren_target.dat",
@@ -1191,9 +1191,9 @@ TEST_F(LinksReparseTest,
     auto rp_h = OpenReparsePointHandle(
         link2, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
         /*is_directory=*/false);
-    ASSERT_TRUE(rp_h) << core::FormatWin32Error(rp_h.error);
+    ASSERT_WIN32_OK(rp_h);
     auto rp_info = core::GetByHandleInfo(rp_h.value->get());
-    ASSERT_TRUE(rp_info) << core::FormatWin32Error(rp_info.error);
+    ASSERT_WIN32_OK(rp_info);
     EXPECT_NE(rp_info.value->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT,
               DWORD{0});
     EXPECT_NE(core::FileIndexOf(*rp_info.value), target_index);
@@ -1220,9 +1220,9 @@ TEST_F(LinksReparseTest,
   // resolves to the target path.
   auto followed = core::CreateWin32File(link2, GENERIC_READ, core::kShareAll,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(followed) << core::FormatWin32Error(followed.error);
+  ASSERT_WIN32_OK(followed);
   auto data = core::ReadAllBytes(followed.value->get());
-  ASSERT_TRUE(data) << core::FormatWin32Error(data.error);
+  ASSERT_WIN32_OK(data);
   EXPECT_EQ(*data.value, "target-stays-put");
 
   const std::wstring expected_suffix =
@@ -1250,7 +1250,7 @@ TEST_F(LinksReparseTest, RemoveJunctionPointingToNonEmptyDirectorySucceeds) {
   ASSERT_WIN32_OK(core::WriteFileContents(deep, "payload-three"));
 
   auto created = core::CreateDirectoryJunction(junction_dir, target_dir);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   // Confirm junction resolves into nested content.
   EXPECT_TRUE(helpers::CheckFileContents(junction_dir + L"\\nested\\deep.dat",
@@ -1294,7 +1294,7 @@ TEST_F(LinksReparseTest, JunctionOnNonEmptyDirectoryFailsNotEmpty) {
   // Once the directory is emptied, the same junction creation succeeds.
   ASSERT_WIN32_TRUE(::DeleteFileW(blocker.c_str()));
   auto created = core::CreateDirectoryJunction(non_empty_mount, target_dir);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
   EXPECT_WIN32_TRUE(::RemoveDirectoryW(non_empty_mount.c_str()));
 }
 
@@ -1309,12 +1309,12 @@ TEST_F(LinksReparseTest, GetReparsePointSmallBufferFailsMoreData) {
   ASSERT_WIN32_TRUE(::CreateDirectoryW(target_dir.c_str(), nullptr));
 
   auto created = core::CreateDirectoryJunction(small_buf_junc, target_dir);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   {
     auto h = OpenReparsePointHandle(small_buf_junc, FILE_READ_ATTRIBUTES,
                                     /*is_directory=*/true);
-    ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+    ASSERT_WIN32_OK(h);
 
     // Buffer smaller than REPARSE_GUID_DATA_BUFFER_HEADER_SIZE (24 bytes) fails
     // with ERROR_INSUFFICIENT_BUFFER (STATUS_BUFFER_TOO_SMALL).
@@ -1344,7 +1344,7 @@ TEST_F(LinksReparseTest, GetReparsePointSmallBufferFailsMoreData) {
 
     // Confirm the full query succeeds and exceeds the 32-byte probe buffer.
     auto full_data = core::GetReparsePointData(h.value->get());
-    ASSERT_TRUE(full_data) << core::FormatWin32Error(full_data.error);
+    ASSERT_WIN32_OK(full_data);
     ASSERT_GT(full_data.value->size(), sizeof(header_buf));
     const auto *rdb = reinterpret_cast<const nt::ReparseDataBuffer *>(
         full_data.value->data());
@@ -1370,7 +1370,7 @@ TEST_F(LinksReparseTest, FileSymlinkToAlternateDataStream) {
 
   auto created =
       core::CreateSymlink(link, target, /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   // Reading an alternate data stream through the file symlink resolves to the
   // target's stream.
@@ -1381,7 +1381,7 @@ TEST_F(LinksReparseTest, FileSymlinkToAlternateDataStream) {
   // materializes on the target file without disturbing the base stream.
   auto write_ads2 =
       core::WriteFileContents(link + L":ads2", "written-via-symlink");
-  ASSERT_TRUE(write_ads2) << core::FormatWin32Error(write_ads2.error);
+  ASSERT_WIN32_OK(write_ads2);
 
   EXPECT_TRUE(
       helpers::CheckFileContents(target + L":ads2", "written-via-symlink"));
@@ -1399,8 +1399,8 @@ TEST_F(LinksReparseTest, FileHardLinkInformationListsAllLinks) {
   auto root_dir_id =
       core::QueryPathFileIndex(TempDir().Path(), /*backup_semantics=*/true);
   auto sub_dir_id = core::QueryPathFileIndex(sub, /*backup_semantics=*/true);
-  ASSERT_TRUE(root_dir_id) << core::FormatWin32Error(root_dir_id.error);
-  ASSERT_TRUE(sub_dir_id) << core::FormatWin32Error(sub_dir_id.error);
+  ASSERT_WIN32_OK(root_dir_id);
+  ASSERT_WIN32_OK(sub_dir_id);
   ASSERT_NE(*root_dir_id.value, *sub_dir_id.value);
 
   const std::wstring link_a = TestPath(L"hl_info_a.dat");
@@ -1414,7 +1414,7 @@ TEST_F(LinksReparseTest, FileHardLinkInformationListsAllLinks) {
   auto h = core::CreateWin32File(link_a, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                  core::kShareAll, OPEN_EXISTING,
                                  FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h) << core::FormatWin32Error(h.error);
+  ASSERT_WIN32_OK(h);
 
   EXPECT_TRUE(CheckHardLinkEntries(h.value->get(),
                                    {{*root_dir_id.value, L"hl_info_a.dat"},
@@ -1447,7 +1447,7 @@ TEST_F(LinksReparseTest, JunctionIntermediateComponentTraversal) {
       core::WriteFileContents(target_file, "initial-junction-nested"));
 
   auto created = core::CreateDirectoryJunction(junc_root, target_root);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   const std::wstring via_junc_file = junc_root + L"\\sub\\nested.dat";
   const std::wstring via_junc_created = junc_root + L"\\sub\\created.dat";
@@ -1492,23 +1492,23 @@ TEST_F(LinksReparseTest, ChainedSymlinksAndIntermediateComponentTraversal) {
   ASSERT_WIN32_OK(core::WriteFileContents(target_file, "chained-file-v1"));
 
   auto target_info = core::QueryInfoByPath(target_file);
-  ASSERT_TRUE(target_info) << core::FormatWin32Error(target_info.error);
+  ASSERT_WIN32_OK(target_info);
   const uint64_t target_index = core::FileIndexOf(*target_info.value);
 
   auto res_b = core::CreateSymlink(sym_b, target_file, /*is_directory=*/false,
                                    Os().build);
-  ASSERT_TRUE(res_b) << core::FormatWin32Error(res_b.error);
+  ASSERT_WIN32_OK(res_b);
   auto res_a =
       core::CreateSymlink(sym_a, sym_b, /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(res_a) << core::FormatWin32Error(res_a.error);
+  ASSERT_WIN32_OK(res_a);
 
   EXPECT_TRUE(helpers::CheckFileContents(sym_a, "chained-file-v1"));
   {
     auto followed = core::CreateWin32File(sym_a, GENERIC_READ, core::kShareAll,
                                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(followed) << core::FormatWin32Error(followed.error);
+    ASSERT_WIN32_OK(followed);
     auto followed_info = core::GetByHandleInfo(followed.value->get());
-    ASSERT_TRUE(followed_info) << core::FormatWin32Error(followed_info.error);
+    ASSERT_WIN32_OK(followed_info);
     EXPECT_EQ(core::FileIndexOf(*followed_info.value), target_index);
     const std::wstring expected_file_suffix =
         L"\\" + TempDir().Basename() + L"\\chain_target.dat";
@@ -1533,10 +1533,10 @@ TEST_F(LinksReparseTest, ChainedSymlinksAndIntermediateComponentTraversal) {
 
   auto dir_b_res = core::CreateSymlink(sym_dir_b, real_dir,
                                        /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(dir_b_res) << core::FormatWin32Error(dir_b_res.error);
+  ASSERT_WIN32_OK(dir_b_res);
   auto dir_a_res = core::CreateSymlink(sym_dir_a, sym_dir_b,
                                        /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(dir_a_res) << core::FormatWin32Error(dir_a_res.error);
+  ASSERT_WIN32_OK(dir_a_res);
 
   const std::wstring via_chain_leaf = sym_dir_a + L"\\sub\\leaf.dat";
   EXPECT_TRUE(helpers::CheckFileContents(via_chain_leaf, "chained-dir-v1"));
@@ -1556,10 +1556,10 @@ TEST_F(LinksReparseTest, ChainedSymlinksAndIntermediateComponentTraversal) {
   const std::wstring junc_dir = TestPath(L"chain_junc_dir");
   const std::wstring sym_to_junc = TestPath(L"chain_sym_to_junc");
   auto junc_res = core::CreateDirectoryJunction(junc_dir, real_dir);
-  ASSERT_TRUE(junc_res) << core::FormatWin32Error(junc_res.error);
+  ASSERT_WIN32_OK(junc_res);
   auto sym_junc_res = core::CreateSymlink(sym_to_junc, junc_dir,
                                           /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(sym_junc_res) << core::FormatWin32Error(sym_junc_res.error);
+  ASSERT_WIN32_OK(sym_junc_res);
 
   const std::wstring via_mixed_leaf = sym_to_junc + L"\\sub\\leaf.dat";
   EXPECT_TRUE(helpers::CheckFileContents(via_mixed_leaf, "chained-dir-v2"));
@@ -1670,12 +1670,12 @@ TEST_F(LinksReparseTest, ReparsePointMatchingTagAndGuidUpdatesAndDeletes) {
 
   auto set_match = SetCustomReparsePoint(h.get(), kAppTag1, kAppGuid1,
                                          kAppPayload2, sizeof(kAppPayload2));
-  ASSERT_TRUE(set_match) << core::FormatWin32Error(set_match.error);
+  ASSERT_WIN32_OK(set_match);
   EXPECT_TRUE(CheckCustomReparsePoint(h.get(), kAppTag1, kAppGuid1,
                                       kAppPayload2, sizeof(kAppPayload2)));
 
   auto del_match = core::DeleteReparsePoint(h.get(), kAppTag1, &kAppGuid1);
-  ASSERT_TRUE(del_match) << core::FormatWin32Error(del_match.error);
+  ASSERT_WIN32_OK(del_match);
   EXPECT_TRUE(CheckNoReparsePoint(h.get()));
 }
 
@@ -1694,7 +1694,7 @@ TEST_F(LinksReparseTest, SymlinkCreateWithoutPrivilegeFailsPrivilegeNotHeld) {
   ASSERT_WIN32_OK(core::WriteFileContents(target, "nopriv-target"));
 
   auto token = core::CreateTokenWithoutPrivilege(SE_CREATE_SYMBOLIC_LINK_NAME);
-  ASSERT_TRUE(token) << core::FormatWin32Error(token.error);
+  ASSERT_WIN32_OK(token);
 
   bool created = false;
   DWORD create_error = ERROR_SUCCESS;
@@ -1727,10 +1727,10 @@ TEST_F(LinksReparseTest, FileSymlinkToDirectoryFailsDataOpen) {
 
   auto created =
       core::CreateSymlink(link, target_dir, /*is_directory=*/false, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   auto link_attrs = core::QueryWin32Attributes(link);
-  ASSERT_TRUE(link_attrs) << core::FormatWin32Error(link_attrs.error);
+  ASSERT_WIN32_OK(link_attrs);
   EXPECT_NE(*link_attrs.value & FILE_ATTRIBUTE_REPARSE_POINT, DWORD{0});
   EXPECT_EQ(*link_attrs.value & FILE_ATTRIBUTE_DIRECTORY, DWORD{0});
 
@@ -1743,7 +1743,7 @@ TEST_F(LinksReparseTest, FileSymlinkToDirectoryFailsDataOpen) {
   ASSERT_WIN32_TRUE(::DeleteFileW(link.c_str()));
   EXPECT_TRUE(helpers::CheckFileNotFound(link));
   auto target_attrs = core::QueryWin32Attributes(target_dir);
-  ASSERT_TRUE(target_attrs) << core::FormatWin32Error(target_attrs.error);
+  ASSERT_WIN32_OK(target_attrs);
   EXPECT_NE(*target_attrs.value & FILE_ATTRIBUTE_DIRECTORY, DWORD{0});
 }
 
@@ -1761,10 +1761,10 @@ TEST_F(LinksReparseTest, DirectorySymlinkToFileFailsDirectoryOpen) {
 
   auto created =
       core::CreateSymlink(link, target, /*is_directory=*/true, Os().build);
-  ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+  ASSERT_WIN32_OK(created);
 
   auto link_attrs = core::QueryWin32Attributes(link);
-  ASSERT_TRUE(link_attrs) << core::FormatWin32Error(link_attrs.error);
+  ASSERT_WIN32_OK(link_attrs);
   EXPECT_NE(*link_attrs.value & FILE_ATTRIBUTE_REPARSE_POINT, DWORD{0});
   EXPECT_NE(*link_attrs.value & FILE_ATTRIBUTE_DIRECTORY, DWORD{0});
 
@@ -1800,7 +1800,7 @@ TEST_F(LinksReparseTest, ReparseDataAtMaximumSizeRoundTrips) {
 
   auto set = SetCustomReparsePoint(h.get(), kAppTag1, kAppGuid1, payload.data(),
                                    payload.size());
-  ASSERT_TRUE(set) << core::FormatWin32Error(set.error);
+  ASSERT_WIN32_OK(set);
   EXPECT_TRUE(CheckCustomReparsePoint(h.get(), kAppTag1, kAppGuid1,
                                       payload.data(), payload.size()));
 }

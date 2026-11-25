@@ -67,7 +67,7 @@ TEST_F(CreateOpenTest, CreateNewSucceedsAndRejectsExisting) {
 
   auto first = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_NEW,
                                        FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(first.handle.valid()) << core::FormatWin32Error(first.last_error);
+  ASSERT_WIN32_OK(first);
   EXPECT_WIN32_ERROR_CODE(first.last_error, ERROR_SUCCESS);
   first.handle.reset();
 
@@ -87,20 +87,19 @@ TEST_F(CreateOpenTest, CreateAlwaysSetsAlreadyExistsLastError) {
 
   auto first = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                        FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(first.handle.valid()) << core::FormatWin32Error(first.last_error);
+  ASSERT_WIN32_OK(first);
   EXPECT_WIN32_ERROR_CODE(first.last_error, ERROR_SUCCESS);
   first.handle.reset();
 
   auto second = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                         FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(second.handle.valid())
-      << core::FormatWin32Error(second.last_error);
+  ASSERT_WIN32_OK(second);
   EXPECT_WIN32_ERROR_CODE(second.last_error, ERROR_ALREADY_EXISTS);
   second.handle.reset();
 
   auto third = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                        FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(third.handle.valid()) << core::FormatWin32Error(third.last_error);
+  ASSERT_WIN32_OK(third);
   EXPECT_WIN32_ERROR_CODE(third.last_error, ERROR_ALREADY_EXISTS);
   third.handle.reset();
 
@@ -114,14 +113,13 @@ TEST_F(CreateOpenTest, OpenAlwaysCreatesAndOpensWithAlreadyExists) {
 
   auto first = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, OPEN_ALWAYS,
                                        FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(first.handle.valid()) << core::FormatWin32Error(first.last_error);
+  ASSERT_WIN32_OK(first);
   EXPECT_WIN32_ERROR_CODE(first.last_error, ERROR_SUCCESS);
   first.handle.reset();
 
   auto second = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, OPEN_ALWAYS,
                                         FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(second.handle.valid())
-      << core::FormatWin32Error(second.last_error);
+  ASSERT_WIN32_OK(second);
   EXPECT_WIN32_ERROR_CODE(second.last_error, ERROR_ALREADY_EXISTS);
   second.handle.reset();
 
@@ -140,14 +138,12 @@ TEST_F(CreateOpenTest, OpenExistingNotFoundAndExisting) {
 
   auto created = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                          FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(created.handle.valid())
-      << core::FormatWin32Error(created.last_error);
+  ASSERT_WIN32_OK(created);
   created.handle.reset();
 
   auto existing = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, OPEN_EXISTING,
                                           FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(existing.handle.valid())
-      << core::FormatWin32Error(existing.last_error);
+  ASSERT_WIN32_OK(existing);
   EXPECT_WIN32_ERROR_CODE(existing.last_error, ERROR_SUCCESS);
   existing.handle.reset();
 
@@ -166,7 +162,7 @@ TEST_F(CreateOpenTest, TruncateExistingRequiresWriteAndTruncates) {
 
   const std::string payload(42, 'A');
   auto write_res = core::WriteFileContents(path, payload);
-  ASSERT_TRUE(write_res) << core::FormatWin32Error(write_res.error);
+  ASSERT_WIN32_OK(write_res);
   EXPECT_TRUE(CheckFileSize(path, 42));
 
   // TRUNCATE_EXISTING requires GENERIC_WRITE in Win32.
@@ -178,8 +174,7 @@ TEST_F(CreateOpenTest, TruncateExistingRequiresWriteAndTruncates) {
 
   auto rw_trunc =
       core::CreateWin32FileEx(path, GENERIC_WRITE, 0, TRUNCATE_EXISTING, 0);
-  ASSERT_TRUE(rw_trunc.handle.valid())
-      << core::FormatWin32Error(rw_trunc.last_error);
+  ASSERT_WIN32_OK(rw_trunc);
   EXPECT_WIN32_ERROR_CODE(rw_trunc.last_error, ERROR_SUCCESS);
   rw_trunc.handle.reset();
 
@@ -210,14 +205,14 @@ TEST_F(CreateOpenTest, CreateAlwaysAttributesAndReadOnlySystemHidden) {
   // CREATE_ALWAYS + FILE_ATTRIBUTE_NORMAL -> ARCHIVE (0x20).
   auto h1 = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                   FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
   h1.value->reset();
   EXPECT_TRUE(CheckPolicyAttributes(path, DWORD{FILE_ATTRIBUTE_ARCHIVE}));
 
   // Overwriting a normal file with CREATE_ALWAYS + READONLY succeeds -> 0x21.
   auto h2 = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                   FILE_ATTRIBUTE_READONLY);
-  ASSERT_TRUE(h2) << core::FormatWin32Error(h2.error);
+  ASSERT_WIN32_OK(h2);
   h2.value->reset();
   EXPECT_TRUE(CheckPolicyAttributes(
       path, DWORD{FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_READONLY}));
@@ -234,7 +229,7 @@ TEST_F(CreateOpenTest, CreateAlwaysAttributesAndReadOnlySystemHidden) {
   // CREATE_ALWAYS + SYSTEM -> 0x24.
   auto h3 = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                   FILE_ATTRIBUTE_SYSTEM);
-  ASSERT_TRUE(h3) << core::FormatWin32Error(h3.error);
+  ASSERT_WIN32_OK(h3);
   h3.value->reset();
   EXPECT_TRUE(CheckPolicyAttributes(
       path, DWORD{FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_SYSTEM}));
@@ -244,7 +239,7 @@ TEST_F(CreateOpenTest, CreateAlwaysAttributesAndReadOnlySystemHidden) {
   // CREATE_ALWAYS + HIDDEN -> 0x22.
   auto h4 = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                   FILE_ATTRIBUTE_HIDDEN);
-  ASSERT_TRUE(h4) << core::FormatWin32Error(h4.error);
+  ASSERT_WIN32_OK(h4);
   h4.value->reset();
   EXPECT_TRUE(CheckPolicyAttributes(
       path, DWORD{FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN}));
@@ -269,7 +264,7 @@ TEST_F(CreateOpenTest, CreateAlwaysRejectsHiddenOrSystemMismatch) {
     const std::wstring path = TestPath(c.name);
     auto created = core::CreateWin32File(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                          c.protected_attr);
-    ASSERT_TRUE(created) << core::FormatWin32Error(created.error);
+    ASSERT_WIN32_OK(created);
     created.value->reset();
 
     auto mismatch =
@@ -279,13 +274,12 @@ TEST_F(CreateOpenTest, CreateAlwaysRejectsHiddenOrSystemMismatch) {
 
     auto open_ok =
         core::CreateWin32File(path, GENERIC_WRITE, 0, OPEN_EXISTING, 0);
-    ASSERT_TRUE(open_ok) << core::FormatWin32Error(open_ok.error);
+    ASSERT_WIN32_OK(open_ok);
     open_ok.value->reset();
 
     auto match = core::CreateWin32FileEx(path, GENERIC_WRITE, 0, CREATE_ALWAYS,
                                          c.protected_attr);
-    ASSERT_TRUE(match.handle.valid())
-        << core::FormatWin32Error(match.last_error);
+    ASSERT_WIN32_OK(match);
     EXPECT_WIN32_ERROR_CODE(match.last_error, ERROR_ALREADY_EXISTS);
     match.handle.reset();
 
@@ -299,7 +293,7 @@ TEST_F(CreateOpenTest, CreateDirectoryCollisionsAndBasicAttributes) {
   const std::wstring file_path = TestPath(L"collide_file.dat");
   auto created_file = core::CreateWin32File(file_path, GENERIC_WRITE, 0,
                                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(created_file) << core::FormatWin32Error(created_file.error);
+  ASSERT_WIN32_OK(created_file);
   created_file.value->reset();
 
   EXPECT_WIN32_ERROR(::CreateDirectoryW(file_path.c_str(), nullptr),
@@ -316,9 +310,9 @@ TEST_F(CreateOpenTest, CreateDirectoryCollisionsAndBasicAttributes) {
   auto dir_h =
       core::CreateWin32File(dir_path, FILE_READ_ATTRIBUTES, core::kShareAll,
                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(dir_h) << core::FormatWin32Error(dir_h.error);
+  ASSERT_WIN32_OK(dir_h);
   auto bhfi = core::GetByHandleInfo(dir_h.value->get());
-  ASSERT_TRUE(bhfi) << core::FormatWin32Error(bhfi.error);
+  ASSERT_WIN32_OK(bhfi);
   EXPECT_EQ(MaskPolicyAttributes(bhfi.value->dwFileAttributes),
             DWORD{FILE_ATTRIBUTE_DIRECTORY});
   dir_h.value->reset();
@@ -332,20 +326,18 @@ TEST_F(CreateOpenTest, CreateAlwaysVsOpenDispositionsTruncation) {
   const std::wstring path = TestPath(L"disp_trunc.dat");
   const std::string payload(42, 'Z');
   auto write_res = core::WriteFileContents(path, payload);
-  ASSERT_TRUE(write_res) << core::FormatWin32Error(write_res.error);
+  ASSERT_WIN32_OK(write_res);
 
   auto open_always = core::CreateWin32FileEx(
       path, GENERIC_WRITE, 0, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(open_always.handle.valid())
-      << core::FormatWin32Error(open_always.last_error);
+  ASSERT_WIN32_OK(open_always);
   EXPECT_WIN32_ERROR_CODE(open_always.last_error, ERROR_ALREADY_EXISTS);
   open_always.handle.reset();
   EXPECT_TRUE(CheckFileSize(path, 42));
 
   auto open_existing = core::CreateWin32FileEx(
       path, GENERIC_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(open_existing.handle.valid())
-      << core::FormatWin32Error(open_existing.last_error);
+  ASSERT_WIN32_OK(open_existing);
   open_existing.handle.reset();
   EXPECT_TRUE(CheckFileSize(path, 42));
 
@@ -353,8 +345,7 @@ TEST_F(CreateOpenTest, CreateAlwaysVsOpenDispositionsTruncation) {
 
   auto create_always = core::CreateWin32FileEx(
       path, GENERIC_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(create_always.handle.valid())
-      << core::FormatWin32Error(create_always.last_error);
+  ASSERT_WIN32_OK(create_always);
   EXPECT_WIN32_ERROR_CODE(create_always.last_error, ERROR_ALREADY_EXISTS);
   create_always.handle.reset();
   EXPECT_TRUE(CheckFileSize(path, 0));
@@ -369,7 +360,7 @@ TEST_F(CreateOpenTest, ShareModeWriteHandleConflicts) {
 
   auto h1 = core::CreateWin32File(path, GENERIC_WRITE, FILE_SHARE_READ,
                                   CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto c1 = core::CreateWin32File(path, GENERIC_READ, FILE_SHARE_READ,
                                   OPEN_EXISTING, 0);
@@ -378,7 +369,7 @@ TEST_F(CreateOpenTest, ShareModeWriteHandleConflicts) {
 
   auto ok_read = core::CreateWin32File(path, GENERIC_READ, FILE_SHARE_WRITE,
                                        OPEN_EXISTING, 0);
-  ASSERT_TRUE(ok_read) << core::FormatWin32Error(ok_read.error);
+  ASSERT_WIN32_OK(ok_read);
   ok_read.value->reset();
 
   auto c2 =
@@ -400,11 +391,11 @@ TEST_F(CreateOpenTest, ShareModeWriteHandleConflicts) {
 TEST_F(CreateOpenTest, ShareModeReadHandleConflicts) {
   const std::wstring path = TestPath(L"share_read.dat");
   auto init = core::WriteFileContents(path, "seed");
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   auto h1 = core::CreateWin32File(path, GENERIC_READ, FILE_SHARE_WRITE,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto c1 = core::CreateWin32File(path, GENERIC_WRITE, FILE_SHARE_WRITE,
                                   OPEN_EXISTING, 0);
@@ -413,7 +404,7 @@ TEST_F(CreateOpenTest, ShareModeReadHandleConflicts) {
 
   auto ok_write = core::CreateWin32File(path, GENERIC_WRITE, FILE_SHARE_READ,
                                         OPEN_EXISTING, 0);
-  ASSERT_TRUE(ok_write) << core::FormatWin32Error(ok_write.error);
+  ASSERT_WIN32_OK(ok_write);
   ok_write.value->reset();
 
   auto c2 =
@@ -435,11 +426,11 @@ TEST_F(CreateOpenTest, ShareModeReadHandleConflicts) {
 TEST_F(CreateOpenTest, ShareModeDeleteHandleConflicts) {
   const std::wstring path = TestPath(L"share_delete.dat");
   auto init = core::WriteFileContents(path, "seed");
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
 
   auto h1 = core::CreateWin32File(path, DELETE, FILE_SHARE_DELETE,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto c1 = core::CreateWin32File(path, GENERIC_WRITE, FILE_SHARE_DELETE,
                                   OPEN_EXISTING, 0);
@@ -453,7 +444,7 @@ TEST_F(CreateOpenTest, ShareModeDeleteHandleConflicts) {
 
   auto ok_del =
       core::CreateWin32File(path, DELETE, FILE_SHARE_DELETE, OPEN_EXISTING, 0);
-  ASSERT_TRUE(ok_del) << core::FormatWin32Error(ok_del.error);
+  ASSERT_WIN32_OK(ok_del);
   ok_del.value->reset();
 
   h1.value->reset();
@@ -468,7 +459,7 @@ TEST_F(CreateOpenTest, ShareModeDirectoryExclusiveOpen) {
 
   auto h1 = core::CreateWin32File(dir, GENERIC_READ, 0, OPEN_EXISTING,
                                   FILE_FLAG_BACKUP_SEMANTICS);
-  ASSERT_TRUE(h1) << core::FormatWin32Error(h1.error);
+  ASSERT_WIN32_OK(h1);
 
   auto h2 = core::CreateWin32File(dir, GENERIC_READ, 0, OPEN_EXISTING,
                                   FILE_FLAG_BACKUP_SEMANTICS);
@@ -537,7 +528,7 @@ TEST_F(CreateOpenTest, NtCreateFileAllSixDispositionsAndIoStatus) {
     ASSERT_NT_STATUS(r2.status, STATUS_SUCCESS);
     EXPECT_EQ(r2.information, nt::kFileOpened);
     auto content = core::ReadAllBytes(r2.value->get());
-    ASSERT_TRUE(content) << core::FormatWin32Error(content.error);
+    ASSERT_WIN32_OK(content);
     EXPECT_EQ(*content.value, "keep_me");
     r2.value->reset();
     EXPECT_WIN32_TRUE(::DeleteFileW(path.c_str()));
@@ -686,7 +677,7 @@ TEST_F(CreateOpenTest, NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf) {
 
   auto h_reader = core::CreateWin32File(path, GENERIC_READ, FILE_SHARE_WRITE,
                                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(h_reader) << core::FormatWin32Error(h_reader.error);
+  ASSERT_WIN32_OK(h_reader);
 
   auto sup_res = core::NtCreateFilePath(
       nt_path, FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
@@ -722,7 +713,7 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteIfMergeAttributes) {
 
   auto init = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
                                     CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY);
-  ASSERT_TRUE(init) << core::FormatWin32Error(init.error);
+  ASSERT_WIN32_OK(init);
   ASSERT_WIN32_OK(core::WriteAllBytes(init.value->get(), "temp_data", 9));
   init.value->reset();
 
@@ -864,7 +855,7 @@ TEST_F(CreateOpenTest, NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch) {
     EXPECT_TRUE(CheckFileSize(path, 0));
 
     auto attrs = core::QueryWin32Attributes(path);
-    ASSERT_TRUE(attrs) << core::FormatWin32Error(attrs.error);
+    ASSERT_WIN32_OK(attrs);
     EXPECT_NE(*attrs.value & protected_attr, 0UL);
   }
 }
@@ -1016,7 +1007,7 @@ TEST_F(CreateOpenTest, OverwriteAndSupersedeOfUserMappedFileFail) {
     auto h_map = core::CreateWin32File(path, GENERIC_READ | GENERIC_WRITE,
                                        core::kShareAll, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(h_map) << core::FormatWin32Error(h_map.error);
+    ASSERT_WIN32_OK(h_map);
     ::SetLastError(ERROR_SUCCESS);
     mapping.reset(::CreateFileMappingW(h_map.value->get(), nullptr,
                                        PAGE_READWRITE, 0, 0, nullptr));
@@ -1065,8 +1056,7 @@ TEST_F(CreateOpenTest, OverwriteAndSupersedeOfUserMappedFileFail) {
   auto after_unmap =
       core::CreateWin32FileEx(path, GENERIC_WRITE, core::kShareAll,
                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
-  ASSERT_TRUE(after_unmap.handle.valid())
-      << core::FormatWin32Error(after_unmap.last_error);
+  ASSERT_WIN32_OK(after_unmap);
   after_unmap.handle.reset();
   EXPECT_TRUE(CheckFileSize(path, 0));
 }
