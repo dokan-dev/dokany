@@ -12,244 +12,124 @@
 #include <utility>
 
 namespace fstest::core {
+namespace detail {
 
-/// \brief Move-only RAII wrapper for Win32 and NT HANDLE values closed via
-/// `CloseHandle`. Treats both `nullptr` and `INVALID_HANDLE_VALUE` as invalid.
-class UniqueHandle {
+struct Win32HandleTraitsBase {
+  using pointer = HANDLE;
+  static bool IsValid(HANDLE h) noexcept {
+    return h != nullptr && h != INVALID_HANDLE_VALUE;
+  }
+  static HANDLE Normalize(HANDLE h) noexcept {
+    return IsValid(h) ? h : nullptr;
+  }
+};
+
+struct HandleTraits : Win32HandleTraitsBase {
+  static void Close(HANDLE h) noexcept { ::CloseHandle(h); }
+};
+
+struct FindHandleTraits : Win32HandleTraitsBase {
+  static void Close(HANDLE h) noexcept { ::FindClose(h); }
+};
+
+template <typename T> struct LocalMemTraits {
+  using pointer = T *;
+  static bool IsValid(T *p) noexcept { return p != nullptr; }
+  static T *Normalize(T *p) noexcept { return p; }
+  static void Close(T *p) noexcept { ::LocalFree(p); }
+};
+
+struct ViewOfFileTraits {
+  using pointer = void *;
+  static bool IsValid(void *p) noexcept { return p != nullptr; }
+  static void *Normalize(void *p) noexcept { return p; }
+  static void Close(void *p) noexcept { ::UnmapViewOfFile(p); }
+};
+
+/// \brief Move-only RAII wrapper parameterized by a resource traits type.
+template <typename Traits> class UniqueResource {
 public:
-  UniqueHandle() noexcept = default;
+  using pointer = typename Traits::pointer;
 
-  /// \brief Takes ownership of \p h, normalizing `INVALID_HANDLE_VALUE` to
-  /// `nullptr`.
-  explicit UniqueHandle(HANDLE h) noexcept : handle_(Normalize(h)) {}
+  UniqueResource() noexcept = default;
 
-  ~UniqueHandle() { reset(); }
+  /// \brief Takes ownership of \p h, normalizing any sentinel to `nullptr`.
+  explicit UniqueResource(pointer h) noexcept : handle_(Traits::Normalize(h)) {}
 
-  UniqueHandle(const UniqueHandle &) = delete;
-  UniqueHandle &operator=(const UniqueHandle &) = delete;
+  ~UniqueResource() { reset(); }
 
-  UniqueHandle(UniqueHandle &&other) noexcept
-      : handle_(Normalize(std::exchange(other.handle_, nullptr))) {}
+  UniqueResource(const UniqueResource &) = delete;
+  UniqueResource &operator=(const UniqueResource &) = delete;
 
-  UniqueHandle &operator=(UniqueHandle &&other) noexcept {
+  UniqueResource(UniqueResource &&other) noexcept
+      : handle_(Traits::Normalize(std::exchange(other.handle_, nullptr))) {}
+
+  UniqueResource &operator=(UniqueResource &&other) noexcept {
     if (this != &other) {
       reset(std::exchange(other.handle_, nullptr));
     }
     return *this;
   }
 
-  /// \brief Returns the raw handle, or `nullptr` when empty/invalid.
-  HANDLE get() const noexcept { return Normalize(handle_); }
+  /// \brief Returns the raw resource, or `nullptr` when empty/invalid.
+  pointer get() const noexcept { return Traits::Normalize(handle_); }
 
-  /// \brief Returns true iff a valid non-null, non-`INVALID_HANDLE_VALUE`
-  /// handle is owned.
-  bool valid() const noexcept {
-    return handle_ != nullptr && handle_ != INVALID_HANDLE_VALUE;
-  }
+  /// \brief Returns true iff a valid non-sentinel resource is owned.
+  bool valid() const noexcept { return Traits::IsValid(handle_); }
 
   /// \brief Evaluates true iff valid() is true.
   explicit operator bool() const noexcept { return valid(); }
 
-  /// \brief Resets any currently owned handle and returns the raw slot for
+  /// \brief Resets any currently owned resource and returns the raw slot for
   /// Win32/NT out-parameters.
-  HANDLE *put() noexcept {
+  pointer *put() noexcept {
     reset();
     return &handle_;
   }
 
-  /// \brief Relinquishes ownership and returns the normalized handle.
-  HANDLE release() noexcept {
-    return Normalize(std::exchange(handle_, nullptr));
+  /// \brief Relinquishes ownership and returns the normalized resource.
+  pointer release() noexcept {
+    return Traits::Normalize(std::exchange(handle_, nullptr));
   }
 
-  /// \brief Closes any currently owned handle (unless equal to \p new_handle)
+  /// \brief Closes any currently owned resource (unless equal to \p new_handle)
   /// and takes ownership of \p new_handle.
-  void reset(HANDLE new_handle = nullptr) noexcept {
-    HANDLE normalized = Normalize(new_handle);
-    HANDLE current = Normalize(handle_);
+  void reset(pointer new_handle = nullptr) noexcept {
+    pointer normalized = Traits::Normalize(new_handle);
+    pointer current = Traits::Normalize(handle_);
     if (normalized == current) {
       handle_ = normalized;
       return;
     }
-    if (current != nullptr) {
-      ::CloseHandle(current);
+    if (Traits::IsValid(current)) {
+      Traits::Close(current);
     }
     handle_ = normalized;
   }
 
 private:
-  static HANDLE Normalize(HANDLE h) noexcept {
-    return (h == INVALID_HANDLE_VALUE) ? nullptr : h;
-  }
-
-  HANDLE handle_ = nullptr;
+  pointer handle_ = nullptr;
 };
+
+} // namespace detail
+
+/// \brief Move-only RAII wrapper for Win32 and NT HANDLE values closed via
+/// `CloseHandle`. Treats both `nullptr` and `INVALID_HANDLE_VALUE` as invalid.
+using UniqueHandle = detail::UniqueResource<detail::HandleTraits>;
 
 /// \brief Move-only RAII wrapper for `FindFirstFile*` / `FindFirstStream*` /
 /// `FindFirstFileName*` search handles closed via `FindClose`.
-class UniqueFindHandle {
-public:
-  UniqueFindHandle() noexcept = default;
-
-  /// \brief Takes ownership of \p h, normalizing `INVALID_HANDLE_VALUE` to
-  /// `nullptr`.
-  explicit UniqueFindHandle(HANDLE h) noexcept : handle_(Normalize(h)) {}
-
-  ~UniqueFindHandle() { reset(); }
-
-  UniqueFindHandle(const UniqueFindHandle &) = delete;
-  UniqueFindHandle &operator=(const UniqueFindHandle &) = delete;
-
-  UniqueFindHandle(UniqueFindHandle &&other) noexcept
-      : handle_(Normalize(std::exchange(other.handle_, nullptr))) {}
-
-  UniqueFindHandle &operator=(UniqueFindHandle &&other) noexcept {
-    if (this != &other) {
-      reset(std::exchange(other.handle_, nullptr));
-    }
-    return *this;
-  }
-
-  /// \brief Returns the search handle, or `nullptr` when empty/invalid.
-  HANDLE get() const noexcept { return Normalize(handle_); }
-
-  /// \brief Returns true iff a valid search handle is owned.
-  bool valid() const noexcept {
-    return handle_ != nullptr && handle_ != INVALID_HANDLE_VALUE;
-  }
-
-  /// \brief Evaluates true iff valid() is true.
-  explicit operator bool() const noexcept { return valid(); }
-
-  /// \brief Relinquishes ownership and returns the normalized search handle.
-  HANDLE release() noexcept {
-    return Normalize(std::exchange(handle_, nullptr));
-  }
-
-  /// \brief Closes any currently owned search handle (unless equal to
-  /// \p new_handle) and takes ownership of \p new_handle.
-  void reset(HANDLE new_handle = nullptr) noexcept {
-    HANDLE normalized = Normalize(new_handle);
-    HANDLE current = Normalize(handle_);
-    if (normalized == current) {
-      handle_ = normalized;
-      return;
-    }
-    if (current != nullptr) {
-      ::FindClose(current);
-    }
-    handle_ = normalized;
-  }
-
-private:
-  static HANDLE Normalize(HANDLE h) noexcept {
-    return (h == INVALID_HANDLE_VALUE) ? nullptr : h;
-  }
-
-  HANDLE handle_ = nullptr;
-};
+using UniqueFindHandle = detail::UniqueResource<detail::FindHandleTraits>;
 
 /// \brief Move-only RAII wrapper for `LocalAlloc` / SDDL / `FormatMessageW`
 /// allocations freed via `LocalFree`.
 /// \tparam T Pointed-to element type.
-template <typename T> class UniqueLocalMem {
-public:
-  UniqueLocalMem() noexcept = default;
-
-  /// \brief Takes ownership of \p ptr.
-  explicit UniqueLocalMem(T *ptr) noexcept : ptr_(ptr) {}
-
-  ~UniqueLocalMem() { reset(); }
-
-  UniqueLocalMem(const UniqueLocalMem &) = delete;
-  UniqueLocalMem &operator=(const UniqueLocalMem &) = delete;
-
-  UniqueLocalMem(UniqueLocalMem &&other) noexcept
-      : ptr_(std::exchange(other.ptr_, nullptr)) {}
-
-  UniqueLocalMem &operator=(UniqueLocalMem &&other) noexcept {
-    if (this != &other) {
-      reset(std::exchange(other.ptr_, nullptr));
-    }
-    return *this;
-  }
-
-  /// \brief Returns the owned pointer or `nullptr`.
-  T *get() const noexcept { return ptr_; }
-
-  /// \brief Evaluates true iff a non-null pointer is owned.
-  explicit operator bool() const noexcept { return ptr_ != nullptr; }
-
-  /// \brief Resets any owned allocation and returns the raw slot for out-params.
-  T **put() noexcept {
-    reset();
-    return &ptr_;
-  }
-
-  /// \brief Relinquishes ownership and returns the raw pointer.
-  T *release() noexcept { return std::exchange(ptr_, nullptr); }
-
-  /// \brief Frees any owned allocation (unless equal to \p new_ptr) and takes
-  /// ownership of \p new_ptr.
-  void reset(T *new_ptr = nullptr) noexcept {
-    if (new_ptr == ptr_) {
-      return;
-    }
-    if (ptr_ != nullptr) {
-      ::LocalFree(ptr_);
-    }
-    ptr_ = new_ptr;
-  }
-
-private:
-  T *ptr_ = nullptr;
-};
+template <typename T>
+using UniqueLocalMem = detail::UniqueResource<detail::LocalMemTraits<T>>;
 
 /// \brief Move-only RAII wrapper for `MapViewOfFile` base addresses unmapped
 /// via `UnmapViewOfFile`.
-class UniqueViewOfFile {
-public:
-  UniqueViewOfFile() noexcept = default;
-
-  /// \brief Takes ownership of mapped view \p view.
-  explicit UniqueViewOfFile(void *view) noexcept : view_(view) {}
-
-  ~UniqueViewOfFile() { reset(); }
-
-  UniqueViewOfFile(const UniqueViewOfFile &) = delete;
-  UniqueViewOfFile &operator=(const UniqueViewOfFile &) = delete;
-
-  UniqueViewOfFile(UniqueViewOfFile &&other) noexcept
-      : view_(std::exchange(other.view_, nullptr)) {}
-
-  UniqueViewOfFile &operator=(UniqueViewOfFile &&other) noexcept {
-    if (this != &other) {
-      reset(std::exchange(other.view_, nullptr));
-    }
-    return *this;
-  }
-
-  /// \brief Returns the mapped view base address or `nullptr`.
-  void *get() const noexcept { return view_; }
-
-  /// \brief Evaluates true iff a non-null view is owned.
-  explicit operator bool() const noexcept { return view_ != nullptr; }
-
-  /// \brief Unmaps any owned view (unless equal to \p new_view) and takes
-  /// ownership of \p new_view.
-  void reset(void *new_view = nullptr) noexcept {
-    if (new_view == view_) {
-      return;
-    }
-    if (view_ != nullptr) {
-      ::UnmapViewOfFile(view_);
-    }
-    view_ = new_view;
-  }
-
-private:
-  void *view_ = nullptr;
-};
+using UniqueViewOfFile = detail::UniqueResource<detail::ViewOfFileTraits>;
 
 /// \brief Move-only RAII guard that calls `ImpersonateLoggedOnUser(token)` and
 /// unconditionally invokes `RevertToSelf()` on scope exit.

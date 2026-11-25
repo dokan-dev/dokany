@@ -92,26 +92,8 @@ std::wstring StripExtendedPrefixForCheck(std::wstring_view path) {
   return norm;
 }
 
-bool ContainsDotDotComponent(std::wstring_view raw_path) noexcept {
-  size_t i = 0;
-  while (i < raw_path.size()) {
-    while (i < raw_path.size() &&
-           (raw_path[i] == L'\\' || raw_path[i] == L'/')) {
-      ++i;
-    }
-    const size_t start = i;
-    while (i < raw_path.size() && raw_path[i] != L'\\' && raw_path[i] != L'/') {
-      ++i;
-    }
-    if (i - start == 2 && raw_path[start] == L'.' &&
-        raw_path[start + 1] == L'.') {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool ContainsDotOrDotDotComponent(std::wstring_view raw_path) noexcept {
+bool ContainsDotComponent(std::wstring_view raw_path,
+                          bool include_single_dot) noexcept {
   size_t i = 0;
   while (i < raw_path.size()) {
     while (i < raw_path.size() &&
@@ -123,7 +105,7 @@ bool ContainsDotOrDotDotComponent(std::wstring_view raw_path) noexcept {
       ++i;
     }
     const size_t len = i - start;
-    if ((len == 1 && raw_path[start] == L'.') ||
+    if ((include_single_dot && len == 1 && raw_path[start] == L'.') ||
         (len == 2 && raw_path[start] == L'.' && raw_path[start + 1] == L'.')) {
       return true;
     }
@@ -221,25 +203,6 @@ DWORD GetFullPathNameString(const std::wstring &input, std::wstring *out) {
   return ERROR_SUCCESS;
 }
 
-// GetFinalPathNameByHandleW returns the length without the terminator on
-// success, or the required size including the terminator when too small.
-std::wstring QueryFinalPath(HANDLE h, DWORD flags) {
-  std::wstring buf(MAX_PATH, L'\0');
-  for (int attempt = 0; attempt < 4; ++attempt) {
-    const DWORD n = ::GetFinalPathNameByHandleW(
-        h, buf.data(), static_cast<DWORD>(buf.size()), flags);
-    if (n == 0) {
-      return {};
-    }
-    if (n < buf.size()) {
-      buf.resize(n);
-      return buf;
-    }
-    buf.resize(n);
-  }
-  return {};
-}
-
 /// Canonical identity of an opened directory in both the volume-GUID and DOS
 /// namespaces (either may be empty: network files have no volume GUID path).
 struct CanonicalDir {
@@ -274,12 +237,19 @@ CanonicalDir OpenCanonicalDirectory(const std::wstring &path,
     return info;
   }
   info.attrs = tag_info.FileAttributes;
-  info.guid_path =
-      QueryFinalPath(h.get(), FILE_NAME_NORMALIZED | VOLUME_NAME_GUID);
-  info.dos_path =
-      QueryFinalPath(h.get(), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+  auto guid_res = fstest::core::QueryFinalPath(h.get(), FILE_NAME_NORMALIZED |
+                                                            VOLUME_NAME_GUID);
+  if (guid_res) {
+    info.guid_path = std::move(*guid_res.value);
+  }
+  auto dos_res = fstest::core::QueryFinalPath(h.get(), FILE_NAME_NORMALIZED |
+                                                           VOLUME_NAME_DOS);
+  if (dos_res) {
+    info.dos_path = std::move(*dos_res.value);
+  }
   if (info.guid_path.empty() && info.dos_path.empty()) {
-    const DWORD err = ::GetLastError();
+    const DWORD err =
+        dos_res.error != ERROR_SUCCESS ? dos_res.error : guid_res.error;
     info.error = err != ERROR_SUCCESS ? err : ERROR_INVALID_NAME;
   }
   return info;
@@ -662,7 +632,7 @@ bool ResolveSafeCleanupTarget(const std::wstring &path,
   if (path.empty()) {
     return reject("Cleanup target path is empty.");
   }
-  if (ContainsDotDotComponent(path)) {
+  if (ContainsDotComponent(path, /*include_single_dot=*/false)) {
     return reject("Cleanup target path must not contain '..' components.");
   }
   if (IsDriveRelativePath(path)) {
@@ -683,7 +653,7 @@ bool ResolveSafeCleanupTarget(const std::wstring &path,
   // `\x` resolve to the directory that will actually be deleted.
   std::wstring resolved = path;
   if (IsExtendedPrefix(path)) {
-    if (ContainsDotOrDotDotComponent(path)) {
+    if (ContainsDotComponent(path, /*include_single_dot=*/true)) {
       return reject("Extended cleanup target path must not contain '.' or '..' "
                     "components.");
     }
