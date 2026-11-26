@@ -2,13 +2,13 @@
 
 Dokan's CI is the GitHub Actions workflow
 [`.github/workflows/build-and-test.yml`](../../.github/workflows/build-and-test.yml) ("Build and Test").
-It runs on every pull request, on pushes to `master`, on a 5-day `schedule:` keep-alive on `master`
+It runs on pull requests (ignoring `README.md` and `documentations/**`), on pushes to `master`, on a 5-day `schedule:` keep-alive on `master`
 (which restores cached VM images to prevent 7-day inactivity eviction without running tests), and on
 demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A companion workflow,
-[`.github/workflows/cleanup-pr-caches.yml`](../../.github/workflows/cleanup-pr-caches.yml), deletes
+[`.github/workflows/cleanup-pr-caches.yml`](../../.github/workflows/cleanup-pr-caches.yml), cancels any in-flight `pull_request` runs and deletes
 `refs/pull/<N>/merge` caches as soon as a pull request is closed or merged.
 
-```
+```text
             ┌───────────────────────────────────┐
             │ Build, sign and package (Windows) │──► DokanSetup-<ver>.exe, dokan-<ver>.zip
             │                                   │──► dokan-test-payload ───────┐
@@ -30,7 +30,7 @@ demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A 
 
 | Job | Runner | What it does |
 | :--- | :--- | :--- |
-| `Build, sign and package` | `windows-2025-vs2026` | [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
+| `Build, sign and package` | `windows-2025-vs2026` | [`install_cygwin.ps1`](install_cygwin.ps1) + [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
 | `Build test tools` | `windows-2025-vs2026` | [`build_test_tools.ps1`](build_test_tools.ps1): builds `dokan_fstest.exe` (static CRT, Server 2016 import gate, self-tests) and `fsx.exe`. Publishes single-zipped (`archive: false`) `dokan-fstest-<version>.zip` (prefixed `pr-<N>-` on pull requests) and `dokan-test-tools`. Runs in parallel with the Dokan build; skipped on `schedule` and `crash_selftest` runs. |
 | `Prepare VM image (<os>)` | `ubuntu-latest` | Computes the per-OS cache key via [`vm/image_cache_key.sh`](vm/image_cache_key.sh). On a cache miss, [`vm/bake_image.sh`](vm/bake_image.sh) installs Windows Server Core from Microsoft's evaluation ISO, provisions it (see below), and saves it to the Actions cache. On the 5-day `schedule:` run on `master`, restores each cached image to refresh its last-accessed time. |
 | `Test (<os>, <shard>)` | `ubuntu-latest` | Depends on `Build, sign and package`, `Build test tools`, and `Prepare VM image`. Restores the cached image, downloads `dokan-test-payload` and `dokan-test-tools` via `actions/download-artifact`, and runs [`vm/run_vm_tests.sh`](vm/run_vm_tests.sh) (QEMU/KVM) and [`vm/run_guest_tests.ps1`](vm/run_guest_tests.ps1) inside the guest. |
@@ -62,8 +62,9 @@ Each mount runs `fsx`, `dokan_fstest` against the `tests/fstest/baselines` manif
 using the same `samples/*.ps1` harnesses as local runs. Because Win32-OpenSSH executes in non-interactive
 Session 0 (where IFSTest multi-process security tests using `CreateProcessWithLogonW` fail with
 `C0000095`), [`vm/run_guest_tests.ps1`](vm/run_guest_tests.ps1) trampolines into interactive Session 1
-(`AutoAdminLogon` / `WinSta0\Default`) via a one-shot Scheduled Task, streams output back over SSH, and
-explicitly fails the shard if `IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE` ever appears in `guest_tests.log`.
+(`AutoAdminLogon` / `WinSta0\Default`) via a one-shot Scheduled Task and streams output back over SSH;
+[`scripts/run_ifstest.ps1`](../run_ifstest.ps1) explicitly fails the run (in both CI and local runs) if
+`SetOwnerSecurityTest` or `DirectoryTraverseTest` reports `IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE`.
 Scorecards (`fstest-results/*.json`), install logs, `guest_tests.log`, and the serial console log are
 uploaded as `vm-logs-<os>-<shard>`.
 
@@ -158,13 +159,13 @@ default 10 GB repository cache limit on personal forks; forks can test one OS at
   installation, test-signing, Driver Verifier, and BugChecks/NMIs from the runner OS and keep test runs
   offline. During image baking, `bake_image.sh` enables outbound NAT so the guest can download Microsoft
   HLK packages.
-- **Download integrity and cache isolation:** `setup-x86_64.exe` is GPG-verified against Cygwin's pinned
-  key (`56405CF6FCC81574682A5D561A698DE9E2E56300`); Win32-OpenSSH (`bake_image.sh`), HLK IFSTest MSIs/CABs
+- **Download integrity and cache isolation:** `setup-x86_64.exe` is GPG-verified by [`install_cygwin.ps1`](install_cygwin.ps1) against Cygwin's pinned
+  key (`56405CF6FCC81574682A5D561A698DE9E2E56300`, fetched fresh each run with cached outage fallback and `GOODSIG` + `VALIDSIG` enforcement); Win32-OpenSSH (`bake_image.sh`), HLK IFSTest MSIs/CABs
   (`scripts/install_wlk_ifstest.ps1`), and `dokan_fstest` dependencies
   ([`tests/fstest/deps.json`](../../tests/fstest/deps.json)) are SHA-256 verified. Build caches (WDK
   NuGet, Cygwin, `fstest-deps`) are read-only on pull requests (`actions/cache/save` is skipped), and any
   VM-image caches created by a pull request are scoped to `refs/pull/<N>/merge` (so they cannot replace
-  `master` images) and deleted when the PR closes or merges by
+  `master` images) and cleaned up (along with any in-flight `pull_request` runs) when the PR closes or merges by
   [`.github/workflows/cleanup-pr-caches.yml`](../../.github/workflows/cleanup-pr-caches.yml).
 
 ## Running locally

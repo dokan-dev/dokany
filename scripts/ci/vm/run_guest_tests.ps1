@@ -128,14 +128,6 @@ if (-not $InSession1 -and (Get-Process -Id $PID).SessionId -eq 0) {
             $childExit = [int]$rawExit
         }
     }
-
-    # Regression guard: ifstest.exe exits 0 even when multi-process security setup fails with C0000095.
-    if (-not $SimulateBugCheck -and -not $SimulateHang -and (Test-Path -LiteralPath $logPath -PathType Leaf)) {
-        if (Select-String -LiteralPath $logPath -SimpleMatch 'IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE' -Quiet) {
-            Write-Host 'ERROR: IFSTest reported IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE (Process B failed to start).' -ForegroundColor Red
-            exit 1
-        }
-    }
     exit $childExit
 }
 
