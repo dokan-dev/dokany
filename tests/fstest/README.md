@@ -762,8 +762,9 @@ and `fstest/suite/test_fixture.h`:
     `named_streams`, `sparse_files`, `hard_links`, `reparse_points`,
     `persistent_acls`, `extended_attributes`, `case_preserved_names`,
     `case_sensitive_dir`, `file_compression`, `object_ids`, `open_by_file_id`,
-    `short_names`, `can_create_symlinks`, `oplocks`, `change_notifications`,
-    and `sector_size` (`std::optional<uint32_t>` for `FILE_FLAG_NO_BUFFERING`).
+    `volume_quotas`, `usn_journal`, `short_names`, `can_create_symlinks`,
+    `oplocks`, `change_notifications`, and `sector_size`
+    (`std::optional<uint32_t>` for `FILE_FLAG_NO_BUFFERING`).
   - `timing` (`fstest::TimingConfig`): `cleanup_retries` (default `5`),
     `cleanup_initial_backoff_ms` (default `10`), and `async_timeout_ms`
     (default `5000`).

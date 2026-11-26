@@ -18,7 +18,7 @@
           "gap": "GAP-09"
         },
         "CreateOpenTest.NtSupersedeAndOverwriteIfMergeAttributes": {
-          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_createfile drops FILE_ATTRIBUTE_TEMPORARY during FILE_SUPERSEDE attribute merge (reporting 0x1020 instead of 0x1120)",
+          "reason": "Observed-NTFS vs [MS-FSA] 2.1.5.1.2 divergence: memfs_createfile (samples/dokan_memfs/memfs_operations.cpp:163-166) replaces attributes on FILE_SUPERSEDE per [MS-FSA] instead of retaining FILE_ATTRIBUTE_TEMPORARY as NTFS does (reporting 0x1020 instead of 0x1120)",
           "gap": "GAP-06"
         },
         "CreateOpenTest.NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch": {
@@ -36,6 +36,10 @@
         "CreateOpenTest.OverwriteAndSupersedeOfUserMappedFileFail": {
           "reason": "dokan3.sys DokanDispatchCreate does not call MmCanFileBeTruncated on overwrite/supersede of a user-mapped file, allowing truncation instead of STATUS_USER_MAPPED_FILE",
           "gap": "GAP-05"
+        },
+        "CreateOpenTest.OverwriteWithReadOnlyAccessChecksWriteShare": {
+          "reason": "dokan3.sys DokanDispatchCreate (sys/create.c:1024-1027) passes raw DesiredAccess to DokanCheckShareAccess without synthesizing FILE_WRITE_DATA for FILE_OVERWRITE/FILE_OVERWRITE_IF, allowing memfs to truncate under a deny-write handle",
+          "gap": "GAP-06"
         },
         "CreateOpenTest.ReadOnlyFileBlocksWriteOpenAllowsReadAndWriteAttr": {
           "reason": "memfs allows FILE_APPEND_DATA open on READONLY files",
@@ -175,11 +179,6 @@
           "reason": "dokan3.sys accepts FILE_DISPOSITION_ON_CLOSE on non-delete-on-close handles instead of returning STATUS_NOT_SUPPORTED",
           "gap": "GAP-21"
         },
-        "DeleteTest.DispositionInfoExForceImageSectionCheck": {
-          "reason": "dokan3.sys/memfs leaves unmapped SEC_IMAGE file in STATUS_DELETE_PENDING after FileDispositionInformationEx(FORCE_IMAGE_SECTION_CHECK) when MM retains a cached image section",
-          "gap": "GAP-05",
-          "allow_xpass": true
-        },
         "DeleteTest.DispositionInfoExIgnoreReadOnly": {
           "reason": "Dokan does not honor FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE in FileDispositionInformationEx",
           "gap": "GAP-21"
@@ -204,6 +203,10 @@
           "reason": "memfs deletes non-empty directory on NtDeleteFile instead of preserving it",
           "gap": "GAP-16"
         },
+        "DirEnumTest.DotAndDotDotMatchedByNonStarWildcards": {
+          "reason": "dokan/directory.c:480-484 AddMissingCurrentAndParentFolder returns early whenever pattern != L\"*\", dropping synthesized '.' and '..' entries for non-'*' wildcard patterns on memfs",
+          "gap": "GAP-12"
+        },
         "DirEnumTest.EnumerateRegularFileFailsNotDirectory": {
           "reason": "dokan3.sys DokanQueryDirectory does not reject non-directory handles, so memfs_findfiles returns STATUS_NO_MORE_FILES instead of STATUS_INVALID_PARAMETER",
           "gap": "GAP-12"
@@ -217,7 +220,7 @@
           "gap": "GAP-22"
         },
         "DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor": {
-          "reason": "dokan3.sys/dokan/directory.c does not return STATUS_BUFFER_OVERFLOW with a partial filename and advance the directory scan cursor on an undersized first entry",
+          "reason": "dokan/directory.c MatchFiles returns STATUS_BUFFER_OVERFLOW with 0 bytes instead of writing a partial filename with full FileNameLength while preserving (not advancing) the directory scan cursor on an undersized first entry",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryCaseInsensitiveWildcards": {
@@ -228,8 +231,12 @@
           "reason": "dokan/directory.c DokanIsNameInExpression does not fully implement DOS_QM ('>') and DOS_DOT ('\"') wildcards",
           "gap": "GAP-12"
         },
+        "DirEnumTest.NtQueryDirectoryExactFitFinalEntryBuffer": {
+          "reason": "dokan/directory.c:300-333 requires QuadAlign(sizeof(FILE_BOTH_DIR_INFORMATION) + nameBytes) instead of FIELD_OFFSET(FileName) + nameBytes for the final directory entry, returning STATUS_BUFFER_OVERFLOW on exact-fit buffers",
+          "gap": "GAP-12"
+        },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
-          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx and always advances ccb->Context",
+          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:122-154)",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
@@ -302,7 +309,7 @@
           "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryFileInternalAndAllInfo": {
-          "reason": "dokan/fileinfo.c DokanFillFileAllInfo leaves AccessInformation/ModeInformation fields zeroed",
+          "reason": "dokan3.sys DokanCompleteQueryInformation (sys/fileinfo.c:256-288) zeroes and overwrites the entire FILE_ALL_INFORMATION buffer from user mode, refilling only Position/DeletePending/Name and wiping I/O-manager-prefilled AccessInformation/ModeInformation",
           "gap": "GAP-13"
         },
         "InfoQueriesTest.NtQueryFileNameAndNormalizedNameInfo": {
@@ -329,8 +336,16 @@
           "reason": "Dokan does not support FILE_OPEN_BY_FILE_ID / OpenFileById",
           "gap": "GAP-27"
         },
+        "InfoQueriesTest.ReadDirectoryChangesBasicInfoFilterIsolation": {
+          "reason": "dokan3.sys DokanCompleteSetInformation (sys/fileinfo.c:919-925) unconditionally fires ATTRIBUTES|LAST_WRITE|LAST_ACCESS|CREATION notifications on every FileBasicInformation set instead of only changed-field filters",
+          "gap": "GAP-13"
+        },
         "InfoQueriesTest.ReadDirectoryChangesExExtendedInfo": {
           "reason": "dokan3.sys does not support ReadDirectoryChangesExW extended notifications (ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-13"
+        },
+        "InfoQueriesTest.ReadDirectoryChangesReadOnlyCloseAfterWriteNoSpuriousNotify": {
+          "reason": "dokan3.sys sets DOKAN_FILE_CHANGE_LAST_WRITE in DokanCompleteWrite (sys/write.c:372) and never clears it in DokanDispatchCleanup (sys/cleanup.c:117-120), emitting spurious FILE_ACTION_MODIFIED notifications when subsequent read-only handles close while the FCB stays live",
           "gap": "GAP-13"
         },
         "InfoQueriesTest.ReadDirectoryChangesSecurityFilter": {
@@ -338,7 +353,7 @@
           "gap": "GAP-20"
         },
         "InfoQueriesTest.ReadDirectoryChangesSizeFilter": {
-          "reason": "dokan3.sys DokanAllocateFCB (sys/util/fcb.c:62) initializes AdvancedFCBHeader.FileSize to 4096 and DokanCompleteWrite (sys/write.c:352) only emits FILE_NOTIFY_CHANGE_SIZE when CurrentByteOffset exceeds FileSize, suppressing sub-4 KiB growth notifications unless a host minifilter first updates FileSize via FileStandardInformation (sys/fileinfo.c:311)",
+          "reason": "dokan3.sys DokanInitializeFcb (sys/util/fcb.c:62) initializes AdvancedFCBHeader.FileSize to 4096 and DokanCompleteWrite (sys/write.c:352) only emits FILE_NOTIFY_CHANGE_SIZE when CurrentByteOffset exceeds FileSize, suppressing sub-4 KiB growth notifications unless a host minifilter first updates FileSize via FileStandardInformation (sys/fileinfo.c:311)",
           "allow_xpass": true,
           "gap": "GAP-13"
         },
@@ -498,6 +513,10 @@
           "reason": "Dokan does not support symbolic links",
           "gap": "GAP-22"
         },
+        "LocksOplocksTest.ByteRangeLockAbove4KiBBreaksReadOplock": {
+          "reason": "dokan3.sys DokanInitializeFcb (sys/util/fcb.c:62) initializes AllocationSize to 4096 and DokanCommonLockControl (sys/lock.c:70-73) skips DokanCheckOplock for ByteOffset >= AllocationSize without refreshing file size",
+          "gap": "GAP-11"
+        },
         "LocksOplocksTest.DirectoryOplockBreaksOnChildCreate": {
           "reason": "dokan3.sys does not break directory RH oplocks on child file creation",
           "gap": "GAP-11"
@@ -559,9 +578,22 @@
           "reason": "memfs filenode lookup is case-sensitive and does not perform NTFS Unicode $UpCase folding",
           "gap": "GAP-15"
         },
+        "NamingPathsTest.VerbatimDotDotTraversalRejected": {
+          "reason": "Neither dokan3.sys nor memfs rejects '..' components in verbatim/NT paths with STATUS_OBJECT_NAME_INVALID (memfs returns STATUS_OBJECT_NAME_NOT_FOUND)",
+          "gap": "GAP-15"
+        },
+        "RenameMoveTest.ConcurrentFileRenameInfoExAndCreateStress": {
+          "reason": "dokan3.sys DokanCompleteSetInformation (sys/fileinfo.c:864-868) acquires DokanVCBLockRW only for FileRenameInformation and omits FileRenameInformationEx while calling DokanRenameFcb (:894-907), racing DokanDispatchCreate on Vcb->FcbTable and risking a kernel BSOD",
+          "gap": "GAP-30",
+          "skip_crash": true
+        },
         "RenameMoveTest.FileRenameInfoExIgnoreReadOnlyTarget": {
           "reason": "Dokan does not honor FILE_RENAME_IGNORE_READONLY_ATTRIBUTE in FileRenameInformationEx",
           "gap": "GAP-21"
+        },
+        "RenameMoveTest.FileRenameInfoExNonPosixBasicAndReplace": {
+          "reason": "memfs fs_filenodes::move allows non-POSIX FileRenameInformationEx overwrite of an open target instead of failing STATUS_ACCESS_DENIED",
+          "gap": "GAP-16"
         },
         "RenameMoveTest.FileRenameInfoExPosixReplaceOpenTarget": {
           "reason": "Dokan does not support FILE_RENAME_POSIX_SEMANTICS replacing an open target",
@@ -570,6 +602,10 @@
         "RenameMoveTest.FileRenameInfoReplaceOpenTargetNonPosixFails": {
           "reason": "memfs allows non-POSIX FileRenameInformation overwrite of an open target instead of failing STATUS_ACCESS_DENIED",
           "gap": "GAP-16"
+        },
+        "RenameMoveTest.PosixRenameOntoDeletePendingTargetFailsDeletePending": {
+          "reason": "Dokan ignores FILE_RENAME_POSIX_SEMANTICS in FileRenameInformationEx and memfs does not enforce delete-pending rejection on POSIX rename targets",
+          "gap": "GAP-21"
         },
         "RenameMoveTest.PosixRenameReplacesDataMappedTarget": {
           "reason": "memfs allows non-POSIX FileRenameInformation overwrite of an open data-mapped target, and Dokan ignores FILE_RENAME_POSIX_SEMANTICS in FileRenameInformationEx",
@@ -597,15 +633,15 @@
           "gap": "GAP-23"
         },
         "RenameMoveTest.RenameMissingSourceFailsNotFound": {
-          "reason": "samples/dokan_memfs/memfs_operations.cpp returns ERROR_FILE_NOT_FOUND instead of ERROR_PATH_NOT_FOUND when MoveFileExW names a source under a missing parent directory",
-          "gap": "GAP-16"
+          "reason": "memfs_createfile (samples/dokan_memfs/memfs_operations.cpp:253) translates fs_filenodes::find nullptr into STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) instead of STATUS_OBJECT_PATH_NOT_FOUND (ERROR_PATH_NOT_FOUND) when MoveFileExW opens a source under a missing parent directory",
+          "gap": "GAP-15"
         },
         "RenameMoveTest.RenameMissingTargetParentFailsPathNotFound": {
-          "reason": "samples/dokan_memfs/memfs_operations.cpp memfs_movefile returns STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) instead of STATUS_OBJECT_PATH_NOT_FOUND (ERROR_PATH_NOT_FOUND) when the target parent directory does not exist",
-          "gap": "GAP-16"
+          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and opening the parent with FILE_DIRECTORY_FILE, forwarding memfs_createfile's STATUS_OBJECT_NAME_NOT_FOUND verbatim instead of translating it to STATUS_OBJECT_PATH_NOT_FOUND (memfs_movefile is never reached)",
+          "gap": "GAP-29"
         },
         "RenameMoveTest.RenameOntoDeletePendingTargetFailsAccessDenied": {
-          "reason": "memfs fs_filenodes::move does not check delete-pending state on rename targets",
+          "reason": "samples/dokan_memfs/filenodes.cpp:200-218 fs_filenodes::move lacks both open-target rejection (legacy STATUS_ACCESS_DENIED) and delete-pending validation on rename targets",
           "gap": "GAP-16"
         },
         "RenameMoveTest.RenameOverDataMappedTargetPreservesMappedView": {
@@ -728,6 +764,10 @@
           "reason": "memfs does not enforce deny-read DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
           "gap": "GAP-20"
         },
+        "SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner": {
+          "reason": "memfs_setfilesecurity does not validate owner assignability (and fails on null default descriptors), and dokan/security.c:210-211 rewrites every non-STATUS_SUCCESS return to STATUS_INVALID_PARAMETER instead of STATUS_INVALID_OWNER",
+          "gap": "GAP-20"
+        },
         "SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner": {
           "reason": "memfs does not evaluate DACLs/ownership and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
           "gap": "GAP-20"
@@ -742,6 +782,10 @@
         },
         "StreamsTest.BaseAttributeChangeVisibleThroughStream": {
           "reason": "memfs models alternate streams as separate filenodes and does not synchronize file attributes across streams",
+          "gap": "GAP-18"
+        },
+        "StreamsTest.BaseFileLegacyDeletePendingWhileNamedStreamOpen": {
+          "reason": "dokan3.sys keys FCBs by full stream path (sys/create.c:686), giving base file and named streams independent UncleanCount/DELETE_PENDING state so closing the base handle deletes the file on memfs while a named stream handle remains open",
           "gap": "GAP-18"
         },
         "StreamsTest.BaseTimestampChangeVisibleThroughStream": {
@@ -823,7 +867,7 @@
           "gap": "GAP-18"
         },
         "StreamsTest.StreamIndependentByteRangeLocks": {
-          "reason": "dokan3.sys DokanDispatchWrite omits FsRtlCheckLockForWriteAccess, and memfs fails independent open/locking on default stream alongside a named stream",
+          "reason": "memfs first hits GAP-18 (memfs_helper::RemoveStreamType strips ':$DATA' from '::$DATA' leaving a trailing ':', failing CreateFileW with ERROR_FILE_NOT_FOUND before LockFileEx), and dokan3.sys DokanDispatchWrite omits FsRtlCheckLockForWriteAccess (GAP-07)",
           "gap": "GAP-07"
         },
         "StreamsTest.StreamNameLengthLimit255": {
@@ -876,7 +920,7 @@
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.ReadAdvancesLastAccessTimeWhenUpdatesEnabled": {
-          "reason": "memfs_readfile does not update LastAccessTime on reads when volume last-access updates are enabled",
+          "reason": "memfs_readfile never updates LastAccessTime on reads when the host NTFS NtfsDisableLastAccessUpdate registry policy enables last-access updates (note: that registry key is ntfs.sys-private)",
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
@@ -902,6 +946,10 @@
         "TimestampsAttrsTest.SetFileAttributesCannotClearSparseFlag": {
           "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
           "gap": "GAP-24"
+        },
+        "TimestampsAttrsTest.SetFileTimePreservesExistingFileAttributes": {
+          "reason": "dokan/setfile.c:70-72 unconditionally calls SetFileAttributes(basicInfo->FileAttributes) even when FileAttributes == 0, and memfs_setfileattributes (samples/dokan_memfs/memfs_operations.cpp:467-483) lacks a zero guard, wiping existing attributes on SetFileTime",
+          "gap": "GAP-10"
         },
         "TimestampsAttrsTest.TemporaryAttributeRejectedOnDirectory": {
           "reason": "memfs_setfileattributes accepts FILE_ATTRIBUTE_TEMPORARY on directories instead of returning STATUS_INVALID_PARAMETER",

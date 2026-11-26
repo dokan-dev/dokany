@@ -338,6 +338,8 @@ public:
     preprobed.named_streams = false;
     preprobed.sparse_files = true;
     preprobed.hard_links = false;
+    preprobed.volume_quotas = false;
+    preprobed.usn_journal = true;
     preprobed.probe_succeeded = true;
 
     TestConfig cfg;
@@ -346,6 +348,7 @@ public:
     cfg.preprobed_capabilities = preprobed;
     cfg.capability_overrides.named_streams = true;
     cfg.capability_overrides.sparse_files = false;
+    cfg.capability_overrides.usn_journal = false;
     cfg.capability_overrides.sector_size = 8192;
     ConfigureSuite(std::move(cfg));
 
@@ -380,6 +383,145 @@ TEST_F(FixturePreprobedAndOverridesTest,
   reason.clear();
   EXPECT_TRUE(ShouldSkipForFsCapability(FsCapability::kHardLinks, &reason));
   EXPECT_NE(reason.find("HardLinks"), std::string::npos) << reason;
+}
+
+TEST_F(FixturePreprobedAndOverridesTest,
+       VolumeQuotasAndUsnJournalHonorOverridesAndProbes) {
+  // No override + respect_fs_capabilities=true falls back to probed false.
+  std::string reason;
+  EXPECT_TRUE(ShouldSkipForFsCapability(FsCapability::kVolumeQuotas, &reason));
+  EXPECT_NE(reason.find("does not advertise"), std::string::npos) << reason;
+  EXPECT_NE(reason.find("VolumeQuotas (FILE_VOLUME_QUOTAS)"), std::string::npos)
+      << reason;
+
+  // Override false takes precedence over probed true.
+  reason.clear();
+  EXPECT_TRUE(ShouldSkipForFsCapability(FsCapability::kUsnJournal, &reason));
+  EXPECT_NE(reason.find("CapabilityOverrides"), std::string::npos) << reason;
+  EXPECT_NE(reason.find("UsnJournal (FILE_SUPPORTS_USN_JOURNAL)"),
+            std::string::npos)
+      << reason;
+
+  // Neither capability participates in the kFullNtfsFlags composite.
+  reason.clear();
+  EXPECT_TRUE(ShouldSkipForFsCapability(FsCapability::kFullNtfsFlags, &reason));
+  EXPECT_EQ(reason.find("VolumeQuotas"), std::string::npos) << reason;
+  EXPECT_EQ(reason.find("UsnJournal"), std::string::npos) << reason;
+}
+
+TEST(SuiteConfigTest, VolumeQuotasAndUsnJournalOverridesForceSupport) {
+  ScopedSuiteConfigReset reset_guard;
+  ScopedTestDirectory root_dir(L"fstqu");
+  ASSERT_TRUE(root_dir.ok());
+
+  core::VolumeCapabilities preprobed{};
+  preprobed.filesystem_name = L"SyntheticNoQuotaNoUsnFS";
+  preprobed.volume_quotas = false;
+  preprobed.usn_journal = false;
+  preprobed.probe_succeeded = true;
+
+  TestConfig cfg;
+  cfg.root_path = root_dir.Path();
+  cfg.respect_fs_capabilities = true;
+  cfg.preprobed_capabilities = preprobed;
+  cfg.capability_overrides.volume_quotas = true;
+  cfg.capability_overrides.usn_journal = true;
+  ConfigureSuite(std::move(cfg));
+
+  // Drives NtfsTestBase directly; see FixtureHarness below for the pattern.
+  class Harness : public NtfsTestBase {
+  public:
+    void TestBody() override {}
+    using NtfsTestBase::Caps;
+    using NtfsTestBase::ShouldSkipForFsCapability;
+  };
+  Harness::SetUpTestSuite();
+  {
+    Harness h;
+    EXPECT_EQ(h.Caps().filesystem_name, L"SyntheticNoQuotaNoUsnFS");
+    std::string reason;
+    // Override true takes precedence over probed false.
+    EXPECT_FALSE(
+        h.ShouldSkipForFsCapability(FsCapability::kVolumeQuotas, &reason))
+        << reason;
+    EXPECT_FALSE(
+        h.ShouldSkipForFsCapability(FsCapability::kUsnJournal, &reason))
+        << reason;
+  }
+  Harness::TearDownTestSuite();
+}
+
+// Returns the number of directory entries other than "." and "..".
+size_t CountChildEntries(const std::wstring &dir) {
+  WIN32_FIND_DATAW fd{};
+  const std::wstring pattern = dir + L"\\*";
+  HANDLE find_handle = ::FindFirstFileW(pattern.c_str(), &fd);
+  if (find_handle == INVALID_HANDLE_VALUE) {
+    return 0;
+  }
+  size_t count = 0;
+  do {
+    const std::wstring_view name(fd.cFileName);
+    if (name != L"." && name != L"..") {
+      ++count;
+    }
+  } while (::FindNextFileW(find_handle, &fd) != FALSE);
+  ::FindClose(find_handle);
+  return count;
+}
+
+TEST(VolumeCapabilitiesTest, ProbePopulatesQuotaUsnFlagsAndLeavesNoDebris) {
+  ScopedTestDirectory dir(L"fstvc");
+  ASSERT_TRUE(dir.ok());
+  const auto norm = core::NormalizeRootPath(dir.Path(), std::nullopt);
+  ASSERT_TRUE(norm.ok()) << core::FormatWin32Error(norm.error);
+
+  const core::VolumeCapabilities caps =
+      core::ProbeVolumeCapabilities(*norm.value, core::GetOsInfo());
+  ASSERT_TRUE(caps.probe_succeeded) << caps.probe_error;
+  EXPECT_TRUE(caps.probe_error.empty()) << caps.probe_error;
+  EXPECT_EQ(caps.volume_quotas, (caps.fs_flags & nt::kFileVolumeQuotas) != 0);
+  EXPECT_EQ(caps.usn_journal,
+            (caps.fs_flags & nt::kFileSupportsUsnJournal) != 0);
+  // The transient 8.3 probe directory is removed whether or not 8.3 names
+  // are enabled on the host volume.
+  EXPECT_EQ(CountChildEntries(dir.Path()), 0u);
+}
+
+TEST(VolumeCapabilitiesTest, ShortNameProbeFailureFailsCapabilityProbe) {
+  ScopedTestDirectory parent(L"fst83f");
+  ASSERT_TRUE(parent.ok());
+  const std::wstring root = parent.ChildPath(L"no_add_subdir_root");
+  const std::wstring root_ext = parent.ChildExtendedPath(L"no_add_subdir_root");
+  ASSERT_NE(::CreateDirectoryW(root_ext.c_str(), nullptr), FALSE)
+      << core::FormatWin32Error(::GetLastError());
+
+  {
+    core::ScopedDaclRestore guard =
+        core::ScopedDaclRestore::Arm(core::VerbatimToNtPath(root_ext));
+    ASSERT_TRUE(guard.armed());
+    // Deny FILE_ADD_SUBDIRECTORY (0x4) so the 8.3 probe cannot create its
+    // transient directory while the root itself stays openable.
+    auto deny_res = core::SetFileSddl(root_ext, DACL_SECURITY_INFORMATION,
+                                      L"D:P(D;;0x4;;;WD)(A;;FA;;;WD)");
+    ASSERT_TRUE(deny_res.ok()) << core::FormatWin32Error(deny_res.error);
+
+    const auto norm = core::NormalizeRootPath(root, std::nullopt);
+    ASSERT_TRUE(norm.ok()) << core::FormatWin32Error(norm.error);
+    const core::VolumeCapabilities caps =
+        core::ProbeVolumeCapabilities(*norm.value, core::GetOsInfo());
+    // A probe API failure must never masquerade as "8.3 disabled".
+    EXPECT_FALSE(caps.probe_succeeded);
+    EXPECT_FALSE(caps.short_names_enabled);
+    EXPECT_NE(caps.probe_error.find("8.3 short-name probe"), std::string::npos)
+        << caps.probe_error;
+    EXPECT_NE(caps.probe_error.find("ERROR_ACCESS_DENIED"), std::string::npos)
+        << caps.probe_error;
+  }
+
+  EXPECT_EQ(CountChildEntries(root), 0u);
+  EXPECT_NE(::RemoveDirectoryW(root_ext.c_str()), FALSE)
+      << core::FormatWin32Error(::GetLastError());
 }
 
 // Drives NtfsTestBase's suite/test lifecycle directly (outside GoogleTest's

@@ -149,11 +149,21 @@ private:
 // owns copies of every path plus its own completion event, so a worker that
 // outlives a timed-out Join() never touches the test's stack frame.
 struct OplockWorkerContext {
-  enum class Action { kOpen, kOpenRead, kNtCreate, kMove, kDelete };
+  enum class Action {
+    kOpen,
+    kOpenRead,
+    kNtCreate,
+    kMove,
+    kDelete,
+    kSetRename,
+    kSetDisposition,
+  };
 
   Action action = Action::kOpen;
   std::wstring path;
   std::wstring target_path;
+  core::UniqueHandle op_handle;
+  bool delete_file = true;
   DWORD desired_access = GENERIC_READ;
   DWORD share_mode = core::kShareAll;
   DWORD creation_disposition = OPEN_EXISTING;
@@ -197,6 +207,25 @@ struct OplockWorkerContext {
         ctx->succeeded.store(true, std::memory_order_release);
       } else {
         ctx->err.store(::GetLastError(), std::memory_order_release);
+      }
+    } else if (ctx->action == Action::kSetRename) {
+      auto ren = core::SetRenameInfo(ctx->op_handle.get(), ctx->target_path,
+                                     nullptr, /*replace_if_exists=*/false);
+      ctx->nt_status.store(ren.status, std::memory_order_release);
+      ctx->op_handle.reset();
+      if (nt::NtSuccess(ren.status)) {
+        ctx->succeeded.store(true, std::memory_order_release);
+      } else {
+        ctx->err.store(ERROR_GEN_FAILURE, std::memory_order_release);
+      }
+    } else if (ctx->action == Action::kSetDisposition) {
+      auto disp = core::SetDisposition(ctx->op_handle.get(), ctx->delete_file);
+      ctx->nt_status.store(disp.status, std::memory_order_release);
+      ctx->op_handle.reset();
+      if (nt::NtSuccess(disp.status)) {
+        ctx->succeeded.store(true, std::memory_order_release);
+      } else {
+        ctx->err.store(ERROR_GEN_FAILURE, std::memory_order_release);
       }
     } else {
       ::SetLastError(ERROR_SUCCESS);
@@ -502,6 +531,29 @@ struct OplockHarness {
     return StartWorker();
   }
 
+  ::testing::AssertionResult
+  StartSetRenameWorker(core::UniqueHandle op_handle,
+                       const std::wstring &nt_target_path) {
+    if (auto fresh = NewWorkerContext(); !fresh) {
+      return fresh;
+    }
+    worker_ctx->action = OplockWorkerContext::Action::kSetRename;
+    worker_ctx->op_handle = std::move(op_handle);
+    worker_ctx->target_path = nt_target_path;
+    return StartWorker();
+  }
+
+  ::testing::AssertionResult
+  StartSetDispositionWorker(core::UniqueHandle op_handle, bool delete_file) {
+    if (auto fresh = NewWorkerContext(); !fresh) {
+      return fresh;
+    }
+    worker_ctx->action = OplockWorkerContext::Action::kSetDisposition;
+    worker_ctx->op_handle = std::move(op_handle);
+    worker_ctx->delete_file = delete_file;
+    return StartWorker();
+  }
+
   ::testing::AssertionResult WaitBreak(DWORD timeout_ms,
                                        DWORD *bytes_out = nullptr) {
     const DWORD wait_rc = ::WaitForSingleObject(break_event.get(), timeout_ms);
@@ -624,6 +676,13 @@ struct OplockHarness {
     const DWORD err = worker_ctx->err.load(std::memory_order_acquire);
     if (err != ERROR_SUCCESS ||
         !worker_ctx->succeeded.load(std::memory_order_acquire)) {
+      if (worker_ctx->action == OplockWorkerContext::Action::kSetRename ||
+          worker_ctx->action == OplockWorkerContext::Action::kSetDisposition) {
+        const NTSTATUS st =
+            worker_ctx->nt_status.load(std::memory_order_acquire);
+        return ::testing::AssertionFailure()
+               << "Worker NT action failed: " << core::FormatNtStatus(st);
+      }
       return ::testing::AssertionFailure()
              << "Worker action failed: " << core::FormatWin32Error(err);
     }
@@ -2026,6 +2085,166 @@ TEST_F(LocksOplocksTest, OplockRhBrokenByDeleteFile) {
   harness.CloseHandle();
   ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
   EXPECT_TRUE(helpers::CheckFileNotFound(path));
+}
+
+// Spec: [MS-FSA] 2.1.5.15.12 / 2.1.5.15.3 / 2.1.4.12 -- even when H1 holds an
+// RH oplock with FILE_SHARE_DELETE (so H2's DELETE open succeeds without
+// breaking the oplock on create), IRP_MJ_SET_INFORMATION(FileRenameInformation)
+// and IRP_MJ_SET_INFORMATION(FileDispositionInformation) must break H1's
+// handle-caching oplock and wait for acknowledgment before completing.
+TEST_F(LocksOplocksTest, OplockRhBrokenByRenameAndDeleteWithShareDelete) {
+  REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
+
+  const DWORD timeout_ms = Config().timing.async_timeout_ms;
+
+  // Sub-case 1: FileRenameInformation breaks RH when H1 has FILE_SHARE_DELETE.
+  {
+    const std::wstring src = TestPath(L"oplock_rh_share_del_ren_src.dat");
+    const std::wstring dst = TestPath(L"oplock_rh_share_del_ren_dst.dat");
+    const std::wstring nt_dst = TestNtPath(L"oplock_rh_share_del_ren_dst.dat");
+    ASSERT_WIN32_OK(core::WriteFileContents(src, "rh_share_del_rename"));
+
+    OplockHarness harness;
+    ASSERT_TRUE(harness.Init());
+    ASSERT_TRUE(harness.Open(src, GENERIC_READ, core::kShareAll));
+    ASSERT_TRUE(harness.RequestModern(kOplockRh));
+
+    // H2 opens with DELETE access: because H1 grants FILE_SHARE_DELETE, the
+    // open itself succeeds and must NOT break H1's RH oplock.
+    auto h2 = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
+                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h2);
+    EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0),
+              kWaitTimeout);
+
+    // Issuing FileRenameInformation on H2 must break H1's handle caching.
+    ASSERT_TRUE(harness.StartSetRenameWorker(std::move(*h2.value), nt_dst));
+
+    DWORD bytes_ret = 0;
+    ASSERT_TRUE(harness.WaitBreak(timeout_ms, &bytes_ret));
+    EXPECT_EQ(bytes_ret,
+              static_cast<DWORD>(sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)));
+    EXPECT_EQ(harness.out_buf.OriginalOplockLevel, kOplockRh);
+    EXPECT_EQ(harness.out_buf.NewOplockLevel & OPLOCK_LEVEL_CACHE_HANDLE, 0u);
+    EXPECT_NE(harness.out_buf.Flags & REQUEST_OPLOCK_OUTPUT_FLAG_ACK_REQUIRED,
+              0u);
+
+    // Acknowledge without closing H1: with FILE_SHARE_DELETE granted, the
+    // rename must complete cleanly once H1 drops handle caching.
+    ASSERT_TRUE(harness.SendModernAck(harness.out_buf.NewOplockLevel));
+    ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
+    EXPECT_NT_STATUS(
+        harness.worker_ctx->nt_status.load(std::memory_order_acquire),
+        STATUS_SUCCESS);
+
+    harness.CloseHandle();
+    EXPECT_TRUE(helpers::CheckFileNotFound(src));
+    EXPECT_TRUE(helpers::CheckFileContents(dst, "rh_share_del_rename"));
+  }
+
+  // Sub-case 2: FileDispositionInformation(TRUE) breaks RH when H1 has
+  // FILE_SHARE_DELETE.
+  {
+    const std::wstring path = TestPath(L"oplock_rh_share_del_disp.dat");
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "rh_share_del_delete"));
+
+    OplockHarness harness;
+    ASSERT_TRUE(harness.Init());
+    ASSERT_TRUE(harness.Open(path, GENERIC_READ, core::kShareAll));
+    ASSERT_TRUE(harness.RequestModern(kOplockRh));
+
+    auto h2 = core::CreateWin32File(path, DELETE | SYNCHRONIZE, core::kShareAll,
+                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h2);
+    EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0),
+              kWaitTimeout);
+
+    ASSERT_TRUE(harness.StartSetDispositionWorker(std::move(*h2.value),
+                                                  /*delete_file=*/true));
+
+    DWORD bytes_ret = 0;
+    ASSERT_TRUE(harness.WaitBreak(timeout_ms, &bytes_ret));
+    EXPECT_EQ(bytes_ret,
+              static_cast<DWORD>(sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)));
+    EXPECT_EQ(harness.out_buf.OriginalOplockLevel, kOplockRh);
+    EXPECT_EQ(harness.out_buf.NewOplockLevel & OPLOCK_LEVEL_CACHE_HANDLE, 0u);
+    EXPECT_NE(harness.out_buf.Flags & REQUEST_OPLOCK_OUTPUT_FLAG_ACK_REQUIRED,
+              0u);
+
+    ASSERT_TRUE(harness.SendModernAck(harness.out_buf.NewOplockLevel));
+    ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
+    EXPECT_NT_STATUS(
+        harness.worker_ctx->nt_status.load(std::memory_order_acquire),
+        STATUS_SUCCESS);
+
+    // Worker already closed H2; closing H1 completes the pending delete.
+    harness.CloseHandle();
+    EXPECT_TRUE(helpers::CheckFileNotFound(path));
+  }
+}
+
+// Spec: [MS-FSA] 2.1.5.8 / 2.1.4.12 -- a byte-range lock starting at offset
+// 4096 inside an 8 KiB file breaks a shared Read (R) oplock to None even when
+// no handle has queried file size since reopen.
+TEST_F(LocksOplocksTest, ByteRangeLockAbove4KiBBreaksReadOplock) {
+  REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
+
+  const DWORD timeout_ms = Config().timing.async_timeout_ms;
+  const std::wstring path = TestPath(L"oplock_break_lock_above_4k.dat");
+  // Write 8 KiB and close all handles so the next open starts from a fresh
+  // FCB/stream state without a prior size query.
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(8192, 'O')));
+
+  OplockHarness harness;
+  ASSERT_TRUE(harness.Init());
+  ASSERT_TRUE(harness.Open(path, GENERIC_READ));
+  ASSERT_TRUE(harness.RequestModern(OPLOCK_LEVEL_CACHE_READ));
+
+  auto h2 = OpenRw(path);
+  ASSERT_WIN32_OK(h2);
+  EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0), kWaitTimeout);
+
+  ASSERT_WIN32_TRUE(
+      LockRange(h2.value->get(), 4096, 4096,
+                LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY));
+
+  ASSERT_TRUE(harness.WaitBreak(timeout_ms));
+  EXPECT_EQ(harness.out_buf.OriginalOplockLevel,
+            static_cast<DWORD>(OPLOCK_LEVEL_CACHE_READ));
+  EXPECT_EQ(harness.out_buf.NewOplockLevel, 0u);
+
+  ASSERT_WIN32_TRUE(UnlockRange(h2.value->get(), 4096, 4096));
+}
+
+// Spec: [MS-FSA] 2.1.5.18 / [MS-FSCC] 2.3 -- requesting a legacy Level 2 or
+// modern Read (R) oplock while another handle holds a byte-range lock on the
+// file fails ERROR_OPLOCK_NOT_GRANTED; once unlocked, acquiring Read succeeds.
+TEST_F(LocksOplocksTest, OplockRequestRejectedWhileByteRangeLockHeld) {
+  REQUIRE_FS_CAPABILITY(FsCapability::kOplocks);
+
+  const std::wstring path = TestPath(L"oplock_rejected_while_locked.dat");
+  ASSERT_WIN32_OK(core::WriteFileContents(path, std::string(8192, 'L')));
+
+  auto h1 = OpenRw(path);
+  ASSERT_WIN32_OK(h1);
+  ASSERT_WIN32_TRUE(
+      LockRange(h1.value->get(), 0, 4096,
+                LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY));
+
+  OplockHarness harness;
+  ASSERT_TRUE(harness.Init());
+  ASSERT_TRUE(harness.Open(path, GENERIC_READ));
+
+  EXPECT_TRUE(harness.ExpectRequestRejected(
+      nt::kFsctlRequestOplockLevel2,
+      static_cast<DWORD>(ERROR_OPLOCK_NOT_GRANTED)));
+  EXPECT_TRUE(harness.ExpectRequestRejected(
+      nt::kFsctlRequestOplock, static_cast<DWORD>(ERROR_OPLOCK_NOT_GRANTED),
+      OPLOCK_LEVEL_CACHE_READ));
+
+  ASSERT_WIN32_TRUE(UnlockRange(h1.value->get(), 0, 4096));
+  ASSERT_TRUE(harness.RequestModern(OPLOCK_LEVEL_CACHE_READ));
+  harness.CloseHandle();
 }
 
 // Spec: [MS-FSA] 2.1.5.8 / 2.1.4.12 -- a byte-range lock taken through another

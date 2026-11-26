@@ -38,6 +38,8 @@ struct CapabilityOverrides {
   std::optional<bool> object_ids;
   std::optional<bool> open_by_file_id;
   std::optional<bool> posix_unlink_rename;
+  std::optional<bool> volume_quotas;
+  std::optional<bool> usn_journal;
   std::optional<bool> short_names;
   std::optional<bool> can_create_symlinks;
   std::optional<bool> oplocks;

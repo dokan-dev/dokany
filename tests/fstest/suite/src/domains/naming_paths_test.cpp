@@ -1366,47 +1366,56 @@ TEST_F(NamingPathsTest, LeadingSpacesLeadingDotsAndTripleDotNames) {
 
 // Spec: [MS-FSA] 2.1.5.1 / Win32 CreateFileW, NtCreateFile &
 // GetFileAttributesW -- appending a trailing backslash to an existing regular
-// file path fails with ERROR_INVALID_NAME / STATUS_OBJECT_NAME_INVALID on
-// pre-24H2 Windows and ERROR_DIRECTORY / STATUS_NOT_A_DIRECTORY on Win11 24H2+
-// / Server 2025+.
+// file path fails with ERROR_INVALID_NAME / STATUS_OBJECT_NAME_INVALID (pre-24H2
+// Windows) or ERROR_DIRECTORY / STATUS_NOT_A_DIRECTORY (Win11 24H2+ / Server
+// 2025+); either status is accepted across Windows builds.
 TEST_F(NamingPathsTest, TrailingBackslashOnRegularFileFails) {
   const std::wstring file_path = TestPath(L"plain.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(file_path, "regular-file"));
 
-  const bool is_24h2_or_newer = Os().build >= core::kBuildWin11_24H2;
-  const DWORD expected_win32 = is_24h2_or_newer
-                                   ? static_cast<DWORD>(ERROR_DIRECTORY)
-                                   : static_cast<DWORD>(ERROR_INVALID_NAME);
-  const NTSTATUS expected_nt =
-      is_24h2_or_newer ? STATUS_NOT_A_DIRECTORY : STATUS_OBJECT_NAME_INVALID;
+  auto expect_win_slash_err = [](DWORD err, const char *label) {
+    EXPECT_TRUE(err == static_cast<DWORD>(ERROR_INVALID_NAME) ||
+                err == static_cast<DWORD>(ERROR_DIRECTORY))
+        << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY for " << label
+        << " on trailing backslash, got " << core::FormatWin32Error(err);
+  };
 
   const std::wstring with_slash = file_path + L"\\";
   auto open_res =
       core::CreateWin32File(with_slash, GENERIC_READ, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(open_res);
-  EXPECT_WIN32_ERROR_CODE(open_res.error, expected_win32);
+  expect_win_slash_err(open_res.error, "CreateFileW(OPEN_EXISTING)");
+  if (open_res) {
+    open_res.value->reset();
+  }
 
   auto create_res =
       core::CreateWin32File(with_slash, GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(create_res);
-  EXPECT_WIN32_ERROR_CODE(create_res.error, expected_win32);
+  expect_win_slash_err(create_res.error, "CreateFileW(CREATE_NEW)");
+  if (create_res) {
+    create_res.value->reset();
+  }
 
   auto nt_res = core::NtCreateFilePath(
       TestNtPath(L"plain.dat") + L"\\", FILE_READ_ATTRIBUTES | SYNCHRONIZE,
       FILE_ATTRIBUTE_NORMAL, core::kShareAll, nt::kFileOpen,
       nt::kFileNonDirectoryFile);
   EXPECT_FALSE(nt_res);
-  EXPECT_NT_STATUS(nt_res.status, expected_nt);
+  EXPECT_TRUE(nt_res.status == STATUS_OBJECT_NAME_INVALID ||
+              nt_res.status == STATUS_NOT_A_DIRECTORY)
+      << "Expected STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY for "
+         "NtCreateFile on trailing backslash, got "
+      << core::FormatNtStatus(nt_res.status);
+  if (nt_res) {
+    nt_res.value->reset();
+  }
 
   auto attrs = core::QueryWin32Attributes(with_slash);
   EXPECT_FALSE(attrs);
-  EXPECT_TRUE(attrs.error == static_cast<DWORD>(ERROR_INVALID_NAME) ||
-              attrs.error == static_cast<DWORD>(ERROR_DIRECTORY))
-      << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY for "
-         "GetFileAttributesW on trailing backslash, got "
-      << core::FormatWin32Error(attrs.error);
+  expect_win_slash_err(attrs.error, "GetFileAttributesW");
 }
 
 // Spec: Win32 CreateFileW & GetFullPathNameW -- standard Win32 path parsing
@@ -1743,6 +1752,39 @@ TEST_F(NamingPathsTest, MetadataTunnelingPreservesCreationTime) {
     EXPECT_EQ(after_info.value->creation_time.QuadPart, backdate);
     EXPECT_GT(after_info.value->last_write_time.QuadPart, backdate);
     EXPECT_TRUE(helpers::CheckFileContents(path, "safe_saved"));
+  }
+}
+
+// Spec: [MS-FSA] 2.1.5.1 / Win32 CreateFileW & NtOpenFile -- verbatim
+// (`\\?\` and `\??\`) paths bypass Win32 path canonicalization so literal ".."
+// segments reach the filesystem driver and are rejected with ERROR_INVALID_NAME
+// / STATUS_OBJECT_NAME_INVALID.
+TEST_F(NamingPathsTest, VerbatimDotDotTraversalRejected) {
+  const std::wstring canary = TestPath(L"canary.txt");
+  const std::wstring sub = TestPath(L"sub");
+  ASSERT_WIN32_OK(core::WriteFileContents(canary, "canary"));
+  ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
+
+  // Strictly read-only OPEN_EXISTING / FILE_OPEN probes so no out-of-root
+  // writes can occur even on a broken driver that resolves "..".
+  const std::wstring ext_dotdot = TestExtendedPath(L"sub\\..\\canary.txt");
+  auto win_res =
+      core::CreateWin32File(ext_dotdot, FILE_READ_ATTRIBUTES, core::kShareAll,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  EXPECT_FALSE(win_res);
+  EXPECT_WIN32_ERROR_CODE(win_res.error, ERROR_INVALID_NAME);
+  if (win_res) {
+    win_res.value->reset();
+  }
+
+  const std::wstring nt_dotdot = TestVerbatimNtPath(L"sub\\..\\canary.txt");
+  auto nt_res = core::NtOpenFilePath(
+      nt_dotdot, FILE_READ_ATTRIBUTES | SYNCHRONIZE, core::kShareAll,
+      nt::kFileNonDirectoryFile | nt::kFileSynchronousIoNonalert);
+  EXPECT_FALSE(nt_res);
+  EXPECT_NT_STATUS(nt_res.status, STATUS_OBJECT_NAME_INVALID);
+  if (nt_res) {
+    nt_res.value->reset();
   }
 }
 

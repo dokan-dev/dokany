@@ -130,6 +130,94 @@ jobs:
             }
           }
 
+      - name: Run real NTFS --strict volume-root tests (VHDX)
+        shell: powershell
+        env:
+          RUNNER_IMAGE: ${{ matrix.os }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fsTestExe = '.\tests\fstest\build\bin\Release\dokan_fstest.exe'
+          $resultsDir = '.\fstest-results'
+          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
+
+          # Volume-root-only tests (MountRoot*, DotDotTraversalClampsAtVolumeRoot,
+          # CrossVolumeMove) skip under C:\fstest_ntfs; run them against the
+          # root of a throwaway NTFS VHDX so real NTFS remains their oracle.
+          $usedLetters = @([System.IO.DriveInfo]::GetDrives() | ForEach-Object { $_.Name.Substring(0, 1).ToUpperInvariant() })
+          $letter = @('V', 'W', 'X', 'Y', 'Z', 'T', 'U') |
+            Where-Object { $usedLetters -notcontains $_ } |
+            Select-Object -First 1
+          if (-not $letter) {
+            throw "No free drive letter available for the volume-root VHDX."
+          }
+
+          $vhdxPath = Join-Path $env:RUNNER_TEMP 'fstest_root.vhdx'
+          if (Test-Path -LiteralPath $vhdxPath) {
+            Remove-Item -LiteralPath $vhdxPath -Force
+          }
+          $vhdxJsonOut = Join-Path $resultsDir "ntfs_strict_volroot_$($env:RUNNER_IMAGE).json"
+          $createScript = Join-Path $env:RUNNER_TEMP 'fstest_vhdx_create.txt'
+          $detachScript = Join-Path $env:RUNNER_TEMP 'fstest_vhdx_detach.txt'
+          @(
+            "create vdisk file=`"$vhdxPath`" maximum=256 type=expandable",
+            "select vdisk file=`"$vhdxPath`"",
+            'attach vdisk',
+            'create partition primary',
+            'format fs=ntfs quick label=FSTESTROOT',
+            "assign letter=$letter"
+          ) | Set-Content -LiteralPath $createScript -Encoding ASCII
+          @(
+            "select vdisk file=`"$vhdxPath`"",
+            'detach vdisk'
+          ) | Set-Content -LiteralPath $detachScript -Encoding ASCII
+
+          try {
+            & diskpart.exe /s $createScript
+            if ($LASTEXITCODE -ne 0) {
+              throw "diskpart VHDX create/attach/format failed with exit code $LASTEXITCODE"
+            }
+            $volRoot = "${letter}:\"
+            $volReady = $false
+            for ($attempt = 0; $attempt -lt 20; $attempt++) {
+              if ([System.IO.Directory]::Exists($volRoot)) {
+                $volReady = $true
+                break
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $volReady) {
+              throw "VHDX volume $volRoot is not accessible after diskpart."
+            }
+
+            if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+              try {
+                Add-MpPreference -ExclusionPath $volRoot -ErrorAction Stop
+              } catch {
+                Write-Warning "Windows Defender exclusion skipped for ${volRoot}: $($_.Exception.Message)"
+              }
+            }
+
+            & $fsTestExe "--root=$volRoot" '--strict' '--gtest_filter=*MountRoot*:*DotDotTraversalClampsAtVolumeRoot*:*CrossVolumeMove*' "--json-out=$vhdxJsonOut"
+            if ($LASTEXITCODE -ne 0) {
+              throw "dokan_fstest --strict (volume root $volRoot) failed with exit code $LASTEXITCODE"
+            }
+            # Guard against a mis-detected IsVolumeRoot() silently skipping the
+            # 10 volume-root tests (6 MountRoot*, DotDotTraversalClampsAtVolumeRoot,
+            # 3 CrossVolumeMove*) while the run still exits 0.
+            $volRootCard = Get-Content -LiteralPath $vhdxJsonOut -Raw | ConvertFrom-Json
+            if (-not $volRootCard.capabilities.is_volume_root -or $volRootCard.summary.skip -ne 0 -or $volRootCard.summary.pass -lt 10) {
+              throw "Volume-root VHDX run did not exercise volume-root tests (is_volume_root=$($volRootCard.capabilities.is_volume_root), pass=$($volRootCard.summary.pass), skip=$($volRootCard.summary.skip); expected is_volume_root=True, pass>=10, skip=0)"
+            }
+          } finally {
+            & diskpart.exe /s $detachScript
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "diskpart VHDX detach failed with exit code $LASTEXITCODE"
+              $global:LASTEXITCODE = 0
+            }
+            Remove-Item -LiteralPath $vhdxPath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $createScript, $detachScript -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Upload NTFS conformance scorecard
         if: always()
         uses: actions/upload-artifact@v7

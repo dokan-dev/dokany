@@ -57,6 +57,7 @@ CheckStreamsWithSizes(std::wstring_view path,
 struct RenameEnumStressShared {
   fstest::ScopedCriticalSection cs;
   core::UniqueHandle start_event;
+  std::atomic<bool> stop{false};
   std::atomic<int> error_count{0};
   std::vector<std::string> errors;
 
@@ -145,6 +146,101 @@ DWORD WINAPI EnumStressReaderProc(LPVOID param) {
     if (!has_dot || !has_dotdot) {
       ctx->shared->RecordError("reader iter " + std::to_string(i) +
                                " missing '.' or '..' entry");
+    }
+  }
+  return 0;
+}
+
+struct RenameExWorkerContext {
+  std::shared_ptr<RenameEnumStressShared> shared;
+  std::wstring path_a;
+  std::wstring path_b;
+  std::wstring nt_path_a;
+  std::wstring nt_path_b;
+  int worker_id = 0;
+  int iterations = 0;
+};
+
+struct ConcurrentOpenWorkerContext {
+  std::shared_ptr<RenameEnumStressShared> shared;
+  std::vector<std::wstring> paths;
+  int worker_id = 0;
+  int max_iterations = 0;
+};
+
+DWORD WINAPI RenameExStressWorkerProc(LPVOID param) {
+  auto *ctx = static_cast<RenameExWorkerContext *>(param);
+  if (ctx->shared->start_event.valid()) {
+    ::WaitForSingleObject(ctx->shared->start_event.get(), 10000);
+  }
+  for (int i = 0; i < ctx->iterations; ++i) {
+    if (ctx->shared->stop.load(std::memory_order_acquire)) {
+      return 0;
+    }
+    {
+      auto h_a = core::CreateWin32File(ctx->path_a, DELETE | SYNCHRONIZE,
+                                       core::kShareAll, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL);
+      if (!h_a) {
+        ctx->shared->RecordError(
+            "renex worker " + std::to_string(ctx->worker_id) + " iter " +
+            std::to_string(i) +
+            " open a failed: " + core::FormatWin32Error(h_a.error));
+        return 1;
+      }
+      auto ren = core::SetRenameInfoEx(h_a.value->get(), ctx->nt_path_b,
+                                       nullptr, /*flags=*/0);
+      if (ren.status != STATUS_SUCCESS) {
+        ctx->shared->RecordError(
+            "renex worker " + std::to_string(ctx->worker_id) + " iter " +
+            std::to_string(i) +
+            " a->b failed: " + core::FormatNtStatus(ren.status));
+        return 1;
+      }
+    }
+    {
+      auto h_b = core::CreateWin32File(ctx->path_b, DELETE | SYNCHRONIZE,
+                                       core::kShareAll, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL);
+      if (!h_b) {
+        ctx->shared->RecordError(
+            "renex worker " + std::to_string(ctx->worker_id) + " iter " +
+            std::to_string(i) +
+            " open b failed: " + core::FormatWin32Error(h_b.error));
+        return 1;
+      }
+      auto ren = core::SetRenameInfoEx(h_b.value->get(), ctx->nt_path_a,
+                                       nullptr, /*flags=*/0);
+      if (ren.status != STATUS_SUCCESS) {
+        ctx->shared->RecordError(
+            "renex worker " + std::to_string(ctx->worker_id) + " iter " +
+            std::to_string(i) +
+            " b->a failed: " + core::FormatNtStatus(ren.status));
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+DWORD WINAPI ConcurrentOpenWorkerProc(LPVOID param) {
+  auto *ctx = static_cast<ConcurrentOpenWorkerContext *>(param);
+  if (ctx->shared->start_event.valid()) {
+    ::WaitForSingleObject(ctx->shared->start_event.get(), 10000);
+  }
+  for (int i = 0; i < ctx->max_iterations &&
+                  !ctx->shared->stop.load(std::memory_order_acquire);
+       ++i) {
+    for (const auto &path : ctx->paths) {
+      auto h =
+          core::CreateWin32File(path, FILE_READ_ATTRIBUTES, core::kShareAll,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      if (!h && h.error != static_cast<DWORD>(ERROR_FILE_NOT_FOUND)) {
+        ctx->shared->RecordError(
+            "opener " + std::to_string(ctx->worker_id) + " iter " +
+            std::to_string(i) + " '" + core::WideToUtf8(path) +
+            "' unexpected error: " + core::FormatWin32Error(h.error));
+      }
     }
   }
   return 0;
@@ -1477,9 +1573,13 @@ TEST_F(RenameMoveTest, RenameReadOnlySourceSucceedsAndKeepsReadOnly) {
       ::SetFileAttributesW(cross_dir_dst.c_str(), FILE_ATTRIBUTE_NORMAL));
 }
 
-// Spec: [MS-FSA] 2.1.5.15.12 -- a delete-pending file still occupies its name:
-// MoveFileExW(REPLACE_EXISTING) onto it fails ERROR_ACCESS_DENIED and leaves
-// the source intact; once the pending delete completes the rename succeeds.
+// Spec: [MS-FSA] 2.1.5.15.12 -- a legacy MoveFileExW(REPLACE_EXISTING) onto an
+// open delete-pending target fails ERROR_ACCESS_DENIED (legacy rename cannot
+// overwrite any open target, whether delete-pending or not) and leaves the
+// source intact; once the last handle closes, the pending delete completes and
+// frees the name so a subsequent rename succeeds. See
+// PosixRenameOntoDeletePendingTargetFailsDeletePending for the POSIX rename
+// test that specifically isolates the delete-pending target rejection.
 TEST_F(RenameMoveTest, RenameOntoDeletePendingTargetFailsAccessDenied) {
   const std::wstring src = TestPath(L"dp_target_src.dat");
   const std::wstring target = TestPath(L"dp_target_dst.dat");
@@ -1505,6 +1605,288 @@ TEST_F(RenameMoveTest, RenameOntoDeletePendingTargetFailsAccessDenied) {
   ASSERT_WIN32_TRUE(::MoveFileExW(src.c_str(), target.c_str(), 0));
   EXPECT_TRUE(helpers::CheckFileNotFound(src));
   EXPECT_TRUE(helpers::CheckFileContents(target, "replacement_payload"));
+}
+
+// Spec: [MS-FSA] 2.1.5.15.12 / [MS-FSCC] 2.4.43 -- FileRenameInformationEx
+// with FILE_RENAME_REPLACE_IF_EXISTS | FILE_RENAME_POSIX_SEMANTICS succeeds
+// over an ordinary open target (control), but fails STATUS_DELETE_PENDING when
+// the open target is already marked legacy delete-pending; once that target
+// handle closes and completes the pending delete, the rename succeeds.
+TEST_F(RenameMoveTest, PosixRenameOntoDeletePendingTargetFailsDeletePending) {
+  REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
+  REQUIRE_FS_CAPABILITY(FsCapability::kPosixUnlinkRename);
+
+  const ULONG posix_replace =
+      nt::kFileRenameReplaceIfExists | nt::kFileRenamePosixSemantics;
+
+  // Control: POSIX replace onto a normal (non-delete-pending) open target
+  // succeeds.
+  {
+    const std::wstring ctrl_src = TestPath(L"posix_dp_ctrl_src.dat");
+    const std::wstring ctrl_tgt = TestPath(L"posix_dp_ctrl_tgt.dat");
+    ASSERT_WIN32_OK(core::WriteFileContents(ctrl_src, "ctrl_src_payload"));
+    ASSERT_WIN32_OK(core::WriteFileContents(ctrl_tgt, "ctrl_tgt_payload"));
+
+    auto h_ctrl_tgt =
+        core::CreateWin32File(ctrl_tgt, GENERIC_READ, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_ctrl_tgt);
+    auto h_ctrl_src =
+        core::CreateWin32File(ctrl_src, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_ctrl_src);
+
+    auto ctrl_ren = core::SetRenameInfoEx(h_ctrl_src.value->get(),
+                                          TestNtPath(L"posix_dp_ctrl_tgt.dat"),
+                                          nullptr, posix_replace);
+    ASSERT_NT_STATUS(ctrl_ren.status, STATUS_SUCCESS);
+    h_ctrl_src.value->reset();
+    h_ctrl_tgt.value->reset();
+    EXPECT_TRUE(helpers::CheckFileNotFound(ctrl_src));
+    EXPECT_TRUE(helpers::CheckFileContents(ctrl_tgt, "ctrl_src_payload"));
+  }
+
+  // Target marked legacy delete-pending: POSIX rename must fail
+  // STATUS_DELETE_PENDING instead of overwriting the doomed target.
+  const std::wstring src = TestPath(L"posix_dp_src.dat");
+  const std::wstring target = TestPath(L"posix_dp_tgt.dat");
+  const std::wstring nt_target = TestNtPath(L"posix_dp_tgt.dat");
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "posix_dp_replacement"));
+  ASSERT_WIN32_OK(core::WriteFileContents(target, "posix_dp_doomed"));
+
+  auto h_target =
+      core::CreateWin32File(target, DELETE | SYNCHRONIZE, core::kShareAll,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_WIN32_OK(h_target);
+  auto disp = core::SetDisposition(h_target.value->get(), /*delete_file=*/true);
+  ASSERT_NT_STATUS(disp.status, STATUS_SUCCESS);
+
+  {
+    auto h_src =
+        core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_src);
+    auto ren = core::SetRenameInfoEx(h_src.value->get(), nt_target, nullptr,
+                                     posix_replace);
+    EXPECT_NT_STATUS(ren.status, STATUS_DELETE_PENDING);
+  }
+  EXPECT_TRUE(helpers::CheckFileContents(src, "posix_dp_replacement"));
+
+  // Closing the last handle completes the pending delete and frees the name.
+  h_target.value->reset();
+  EXPECT_TRUE(helpers::CheckFileNotFound(target));
+
+  {
+    auto h_src =
+        core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_src);
+    auto ren = core::SetRenameInfoEx(h_src.value->get(), nt_target, nullptr,
+                                     posix_replace);
+    ASSERT_NT_STATUS(ren.status, STATUS_SUCCESS);
+  }
+  EXPECT_TRUE(helpers::CheckFileNotFound(src));
+  EXPECT_TRUE(helpers::CheckFileContents(target, "posix_dp_replacement"));
+}
+
+// Spec: [MS-FSA] 2.1.5.15.12 / [MS-FSCC] 2.4.43 -- FileRenameInformationEx
+// (class 65) with non-POSIX flags supports basic rename (Flags=0), rejects
+// collisions without FILE_RENAME_REPLACE_IF_EXISTS with
+// STATUS_OBJECT_NAME_COLLISION, replaces closed targets when
+// FILE_RENAME_REPLACE_IF_EXISTS is set, and rejects open targets with
+// STATUS_ACCESS_DENIED when FILE_RENAME_POSIX_SEMANTICS is not set.
+TEST_F(RenameMoveTest, FileRenameInfoExNonPosixBasicAndReplace) {
+  REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
+
+  const std::wstring src = TestPath(L"renex_nonposix_src.dat");
+  const std::wstring dst = TestPath(L"renex_nonposix_dst.dat");
+  const std::wstring other = TestPath(L"renex_nonposix_other.dat");
+  const std::wstring open_tgt = TestPath(L"renex_nonposix_open.dat");
+  const std::wstring nt_dst = TestNtPath(L"renex_nonposix_dst.dat");
+  const std::wstring nt_other = TestNtPath(L"renex_nonposix_other.dat");
+  const std::wstring nt_open_tgt = TestNtPath(L"renex_nonposix_open.dat");
+
+  ASSERT_WIN32_OK(core::WriteFileContents(src, "renex_basic_payload"));
+  auto orig_idx = core::QueryPathFileIndex(src);
+  ASSERT_WIN32_OK(orig_idx);
+
+  // 1. Flags = 0 basic rename preserves data and FileIndex.
+  {
+    auto h_src =
+        core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_src);
+    auto ren =
+        core::SetRenameInfoEx(h_src.value->get(), nt_dst, nullptr, /*flags=*/0);
+    ASSERT_NT_STATUS(ren.status, STATUS_SUCCESS);
+  }
+  EXPECT_TRUE(helpers::CheckFileNotFound(src));
+  EXPECT_TRUE(helpers::CheckFileContents(dst, "renex_basic_payload"));
+  auto dst_idx = core::QueryPathFileIndex(dst);
+  ASSERT_WIN32_OK(dst_idx);
+  EXPECT_EQ(*dst_idx.value, *orig_idx.value);
+
+  // 2. Flags = 0 onto an existing file fails STATUS_OBJECT_NAME_COLLISION.
+  ASSERT_WIN32_OK(core::WriteFileContents(other, "renex_other_payload"));
+  {
+    auto h_dst =
+        core::CreateWin32File(dst, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_dst);
+    auto ren = core::SetRenameInfoEx(h_dst.value->get(), nt_other, nullptr,
+                                     /*flags=*/0);
+    EXPECT_NT_STATUS(ren.status, STATUS_OBJECT_NAME_COLLISION);
+  }
+  EXPECT_TRUE(helpers::CheckFileContents(dst, "renex_basic_payload"));
+  EXPECT_TRUE(helpers::CheckFileContents(other, "renex_other_payload"));
+
+  // 3. Flags = FILE_RENAME_REPLACE_IF_EXISTS replaces a closed target.
+  {
+    auto h_dst =
+        core::CreateWin32File(dst, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_dst);
+    auto ren = core::SetRenameInfoEx(h_dst.value->get(), nt_other, nullptr,
+                                     nt::kFileRenameReplaceIfExists);
+    ASSERT_NT_STATUS(ren.status, STATUS_SUCCESS);
+  }
+  EXPECT_TRUE(helpers::CheckFileNotFound(dst));
+  EXPECT_TRUE(helpers::CheckFileContents(other, "renex_basic_payload"));
+  auto replaced_idx = core::QueryPathFileIndex(other);
+  ASSERT_WIN32_OK(replaced_idx);
+  EXPECT_EQ(*replaced_idx.value, *orig_idx.value);
+
+  // 4. Flags = FILE_RENAME_REPLACE_IF_EXISTS (non-POSIX) onto an open target
+  // fails STATUS_ACCESS_DENIED and leaves both files intact.
+  ASSERT_WIN32_OK(core::WriteFileContents(open_tgt, "renex_open_payload"));
+  {
+    auto h_open = core::CreateWin32File(open_tgt, GENERIC_READ, core::kShareAll,
+                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_open);
+    auto h_other =
+        core::CreateWin32File(other, DELETE | SYNCHRONIZE, core::kShareAll,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_other);
+    auto ren = core::SetRenameInfoEx(h_other.value->get(), nt_open_tgt, nullptr,
+                                     nt::kFileRenameReplaceIfExists);
+    EXPECT_NT_STATUS(ren.status, STATUS_ACCESS_DENIED);
+  }
+  EXPECT_TRUE(helpers::CheckFileContents(other, "renex_basic_payload"));
+  EXPECT_TRUE(helpers::CheckFileContents(open_tgt, "renex_open_payload"));
+}
+
+// Spec: [MS-FSA] 2.1.5.15.12 / [MS-FSCC] 2.4.43 -- concurrent
+// FileRenameInformationEx (class 65) renames racing against concurrent opens
+// on the same paths serialize cleanly without kernel corruption, spurious
+// errors, or lost data.
+TEST_F(RenameMoveTest, ConcurrentFileRenameInfoExAndCreateStress) {
+  REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
+
+  const std::wstring dir = TestPath(L"renex_stress_dir");
+  ASSERT_WIN32_TRUE(::CreateDirectoryW(dir.c_str(), nullptr));
+
+  const std::wstring w0_a = TestPath(L"renex_stress_dir\\renex_w0_a.dat");
+  const std::wstring w0_b = TestPath(L"renex_stress_dir\\renex_w0_b.dat");
+  const std::wstring w1_a = TestPath(L"renex_stress_dir\\renex_w1_a.dat");
+  const std::wstring w1_b = TestPath(L"renex_stress_dir\\renex_w1_b.dat");
+  ASSERT_WIN32_OK(core::WriteFileContents(w0_a, "renex_stress_0"));
+  ASSERT_WIN32_OK(core::WriteFileContents(w1_a, "renex_stress_1"));
+
+  auto shared = std::make_shared<RenameEnumStressShared>();
+  shared->start_event.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+  ASSERT_TRUE(shared->start_event.valid());
+
+  constexpr int kRenameIterations = 40;
+  constexpr int kMaxOpenIterations = 4000;
+  const DWORD timeout_ms = Config().timing.async_timeout_ms * 4;
+
+  auto w0_ctx = std::make_shared<RenameExWorkerContext>();
+  w0_ctx->shared = shared;
+  w0_ctx->path_a = w0_a;
+  w0_ctx->path_b = w0_b;
+  w0_ctx->nt_path_a = TestNtPath(L"renex_stress_dir\\renex_w0_a.dat");
+  w0_ctx->nt_path_b = TestNtPath(L"renex_stress_dir\\renex_w0_b.dat");
+  w0_ctx->worker_id = 0;
+  w0_ctx->iterations = kRenameIterations;
+
+  auto w1_ctx = std::make_shared<RenameExWorkerContext>();
+  w1_ctx->shared = shared;
+  w1_ctx->path_a = w1_a;
+  w1_ctx->path_b = w1_b;
+  w1_ctx->nt_path_a = TestNtPath(L"renex_stress_dir\\renex_w1_a.dat");
+  w1_ctx->nt_path_b = TestNtPath(L"renex_stress_dir\\renex_w1_b.dat");
+  w1_ctx->worker_id = 1;
+  w1_ctx->iterations = kRenameIterations;
+
+  auto o0_ctx = std::make_shared<ConcurrentOpenWorkerContext>();
+  o0_ctx->shared = shared;
+  o0_ctx->paths = {w0_a, w0_b, w1_a, w1_b};
+  o0_ctx->worker_id = 0;
+  o0_ctx->max_iterations = kMaxOpenIterations;
+
+  auto o1_ctx = std::make_shared<ConcurrentOpenWorkerContext>();
+  o1_ctx->shared = shared;
+  o1_ctx->paths = {w1_b, w1_a, w0_b, w0_a};
+  o1_ctx->worker_id = 1;
+  o1_ctx->max_iterations = kMaxOpenIterations;
+
+  ScopedThread ren0;
+  ScopedThread ren1;
+  ScopedThread open0;
+  ScopedThread open1;
+
+  // Declared after the ScopedThreads so early ASSERT unwinds unblock and stop
+  // workers before ~ScopedThread() joins them.
+  struct StopGuard {
+    std::shared_ptr<RenameEnumStressShared> state;
+    ~StopGuard() {
+      if (state != nullptr) {
+        state->stop.store(true, std::memory_order_release);
+        if (state->start_event.valid()) {
+          ::SetEvent(state->start_event.get());
+        }
+      }
+    }
+  } stop_guard{shared};
+
+  ASSERT_TRUE(ren0.Start(&RenameExStressWorkerProc, w0_ctx))
+      << core::FormatWin32Error(ren0.LastError());
+  ASSERT_TRUE(ren1.Start(&RenameExStressWorkerProc, w1_ctx))
+      << core::FormatWin32Error(ren1.LastError());
+  ASSERT_TRUE(open0.Start(&ConcurrentOpenWorkerProc, o0_ctx))
+      << core::FormatWin32Error(open0.LastError());
+  ASSERT_TRUE(open1.Start(&ConcurrentOpenWorkerProc, o1_ctx))
+      << core::FormatWin32Error(open1.LastError());
+
+  ASSERT_WIN32_TRUE(::SetEvent(shared->start_event.get()));
+
+  ASSERT_TRUE(ren0.Join(timeout_ms))
+      << core::FormatWin32Error(ren0.LastError());
+  ASSERT_TRUE(ren1.Join(timeout_ms))
+      << core::FormatWin32Error(ren1.LastError());
+  shared->stop.store(true, std::memory_order_release);
+  ASSERT_TRUE(open0.Join(timeout_ms))
+      << core::FormatWin32Error(open0.LastError());
+  ASSERT_TRUE(open1.Join(timeout_ms))
+      << core::FormatWin32Error(open1.LastError());
+
+  std::string joined_errors;
+  {
+    fstest::ScopedCsLock lock(shared->cs);
+    for (const auto &err : shared->errors) {
+      if (!joined_errors.empty()) {
+        joined_errors += "; ";
+      }
+      joined_errors += err;
+    }
+  }
+  EXPECT_EQ(shared->error_count.load(std::memory_order_relaxed), 0)
+      << joined_errors;
+
+  EXPECT_TRUE(helpers::CheckFileContents(w0_a, "renex_stress_0"));
+  EXPECT_TRUE(helpers::CheckFileContents(w1_a, "renex_stress_1"));
+  EXPECT_TRUE(helpers::CheckFileNotFound(w0_b));
+  EXPECT_TRUE(helpers::CheckFileNotFound(w1_b));
 }
 
 // Spec: Win32 MoveFileExW / [MS-FSA] 2.1.5.15.12 -- a rename whose target is

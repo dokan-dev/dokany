@@ -1861,7 +1861,6 @@ TEST_F(DataIoTest, NtReadWriteFileUseFilePointerPosition) {
 // SetFileValidData requires SeManageVolumePrivilege at open time, rejects
 // VDL > EndOfFile and VDL shrink, and extends valid data length up to EOF.
 TEST_F(DataIoTest, FileValidDataLengthExtend) {
-  REQUIRE_ADMIN();
   REQUIRE_LOCAL_VOLUME();
 
   // SE_MANAGE_VOLUME_NAME must be enabled BEFORE opening the privileged handle.

@@ -56,6 +56,10 @@ enum class FsCapability {
   kOpenByFileId,
   /// POSIX immediate unlink/rename (`FILE_SUPPORTS_POSIX_UNLINK_RENAME`).
   kPosixUnlinkRename,
+  /// Per-volume disk quotas (`FILE_VOLUME_QUOTAS`).
+  kVolumeQuotas,
+  /// USN change journal (`FILE_SUPPORTS_USN_JOURNAL`).
+  kUsnJournal,
   /// Opportunistic locks (oplocks).
   kOplocks,
   /// Directory change notifications (`ReadDirectoryChangesW`).
@@ -242,12 +246,14 @@ private:
   } while (false)
 
 /// \brief Category 4a host-volume-policy precondition: skips unless 8.3 short name
-/// generation is enabled on the target volume (respecting overrides).
+/// generation is enabled on the target volume (respecting overrides). A failed
+/// short-name probe fails suite setup instead of reaching this skip.
 #define REQUIRE_SHORT_NAMES_ENABLED()                                          \
   do {                                                                         \
     if (!this->ShortNamesEnabled()) {                                          \
       this->RecordSkipCategory("volume_policy");                               \
-      GTEST_SKIP() << "8.3 short name generation is disabled on this volume."; \
+      GTEST_SKIP() << "8.3 short name generation is disabled or unsupported "  \
+                      "on this volume.";                                       \
     }                                                                          \
   } while (false)
 

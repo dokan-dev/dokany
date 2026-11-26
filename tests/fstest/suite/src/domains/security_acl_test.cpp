@@ -623,7 +623,7 @@ TEST_F(SecurityAclTest, QueryOwnerGroupAndDaclSelectively) {
                      ERROR_INSUFFICIENT_BUFFER);
   EXPECT_GT(needed, DWORD{0});
 
-  // Selective OWNER query.
+  // Selective OWNER query: owner present, group and DACL absent in binary SD.
   {
     auto owner_buf = QueryRawFileSecurity(path, OWNER_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(owner_buf);
@@ -634,15 +634,22 @@ TEST_F(SecurityAclTest, QueryOwnerGroupAndDaclSelectively) {
     ASSERT_NE(owner_sid, nullptr);
     EXPECT_TRUE(::IsValidSid(owner_sid) != FALSE);
 
-    auto owner_sddl = core::SecurityDescriptorToSddl(
-        owner_buf.value->data(), OWNER_SECURITY_INFORMATION);
-    ASSERT_WIN32_OK(owner_sddl);
-    EXPECT_EQ(owner_sddl.value->rfind(L"O:", 0), size_t{0});
-    EXPECT_EQ(owner_sddl.value->find(L"G:"), std::wstring::npos);
-    EXPECT_EQ(owner_sddl.value->find(L"D:"), std::wstring::npos);
+    PSID group_sid = nullptr;
+    BOOL group_defaulted = FALSE;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorGroup(
+        owner_buf.value->data(), &group_sid, &group_defaulted));
+    EXPECT_EQ(group_sid, nullptr);
+
+    BOOL dacl_present = FALSE;
+    BOOL dacl_defaulted = FALSE;
+    PACL dacl = nullptr;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorDacl(
+        owner_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
+    EXPECT_EQ(dacl_present, FALSE);
+    EXPECT_EQ(dacl, nullptr);
   }
 
-  // Selective GROUP query.
+  // Selective GROUP query: group present, owner and DACL absent in binary SD.
   {
     auto group_buf = QueryRawFileSecurity(path, GROUP_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(group_buf);
@@ -653,15 +660,22 @@ TEST_F(SecurityAclTest, QueryOwnerGroupAndDaclSelectively) {
     ASSERT_NE(group_sid, nullptr);
     EXPECT_TRUE(::IsValidSid(group_sid) != FALSE);
 
-    auto group_sddl = core::SecurityDescriptorToSddl(
-        group_buf.value->data(), GROUP_SECURITY_INFORMATION);
-    ASSERT_WIN32_OK(group_sddl);
-    EXPECT_EQ(group_sddl.value->rfind(L"G:", 0), size_t{0});
-    EXPECT_EQ(group_sddl.value->find(L"O:"), std::wstring::npos);
-    EXPECT_EQ(group_sddl.value->find(L"D:"), std::wstring::npos);
+    PSID owner_sid = nullptr;
+    BOOL owner_defaulted = FALSE;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorOwner(
+        group_buf.value->data(), &owner_sid, &owner_defaulted));
+    EXPECT_EQ(owner_sid, nullptr);
+
+    BOOL dacl_present = FALSE;
+    BOOL dacl_defaulted = FALSE;
+    PACL dacl = nullptr;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorDacl(
+        group_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
+    EXPECT_EQ(dacl_present, FALSE);
+    EXPECT_EQ(dacl, nullptr);
   }
 
-  // Selective DACL query.
+  // Selective DACL query: DACL present, owner and group absent in binary SD.
   {
     auto dacl_buf = QueryRawFileSecurity(path, DACL_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(dacl_buf);
@@ -672,6 +686,18 @@ TEST_F(SecurityAclTest, QueryOwnerGroupAndDaclSelectively) {
         dacl_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
     EXPECT_TRUE(dacl_present != FALSE);
     EXPECT_NE(dacl, nullptr);
+
+    PSID owner_sid = nullptr;
+    BOOL owner_defaulted = FALSE;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorOwner(
+        dacl_buf.value->data(), &owner_sid, &owner_defaulted));
+    EXPECT_EQ(owner_sid, nullptr);
+
+    PSID group_sid = nullptr;
+    BOOL group_defaulted = FALSE;
+    ASSERT_WIN32_TRUE(::GetSecurityDescriptorGroup(
+        dacl_buf.value->data(), &group_sid, &group_defaulted));
+    EXPECT_EQ(group_sid, nullptr);
 
     auto dacl_sddl = core::SecurityDescriptorToSddl(dacl_buf.value->data(),
                                                     DACL_SECURITY_INFORMATION);
@@ -1741,8 +1767,9 @@ TEST_F(SecurityAclTest, FileExecuteOnlyAllowsImageMappingDeniesReadData) {
   dacl_guard.RestoreNow();
 }
 
-// Spec: [MS-FSA] 2.1.5.1.2 & Win32 Privileges — requesting
-// ACCESS_SYSTEM_SECURITY without SeSecurityPrivilege fails privilege check.
+// Spec: Win32 Privileges / IopParseDevice (SeCreateAccessState pre-IRP
+// validation) — requesting ACCESS_SYSTEM_SECURITY without SeSecurityPrivilege
+// fails ERROR_PRIVILEGE_NOT_HELD before IRP_MJ_CREATE reaches the FSD.
 TEST_F(SecurityAclTest, AccessSystemSecurityDeniedWithoutSeSecurityPrivilege) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
@@ -2171,9 +2198,9 @@ TEST_F(SecurityAclTest, DirectoryGenericRightsMapToSpecificRights) {
   dir_guard.RestoreNow();
 }
 
-// Spec: [MS-FSA] 2.1.5.17 & NtSetSecurityObject — OWNER_SECURITY_INFORMATION
-// with a security descriptor that carries no owner SID fails
-// STATUS_INVALID_SECURITY_DESCR.
+// Spec: NtSetSecurityObject / SeCaptureSecurityDescriptor (pre-IRP validation)
+// — OWNER_SECURITY_INFORMATION with a security descriptor that carries no
+// owner SID fails STATUS_INVALID_SECURITY_DESCR before IRP_MJ_SET_SECURITY.
 TEST_F(SecurityAclTest, SetSecurityRejectsOwnerInfoWithoutOwnerSid) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
@@ -2190,9 +2217,9 @@ TEST_F(SecurityAclTest, SetSecurityRejectsOwnerInfoWithoutOwnerSid) {
                    nt::kStatusInvalidSecurityDescr);
 }
 
-// Spec: [MS-FSA] 2.1.5.17 & NtSetSecurityObject — GROUP_SECURITY_INFORMATION
-// with a security descriptor that carries no group SID fails
-// STATUS_INVALID_SECURITY_DESCR.
+// Spec: NtSetSecurityObject / SeCaptureSecurityDescriptor (pre-IRP validation)
+// — GROUP_SECURITY_INFORMATION with a security descriptor that carries no
+// group SID fails STATUS_INVALID_SECURITY_DESCR before IRP_MJ_SET_SECURITY.
 TEST_F(SecurityAclTest, SetSecurityRejectsGroupInfoWithoutGroupSid) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
@@ -2209,8 +2236,9 @@ TEST_F(SecurityAclTest, SetSecurityRejectsGroupInfoWithoutGroupSid) {
                    nt::kStatusInvalidSecurityDescr);
 }
 
-// Spec: NtSetSecurityObject — a security descriptor whose Revision is not
-// SECURITY_DESCRIPTOR_REVISION fails STATUS_UNKNOWN_REVISION.
+// Spec: NtSetSecurityObject / SeCaptureSecurityDescriptor (pre-IRP validation)
+// — a security descriptor whose Revision is not SECURITY_DESCRIPTOR_REVISION
+// fails STATUS_UNKNOWN_REVISION before IRP_MJ_SET_SECURITY.
 TEST_F(SecurityAclTest, SetSecurityRejectsUnknownSdRevision) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
@@ -2230,8 +2258,9 @@ TEST_F(SecurityAclTest, SetSecurityRejectsUnknownSdRevision) {
   dacl_guard.RestoreNow();
 }
 
-// Spec: NtSetSecurityObject — a self-relative security descriptor whose DACL
-// header is truncated (AclSize < sizeof(ACL)) fails STATUS_INVALID_ACL.
+// Spec: NtSetSecurityObject / SeCaptureSecurityDescriptor (pre-IRP validation)
+// — a self-relative security descriptor whose DACL header is truncated
+// (AclSize < sizeof(ACL)) fails STATUS_INVALID_ACL before IRP_MJ_SET_SECURITY.
 TEST_F(SecurityAclTest, SetSecurityRejectsTruncatedDaclHeader) {
   REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
 
@@ -2259,6 +2288,54 @@ TEST_F(SecurityAclTest, SetSecurityRejectsTruncatedDaclHeader) {
                    STATUS_INVALID_ACL);
 
   dacl_guard.RestoreNow();
+}
+
+// Spec: [MS-FSA] 2.1.5.17 & NtSetSecurityObject — assigning
+// OWNER_SECURITY_INFORMATION to a valid SID not assignable by the caller's
+// token without SeRestorePrivilege reaches IRP_MJ_SET_SECURITY and fails
+// STATUS_INVALID_OWNER.
+TEST_F(SecurityAclTest,
+       SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner) {
+  REQUIRE_FS_CAPABILITY(FsCapability::kPersistentAcls);
+
+  const std::wstring path = TestPath(L"invalid_owner_no_restore.dat");
+  const std::wstring nt_path = TestNtPath(L"invalid_owner_no_restore.dat");
+  core::UniqueHandle h;
+  ASSERT_NO_FATAL_FAILURE(CreateSetSecurityTarget(path, nt_path, &h));
+
+  // Explicitly disable SeRestorePrivilege on the current process token so an
+  // elevated token cannot bypass owner-assignability validation. If the token
+  // does not hold SeRestorePrivilege (non-elevated runs), ScopedPrivilege fails
+  // harmlessly with ERROR_NOT_ALL_ASSIGNED.
+  core::ScopedPrivilege disable_restore(SE_RESTORE_NAME, /*enable=*/false);
+  ASSERT_TRUE(disable_restore.active() ||
+              disable_restore.error() == ERROR_NOT_ALL_ASSIGNED)
+      << core::FormatWin32Error(disable_restore.error());
+
+  // Pick a well-known service SID (NT AUTHORITY\LOCAL SERVICE, S-1-5-19; fall
+  // back to NETWORK SERVICE, S-1-5-20, if somehow running as LOCAL SERVICE)
+  // that is never assignable as file owner without SeRestorePrivilege.
+  auto current_user_sid = core::GetCurrentUserSid();
+  ASSERT_WIN32_OK(current_user_sid);
+  auto local_service_sid = StringToSid(L"S-1-5-19");
+  ASSERT_WIN32_OK(local_service_sid);
+  const wchar_t *unassignable_owner_sddl =
+      (::EqualSid(current_user_sid.value->get(),
+                  local_service_sid.value->get()) != FALSE)
+          ? L"O:S-1-5-20"
+          : L"O:S-1-5-19";
+
+  // ConvertStringSecurityDescriptorToSecurityDescriptorW produces a valid
+  // self-relative SECURITY_DESCRIPTOR that passes SeCaptureSecurityDescriptor
+  // and reaches the FSD's IRP_MJ_SET_SECURITY handler.
+  auto unassignable_sd =
+      core::SddlToSecurityDescriptor(unassignable_owner_sddl);
+  ASSERT_WIN32_OK(unassignable_sd);
+  ASSERT_WIN32_TRUE(::IsValidSecurityDescriptor(unassignable_sd.value->get()));
+
+  const NTSTATUS st = core::Ntdll().NtSetSecurityObject(
+      h.get(), OWNER_SECURITY_INFORMATION, unassignable_sd.value->get());
+  EXPECT_NT_STATUS(st, STATUS_INVALID_OWNER);
 }
 
 // Spec: [MS-FSCC] 2.4.1 FileAccessInformation — generic rights requested at

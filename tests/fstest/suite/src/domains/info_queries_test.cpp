@@ -1388,7 +1388,7 @@ TEST_F(InfoQueriesTest, NtQueryFileStandardInfoDeletePendingTracksDisposition) {
 // FILE_FS_CONTROL_INFORMATION (quota defaults and control flags) whose
 // FileSystemControlFlags contain only defined FILE_VC_* bits.
 TEST_F(InfoQueriesTest, NtQueryVolumeFsControlInformation) {
-  REQUIRE_FULL_NTFS_FLAGS();
+  REQUIRE_FS_CAPABILITY(FsCapability::kVolumeQuotas);
   REQUIRE_LOCAL_VOLUME();
 
   const auto &ntdll = core::Ntdll();
@@ -1418,7 +1418,7 @@ TEST_F(InfoQueriesTest, NtQueryVolumeFsControlInformation) {
 // for any open file carrying its 64-bit file reference number, its parent
 // directory's file reference number, and its final path component.
 TEST_F(InfoQueriesTest, ReadFileUsnDataMatchesFileIdParentAndName) {
-  REQUIRE_FULL_NTFS_FLAGS();
+  REQUIRE_FS_CAPABILITY(FsCapability::kUsnJournal);
   REQUIRE_LOCAL_VOLUME();
 
   const std::wstring file_name = L"usn_record.dat";

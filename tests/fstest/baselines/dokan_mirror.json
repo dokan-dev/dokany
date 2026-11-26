@@ -211,15 +211,19 @@
           "gap": "GAP-22"
         },
         "DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor": {
-          "reason": "dokan3.sys/dokan/directory.c does not return STATUS_BUFFER_OVERFLOW with a partial filename and advance the directory scan cursor on an undersized first entry",
+          "reason": "dokan/directory.c MatchFiles returns STATUS_BUFFER_OVERFLOW with 0 bytes instead of writing a partial filename with full FileNameLength while preserving (not advancing) the directory scan cursor on an undersized first entry",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryDosWildcards": {
           "reason": "dokan/directory.c DokanIsNameInExpression does not fully implement DOS_QM ('>') and DOS_DOT ('\"') wildcards",
           "gap": "GAP-12"
         },
+        "DirEnumTest.NtQueryDirectoryExactFitFinalEntryBuffer": {
+          "reason": "dokan/directory.c:300-333 requires QuadAlign(sizeof(FILE_BOTH_DIR_INFORMATION) + nameBytes) instead of FIELD_OFFSET(FileName) + nameBytes for the final directory entry, returning STATUS_BUFFER_OVERFLOW on exact-fit buffers",
+          "gap": "GAP-12"
+        },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
-          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx and always advances ccb->Context",
+          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:122-154)",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
@@ -291,7 +295,7 @@
           "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryFileInternalAndAllInfo": {
-          "reason": "dokan/fileinfo.c DokanFillFileAllInfo leaves AccessInformation/ModeInformation fields zeroed",
+          "reason": "dokan3.sys DokanCompleteQueryInformation (sys/fileinfo.c:256-288) zeroes and overwrites the entire FILE_ALL_INFORMATION buffer from user mode, refilling only Position/DeletePending/Name and wiping I/O-manager-prefilled AccessInformation/ModeInformation",
           "gap": "GAP-13"
         },
         "InfoQueriesTest.NtQueryFileNameAndNormalizedNameInfo": {
@@ -318,12 +322,20 @@
           "reason": "Dokan does not support FILE_OPEN_BY_FILE_ID / OpenFileById",
           "gap": "GAP-27"
         },
+        "InfoQueriesTest.ReadDirectoryChangesBasicInfoFilterIsolation": {
+          "reason": "dokan3.sys DokanCompleteSetInformation (sys/fileinfo.c:919-925) unconditionally fires ATTRIBUTES|LAST_WRITE|LAST_ACCESS|CREATION notifications on every FileBasicInformation set instead of only changed-field filters",
+          "gap": "GAP-13"
+        },
         "InfoQueriesTest.ReadDirectoryChangesExExtendedInfo": {
           "reason": "dokan3.sys does not support ReadDirectoryChangesExW extended notifications (ERROR_INVALID_PARAMETER)",
           "gap": "GAP-13"
         },
+        "InfoQueriesTest.ReadDirectoryChangesReadOnlyCloseAfterWriteNoSpuriousNotify": {
+          "reason": "dokan3.sys sets DOKAN_FILE_CHANGE_LAST_WRITE in DokanCompleteWrite (sys/write.c:372) and never clears it in DokanDispatchCleanup (sys/cleanup.c:117-120), emitting spurious FILE_ACTION_MODIFIED notifications when subsequent read-only handles close while the FCB stays live",
+          "gap": "GAP-13"
+        },
         "InfoQueriesTest.ReadDirectoryChangesSizeFilter": {
-          "reason": "dokan3.sys DokanAllocateFCB (sys/util/fcb.c:62) initializes AdvancedFCBHeader.FileSize to 4096 and DokanCompleteWrite (sys/write.c:352) only emits FILE_NOTIFY_CHANGE_SIZE when CurrentByteOffset exceeds FileSize, suppressing sub-4 KiB growth notifications unless a host minifilter first updates FileSize via FileStandardInformation (sys/fileinfo.c:311)",
+          "reason": "dokan3.sys DokanInitializeFcb (sys/util/fcb.c:62) initializes AdvancedFCBHeader.FileSize to 4096 and DokanCompleteWrite (sys/write.c:352) only emits FILE_NOTIFY_CHANGE_SIZE when CurrentByteOffset exceeds FileSize, suppressing sub-4 KiB growth notifications unless a host minifilter first updates FileSize via FileStandardInformation (sys/fileinfo.c:311)",
           "allow_xpass": true,
           "gap": "GAP-13"
         },
@@ -483,6 +495,10 @@
           "reason": "Dokan does not support symbolic links",
           "gap": "GAP-22"
         },
+        "LocksOplocksTest.ByteRangeLockAbove4KiBBreaksReadOplock": {
+          "reason": "dokan3.sys DokanInitializeFcb (sys/util/fcb.c:62) initializes AllocationSize to 4096 and DokanCommonLockControl (sys/lock.c:70-73) skips DokanCheckOplock for ByteOffset >= AllocationSize without refreshing file size",
+          "gap": "GAP-11"
+        },
         "LocksOplocksTest.DirectoryOplockBreaksOnChildCreate": {
           "reason": "dokan3.sys does not break directory RH oplocks on child file creation",
           "gap": "GAP-11"
@@ -516,8 +532,8 @@
           "gap": "GAP-14"
         },
         "NamingPathsTest.ParentIsFilePathErrorsAllApis": {
-          "reason": "mirror.exe returns ERROR_DIRECTORY instead of ERROR_INVALID_PARAMETER for MoveFileExW into a regular-file parent",
-          "gap": "GAP-14"
+          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and forcing FILE_DIRECTORY_FILE on the regular-file parent, so MirrorCreateFile (mirror.c:372-376) returns STATUS_NOT_A_DIRECTORY (ERROR_DIRECTORY) instead of STATUS_INVALID_PARAMETER (ERROR_INVALID_PARAMETER)",
+          "gap": "GAP-29"
         },
         "NamingPathsTest.PerDirectoryCaseSensitivityFlag": {
           "reason": "dokan3.sys does not implement FileCaseSensitiveInformation (returns STATUS_INVALID_PARAMETER)",
@@ -544,6 +560,10 @@
           "gap": "GAP-14",
           "os_max_build": 21999
         },
+        "NamingPathsTest.VerbatimDotDotTraversalRejected": {
+          "reason": "Neither dokan3.sys nor dokan/dokan.c CheckFileName rejects '..' components in verbatim/NT paths, and mirror.c:86-90 passes non-verbatim paths to Win32 CreateFileW which resolves '..' instead of failing STATUS_OBJECT_NAME_INVALID",
+          "gap": "GAP-14"
+        },
         "NamingPathsTest.VerbatimReservedDosDeviceNamesAreLiteralFiles": {
           "reason": "mirror.exe strips '\\\\?\\' and forwards AUX/NUL to Win32 CreateFileW, opening \\Device\\Serial0 (COM1) on hosts with a serial port and blocking ReadFile until dokan3.sys operation timeout kills the mount",
           "skip_crash": true,
@@ -561,12 +581,21 @@
           "reason": "samples/dokan_mirror/mirror.c passes non-verbatim Win32 paths to GetFileAttributesW without a '\\\\?\\' prefix, so probing '\\\\?\\<root>\\...\\NUL' resolves to \\Device\\Null and falsely reports an existing file",
           "gap": "GAP-14"
         },
+        "RenameMoveTest.ConcurrentFileRenameInfoExAndCreateStress": {
+          "reason": "dokan3.sys DokanCompleteSetInformation (sys/fileinfo.c:864-868) acquires DokanVCBLockRW only for FileRenameInformation and omits FileRenameInformationEx while calling DokanRenameFcb (:894-907), racing DokanDispatchCreate on Vcb->FcbTable and risking a kernel BSOD",
+          "gap": "GAP-30",
+          "skip_crash": true
+        },
         "RenameMoveTest.FileRenameInfoExIgnoreReadOnlyTarget": {
           "reason": "Dokan does not honor FILE_RENAME_IGNORE_READONLY_ATTRIBUTE in FileRenameInformationEx",
           "gap": "GAP-21"
         },
         "RenameMoveTest.FileRenameInfoExPosixReplaceOpenTarget": {
           "reason": "Dokan does not support FILE_RENAME_POSIX_SEMANTICS replacing an open target",
+          "gap": "GAP-21"
+        },
+        "RenameMoveTest.PosixRenameOntoDeletePendingTargetFailsDeletePending": {
+          "reason": "Dokan ignores FILE_RENAME_POSIX_SEMANTICS in FileRenameInformationEx",
           "gap": "GAP-21"
         },
         "RenameMoveTest.PosixRenameReplacesDataMappedTarget": {
@@ -578,8 +607,8 @@
           "gap": "GAP-23"
         },
         "RenameMoveTest.RenameMissingTargetParentFailsPathNotFound": {
-          "reason": "samples/dokan_mirror/mirror.c MirrorMoveFile / sys/fileinfo.c returns STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) instead of STATUS_OBJECT_PATH_NOT_FOUND (ERROR_PATH_NOT_FOUND) when the target parent directory does not exist",
-          "gap": "GAP-14"
+          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and opening the parent with FILE_DIRECTORY_FILE, discarding the child probe's STATUS_OBJECT_PATH_NOT_FOUND (:199-213) and forwarding MirrorCreateFile's STATUS_OBJECT_NAME_NOT_FOUND verbatim instead of translating it to STATUS_OBJECT_PATH_NOT_FOUND",
+          "gap": "GAP-29"
         },
         "RenameMoveTest.RenameOverDataMappedTargetPreservesMappedView": {
           "reason": "dokan3.sys indexes FCBs by path name; MoveFileExW(REPLACE_EXISTING) over a data-mapped target faults replacement bytes into the old view when pages are not already resident",
@@ -616,6 +645,10 @@
         },
         "SecurityAclTest.OwnerRestoresDaclUnderDenyReadAce": {
           "reason": "mirror.exe Win32 CreateFile adds FILE_READ_ATTRIBUTES|SYNCHRONIZE, blocking owner WRITE_DAC restore under D:P(D;;GR;;;WD)",
+          "gap": "GAP-19"
+        },
+        "SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner": {
+          "reason": "dokan/security.c:210-211 DispatchSetSecurity rewrites every non-STATUS_SUCCESS return from MirrorSetFileSecurity (including STATUS_INVALID_OWNER) to STATUS_INVALID_PARAMETER",
           "gap": "GAP-19"
         },
         "SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner": {
@@ -655,7 +688,7 @@
           "gap": "GAP-07"
         },
         "StreamsTest.StreamNameLengthLimit255": {
-          "reason": "samples/dokan_mirror/mirror.c rejects a 255-character alternate stream name because prepending RootDirectory overflows mirror's DOKAN_MAX_PATH path buffer",
+          "reason": "samples/dokan_mirror/mirror.c:86-90 prepends non-verbatim gRootDirectory without a '\\\\?\\' prefix (despite DOKAN_MAX_PATH = 32768 at :39-42), causing Win32 CreateFileW to reject a 255-character stream path exceeding MAX_PATH (260)",
           "gap": "GAP-14"
         },
         "StreamsTest.StreamRenameReplaceAndNoReplace": {
@@ -770,6 +803,10 @@
           "reason": "dokan3.sys PopulateRenameEventInformations fails MoveFileExW with ERROR_PATH_NOT_FOUND on UNC mounts",
           "gap": "GAP-03"
         },
+        "LocksOplocksTest.OplockRhBrokenByRenameAndDeleteWithShareDelete": {
+          "reason": "dokan3.sys PopulateRenameEventInformations fails absolute-path FileRenameInformation with STATUS_OBJECT_PATH_NOT_FOUND on UNC mounts",
+          "gap": "GAP-03"
+        },
         "NamingPathsTest.MountRootRenameRejected": {
           "reason": "dokan3.sys PopulateRenameEventInformations fails MoveFileExW on volume root with ERROR_PATH_NOT_FOUND on UNC mounts",
           "gap": "GAP-03"
@@ -780,6 +817,10 @@
         },
         "RenameMoveTest.ConcurrentRenameAndEnumerateStress": {
           "reason": "dokan3.sys PopulateRenameEventInformations fails MoveFileExW with ERROR_PATH_NOT_FOUND on UNC mounts",
+          "gap": "GAP-03"
+        },
+        "RenameMoveTest.FileRenameInfoExNonPosixBasicAndReplace": {
+          "reason": "dokan3.sys PopulateRenameEventInformations fails absolute-path FileRenameInformationEx with STATUS_OBJECT_PATH_NOT_FOUND on UNC mounts",
           "gap": "GAP-03"
         },
         "RenameMoveTest.FileRenameInfoReplaceOpenTargetNonPosixFails": {

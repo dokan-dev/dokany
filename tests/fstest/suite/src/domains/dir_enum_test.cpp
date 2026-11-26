@@ -2080,6 +2080,90 @@ TEST_F(DirEnumTest, NtQueryDirectoryInfoClassSwitchMidScanKeepsCursor) {
   EXPECT_MULTISET_EQ(seen, expected);
 }
 
+// Spec: [MS-FSA] 2.1.4.4 & 2.1.5.6.3 / NtQueryDirectoryFile -- non-"*"
+// wildcard patterns (".", "..", "?", "??", ".*", and "*.*") must still match
+// the "." and ".." entries of a non-root directory using NT wildcard rules.
+TEST_F(DirEnumTest, DotAndDotDotMatchedByNonStarWildcards) {
+  const std::wstring sub = TestPath(L"dot_wildcards");
+  ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
+  ASSERT_TRUE(CreateEmptyFile(core::JoinPath(sub, L"alpha.txt")));
+
+  // Literal dot entries.
+  EXPECT_TRUE(
+      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L".", {L"."}));
+  EXPECT_TRUE(
+      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"..", {L".."}));
+
+  // NT '?' matches exactly one character (not DOS_QM '>'), so "?" matches "."
+  // and "??" matches "..".
+  EXPECT_TRUE(
+      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"?", {L"."}));
+  EXPECT_TRUE(
+      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"??", {L".."}));
+
+  // ".*" matches names starting with '.' (both "." and ".."), and "*.*"
+  // matches every name containing '.' (".", "..", and "alpha.txt").
+  EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
+      sub, L".*", {L".", L".."}));
+  EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
+      sub, L"*.*", {L".", L"..", L"alpha.txt"}));
+}
+
+// Spec: [MS-FSCC] 2.4.8 / [MS-FSA] 2.1.5.6.3 / NtQueryDirectoryFile -- the
+// final record in a directory query buffer (NextEntryOffset == 0) requires
+// only offsetof(FILE_BOTH_DIR_INFORMATION, FileName) + FileNameLength bytes
+// with no trailing 8-byte alignment padding.
+TEST_F(DirEnumTest, NtQueryDirectoryExactFitFinalEntryBuffer) {
+  const std::wstring sub = TestPath(L"exact_fit_entry");
+  ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
+  const std::wstring file_name = L"exact11.txt";
+  ASSERT_EQ(file_name.size(), size_t{11});
+  ASSERT_TRUE(CreateEmptyFile(core::JoinPath(sub, file_name)));
+
+  const auto &ntdll = core::Ntdll();
+  ASSERT_NE(ntdll.NtQueryDirectoryFile, nullptr);
+
+  auto dh = OpenDirForEnum(sub);
+  ASSERT_WIN32_OK(dh);
+
+  constexpr size_t kNameChars = 11;
+  constexpr size_t kNameBytes = kNameChars * sizeof(wchar_t);
+  constexpr size_t kExactSize =
+      offsetof(nt::FileBothDirInfo, file_name) + kNameBytes;
+  // Verify the exact-fit buffer is >= sizeof(FileBothDirInfo) (avoiding
+  // STATUS_INFO_LENGTH_MISMATCH) while intentionally not 8-byte aligned.
+  static_assert(kExactSize >= sizeof(nt::FileBothDirInfo));
+  static_assert(kExactSize % 8 != 0);
+
+  std::wstring pat = file_name;
+  nt::UnicodeString pat_us = nt::MakeUnicodeString(pat.data(), pat.size());
+  std::vector<uint8_t> buf(kExactSize, 0);
+  nt::IoStatusBlock iosb{};
+  const NTSTATUS st = ntdll.NtQueryDirectoryFile(
+      dh.value->get(), nullptr, nullptr, nullptr, &iosb, buf.data(),
+      static_cast<ULONG>(buf.size()),
+      nt::FileInfoClass::FileBothDirectoryInformation,
+      /*return_single_entry=*/TRUE, &pat_us, /*restart_scan=*/TRUE);
+  ASSERT_NT_STATUS(st, STATUS_SUCCESS);
+  EXPECT_EQ(static_cast<size_t>(iosb.information), kExactSize);
+
+  const auto *entry = reinterpret_cast<const nt::FileBothDirInfo *>(buf.data());
+  EXPECT_EQ(entry->next_entry_offset, 0u);
+  EXPECT_EQ(static_cast<size_t>(entry->file_name_length), kNameBytes);
+  if (static_cast<size_t>(entry->file_name_length) == kNameBytes) {
+    const std::wstring actual_name(entry->file_name, kNameChars);
+    EXPECT_EQ(actual_name, file_name);
+  }
+
+  nt::IoStatusBlock end_iosb{};
+  const NTSTATUS end_st = ntdll.NtQueryDirectoryFile(
+      dh.value->get(), nullptr, nullptr, nullptr, &end_iosb, buf.data(),
+      static_cast<ULONG>(buf.size()),
+      nt::FileInfoClass::FileBothDirectoryInformation,
+      /*return_single_entry=*/TRUE, nullptr, /*restart_scan=*/FALSE);
+  EXPECT_NT_STATUS(end_st, STATUS_NO_MORE_FILES);
+}
+
 void ForceLink_DirEnum() {}
 
 } // namespace fstest

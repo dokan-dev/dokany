@@ -47,6 +47,8 @@ struct VolumeCapabilities {
   bool object_ids = false;            ///< `FILE_SUPPORTS_OBJECT_IDS`.
   bool open_by_file_id = false;       ///< `FILE_SUPPORTS_OPEN_BY_FILE_ID`.
   bool posix_unlink_rename = false;   ///< `FILE_SUPPORTS_POSIX_UNLINK_RENAME`.
+  bool volume_quotas = false;         ///< `FILE_VOLUME_QUOTAS`.
+  bool usn_journal = false;           ///< `FILE_SUPPORTS_USN_JOURNAL`.
   bool case_sensitive_dir = false; ///< Per-directory case sensitivity support.
   /// Oplock support. NOT probed: no FileSystemAttributes bit reports it, so
   /// it is assumed true and oplock tests run unconditionally (disable via
@@ -57,7 +59,9 @@ struct VolumeCapabilities {
   bool change_notifications = true;
 
   bool probe_succeeded = false; ///< True iff volume probing succeeded.
-  std::string probe_error;      ///< Diagnostic message when probe failed.
+  /// Diagnostic message when probe failed (including an 8.3 short-name probe
+  /// API failure, which is never reported as "short names disabled").
+  std::string probe_error;
 };
 
 /// \brief Fields decoded from a `FILE_FS_ATTRIBUTE_INFORMATION` payload.
@@ -83,7 +87,10 @@ bool ParseFsAttributeInfo(std::span<const uint8_t> returned,
 /// handle to \p root plus the single Category 4a 8.3 short-name probe.
 ///
 /// Works uniformly across drive roots, subdirectories, directory junctions,
-/// volume GUID paths, and UNC shares.
+/// volume GUID paths, and UNC shares. On writable volumes the 8.3 probe must
+/// complete: if it cannot create its transient file or query
+/// `FileBothDirectoryInformation`, `probe_succeeded` is `false` and
+/// `probe_error` describes the failure.
 /// \param root Normalized target root path.
 /// \param os_info Host OS information snapshot.
 /// \return Probed VolumeCapabilities (check `probe_succeeded`).
