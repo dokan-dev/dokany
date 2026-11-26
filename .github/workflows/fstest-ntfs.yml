@@ -7,12 +7,14 @@ on:
     paths:
       - 'tests/fstest/**'
       - 'scripts/build_fstest.ps1'
+      - 'scripts/build_helper.ps1'
       - 'scripts/fstest_common.ps1'
       - '.github/workflows/fstest-ntfs.yml'
   pull_request:
     paths:
       - 'tests/fstest/**'
       - 'scripts/build_fstest.ps1'
+      - 'scripts/build_helper.ps1'
       - 'scripts/fstest_common.ps1'
       - '.github/workflows/fstest-ntfs.yml'
   schedule:

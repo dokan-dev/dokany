@@ -22,6 +22,7 @@ if ($VerifyStaticCrt -and $SkipCli) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path -Path $PSScriptRoot -ChildPath 'build_helper.ps1')
 $sourceDir = Join-Path $repoRoot 'tests\fstest'
 $cmakeListsPath = Join-Path $sourceDir 'CMakeLists.txt'
 if (-not (Test-Path -LiteralPath $cmakeListsPath -PathType Leaf)) {
@@ -77,21 +78,6 @@ function Resolve-CallerPath {
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 }
 
-function Invoke-External {
-    param([Parameter(Position = 0, Mandatory = $true)][scriptblock]$Command)
-    $prevPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        & $Command
-        $exitCode = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $prevPreference
-    }
-    if ($exitCode -ne 0) {
-        throw "Command returned non-zero exit code ${exitCode}: $Command"
-    }
-}
-
 function Get-ExcludedUnixPrefixes {
     $cygwinDir = if (-not [string]::IsNullOrWhiteSpace($env:CYGWIN_INST_DIR)) { $env:CYGWIN_INST_DIR } else { 'C:\cygwin64' }
     $msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
@@ -115,24 +101,14 @@ function Test-ExcludedPath {
 }
 
 function Resolve-VisualStudioInfo {
-    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
-        throw "Visual Studio Installer (vswhere.exe) not found at $vswhere"
+    $vs = Find-DokanVisualStudio -Requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -Latest -IncludeVersion -RequireVsWhere | Select-Object -First 1
+    if (-not $vs) {
+        $vs = Find-DokanVisualStudio -Requires 'Microsoft.Component.MSBuild' -Latest -IncludeVersion -RequireVsWhere | Select-Object -First 1
     }
-
-    $vsPath = @(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null) | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($vsPath)) {
-        $vsPath = @(& $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath 2>$null) | Select-Object -First 1
-    }
-    if ([string]::IsNullOrWhiteSpace($vsPath) -or -not (Test-Path -LiteralPath $vsPath -PathType Container)) {
+    if (-not $vs) {
         throw 'Visual Studio installation with C++ tools not found via vswhere.exe.'
     }
-
-    $vsVersion = @(& $vswhere -path $vsPath -property installationVersion 2>$null) | Select-Object -First 1
-    return @{
-        Path    = $vsPath
-        Version = $vsVersion
-    }
+    return $vs
 }
 
 function Resolve-WindowsCMake {
@@ -154,13 +130,8 @@ function Resolve-WindowsCMake {
     if (-not [string]::IsNullOrWhiteSpace($VsPath)) {
         $candidates += Join-Path $VsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
     }
-    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
-        foreach ($path in @(& $vswhere -products * -sort -property installationPath 2>$null)) {
-            if (-not [string]::IsNullOrWhiteSpace($path)) {
-                $candidates += Join-Path $path 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
-            }
-        }
+    foreach ($vs in @(Find-DokanVisualStudio)) {
+        $candidates += Join-Path $vs.Path 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
     }
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -621,14 +592,14 @@ try {
     }
 
     Write-Output "Configuring tests/fstest ($Configuration, compiler=$Compiler)..."
-    Invoke-External { & $cmakeExe @cmakeArgs }
+    Invoke-DokanExternal { & $cmakeExe @cmakeArgs }
 
     Write-Output "Building tests/fstest ($Configuration)..."
     $buildArgs = @('--build', $resolvedBuildDir, '--config', $Configuration, '--parallel')
     if ($SkipCli) {
         $buildArgs += @('--target', 'ntfs_helpers', 'ntfs_suite')
     }
-    Invoke-External { & $cmakeExe @buildArgs }
+    Invoke-DokanExternal { & $cmakeExe @buildArgs }
 
     if ($SkipCli) {
         $libDir = Join-Path -Path $resolvedBuildDir -ChildPath "lib\$Configuration"
@@ -653,7 +624,7 @@ try {
                 throw "Expected self-test binary not found after build: $selfTestExe"
             }
             Write-Output "Running fstest_self_test ($selfTestExe)..."
-            Invoke-External { & $selfTestExe }
+            Invoke-DokanExternal { & $selfTestExe }
         }
 
         if ($VerifyStaticCrt) {
@@ -663,17 +634,7 @@ try {
         }
 
         Write-Output "Running smoke check ($fsTestExe --gtest_list_tests)..."
-        $prevPref = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $listOutput = @(& $fsTestExe --gtest_list_tests)
-            $listExit = $LASTEXITCODE
-        } finally {
-            $ErrorActionPreference = $prevPref
-        }
-        if ($listExit -ne 0) {
-            throw "Smoke check '$fsTestExe --gtest_list_tests' failed with exit code $listExit"
-        }
+        $listOutput = @(Invoke-DokanExternal { & $fsTestExe --gtest_list_tests })
         $testCount = @($listOutput | Where-Object { $_ -match '^\s+\S' }).Count
         if ($testCount -le 0) {
             throw "Smoke check '$fsTestExe --gtest_list_tests' listed 0 tests."
