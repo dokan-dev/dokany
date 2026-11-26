@@ -4,6 +4,7 @@
 #   1. cleanup-pr-caches.yml jq run-matcher (fork/deleted-fork/same-repo/self/pagination)
 #   2. scripts/run_ifstest.ps1 Find-IfsTestCreateProcFailure (Set-StrictMode -Version 2)
 #   3. scripts/ci/install_cygwin.ps1 Assert-CygwinGpgVerification (GOODSIG/EXPKEYSIG/REVKEYSIG)
+#   4. scripts/ci/vm/provisioning/verifier_helpers.ps1 Driver Verifier guards
 # Uses only tools preinstalled on ubuntu-latest (jq, pwsh, python3 stdlib).
 set -euo pipefail
 
@@ -99,7 +100,7 @@ assert run_filter(1368, 'f' * 40, 'dokan-dev/dokany', 'same-repo') == ['201', '2
 print('cleanup-pr-caches.yml jq unit tests passed.')
 EOF
 
-echo "=== 2. PowerShell behavioral unit tests (run_ifstest.ps1, install_cygwin.ps1) ==="
+echo "=== 2. PowerShell behavioral unit tests (run_ifstest, install_cygwin, Verifier guards) ==="
 cat <<'PWSH' > "$WORK_DIR/test_ps.ps1"
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Stop'
@@ -186,6 +187,44 @@ foreach ($badCase in @(
     if (-not $threw) { throw "Assert-CygwinGpgVerification unexpectedly accepted $($badCase.Name)" }
 }
 Write-Output 'install_cygwin.ps1 Assert-CygwinGpgVerification unit tests passed.'
+
+# 2c. Assert-DriverVerifierSettings / Assert-DriverVerifierActive (scripts/ci/vm/provisioning/verifier_helpers.ps1)
+. (Resolve-Path 'scripts/ci/vm/provisioning/verifier_helpers.ps1').Path
+
+$goodSettings2016 = "Verifier Flags: 0x020209bb`r`n    [X] 0x00000001 Special pool.`r`n    [X] 0x02000000 Code integrity checks.`r`n  Verified Drivers:`r`n    dokan3.sys`r`n"
+$goodSettings2025 = "Verifier Flags: 0x021209bb`n    [X] 0x00000001 Special pool.`n    [X] 0x02000000 Code integrity checks.`n    [X] 0x00100000 Extended Verifier flags (internal).`n  Active Rule Classes:`n    26 - Code integrity checks.`n  Verified Drivers:`n    dokan3.sys`n"
+Assert-DriverVerifierSettings -QuerySettingsOutput $goodSettings2016
+Assert-DriverVerifierSettings -QuerySettingsOutput $goodSettings2025
+
+foreach ($badCase in @(
+    @{ Name = 'empty'; Out = '' },
+    @{ Name = 'missing-ci-bit'; Out = "Verifier Flags: 0x001209bb`n    [ ] 0x02000000 Code integrity checks.`n    dokan3.sys`n" },
+    @{ Name = 'missing-rc26'; Out = "Verifier Flags: 0x021209bb`n    [X] 0x02000000 Code integrity checks.`n  Active Rule Classes:`n    21 - Extended Verifier flags (internal).`n    dokan3.sys`n" },
+    @{ Name = 'dropped-standard'; Out = "Verifier Flags: 0x02000000`n    [X] 0x02000000 Code integrity checks.`n    dokan3.sys`n" },
+    @{ Name = 'missing-driver'; Out = "Verifier Flags: 0x021209bb`n    [X] 0x02000000 Code integrity checks.`n    other.sys`n" }
+)) {
+    $threw = $false
+    try { Assert-DriverVerifierSettings -QuerySettingsOutput $badCase.Out } catch { $threw = $true }
+    if (-not $threw) { throw "Assert-DriverVerifierSettings unexpectedly accepted $($badCase.Name)" }
+}
+Write-Output 'verifier_helpers.ps1 Assert-DriverVerifierSettings unit tests passed.'
+
+$goodQuery2016 = "Verifier Flags: 0x020209bb`r`n    [X] 0x02000000 Code integrity checks.`r`n    MODULE: dokan3.sys (load: 1 / unload: 0)`r`n"
+$goodQuery2025 = "Verifier Flags: 0x021209bb`n    [X] 0x02000000 Code integrity checks.`n    [X] 0x00100000 Extended Verifier flags (internal).`n    MODULE: dokan3.sys (load: 1 / unload: 0)`n"
+Assert-DriverVerifierActive -QueryOutput $goodQuery2016
+Assert-DriverVerifierActive -QueryOutput $goodQuery2025
+
+foreach ($badCase in @(
+    @{ Name = 'empty'; Out = '' },
+    @{ Name = 'missing-ci-bit'; Out = "Verifier Flags: 0x001209bb`n    [ ] 0x02000000 Code integrity checks.`n    MODULE: dokan3.sys (load: 1 / unload: 0)`n" },
+    @{ Name = 'dropped-standard'; Out = "Verifier Flags: 0x02000000`n    [X] 0x02000000 Code integrity checks.`n    MODULE: dokan3.sys (load: 1 / unload: 0)`n" },
+    @{ Name = 'missing-module'; Out = "Verifier Flags: 0x021209bb`n    [X] 0x02000000 Code integrity checks.`n    MODULE: other.sys (load: 1 / unload: 0)`n" }
+)) {
+    $threw = $false
+    try { Assert-DriverVerifierActive -QueryOutput $badCase.Out } catch { $threw = $true }
+    if (-not $threw) { throw "Assert-DriverVerifierActive unexpectedly accepted $($badCase.Name)" }
+}
+Write-Output 'verifier_helpers.ps1 Assert-DriverVerifierActive unit tests passed.'
 PWSH
 pwsh -NoProfile -File "$WORK_DIR/test_ps.ps1"
 
