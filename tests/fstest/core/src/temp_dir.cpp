@@ -319,14 +319,24 @@ struct ProtectedDir {
   bool forbid_descendants = false; ///< Also reject anything below `path`.
 };
 
+void AddProtectedDir(std::vector<ProtectedDir> *dirs, std::wstring_view path,
+                     bool forbid_descendants) {
+  std::wstring norm = NormalizeWin32Path(path);
+  if (norm.empty()) {
+    return;
+  }
+  for (ProtectedDir &existing : *dirs) {
+    if (EqualsIgnoreCase(existing.path, norm)) {
+      existing.forbid_descendants =
+          existing.forbid_descendants || forbid_descendants;
+      return;
+    }
+  }
+  dirs->push_back(ProtectedDir{std::move(norm), forbid_descendants});
+}
+
 std::vector<ProtectedDir> BuildProtectedDirs() {
   std::vector<ProtectedDir> dirs;
-  auto add = [&dirs](std::wstring_view path, bool forbid_descendants) {
-    std::wstring norm = NormalizeWin32Path(path);
-    if (!norm.empty()) {
-      dirs.push_back(ProtectedDir{std::move(norm), forbid_descendants});
-    }
-  };
 
   const std::wstring windows_dirs[] = {
       GetEnvVarW(L"SystemRoot"),
@@ -337,26 +347,27 @@ std::vector<ProtectedDir> BuildProtectedDirs() {
     if (win.empty()) {
       continue;
     }
-    add(win, /*forbid_descendants=*/false);
+    AddProtectedDir(&dirs, win, /*forbid_descendants=*/false);
     for (const wchar_t *child :
          {L"System32", L"SysWOW64", L"WinSxS", L"Boot"}) {
-      add(JoinPath(win, child), /*forbid_descendants=*/true);
+      AddProtectedDir(&dirs, JoinPath(win, child), /*forbid_descendants=*/true);
     }
   }
-  add(GetSystemDirectoryString(), /*forbid_descendants=*/true);
+  AddProtectedDir(&dirs, GetSystemDirectoryString(),
+                  /*forbid_descendants=*/true);
 
   for (const wchar_t *env_name :
        {L"ProgramFiles", L"ProgramFiles(x86)", L"ProgramW6432", L"ProgramData",
         L"USERPROFILE", L"ALLUSERSPROFILE", L"PUBLIC"}) {
-    add(GetEnvVarW(env_name), /*forbid_descendants=*/false);
+    AddProtectedDir(&dirs, GetEnvVarW(env_name), /*forbid_descendants=*/false);
   }
 
   const std::wstring system_drive = GetEnvVarW(L"SystemDrive");
   if (system_drive.size() == 2 && IsAsciiAlpha(system_drive[0]) &&
       system_drive[1] == L':') {
     for (const std::wstring_view name : kProtectedTopLevelNames) {
-      add(system_drive + L"\\" + std::wstring(name),
-          /*forbid_descendants=*/false);
+      AddProtectedDir(&dirs, system_drive + L"\\" + std::wstring(name),
+                      /*forbid_descendants=*/false);
     }
   }
   return dirs;
@@ -614,149 +625,222 @@ bool RemoveTree(const std::wstring &root, const CleanupOptions &options,
   return all_ok;
 }
 
-} // namespace
-
-bool ResolveSafeCleanupTarget(const std::wstring &path,
-                              std::wstring *canonical_out,
-                              std::string *reason_out) {
-  if (canonical_out != nullptr) {
-    canonical_out->clear();
+bool RejectCleanupTarget(std::string *reason_out, std::string reason) {
+  if (reason_out != nullptr) {
+    *reason_out = std::move(reason);
   }
-  auto reject = [&](const std::string &reason) {
-    if (reason_out != nullptr) {
-      *reason_out = reason;
-    }
-    return false;
-  };
+  return false;
+}
 
+bool IsRootPathKind(RootKind kind) noexcept {
+  return kind == RootKind::kDriveLetter || kind == RootKind::kVolumeGuid ||
+         kind == RootKind::kUncShare;
+}
+
+bool IsSubdirectoryKind(RootKind kind) noexcept {
+  return kind == RootKind::kSubdirectory || kind == RootKind::kUncSubdirectory;
+}
+
+bool ValidateRawCleanupPath(const std::wstring &path, std::string *reason_out) {
   if (path.empty()) {
-    return reject("Cleanup target path is empty.");
+    return RejectCleanupTarget(reason_out, "Cleanup target path is empty.");
   }
   if (ContainsDotComponent(path, /*include_single_dot=*/false)) {
-    return reject("Cleanup target path must not contain '..' components.");
+    return RejectCleanupTarget(
+        reason_out, "Cleanup target path must not contain '..' components.");
   }
   if (IsDriveRelativePath(path)) {
-    return reject("Refusing drive-relative cleanup target path: " +
-                  WideToUtf8(path));
+    return RejectCleanupTarget(reason_out,
+                               "Refusing drive-relative cleanup target path: " +
+                                   WideToUtf8(path));
   }
-  if (path.size() >= 4 && IsExtendedPrefix(path) &&
+  if (IsExtendedPrefix(path) &&
       StartsWithIgnoreCase(std::wstring_view(path).substr(4), L"GLOBALROOT")) {
-    return reject("Refusing \\\\?\\GLOBALROOT cleanup target path: " +
-                  WideToUtf8(path));
+    return RejectCleanupTarget(
+        reason_out,
+        "Refusing \\\\?\\GLOBALROOT cleanup target path: " + WideToUtf8(path));
   }
   if (IsDeviceNamespacePath(path)) {
-    return reject("Refusing device-namespace cleanup target path: " +
-                  WideToUtf8(path));
+    return RejectCleanupTarget(
+        reason_out,
+        "Refusing device-namespace cleanup target path: " + WideToUtf8(path));
   }
+  return true;
+}
 
-  // Canonicalize every non-verbatim path so `C:\x\.`, `C:\x.` and rooted
-  // `\x` resolve to the directory that will actually be deleted.
-  std::wstring resolved = path;
+// Canonicalizes every non-verbatim path so `C:\x\.`, `C:\x.` and rooted `\x`
+// resolve to the directory that will actually be deleted.
+bool ResolveCleanupPathToFull(const std::wstring &path,
+                              std::wstring *resolved_out,
+                              std::string *reason_out) {
   if (IsExtendedPrefix(path)) {
     if (ContainsDotComponent(path, /*include_single_dot=*/true)) {
-      return reject("Extended cleanup target path must not contain '.' or '..' "
-                    "components.");
+      return RejectCleanupTarget(
+          reason_out, "Extended cleanup target path must not contain '.' or "
+                      "'..' components.");
     }
-  } else {
-    const DWORD err = GetFullPathNameString(path, &resolved);
-    if (err != ERROR_SUCCESS) {
-      return reject("Failed to resolve cleanup target path: " +
-                    FormatWin32Error(err));
-    }
-    if (IsDeviceNamespacePath(resolved)) {
-      return reject("Refusing device-namespace cleanup target path: " +
-                    WideToUtf8(resolved));
-    }
+    *resolved_out = path;
+    return true;
   }
+  const DWORD err = GetFullPathNameString(path, resolved_out);
+  if (err != ERROR_SUCCESS) {
+    return RejectCleanupTarget(reason_out,
+                               "Failed to resolve cleanup target path: " +
+                                   FormatWin32Error(err));
+  }
+  if (IsDeviceNamespacePath(*resolved_out)) {
+    return RejectCleanupTarget(
+        reason_out, "Refusing device-namespace cleanup target path: " +
+                        WideToUtf8(*resolved_out));
+  }
+  return true;
+}
 
-  const std::wstring norm = NormalizeWin32Path(resolved);
+bool ValidateNormalizedCleanupRoot(const std::wstring &norm,
+                                   std::wstring *plain_out,
+                                   std::string *reason_out) {
   if (IsUncAdminShare(norm)) {
-    return reject("Refusing UNC administrative share cleanup target: " +
-                  WideToUtf8(norm));
+    return RejectCleanupTarget(
+        reason_out, "Refusing UNC administrative share cleanup target: " +
+                        WideToUtf8(norm));
   }
   const RootKind kind = ClassifyPathKind(norm);
   if (kind == RootKind::kDriveLetter) {
-    return reject("Refusing to clean up a drive root: " + WideToUtf8(norm));
+    return RejectCleanupTarget(
+        reason_out, "Refusing to clean up a drive root: " + WideToUtf8(norm));
   }
   if (kind == RootKind::kVolumeGuid) {
-    return reject("Refusing to clean up a volume GUID root: " +
-                  WideToUtf8(norm));
+    return RejectCleanupTarget(reason_out,
+                               "Refusing to clean up a volume GUID root: " +
+                                   WideToUtf8(norm));
   }
   if (kind == RootKind::kUncShare) {
-    return reject("Refusing to clean up a UNC share root: " + WideToUtf8(norm));
+    return RejectCleanupTarget(reason_out,
+                               "Refusing to clean up a UNC share root: " +
+                                   WideToUtf8(norm));
   }
 
   const std::wstring plain = StripExtendedPrefixForCheck(norm);
-  if (ClassifyPathKind(plain) != RootKind::kSubdirectory &&
-      ClassifyPathKind(plain) != RootKind::kUncSubdirectory) {
-    return reject("Refusing to clean up a root path: " + WideToUtf8(plain));
+  if (!IsSubdirectoryKind(ClassifyPathKind(plain))) {
+    return RejectCleanupTarget(
+        reason_out, "Refusing to clean up a root path: " + WideToUtf8(plain));
   }
   if (DetectIsVolumeRoot(plain)) {
-    return reject("Refusing to clean up a mounted volume root: " +
-                  WideToUtf8(plain));
+    return RejectCleanupTarget(reason_out,
+                               "Refusing to clean up a mounted volume root: " +
+                                   WideToUtf8(plain));
   }
   if (IsProtectedTopLevelName(TailAfterVolumePrefix(plain))) {
-    return reject("Refusing to clean up protected top-level OS directory: " +
-                  WideToUtf8(plain));
+    return RejectCleanupTarget(
+        reason_out, "Refusing to clean up protected top-level OS directory: " +
+                        WideToUtf8(plain));
   }
+  *plain_out = plain;
+  return true;
+}
 
-  // Lexical pre-checks against the protected set (also covers targets that do
-  // not exist yet, and hosts where a protected directory cannot be opened).
-  const std::vector<ProtectedDir> protected_dirs = BuildProtectedDirs();
+bool MatchesProtectedDirLexically(
+    const std::wstring &plain,
+    const std::vector<ProtectedDir> &protected_dirs) noexcept {
   for (const ProtectedDir &dir : protected_dirs) {
     if (IsSameOrSubpathIgnoreCase(dir.path, plain) ||
         (dir.forbid_descendants &&
          IsSameOrSubpathIgnoreCase(plain, dir.path))) {
-      return reject("Refusing to clean up protected system directory: " +
-                    WideToUtf8(plain));
+      return true;
     }
   }
+  return false;
+}
 
-  // Filesystem identity checks: open the target itself (never its reparse
-  // target) and compare final paths, defeating 8.3 short names, volume GUID
-  // aliases, mapped drives, and junction/symlink ancestors.
-  const CanonicalDir target =
-      OpenCanonicalDirectory(ToExtendedWin32Path(norm),
-                             /*open_reparse_point=*/true);
+bool ValidateAndNormalizeLexicalTarget(
+    const std::wstring &path, const std::vector<ProtectedDir> &protected_dirs,
+    std::wstring *norm_out, std::string *reason_out) {
+  if (!ValidateRawCleanupPath(path, reason_out)) {
+    return false;
+  }
+  std::wstring resolved;
+  if (!ResolveCleanupPathToFull(path, &resolved, reason_out)) {
+    return false;
+  }
+  const std::wstring norm = NormalizeWin32Path(resolved);
+  std::wstring plain;
+  if (!ValidateNormalizedCleanupRoot(norm, &plain, reason_out)) {
+    return false;
+  }
+
+  // Lexical pre-checks against the protected set (also covers targets that do
+  // not exist yet, and hosts where a protected directory cannot be opened).
+  if (MatchesProtectedDirLexically(plain, protected_dirs)) {
+    return RejectCleanupTarget(
+        reason_out, "Refusing to clean up protected system directory: " +
+                        WideToUtf8(plain));
+  }
+  *norm_out = norm;
+  return true;
+}
+
+// Opens the target itself (never its reparse target) and verifies it is a
+// non-reparse directory. Sets *not_found_out = true when nothing exists.
+bool OpenExistingCleanupTarget(const std::wstring &norm,
+                               CanonicalDir *target_out, bool *not_found_out,
+                               std::string *reason_out) {
+  *not_found_out = false;
+  CanonicalDir target = OpenCanonicalDirectory(ToExtendedWin32Path(norm),
+                                               /*open_reparse_point=*/true);
   if (target.error != ERROR_SUCCESS) {
     if (IsNotFoundError(target.error)) {
-      return true; // Nothing to delete; *canonical_out stays empty.
+      *not_found_out = true;
+      return true;
     }
-    return reject("Failed to open cleanup target '" + WideToUtf8(norm) +
-                  "': " + FormatWin32Error(target.error));
+    return RejectCleanupTarget(
+        reason_out, "Failed to open cleanup target '" + WideToUtf8(norm) +
+                        "': " + FormatWin32Error(target.error));
   }
   if ((target.attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-    return reject("Refusing to clean up a reparse point (junction/symlink): " +
-                  WideToUtf8(norm));
+    return RejectCleanupTarget(
+        reason_out,
+        "Refusing to clean up a reparse point (junction/symlink): " +
+            WideToUtf8(norm));
   }
   if ((target.attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-    return reject("Cleanup target is not a directory: " + WideToUtf8(norm));
+    return RejectCleanupTarget(
+        reason_out, "Cleanup target is not a directory: " + WideToUtf8(norm));
   }
+  *target_out = std::move(target);
+  return true;
+}
 
-  const std::wstring &canonical =
-      !target.guid_path.empty() ? target.guid_path : target.dos_path;
+bool ValidateCanonicalTargetForms(const CanonicalDir &target,
+                                  std::string *reason_out) {
   for (const std::wstring *form : {&target.guid_path, &target.dos_path}) {
     if (form->empty()) {
       continue;
     }
     if (IsUncAdminShare(*form)) {
-      return reject("Cleanup target resolves to a UNC administrative share: " +
-                    WideToUtf8(*form));
+      return RejectCleanupTarget(
+          reason_out,
+          "Cleanup target resolves to a UNC administrative share: " +
+              WideToUtf8(*form));
     }
-    const RootKind form_kind = ClassifyPathKind(*form);
-    if (form_kind == RootKind::kDriveLetter ||
-        form_kind == RootKind::kVolumeGuid ||
-        form_kind == RootKind::kUncShare) {
-      return reject("Cleanup target resolves to a volume or share root: " +
-                    WideToUtf8(*form));
+    if (IsRootPathKind(ClassifyPathKind(*form))) {
+      return RejectCleanupTarget(
+          reason_out, "Cleanup target resolves to a volume or share root: " +
+                          WideToUtf8(*form));
     }
     if (IsProtectedTopLevelName(TailAfterVolumePrefix(*form))) {
-      return reject("Cleanup target resolves to a protected top-level OS "
-                    "directory: " +
-                    WideToUtf8(*form));
+      return RejectCleanupTarget(
+          reason_out,
+          "Cleanup target resolves to a protected top-level OS directory: " +
+              WideToUtf8(*form));
     }
   }
+  return true;
+}
 
+bool ValidateCanonicalAgainstProtectedDirs(
+    const std::wstring &norm, const std::wstring &canonical,
+    const CanonicalDir &target, const std::vector<ProtectedDir> &protected_dirs,
+    std::string *reason_out) {
   for (const ProtectedDir &dir : protected_dirs) {
     const CanonicalDir prot =
         OpenCanonicalDirectory(ToExtendedWin32Path(dir.path),
@@ -766,13 +850,51 @@ bool ResolveSafeCleanupTarget(const std::wstring &path,
     }
     if (CanonicalSameOrSubpath(prot, target) ||
         (dir.forbid_descendants && CanonicalSameOrSubpath(target, prot))) {
-      return reject("Cleanup target '" + WideToUtf8(norm) +
-                    "' resolves to protected system directory '" +
-                    WideToUtf8(dir.path) + "' (canonical '" +
-                    WideToUtf8(canonical) + "').");
+      return RejectCleanupTarget(
+          reason_out, "Cleanup target '" + WideToUtf8(norm) +
+                          "' resolves to protected system directory '" +
+                          WideToUtf8(dir.path) + "' (canonical '" +
+                          WideToUtf8(canonical) + "').");
     }
   }
+  return true;
+}
 
+} // namespace
+
+bool ResolveSafeCleanupTarget(const std::wstring &path,
+                              std::wstring *canonical_out,
+                              std::string *reason_out) {
+  if (canonical_out != nullptr) {
+    canonical_out->clear();
+  }
+  const std::vector<ProtectedDir> protected_dirs = BuildProtectedDirs();
+  std::wstring norm;
+  if (!ValidateAndNormalizeLexicalTarget(path, protected_dirs, &norm,
+                                         reason_out)) {
+    return false;
+  }
+
+  // Filesystem identity checks: open the target itself (never its reparse
+  // target) and compare final paths, defeating 8.3 short names, volume GUID
+  // aliases, mapped drives, and junction/symlink ancestors.
+  CanonicalDir target;
+  bool not_found = false;
+  if (!OpenExistingCleanupTarget(norm, &target, &not_found, reason_out)) {
+    return false;
+  }
+  if (not_found) {
+    return true; // Nothing to delete; *canonical_out stays empty.
+  }
+  if (!ValidateCanonicalTargetForms(target, reason_out)) {
+    return false;
+  }
+  const std::wstring &canonical =
+      !target.guid_path.empty() ? target.guid_path : target.dos_path;
+  if (!ValidateCanonicalAgainstProtectedDirs(norm, canonical, target,
+                                             protected_dirs, reason_out)) {
+    return false;
+  }
   if (canonical_out != nullptr) {
     *canonical_out = canonical;
   }

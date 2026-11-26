@@ -128,6 +128,43 @@ TEST(TempDirTest, IsSafeCleanupTargetRejectsUnsafePaths) {
   EXPECT_TRUE(IsSafeCleanupTarget(
       JoinPath(host_tmp, L"fst_safe_sub_absent_987654"), &reason))
       << reason;
+
+  // Null optional out-parameters must be handled safely on both accept and
+  // reject paths.
+  EXPECT_FALSE(ResolveSafeCleanupTarget(L"C:\\", nullptr, nullptr));
+  EXPECT_TRUE(ResolveSafeCleanupTarget(
+      JoinPath(host_tmp, L"fst_safe_sub_absent_987654"), nullptr, nullptr));
+}
+
+TEST(TempDirTest, ResolveSafeCleanupTargetReportsDistinctRejectionReasons) {
+  struct ReasonCase {
+    const wchar_t *path;
+    const char *expected_substr;
+  };
+  const ReasonCase cases[] = {
+      {L"", "empty"},
+      {L"C:\\fstest_ntfs\\..\\Windows", "'..'"},
+      {L"C:Windows", "drive-relative"},
+      {L"\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\Windows", "GLOBALROOT"},
+      {L"\\\\.\\C:\\fstest_ntfs", "device-namespace"},
+      {L"\\\\?\\C:\\fstest_ntfs\\.", "Extended cleanup target"},
+      {L"\\\\localhost\\C$\\Windows", "UNC administrative share"},
+      {L"C:\\", "drive root"},
+      {L"\\\\?\\Volume{12345678-1234-1234-1234-1234567890ab}\\",
+       "volume GUID root"},
+      {L"\\\\server\\share", "UNC share root"},
+      {L"D:\\Windows", "protected top-level OS directory"},
+      {L"C:\\Windows\\System32", "protected system directory"},
+  };
+  for (const ReasonCase &c : cases) {
+    std::wstring canonical = L"sentinel";
+    std::string reason;
+    EXPECT_FALSE(ResolveSafeCleanupTarget(c.path, &canonical, &reason))
+        << WideToUtf8(c.path);
+    EXPECT_TRUE(canonical.empty()) << WideToUtf8(c.path);
+    EXPECT_NE(reason.find(c.expected_substr), std::string::npos)
+        << "path=" << WideToUtf8(c.path) << " reason=" << reason;
+  }
 }
 
 TEST(TempDirTest, ResolveSafeCleanupTargetCanonicalizesExistingDirectory) {
@@ -167,7 +204,15 @@ TEST(TempDirTest, ResolveSafeCleanupTargetCanonicalizesExistingDirectory) {
   }
 
   // A regular file is not a cleanup directory.
-  ExpectUnsafe(dir.value->ChildPath(L"f.txt"));
+  {
+    std::wstring file_canonical = L"sentinel";
+    std::string file_reason;
+    EXPECT_FALSE(ResolveSafeCleanupTarget(dir.value->ChildPath(L"f.txt"),
+                                          &file_canonical, &file_reason));
+    EXPECT_TRUE(file_canonical.empty());
+    EXPECT_NE(file_reason.find("not a directory"), std::string::npos)
+        << file_reason;
+  }
 
   // The canonical form is accepted verbatim by ForceRemoveAll.
   std::string err;
@@ -254,10 +299,24 @@ TEST(TempDirTest, ResolveSafeCleanupTargetRejectsJunctionAncestor) {
   auto jres = CreateDirectoryJunction(junc, windir);
   ASSERT_TRUE(jres.ok()) << FormatWin32Error(jres.error);
 
-  ExpectUnsafe(JoinPath(junc, L"System32"));
+  {
+    std::wstring junc_canonical = L"sentinel";
+    std::string junc_reason;
+    EXPECT_FALSE(ResolveSafeCleanupTarget(JoinPath(junc, L"System32"),
+                                          &junc_canonical, &junc_reason));
+    EXPECT_TRUE(junc_canonical.empty());
+    EXPECT_NE(junc_reason.find("protected system directory"), std::string::npos)
+        << junc_reason;
+  }
   ExpectUnsafe(JoinPath(junc, L"System32\\drivers"));
   // The junction itself is a reparse point, never a cleanup directory.
-  ExpectUnsafe(junc);
+  {
+    std::wstring rp_canonical = L"sentinel";
+    std::string rp_reason;
+    EXPECT_FALSE(ResolveSafeCleanupTarget(junc, &rp_canonical, &rp_reason));
+    EXPECT_TRUE(rp_canonical.empty());
+    EXPECT_NE(rp_reason.find("reparse point"), std::string::npos) << rp_reason;
+  }
 
   // Cleanup removes only the junction; %WINDIR% is untouched.
   std::string err;
