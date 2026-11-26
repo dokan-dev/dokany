@@ -191,7 +191,7 @@ stage_guest_files() {
   fi
   cp "$SCRIPT_DIR/run_guest_tests.ps1" "$stage/"
   cp "$REPO_ROOT/samples/memfs_test.ps1" "$REPO_ROOT/samples/mirror_test.ps1" "$stage/repo/samples/"
-  cp "$REPO_ROOT/scripts/run_ifstest.ps1" "$REPO_ROOT/scripts/fstest_common.ps1" "$stage/repo/scripts/"
+  cp "$REPO_ROOT/scripts/run_ifstest.ps1" "$REPO_ROOT/scripts/fstest_common.ps1" "$REPO_ROOT/scripts/build_helper.ps1" "$stage/repo/scripts/"
   guest_ssh 'Remove-Item -Recurse -Force C:\ci -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path C:\ci | Out-Null'
   scp "${SCP_OPTS[@]}" -r "$stage"/* "Administrator@127.0.0.1:C:/ci/"
 }

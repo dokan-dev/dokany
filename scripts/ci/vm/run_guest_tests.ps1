@@ -7,7 +7,7 @@
         C:\ci\DokanSetup.exe
         C:\ci\fstest\dokan_fstest.exe, C:\ci\fstest\baselines\
         C:\ci\repo\samples\memfs_test.ps1, mirror_test.ps1, fstools\src\fsx\fsx.exe
-        C:\ci\repo\scripts\run_ifstest.ps1, fstest_common.ps1
+        C:\ci\repo\scripts\run_ifstest.ps1, fstest_common.ps1, build_helper.ps1
     The samples\ harnesses are the same scripts developers run locally, so CI and local runs stay identical.
 
     When invoked over Win32-OpenSSH (Session 0), relaunches itself inside interactive Session 1
@@ -139,13 +139,7 @@ if (-not $InSession1 -and (Get-Process -Id $PID).SessionId -eq 0) {
     exit $childExit
 }
 
-function Exec-External {
-    param([Parameter(Position = 0, Mandatory = $true)][scriptblock]$Command)
-    & $Command
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command returned non-zero exit code ${LASTEXITCODE}: $Command"
-    }
-}
+. (Join-Path -Path $PSScriptRoot -ChildPath 'repo\scripts\build_helper.ps1')
 
 function Assert-NoBugCheck {
     $bugChecks = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 1001; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting' } -ErrorAction SilentlyContinue

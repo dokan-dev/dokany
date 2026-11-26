@@ -1,5 +1,7 @@
 # Shared PowerShell 5.1+ helpers for running dokan_fstest against Dokan mounts.
 
+. (Join-Path -Path $PSScriptRoot -ChildPath 'build_helper.ps1')
+
 # Single source of truth for the pinned Liryna/fstools commit used by CI and
 # sample test scripts (modern MSBuild Current).
 $script:DokanFsToolsRevision = '9e378a7745a7dcb6fbfc1f649975e7a47c8f952e'
@@ -10,20 +12,6 @@ function Get-DokanFsToolsRevision {
     param()
 
     return $script:DokanFsToolsRevision
-}
-
-function Invoke-DokanExternal {
-    [CmdletBinding()]
-    param(
-        [Parameter(Position = 0, Mandatory = $true)]
-        [scriptblock]$Command
-    )
-
-    $global:LASTEXITCODE = 0
-    & $Command
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        throw "Command returned non-zero exit code ${LASTEXITCODE}: $Command"
-    }
 }
 
 function Initialize-DokanFsxTool {
@@ -45,15 +33,12 @@ function Initialize-DokanFsxTool {
     if (-not (Test-Path -LiteralPath $fsxExe -PathType Leaf)) {
         $fstoolsRevision = 'f010a68f96e004e8ef76436c0582e64216f400a0'
         $buildCmd = 'C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe'
-        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
-            $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath | Select-Object -First 1
-            if ($vsPath) {
-                $tmpBuildCmd = Join-Path -Path $vsPath -ChildPath 'MSBuild\Current\Bin\MSBuild.exe'
-                if (Test-Path -LiteralPath $tmpBuildCmd -PathType Leaf) {
-                    $buildCmd = $tmpBuildCmd
-                    $fstoolsRevision = Get-DokanFsToolsRevision
-                }
+        $vs = Find-DokanVisualStudio -Requires 'Microsoft.Component.MSBuild' -Latest | Select-Object -First 1
+        if ($vs) {
+            $tmpBuildCmd = Join-Path -Path $vs.Path -ChildPath 'MSBuild\Current\Bin\MSBuild.exe'
+            if (Test-Path -LiteralPath $tmpBuildCmd -PathType Leaf) {
+                $buildCmd = $tmpBuildCmd
+                $fstoolsRevision = Get-DokanFsToolsRevision
             }
         }
 
