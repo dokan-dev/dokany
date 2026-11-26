@@ -10,6 +10,8 @@ demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A 
 
 ```text
             ┌───────────────────────────────────┐
+            │ Validate CI scripts (Linux)       │  (unit tests for CI helpers)
+            ├───────────────────────────────────┤
             │ Build, sign and package (Windows) │──► DokanSetup-<ver>.exe, dokan-<ver>.zip
             │                                   │──► dokan-test-payload ───────┐
  push / PR ─┼───────────────────────────────────┤                              │ (needs +
@@ -30,6 +32,7 @@ demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A 
 
 | Job | Runner | What it does |
 | :--- | :--- | :--- |
+| `Validate CI scripts` | `ubuntu-latest` | [`test_ci_scripts.sh`](test_ci_scripts.sh): behavioral unit tests for `cleanup-pr-caches.yml` (`jq` run matcher), `scripts/run_ifstest.ps1` (`Find-IfsTestCreateProcFailure`), and `scripts/ci/install_cygwin.ps1` (`Assert-CygwinGpgVerification`). Skipped on `schedule` and `crash_selftest` runs. |
 | `Build, sign and package` | `windows-2025-vs2026` | [`install_cygwin.ps1`](install_cygwin.ps1) + [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
 | `Build test tools` | `windows-2025-vs2026` | [`build_test_tools.ps1`](build_test_tools.ps1): builds `dokan_fstest.exe` (static CRT, Server 2016 import gate, self-tests) and `fsx.exe`. Publishes single-zipped (`archive: false`) `dokan-fstest-<version>.zip` (prefixed `pr-<N>-` on pull requests) and `dokan-test-tools`. Runs in parallel with the Dokan build; skipped on `schedule` and `crash_selftest` runs. |
 | `Prepare VM image (<os>)` | `ubuntu-latest` | Computes the per-OS cache key via [`vm/image_cache_key.sh`](vm/image_cache_key.sh). On a cache miss, [`vm/bake_image.sh`](vm/bake_image.sh) installs Windows Server Core from Microsoft's evaluation ISO, provisions it (see below), and saves it to the Actions cache. On the 5-day `schedule:` run on `master`, restores each cached image to refresh its last-accessed time. |

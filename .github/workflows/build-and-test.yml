@@ -53,6 +53,22 @@ env:
   BUILD_NUMBER_OFFSET: 1000
 
 jobs:
+  validate-ci:
+    name: Validate CI scripts
+    if: github.event_name != 'schedule' && inputs.crash_selftest != 'bugcheck' && inputs.crash_selftest != 'hang'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run CI script unit tests
+        run: ./scripts/ci/test_ci_scripts.sh
+
   build:
     name: Build, sign and package
     if: github.event_name != 'schedule'
