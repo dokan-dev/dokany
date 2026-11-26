@@ -2,9 +2,6 @@
 // Copyright (c) 2026 Dokan Project Contributors
 
 #include "cli_args.h"
-#include "fstest/core/path.h"
-#include "fstest/core/status.h"
-#include "fstest/core/temp_dir.h"
 #include "json_util.h"
 #include "scorecard.h"
 #include "test_support.h"
@@ -397,11 +394,8 @@ TEST(ScorecardTest, CollectRegisteredTestIdsFindsCompiledTests) {
 }
 
 TEST(ScorecardTest, WriteScorecardJsonFileHandlesInvalidUtf8WithoutThrowing) {
-  const std::wstring host_tmp = test_support::GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-
-  auto dir = core::ScopedTempDir::Create(host_tmp, L"fstsc");
-  ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
+  test_support::ScopedTestDirectory dir(L"fstsc");
+  ASSERT_TRUE(dir.ok());
 
   Scorecard sc;
   TestRecord rec;
@@ -415,8 +409,7 @@ TEST(ScorecardTest, WriteScorecardJsonFileHandlesInvalidUtf8WithoutThrowing) {
   meta.mode = "strict";
   meta.exit_code = 1;
 
-  const std::string out_path =
-      core::WideToUtf8(dir.value->ChildPath(L"invalid_utf8_report.json"));
+  const std::string out_path = dir.ChildPathUtf8("invalid_utf8_report.json");
   std::string err;
   ASSERT_TRUE(WriteScorecardJsonFile(out_path, meta, sc, &err)) << err;
 
@@ -429,9 +422,6 @@ TEST(ScorecardTest, WriteScorecardJsonFileHandlesInvalidUtf8WithoutThrowing) {
       parsed["tests"][0]["failure_messages"][0].get<std::string>();
   // Invalid bytes are replaced with U+FFFD (\xEF\xBF\xBD) rather than throwing.
   EXPECT_NE(msg.find("\xEF\xBF\xBD"), std::string::npos) << msg;
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 } // namespace

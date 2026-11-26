@@ -9,7 +9,6 @@
 #include "fstest/core/path.h"
 #include "fstest/core/security.h"
 #include "fstest/core/status.h"
-#include "fstest/core/temp_dir.h"
 #include "test_support.h"
 
 #include <cstddef>
@@ -28,6 +27,7 @@ namespace fstest::core {
 namespace {
 
 using test_support::GetHostTempDir;
+using test_support::ScopedTestDirectory;
 
 template <typename T>
 void StoreAt(std::vector<uint8_t> *buf, size_t offset, T v) {
@@ -443,19 +443,15 @@ TEST(CoreHelpersTest, ProbeVolumeCapabilitiesOnTempAndMissingPath) {
             (caps.fs_flags & nt::kFileCaseSensitiveSearch) != 0);
 
   // Probing a guaranteed-nonexistent directory fails cleanly with error detail.
-  auto dir = ScopedTempDir::Create(host_tmp, L"fstcap");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
-  const auto missing_norm =
-      NormalizeRootPath(dir.value->ChildPath(L"does_not_exist"));
+  ScopedTestDirectory dir(L"fstcap");
+  ASSERT_TRUE(dir.ok());
+  const auto missing_norm = NormalizeRootPath(dir.ChildPath(L"does_not_exist"));
   ASSERT_TRUE(missing_norm.ok()) << FormatWin32Error(missing_norm.error);
 
   const VolumeCapabilities missing_caps =
       ProbeVolumeCapabilities(*missing_norm.value, os);
   EXPECT_FALSE(missing_caps.probe_succeeded);
   EXPECT_FALSE(missing_caps.probe_error.empty());
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(CoreHelpersTest, UniqueHandleSelfResetAndInvalidHandlePut) {
@@ -555,29 +551,21 @@ TEST(CoreHelpersTest, NtPathOverMaxLengthRejectedWithStatusNameTooLong) {
   EXPECT_EQ(open_res.status, STATUS_NAME_TOO_LONG);
 
   // Oversized junction target path fails cleanly before touching disk.
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto dir = ScopedTempDir::Create(host_tmp, L"fstjlen");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
-  const std::wstring junc_path = dir.value->ChildPath(L"too_long_junc");
+  ScopedTestDirectory dir(L"fstjlen");
+  ASSERT_TRUE(dir.ok());
+  const std::wstring junc_path = dir.ChildPath(L"too_long_junc");
   const std::wstring huge_target = L"C:\\" + std::wstring(10000u, L'x');
   auto jres = CreateDirectoryJunction(junc_path, huge_target);
   EXPECT_FALSE(jres.ok());
   EXPECT_EQ(jres.error, static_cast<DWORD>(ERROR_FILENAME_EXCED_RANGE));
   EXPECT_EQ(::GetFileAttributesW(junc_path.c_str()), INVALID_FILE_ATTRIBUTES);
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
+  ScopedTestDirectory dir(L"fstops");
+  ASSERT_TRUE(dir.ok());
 
-  auto dir = ScopedTempDir::Create(host_tmp, L"fstops");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
-
-  const auto norm = NormalizeRootPath(dir.value->Path());
+  const auto norm = NormalizeRootPath(dir.Path());
   ASSERT_TRUE(norm.ok()) << FormatWin32Error(norm.error);
   const VolumeCapabilities caps =
       ProbeVolumeCapabilities(*norm.value, GetOsInfo());
@@ -585,7 +573,7 @@ TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
 
   // 1. ListStreamsNt on file with alternate stream.
   if (caps.named_streams) {
-    const std::wstring fpath = dir.value->ChildExtendedPath(L"streams.txt");
+    const std::wstring fpath = dir.ChildExtendedPath(L"streams.txt");
     ASSERT_TRUE(WriteFileContents(fpath, "main_data").ok());
     ASSERT_TRUE(WriteFileContents(fpath + L":alt", "alt_payload!").ok());
 
@@ -613,7 +601,7 @@ TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
   // 2. QueryFileNameInfo on normal and >1024-byte nested long path (exercises
   // STATUS_BUFFER_OVERFLOW resize loop).
   {
-    std::wstring deep_dir = dir.value->ExtendedPath();
+    std::wstring deep_dir = dir.ExtendedPath();
     const std::wstring seg(100, L'n');
     for (int i = 0; i < 6; ++i) {
       deep_dir = JoinPath(deep_dir, seg + std::to_wstring(i));
@@ -641,8 +629,8 @@ TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
 
   // 3. QueryHardLinkEntries on a file with two hard links.
   if (caps.hard_links) {
-    const std::wstring link1 = dir.value->ChildExtendedPath(L"hl_one.txt");
-    const std::wstring link2 = dir.value->ChildExtendedPath(L"hl_two.txt");
+    const std::wstring link1 = dir.ChildExtendedPath(L"hl_one.txt");
+    const std::wstring link2 = dir.ChildExtendedPath(L"hl_two.txt");
     ASSERT_TRUE(WriteFileContents(link1, "linked").ok());
     ASSERT_NE(::CreateHardLinkW(link2.c_str(), link1.c_str(), nullptr), FALSE)
         << FormatWin32Error(::GetLastError());
@@ -671,7 +659,7 @@ TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
   // 4. QueryAllocatedRanges on a sparse file with two separated extents.
   if (caps.sparse_files) {
     const std::wstring sparse_path =
-        dir.value->ChildExtendedPath(L"sparse_ranges.bin");
+        dir.ChildExtendedPath(L"sparse_ranges.bin");
     auto fh = CreateWin32File(sparse_path, GENERIC_READ | GENERIC_WRITE,
                               kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
     ASSERT_TRUE(fh.ok()) << FormatWin32Error(fh.error);
@@ -701,9 +689,6 @@ TEST(CoreHelpersTest, ListStreamsNtQueryFileNameHardLinksAndAllocatedRanges) {
     EXPECT_GE(last.FileOffset.QuadPart + last.Length.QuadPart,
               kSecondOffset + static_cast<int64_t>(block.size()));
   }
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(CoreHelpersTest, EaBufferRejectsOversizedNameAndValue) {
@@ -1023,15 +1008,11 @@ TEST(CoreHelpersTest, CreateTokenWithoutPrivilegeAndScopedImpersonation) {
 }
 
 TEST(CoreHelpersTest, QueryHardLinkEntriesRegrowsBuffer) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto dir = ScopedTempDir::Create(host_tmp, L"fsthlgrow");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
-  const auto norm = NormalizeRootPath(dir.value->Path());
+  ScopedTestDirectory dir(L"fsthlgrow");
+  ASSERT_TRUE(dir.ok());
+  const auto norm = NormalizeRootPath(dir.Path());
   ASSERT_TRUE(norm.ok()) << FormatWin32Error(norm.error);
   if (!ProbeVolumeCapabilities(*norm.value, GetOsInfo()).hard_links) {
-    std::string ignored;
-    dir.value->Cleanup(&ignored);
     GTEST_SKIP() << "Host temp volume does not support hard links.";
   }
 
@@ -1039,137 +1020,118 @@ TEST(CoreHelpersTest, QueryHardLinkEntriesRegrowsBuffer) {
   // query buffer, forcing the STATUS_BUFFER_OVERFLOW regrowth path.
   constexpr int kLinks = 40;
   const std::wstring stem(100, L'h');
-  const std::wstring primary = dir.value->ChildExtendedPath(stem + L"_0");
+  const std::wstring primary = dir.ChildExtendedPath(stem + L"_0");
   ASSERT_TRUE(WriteFileContents(primary, "linked").ok());
   for (int i = 1; i < kLinks; ++i) {
     const std::wstring link =
-        dir.value->ChildExtendedPath(stem + L"_" + std::to_wstring(i));
+        dir.ChildExtendedPath(stem + L"_" + std::to_wstring(i));
     ASSERT_NE(::CreateHardLinkW(link.c_str(), primary.c_str(), nullptr), FALSE)
         << FormatWin32Error(::GetLastError());
   }
 
-  {
-    auto fh = CreateWin32File(primary, FILE_READ_ATTRIBUTES, kShareAll,
-                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh.ok()) << FormatWin32Error(fh.error);
-    auto links = QueryHardLinkEntries(fh.value->get());
-    ASSERT_TRUE(links.ok()) << FormatNtStatus(links.status);
-    EXPECT_GT(links.information, ULONG_PTR{4096});
-    ASSERT_EQ(links.value->size(), static_cast<size_t>(kLinks));
-    for (const auto &[parent_id, name] : *links.value) {
-      EXPECT_NE(parent_id, 0);
-      EXPECT_TRUE(name.starts_with(stem + L"_")) << WideToUtf8(name);
-    }
+  auto fh = CreateWin32File(primary, FILE_READ_ATTRIBUTES, kShareAll,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_TRUE(fh.ok()) << FormatWin32Error(fh.error);
+  auto links = QueryHardLinkEntries(fh.value->get());
+  ASSERT_TRUE(links.ok()) << FormatNtStatus(links.status);
+  EXPECT_GT(links.information, ULONG_PTR{4096});
+  ASSERT_EQ(links.value->size(), static_cast<size_t>(kLinks));
+  for (const auto &[parent_id, name] : *links.value) {
+    EXPECT_NE(parent_id, 0);
+    EXPECT_TRUE(name.starts_with(stem + L"_")) << WideToUtf8(name);
   }
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(CoreHelpersTest, QueryAllocatedRangesPagesAcrossManyExtents) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto dir = ScopedTempDir::Create(host_tmp, L"fstpages");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
-  const auto norm = NormalizeRootPath(dir.value->Path());
+  ScopedTestDirectory dir(L"fstpages");
+  ASSERT_TRUE(dir.ok());
+  const auto norm = NormalizeRootPath(dir.Path());
   ASSERT_TRUE(norm.ok()) << FormatWin32Error(norm.error);
   if (!ProbeVolumeCapabilities(*norm.value, GetOsInfo()).sparse_files) {
-    std::string ignored;
-    dir.value->Cleanup(&ignored);
     GTEST_SKIP() << "Host temp volume does not support sparse files.";
   }
 
-  {
-    auto fh = CreateWin32File(dir.value->ChildExtendedPath(L"paged.bin"),
-                              GENERIC_READ | GENERIC_WRITE, kShareAll,
-                              CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(fh.ok()) << FormatWin32Error(fh.error);
-    ASSERT_TRUE(SetSparseFile(fh.value->get(), true).ok());
+  auto fh = CreateWin32File(dir.ChildExtendedPath(L"paged.bin"),
+                            GENERIC_READ | GENERIC_WRITE, kShareAll, CREATE_NEW,
+                            FILE_ATTRIBUTE_NORMAL);
+  ASSERT_TRUE(fh.ok()) << FormatWin32Error(fh.error);
+  ASSERT_TRUE(SetSparseFile(fh.value->get(), true).ok());
 
-    // 150 extents 1 MiB apart (well beyond the 64-entry page in
-    // QueryAllocatedRanges and NTFS's 64 KiB sparse granularity).
-    constexpr int kExtents = 150;
-    constexpr int64_t kStride = 1024LL * 1024LL;
-    const std::string block(4096, 'P');
-    for (int i = 0; i < kExtents; ++i) {
-      LARGE_INTEGER pos{};
-      pos.QuadPart = i * kStride;
-      ASSERT_NE(::SetFilePointerEx(fh.value->get(), pos, nullptr, FILE_BEGIN),
-                FALSE)
-          << FormatWin32Error(::GetLastError());
-      ASSERT_TRUE(
-          WriteAllBytes(fh.value->get(), block.data(), block.size()).ok());
-    }
-
-    const int64_t total =
-        (kExtents - 1) * kStride + static_cast<int64_t>(block.size());
-    auto ranges = QueryAllocatedRanges(fh.value->get(), 0, total);
-    ASSERT_TRUE(ranges.ok()) << FormatWin32Error(ranges.error);
-    ASSERT_GE(ranges.value->size(), static_cast<size_t>(kExtents));
-
-    // Ranges are ordered, non-overlapping, and cover every written block.
-    int64_t prev_end = -1;
-    for (const auto &r : *ranges.value) {
-      EXPECT_GE(r.FileOffset.QuadPart, prev_end);
-      EXPECT_GT(r.Length.QuadPart, 0);
-      prev_end = r.FileOffset.QuadPart + r.Length.QuadPart;
-    }
-    for (int i = 0; i < kExtents; ++i) {
-      const int64_t start = i * kStride;
-      bool covered = false;
-      for (const auto &r : *ranges.value) {
-        if (r.FileOffset.QuadPart <= start &&
-            r.FileOffset.QuadPart + r.Length.QuadPart >=
-                start + static_cast<int64_t>(block.size())) {
-          covered = true;
-          break;
-        }
-      }
-      EXPECT_TRUE(covered) << "block " << i << " not reported";
-    }
+  // 150 extents 1 MiB apart (well beyond the 64-entry page in
+  // QueryAllocatedRanges and NTFS's 64 KiB sparse granularity).
+  constexpr int kExtents = 150;
+  constexpr int64_t kStride = 1024LL * 1024LL;
+  const std::string block(4096, 'P');
+  for (int i = 0; i < kExtents; ++i) {
+    LARGE_INTEGER pos{};
+    pos.QuadPart = i * kStride;
+    ASSERT_NE(::SetFilePointerEx(fh.value->get(), pos, nullptr, FILE_BEGIN),
+              FALSE)
+        << FormatWin32Error(::GetLastError());
+    ASSERT_TRUE(
+        WriteAllBytes(fh.value->get(), block.data(), block.size()).ok());
   }
 
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
+  const int64_t total =
+      (kExtents - 1) * kStride + static_cast<int64_t>(block.size());
+  auto ranges = QueryAllocatedRanges(fh.value->get(), 0, total);
+  ASSERT_TRUE(ranges.ok()) << FormatWin32Error(ranges.error);
+  ASSERT_GE(ranges.value->size(), static_cast<size_t>(kExtents));
+
+  // Ranges are ordered, non-overlapping, and cover every written block.
+  int64_t prev_end = -1;
+  for (const auto &r : *ranges.value) {
+    EXPECT_GE(r.FileOffset.QuadPart, prev_end);
+    EXPECT_GT(r.Length.QuadPart, 0);
+    prev_end = r.FileOffset.QuadPart + r.Length.QuadPart;
+  }
+  for (int i = 0; i < kExtents; ++i) {
+    const int64_t start = i * kStride;
+    bool covered = false;
+    for (const auto &r : *ranges.value) {
+      if (r.FileOffset.QuadPart <= start &&
+          r.FileOffset.QuadPart + r.Length.QuadPart >=
+              start + static_cast<int64_t>(block.size())) {
+        covered = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(covered) << "block " << i << " not reported";
+  }
 }
 
 TEST(CoreHelpersTest, SetRenameAndLinkSupportSingleCharRelativeTarget) {
-  auto dir = ScopedTempDir::Create(GetHostTempDir(), L"fst1c");
-  ASSERT_TRUE(dir.ok()) << FormatWin32Error(dir.error);
+  ScopedTestDirectory dir(L"fst1c");
+  ASSERT_TRUE(dir.ok());
 
-  {
-    const std::wstring src = dir.value->ChildExtendedPath(L"src.txt");
-    ASSERT_TRUE(WriteFileContents(src, "single-char").ok());
+  const std::wstring src = dir.ChildExtendedPath(L"src.txt");
+  ASSERT_TRUE(WriteFileContents(src, "single-char").ok());
 
-    auto root_h = CreateWin32File(dir.value->ExtendedPath(),
-                                  FILE_LIST_DIRECTORY | SYNCHRONIZE, kShareAll,
-                                  OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-    ASSERT_TRUE(root_h.ok()) << FormatWin32Error(root_h.error);
+  auto root_h =
+      CreateWin32File(dir.ExtendedPath(), FILE_LIST_DIRECTORY | SYNCHRONIZE,
+                      kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
+  ASSERT_TRUE(root_h.ok()) << FormatWin32Error(root_h.error);
 
-    auto file_h = CreateWin32File(src, DELETE | SYNCHRONIZE, kShareAll,
-                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(file_h.ok()) << FormatWin32Error(file_h.error);
+  auto file_h = CreateWin32File(src, DELETE | SYNCHRONIZE, kShareAll,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_TRUE(file_h.ok()) << FormatWin32Error(file_h.error);
 
-    // 1-WCHAR relative rename exercises sizeof(FileRenameInfo) (24B on x64) >
-    // offsetof(FileRenameInfo, file_name) + 2 (22B).
-    const NtResult<void> ren =
-        SetRenameInfo(file_h.value->get(), L"b", root_h.value->get(),
-                      /*replace_if_exists=*/false);
-    ASSERT_TRUE(ren.ok()) << FormatNtStatus(ren.status);
-    file_h.value->reset();
-
-    auto link_src = CreateWin32File(
-        dir.value->ChildExtendedPath(L"b"), FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
-        kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_TRUE(link_src.ok()) << FormatWin32Error(link_src.error);
-    const NtResult<void> lnk =
-        SetLinkInfo(link_src.value->get(), L"c", root_h.value->get(),
+  // 1-WCHAR relative rename exercises sizeof(FileRenameInfo) (24B on x64) >
+  // offsetof(FileRenameInfo, file_name) + 2 (22B).
+  const NtResult<void> ren =
+      SetRenameInfo(file_h.value->get(), L"b", root_h.value->get(),
                     /*replace_if_exists=*/false);
-    ASSERT_TRUE(lnk.ok()) << FormatNtStatus(lnk.status);
-  }
+  ASSERT_TRUE(ren.ok()) << FormatNtStatus(ren.status);
+  file_h.value->reset();
 
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
+  auto link_src = CreateWin32File(
+      dir.ChildExtendedPath(L"b"), FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+      kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_TRUE(link_src.ok()) << FormatWin32Error(link_src.error);
+  const NtResult<void> lnk =
+      SetLinkInfo(link_src.value->get(), L"c", root_h.value->get(),
+                  /*replace_if_exists=*/false);
+  ASSERT_TRUE(lnk.ok()) << FormatNtStatus(lnk.status);
 }
 
 TEST(CoreHelpersTest,

@@ -8,7 +8,6 @@
 #include "fstest/core/path.h"
 #include "fstest/core/security.h"
 #include "fstest/core/status.h"
-#include "fstest/core/temp_dir.h"
 #include "fstest/suite/test_config.h"
 #include "fstest/suite/test_fixture.h"
 #include "fstest/suite/test_metadata.h"
@@ -30,7 +29,7 @@
 namespace fstest {
 namespace {
 
-using test_support::GetHostTempDir;
+using test_support::ScopedTestDirectory;
 
 class ScopedSuiteConfigReset {
 public:
@@ -148,13 +147,10 @@ TEST(AssertionsTest, Win32OkCoversWin32ResultAndOpenResult) {
 }
 
 TEST(SecurityHelpersTest, ScopedDaclRestoreRestoresAccessOnDestruction) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
+  ScopedTestDirectory dir(L"fstsdr");
+  ASSERT_TRUE(dir.ok());
 
-  auto dir = core::ScopedTempDir::Create(host_tmp, L"fstsdr");
-  ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
-
-  const std::wstring file_ext = dir.value->ChildExtendedPath(L"deny_me.txt");
+  const std::wstring file_ext = dir.ChildExtendedPath(L"deny_me.txt");
   auto wr = core::WriteFileContents(file_ext, "protected payload");
   ASSERT_TRUE(wr.ok()) << core::FormatWin32Error(wr.error);
 
@@ -186,19 +182,13 @@ TEST(SecurityHelpersTest, ScopedDaclRestoreRestoresAccessOnDestruction) {
   EXPECT_EQ(*restored_read.value, "protected payload");
   EXPECT_NE(::DeleteFileW(file_ext.c_str()), FALSE)
       << core::FormatWin32Error(::GetLastError());
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(SecurityHelpersTest, ScopedDaclRestoreMoveAndExplicitRestoreNow) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
+  ScopedTestDirectory dir(L"fstmv");
+  ASSERT_TRUE(dir.ok());
 
-  auto dir = core::ScopedTempDir::Create(host_tmp, L"fstmv");
-  ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
-
-  const std::wstring file_ext = dir.value->ChildExtendedPath(L"move_dacl.txt");
+  const std::wstring file_ext = dir.ChildExtendedPath(L"move_dacl.txt");
   ASSERT_TRUE(core::WriteFileContents(file_ext, "move payload").ok());
 
   const std::wstring nt_path = core::VerbatimToNtPath(file_ext);
@@ -221,19 +211,13 @@ TEST(SecurityHelpersTest, ScopedDaclRestoreMoveAndExplicitRestoreNow) {
   ASSERT_TRUE(content.ok()) << core::FormatWin32Error(content.error);
   EXPECT_EQ(*content.value, "move payload");
   EXPECT_NE(::DeleteFileW(file_ext.c_str()), FALSE);
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(SecurityHelpersTest, SetFileSddlGetFileSddlAndResetDacl) {
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
+  ScopedTestDirectory dir(L"fstsddl");
+  ASSERT_TRUE(dir.ok());
 
-  auto dir = core::ScopedTempDir::Create(host_tmp, L"fstsddl");
-  ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
-
-  const std::wstring file_ext = dir.value->ChildExtendedPath(L"sddl.txt");
+  const std::wstring file_ext = dir.ChildExtendedPath(L"sddl.txt");
   ASSERT_TRUE(core::WriteFileContents(file_ext, "acl check").ok());
 
   auto set_res = core::SetFileSddl(file_ext, DACL_SECURITY_INFORMATION,
@@ -257,9 +241,6 @@ TEST(SecurityHelpersTest, SetFileSddlGetFileSddlAndResetDacl) {
   auto restored = core::ReadFileContents(file_ext);
   ASSERT_TRUE(restored.ok()) << core::FormatWin32Error(restored.error);
   EXPECT_EQ(*restored.value, "acl check");
-
-  std::string cleanup_err;
-  EXPECT_TRUE(dir.value->Cleanup(&cleanup_err)) << cleanup_err;
 }
 
 TEST(SuiteConfigTest, ConfigureSuiteAndResetSuiteConfig) {
@@ -346,12 +327,8 @@ TEST(SuiteMetadataTest, DomainMappingAndKnownSuiteChecks) {
 class FixturePreprobedAndOverridesTest : public NtfsTestBase {
 public:
   static void SetUpTestSuite() {
-    const std::wstring host_tmp = GetHostTempDir();
-    ASSERT_FALSE(host_tmp.empty());
-
-    auto dir = core::ScopedTempDir::Create(host_tmp, L"fstfix");
-    ASSERT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
-    suite_root_dir_ = std::move(*dir.value);
+    suite_root_dir_.emplace(L"fstfix");
+    ASSERT_TRUE(suite_root_dir_->ok());
 
     core::VolumeCapabilities preprobed{};
     preprobed.filesystem_name = L"SyntheticPreprobedFS";
@@ -378,15 +355,11 @@ public:
   static void TearDownTestSuite() {
     NtfsTestBase::TearDownTestSuite();
     ResetSuiteConfig();
-    if (suite_root_dir_.has_value()) {
-      std::string err;
-      EXPECT_TRUE(suite_root_dir_->Cleanup(&err)) << err;
-      suite_root_dir_.reset();
-    }
+    suite_root_dir_.reset();
   }
 
 private:
-  inline static std::optional<core::ScopedTempDir> suite_root_dir_;
+  inline static std::optional<ScopedTestDirectory> suite_root_dir_;
 };
 
 TEST_F(FixturePreprobedAndOverridesTest,
@@ -488,11 +461,9 @@ RunTearDownCapturingFailures(FixtureHarness *h) {
 
 TEST(LifecycleHooksTest, AllHooksRunInOrderWithRootOverride) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto override_dir = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(override_dir.ok()) << core::FormatWin32Error(override_dir.error);
-  const std::wstring override_root = override_dir.value->Path();
+  ScopedTestDirectory override_dir(L"fsthk");
+  ASSERT_TRUE(override_dir.ok());
+  const std::wstring override_root = override_dir.Path();
 
   std::vector<std::string> events;
   TestConfig cfg;
@@ -552,22 +523,17 @@ TEST(LifecycleHooksTest, AllHooksRunInOrderWithRootOverride) {
                         "after_test:" + full + ":passed",
                         "after_suite:" + suite,
                     }));
-
-  std::string err;
-  EXPECT_TRUE(override_dir.value->Cleanup(&err)) << err;
 }
 
 TEST(LifecycleHooksTest, BeforeTestFailureRecordsFatalSetupAndSkipsAfterTest) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto root_dir = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(root_dir.ok()) << core::FormatWin32Error(root_dir.error);
+  ScopedTestDirectory root_dir(L"fsthk");
+  ASSERT_TRUE(root_dir.ok());
 
   int after_test_calls = 0;
   int after_suite_calls = 0;
   TestConfig cfg;
-  cfg.root_path = root_dir.value->Path();
+  cfg.root_path = root_dir.Path();
   cfg.hooks.before_test = [](const TestLifecycleInfo &,
                              std::string *error_out) {
     *error_out = "mount gone";
@@ -602,9 +568,6 @@ TEST(LifecycleHooksTest, BeforeTestFailureRecordsFatalSetupAndSkipsAfterTest) {
   // because before_suite is unset.
   EXPECT_EQ(after_test_calls, 0);
   EXPECT_EQ(after_suite_calls, 1);
-
-  std::string err;
-  EXPECT_TRUE(root_dir.value->Cleanup(&err)) << err;
 }
 
 TEST(LifecycleHooksTest, BeforeSuiteFailureFailsSetUpAndSkipsOtherHooks) {
@@ -703,11 +666,9 @@ TEST(LifecycleHooksTest,
 
 TEST(LifecycleHooksTest, TempDirCreationFailureRecordsFatalSetup) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto parent = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(parent.ok()) << core::FormatWin32Error(parent.error);
-  const std::wstring root = parent.value->ChildPath(L"vanishing_root");
+  ScopedTestDirectory parent(L"fsthk");
+  ASSERT_TRUE(parent.ok());
+  const std::wstring root = parent.ChildPath(L"vanishing_root");
   ASSERT_NE(::CreateDirectoryW(root.c_str(), nullptr), FALSE)
       << core::FormatWin32Error(::GetLastError());
 
@@ -742,20 +703,15 @@ TEST(LifecycleHooksTest, TempDirCreationFailureRecordsFatalSetup) {
   FixtureHarness::TearDownTestSuite();
   // before_test succeeded, so after_test still runs for symmetry.
   EXPECT_EQ(after_test_calls, 1);
-
-  std::string err;
-  EXPECT_TRUE(parent.value->Cleanup(&err)) << err;
 }
 
 TEST(LifecycleHooksTest, AfterTestFailureRecordsFatalTeardown) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto root_dir = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(root_dir.ok()) << core::FormatWin32Error(root_dir.error);
+  ScopedTestDirectory root_dir(L"fsthk");
+  ASSERT_TRUE(root_dir.ok());
 
   TestConfig cfg;
-  cfg.root_path = root_dir.value->Path();
+  cfg.root_path = root_dir.Path();
   cfg.hooks.after_test = [](const TestLifecycleInfo &, bool,
                             std::string *error_out) {
     *error_out = "leak detected";
@@ -780,18 +736,13 @@ TEST(LifecycleHooksTest, AfterTestFailureRecordsFatalTeardown) {
     EXPECT_FALSE(DirectoryExists(test_dir));
   }
   FixtureHarness::TearDownTestSuite();
-
-  std::string err;
-  EXPECT_TRUE(root_dir.value->Cleanup(&err)) << err;
 }
 
 TEST(LifecycleHooksTest, RootIsReprobedForEverySuiteWithoutStaleCache) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto parent = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(parent.ok()) << core::FormatWin32Error(parent.error);
-  const std::wstring root = parent.value->ChildPath(L"suite_root");
+  ScopedTestDirectory parent(L"fsthk");
+  ASSERT_TRUE(parent.ok());
+  const std::wstring root = parent.ChildPath(L"suite_root");
   ASSERT_NE(::CreateDirectoryW(root.c_str(), nullptr), FALSE);
 
   TestConfig cfg;
@@ -820,9 +771,6 @@ TEST(LifecycleHooksTest, RootIsReprobedForEverySuiteWithoutStaleCache) {
     EXPECT_TRUE(CurrentTestHasProperty(kFatalSetupProperty, "1"));
   }
   FixtureHarness::TearDownTestSuite();
-
-  std::string err;
-  EXPECT_TRUE(parent.value->Cleanup(&err)) << err;
 }
 
 TEST(MountLivenessGuardTest, ParseSelfTestFault) {
@@ -929,11 +877,9 @@ TEST(MountLivenessGuardTest, LostBeforeFirstTestAndFaultInjection) {
 
 TEST(MountLivenessGuardTest, GuardInstalledInFixtureDetectsVanishedRoot) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto parent = core::ScopedTempDir::Create(host_tmp, L"fsthk");
-  ASSERT_TRUE(parent.ok()) << core::FormatWin32Error(parent.error);
-  const std::wstring root = parent.value->ChildPath(L"guarded_root");
+  ScopedTestDirectory parent(L"fsthk");
+  ASSERT_TRUE(parent.ok());
+  const std::wstring root = parent.ChildPath(L"guarded_root");
   ASSERT_NE(::CreateDirectoryW(root.c_str(), nullptr), FALSE);
 
   auto norm = core::NormalizeRootPath(root, std::nullopt);
@@ -974,18 +920,13 @@ TEST(MountLivenessGuardTest, GuardInstalledInFixtureDetectsVanishedRoot) {
   FixtureHarness::TearDownTestSuite();
   EXPECT_TRUE(guard.mount_lost());
   EXPECT_EQ(aborts, 1);
-
-  std::string err;
-  EXPECT_TRUE(parent.value->Cleanup(&err)) << err;
 }
 
 TEST(MountLivenessGuardTest, SuiteBoundaryVanishedRootTripsMountLost) {
   ScopedSuiteConfigReset reset_guard;
-  const std::wstring host_tmp = GetHostTempDir();
-  ASSERT_FALSE(host_tmp.empty());
-  auto parent = core::ScopedTempDir::Create(host_tmp, L"fstsb");
-  ASSERT_TRUE(parent.ok()) << core::FormatWin32Error(parent.error);
-  const std::wstring root = parent.value->ChildPath(L"suite_root");
+  ScopedTestDirectory parent(L"fstsb");
+  ASSERT_TRUE(parent.ok());
+  const std::wstring root = parent.ChildPath(L"suite_root");
   ASSERT_NE(::CreateDirectoryW(root.c_str(), nullptr), FALSE);
 
   auto norm = core::NormalizeRootPath(root, std::nullopt);
@@ -1030,9 +971,6 @@ TEST(MountLivenessGuardTest, SuiteBoundaryVanishedRootTripsMountLost) {
     EXPECT_EQ(RunTearDownCapturingFailures(&h).size(), 0u);
   }
   FixtureHarness::TearDownTestSuite();
-
-  std::string err;
-  EXPECT_TRUE(parent.value->Cleanup(&err)) << err;
 }
 
 } // namespace
