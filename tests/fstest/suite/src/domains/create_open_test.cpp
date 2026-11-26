@@ -924,21 +924,26 @@ TEST_F(CreateOpenTest, CreateNewAndCreateAlwaysOnExistingDirectoryFail) {
 // through such a name fails and creates nothing, while an existing directory
 // opens normally.
 //
-// OS-build threshold provenance: Windows Server 2022 (build 20348) returns
-// STATUS_OBJECT_NAME_INVALID (Win32 ERROR_INVALID_NAME), while Windows Server
-// 2025 / Windows 11 24H2 (build 26100+) returns STATUS_NOT_A_DIRECTORY (Win32
-// ERROR_DIRECTORY). Client builds between them (22000-22631) have not been
-// measured; kBuildWin11_24H2 is the lowest build on which the new status is
-// confirmed.
+// Windows Server 2022 (build 20348) returns STATUS_OBJECT_NAME_INVALID (Win32
+// ERROR_INVALID_NAME), while Windows 11 24H2 / Server 2025 (build 26100+)
+// returns STATUS_NOT_A_DIRECTORY (Win32 ERROR_DIRECTORY). Either status is
+// accepted across Windows builds so filesystem implementations do not need an
+// OS-version-dependent branch.
 TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   constexpr ULONG kSyncFile =
       nt::kFileNonDirectoryFile | nt::kFileSynchronousIoNonalert;
-  const DWORD expected_win_err = (Os().build >= core::kBuildWin11_24H2)
-                                     ? static_cast<DWORD>(ERROR_DIRECTORY)
-                                     : static_cast<DWORD>(ERROR_INVALID_NAME);
-  const NTSTATUS expected_nt_status = (Os().build >= core::kBuildWin11_24H2)
-                                          ? STATUS_NOT_A_DIRECTORY
-                                          : STATUS_OBJECT_NAME_INVALID;
+  auto expect_win_slash_err = [](DWORD err, const char *label) {
+    EXPECT_TRUE(err == static_cast<DWORD>(ERROR_INVALID_NAME) ||
+                err == static_cast<DWORD>(ERROR_DIRECTORY))
+        << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY for " << label
+        << ", got " << core::FormatWin32Error(err);
+  };
+  auto expect_nt_slash_status = [](NTSTATUS st, const char *label) {
+    EXPECT_TRUE(st == STATUS_OBJECT_NAME_INVALID ||
+                st == STATUS_NOT_A_DIRECTORY)
+        << "Expected STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY for "
+        << label << ", got " << core::FormatNtStatus(st);
+  };
 
   const std::wstring file = TestPath(L"trailing_slash.dat");
   const std::wstring file_slash = file + L"\\";
@@ -950,12 +955,15 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
       core::CreateWin32File(file_slash, GENERIC_READ, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(win_open);
-  EXPECT_WIN32_ERROR_CODE(win_open.error, expected_win_err);
+  expect_win_slash_err(win_open.error, "CreateFileW(OPEN_EXISTING)");
+  if (win_open) {
+    win_open.value->reset();
+  }
 
   auto nt_open = core::NtCreateFilePath(
       nt_file_slash, FILE_READ_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
       core::kShareAll, nt::kFileOpen, kSyncFile);
-  EXPECT_NT_STATUS(nt_open.status, expected_nt_status);
+  expect_nt_slash_status(nt_open.status, "NtCreateFile(FILE_OPEN)");
   if (nt_open) {
     nt_open.value->reset();
   }
@@ -968,7 +976,7 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   auto nt_create = core::NtCreateFilePath(
       nt_absent_slash, FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
       core::kShareAll, nt::kFileCreate, kSyncFile);
-  EXPECT_NT_STATUS(nt_create.status, expected_nt_status);
+  expect_nt_slash_status(nt_create.status, "NtCreateFile(FILE_CREATE)");
   if (nt_create) {
     nt_create.value->reset();
   }
@@ -1059,6 +1067,52 @@ TEST_F(CreateOpenTest, OverwriteAndSupersedeOfUserMappedFileFail) {
   ASSERT_WIN32_OK(after_unmap);
   after_unmap.handle.reset();
   EXPECT_TRUE(CheckFileSize(path, 0));
+}
+
+// Spec: [MS-FSA] 2.1.5.1.2 / NtCreateFile & Win32 CreateFileW --
+// FILE_OVERWRITE, FILE_OVERWRITE_IF, and CREATE_ALWAYS implicitly require
+// FILE_WRITE_DATA sharing compatibility against existing opens even when
+// DesiredAccess only requests read access.
+TEST_F(CreateOpenTest, OverwriteWithReadOnlyAccessChecksWriteShare) {
+  constexpr ULONG kSyncFile =
+      nt::kFileNonDirectoryFile | nt::kFileSynchronousIoNonalert;
+
+  const std::wstring path = TestPath(L"overwrite_ro_share.dat");
+  const std::wstring nt_path = TestNtPath(L"overwrite_ro_share.dat");
+  ASSERT_WIN32_OK(core::WriteFileContents(path, "intact_payload"));
+
+  // Hold H1 with read-only access and FILE_SHARE_READ only (no write sharing).
+  auto h1 = core::CreateWin32File(path, FILE_READ_DATA, FILE_SHARE_READ,
+                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_WIN32_OK(h1);
+
+  auto ovr = core::NtCreateFilePath(nt_path, FILE_READ_DATA | SYNCHRONIZE,
+                                    FILE_ATTRIBUTE_NORMAL, core::kShareAll,
+                                    nt::kFileOverwrite, kSyncFile);
+  EXPECT_NT_STATUS(ovr.status, STATUS_SHARING_VIOLATION);
+  if (ovr) {
+    ovr.value->reset();
+  }
+
+  auto ovr_if = core::NtCreateFilePath(nt_path, FILE_READ_DATA | SYNCHRONIZE,
+                                       FILE_ATTRIBUTE_NORMAL, core::kShareAll,
+                                       nt::kFileOverwriteIf, kSyncFile);
+  EXPECT_NT_STATUS(ovr_if.status, STATUS_SHARING_VIOLATION);
+  if (ovr_if) {
+    ovr_if.value->reset();
+  }
+
+  auto win_ca = core::CreateWin32File(path, GENERIC_READ,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL);
+  EXPECT_FALSE(win_ca);
+  EXPECT_WIN32_ERROR_CODE(win_ca.error, ERROR_SHARING_VIOLATION);
+  if (win_ca) {
+    win_ca.value->reset();
+  }
+
+  h1.value->reset();
+  EXPECT_TRUE(helpers::CheckFileContents(path, "intact_payload"));
 }
 
 } // namespace fstest

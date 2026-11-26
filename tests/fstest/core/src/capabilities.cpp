@@ -21,9 +21,20 @@ namespace {
 // Single Category 4a volume-policy probe: creates a >8.3 throwaway file in a
 // transient directory under root, queries FileBothDirectoryInformation for
 // ShortNameLength > 0, and removes the transient directory immediately.
-bool ProbeShortNamesEnabled(const NormalizedRoot &root) {
+//
+// Returns false (with *error_out set) when the probe itself could not run, so
+// suite setup fails loudly instead of silently skipping every 8.3 test. A
+// successful query reporting ShortNameLength == 0 returns true with
+// *enabled_out == false (8.3 generation disabled or unsupported).
+bool ProbeShortNamesEnabled(const NormalizedRoot &root, bool *enabled_out,
+                            std::string *error_out) {
+  *enabled_out = false;
   auto probe_dir = ScopedTempDir::Create(root.win32_root, L"fst83");
   if (!probe_dir) {
+    *error_out = "8.3 short-name probe: failed to create probe directory "
+                 "under '" +
+                 WideToUtf8(root.win32_root) +
+                 "': " + FormatWin32Error(probe_dir.error);
     return false;
   }
 
@@ -33,40 +44,62 @@ bool ProbeShortNamesEnabled(const NormalizedRoot &root) {
   auto file_handle = CreateWin32File(file_path, GENERIC_WRITE, kShareAll,
                                      CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   if (!file_handle) {
+    *error_out = "8.3 short-name probe: CreateFileW(probe file) failed: " +
+                 FormatWin32Error(file_handle.error);
     probe_dir.value->Cleanup();
     return false;
   }
   file_handle.value->reset();
 
-  bool has_short_name = false;
   auto dir_handle = CreateWin32File(
       probe_dir.value->ExtendedPath(), FILE_LIST_DIRECTORY | SYNCHRONIZE,
       kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  if (dir_handle) {
-    const auto &ntdll = Ntdll();
-    if (ntdll.NtQueryDirectoryFile != nullptr) {
-      std::wstring pattern(kLongName);
-      nt::UnicodeString pattern_us =
-          nt::MakeUnicodeString(pattern.data(), pattern.size());
-      std::vector<uint8_t> buf(1024, 0);
-      nt::IoStatusBlock iosb{};
-      const NTSTATUS st = ntdll.NtQueryDirectoryFile(
-          dir_handle.value->get(), nullptr, nullptr, nullptr, &iosb, buf.data(),
-          static_cast<ULONG>(buf.size()),
-          nt::FileInfoClass::FileBothDirectoryInformation,
-          /*return_single_entry=*/TRUE, &pattern_us, /*restart_scan=*/TRUE);
-      if (nt::NtSuccess(st) &&
-          iosb.information >= offsetof(nt::FileBothDirInfo, file_name)) {
-        const auto *info =
-            reinterpret_cast<const nt::FileBothDirInfo *>(buf.data());
-        has_short_name = (info->short_name_length > 0);
-      }
-    }
+  if (!dir_handle) {
+    *error_out = "8.3 short-name probe: CreateFileW(probe directory) failed: " +
+                 FormatWin32Error(dir_handle.error);
+    probe_dir.value->Cleanup();
+    return false;
+  }
+
+  const auto &ntdll = Ntdll();
+  if (ntdll.NtQueryDirectoryFile == nullptr) {
+    *error_out = "8.3 short-name probe: ntdll!NtQueryDirectoryFile unavailable";
     dir_handle.value->reset();
+    probe_dir.value->Cleanup();
+    return false;
+  }
+
+  std::wstring pattern(kLongName);
+  nt::UnicodeString pattern_us =
+      nt::MakeUnicodeString(pattern.data(), pattern.size());
+  std::vector<uint8_t> buf(1024, 0);
+  nt::IoStatusBlock iosb{};
+  const NTSTATUS st = ntdll.NtQueryDirectoryFile(
+      dir_handle.value->get(), nullptr, nullptr, nullptr, &iosb, buf.data(),
+      static_cast<ULONG>(buf.size()),
+      nt::FileInfoClass::FileBothDirectoryInformation,
+      /*return_single_entry=*/TRUE, &pattern_us, /*restart_scan=*/TRUE);
+  dir_handle.value->reset();
+
+  bool ok = false;
+  if (!nt::NtSuccess(st)) {
+    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
+                 "FileBothDirectoryInformation) failed: " +
+                 FormatNtStatus(st);
+  } else if (iosb.information < offsetof(nt::FileBothDirInfo, file_name)) {
+    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
+                 "FileBothDirectoryInformation) returned " +
+                 std::to_string(iosb.information) +
+                 " bytes (< fixed FILE_BOTH_DIR_INFORMATION header).";
+  } else {
+    const auto *info =
+        reinterpret_cast<const nt::FileBothDirInfo *>(buf.data());
+    *enabled_out = (info->short_name_length > 0);
+    ok = true;
   }
 
   probe_dir.value->Cleanup();
-  return has_short_name;
+  return ok;
 }
 
 } // namespace
@@ -231,6 +264,8 @@ VolumeCapabilities ProbeVolumeCapabilities(const NormalizedRoot &root,
   caps.open_by_file_id = (caps.fs_flags & nt::kFileSupportsOpenByFileId) != 0;
   caps.posix_unlink_rename =
       (caps.fs_flags & nt::kFileSupportsPosixUnlinkRename) != 0;
+  caps.volume_quotas = (caps.fs_flags & nt::kFileVolumeQuotas) != 0;
+  caps.usn_journal = (caps.fs_flags & nt::kFileSupportsUsnJournal) != 0;
 
   // Never probed empirically on root_path; defaults to true on Win10 1809+.
   caps.case_sensitive_dir = (os_info.build >= kBuildWin10_1809);
@@ -239,9 +274,16 @@ VolumeCapabilities ProbeVolumeCapabilities(const NormalizedRoot &root,
   caps.oplocks = true;
   caps.change_notifications = true;
 
-  // Single Category 4a volume-policy probe (8.3 short names).
+  // Single Category 4a volume-policy probe (8.3 short names). A probe API
+  // failure fails the whole capability probe rather than masquerading as
+  // "8.3 disabled" and silently skipping every short-name test.
   if (!caps.read_only_volume) {
-    caps.short_names_enabled = ProbeShortNamesEnabled(root);
+    std::string short_name_error;
+    if (!ProbeShortNamesEnabled(root, &caps.short_names_enabled,
+                                &short_name_error)) {
+      caps.probe_error = std::move(short_name_error);
+      return caps;
+    }
   }
 
   caps.probe_succeeded = true;

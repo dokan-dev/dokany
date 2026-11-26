@@ -13,8 +13,11 @@
 #include "streams_helpers.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <ios>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -531,7 +534,7 @@ TEST_F(StreamsTest, NtQueryFileStreamInformationSmallBufferAndDir) {
 
   // Buffer large enough for one entry (::$DATA = 40 bytes aligned) but too
   // small for both streams (::$DATA + :alpha:$DATA = 88 bytes) deterministically
-  // returns STATUS_BUFFER_OVERFLOW.
+  // returns STATUS_BUFFER_OVERFLOW with the first complete entry populated.
   std::vector<uint8_t> small_buf(48, 0);
   nt::IoStatusBlock iosb{};
   const NTSTATUS small_st =
@@ -539,6 +542,23 @@ TEST_F(StreamsTest, NtQueryFileStreamInformationSmallBufferAndDir) {
                                    static_cast<ULONG>(small_buf.size()),
                                    nt::FileInfoClass::FileStreamInformation);
   EXPECT_NT_STATUS(small_st, STATUS_BUFFER_OVERFLOW);
+  ASSERT_GE(static_cast<size_t>(iosb.information),
+            offsetof(nt::FileStreamInfo, stream_name));
+  ASSERT_LE(static_cast<size_t>(iosb.information), small_buf.size());
+  ULONG next_entry_offset = 0;
+  std::memcpy(&next_entry_offset,
+              small_buf.data() +
+                  offsetof(nt::FileStreamInfo, next_entry_offset),
+              sizeof(next_entry_offset));
+  EXPECT_EQ(next_entry_offset, ULONG{0});
+  const auto partial_entries =
+      core::ParseStreamInfoBuffer(std::span<const uint8_t>(
+          small_buf.data(), static_cast<size_t>(iosb.information)));
+  ASSERT_EQ(partial_entries.size(), size_t{1});
+  EXPECT_TRUE(partial_entries[0].name == L"::$DATA" ||
+              partial_entries[0].name == L":alpha:$DATA")
+      << "Unexpected partial stream name: '"
+      << core::WideToUtf8(partial_entries[0].name) << "'";
 
   // Properly sized query returns full multiset with exact StreamSize.
   auto nt_streams = core::ListStreamsNt(file_h.value->get());

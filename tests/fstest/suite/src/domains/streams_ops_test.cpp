@@ -507,6 +507,64 @@ TEST_F(StreamsTest, StreamDeleteWhileOpenLegacyDeletePending) {
   EXPECT_TRUE(streams_internal::CheckStreamNames(base, {L"::$DATA"}));
 }
 
+// Spec: [MS-FSA] 2.1.5.15.3 / 2.1.5.1.2 FileDispositionInformation — marking a
+// base file for legacy deletion while a named ADS handle is open keeps the
+// file alive until the ADS handle closes and fails new opens of the base file
+// and any stream with STATUS_DELETE_PENDING.
+TEST_F(StreamsTest, BaseFileLegacyDeletePendingWhileNamedStreamOpen) {
+  REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
+
+  const std::wstring base = TestPath(L"del_base_open_ads.dat");
+  const std::wstring keep = base + L":keep";
+  ASSERT_WIN32_OK(core::WriteFileContents(base, "base-payload"));
+  ASSERT_WIN32_OK(core::WriteFileContents(keep, "keep-stream-payload"));
+
+  {
+    auto h_stream = core::CreateWin32File(keep, GENERIC_READ, core::kShareAll,
+                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    ASSERT_WIN32_OK(h_stream);
+
+    {
+      auto h_base = core::CreateWin32File(base, DELETE, core::kShareAll,
+                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      ASSERT_WIN32_OK(h_base);
+      auto disp =
+          core::SetDisposition(h_base.value->get(), /*delete_file=*/true);
+      ASSERT_NT_SUCCESS(disp.status);
+    }
+
+    // Open ADS handle continues reading while the base file is delete-pending.
+    auto read_stream = core::ReadAllBytes(h_stream.value->get());
+    ASSERT_WIN32_OK(read_stream);
+    EXPECT_EQ(*read_stream.value, "keep-stream-payload");
+
+    // New opens of the base file, open ADS, and sibling ADS fail
+    // STATUS_DELETE_PENDING.
+    auto reopen_base = core::NtOpenFilePath(
+        TestNtPath(L"del_base_open_ads.dat"), FILE_READ_DATA | SYNCHRONIZE,
+        core::kShareAll, nt::kFileSynchronousIoNonalert);
+    EXPECT_FALSE(reopen_base);
+    EXPECT_NT_STATUS(reopen_base.status, STATUS_DELETE_PENDING);
+
+    auto reopen_keep = core::NtOpenFilePath(
+        TestNtPath(L"del_base_open_ads.dat:keep"), FILE_READ_DATA | SYNCHRONIZE,
+        core::kShareAll, nt::kFileSynchronousIoNonalert);
+    EXPECT_FALSE(reopen_keep);
+    EXPECT_NT_STATUS(reopen_keep.status, STATUS_DELETE_PENDING);
+
+    auto reopen_extra =
+        core::NtOpenFilePath(TestNtPath(L"del_base_open_ads.dat:extra"),
+                             FILE_READ_DATA | SYNCHRONIZE, core::kShareAll,
+                             nt::kFileSynchronousIoNonalert);
+    EXPECT_FALSE(reopen_extra);
+    EXPECT_NT_STATUS(reopen_extra.status, STATUS_DELETE_PENDING);
+  }
+
+  // Once the last stream handle closes, the entire file is removed.
+  EXPECT_TRUE(helpers::CheckFileNotFound(base));
+  EXPECT_TRUE(streams_internal::CheckStreamAbsent(keep));
+}
+
 // Spec: [MS-FSA] 2.1.5.15.4 FileDispositionInformationEx — on NTFS,
 // FILE_DISPOSITION_POSIX_SEMANTICS applied to a named ADS that another handle
 // holds open does NOT unlink the stream name immediately: the stream stays
@@ -514,6 +572,7 @@ TEST_F(StreamsTest, StreamDeleteWhileOpenLegacyDeletePending) {
 // handle closes, then it is removed.
 TEST_F(StreamsTest, StreamPosixDeleteWhileOpenStaysDeletePending) {
   REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
+  REQUIRE_FS_CAPABILITY(FsCapability::kPosixUnlinkRename);
   // FileDispositionInformationEx requires Windows 10 1709 (build 16299).
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
 
@@ -557,6 +616,7 @@ TEST_F(StreamsTest, StreamPosixDeleteWhileOpenStaysDeletePending) {
 // name immediately while the open ADS handle keeps reading its data.
 TEST_F(StreamsTest, PosixDeleteFileWhileStreamHandleOpenUnlinksName) {
   REQUIRE_FS_CAPABILITY(FsCapability::kNamedStreams);
+  REQUIRE_FS_CAPABILITY(FsCapability::kPosixUnlinkRename);
   // FileDispositionInformationEx requires Windows 10 1709 (build 16299).
   REQUIRE_MIN_OS_BUILD(core::kBuildWin10_1709);
 

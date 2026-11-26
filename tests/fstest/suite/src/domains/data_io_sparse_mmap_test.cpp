@@ -393,6 +393,41 @@ TEST_F(DataIoTest, TruncateMappedFileFailsUserMappedFile) {
   EXPECT_TRUE(CheckFileSize(mv.file.get(), kShrinkSize));
 }
 
+// Spec: [MS-FSA] 2.1.5.15.1 FileAllocationInformation -- shrinking allocation
+// size below an active user-mapped section fails STATUS_USER_MAPPED_FILE and
+// leaves EndOfFile and data intact until unmapped.
+TEST_F(DataIoTest, FileAllocationInfoTruncateMappedFileFailsUserMappedFile) {
+  const std::wstring path = TestPath(L"trunc_alloc_mapped.dat");
+  constexpr size_t kInitialSize = 16384u;
+  constexpr int64_t kShrinkSize = 4096;
+  const std::string original(kInitialSize, 'A');
+
+  ASSERT_WIN32_OK(core::WriteFileContents(path, original));
+
+  MappedFileView mv;
+  auto open_res =
+      OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
+                     FILE_MAP_ALL_ACCESS, kInitialSize, &mv);
+  ASSERT_WIN32_OK(open_res);
+
+  auto nt_shrink = core::SetAllocationSizeNt(mv.file.get(), kShrinkSize);
+  EXPECT_NT_STATUS(nt_shrink.status, STATUS_USER_MAPPED_FILE);
+  EXPECT_TRUE(CheckFileSize(mv.file.get(), static_cast<int64_t>(kInitialSize)));
+  EXPECT_TRUE(
+      helpers::AllBytesEqual(std::string_view(mv.bytes(), kInitialSize), 'A'));
+
+  // Unmap and close the section handle, then allocation shrink must succeed.
+  mv.UnmapAndCloseMapping();
+
+  ASSERT_NT_SUCCESS(
+      core::SetAllocationSizeNt(mv.file.get(), kShrinkSize).status);
+  EXPECT_TRUE(CheckFileSize(mv.file.get(), kShrinkSize));
+
+  mv.Reset();
+  EXPECT_TRUE(helpers::CheckFileContents(
+      path, std::string(static_cast<size_t>(kShrinkSize), 'A')));
+}
+
 // Spec: Win32 CreateFileMappingW -- PAGE_READWRITE with MaximumSize > EOF
 // extends the underlying file and zero-fills the newly extended region.
 TEST_F(DataIoTest, MemoryMappedCreateFileMappingExtendsEof) {
@@ -625,6 +660,111 @@ TEST_F(DataIoTest, MemoryMappedDirtyPagesPersistAfterCloseWithoutFlush) {
   }
 
   EXPECT_TRUE(helpers::CheckFileContents(path, expected));
+}
+
+// Spec: Win32 MapViewOfFile / FlushViewOfFile / [MS-FSA] 2.1.5.4 -- pages
+// dirtied through a PAGE_READWRITE view after the originating file handle has
+// already been closed (IRP_MJ_CLEANUP / FO_CLEANUP_COMPLETE completed before
+// dirtying) must be persisted via post-cleanup paging writes and returned by a
+// subsequent FILE_FLAG_NO_BUFFERING reader.
+TEST_F(DataIoTest, MemoryMappedDirtyPagesPersistAfterHandleCleanupBeforeWrite) {
+  const std::wstring path = TestPath(L"mmap_post_cleanup_write.dat");
+  const size_t sector = EffectiveSectorSize();
+  ASSERT_GE(sector, 512u);
+  const size_t map_size = sector * 2u;
+  constexpr char kInitByte = 'P';
+
+  std::string expected(map_size, kInitByte);
+  ASSERT_WIN32_OK(core::WriteFileContents(path, expected));
+
+  const std::string mark0 = "POST_CLEANUP_PG0!";
+  const std::string mark1 = "POST_CLEANUP_PG1!";
+  expected.replace(64, mark0.size(), mark0);
+  expected.replace(sector + 128, mark1.size(), mark1);
+
+  {
+    MappedFileView mv;
+    auto open_res =
+        OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
+                       FILE_MAP_WRITE, map_size, &mv);
+    ASSERT_WIN32_OK(open_res);
+
+    // Close the file handle FIRST so IRP_MJ_CLEANUP completes before any page
+    // is dirtied; subsequent flush/unmap must issue post-cleanup paging writes.
+    mv.file.reset();
+
+    char *mapped = mv.bytes();
+    std::memcpy(mapped + 64, mark0.data(), mark0.size());
+    std::memcpy(mapped + sector + 128, mark1.data(), mark1.size());
+    ASSERT_WIN32_TRUE(::FlushViewOfFile(mv.view.get(), map_size));
+    mv.UnmapAndCloseMapping();
+  }
+
+  PageAlignedBuffer buf(map_size);
+  ASSERT_TRUE(buf);
+  auto h_unbuffered =
+      core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
+  ASSERT_WIN32_OK(h_unbuffered);
+
+  DWORD bytes_read = 0;
+  ASSERT_WIN32_TRUE(::ReadFile(h_unbuffered.value->get(), buf.data(),
+                               static_cast<DWORD>(map_size), &bytes_read,
+                               nullptr));
+  ASSERT_EQ(bytes_read, static_cast<DWORD>(map_size));
+
+  const std::string_view actual(reinterpret_cast<const char *>(buf.data()),
+                                map_size);
+  EXPECT_EQ(actual.substr(64, mark0.size()), mark0);
+  EXPECT_EQ(actual.substr(sector + 128, mark1.size()), mark1);
+  EXPECT_EQ(std::memcmp(actual.data(), expected.data(), map_size), 0);
+}
+
+// Spec: [MS-FSA] 2.1.5.4 / Win32 MapViewOfFile -- paging writes must never
+// extend EndOfFile: dirtying trailing page slack past a non-page-aligned file
+// size and flushing must preserve EndOfFile and persist only [0, EndOfFile).
+TEST_F(DataIoTest, MemoryMappedNonPageAlignedDirtyTailPreservesEof) {
+  const std::wstring path = TestPath(L"mmap_non_page_aligned_tail.dat");
+  constexpr size_t kFileSize = 5000u;
+  constexpr size_t kMinRegionSize = 8192u;
+  constexpr char kInitByte = 'T';
+
+  std::string expected(kFileSize, kInitByte);
+  ASSERT_WIN32_OK(core::WriteFileContents(path, expected));
+
+  const std::string head_mark = "TAIL_TEST_HEAD_0";
+  const std::string page2_mark = "TAIL_TEST_PAGE_1";
+  expected.replace(0, head_mark.size(), head_mark);
+  expected.replace(4096, page2_mark.size(), page2_mark);
+
+  {
+    MappedFileView mv;
+    auto open_res =
+        OpenMappedView(path, GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE,
+                       FILE_MAP_WRITE, /*map_size=*/0, &mv);
+    ASSERT_WIN32_OK(open_res);
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    ASSERT_EQ(::VirtualQuery(mv.view.get(), &mbi, sizeof(mbi)), sizeof(mbi));
+    ASSERT_GE(mbi.RegionSize, kMinRegionSize);
+
+    char *mapped = mv.bytes();
+    std::memcpy(mapped, head_mark.data(), head_mark.size());
+    std::memcpy(mapped + 4096, page2_mark.data(), page2_mark.size());
+    // Dirty the trailing page slack [5000, 8192) past EndOfFile.
+    std::memset(mapped + kFileSize, 0x5A, kMinRegionSize - kFileSize);
+    ASSERT_WIN32_TRUE(::FlushViewOfFile(mv.view.get(), 0));
+    mv.Reset();
+  }
+
+  auto h_verify = core::CreateWin32File(path, GENERIC_READ, core::kShareAll,
+                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_WIN32_OK(h_verify);
+  EXPECT_TRUE(
+      CheckFileSize(h_verify.value->get(), static_cast<int64_t>(kFileSize)));
+  auto contents = core::ReadAllBytes(h_verify.value->get());
+  ASSERT_WIN32_OK(contents);
+  EXPECT_EQ(*contents.value, expected);
 }
 
 // Spec: [MS-FSA] 2.1.5.15.5 FileEndOfFileInformation -- extending EndOfFile
@@ -1156,9 +1296,19 @@ TEST_F(DataIoTest, SparseClearFlagWithHoleSucceedsAndPreservesData) {
   ASSERT_WIN32_OK(clear_with_hole);
   EXPECT_TRUE(CheckHandleAttributeBit(h.value->get(),
                                       FILE_ATTRIBUTE_SPARSE_FILE, false));
+  auto std_info = core::QueryStandardInfo(h.value->get());
+  ASSERT_NT_SUCCESS(std_info.status);
+  ASSERT_TRUE(std_info.value.has_value());
+  EXPECT_GE(std_info.value->allocation_size.QuadPart,
+            static_cast<LONGLONG>(kFileSize));
   EXPECT_TRUE(VerifyFilledChunkAt(h.value->get(), 0, kChunk, 0x00));
   EXPECT_TRUE(VerifyFilledChunkAt(h.value->get(), static_cast<int64_t>(kChunk),
                                   kChunk, 0x55));
+
+  h.value->reset();
+  auto comp_after = QueryCompressedSize(path);
+  ASSERT_WIN32_OK(comp_after);
+  EXPECT_GE(*comp_after.value, static_cast<uint64_t>(kFileSize));
 }
 
 // Spec: [MS-FSA] 2.1.5.10 / [MS-FSCC] 2.3 FSCTL_SET_ZERO_DATA -- an unaligned

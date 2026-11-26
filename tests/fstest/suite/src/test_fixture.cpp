@@ -78,6 +78,10 @@ const char *FsCapabilityName(FsCapability cap) noexcept {
     return "OpenByFileId (FILE_SUPPORTS_OPEN_BY_FILE_ID)";
   case FsCapability::kPosixUnlinkRename:
     return "PosixUnlinkRename (FILE_SUPPORTS_POSIX_UNLINK_RENAME)";
+  case FsCapability::kVolumeQuotas:
+    return "VolumeQuotas (FILE_VOLUME_QUOTAS)";
+  case FsCapability::kUsnJournal:
+    return "UsnJournal (FILE_SUPPORTS_USN_JOURNAL)";
   case FsCapability::kOplocks:
     return "Oplocks";
   case FsCapability::kChangeNotifications:
@@ -115,6 +119,10 @@ std::optional<bool> LookupOverride(const CapabilityOverrides &ov,
     return ov.open_by_file_id;
   case FsCapability::kPosixUnlinkRename:
     return ov.posix_unlink_rename;
+  case FsCapability::kVolumeQuotas:
+    return ov.volume_quotas;
+  case FsCapability::kUsnJournal:
+    return ov.usn_journal;
   case FsCapability::kOplocks:
     return ov.oplocks;
   case FsCapability::kChangeNotifications:
@@ -152,6 +160,10 @@ bool LookupProbedCapability(const core::VolumeCapabilities &caps,
     return caps.open_by_file_id;
   case FsCapability::kPosixUnlinkRename:
     return caps.posix_unlink_rename;
+  case FsCapability::kVolumeQuotas:
+    return caps.volume_quotas;
+  case FsCapability::kUsnJournal:
+    return caps.usn_journal;
   case FsCapability::kOplocks:
     return caps.oplocks;
   case FsCapability::kChangeNotifications:

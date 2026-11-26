@@ -215,6 +215,144 @@ TEST_F(TimestampsAttrsTest, SetFileTimeExplicitAndNullPreservesUnchanged) {
   ASSERT_WIN32_TRUE(::DeleteFileW(path.c_str()));
 }
 
+// Spec: [MS-FSA] 2.1.5.15.2 FileBasicInformation / [MS-FSCC] 2.6 / Win32
+// SetFileTime -- setting timestamps via SetFileTime or NtSetInformationFile
+// (FileBasicInformation) with FileAttributes == 0 must preserve all existing
+// file attributes, including HIDDEN, SYSTEM, ARCHIVE, NOT_CONTENT_INDEXED, and
+// READONLY.
+TEST_F(TimestampsAttrsTest, SetFileTimePreservesExistingFileAttributes) {
+  const int64_t t_create_1 =
+      core::MakeUtcFileTimeInt64(2022, 3, 4, 5, 6, 7) + 1234567;
+  const int64_t t_write_1 =
+      core::MakeUtcFileTimeInt64(2023, 4, 5, 6, 7, 8) + 2345678;
+  const int64_t t_create_2 =
+      core::MakeUtcFileTimeInt64(2024, 5, 6, 7, 8, 9) + 3456789;
+  const int64_t t_write_2 =
+      core::MakeUtcFileTimeInt64(2025, 6, 7, 8, 9, 10) + 4567890;
+  const FILETIME ft_create_1 = helpers::Int64ToFileTime(t_create_1);
+  const FILETIME ft_write_1 = helpers::Int64ToFileTime(t_write_1);
+
+  // (a) HIDDEN | SYSTEM | ARCHIVE | NOT_CONTENT_INDEXED.
+  {
+    const std::wstring path = TestPath(L"sft_preserve_hsani.dat");
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "preserve-a"));
+
+    constexpr DWORD kCoreAttrsA =
+        FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE;
+    constexpr DWORD kFullAttrsA =
+        kCoreAttrsA | nt::kFileAttributeNotContentIndexed;
+    ASSERT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), kFullAttrsA));
+    auto before = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(before);
+    ASSERT_EQ(MaskPolicyAttributes(*before.value), kCoreAttrsA);
+    ASSERT_NE(*before.value & nt::kFileAttributeNotContentIndexed, 0u);
+
+    // Win32 SetFileTime (sends FileBasicInformation with FileAttributes == 0).
+    {
+      auto h = core::CreateWin32File(
+          path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+          core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      ASSERT_WIN32_OK(h);
+      ASSERT_WIN32_TRUE(::SetFileTime(h.value->get(), &ft_create_1,
+                                      /*lpLastAccessTime=*/nullptr,
+                                      &ft_write_1));
+    }
+    auto after_sft = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(after_sft);
+    EXPECT_EQ(MaskPolicyAttributes(*after_sft.value), kCoreAttrsA);
+    EXPECT_NE(*after_sft.value & nt::kFileAttributeNotContentIndexed, 0u);
+    auto times_sft = helpers::QueryPathBasicInfo(path);
+    ASSERT_TRUE(times_sft) << times_sft.Describe();
+    EXPECT_EQ(times_sft.value->creation_time.QuadPart, t_create_1);
+    EXPECT_EQ(times_sft.value->last_write_time.QuadPart, t_write_1);
+
+    // Direct NtSetInformationFile(FileBasicInformation) with FileAttributes=0.
+    {
+      auto h = core::CreateWin32File(
+          path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+          core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      ASSERT_WIN32_OK(h);
+      nt::FileBasicInfo info{};
+      info.creation_time.QuadPart = t_create_2;
+      info.last_write_time.QuadPart = t_write_2;
+      info.file_attributes = 0;
+      ASSERT_NT_SUCCESS(core::SetBasicInfo(h.value->get(), info).status);
+    }
+    auto after_nt = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(after_nt);
+    EXPECT_EQ(MaskPolicyAttributes(*after_nt.value), kCoreAttrsA);
+    EXPECT_NE(*after_nt.value & nt::kFileAttributeNotContentIndexed, 0u);
+    auto times_nt = helpers::QueryPathBasicInfo(path);
+    ASSERT_TRUE(times_nt) << times_nt.Describe();
+    EXPECT_EQ(times_nt.value->creation_time.QuadPart, t_create_2);
+    EXPECT_EQ(times_nt.value->last_write_time.QuadPart, t_write_2);
+  }
+
+  // (b) READONLY | HIDDEN opened with FILE_WRITE_ATTRIBUTES.
+  {
+    const std::wstring path = TestPath(L"sft_preserve_ro_hidden.dat");
+    ASSERT_WIN32_OK(core::WriteFileContents(path, "preserve-b"));
+
+    struct ScopedClearReadOnly {
+      const std::wstring *target = nullptr;
+      explicit ScopedClearReadOnly(const std::wstring &p) noexcept
+          : target(&p) {}
+      ~ScopedClearReadOnly() {
+        if (target != nullptr) {
+          ::SetFileAttributesW(target->c_str(), FILE_ATTRIBUTE_NORMAL);
+        }
+      }
+      ScopedClearReadOnly(const ScopedClearReadOnly &) = delete;
+      ScopedClearReadOnly &operator=(const ScopedClearReadOnly &) = delete;
+    } clear_ro_guard(path);
+
+    constexpr DWORD kAttrsB = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN;
+    ASSERT_WIN32_TRUE(::SetFileAttributesW(path.c_str(), kAttrsB));
+    auto before = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(before);
+    ASSERT_EQ(MaskPolicyAttributes(*before.value), kAttrsB);
+
+    {
+      auto h = core::CreateWin32File(
+          path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+          core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      ASSERT_WIN32_OK(h);
+      ASSERT_WIN32_TRUE(::SetFileTime(h.value->get(), &ft_create_1,
+                                      /*lpLastAccessTime=*/nullptr,
+                                      &ft_write_1));
+    }
+    auto after_sft = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(after_sft);
+    EXPECT_EQ(MaskPolicyAttributes(*after_sft.value), kAttrsB);
+    auto times_sft = helpers::QueryPathBasicInfo(path);
+    ASSERT_TRUE(times_sft) << times_sft.Describe();
+    EXPECT_EQ(times_sft.value->creation_time.QuadPart, t_create_1);
+    EXPECT_EQ(times_sft.value->last_write_time.QuadPart, t_write_1);
+
+    {
+      auto h = core::CreateWin32File(
+          path, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+          core::kShareAll, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+      ASSERT_WIN32_OK(h);
+      nt::FileBasicInfo info{};
+      info.creation_time.QuadPart = t_create_2;
+      info.last_write_time.QuadPart = t_write_2;
+      info.file_attributes = 0;
+      ASSERT_NT_SUCCESS(core::SetBasicInfo(h.value->get(), info).status);
+    }
+    auto after_nt = core::QueryWin32Attributes(path);
+    ASSERT_WIN32_OK(after_nt);
+    EXPECT_EQ(MaskPolicyAttributes(*after_nt.value), kAttrsB);
+    auto times_nt = helpers::QueryPathBasicInfo(path);
+    ASSERT_TRUE(times_nt) << times_nt.Describe();
+    EXPECT_EQ(times_nt.value->creation_time.QuadPart, t_create_2);
+    EXPECT_EQ(times_nt.value->last_write_time.QuadPart, t_write_2);
+
+    EXPECT_WIN32_TRUE(
+        ::SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
+  }
+}
+
 // Spec: [MS-FSA] 2.1.5.15.2 FileBasicInformation -- SetFileAttributesW cleanly
 // transitions READONLY, SYSTEM, HIDDEN, ARCHIVE, and NORMAL on regular files.
 TEST_F(TimestampsAttrsTest, SetGetFileAttributesTransitionMatrix) {
@@ -1003,9 +1141,12 @@ TEST_F(TimestampsAttrsTest, TemporaryAttributeRejectedOnDirectory) {
   EXPECT_EQ(*attrs.value & FILE_ATTRIBUTE_TEMPORARY, 0u);
 }
 
-// Spec: [MS-FSA] & Win32 ReadFile — while the host NTFS last-access policy
-// (NtfsDisableLastAccessUpdate) disables last-access updates, reading a file's
-// data through a fresh handle leaves LastAccessTime untouched.
+// Spec: [MS-FSA] 2.1.5.3 & Win32 ReadFile — when the host ntfs.sys-private
+// registry policy (NtfsDisableLastAccessUpdate) disables last-access updates,
+// reading a file's data through a fresh handle leaves LastAccessTime untouched.
+// Note: NtfsDisableLastAccessUpdate is an ntfs.sys-private policy knob;
+// [MS-FSA] treats read-time LastAccessTime updates as object-store policy and
+// does not require non-NTFS or virtual filesystems to poll this registry value.
 TEST_F(TimestampsAttrsTest, ReadKeepsLastAccessTimeWhenUpdatesDisabled) {
   REQUIRE_LOCAL_VOLUME();
   REQUIRE_HOST_LAST_ACCESS_POLICY(LastAccessPolicy::kDisabled);
@@ -1027,10 +1168,12 @@ TEST_F(TimestampsAttrsTest, ReadKeepsLastAccessTimeWhenUpdatesDisabled) {
   EXPECT_EQ(after.value->last_access_time.QuadPart, kPast);
 }
 
-// Spec: [MS-FSA] & Win32 ReadFile — while the host NTFS last-access policy
-// (NtfsDisableLastAccessUpdate) enables last-access updates, reading a file's
-// data through a fresh handle and closing it advances LastAccessTime (and
-// nothing else).
+// Spec: [MS-FSA] 2.1.5.3 & Win32 ReadFile — when the host ntfs.sys-private
+// registry policy (NtfsDisableLastAccessUpdate) enables last-access updates,
+// reading a file's data through a fresh handle and closing it advances
+// LastAccessTime (and nothing else). Note: NtfsDisableLastAccessUpdate is an
+// ntfs.sys-private policy knob; non-NTFS/virtual filesystems are not required
+// by [MS-FSA] to consult this registry value.
 TEST_F(TimestampsAttrsTest, ReadAdvancesLastAccessTimeWhenUpdatesEnabled) {
   REQUIRE_LOCAL_VOLUME();
   REQUIRE_HOST_LAST_ACCESS_POLICY(LastAccessPolicy::kEnabled);
