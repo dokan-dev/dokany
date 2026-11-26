@@ -393,25 +393,15 @@ protected:
                 "fstest_self_test.exe.";
       return;
     }
-    const std::wstring host_tmp = GetHostTempDir();
-    ASSERT_FALSE(host_tmp.empty());
-
-    auto work = core::ScopedTempDir::Create(host_tmp, L"fste2e");
-    ASSERT_TRUE(work.ok()) << core::FormatWin32Error(work.error);
-    work_dir_ = std::move(*work.value);
+    work_dir_.emplace(L"fste2e");
+    ASSERT_TRUE(work_dir_->ok());
 
     root_dir_ = work_dir_->ChildPath(L"root");
     ASSERT_NE(::CreateDirectoryW(root_dir_.c_str(), nullptr), FALSE)
         << core::FormatWin32Error(::GetLastError());
   }
 
-  void TearDown() override {
-    if (work_dir_.has_value()) {
-      std::string err;
-      EXPECT_TRUE(work_dir_->Cleanup(&err)) << err;
-      work_dir_.reset();
-    }
-  }
+  void TearDown() override { work_dir_.reset(); }
 
   std::wstring WriteBaselineFile(std::wstring_view filename,
                                  std::string_view json_content) {
@@ -471,7 +461,7 @@ protected:
   }
 
   std::wstring exe_path_;
-  std::optional<core::ScopedTempDir> work_dir_;
+  std::optional<test_support::ScopedTestDirectory> work_dir_;
   std::wstring root_dir_;
 };
 

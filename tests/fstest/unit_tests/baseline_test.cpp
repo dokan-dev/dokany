@@ -6,7 +6,6 @@
 #include "fstest/core/handle.h"
 #include "fstest/core/path.h"
 #include "fstest/core/status.h"
-#include "fstest/core/temp_dir.h"
 #include "test_support.h"
 
 #include <algorithm>
@@ -23,49 +22,30 @@
 namespace fstest::cli {
 namespace {
 
-using test_support::GetHostTempDir;
-
-class ScopedTestDirectory {
+class BaselineTestDirectory {
 public:
-  ScopedTestDirectory() {
-    const std::wstring host_tmp = GetHostTempDir();
-    EXPECT_FALSE(host_tmp.empty());
-    auto dir = core::ScopedTempDir::Create(host_tmp, L"fstbl");
-    EXPECT_TRUE(dir.ok()) << core::FormatWin32Error(dir.error);
-    if (dir.ok()) {
-      dir_ = std::move(*dir.value);
-    }
+  BaselineTestDirectory() : dir_(L"fstbl") {}
+
+  BaselineTestDirectory(const BaselineTestDirectory &) = delete;
+  BaselineTestDirectory &operator=(const BaselineTestDirectory &) = delete;
+
+  bool ok() const noexcept { return dir_.ok(); }
+
+  const std::wstring &Path() const { return dir_.Path(); }
+
+  std::string ChildPathUtf8(std::string_view rel) const {
+    return dir_.ChildPathUtf8(rel);
   }
 
-  ~ScopedTestDirectory() {
-    if (dir_.has_value()) {
-      std::string err;
-      EXPECT_TRUE(dir_->Cleanup(&err)) << err;
-      dir_.reset();
-    }
-  }
-
-  ScopedTestDirectory(const ScopedTestDirectory &) = delete;
-  ScopedTestDirectory &operator=(const ScopedTestDirectory &) = delete;
-
-  std::string WriteFile(const std::string &rel, const std::string &content) {
-    const std::string utf8 = ChildPathUtf8(rel);
+  std::string WriteFile(std::string_view rel, std::string_view content) {
+    const std::string utf8 = dir_.ChildPathUtf8(rel);
     std::string err;
     EXPECT_TRUE(WriteTextFileUtf8(utf8, content, &err)) << err;
     return utf8;
   }
 
-  std::string ChildPathUtf8(const std::string &rel) const {
-    EXPECT_TRUE(dir_.has_value());
-    return dir_.has_value()
-               ? core::WideToUtf8(dir_->ChildPath(core::Utf8ToWide(rel)))
-               : std::string();
-  }
-
-  std::wstring Path() const { return dir_.has_value() ? dir_->Path() : L""; }
-
 private:
-  std::optional<core::ScopedTempDir> dir_;
+  test_support::ScopedTestDirectory dir_;
 };
 
 // Lists the names in dir, excluding "." and "..".
@@ -196,7 +176,8 @@ TEST(BaselineTest, MultiLevelInheritanceOverrideAndRemoveXfails) {
 }
 
 TEST(BaselineTest, ExtendsFileCrossManifestInheritance) {
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
   dir.WriteFile("base.json", R"({
     "schema_version": 1,
     "targets": {
@@ -262,7 +243,8 @@ TEST(BaselineTest, DetectsIntraFileAndCrossFileCycles) {
       ResolveBaselineInMemory(manifest, "a", 26100, "x64", &resolved, &err));
   EXPECT_NE(err.find("cycle"), std::string::npos) << err;
 
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
   const std::string f1 = dir.WriteFile("f1.json", R"({
     "schema_version": 1,
     "targets": {
@@ -848,7 +830,8 @@ TEST(BaselineTest, SkipCrashParsingPreservationAndGtestFilterHelpers) {
 }
 
 TEST(BaselineTest, ResolveFromLoadedManifestAvoidsReReadingRootFile) {
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
   dir.WriteFile("parent.json", R"({
     "schema_version": 1,
     "targets": {
@@ -1150,7 +1133,8 @@ TEST(BaselineTest,
 }
 
 TEST(BaselineTest, WriteTextFileUtf8AtomicallyReplacesWithoutTempDebris) {
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
   const std::string path = dir.WriteFile("atomic.json", "initial_payload\n");
 
   std::string err;
@@ -1175,7 +1159,8 @@ TEST(BaselineTest, WriteTextFileUtf8AtomicallyReplacesWithoutTempDebris) {
 }
 
 TEST(BaselineTest, WriteTextFileUtf8RenameFailureLeavesNoTempDebris) {
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
 
   // Destination is an existing directory: MoveFileExW cannot replace it.
   const std::string dir_dest = dir.ChildPathUtf8("dest_is_dir.json");
@@ -1297,7 +1282,8 @@ TEST(BaselineTest, GapFieldParsesValidatesAndRoundTrips) {
 }
 
 TEST(BaselineTest, RebaseExtendsFilePathsKeepsParentsReachable) {
-  ScopedTestDirectory dir;
+  BaselineTestDirectory dir;
+  ASSERT_TRUE(dir.ok());
   dir.WriteFile("parents\\base.json", R"({
     "schema_version": 1,
     "targets": {
