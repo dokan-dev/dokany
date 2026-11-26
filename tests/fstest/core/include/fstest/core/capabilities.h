@@ -88,9 +88,11 @@ bool ParseFsAttributeInfo(std::span<const uint8_t> returned,
 ///
 /// Works uniformly across drive roots, subdirectories, directory junctions,
 /// volume GUID paths, and UNC shares. On writable volumes the 8.3 probe must
-/// complete: if it cannot create its transient file or query
-/// `FileBothDirectoryInformation`, `probe_succeeded` is `false` and
-/// `probe_error` describes the failure.
+/// complete: if it cannot create its transient file inside its transient
+/// directory or query `FileBothDirectoryInformation`, `probe_succeeded` is
+/// `false` and `probe_error` describes the failure. A root that rejects the
+/// transient directory itself reports `short_names_enabled == false`; every
+/// suite test then fails fatally creating its per-test temp directory.
 /// \param root Normalized target root path.
 /// \param os_info Host OS information snapshot.
 /// \return Probed VolumeCapabilities (check `probe_succeeded`).
