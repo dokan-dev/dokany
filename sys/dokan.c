@@ -38,8 +38,7 @@ LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 BOOLEAN g_FixFileNameForReparseMountPoint;
 
-NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
-ULONG DokanMdlSafePriority = 0;
+LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
 
 FAST_IO_DISPATCH FastIoDispatch;
 FAST_IO_CHECK_IF_POSSIBLE DokanFastIoCheckIfPossible;
@@ -167,7 +166,7 @@ DokanFilterCallbackAcquireForCreateSection(__in PFS_FILTER_CALLBACK_DATA
 BOOLEAN
 DokanLookasideCreate(__in LOOKASIDE_LIST_EX *pCache, __in size_t cbElement) {
   NTSTATUS Status = ExInitializeLookasideListEx(
-      pCache, NULL, NULL, NonPagedPool, 0, cbElement, TAG, 0);
+      pCache, NULL, NULL, NonPagedPoolNx, 0, cbElement, TAG, 0);
 
   if (!NT_SUCCESS(Status)) {
     DOKAN_LOG_("ExInitializeLookasideListEx failed, Status (0x%x) %s", Status,
@@ -199,13 +198,7 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
 }
 
 VOID InitMultiVersionResources() {
-  // Enable No-Execute Nonpaged Pool - POOL_NX_OPTIN
-  ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
-
   if (RtlIsNtDdiVersionAvailable(NTDDI_WIN8)) {
-
-    DokanMdlSafePriority = MdlMappingNoExecute;
-
     UNICODE_STRING SystemRoutineName;
     RtlInitUnicodeString(&SystemRoutineName, L"FsRtlCheckLockForOplockRequest");
     DokanFsRtlCheckLockForOplockRequest =
@@ -253,6 +246,8 @@ Return Value:
   DOKAN_LOG_("ver.%x, %s %s", DOKAN_DRIVER_VERSION, __DATE__,
             __TIME__);
 #endif
+
+  InitMultiVersionResources();
 
   status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
@@ -309,11 +304,6 @@ Return Value:
 
   DriverObject->FastIoDispatch = &FastIoDispatch;
 
-  InitMultiVersionResources();
-
-  ExInitializeNPagedLookasideList(&DokanIrpEntryLookasideList, NULL, NULL, 0,
-                                  sizeof(IRP_ENTRY), TAG, 0);
-
   RtlZeroMemory(&filterCallbacks, sizeof(FS_FILTER_CALLBACKS));
 
   // only be used by filter driver?
@@ -331,15 +321,23 @@ Return Value:
     return status;
   }
 
+  if (!DokanLookasideCreate(&DokanIrpEntryLookasideList, sizeof(IRP_ENTRY))) {
+    DOKAN_LOG("DokanLookasideCreate DokanIrpEntryLookasideList failed");
+    CleanupGlobalDiskDevice(dokanGlobal);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
   if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
     DOKAN_LOG("DokanLookasideCreate g_DokanCCBLookasideList failed");
     CleanupGlobalDiskDevice(dokanGlobal);
+    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
   if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
     DOKAN_LOG("DokanLookasideCreate g_DokanFCBLookasideList failed");
     CleanupGlobalDiskDevice(dokanGlobal);
+    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
@@ -348,6 +346,7 @@ Return Value:
                             sizeof(ERESOURCE))) {
     DOKAN_LOG("DokanLookasideCreate g_DokanEResourceLookasideList failed");
     CleanupGlobalDiskDevice(dokanGlobal);
+    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
     ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
     ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
     return STATUS_INSUFFICIENT_RESOURCES;
@@ -394,7 +393,7 @@ Return Value:
     CleanupGlobalDiskDevice(dokanGlobal);
   }
 
-  ExDeleteNPagedLookasideList(&DokanIrpEntryLookasideList);
+  ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
 
   ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
   ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
