@@ -1,5 +1,5 @@
 ﻿param(
-    [Parameter(Mandatory=$false)][Array] $Mirrors = @("..\x64\Release\mirror.exe", "..\Win32\Release\mirror.exe"),
+    [Parameter(Mandatory=$false)][Array] $Mirrors = @(),
     [Parameter(Mandatory=$false)][string[]] $ConfigNames = @(),
     [Parameter(Mandatory=$false)][string] $FsTestExe = "",
     [Parameter(Mandatory=$false)][string] $BaselinesDir = "",
@@ -7,17 +7,15 @@
     [Parameter(Mandatory=$false)][ValidateSet("fail", "warn")][string] $XpassPolicy = "fail"
 )
 #TODO: enable specifying own mirror-commands and own test-commands
-#TODO: move compilation of test tools to separate scripts in scripts
-#TODO: allow running from any directory by using the path this script is located in as reference
 
-function Exec-External {
-  param(
-	[Parameter(Position=0,Mandatory=1)][scriptblock] $command
-  )
-  & $command
-  if ($LASTEXITCODE -ne 0) {
-	throw ("Command returned non-zero error-code ${LASTEXITCODE}: $command")
-  }
+$repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path -Path $repoRoot -ChildPath 'scripts\fstest_common.ps1')
+
+if (-not $PSBoundParameters.ContainsKey('Mirrors')) {
+    $Mirrors = @(
+        (Join-Path -Path $repoRoot -ChildPath 'x64\Release\mirror.exe'),
+        (Join-Path -Path $repoRoot -ChildPath 'Win32\Release\mirror.exe')
+    )
 }
 
 $ifstest_user = "dokan_ifstest"
@@ -106,36 +104,8 @@ $ifstestParameters = @(
 	"/U", $ifstest_pass
 )
 
-$fstoolsRevision="f010a68f96e004e8ef76436c0582e64216f400a0"
-$buildCmd = "C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe"
-$vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (Test-Path $vswhere) {
-	$path = & "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-	if ($path) {
-		$tmpBuildCmd = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
-		if (test-path $tmpBuildCmd) {
-			$buildCmd = $tmpBuildCmd
-			# Keep in sync with scripts/fstest_common.ps1 and scripts/ci/build_test_tools.ps1.
-			$fstoolsRevision="9e378a7745a7dcb6fbfc1f649975e7a47c8f952e"
-		}
-	}
-}
-
-Write-Host Build test tools -ForegroundColor Green
-if (!(Test-Path .\fstools\src\fsx\fsx.exe))
-{
-	Exec-External {if (!(Test-Path fstools)) { git clone -q https://github.com/Liryna/fstools.git } }
-	Exec-External {cd fstools; git reset --hard $fstoolsRevision; cd .. }
-	$buildArgs = @(
-	".\fstools\winfstest.sln",
-	"/m",
-	"/p:Configuration=Release",
-	"/p:Platform=x64")
-	Exec-External {& $buildCmd $buildArgs}
-}
-
-$repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $repoRoot 'scripts\fstest_common.ps1')
+Write-Output 'Build test tools'
+$fsxExe = Initialize-DokanFsxTool -RepoRoot $repoRoot
 $fsTestPaths = Resolve-DokanFsTestPaths `
 	-RepoRoot $repoRoot `
 	-BaselineFileName 'dokan_mirror.json' `
@@ -144,7 +114,8 @@ $fsTestPaths = Resolve-DokanFsTestPaths `
 $FsTestExe = $fsTestPaths.FsTestExe
 $BaselinesDir = $fsTestPaths.BaselinesDir
 $baselineFile = $fsTestPaths.BaselineFile
-Write-Host Build test tools done. -ForegroundColor Green
+$runIfstestScript = Join-Path -Path $repoRoot -ChildPath 'scripts\run_ifstest.ps1'
+Write-Output 'Build test tools done.'
 
 if (!(Test-Path $fsTestPath)) { New-Item $fsTestPath -type directory | Out-Null }
 if (!(Test-Path $fsTestPath2)) { New-Item $fsTestPath2 -type directory | Out-Null }
@@ -177,13 +148,13 @@ foreach ($mirror in $Mirrors) {
 		# dummy file used for checking that the mount succeeded further below
 		New-Item -Force "$MirrorDir\tmp" | Out-Null
 
-		Write-Host Test mirror $mirror with args /r $MirrorDir $command with $destination as mount -ForegroundColor Green
+		Write-Output "Test mirror $mirror with args /r $MirrorDir $command with $destination as mount"
 		if ($destination.StartsWith("C:\")) {   # destination is a directory junction
 			# Cleanup mount folder - Ensure the target dir is empty when mounting to a directory junction
 			if (!(Test-Path $destination)) { New-Item $destination -type directory | Out-Null }
 			Remove-Item -Recurse -Force "$($destination)\*" | Out-Null
 		}
-		
+
 		$app = Start-Process -passthru $mirror -ArgumentList "/r $MirrorDir $command"
 		try {
 			# When mirror finished mounting, Test-Path will return success.
@@ -194,9 +165,9 @@ foreach ($mirror in $Mirrors) {
 				throw ("Impossible to mount for command $command")
 			}
 
-			Write-Host "Start FSX Test" -ForegroundColor Green
-			Exec-External {& .\fstools\src\fsx\fsx.exe -N 5000 "$($destination)\fsxtest"}
-			Write-Host "FSX Test finished" -ForegroundColor Green
+			Write-Output "Start FSX Test"
+			Invoke-DokanExternal { & $fsxExe -N 5000 "$($destination)\fsxtest" }
+			Write-Output "FSX Test finished"
 
 			$fsTestArgs = @(
 				"--root=$rootArg",
@@ -211,16 +182,16 @@ foreach ($mirror in $Mirrors) {
 				$fsTestArgs += "--json-out=$jsonOut"
 			}
 
-			Write-Host "Start Dokan FsTest ($targetName / $archTag)" -ForegroundColor Green
-			Exec-External { & $FsTestExe @fsTestArgs }
-			Write-Host "Dokan FsTest finished" -ForegroundColor Green
+			Write-Output "Start Dokan FsTest ($targetName / $archTag)"
+			Invoke-DokanExternal { & $FsTestExe @fsTestArgs }
+			Write-Output "Dokan FsTest finished"
 
 			if ($destination -match "[a-zA-Z]:") {
-				Write-Host "Start IFSTest" -ForegroundColor Green
-				Exec-External {& "..\scripts\run_ifstest.ps1" @ifstestParameters "$($destination)\"}
-				Write-Host "IFSTest finished" -ForegroundColor Green
+				Write-Output "Start IFSTest"
+				Invoke-DokanExternal { & $runIfstestScript @ifstestParameters "$($destination)\" }
+				Write-Output "IFSTest finished"
 			} else {
-				Write-Host "Skipping IFSTest, because it cannot be run against UNC-Paths" -ForegroundColor Green
+				Write-Output "Skipping IFSTest, because it cannot be run against UNC-Paths"
 			}
 		} finally {
 			Stop-DokanMountProcess `
@@ -229,7 +200,7 @@ foreach ($mirror in $Mirrors) {
 				-DokanDriveLetter $DokanDriverLetter `
 				-RepoRoot $repoRoot
 		}
-		Write-Host Test mirror $mirror ended. -ForegroundColor Green
+		Write-Output "Test mirror $mirror ended."
 	}
 	$mirrorCount += 1;
 }

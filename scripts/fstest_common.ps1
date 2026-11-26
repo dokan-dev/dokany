@@ -1,7 +1,7 @@
 # Shared PowerShell 5.1+ helpers for running dokan_fstest against Dokan mounts.
 
-# Single source of truth for the pinned Liryna/fstools commit used in CI.
-# Keep in sync with $fstoolsRevision in samples/memfs_test.ps1 and samples/mirror_test.ps1.
+# Single source of truth for the pinned Liryna/fstools commit used by CI and
+# sample test scripts (modern MSBuild Current).
 $script:DokanFsToolsRevision = '9e378a7745a7dcb6fbfc1f649975e7a47c8f952e'
 
 function Get-DokanFsToolsRevision {
@@ -10,6 +10,78 @@ function Get-DokanFsToolsRevision {
     param()
 
     return $script:DokanFsToolsRevision
+}
+
+function Invoke-DokanExternal {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, Mandatory = $true)]
+        [scriptblock]$Command
+    )
+
+    $global:LASTEXITCODE = 0
+    & $Command
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        throw "Command returned non-zero exit code ${LASTEXITCODE}: $Command"
+    }
+}
+
+function Initialize-DokanFsxTool {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [AllowEmptyString()]
+        [string]$FsToolsDir = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($FsToolsDir)) {
+        # Match scripts/ci/vm/run_vm_tests.sh and legacy samples/ CWD layout.
+        $FsToolsDir = Join-Path -Path $RepoRoot -ChildPath 'samples\fstools'
+    }
+    $fsxExe = Join-Path -Path $FsToolsDir -ChildPath 'src\fsx\fsx.exe'
+
+    if (-not (Test-Path -LiteralPath $fsxExe -PathType Leaf)) {
+        $fstoolsRevision = 'f010a68f96e004e8ef76436c0582e64216f400a0'
+        $buildCmd = 'C:\Program Files (x86)\MSBuild\14.0\Bin\MSBuild.exe'
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
+            $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath | Select-Object -First 1
+            if ($vsPath) {
+                $tmpBuildCmd = Join-Path -Path $vsPath -ChildPath 'MSBuild\Current\Bin\MSBuild.exe'
+                if (Test-Path -LiteralPath $tmpBuildCmd -PathType Leaf) {
+                    $buildCmd = $tmpBuildCmd
+                    $fstoolsRevision = Get-DokanFsToolsRevision
+                }
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $FsToolsDir -PathType Container)) {
+            Invoke-DokanExternal { & git clone -q https://github.com/Liryna/fstools.git $FsToolsDir } | Out-Host
+        }
+        Push-Location -LiteralPath $FsToolsDir
+        try {
+            Invoke-DokanExternal { & git reset --hard $fstoolsRevision } | Out-Host
+        } finally {
+            Pop-Location
+        }
+
+        $slnPath = Join-Path -Path $FsToolsDir -ChildPath 'winfstest.sln'
+        $buildArgs = @(
+            $slnPath,
+            '/m',
+            '/p:Configuration=Release',
+            '/p:Platform=x64'
+        )
+        Invoke-DokanExternal { & $buildCmd @buildArgs } | Out-Host
+    }
+
+    if (-not (Test-Path -LiteralPath $fsxExe -PathType Leaf)) {
+        throw "fsx.exe not found at $fsxExe"
+    }
+
+    return $fsxExe
 }
 
 function Resolve-DokanFsTestPaths {
@@ -47,10 +119,7 @@ function Resolve-DokanFsTestPaths {
             $buildScript = Join-Path -Path $RepoRoot -ChildPath 'scripts\build_fstest.ps1'
             Push-Location -LiteralPath $RepoRoot
             try {
-                & $buildScript -Configuration Release | Out-Host
-                if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-                    throw "Command returned non-zero exit code ${LASTEXITCODE}: $buildScript -Configuration Release"
-                }
+                Invoke-DokanExternal { & $buildScript -Configuration Release } | Out-Host
             } finally {
                 Pop-Location
             }
