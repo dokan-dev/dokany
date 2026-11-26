@@ -1045,6 +1045,110 @@ TEST(BaselineTest,
   EXPECT_EQ(widened2.arch, (std::vector<std::string>{"arm64", "x64", "x86"}));
 }
 
+TEST(BaselineTest, UpdateBaselineRejectsNullManifestAndMissingTarget) {
+  ResolvedBaseline missing_resolved;
+  missing_resolved.target_name = "no_such_target";
+  std::string err;
+  EXPECT_FALSE(UpdateBaselineManifest(nullptr, missing_resolved, 26100, "x64",
+                                      "TODO", {}, BaselineUpdateOptions{},
+                                      nullptr, &err));
+  EXPECT_NE(err.find("null manifest"), std::string::npos) << err;
+
+  BaselineManifest empty_manifest;
+  err.clear();
+  EXPECT_FALSE(UpdateBaselineManifest(&empty_manifest, missing_resolved, 26100,
+                                      "x64", "TODO", {},
+                                      BaselineUpdateOptions{}, nullptr, &err));
+  EXPECT_NE(err.find("no_such_target"), std::string::npos) << err;
+}
+
+TEST(BaselineTest, UpdateBaselineAllowXpassParentAndSkippedRemovePreservation) {
+  // Passing a child override of an allow_xpass parent entry removes the child
+  // entry without emitting a spurious remove_xfails; skipped/unexecuted tests
+  // keep existing remove_xfails untouched.
+  const std::string json = R"({
+    "schema_version": 1,
+    "targets": {
+      "parent": {
+        "abstract": true,
+        "xfails": {
+          "Suite.AllowXpassParent": {
+            "reason": "flaky in parent",
+            "gap": "GAP-02",
+            "allow_xpass": true
+          },
+          "Suite.SkippedRemove": {"reason": "removed in child"}
+        }
+      },
+      "child": {
+        "extends": "parent",
+        "xfails": {
+          "Suite.AllowXpassParent": {
+            "reason": "host-specific child override",
+            "os_min_build": 26100,
+            "os_max_build": 26100,
+            "arch": ["x64"]
+          }
+        },
+        "remove_xfails": ["Suite.SkippedRemove"]
+      }
+    }
+  })";
+  BaselineManifest manifest;
+  std::string err;
+  ASSERT_TRUE(ParseBaselineManifest(json, &manifest, &err)) << err;
+  ResolvedBaseline resolved;
+  ASSERT_TRUE(
+      ResolveBaselineInMemory(manifest, "child", 26100, "x64", &resolved, &err))
+      << err;
+
+  BaselineUpdateReport report;
+  ASSERT_TRUE(UpdateBaselineManifest(
+      &manifest, resolved, 26100, "x64", "TODO",
+      {MakeObs("Suite.AllowXpassParent", /*passed=*/true, /*failed=*/false),
+       MakeObs("Suite.SkippedRemove", /*passed=*/false, /*failed=*/false,
+               /*skipped=*/true)},
+      BaselineUpdateOptions{}, &report, &err))
+      << err;
+
+  const TargetDefinition &child = manifest.targets.at("child");
+  EXPECT_FALSE(child.xfails.contains("Suite.AllowXpassParent"));
+  EXPECT_EQ(child.remove_xfails,
+            std::vector<std::string>{"Suite.SkippedRemove"});
+  EXPECT_EQ(report.removed, std::vector<std::string>{"Suite.AllowXpassParent"});
+}
+
+TEST(BaselineTest,
+     SerializeBaselineManifestPreservesTargetOrderAndDeduplicatesRemoves) {
+  const std::string json = R"({
+    "schema_version": 1,
+    "targets": {
+      "parent": {"abstract": true, "xfails": {}},
+      "child": {"extends": "parent", "xfails": {}}
+    }
+  })";
+  BaselineManifest manifest;
+  std::string err;
+  ASSERT_TRUE(ParseBaselineManifest(json, &manifest, &err)) << err;
+
+  TargetDefinition extra;
+  extra.name = "alpha_extra";
+  extra.extends = "parent";
+  extra.remove_xfails = {"Suite.B", "Suite.A", "Suite.B"};
+  manifest.targets.emplace(extra.name, std::move(extra));
+
+  const nlohmann::ordered_json out = SerializeBaselineManifestToJson(manifest);
+  std::vector<std::string> target_names;
+  for (const auto &[k, _] : out["targets"].items()) {
+    target_names.push_back(k);
+  }
+  EXPECT_EQ(target_names,
+            (std::vector<std::string>{"parent", "child", "alpha_extra"}));
+  EXPECT_EQ(out["targets"]["alpha_extra"]["remove_xfails"]
+                .get<std::vector<std::string>>(),
+            (std::vector<std::string>{"Suite.A", "Suite.B"}));
+}
+
 TEST(BaselineTest, WriteTextFileUtf8AtomicallyReplacesWithoutTempDebris) {
   ScopedTestDirectory dir;
   const std::string path = dir.WriteFile("atomic.json", "initial_payload\n");
