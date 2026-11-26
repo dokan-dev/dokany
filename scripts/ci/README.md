@@ -32,7 +32,7 @@ demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A 
 
 | Job | Runner | What it does |
 | :--- | :--- | :--- |
-| `Validate CI scripts` | `ubuntu-latest` | [`test_ci_scripts.sh`](test_ci_scripts.sh): behavioral unit tests for `cleanup-pr-caches.yml` (`jq` run matcher), `scripts/run_ifstest.ps1` (`Find-IfsTestCreateProcFailure`), and `scripts/ci/install_cygwin.ps1` (`Assert-CygwinGpgVerification`). Skipped on `schedule` and `crash_selftest` runs. |
+| `Validate CI scripts` | `ubuntu-latest` | [`test_ci_scripts.sh`](test_ci_scripts.sh): behavioral unit tests for `cleanup-pr-caches.yml` (`jq` run matcher), `scripts/run_ifstest.ps1` (`Find-IfsTestCreateProcFailure`), `scripts/ci/install_cygwin.ps1` (`Assert-CygwinGpgVerification`), and Driver Verifier checks in `vm/provisioning/verifier_helpers.ps1`. Skipped on `schedule` and `crash_selftest` runs. |
 | `Build, sign and package` | `windows-2025-vs2026` | [`install_cygwin.ps1`](install_cygwin.ps1) + [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
 | `Build test tools` | `windows-2025-vs2026` | [`build_test_tools.ps1`](build_test_tools.ps1): builds `dokan_fstest.exe` (static CRT, Server 2016 import gate, self-tests) and `fsx.exe`. Publishes single-zipped (`archive: false`) `dokan-fstest-<version>.zip` (prefixed `pr-<N>-` on pull requests) and `dokan-test-tools`. Runs in parallel with the Dokan build; skipped on `schedule` and `crash_selftest` runs. |
 | `Prepare VM image (<os>)` | `ubuntu-latest` | Computes the per-OS cache key via [`vm/image_cache_key.sh`](vm/image_cache_key.sh). On a cache miss, [`vm/bake_image.sh`](vm/bake_image.sh) installs Windows Server Core from Microsoft's evaluation ISO, provisions it (see below), and saves it to the Actions cache. On the 5-day `schedule:` run on `master`, restores each cached image to refresh its last-accessed time. |
@@ -52,9 +52,11 @@ future `BuildVersion` hotfix bumps.
 
 ## Test coverage
 
-Windows Server Core **2016 (14393)**, **2019 (17763)**, **2022 (20348)**, and **2025 (26100)**, x64, with
-Driver Verifier (`verifier /standard /driver dokan3.sys`) active from the first load of the driver.
-Each OS runs two shards in parallel; together they match the full former AppVeyor FsTest coverage:
+Windows Server Core **2016 (14393)**, **2019 (17763)**, **2022 (20348)**, and
+**2025 (26100)**, x64, with Driver Verifier (`/standard` plus `0x02000000` Code
+integrity / HVCI checks for `dokan3.sys`) active from the first load of the
+driver. Each OS runs two shards in parallel; together they match the full
+former AppVeyor FsTest coverage:
 
 | Shard | Tests |
 | :--- | :--- |
@@ -98,18 +100,25 @@ fails hard.
 
 ## VM images
 
-`bake_image.sh` reads per-OS settings (`ISO_URL`, `IMAGE_INDEX`) from `scripts/ci/vm/os/<os>.env`, runs an
-unattended install ([`vm/provisioning/autounattend.xml`](vm/provisioning/autounattend.xml)), and then runs
-[`vm/provisioning/provision_guest.ps1`](vm/provisioning/provision_guest.ps1) inside the guest: test
-signing on, `cert/DokanCA.cer` trusted, Driver Verifier armed for `dokan3.sys`, kernel memory dumps and
-NMI dumps enabled, console `AutoAdminLogon` for interactive Session 1, Windows Update and Defender
-real-time scanning off, Win32-OpenSSH (key-only for `Administrator`) with a per-image key, the
-`dokan_ifstest` user with password expiration disabled (`net accounts /maxpwage:unlimited` so cached
-images outlive Windows' 42-day password limit), and HLK IFSTest
-([`scripts/install_wlk_ifstest.ps1`](../install_wlk_ifstest.ps1)). Provisioning cleans the component store
-with DISM, disables hibernation, clears the pagefile at bake shutdown, and runs
-`Optimize-Volume -DriveLetter C -ReTrim` (with QEMU `discard=unmap` and `rotation_rate=1`) before
-`qemu-img convert` compacts the disk; `actions/cache` compresses the result (~2.6–3.9 GiB per OS).
+`bake_image.sh` reads per-OS settings (`ISO_URL`, `IMAGE_INDEX`) from
+`scripts/ci/vm/os/<os>.env`, runs an unattended install
+([`vm/provisioning/autounattend.xml`](vm/provisioning/autounattend.xml)), and
+invokes
+[`vm/provisioning/provision_guest.ps1`](vm/provisioning/provision_guest.ps1)
+inside the guest: test signing on, `cert/DokanCA.cer` trusted, Driver Verifier
+armed for `dokan3.sys` (`/standard` plus `0x02000000` Code integrity / HVCI
+checks, preserving OS-specific extended flags via `VerifyDriverLevel` and
+`VerifierSettingState`), kernel memory dumps and NMI dumps enabled, console
+`AutoAdminLogon` for interactive Session 1, Windows Update and Defender
+real-time scanning off, Win32-OpenSSH (key-only for `Administrator`) with a
+per-image key, the `dokan_ifstest` user with password expiration disabled (`net
+accounts /maxpwage:unlimited` so cached images outlive Windows' 42-day password
+limit), and HLK IFSTest
+([`scripts/install_wlk_ifstest.ps1`](../install_wlk_ifstest.ps1)). Provisioning
+cleans the component store with DISM, disables hibernation, clears the pagefile
+at bake shutdown, and runs `Optimize-Volume -DriveLetter C -ReTrim` (with QEMU
+`discard=unmap` and `rotation_rate=1`) before `qemu-img convert` compacts the
+disk; `actions/cache` compresses the result (~2.6–3.9 GiB per OS).
 
 [`vm/image_cache_key.sh`](vm/image_cache_key.sh) computes the deterministic per-OS cache key shared by
 `vm-image`, `vm-test`, and `crash-selftest`. It hashes `scripts/ci/vm/os/<os>.env`,

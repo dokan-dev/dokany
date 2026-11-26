@@ -37,6 +37,8 @@ function Invoke-NativeCapture {
 }
 
 try {
+    . (Join-Path -Path $PSScriptRoot -ChildPath 'verifier_helpers.ps1')
+
     $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
     Write-ProvisionLog "Guest booted: $($cv.ProductName) build $($cv.CurrentBuildNumber).$($cv.UBR)"
 
@@ -67,14 +69,49 @@ try {
     & certutil.exe -addstore -f TrustedPublisher "$localSeed\DokanCA.cer" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPublisher failed: $LASTEXITCODE" }
 
-    # 3. Enable TESTSIGNING and pre-arm Driver Verifier for dokan3.sys
-    Write-ProvisionLog 'Enabling TESTSIGNING and Driver Verifier for dokan3.sys...'
+    # 3. Enable TESTSIGNING and pre-arm Driver Verifier (/standard + 0x02000000 Code integrity checks)
+    Write-ProvisionLog 'Enabling TESTSIGNING and Driver Verifier (/standard + 0x02000000) for dokan3.sys...'
     & bcdedit.exe /set testsigning on | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "bcdedit testsigning failed: $LASTEXITCODE" }
     $vRes = Invoke-NativeCapture { & verifier.exe /standard /driver dokan3.sys }
     # verifier.exe exit code 2 = EXIT_CODE_REBOOT_REQUIRED (success; changes take effect on next boot)
-    Write-ProvisionLog "verifier exit=$($vRes.ExitCode): $($vRes.Output)"
-    if ($vRes.ExitCode -ne 0 -and $vRes.ExitCode -ne 2) { throw "verifier config failed: $($vRes.ExitCode)" }
+    Write-ProvisionLog "verifier /standard exit=$($vRes.ExitCode): $($vRes.Output)"
+    if ($vRes.ExitCode -ne 0 -and $vRes.ExitCode -ne 2) { throw "verifier /standard failed: $($vRes.ExitCode)" }
+
+    # verifier.exe /standard and /flags are mutually exclusive, and /flags would drop OS-specific
+    # flags such as 0x00100000 (Extended Verifier flags on Server 2019+). Bitwise-OR 0x02000000
+    # (Code integrity checks / HVCI compliance) directly into VerifyDriverLevel and confirm via
+    # verifier.exe /querysettings.
+    $mmKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+    $rawLevel = (Get-ItemProperty -Path $mmKey -Name 'VerifyDriverLevel').VerifyDriverLevel
+    if ($null -eq $rawLevel) {
+        throw 'VerifyDriverLevel registry value missing after verifier /standard.'
+    }
+    $curLevelU32 = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$rawLevel), 0)
+    if ($curLevelU32 -eq [uint32]0) {
+        throw 'Unexpected VerifyDriverLevel=0x00000000 after verifier /standard.'
+    }
+    $newLevelU32 = $curLevelU32 -bor [uint32]0x02000000
+    $newLevel = [BitConverter]::ToInt32([BitConverter]::GetBytes($newLevelU32), 0)
+    Set-ItemProperty -Path $mmKey -Name 'VerifyDriverLevel' -Type DWord -Value $newLevel
+    Write-ProvisionLog ("Updated VerifyDriverLevel: 0x{0:x8} -> 0x{1:x8}" -f $curLevelU32, $newLevelU32)
+
+    # Server 2019+ / Win11 also maintains VerifierSettingState (REG_BINARY little-endian bitmask of
+    # rule classes 1..64; bit 25 = byte[3] bit 1 = rule class 26 Code integrity checks). Keep it
+    # in sync with VerifyDriverLevel when present.
+    $vss = (Get-ItemProperty -Path $mmKey -Name 'VerifierSettingState' -ErrorAction SilentlyContinue).VerifierSettingState
+    if ($vss -is [byte[]] -and $vss.Length -ge 4) {
+        $vss[3] = [byte]($vss[3] -bor 0x02)
+        Set-ItemProperty -Path $mmKey -Name 'VerifierSettingState' -Type Binary -Value $vss
+        Write-ProvisionLog ("Updated VerifierSettingState: {0}" -f (($vss | ForEach-Object { '{0:x2}' -f $_ }) -join ' '))
+    }
+
+    $vqRes = Invoke-NativeCapture { & verifier.exe /querysettings }
+    Write-ProvisionLog "verifier /querysettings exit=$($vqRes.ExitCode): $($vqRes.Output)"
+    if ($vqRes.ExitCode -ne 0 -and $vqRes.ExitCode -ne 2) {
+        throw "verifier /querysettings failed: $($vqRes.ExitCode)"
+    }
+    Assert-DriverVerifierSettings -QuerySettingsOutput $vqRes.Output
 
     # 4. Configure Kernel Memory Dump (CrashDumpEnabled=2 -> C:\Windows\MEMORY.DMP) + AutoReboot
     Write-ProvisionLog 'Configuring Kernel Memory Dump (MEMORY.DMP)...'
@@ -86,7 +123,6 @@ try {
     # Let the CI host turn guest hangs into a kernel dump via QEMU 'nmi' (BugCheck 0x80 NMI_HARDWARE_FAILURE)
     Set-ItemProperty -Path $cc -Name 'NMICrashDump' -Type DWord -Value 1
     # Ensure pagefile is large enough on C: for kernel memory dump, and zero it on bake shutdown so qemu-img drops it
-    $mmKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
     Set-ItemProperty -Path $mmKey -Name 'PagingFiles' -Type MultiString -Value @('C:\pagefile.sys 2048 4096')
     Set-ItemProperty -Path $mmKey -Name 'ClearPageFileAtShutdown' -Type DWord -Value 1
 

@@ -5,6 +5,7 @@
 .DESCRIPTION
     Expects the C:\ci layout staged by run_vm_tests.sh:
         C:\ci\DokanSetup.exe
+        C:\ci\verifier_helpers.ps1
         C:\ci\fstest\dokan_fstest.exe, C:\ci\fstest\baselines\
         C:\ci\repo\samples\memfs_test.ps1, mirror_test.ps1, fstools\src\fsx\fsx.exe
         C:\ci\repo\scripts\run_ifstest.ps1, fstest_common.ps1, build_helper.ps1
@@ -132,6 +133,7 @@ if (-not $InSession1 -and (Get-Process -Id $PID).SessionId -eq 0) {
 }
 
 . (Join-Path -Path $PSScriptRoot -ChildPath 'repo\scripts\build_helper.ps1')
+. (Join-Path -Path $PSScriptRoot -ChildPath 'verifier_helpers.ps1')
 
 function Assert-NoBugCheck {
     $bugChecks = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 1001; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting' } -ErrorAction SilentlyContinue
@@ -163,9 +165,7 @@ try {
 
     $verifierState = & verifier.exe /query | Out-String
     Write-Host $verifierState
-    if ($verifierState -notmatch 'dokan3\.sys') {
-        throw 'Driver Verifier is not monitoring dokan3.sys.'
-    }
+    Assert-DriverVerifierActive -QueryOutput $verifierState
 
     if ($SimulateHang) {
         Write-Host '=== Self-test: blocking so the host detects a hang and injects an NMI ===' -ForegroundColor Yellow

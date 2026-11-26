@@ -91,7 +91,7 @@ ssh-keygen -q -t ed25519 -N "" -C "dokany-ci" -f "$OUT_DIR/id_ed25519"
 cp "$OUT_DIR/id_ed25519.pub" "$SEED_DIR/authorized_keys"
 rm -f "$OUT_DIR/id_ed25519.pub"
 cp "$WORK_DIR/OpenSSH-Win64.zip" "$REPO_ROOT/cert/DokanCA.cer" "$REPO_ROOT/scripts/install_wlk_ifstest.ps1" \
-   "$PROVISIONING_DIR/provision_guest.ps1" "$SEED_DIR/"
+   "$PROVISIONING_DIR/provision_guest.ps1" "$PROVISIONING_DIR/verifier_helpers.ps1" "$SEED_DIR/"
 sed "s/@IMAGE_INDEX@/$IMAGE_INDEX/" "$PROVISIONING_DIR/autounattend.xml" > "$SEED_DIR/autounattend.xml"
 sed 's/\r$//; s/$/\r/' "$PROVISIONING_DIR/run_provisioning.cmd" > "$SEED_DIR/run_provisioning.cmd"
 xmllint --noout "$SEED_DIR/autounattend.xml"

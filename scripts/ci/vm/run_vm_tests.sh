@@ -189,7 +189,7 @@ stage_guest_files() {
   if [[ -d "$PAYLOAD_DIR/fstest" ]]; then
     cp -r "$PAYLOAD_DIR/fstest" "$stage/"
   fi
-  cp "$SCRIPT_DIR/run_guest_tests.ps1" "$stage/"
+  cp "$SCRIPT_DIR/run_guest_tests.ps1" "$SCRIPT_DIR/provisioning/verifier_helpers.ps1" "$stage/"
   cp "$REPO_ROOT/samples/memfs_test.ps1" "$REPO_ROOT/samples/mirror_test.ps1" "$stage/repo/samples/"
   cp "$REPO_ROOT/scripts/run_ifstest.ps1" "$REPO_ROOT/scripts/fstest_common.ps1" "$REPO_ROOT/scripts/build_helper.ps1" "$stage/repo/scripts/"
   guest_ssh 'Remove-Item -Recurse -Force C:\ci -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path C:\ci | Out-Null'
