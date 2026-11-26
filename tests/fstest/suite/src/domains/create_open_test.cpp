@@ -932,18 +932,6 @@ TEST_F(CreateOpenTest, CreateNewAndCreateAlwaysOnExistingDirectoryFail) {
 TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   constexpr ULONG kSyncFile =
       nt::kFileNonDirectoryFile | nt::kFileSynchronousIoNonalert;
-  auto expect_win_slash_err = [](DWORD err, const char *label) {
-    EXPECT_TRUE(err == static_cast<DWORD>(ERROR_INVALID_NAME) ||
-                err == static_cast<DWORD>(ERROR_DIRECTORY))
-        << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY for " << label
-        << ", got " << core::FormatWin32Error(err);
-  };
-  auto expect_nt_slash_status = [](NTSTATUS st, const char *label) {
-    EXPECT_TRUE(st == STATUS_OBJECT_NAME_INVALID ||
-                st == STATUS_NOT_A_DIRECTORY)
-        << "Expected STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY for "
-        << label << ", got " << core::FormatNtStatus(st);
-  };
 
   const std::wstring file = TestPath(L"trailing_slash.dat");
   const std::wstring file_slash = file + L"\\";
@@ -955,7 +943,8 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
       core::CreateWin32File(file_slash, GENERIC_READ, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(win_open);
-  expect_win_slash_err(win_open.error, "CreateFileW(OPEN_EXISTING)");
+  EXPECT_TRUE(helpers::CheckTrailingSlashWin32Error(win_open.error))
+      << "CreateFileW(OPEN_EXISTING)";
   if (win_open) {
     win_open.value->reset();
   }
@@ -963,7 +952,8 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   auto nt_open = core::NtCreateFilePath(
       nt_file_slash, FILE_READ_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
       core::kShareAll, nt::kFileOpen, kSyncFile);
-  expect_nt_slash_status(nt_open.status, "NtCreateFile(FILE_OPEN)");
+  EXPECT_TRUE(helpers::CheckTrailingSlashNtStatus(nt_open.status))
+      << "NtCreateFile(FILE_OPEN)";
   if (nt_open) {
     nt_open.value->reset();
   }
@@ -976,7 +966,8 @@ TEST_F(CreateOpenTest, TrailingBackslashOnFileFailsNotADirectory) {
   auto nt_create = core::NtCreateFilePath(
       nt_absent_slash, FILE_WRITE_DATA | SYNCHRONIZE, FILE_ATTRIBUTE_NORMAL,
       core::kShareAll, nt::kFileCreate, kSyncFile);
-  expect_nt_slash_status(nt_create.status, "NtCreateFile(FILE_CREATE)");
+  EXPECT_TRUE(helpers::CheckTrailingSlashNtStatus(nt_create.status))
+      << "NtCreateFile(FILE_CREATE)";
   if (nt_create) {
     nt_create.value->reset();
   }

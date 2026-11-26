@@ -333,6 +333,32 @@ inline ::testing::AssertionResult CheckPathAbsent(std::wstring_view path) {
   return ::testing::AssertionSuccess();
 }
 
+// Verifies a Win32 open of a regular file with a trailing path separator
+// failed with ERROR_INVALID_NAME or ERROR_DIRECTORY (both observed across
+// Windows 10, Windows 11, and Windows Server builds).
+inline ::testing::AssertionResult CheckTrailingSlashWin32Error(DWORD err) {
+  if (err == static_cast<DWORD>(ERROR_INVALID_NAME) ||
+      err == static_cast<DWORD>(ERROR_DIRECTORY)) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure()
+         << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY, got "
+         << core::FormatWin32Error(err);
+}
+
+// Verifies an NT open of a regular file with a trailing path separator failed
+// with STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY (both observed
+// across Windows 10, Windows 11, and Windows Server builds).
+inline ::testing::AssertionResult CheckTrailingSlashNtStatus(NTSTATUS st) {
+  if (st == STATUS_OBJECT_NAME_INVALID || st == STATUS_NOT_A_DIRECTORY) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure()
+         << "Expected STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY, "
+            "got "
+         << core::FormatNtStatus(st);
+}
+
 // Opens `path`, reads all bytes via core::ReadFileContents / ReadAllBytes,
 // and compares against `expected`, returning a diagnostic AssertionResult.
 inline ::testing::AssertionResult CheckFileContents(std::wstring_view path,

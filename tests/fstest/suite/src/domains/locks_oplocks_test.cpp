@@ -208,21 +208,16 @@ struct OplockWorkerContext {
       } else {
         ctx->err.store(::GetLastError(), std::memory_order_release);
       }
-    } else if (ctx->action == Action::kSetRename) {
-      auto ren = core::SetRenameInfo(ctx->op_handle.get(), ctx->target_path,
-                                     nullptr, /*replace_if_exists=*/false);
-      ctx->nt_status.store(ren.status, std::memory_order_release);
+    } else if (ctx->action == Action::kSetRename ||
+               ctx->action == Action::kSetDisposition) {
+      const core::NtResult<void> res =
+          (ctx->action == Action::kSetRename)
+              ? core::SetRenameInfo(ctx->op_handle.get(), ctx->target_path,
+                                    nullptr, /*replace_if_exists=*/false)
+              : core::SetDisposition(ctx->op_handle.get(), ctx->delete_file);
+      ctx->nt_status.store(res.status, std::memory_order_release);
       ctx->op_handle.reset();
-      if (nt::NtSuccess(ren.status)) {
-        ctx->succeeded.store(true, std::memory_order_release);
-      } else {
-        ctx->err.store(ERROR_GEN_FAILURE, std::memory_order_release);
-      }
-    } else if (ctx->action == Action::kSetDisposition) {
-      auto disp = core::SetDisposition(ctx->op_handle.get(), ctx->delete_file);
-      ctx->nt_status.store(disp.status, std::memory_order_release);
-      ctx->op_handle.reset();
-      if (nt::NtSuccess(disp.status)) {
+      if (nt::NtSuccess(res.status)) {
         ctx->succeeded.store(true, std::memory_order_release);
       } else {
         ctx->err.store(ERROR_GEN_FAILURE, std::memory_order_release);
@@ -689,6 +684,52 @@ struct OplockHarness {
     return ::testing::AssertionSuccess();
   }
 };
+
+// Opens H1 with FILE_SHARE_DELETE and an RH oplock, verifies that opening H2
+// with DELETE access does NOT break RH on create, then runs SetRenameInfo
+// (when `nt_rename_target != nullptr`) or SetDisposition(TRUE) on H2 and
+// verifies RH handle-cache break, ACK_REQUIRED, clean completion while H1 is
+// still open, and teardown.
+void VerifyRhBreakOnSetInfo(const std::wstring &path, DWORD timeout_ms,
+                            const std::wstring *nt_rename_target) {
+  OplockHarness harness;
+  ASSERT_TRUE(harness.Init());
+  ASSERT_TRUE(harness.Open(path, GENERIC_READ, core::kShareAll));
+  ASSERT_TRUE(harness.RequestModern(kOplockRh));
+
+  auto h2 = core::CreateWin32File(path, DELETE | SYNCHRONIZE, core::kShareAll,
+                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_WIN32_OK(h2);
+  EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0), kWaitTimeout);
+
+  if (nt_rename_target != nullptr) {
+    ASSERT_TRUE(
+        harness.StartSetRenameWorker(std::move(*h2.value), *nt_rename_target));
+  } else {
+    ASSERT_TRUE(harness.StartSetDispositionWorker(std::move(*h2.value),
+                                                  /*delete_file=*/true));
+  }
+
+  DWORD bytes_ret = 0;
+  ASSERT_TRUE(harness.WaitBreak(timeout_ms, &bytes_ret));
+  EXPECT_EQ(bytes_ret,
+            static_cast<DWORD>(sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)));
+  EXPECT_EQ(harness.out_buf.OriginalOplockLevel, kOplockRh);
+  EXPECT_EQ(harness.out_buf.NewOplockLevel & OPLOCK_LEVEL_CACHE_HANDLE, 0u);
+  EXPECT_NE(harness.out_buf.Flags & REQUEST_OPLOCK_OUTPUT_FLAG_ACK_REQUIRED,
+            0u);
+
+  // Acknowledge without closing H1: with FILE_SHARE_DELETE granted, SetInfo
+  // must complete cleanly once H1 drops handle caching.
+  ASSERT_TRUE(harness.SendModernAck(harness.out_buf.NewOplockLevel));
+  ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
+  EXPECT_NT_STATUS(
+      harness.worker_ctx->nt_status.load(std::memory_order_acquire),
+      STATUS_SUCCESS);
+
+  // Worker already closed H2; closing H1 completes any pending delete.
+  harness.CloseHandle();
+}
 
 // Heap-allocated (std::shared_ptr) state shared by all stress workers; it owns
 // the path so no worker ever dereferences the test's stack frame.
@@ -2099,45 +2140,13 @@ TEST_F(LocksOplocksTest, OplockRhBrokenByRenameAndDeleteWithShareDelete) {
 
   // Sub-case 1: FileRenameInformation breaks RH when H1 has FILE_SHARE_DELETE.
   {
+    SCOPED_TRACE("FileRenameInformation");
     const std::wstring src = TestPath(L"oplock_rh_share_del_ren_src.dat");
     const std::wstring dst = TestPath(L"oplock_rh_share_del_ren_dst.dat");
     const std::wstring nt_dst = TestNtPath(L"oplock_rh_share_del_ren_dst.dat");
     ASSERT_WIN32_OK(core::WriteFileContents(src, "rh_share_del_rename"));
 
-    OplockHarness harness;
-    ASSERT_TRUE(harness.Init());
-    ASSERT_TRUE(harness.Open(src, GENERIC_READ, core::kShareAll));
-    ASSERT_TRUE(harness.RequestModern(kOplockRh));
-
-    // H2 opens with DELETE access: because H1 grants FILE_SHARE_DELETE, the
-    // open itself succeeds and must NOT break H1's RH oplock.
-    auto h2 = core::CreateWin32File(src, DELETE | SYNCHRONIZE, core::kShareAll,
-                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_WIN32_OK(h2);
-    EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0),
-              kWaitTimeout);
-
-    // Issuing FileRenameInformation on H2 must break H1's handle caching.
-    ASSERT_TRUE(harness.StartSetRenameWorker(std::move(*h2.value), nt_dst));
-
-    DWORD bytes_ret = 0;
-    ASSERT_TRUE(harness.WaitBreak(timeout_ms, &bytes_ret));
-    EXPECT_EQ(bytes_ret,
-              static_cast<DWORD>(sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)));
-    EXPECT_EQ(harness.out_buf.OriginalOplockLevel, kOplockRh);
-    EXPECT_EQ(harness.out_buf.NewOplockLevel & OPLOCK_LEVEL_CACHE_HANDLE, 0u);
-    EXPECT_NE(harness.out_buf.Flags & REQUEST_OPLOCK_OUTPUT_FLAG_ACK_REQUIRED,
-              0u);
-
-    // Acknowledge without closing H1: with FILE_SHARE_DELETE granted, the
-    // rename must complete cleanly once H1 drops handle caching.
-    ASSERT_TRUE(harness.SendModernAck(harness.out_buf.NewOplockLevel));
-    ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
-    EXPECT_NT_STATUS(
-        harness.worker_ctx->nt_status.load(std::memory_order_acquire),
-        STATUS_SUCCESS);
-
-    harness.CloseHandle();
+    ASSERT_NO_FATAL_FAILURE(VerifyRhBreakOnSetInfo(src, timeout_ms, &nt_dst));
     EXPECT_TRUE(helpers::CheckFileNotFound(src));
     EXPECT_TRUE(helpers::CheckFileContents(dst, "rh_share_del_rename"));
   }
@@ -2145,40 +2154,11 @@ TEST_F(LocksOplocksTest, OplockRhBrokenByRenameAndDeleteWithShareDelete) {
   // Sub-case 2: FileDispositionInformation(TRUE) breaks RH when H1 has
   // FILE_SHARE_DELETE.
   {
+    SCOPED_TRACE("FileDispositionInformation");
     const std::wstring path = TestPath(L"oplock_rh_share_del_disp.dat");
     ASSERT_WIN32_OK(core::WriteFileContents(path, "rh_share_del_delete"));
 
-    OplockHarness harness;
-    ASSERT_TRUE(harness.Init());
-    ASSERT_TRUE(harness.Open(path, GENERIC_READ, core::kShareAll));
-    ASSERT_TRUE(harness.RequestModern(kOplockRh));
-
-    auto h2 = core::CreateWin32File(path, DELETE | SYNCHRONIZE, core::kShareAll,
-                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_WIN32_OK(h2);
-    EXPECT_EQ(::WaitForSingleObject(harness.break_event.get(), 0),
-              kWaitTimeout);
-
-    ASSERT_TRUE(harness.StartSetDispositionWorker(std::move(*h2.value),
-                                                  /*delete_file=*/true));
-
-    DWORD bytes_ret = 0;
-    ASSERT_TRUE(harness.WaitBreak(timeout_ms, &bytes_ret));
-    EXPECT_EQ(bytes_ret,
-              static_cast<DWORD>(sizeof(REQUEST_OPLOCK_OUTPUT_BUFFER)));
-    EXPECT_EQ(harness.out_buf.OriginalOplockLevel, kOplockRh);
-    EXPECT_EQ(harness.out_buf.NewOplockLevel & OPLOCK_LEVEL_CACHE_HANDLE, 0u);
-    EXPECT_NE(harness.out_buf.Flags & REQUEST_OPLOCK_OUTPUT_FLAG_ACK_REQUIRED,
-              0u);
-
-    ASSERT_TRUE(harness.SendModernAck(harness.out_buf.NewOplockLevel));
-    ASSERT_TRUE(harness.WaitWorkerClean(timeout_ms));
-    EXPECT_NT_STATUS(
-        harness.worker_ctx->nt_status.load(std::memory_order_acquire),
-        STATUS_SUCCESS);
-
-    // Worker already closed H2; closing H1 completes the pending delete.
-    harness.CloseHandle();
+    ASSERT_NO_FATAL_FAILURE(VerifyRhBreakOnSetInfo(path, timeout_ms, nullptr));
     EXPECT_TRUE(helpers::CheckFileNotFound(path));
   }
 }

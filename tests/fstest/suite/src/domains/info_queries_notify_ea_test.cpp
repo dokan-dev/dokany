@@ -473,6 +473,27 @@ core::Win32Result<bool> CollectUntil(AsyncDirWatcher *watcher, DWORD filter,
   }
 }
 
+void WriteAndFlushExistingFile(const std::wstring &path,
+                               std::string_view payload) {
+  auto fh = core::CreateWin32File(path, GENERIC_WRITE, core::kShareAll,
+                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+  ASSERT_WIN32_OK(fh);
+  ASSERT_WIN32_OK(
+      core::WriteAllBytes(fh.value->get(), payload.data(), payload.size()));
+  ::FlushFileBuffers(fh.value->get());
+}
+
+core::Win32Result<bool>
+WaitForModifiedNotify(AsyncDirWatcher *watcher, DWORD filter, DWORD timeout_ms,
+                      std::wstring_view file_name,
+                      std::vector<NotifyRecord> *events_out) {
+  return CollectUntil(
+      watcher, filter, /*watch_subtree=*/false, timeout_ms, events_out,
+      [file_name](const std::vector<NotifyRecord> &r) {
+        return HasNotifyEvent(r, FILE_ACTION_MODIFIED, file_name);
+      });
+}
+
 std::vector<uint8_t>
 BuildGetEaListBuffer(const std::vector<std::string> &names) {
   std::vector<uint8_t> out;
@@ -1038,22 +1059,11 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesBasicInfoFilterIsolation) {
 
     ASSERT_WIN32_ERROR_CODE(watcher.Arm(kTimeFilter, /*watch_subtree=*/false),
                             ERROR_SUCCESS);
-    {
-      auto fh = core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
-                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_WIN32_OK(fh);
-      const std::string updated = "updated-for-last-write";
-      ASSERT_WIN32_OK(
-          core::WriteAllBytes(fh.value->get(), updated.data(), updated.size()));
-      ::FlushFileBuffers(fh.value->get());
-    }
+    ASSERT_NO_FATAL_FAILURE(
+        WriteAndFlushExistingFile(target, "updated-for-last-write"));
     std::vector<NotifyRecord> sentinel_events;
-    auto sentinel_res = CollectUntil(
-        &watcher, kTimeFilter, /*watch_subtree=*/false, timeout_ms,
-        &sentinel_events, [](const std::vector<NotifyRecord> &recs) {
-          return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
-        });
-    EXPECT_WIN32_OK(sentinel_res)
+    EXPECT_WIN32_OK(WaitForModifiedNotify(&watcher, kTimeFilter, timeout_ms,
+                                          L"target.dat", &sentinel_events))
         << "Waiting for active LAST_WRITE sentinel on target.dat";
   }
 
@@ -1086,13 +1096,9 @@ TEST_F(InfoQueriesTest, ReadDirectoryChangesBasicInfoFilterIsolation) {
     ASSERT_WIN32_TRUE(
         ::SetFileAttributesW(target.c_str(), FILE_ATTRIBUTE_ARCHIVE));
     std::vector<NotifyRecord> sentinel_events;
-    auto sentinel_res = CollectUntil(
-        &watcher, FILE_NOTIFY_CHANGE_ATTRIBUTES, /*watch_subtree=*/false,
-        timeout_ms, &sentinel_events,
-        [](const std::vector<NotifyRecord> &recs) {
-          return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
-        });
-    EXPECT_WIN32_OK(sentinel_res)
+    EXPECT_WIN32_OK(
+        WaitForModifiedNotify(&watcher, FILE_NOTIFY_CHANGE_ATTRIBUTES,
+                              timeout_ms, L"target.dat", &sentinel_events))
         << "Waiting for active ATTRIBUTES sentinel on target.dat";
   }
 }
@@ -1129,23 +1135,12 @@ TEST_F(InfoQueriesTest,
     ASSERT_WIN32_ERROR_CODE(write_watcher.Arm(FILE_NOTIFY_CHANGE_LAST_WRITE,
                                               /*watch_subtree=*/false),
                             ERROR_SUCCESS);
-    {
-      auto writer =
-          core::CreateWin32File(target, GENERIC_WRITE, core::kShareAll,
-                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-      ASSERT_WIN32_OK(writer);
-      const std::string payload = "written-before-ro-close";
-      ASSERT_WIN32_OK(core::WriteAllBytes(writer.value->get(), payload.data(),
-                                          payload.size()));
-      ::FlushFileBuffers(writer.value->get());
-    }
+    ASSERT_NO_FATAL_FAILURE(
+        WriteAndFlushExistingFile(target, "written-before-ro-close"));
     std::vector<NotifyRecord> write_events;
-    auto write_res = CollectUntil(
-        &write_watcher, FILE_NOTIFY_CHANGE_LAST_WRITE, /*watch_subtree=*/false,
-        timeout_ms, &write_events, [](const std::vector<NotifyRecord> &recs) {
-          return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"target.dat");
-        });
-    ASSERT_WIN32_OK(write_res)
+    ASSERT_WIN32_OK(
+        WaitForModifiedNotify(&write_watcher, FILE_NOTIFY_CHANGE_LAST_WRITE,
+                              timeout_ms, L"target.dat", &write_events))
         << "Waiting for initial FILE_ACTION_MODIFIED on target.dat";
   }
 
@@ -1178,22 +1173,11 @@ TEST_F(InfoQueriesTest,
   ASSERT_WIN32_ERROR_CODE(
       ro_watcher.Arm(FILE_NOTIFY_CHANGE_LAST_WRITE, /*watch_subtree=*/false),
       ERROR_SUCCESS);
-  {
-    auto sh = core::CreateWin32File(sentinel, GENERIC_WRITE, core::kShareAll,
-                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
-    ASSERT_WIN32_OK(sh);
-    const std::string ping = "sentinel-ping";
-    ASSERT_WIN32_OK(
-        core::WriteAllBytes(sh.value->get(), ping.data(), ping.size()));
-    ::FlushFileBuffers(sh.value->get());
-  }
+  ASSERT_NO_FATAL_FAILURE(WriteAndFlushExistingFile(sentinel, "sentinel-ping"));
   std::vector<NotifyRecord> sentinel_events;
-  auto sentinel_res = CollectUntil(
-      &ro_watcher, FILE_NOTIFY_CHANGE_LAST_WRITE, /*watch_subtree=*/false,
-      timeout_ms, &sentinel_events, [](const std::vector<NotifyRecord> &recs) {
-        return HasNotifyEvent(recs, FILE_ACTION_MODIFIED, L"sentinel.dat");
-      });
-  EXPECT_WIN32_OK(sentinel_res)
+  EXPECT_WIN32_OK(
+      WaitForModifiedNotify(&ro_watcher, FILE_NOTIFY_CHANGE_LAST_WRITE,
+                            timeout_ms, L"sentinel.dat", &sentinel_events))
       << "Waiting for sentinel FILE_ACTION_MODIFIED on sentinel.dat";
   EXPECT_FALSE(
       HasNotifyEvent(sentinel_events, FILE_ACTION_MODIFIED, L"target.dat"));

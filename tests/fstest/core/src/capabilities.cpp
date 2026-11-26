@@ -18,6 +18,65 @@
 namespace fstest::core {
 namespace {
 
+// Runs the 8.3 probe inside an existing transient directory. Every handle it
+// opens is closed before it returns, so the caller can remove probe_dir.
+bool ProbeShortNamesInDir(const ScopedTempDir &probe_dir, bool *enabled_out,
+                          std::string *error_out) {
+  constexpr std::wstring_view kLongName =
+      L"long_probe_filename_for_8dot3_check.txt";
+  auto file_handle =
+      CreateWin32File(probe_dir.ChildExtendedPath(kLongName), GENERIC_WRITE,
+                      kShareAll, CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
+  if (!file_handle) {
+    *error_out = "8.3 short-name probe: CreateFileW(probe file) failed: " +
+                 FormatWin32Error(file_handle.error);
+    return false;
+  }
+  file_handle.value->reset();
+
+  auto dir_handle = CreateWin32File(
+      probe_dir.ExtendedPath(), FILE_LIST_DIRECTORY | SYNCHRONIZE, kShareAll,
+      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
+  if (!dir_handle) {
+    *error_out = "8.3 short-name probe: CreateFileW(probe directory) failed: " +
+                 FormatWin32Error(dir_handle.error);
+    return false;
+  }
+
+  const auto &ntdll = Ntdll();
+  if (ntdll.NtQueryDirectoryFile == nullptr) {
+    *error_out = "8.3 short-name probe: ntdll!NtQueryDirectoryFile unavailable";
+    return false;
+  }
+
+  std::wstring pattern(kLongName);
+  nt::UnicodeString pattern_us =
+      nt::MakeUnicodeString(pattern.data(), pattern.size());
+  std::vector<uint8_t> buf(1024, 0);
+  nt::IoStatusBlock iosb{};
+  const NTSTATUS st = ntdll.NtQueryDirectoryFile(
+      dir_handle.value->get(), nullptr, nullptr, nullptr, &iosb, buf.data(),
+      static_cast<ULONG>(buf.size()),
+      nt::FileInfoClass::FileBothDirectoryInformation,
+      /*return_single_entry=*/TRUE, &pattern_us, /*restart_scan=*/TRUE);
+  if (!nt::NtSuccess(st)) {
+    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
+                 "FileBothDirectoryInformation) failed: " +
+                 FormatNtStatus(st);
+    return false;
+  }
+  if (iosb.information < offsetof(nt::FileBothDirInfo, file_name)) {
+    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
+                 "FileBothDirectoryInformation) returned " +
+                 std::to_string(iosb.information) +
+                 " bytes (< fixed FILE_BOTH_DIR_INFORMATION header).";
+    return false;
+  }
+  const auto *info = reinterpret_cast<const nt::FileBothDirInfo *>(buf.data());
+  *enabled_out = (info->short_name_length > 0);
+  return true;
+}
+
 // Single Category 4a volume-policy probe: creates a >8.3 throwaway file in a
 // transient directory under root, queries FileBothDirectoryInformation for
 // ShortNameLength > 0, and removes the transient directory immediately.
@@ -38,67 +97,8 @@ bool ProbeShortNamesEnabled(const NormalizedRoot &root, bool *enabled_out,
   if (!probe_dir) {
     return true;
   }
-
-  constexpr std::wstring_view kLongName =
-      L"long_probe_filename_for_8dot3_check.txt";
-  const std::wstring file_path = probe_dir.value->ChildExtendedPath(kLongName);
-  auto file_handle = CreateWin32File(file_path, GENERIC_WRITE, kShareAll,
-                                     CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
-  if (!file_handle) {
-    *error_out = "8.3 short-name probe: CreateFileW(probe file) failed: " +
-                 FormatWin32Error(file_handle.error);
-    probe_dir.value->Cleanup();
-    return false;
-  }
-  file_handle.value->reset();
-
-  auto dir_handle = CreateWin32File(
-      probe_dir.value->ExtendedPath(), FILE_LIST_DIRECTORY | SYNCHRONIZE,
-      kShareAll, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  if (!dir_handle) {
-    *error_out = "8.3 short-name probe: CreateFileW(probe directory) failed: " +
-                 FormatWin32Error(dir_handle.error);
-    probe_dir.value->Cleanup();
-    return false;
-  }
-
-  const auto &ntdll = Ntdll();
-  if (ntdll.NtQueryDirectoryFile == nullptr) {
-    *error_out = "8.3 short-name probe: ntdll!NtQueryDirectoryFile unavailable";
-    dir_handle.value->reset();
-    probe_dir.value->Cleanup();
-    return false;
-  }
-
-  std::wstring pattern(kLongName);
-  nt::UnicodeString pattern_us =
-      nt::MakeUnicodeString(pattern.data(), pattern.size());
-  std::vector<uint8_t> buf(1024, 0);
-  nt::IoStatusBlock iosb{};
-  const NTSTATUS st = ntdll.NtQueryDirectoryFile(
-      dir_handle.value->get(), nullptr, nullptr, nullptr, &iosb, buf.data(),
-      static_cast<ULONG>(buf.size()),
-      nt::FileInfoClass::FileBothDirectoryInformation,
-      /*return_single_entry=*/TRUE, &pattern_us, /*restart_scan=*/TRUE);
-  dir_handle.value->reset();
-
-  bool ok = false;
-  if (!nt::NtSuccess(st)) {
-    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
-                 "FileBothDirectoryInformation) failed: " +
-                 FormatNtStatus(st);
-  } else if (iosb.information < offsetof(nt::FileBothDirInfo, file_name)) {
-    *error_out = "8.3 short-name probe: NtQueryDirectoryFile("
-                 "FileBothDirectoryInformation) returned " +
-                 std::to_string(iosb.information) +
-                 " bytes (< fixed FILE_BOTH_DIR_INFORMATION header).";
-  } else {
-    const auto *info =
-        reinterpret_cast<const nt::FileBothDirInfo *>(buf.data());
-    *enabled_out = (info->short_name_length > 0);
-    ok = true;
-  }
-
+  const bool ok =
+      ProbeShortNamesInDir(*probe_dir.value, enabled_out, error_out);
   probe_dir.value->Cleanup();
   return ok;
 }

@@ -275,6 +275,40 @@ private:
   uint8_t *ptr_ = nullptr;
 };
 
+// Opens `path` with FILE_FLAG_NO_BUFFERING, reads exactly `size` bytes into a
+// page-aligned buffer, and stores them in `*out`.
+::testing::AssertionResult ReadFileUnbuffered(const std::wstring &path,
+                                              size_t size, std::string *out) {
+  PageAlignedBuffer buf(size);
+  if (!buf) {
+    return ::testing::AssertionFailure()
+           << "VirtualAlloc(" << size << ") failed";
+  }
+  auto h =
+      core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
+  if (!h) {
+    return ::testing::AssertionFailure()
+           << "Unbuffered open of '" << core::WideToUtf8(path)
+           << "' failed: " << core::FormatWin32Error(h.error);
+  }
+  DWORD bytes_read = 0;
+  ::SetLastError(ERROR_SUCCESS);
+  if (::ReadFile(h.value->get(), buf.data(), static_cast<DWORD>(size),
+                 &bytes_read, nullptr) == FALSE) {
+    const DWORD err = ::GetLastError();
+    return ::testing::AssertionFailure()
+           << "Unbuffered ReadFile failed: " << core::FormatWin32Error(err);
+  }
+  if (bytes_read != static_cast<DWORD>(size)) {
+    return ::testing::AssertionFailure()
+           << "Unbuffered short read: got " << bytes_read << " bytes, expected "
+           << size;
+  }
+  out->assign(reinterpret_cast<const char *>(buf.data()), size);
+  return ::testing::AssertionSuccess();
+}
+
 // Issues one raw FSCTL_QUERY_ALLOCATED_RANGES for [offset, offset + length)
 // and returns its Win32 status (ERROR_SUCCESS when the call succeeded), with
 // no client-side validation of the arguments.
@@ -599,24 +633,12 @@ TEST_F(DataIoTest, MemoryMappedFlushViewOfFileReachesUnbufferedReader) {
 
   // Read the whole file through an unbuffered handle while the view is still
   // mapped.
-  PageAlignedBuffer buf(map_size);
-  ASSERT_TRUE(buf);
-  auto h_unbuffered =
-      core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
-                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
-  ASSERT_WIN32_OK(h_unbuffered);
-
-  DWORD bytes_read = 0;
-  ASSERT_WIN32_TRUE(::ReadFile(h_unbuffered.value->get(), buf.data(),
-                               static_cast<DWORD>(map_size), &bytes_read,
-                               nullptr));
-  ASSERT_EQ(bytes_read, static_cast<DWORD>(map_size));
-
-  const std::string_view actual(reinterpret_cast<const char *>(buf.data()),
-                                map_size);
-  EXPECT_EQ(actual.substr(0, mark0.size()), mark0);
-  EXPECT_EQ(actual.substr(sector, mark1.size()), mark1);
-  EXPECT_EQ(actual.substr(sector * 3u, mark3.size()), mark3);
+  std::string actual;
+  ASSERT_TRUE(ReadFileUnbuffered(path, map_size, &actual));
+  const std::string_view actual_sv(actual);
+  EXPECT_EQ(actual_sv.substr(0, mark0.size()), mark0);
+  EXPECT_EQ(actual_sv.substr(sector, mark1.size()), mark1);
+  EXPECT_EQ(actual_sv.substr(sector * 3u, mark3.size()), mark3);
   // Everything else, including the untouched third page, is unchanged.
   EXPECT_EQ(std::memcmp(actual.data(), expected.data(), map_size), 0);
 }
@@ -700,23 +722,11 @@ TEST_F(DataIoTest, MemoryMappedDirtyPagesPersistAfterHandleCleanupBeforeWrite) {
     mv.UnmapAndCloseMapping();
   }
 
-  PageAlignedBuffer buf(map_size);
-  ASSERT_TRUE(buf);
-  auto h_unbuffered =
-      core::CreateWin32File(path, GENERIC_READ, core::kShareAll, OPEN_EXISTING,
-                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING);
-  ASSERT_WIN32_OK(h_unbuffered);
-
-  DWORD bytes_read = 0;
-  ASSERT_WIN32_TRUE(::ReadFile(h_unbuffered.value->get(), buf.data(),
-                               static_cast<DWORD>(map_size), &bytes_read,
-                               nullptr));
-  ASSERT_EQ(bytes_read, static_cast<DWORD>(map_size));
-
-  const std::string_view actual(reinterpret_cast<const char *>(buf.data()),
-                                map_size);
-  EXPECT_EQ(actual.substr(64, mark0.size()), mark0);
-  EXPECT_EQ(actual.substr(sector + 128, mark1.size()), mark1);
+  std::string actual;
+  ASSERT_TRUE(ReadFileUnbuffered(path, map_size, &actual));
+  const std::string_view actual_sv(actual);
+  EXPECT_EQ(actual_sv.substr(64, mark0.size()), mark0);
+  EXPECT_EQ(actual_sv.substr(sector + 128, mark1.size()), mark1);
   EXPECT_EQ(std::memcmp(actual.data(), expected.data(), map_size), 0);
 }
 
