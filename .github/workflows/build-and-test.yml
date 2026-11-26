@@ -12,6 +12,11 @@ on:
       - 'README.md'
       - 'documentations/**'
   pull_request:
+    # Safe while no Build and Test job is a required status check in the master ruleset;
+    # if one becomes required later, remove paths-ignore here so docs-only PRs can merge.
+    paths-ignore:
+      - 'README.md'
+      - 'documentations/**'
   schedule:
     # Keep cached VM images warm on master (Actions evicts caches after 7 days without access).
     - cron: '0 5 */5 * *'
@@ -116,112 +121,10 @@ jobs:
         env:
           CYGWIN_CACHE_HIT: ${{ steps.cygwin-cache.outputs.cache-hit }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $ProgressPreference = 'SilentlyContinue'
-          $packageDir = (Join-Path $env:RUNNER_TEMP 'cygwin-packages').TrimEnd('\')
-          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
-          $setup = Join-Path $packageDir 'setup-x86_64.exe'
-          $setupSig = Join-Path $packageDir 'setup-x86_64.exe.sig'
-          $pubring = Join-Path $packageDir 'pubring.asc'
-
-          function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile) {
-            for ($attempt = 1; $attempt -le 3; $attempt++) {
-              try {
-                Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $OutFile
-                return
-              } catch {
-                Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
-                if ($attempt -eq 3) { throw }
-                Write-Warning "Download of $Uri failed (attempt $attempt): $($_.Exception.Message); retrying in 10s..."
-                Start-Sleep -Seconds 10
-              }
-            }
-          }
-
-          if (-not (Test-Path -LiteralPath $setup -PathType Leaf) -or -not (Test-Path -LiteralPath $setupSig -PathType Leaf)) {
-            Invoke-DownloadWithRetry 'https://cygwin.com/setup-x86_64.exe' $setup
-            Invoke-DownloadWithRetry 'https://cygwin.com/setup-x86_64.exe.sig' $setupSig
-          }
-          if (-not (Test-Path -LiteralPath $pubring -PathType Leaf)) {
-            Invoke-DownloadWithRetry 'https://cygwin.com/key/pubring.asc' $pubring
-          }
-
-          $gpg = (Get-Command gpg.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
-          if (-not $gpg) {
-            $gpg = @('C:\Program Files\Git\usr\bin\gpg.exe', 'C:\msys64\usr\bin\gpg.exe') |
-              Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
-              Select-Object -First 1
-          }
-          if (-not $gpg) { throw 'gpg.exe not found to verify Cygwin setup-x86_64.exe' }
-
-          $cygpath = Join-Path (Split-Path -Parent $gpg) 'cygpath.exe'
-          $useCygpath = Test-Path -LiteralPath $cygpath -PathType Leaf
-          function Convert-GpgPath([string]$Path) {
-            if (-not $useCygpath) { return $Path }
-            $converted = (& $cygpath -u $Path).Trim()
-            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($converted)) {
-              throw "cygpath failed for $Path (exit code $LASTEXITCODE)"
-            }
-            return $converted
-          }
-
-          $gpgHome = Join-Path $env:RUNNER_TEMP "cygwin-gpg-$PID"
-          Remove-Item -LiteralPath $gpgHome -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $gpgHome | Out-Null
-          try {
-            $gpgHomeArg = Convert-GpgPath $gpgHome
-            $pubringArg = Convert-GpgPath $pubring
-            $setupSigArg = Convert-GpgPath $setupSig
-            $setupArg = Convert-GpgPath $setup
-
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            try {
-              $importOut = @(& $gpg --homedir $gpgHomeArg --batch --import $pubringArg 2>&1 | ForEach-Object { "$_" })
-              $importRc = $LASTEXITCODE
-            } finally {
-              $ErrorActionPreference = $prevEap
-            }
-            if ($importRc -ne 0) {
-              Write-Host ($importOut -join "`n")
-              throw "gpg --import failed with exit code $importRc"
-            }
-
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            try {
-              $verifyOut = @(& $gpg --homedir $gpgHomeArg --batch --status-fd=1 --verify $setupSigArg $setupArg 2>&1 | ForEach-Object { "$_" })
-              $verifyRc = $LASTEXITCODE
-            } finally {
-              $ErrorActionPreference = $prevEap
-            }
-            $verifyText = $verifyOut -join "`n"
-            if ($verifyRc -ne 0 -or $verifyText -notmatch '(?m)^\[GNUPG:\] VALIDSIG 56405CF6FCC81574682A5D561A698DE9E2E56300\b') {
-              Write-Host $verifyText
-              throw "GPG verification of Cygwin setup-x86_64.exe failed (exit code $verifyRc)"
-            }
-          } finally {
-            Remove-Item -LiteralPath $gpgHome -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-          $setupArgs = @('-gqnNdO', '-R', 'C:\cygwin64', '-l', "`"$packageDir`"",
-                         '-P', 'cmake', '-P', 'make', '-P', 'gcc-core', '-P', 'gcc-g++', '-P', 'pkg-config')
-          # Packages downloaded this week are installed offline; otherwise (or if that fails) fall back to HTTPS mirrors.
-          if ($env:CYGWIN_CACHE_HIT -eq 'true') {
-            $p = Start-Process -FilePath $setup -ArgumentList ($setupArgs + '-L') -Wait -PassThru
-            if ($p.ExitCode -eq 0) { exit 0 }
-            Write-Warning "Offline Cygwin install failed with exit code $($p.ExitCode); falling back to HTTPS mirrors."
-          }
-          $mirrors = @(
-            'https://mirrors.kernel.org/sourceware/cygwin/',
-            'https://mirrors.rit.edu/cygwin/'
-          )
-          foreach ($mirror in $mirrors) {
-            $p = Start-Process -FilePath $setup -ArgumentList ($setupArgs + @('-s', $mirror)) -Wait -PassThru
-            if ($p.ExitCode -eq 0) { exit 0 }
-            Write-Warning "Cygwin setup failed with mirror $mirror (exit code $($p.ExitCode))."
-          }
-          throw "Cygwin setup failed across all mirrors (last exit code $($p.ExitCode))"
+          $cacheHit = $env:CYGWIN_CACHE_HIT -eq 'true'
+          .\scripts\ci\install_cygwin.ps1 `
+            -PackageDir "$env:RUNNER_TEMP\cygwin-packages" `
+            -CacheHit:$cacheHit
 
       - name: Save Cygwin package cache
         if: github.event_name != 'pull_request' && steps.cygwin-cache.outputs.cache-hit != 'true'

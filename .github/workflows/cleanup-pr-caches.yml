@@ -1,9 +1,10 @@
 name: Cleanup PR Caches
 
-# Deletes Actions caches scoped to a pull request as soon as it is closed or merged,
-# keeping repository cache usage well below quota (especially after VM-image PRs).
-# Uses pull_request_target solely so fork PR caches can be deleted; checks out no code
-# and never reads any untrusted PR fields beyond the integer PR number.
+# Cancels any in-flight pull_request workflow runs for a closed or merged pull
+# request and deletes Actions caches scoped to that PR so a mid-bake VM image
+# job (or SonarCloud/docs job) cannot finish later and leave orphaned caches.
+# Uses pull_request_target solely so fork PR runs can be cancelled and caches
+# deleted; checks out no code and validates all PR inputs strictly before use.
 
 on:
   pull_request_target:
@@ -12,22 +13,149 @@ on:
 permissions:
   actions: write
 
+concurrency:
+  group: cleanup-pr-caches-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     name: Delete caches for closed PR
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Delete PR-scoped caches
+      - name: Cancel in-flight PR runs and delete PR caches
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          SELF_RUN_ID: ${{ github.run_id }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          set -euo pipefail
           if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "ERROR: invalid PR number '$PR_NUMBER'" >&2
             exit 1
           fi
+          if [[ ! "$SELF_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: invalid self run ID '$SELF_RUN_ID'" >&2
+            exit 1
+          fi
+          if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "ERROR: invalid PR head SHA '$PR_HEAD_SHA'" >&2
+            exit 1
+          fi
+          if [[ -n "$PR_HEAD_REPO" && ! "$PR_HEAD_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+            echo "ERROR: invalid PR head repository '$PR_HEAD_REPO'" >&2
+            exit 1
+          fi
+
+          # GitHub's Actions API leaves .pull_requests empty for fork PRs (and for
+          # closed/merged same-repo PRs once the branch is deleted). Query both
+          # recent runs (last 24h, catching superseded SHAs still winding down)
+          # and all runs at PR_HEAD_SHA (catching re-runs or delayed-approval fork
+          # runs whose attempt-1 created_at is older than 24h) across every
+          # cache-producing pull_request workflow.
+          read -r -d '' jq_filter <<'JQ' || true
+          .workflow_runs[]?
+          | select(.status != "completed" and .id != $self_id)
+          | select(
+              ((.pull_requests // []) | any(.number == $pr))
+              or (
+                ((.pull_requests // []) | length) == 0
+                and ((.head_repository.full_name // "") | ascii_downcase) == ($head_repo | ascii_downcase)
+                and (
+                  ((.head_sha // "") | ascii_downcase) == ($sha | ascii_downcase)
+                  or ($head_repo != "" and $head_ref != "" and (.head_branch // "") == $head_ref)
+                )
+              )
+            )
+          | .id
+          JQ
+
+          since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          declare -A seen_ids=()
+          cancel_ids=()
+          query_runs() {
+            local matched="" run_id=""
+            if matched=$(
+              gh api --paginate -X GET "repos/${GH_REPO}/actions/runs" \
+                -f event=pull_request "$@" -F per_page=100 |
+                jq -r \
+                  --argjson self_id "$SELF_RUN_ID" \
+                  --argjson pr "$PR_NUMBER" \
+                  --arg sha "$PR_HEAD_SHA" \
+                  --arg head_repo "$PR_HEAD_REPO" \
+                  --arg head_ref "$PR_HEAD_REF" \
+                  "$jq_filter"
+            ); then
+              while IFS= read -r run_id; do
+                if [[ "$run_id" =~ ^[0-9]+$ && -z "${seen_ids[$run_id]+x}" ]]; then
+                  seen_ids[$run_id]=1
+                  cancel_ids+=("$run_id")
+                fi
+              done <<< "$matched"
+            else
+              echo "::warning::Failed to query in-flight pull_request runs ($*); proceeding with cache cleanup."
+            fi
+          }
+          query_runs -f "created=>=${since}"
+          query_runs -f "head_sha=${PR_HEAD_SHA}"
+
+          cancelled_ids=()
+          for run_id in "${cancel_ids[@]}"; do
+            echo "Cancelling in-flight run ${run_id} for PR #${PR_NUMBER}"
+            cancel_state="failed"
+            for attempt in 1 2 3; do
+              if cancel_err=$(gh api -X POST "repos/${GH_REPO}/actions/runs/${run_id}/cancel" 2>&1); then
+                cancel_state="cancelled"
+                break
+              fi
+              if [[ "$cancel_err" == *"HTTP 409"* || "$cancel_err" == *"Cannot cancel"* ]]; then
+                echo "Run ${run_id} is already completed."
+                cancel_state="completed"
+                break
+              fi
+              echo "Note: cancel attempt ${attempt}/3 for run ${run_id} failed: ${cancel_err}"
+              if (( attempt < 3 )); then
+                sleep 3
+              fi
+            done
+            if [[ "$cancel_state" == "cancelled" ]]; then
+              cancelled_ids+=("$run_id")
+            elif [[ "$cancel_state" == "failed" ]]; then
+              echo "::warning::Failed to cancel run ${run_id} after 3 attempts; skipping wait and proceeding with cache cleanup."
+            fi
+          done
+
+          if (( ${#cancelled_ids[@]} > 0 )); then
+            # Wait (bounded) for cancelled runs to reach completed so an in-flight
+            # cache save cannot commit after gh cache delete runs.
+            deadline=$((SECONDS + 120))
+            while true; do
+              still_running=()
+              for run_id in "${cancelled_ids[@]}"; do
+                if ! run_status=$(gh api "repos/${GH_REPO}/actions/runs/${run_id}" --jq '.status' 2>&1); then
+                  echo "Note: status check for run ${run_id} returned: ${run_status}"
+                  still_running+=("${run_id}:unknown")
+                elif [[ "$run_status" != "completed" ]]; then
+                  still_running+=("${run_id}:${run_status}")
+                fi
+              done
+              if (( ${#still_running[@]} == 0 )); then
+                echo "All cancelled runs have completed."
+                break
+              fi
+              if (( SECONDS >= deadline )); then
+                echo "::warning::Timed out waiting for cancelled run(s) to complete: ${still_running[*]}; proceeding with cache cleanup."
+                break
+              fi
+              echo "Waiting for cancelled run(s) to finish: ${still_running[*]}"
+              sleep 5
+            done
+          fi
+
           ref="refs/pull/${PR_NUMBER}/merge"
           echo "Cleaning up Actions caches for ${ref}"
           gh cache delete --all --ref "$ref" --succeed-on-no-caches
