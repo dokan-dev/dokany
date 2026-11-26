@@ -28,7 +28,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef DOKAN_H_
 #define DOKAN_H_
 
-#define POOL_NX_OPTIN 1
 #include <ntifs.h>
 #include <ntdddisk.h>
 #include <ntstrsafe.h>
@@ -104,7 +103,7 @@ extern DokanPtr_FsRtlAreThereWaitingFileLocks
 
 #define DOKAN_MDL_ALLOCATED 0x1
 
-#define DokanAlloc(size) ExAllocatePoolWithTag(NonPagedPool, size, TAG)
+#define DokanAlloc(size) ExAllocatePoolWithTag(NonPagedPoolNx, size, TAG)
 #define DokanFree(ptr) ExFreePoolWithTag(ptr, TAG)
 
 inline PVOID DokanAllocZero(SIZE_T size) {
@@ -113,9 +112,8 @@ inline PVOID DokanAllocZero(SIZE_T size) {
   return buffer;
 }
 
-extern ULONG DokanMdlSafePriority;
 #define MmGetSystemAddressForMdlNormalSafe(mdl)                                \
-  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority | DokanMdlSafePriority)
+  MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority | MdlMappingNoExecute)
 
 #define DRIVER_CONTEXT_EVENT 2
 #define DRIVER_CONTEXT_IRP_ENTRY 3
@@ -124,11 +122,11 @@ extern ULONG DokanMdlSafePriority;
 #define DOKAN_IRP_PENDING_TIMEOUT_RESET_MAX (1000 * 60 * 5) // in millisecond
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
 
-extern NPAGED_LOOKASIDE_LIST DokanIrpEntryLookasideList;
+extern LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
 #define DokanAllocateIrpEntry()                                                \
-  ExAllocateFromNPagedLookasideList(&DokanIrpEntryLookasideList)
+  ExAllocateFromLookasideListEx(&DokanIrpEntryLookasideList)
 #define DokanFreeIrpEntry(IrpEntry)                                            \
-  ExFreeToNPagedLookasideList(&DokanIrpEntryLookasideList, IrpEntry)
+  ExFreeToLookasideListEx(&DokanIrpEntryLookasideList, IrpEntry)
 
 //
 //  Undocumented definition of ExtensionFlags
