@@ -513,10 +513,6 @@
           "reason": "Dokan does not support symbolic links",
           "gap": "GAP-22"
         },
-        "LocksOplocksTest.ByteRangeLockAbove4KiBBreaksReadOplock": {
-          "reason": "dokan3.sys DokanInitializeFcb (sys/util/fcb.c:62) initializes AllocationSize to 4096 and DokanCommonLockControl (sys/lock.c:70-73) skips DokanCheckOplock for ByteOffset >= AllocationSize without refreshing file size",
-          "gap": "GAP-11"
-        },
         "LocksOplocksTest.DirectoryOplockBreaksOnChildCreate": {
           "reason": "dokan3.sys does not break directory RH oplocks on child file creation",
           "gap": "GAP-11"

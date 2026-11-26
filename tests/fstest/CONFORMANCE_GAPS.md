@@ -645,16 +645,10 @@ immediately overwrites `status` via
 completes the IRP with user-mode `EventInfo->Status` (`STATUS_SUCCESS`).
 (Separately, when a sharing conflict *does* occur alongside
 `FILE_COMPLETE_IF_OPLOCKED`, `sys/create.c:1045-1139` bypasses
-`FsRtlOplockBreakH` and fails with `STATUS_SHARING_VIOLATION`.) In addition,
-`DokanInitializeFcb` (`sys/util/fcb.c:62`) initializes `AllocationSize` to
-`4096` and `DokanCommonLockControl` (`sys/lock.c:70-73`) only invokes
-`DokanCheckOplock` when `ByteOffset < AllocationSize`, skipping oplock breaks
-for byte-range locks starting at or above 4 KiB unless file size was refreshed
-first.
+`FsRtlOplockBreakH` and fails with `STATUS_SHARING_VIOLATION`.)
 
 **Covered Tests:**
 
-- `LocksOplocksTest.ByteRangeLockAbove4KiBBreaksReadOplock` (`memfs`, `mirror`)
 - `LocksOplocksTest.DirectoryOplockBreaksOnChildCreate` (`memfs`, `mirror`)
 - `LocksOplocksTest.OplockCompleteIfOplockedFlag` (`memfs`, `mirror`)
 - `LocksOplocksTest.OplockOpbatchAckClosePendingReleasesOpener`
@@ -958,10 +952,16 @@ reaching `MirrorMoveFile` (`samples/dokan_mirror/mirror.c`); its
 `NewFileName[0] != ':'` branch prepends `gRootDirectory` and passes a full
 path to `SetFileInformationByHandle(FileRenameInfo)`, which NTFS rejects. For
 `dir::$DATA`, `MirrorCreateFile` loses `STATUS_FILE_IS_A_DIRECTORY` through
-Win32 `ERROR_ACCESS_DENIED` -> `STATUS_ACCESS_DENIED`.
+Win32 `ERROR_ACCESS_DENIED` -> `STATUS_ACCESS_DENIED`. Similarly, because
+`dokan3.sys` keys FCBs by full stream path (`sys/create.c:686`), closing a
+delete-pending base file while a named stream handle stays open drops the base
+FCB while backing NTFS keeps the file delete-pending; subsequent opens reach
+`MirrorCreateFile` (`mirror.c:453, 468`), where Win32 `CreateFileW` collapses
+`STATUS_DELETE_PENDING` into `ERROR_ACCESS_DENIED` -> `STATUS_ACCESS_DENIED`.
 
 **Covered Tests:**
 
+- `StreamsTest.BaseFileLegacyDeletePendingWhileNamedStreamOpen` (`mirror`)
 - `StreamsTest.DefaultStreamRenameToNamedStreamMovesData` (`mirror`)
 - `StreamsTest.InvalidStreamSyntaxAndDirectoryDataStreamRejected` (`mirror`)
 - `StreamsTest.NamedStreamRenameOntoEmptyDefaultStream` (`mirror`)
