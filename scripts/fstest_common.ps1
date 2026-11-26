@@ -186,3 +186,106 @@ function Stop-DokanMountProcess {
         $Process.WaitForExit(5000) | Out-Null
     }
 }
+
+function Add-DokanDefenderExclusion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Get-Command -Name Add-MpPreference -ErrorAction SilentlyContinue)) {
+        return
+    }
+    try {
+        Add-MpPreference -ExclusionPath $Path -ErrorAction Stop
+    } catch {
+        Write-Warning "Windows Defender exclusion skipped for ${Path}: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-DokanFsTestVhdxVolumeRoot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FsTestExe,
+        [Parameter(Mandatory = $true)]
+        [string]$JsonOut,
+        [AllowEmptyString()]
+        [string]$TempDir = ''
+    )
+
+    # Volume-root-only tests skip under a subdirectory root, so run them against
+    # the root of a throwaway NTFS VHDX: 6 MountRoot*, DotDotTraversalClamps-
+    # AtVolumeRoot, and 3 CrossVolumeMove* (temp dir lives on another volume).
+    $gtestFilter = '*MountRoot*:*DotDotTraversalClampsAtVolumeRoot*:*CrossVolumeMove*'
+    $minPassed = 10
+
+    if ([string]::IsNullOrWhiteSpace($TempDir)) {
+        $TempDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
+    }
+    $usedLetters = @([System.IO.DriveInfo]::GetDrives() | ForEach-Object { $_.Name.Substring(0, 1).ToUpperInvariant() })
+    $letter = @('V', 'W', 'X', 'Y', 'Z', 'T', 'U') |
+        Where-Object { $usedLetters -notcontains $_ } |
+        Select-Object -First 1
+    if (-not $letter) {
+        throw 'No free drive letter available for the volume-root VHDX.'
+    }
+    $volRoot = "${letter}:\"
+
+    $vhdxPath = Join-Path -Path $TempDir -ChildPath 'fstest_root.vhdx'
+    $createScript = Join-Path -Path $TempDir -ChildPath 'fstest_vhdx_create.txt'
+    $detachScript = Join-Path -Path $TempDir -ChildPath 'fstest_vhdx_detach.txt'
+    if (Test-Path -LiteralPath $vhdxPath) {
+        Remove-Item -LiteralPath $vhdxPath -Force
+    }
+    @(
+        "create vdisk file=`"$vhdxPath`" maximum=256 type=expandable",
+        "select vdisk file=`"$vhdxPath`"",
+        'attach vdisk',
+        'create partition primary',
+        'format fs=ntfs quick label=FSTESTROOT',
+        "assign letter=$letter"
+    ) | Set-Content -LiteralPath $createScript -Encoding ASCII
+    @(
+        "select vdisk file=`"$vhdxPath`"",
+        'detach vdisk'
+    ) | Set-Content -LiteralPath $detachScript -Encoding ASCII
+
+    try {
+        Invoke-DokanExternal { & diskpart.exe /s $createScript } | Out-Host
+
+        # Mount manager letter assignment can lag diskpart's return.
+        $deadline = (Get-Date).AddSeconds(5)
+        while (-not [System.IO.Directory]::Exists($volRoot) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+        }
+        if (-not [System.IO.Directory]::Exists($volRoot)) {
+            throw "VHDX volume $volRoot is not accessible after diskpart."
+        }
+        Add-DokanDefenderExclusion -Path $volRoot
+
+        & $FsTestExe "--root=$volRoot" '--strict' "--gtest_filter=$gtestFilter" "--json-out=$JsonOut" | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "dokan_fstest --strict (volume root $volRoot) failed with exit code $LASTEXITCODE"
+        }
+
+        # Guard against a mis-detected volume root silently skipping every
+        # volume-root test while the run still exits 0.
+        $card = Get-Content -LiteralPath $JsonOut -Raw | ConvertFrom-Json
+        if (-not $card.capabilities.is_volume_root -or $card.summary.skip -ne 0 -or $card.summary.pass -lt $minPassed) {
+            throw "Volume-root VHDX run did not exercise volume-root tests (is_volume_root=$($card.capabilities.is_volume_root), pass=$($card.summary.pass), skip=$($card.summary.skip); expected is_volume_root=True, pass>=$minPassed, skip=0)"
+        }
+    } finally {
+        if (Test-Path -LiteralPath $vhdxPath) {
+            & diskpart.exe /s $detachScript | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "diskpart VHDX detach failed with exit code $LASTEXITCODE"
+            }
+            # A best-effort detach failure must not fail the caller's step.
+            $global:LASTEXITCODE = 0
+            Remove-Item -LiteralPath $vhdxPath -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $createScript, $detachScript -Force -ErrorAction SilentlyContinue
+    }
+}

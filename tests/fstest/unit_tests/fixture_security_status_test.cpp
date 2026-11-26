@@ -409,6 +409,20 @@ TEST_F(FixturePreprobedAndOverridesTest,
   EXPECT_EQ(reason.find("UsnJournal"), std::string::npos) << reason;
 }
 
+// Drives NtfsTestBase's suite/test lifecycle directly (outside GoogleTest's
+// runner) so every LifecycleHooks path is exercised deterministically inside
+// the calling plain TEST.
+class FixtureHarness : public NtfsTestBase {
+public:
+  void TestBody() override {}
+  void RunSetUp() { SetUp(); }
+  void RunTearDown() { TearDown(); }
+  using NtfsTestBase::Caps;
+  using NtfsTestBase::Root;
+  using NtfsTestBase::ShouldSkipForFsCapability;
+  using NtfsTestBase::TempDir;
+};
+
 TEST(SuiteConfigTest, VolumeQuotasAndUsnJournalOverridesForceSupport) {
   ScopedSuiteConfigReset reset_guard;
   ScopedTestDirectory root_dir(L"fstqu");
@@ -428,16 +442,9 @@ TEST(SuiteConfigTest, VolumeQuotasAndUsnJournalOverridesForceSupport) {
   cfg.capability_overrides.usn_journal = true;
   ConfigureSuite(std::move(cfg));
 
-  // Drives NtfsTestBase directly; see FixtureHarness below for the pattern.
-  class Harness : public NtfsTestBase {
-  public:
-    void TestBody() override {}
-    using NtfsTestBase::Caps;
-    using NtfsTestBase::ShouldSkipForFsCapability;
-  };
-  Harness::SetUpTestSuite();
+  FixtureHarness::SetUpTestSuite();
   {
-    Harness h;
+    FixtureHarness h;
     EXPECT_EQ(h.Caps().filesystem_name, L"SyntheticNoQuotaNoUsnFS");
     std::string reason;
     // Override true takes precedence over probed false.
@@ -448,26 +455,26 @@ TEST(SuiteConfigTest, VolumeQuotasAndUsnJournalOverridesForceSupport) {
         h.ShouldSkipForFsCapability(FsCapability::kUsnJournal, &reason))
         << reason;
   }
-  Harness::TearDownTestSuite();
+  FixtureHarness::TearDownTestSuite();
 }
 
-// Returns the number of directory entries other than "." and "..".
-size_t CountChildEntries(const std::wstring &dir) {
-  WIN32_FIND_DATAW fd{};
-  const std::wstring pattern = dir + L"\\*";
-  HANDLE find_handle = ::FindFirstFileW(pattern.c_str(), &fd);
-  if (find_handle == INVALID_HANDLE_VALUE) {
-    return 0;
+// Fail-closed emptiness check: enumeration errors fail rather than read as
+// "no entries".
+::testing::AssertionResult CheckDirectoryEmpty(const std::wstring &dir) {
+  auto listing = core::ListDirectoryWin32(dir);
+  if (!listing) {
+    return ::testing::AssertionFailure()
+           << "Failed to enumerate '" << core::WideToUtf8(dir)
+           << "': " << core::FormatWin32Error(listing.error);
   }
-  size_t count = 0;
-  do {
-    const std::wstring_view name(fd.cFileName);
+  for (const std::wstring &name : *listing.value) {
     if (name != L"." && name != L"..") {
-      ++count;
+      return ::testing::AssertionFailure()
+             << "Unexpected entry '" << core::WideToUtf8(name) << "' in '"
+             << core::WideToUtf8(dir) << "'";
     }
-  } while (::FindNextFileW(find_handle, &fd) != FALSE);
-  ::FindClose(find_handle);
-  return count;
+  }
+  return ::testing::AssertionSuccess();
 }
 
 TEST(VolumeCapabilitiesTest, ProbePopulatesQuotaUsnFlagsAndLeavesNoDebris) {
@@ -485,7 +492,7 @@ TEST(VolumeCapabilitiesTest, ProbePopulatesQuotaUsnFlagsAndLeavesNoDebris) {
             (caps.fs_flags & nt::kFileSupportsUsnJournal) != 0);
   // The transient 8.3 probe directory is removed whether or not 8.3 names
   // are enabled on the host volume.
-  EXPECT_EQ(CountChildEntries(dir.Path()), 0u);
+  EXPECT_TRUE(CheckDirectoryEmpty(dir.Path()));
 }
 
 TEST(VolumeCapabilitiesTest, ShortNameProbeFailureFailsCapabilityProbe) {
@@ -529,24 +536,12 @@ TEST(VolumeCapabilitiesTest, ShortNameProbeFailureFailsCapabilityProbe) {
     EXPECT_NE(caps.probe_error.find("ERROR_ACCESS_DENIED"), std::string::npos)
         << caps.probe_error;
     // The transient probe directory is removed even on the failure path.
-    EXPECT_EQ(CountChildEntries(root), 0u);
+    EXPECT_TRUE(CheckDirectoryEmpty(root));
   }
 
   EXPECT_NE(::RemoveDirectoryW(root_ext.c_str()), FALSE)
       << core::FormatWin32Error(::GetLastError());
 }
-
-// Drives NtfsTestBase's suite/test lifecycle directly (outside GoogleTest's
-// runner) so every LifecycleHooks path is exercised deterministically inside
-// the calling plain TEST.
-class FixtureHarness : public NtfsTestBase {
-public:
-  void TestBody() override {}
-  void RunSetUp() { SetUp(); }
-  void RunTearDown() { TearDown(); }
-  using NtfsTestBase::Root;
-  using NtfsTestBase::TempDir;
-};
 
 bool CurrentTestHasProperty(std::string_view key, std::string_view value) {
   const ::testing::TestInfo *info =

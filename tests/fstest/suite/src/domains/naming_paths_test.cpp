@@ -1373,19 +1373,13 @@ TEST_F(NamingPathsTest, TrailingBackslashOnRegularFileFails) {
   const std::wstring file_path = TestPath(L"plain.dat");
   ASSERT_WIN32_OK(core::WriteFileContents(file_path, "regular-file"));
 
-  auto expect_win_slash_err = [](DWORD err, const char *label) {
-    EXPECT_TRUE(err == static_cast<DWORD>(ERROR_INVALID_NAME) ||
-                err == static_cast<DWORD>(ERROR_DIRECTORY))
-        << "Expected ERROR_INVALID_NAME or ERROR_DIRECTORY for " << label
-        << " on trailing backslash, got " << core::FormatWin32Error(err);
-  };
-
   const std::wstring with_slash = file_path + L"\\";
   auto open_res =
       core::CreateWin32File(with_slash, GENERIC_READ, core::kShareAll,
                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(open_res);
-  expect_win_slash_err(open_res.error, "CreateFileW(OPEN_EXISTING)");
+  EXPECT_TRUE(helpers::CheckTrailingSlashWin32Error(open_res.error))
+      << "CreateFileW(OPEN_EXISTING)";
   if (open_res) {
     open_res.value->reset();
   }
@@ -1394,7 +1388,8 @@ TEST_F(NamingPathsTest, TrailingBackslashOnRegularFileFails) {
       core::CreateWin32File(with_slash, GENERIC_WRITE, core::kShareAll,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL);
   EXPECT_FALSE(create_res);
-  expect_win_slash_err(create_res.error, "CreateFileW(CREATE_NEW)");
+  EXPECT_TRUE(helpers::CheckTrailingSlashWin32Error(create_res.error))
+      << "CreateFileW(CREATE_NEW)";
   if (create_res) {
     create_res.value->reset();
   }
@@ -1404,18 +1399,16 @@ TEST_F(NamingPathsTest, TrailingBackslashOnRegularFileFails) {
       FILE_ATTRIBUTE_NORMAL, core::kShareAll, nt::kFileOpen,
       nt::kFileNonDirectoryFile);
   EXPECT_FALSE(nt_res);
-  EXPECT_TRUE(nt_res.status == STATUS_OBJECT_NAME_INVALID ||
-              nt_res.status == STATUS_NOT_A_DIRECTORY)
-      << "Expected STATUS_OBJECT_NAME_INVALID or STATUS_NOT_A_DIRECTORY for "
-         "NtCreateFile on trailing backslash, got "
-      << core::FormatNtStatus(nt_res.status);
+  EXPECT_TRUE(helpers::CheckTrailingSlashNtStatus(nt_res.status))
+      << "NtCreateFile(FILE_OPEN)";
   if (nt_res) {
     nt_res.value->reset();
   }
 
   auto attrs = core::QueryWin32Attributes(with_slash);
   EXPECT_FALSE(attrs);
-  expect_win_slash_err(attrs.error, "GetFileAttributesW");
+  EXPECT_TRUE(helpers::CheckTrailingSlashWin32Error(attrs.error))
+      << "GetFileAttributesW";
 }
 
 // Spec: Win32 CreateFileW & GetFullPathNameW -- standard Win32 path parsing

@@ -472,6 +472,47 @@ void CreateSetSecurityTarget(const std::wstring &path,
   *handle_out = std::move(*opened.value);
 }
 
+// Verifies directly on binary security descriptor `sd` which of Owner, Group,
+// and DACL are present or absent. Callers should wrap in SCOPED_TRACE /
+// ASSERT_NO_FATAL_FAILURE.
+void ExpectBinarySdComponents(PSECURITY_DESCRIPTOR sd, bool expect_owner,
+                              bool expect_group, bool expect_dacl) {
+  PSID owner_sid = nullptr;
+  BOOL owner_defaulted = FALSE;
+  ASSERT_WIN32_TRUE(
+      ::GetSecurityDescriptorOwner(sd, &owner_sid, &owner_defaulted));
+  if (expect_owner) {
+    ASSERT_NE(owner_sid, nullptr);
+    EXPECT_TRUE(::IsValidSid(owner_sid) != FALSE);
+  } else {
+    EXPECT_EQ(owner_sid, nullptr);
+  }
+
+  PSID group_sid = nullptr;
+  BOOL group_defaulted = FALSE;
+  ASSERT_WIN32_TRUE(
+      ::GetSecurityDescriptorGroup(sd, &group_sid, &group_defaulted));
+  if (expect_group) {
+    ASSERT_NE(group_sid, nullptr);
+    EXPECT_TRUE(::IsValidSid(group_sid) != FALSE);
+  } else {
+    EXPECT_EQ(group_sid, nullptr);
+  }
+
+  BOOL dacl_present = FALSE;
+  BOOL dacl_defaulted = FALSE;
+  PACL dacl = nullptr;
+  ASSERT_WIN32_TRUE(
+      ::GetSecurityDescriptorDacl(sd, &dacl_present, &dacl, &dacl_defaulted));
+  if (expect_dacl) {
+    EXPECT_TRUE(dacl_present != FALSE);
+    EXPECT_NE(dacl, nullptr);
+  } else {
+    EXPECT_EQ(dacl_present, FALSE);
+    EXPECT_EQ(dacl, nullptr);
+  }
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -625,79 +666,32 @@ TEST_F(SecurityAclTest, QueryOwnerGroupAndDaclSelectively) {
 
   // Selective OWNER query: owner present, group and DACL absent in binary SD.
   {
+    SCOPED_TRACE("OWNER_SECURITY_INFORMATION");
     auto owner_buf = QueryRawFileSecurity(path, OWNER_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(owner_buf);
-    PSID owner_sid = nullptr;
-    BOOL owner_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorOwner(
-        owner_buf.value->data(), &owner_sid, &owner_defaulted));
-    ASSERT_NE(owner_sid, nullptr);
-    EXPECT_TRUE(::IsValidSid(owner_sid) != FALSE);
-
-    PSID group_sid = nullptr;
-    BOOL group_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorGroup(
-        owner_buf.value->data(), &group_sid, &group_defaulted));
-    EXPECT_EQ(group_sid, nullptr);
-
-    BOOL dacl_present = FALSE;
-    BOOL dacl_defaulted = FALSE;
-    PACL dacl = nullptr;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorDacl(
-        owner_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
-    EXPECT_EQ(dacl_present, FALSE);
-    EXPECT_EQ(dacl, nullptr);
+    ASSERT_NO_FATAL_FAILURE(ExpectBinarySdComponents(
+        owner_buf.value->data(), /*expect_owner=*/true, /*expect_group=*/false,
+        /*expect_dacl=*/false));
   }
 
   // Selective GROUP query: group present, owner and DACL absent in binary SD.
   {
+    SCOPED_TRACE("GROUP_SECURITY_INFORMATION");
     auto group_buf = QueryRawFileSecurity(path, GROUP_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(group_buf);
-    PSID group_sid = nullptr;
-    BOOL group_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorGroup(
-        group_buf.value->data(), &group_sid, &group_defaulted));
-    ASSERT_NE(group_sid, nullptr);
-    EXPECT_TRUE(::IsValidSid(group_sid) != FALSE);
-
-    PSID owner_sid = nullptr;
-    BOOL owner_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorOwner(
-        group_buf.value->data(), &owner_sid, &owner_defaulted));
-    EXPECT_EQ(owner_sid, nullptr);
-
-    BOOL dacl_present = FALSE;
-    BOOL dacl_defaulted = FALSE;
-    PACL dacl = nullptr;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorDacl(
-        group_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
-    EXPECT_EQ(dacl_present, FALSE);
-    EXPECT_EQ(dacl, nullptr);
+    ASSERT_NO_FATAL_FAILURE(ExpectBinarySdComponents(
+        group_buf.value->data(), /*expect_owner=*/false, /*expect_group=*/true,
+        /*expect_dacl=*/false));
   }
 
   // Selective DACL query: DACL present, owner and group absent in binary SD.
   {
+    SCOPED_TRACE("DACL_SECURITY_INFORMATION");
     auto dacl_buf = QueryRawFileSecurity(path, DACL_SECURITY_INFORMATION);
     ASSERT_WIN32_OK(dacl_buf);
-    BOOL dacl_present = FALSE;
-    BOOL dacl_defaulted = FALSE;
-    PACL dacl = nullptr;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorDacl(
-        dacl_buf.value->data(), &dacl_present, &dacl, &dacl_defaulted));
-    EXPECT_TRUE(dacl_present != FALSE);
-    EXPECT_NE(dacl, nullptr);
-
-    PSID owner_sid = nullptr;
-    BOOL owner_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorOwner(
-        dacl_buf.value->data(), &owner_sid, &owner_defaulted));
-    EXPECT_EQ(owner_sid, nullptr);
-
-    PSID group_sid = nullptr;
-    BOOL group_defaulted = FALSE;
-    ASSERT_WIN32_TRUE(::GetSecurityDescriptorGroup(
-        dacl_buf.value->data(), &group_sid, &group_defaulted));
-    EXPECT_EQ(group_sid, nullptr);
+    ASSERT_NO_FATAL_FAILURE(ExpectBinarySdComponents(
+        dacl_buf.value->data(), /*expect_owner=*/false, /*expect_group=*/false,
+        /*expect_dacl=*/true));
 
     auto dacl_sddl = core::SecurityDescriptorToSddl(dacl_buf.value->data(),
                                                     DACL_SECURITY_INFORMATION);

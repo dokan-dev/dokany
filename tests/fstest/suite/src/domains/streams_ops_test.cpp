@@ -540,24 +540,17 @@ TEST_F(StreamsTest, BaseFileLegacyDeletePendingWhileNamedStreamOpen) {
 
     // New opens of the base file, open ADS, and sibling ADS fail
     // STATUS_DELETE_PENDING.
-    auto reopen_base = core::NtOpenFilePath(
-        TestNtPath(L"del_base_open_ads.dat"), FILE_READ_DATA | SYNCHRONIZE,
-        core::kShareAll, nt::kFileSynchronousIoNonalert);
-    EXPECT_FALSE(reopen_base);
-    EXPECT_NT_STATUS(reopen_base.status, STATUS_DELETE_PENDING);
-
-    auto reopen_keep = core::NtOpenFilePath(
-        TestNtPath(L"del_base_open_ads.dat:keep"), FILE_READ_DATA | SYNCHRONIZE,
-        core::kShareAll, nt::kFileSynchronousIoNonalert);
-    EXPECT_FALSE(reopen_keep);
-    EXPECT_NT_STATUS(reopen_keep.status, STATUS_DELETE_PENDING);
-
-    auto reopen_extra =
-        core::NtOpenFilePath(TestNtPath(L"del_base_open_ads.dat:extra"),
-                             FILE_READ_DATA | SYNCHRONIZE, core::kShareAll,
-                             nt::kFileSynchronousIoNonalert);
-    EXPECT_FALSE(reopen_extra);
-    EXPECT_NT_STATUS(reopen_extra.status, STATUS_DELETE_PENDING);
+    for (const std::wstring_view rel :
+         {std::wstring_view(L"del_base_open_ads.dat"),
+          std::wstring_view(L"del_base_open_ads.dat:keep"),
+          std::wstring_view(L"del_base_open_ads.dat:extra")}) {
+      SCOPED_TRACE(core::WideToUtf8(rel));
+      auto reopen =
+          core::NtOpenFilePath(TestNtPath(rel), FILE_READ_DATA | SYNCHRONIZE,
+                               core::kShareAll, nt::kFileSynchronousIoNonalert);
+      EXPECT_FALSE(reopen);
+      EXPECT_NT_STATUS(reopen.status, STATUS_DELETE_PENDING);
+    }
   }
 
   // Once the last stream handle closes, the entire file is removed.
