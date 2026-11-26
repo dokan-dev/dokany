@@ -2081,32 +2081,28 @@ TEST_F(DirEnumTest, NtQueryDirectoryInfoClassSwitchMidScanKeepsCursor) {
 }
 
 // Spec: [MS-FSA] 2.1.4.4 & 2.1.5.6.3 / NtQueryDirectoryFile -- non-"*"
-// wildcard patterns (".", "..", "?", "??", ".*", and "*.*") must still match
-// the "." and ".." entries of a non-root directory using NT wildcard rules.
+// wildcard patterns (".*", "*.", "*.*", and "**") must still match the "." and
+// ".." entries of a non-root directory. (Literal "."/".." fail
+// STATUS_OBJECT_NAME_INVALID on NTFS, and "?"/"??" hit an NTFS-specific quirk
+// where both synthetic dot entries are tested solely against ".", so only
+// spec-portable wildcard patterns are asserted here.)
 TEST_F(DirEnumTest, DotAndDotDotMatchedByNonStarWildcards) {
   const std::wstring sub = TestPath(L"dot_wildcards");
   ASSERT_WIN32_TRUE(::CreateDirectoryW(sub.c_str(), nullptr));
   ASSERT_TRUE(CreateEmptyFile(core::JoinPath(sub, L"alpha.txt")));
 
-  // Literal dot entries.
-  EXPECT_TRUE(
-      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L".", {L"."}));
-  EXPECT_TRUE(
-      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"..", {L".."}));
-
-  // NT '?' matches exactly one character (not DOS_QM '>'), so "?" matches "."
-  // and "??" matches "..".
-  EXPECT_TRUE(
-      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"?", {L"."}));
-  EXPECT_TRUE(
-      EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(sub, L"??", {L".."}));
-
-  // ".*" matches names starting with '.' (both "." and ".."), and "*.*"
-  // matches every name containing '.' (".", "..", and "alpha.txt").
+  // ".*" and "*." match both "." and ".." without matching "alpha.txt".
   EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
       sub, L".*", {L".", L".."}));
   EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
+      sub, L"*.", {L".", L".."}));
+
+  // "*.*" and "**" match ".", "..", and "alpha.txt" while exercising patterns
+  // distinct from literal "*".
+  EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
       sub, L"*.*", {L".", L"..", L"alpha.txt"}));
+  EXPECT_TRUE(EnumerateDirPathExpectMultiset<nt::FileBothDirInfo>(
+      sub, L"**", {L".", L"..", L"alpha.txt"}));
 }
 
 // Spec: [MS-FSCC] 2.4.8 / [MS-FSA] 2.1.5.6.3 / NtQueryDirectoryFile -- the

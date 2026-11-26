@@ -26,16 +26,17 @@ namespace {
 // suite setup fails loudly instead of silently skipping every 8.3 test. A
 // successful query reporting ShortNameLength == 0 returns true with
 // *enabled_out == false (8.3 generation disabled or unsupported).
+//
+// A root that rejects creating the transient directory is not a probe error:
+// it reports *enabled_out == false so the run proceeds and every test fails
+// fatally in NtfsTestBase::SetUp() (per-test temp directory creation), which
+// baselines can never mask and which precedes any REQUIRE_SHORT_NAMES_ENABLED.
 bool ProbeShortNamesEnabled(const NormalizedRoot &root, bool *enabled_out,
                             std::string *error_out) {
   *enabled_out = false;
   auto probe_dir = ScopedTempDir::Create(root.win32_root, L"fst83");
   if (!probe_dir) {
-    *error_out = "8.3 short-name probe: failed to create probe directory "
-                 "under '" +
-                 WideToUtf8(root.win32_root) +
-                 "': " + FormatWin32Error(probe_dir.error);
-    return false;
+    return true;
   }
 
   constexpr std::wstring_view kLongName =

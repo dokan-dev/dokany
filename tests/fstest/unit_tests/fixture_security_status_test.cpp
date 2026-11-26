@@ -491,35 +491,47 @@ TEST(VolumeCapabilitiesTest, ProbePopulatesQuotaUsnFlagsAndLeavesNoDebris) {
 TEST(VolumeCapabilitiesTest, ShortNameProbeFailureFailsCapabilityProbe) {
   ScopedTestDirectory parent(L"fst83f");
   ASSERT_TRUE(parent.ok());
-  const std::wstring root = parent.ChildPath(L"no_add_subdir_root");
-  const std::wstring root_ext = parent.ChildExtendedPath(L"no_add_subdir_root");
+  const std::wstring root = parent.ChildPath(L"locked_root");
+  const std::wstring root_ext = parent.ChildExtendedPath(L"locked_root");
   ASSERT_NE(::CreateDirectoryW(root_ext.c_str(), nullptr), FALSE)
       << core::FormatWin32Error(::GetLastError());
+  const auto norm = core::NormalizeRootPath(root, std::nullopt);
+  ASSERT_TRUE(norm.ok()) << core::FormatWin32Error(norm.error);
 
   {
     core::ScopedDaclRestore guard =
         core::ScopedDaclRestore::Arm(core::VerbatimToNtPath(root_ext));
     ASSERT_TRUE(guard.armed());
-    // Deny FILE_ADD_SUBDIRECTORY (0x4) so the 8.3 probe cannot create its
-    // transient directory while the root itself stays openable.
-    auto deny_res = core::SetFileSddl(root_ext, DACL_SECURITY_INFORMATION,
-                                      L"D:P(D;;0x4;;;WD)(A;;FA;;;WD)");
-    ASSERT_TRUE(deny_res.ok()) << core::FormatWin32Error(deny_res.error);
 
-    const auto norm = core::NormalizeRootPath(root, std::nullopt);
-    ASSERT_TRUE(norm.ok()) << core::FormatWin32Error(norm.error);
+    // 1. Unwritable root: denying FILE_ADD_SUBDIRECTORY (0x4) blocks the
+    // transient probe directory. That is not a probe error (every suite test
+    // fails fatally creating its per-test temp directory instead).
+    auto deny_dir = core::SetFileSddl(root_ext, DACL_SECURITY_INFORMATION,
+                                      L"D:P(D;;0x4;;;WD)(A;;FA;;;WD)");
+    ASSERT_TRUE(deny_dir.ok()) << core::FormatWin32Error(deny_dir.error);
+    const core::VolumeCapabilities unwritable =
+        core::ProbeVolumeCapabilities(*norm.value, core::GetOsInfo());
+    EXPECT_TRUE(unwritable.probe_succeeded) << unwritable.probe_error;
+    EXPECT_FALSE(unwritable.short_names_enabled);
+
+    // 2. Probe API failure: an inheritable FILE_ADD_FILE (0x2) deny lets the
+    // transient directory be created but blocks its probe file. This must
+    // fail the whole probe rather than masquerade as "8.3 disabled".
+    auto deny_file = core::SetFileSddl(root_ext, DACL_SECURITY_INFORMATION,
+                                       L"D:P(D;OICI;0x2;;;WD)(A;OICI;FA;;;WD)");
+    ASSERT_TRUE(deny_file.ok()) << core::FormatWin32Error(deny_file.error);
     const core::VolumeCapabilities caps =
         core::ProbeVolumeCapabilities(*norm.value, core::GetOsInfo());
-    // A probe API failure must never masquerade as "8.3 disabled".
     EXPECT_FALSE(caps.probe_succeeded);
     EXPECT_FALSE(caps.short_names_enabled);
     EXPECT_NE(caps.probe_error.find("8.3 short-name probe"), std::string::npos)
         << caps.probe_error;
     EXPECT_NE(caps.probe_error.find("ERROR_ACCESS_DENIED"), std::string::npos)
         << caps.probe_error;
+    // The transient probe directory is removed even on the failure path.
+    EXPECT_EQ(CountChildEntries(root), 0u);
   }
 
-  EXPECT_EQ(CountChildEntries(root), 0u);
   EXPECT_NE(::RemoveDirectoryW(root_ext.c_str()), FALSE)
       << core::FormatWin32Error(::GetLastError());
 }
