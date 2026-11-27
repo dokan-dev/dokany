@@ -125,35 +125,29 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->RequestContext.Irp;
     PIO_STACK_LOCATION irpSp = irpEntry->RequestContext.IrpSp;
     DOKAN_LOG_(
         "Cancel [%s][%s] FileObject=%p",
         DokanGetMajorFunctionStr(irpSp->MajorFunction),
         DokanGetMinorFunctionStr(irpSp->MajorFunction, irpSp->MinorFunction),
         irpSp->FileObject);
+    NTSTATUS cancelStatus = STATUS_INSUFFICIENT_RESOURCES;
     if (irpSp->MajorFunction == IRP_MJ_CREATE) {
       BOOLEAN canceled = (irpEntry->TickCount.QuadPart == 0);
-      PFILE_OBJECT fileObject = irpEntry->RequestContext.IrpSp->FileObject;
+      PFILE_OBJECT fileObject = irpSp->FileObject;
       if (fileObject != NULL) {
         PDokanCCB ccb = fileObject->FsContext2;
         if (ccb != NULL) {
-          PDokanFCB fcb = ccb->Fcb;
-          OplockDebugRecordFlag(fcb, canceled
-                                         ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
+          OplockDebugRecordFlag(ccb->Fcb,
+                                canceled ? DOKAN_OPLOCK_DEBUG_CANCELED_CREATE
                                          : DOKAN_OPLOCK_DEBUG_TIMED_OUT_CREATE);
         }
       }
-      DokanCancelCreateIrp(&irpEntry->RequestContext,
-                           canceled ? STATUS_CANCELLED
-                                    : STATUS_INSUFFICIENT_RESOURCES);
-    } else {
-      if (irpSp->MajorFunction == IRP_MJ_CLEANUP) {
-        DokanExecuteCleanup(&irpEntry->RequestContext);
+      if (canceled) {
+        cancelStatus = STATUS_CANCELLED;
       }
-      irp->IoStatus.Information = 0;
-      DokanCompleteIrpRequest(irp, STATUS_INSUFFICIENT_RESOURCES);
     }
+    DokanCancelPendingIrp(&irpEntry->RequestContext, cancelStatus);
     DokanFreeIrpEntry(irpEntry);
   }
 
@@ -314,16 +308,7 @@ Routine Description:
 
 --*/
 {
-  DOKAN_LOG("Stopping Thread");
-  if (KeSetEvent(&Dcb->KillEvent, 0, FALSE) > 0 && Dcb->TimeoutThread) {
-    DOKAN_LOG("Waiting for thread to terminate");
-    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
-    KeWaitForSingleObject(Dcb->TimeoutThread, Executive, KernelMode, FALSE,
-                          NULL);
-    DOKAN_LOG("Thread successfully terminated");
-    ObDereferenceObject(Dcb->TimeoutThread);
-    Dcb->TimeoutThread = NULL;
-  }
+  DokanStopSystemThread(&Dcb->KillEvent, &Dcb->TimeoutThread);
 }
 
 VOID DokanUpdateTimeout(__out PLARGE_INTEGER TickCount, __in ULONG Timeout) {

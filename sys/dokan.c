@@ -26,16 +26,26 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <mountmgr.h>
 
 static VOID InitMultiVersionResources();
+static RTL_AVL_COMPARE_ROUTINE DokanProbeFcbAvlCompare;
+static RTL_AVL_ALLOCATE_ROUTINE DokanProbeFcbAvlAllocate;
+static RTL_AVL_FREE_ROUTINE DokanProbeFcbAvlFree;
+static size_t DokanProbeFcbAvlNodeSize();
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(INIT, DriverEntry)
 #pragma alloc_text(INIT, InitMultiVersionResources)
+#pragma alloc_text(INIT, DokanProbeFcbAvlCompare)
+#pragma alloc_text(INIT, DokanProbeFcbAvlAllocate)
+#pragma alloc_text(INIT, DokanProbeFcbAvlFree)
+#pragma alloc_text(INIT, DokanProbeFcbAvlNodeSize)
 #pragma alloc_text(PAGE, DokanUnload)
 #endif
 
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
+LOOKASIDE_LIST_EX g_DokanFcbAvlNodeLookasideList;
+size_t g_DokanFcbAvlNodeSize = 0;
 BOOLEAN g_FixFileNameForReparseMountPoint;
 
 LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
@@ -211,6 +221,45 @@ VOID InitMultiVersionResources() {
   }
 }
 
+static RTL_GENERIC_COMPARE_RESULTS
+DokanProbeFcbAvlCompare(struct _RTL_AVL_TABLE *Table, PVOID FirstStruct,
+                        PVOID SecondStruct) {
+  UNREFERENCED_PARAMETER(Table);
+  UNREFERENCED_PARAMETER(FirstStruct);
+  UNREFERENCED_PARAMETER(SecondStruct);
+  return GenericEqual;
+}
+
+static PVOID DokanProbeFcbAvlAllocate(struct _RTL_AVL_TABLE *Table,
+                                      CLONG ByteSize) {
+  if (Table->TableContext != NULL) {
+    *(size_t *)Table->TableContext = (size_t)ByteSize;
+  }
+  return NULL;
+}
+
+static VOID DokanProbeFcbAvlFree(struct _RTL_AVL_TABLE *Table, PVOID Buffer) {
+  UNREFERENCED_PARAMETER(Table);
+  UNREFERENCED_PARAMETER(Buffer);
+}
+
+// Probes the opaque RTL_AVL_TABLE node allocation size from the running kernel
+// once at driver load so g_DokanFcbAvlNodeLookasideList never depends on an
+// undocumented TABLE_ENTRY_HEADER layout.
+static size_t DokanProbeFcbAvlNodeSize() {
+  RTL_AVL_TABLE probeTable;
+  size_t nodeSize = 0;
+  PDokanFCB dummyFcb = NULL;
+  BOOLEAN newElement = FALSE;
+
+  RtlInitializeGenericTableAvl(&probeTable, DokanProbeFcbAvlCompare,
+                               DokanProbeFcbAvlAllocate, DokanProbeFcbAvlFree,
+                               &nodeSize);
+  (VOID) RtlInsertElementGenericTableAvl(&probeTable, &dummyFcb,
+                                         sizeof(PDokanFCB), &newElement);
+  return nodeSize;
+}
+
 NTSTATUS
 DriverEntry(__in PDRIVER_OBJECT DriverObject, __in PUNICODE_STRING RegistryPath)
 
@@ -321,35 +370,37 @@ Return Value:
     return status;
   }
 
-  if (!DokanLookasideCreate(&DokanIrpEntryLookasideList, sizeof(IRP_ENTRY))) {
-    DOKAN_LOG("DokanLookasideCreate DokanIrpEntryLookasideList failed");
+  g_DokanFcbAvlNodeSize = DokanProbeFcbAvlNodeSize();
+  if (g_DokanFcbAvlNodeSize == 0) {
+    DOKAN_LOG("DokanProbeFcbAvlNodeSize failed");
     CleanupGlobalDiskDevice(dokanGlobal);
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
-  if (!DokanLookasideCreate(&g_DokanCCBLookasideList, sizeof(DokanCCB))) {
-    DOKAN_LOG("DokanLookasideCreate g_DokanCCBLookasideList failed");
-    CleanupGlobalDiskDevice(dokanGlobal);
-    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
-    return STATUS_INSUFFICIENT_RESOURCES;
-  }
-
-  if (!DokanLookasideCreate(&g_DokanFCBLookasideList, sizeof(DokanFCB))) {
-    DOKAN_LOG("DokanLookasideCreate g_DokanFCBLookasideList failed");
-    CleanupGlobalDiskDevice(dokanGlobal);
-    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
-    ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
-    return STATUS_INSUFFICIENT_RESOURCES;
-  }
-
-  if (!DokanLookasideCreate(&g_DokanEResourceLookasideList,
-                            sizeof(ERESOURCE))) {
-    DOKAN_LOG("DokanLookasideCreate g_DokanEResourceLookasideList failed");
-    CleanupGlobalDiskDevice(dokanGlobal);
-    ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
-    ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
-    ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
-    return STATUS_INSUFFICIENT_RESOURCES;
+  struct {
+    PLOOKASIDE_LIST_EX List;
+    size_t ElementSize;
+    PCSTR Name;
+  } lookasideLists[] = {
+      {&DokanIrpEntryLookasideList, sizeof(IRP_ENTRY),
+       "DokanIrpEntryLookasideList"},
+      {&g_DokanCCBLookasideList, sizeof(DokanCCB), "g_DokanCCBLookasideList"},
+      {&g_DokanFCBLookasideList, sizeof(DokanFCB), "g_DokanFCBLookasideList"},
+      {&g_DokanEResourceLookasideList, sizeof(ERESOURCE),
+       "g_DokanEResourceLookasideList"},
+      {&g_DokanFcbAvlNodeLookasideList, g_DokanFcbAvlNodeSize,
+       "g_DokanFcbAvlNodeLookasideList"},
+  };
+  for (size_t i = 0; i < RTL_NUMBER_OF(lookasideLists); ++i) {
+    if (!DokanLookasideCreate(lookasideLists[i].List,
+                              lookasideLists[i].ElementSize)) {
+      DOKAN_LOG_("DokanLookasideCreate %s failed", lookasideLists[i].Name);
+      for (size_t j = i; j > 0; --j) {
+        ExDeleteLookasideListEx(lookasideLists[j - 1].List);
+      }
+      CleanupGlobalDiskDevice(dokanGlobal);
+      return STATUS_INSUFFICIENT_RESOURCES;
+    }
   }
 
   // Detect if we are running on a older version than NTDDI_WIN10_RS4
@@ -398,6 +449,7 @@ Return Value:
   ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
   ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
   ExDeleteLookasideListEx(&g_DokanEResourceLookasideList);
+  ExDeleteLookasideListEx(&g_DokanFcbAvlNodeLookasideList);
 
   DOKAN_LOG("All resources released");
 }
@@ -879,6 +931,22 @@ VOID RunAsSystem(_In_ PKSTART_ROUTINE StartRoutine, PVOID StartContext) {
                               &thread, NULL);
     ZwClose(handle);
     KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(thread);
+  }
+}
+
+VOID DokanStopSystemThread(__in PKEVENT StopEvent, __inout PKTHREAD *Thread) {
+  DOKAN_LOG("Stopping Thread");
+  KeSetEvent(StopEvent, 0, FALSE);
+  PKTHREAD thread = *Thread;
+  if (thread != NULL) {
+    if (KeGetCurrentThread() != thread) {
+      DOKAN_LOG("Waiting for thread to terminate");
+      ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+      KeWaitForSingleObject(thread, Executive, KernelMode, FALSE, NULL);
+      DOKAN_LOG("Thread successfully terminated");
+    }
+    *Thread = NULL;
     ObDereferenceObject(thread);
   }
 }

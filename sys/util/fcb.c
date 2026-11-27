@@ -470,20 +470,19 @@ RTL_GENERIC_COMPARE_RESULTS DokanCompareFcb(__in struct _RTL_AVL_TABLE *Table,
 PVOID DokanAllocateFcbAvl(__in struct _RTL_AVL_TABLE *Table,
                           __in CLONG ByteSize) {
   PDokanVCB vcb = (PDokanVCB)Table->TableContext;
-  if (!vcb->FCBAvlNodeLookasideListInit) {
-    if (!DokanLookasideCreate(&vcb->FCBAvlNodeLookasideList, ByteSize)) {
-      DOKAN_LOG_VCB(vcb,
-                    "DokanLookasideCreate VCB FCBAvlNodeLookasideList failed.");
-      return NULL;
-    }
-    vcb->FCBAvlNodeLookasideListInit = TRUE;
+  ASSERT((size_t)ByteSize == g_DokanFcbAvlNodeSize);
+  if ((size_t)ByteSize > g_DokanFcbAvlNodeSize) {
+    DOKAN_LOG_VCB(vcb,
+                  "Unexpected FCB AVL node ByteSize %lu (expected <= %lu).",
+                  (ULONG)ByteSize, (ULONG)g_DokanFcbAvlNodeSize);
+    return NULL;
   }
-  return ExAllocateFromLookasideListEx(&vcb->FCBAvlNodeLookasideList);
+  return ExAllocateFromLookasideListEx(&g_DokanFcbAvlNodeLookasideList);
 }
 
 VOID DokanFreeFcbAvl(__in struct _RTL_AVL_TABLE *Table, __in PVOID Buffer) {
-  PDokanVCB vcb = (PDokanVCB)Table->TableContext;
-  ExFreeToLookasideListEx(&vcb->FCBAvlNodeLookasideList, Buffer);
+  UNREFERENCED_PARAMETER(Table);
+  ExFreeToLookasideListEx(&g_DokanFcbAvlNodeLookasideList, Buffer);
 }
 
 VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,

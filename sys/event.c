@@ -134,7 +134,8 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
   }
 
   Irp->IoStatus.Information = 0;
-  DokanCompleteIrpRequest(Irp, STATUS_CANCELLED);
+  DokanCompleteIrpRequest(Irp, needExecuteCleanup ? STATUS_SUCCESS
+                                                  : STATUS_CANCELLED);
 }
 
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
@@ -601,15 +602,17 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   }
   while (!IsListEmpty(&completeList)) {
     listHead = RemoveHeadList(&completeList);
+    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
     if (IsUnmountPendingVcb(RequestContext->Vcb)) {
       DOKAN_LOG_FINE_IRP(RequestContext, "Volume is not mounted second check");
-      return STATUS_NO_SUCH_DEVICE;
-    }
-    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    if (offset >= bufferLength) {
+      // These IRPs were already removed from PendingIrp with their cancel
+      // routines cleared; ReleasePendingIrp cannot see them, so unwind and
+      // complete every entry in completeList before returning.
+      DokanCancelPendingIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
+      result = STATUS_NO_SUCH_DEVICE;
+    } else if (offset >= bufferLength) {
       DokanLogInfo(&logger, L"Unexpected end of event info list.");
-      irpEntry->RequestContext.Irp->IoStatus.Information = 0;
-      DokanCompleteIrpRequest(irpEntry->RequestContext.Irp, STATUS_CANCELLED);
+      DokanCancelPendingIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
     } else {
       eventInfo = (PEVENT_INFORMATION)(buffer + offset);
       eventInfoSize = GetEventInfoSize(
@@ -621,7 +624,7 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     DokanFreeIrpEntry(irpEntry);
     irpEntry = NULL;
   }
-  if (badUsageByCaller) {
+  if (badUsageByCaller && result != STATUS_NO_SUCH_DEVICE) {
     // This flag should only be set if there is a coding error in the DLL.
     DokanLogInfo(
         &logger,

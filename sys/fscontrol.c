@@ -573,7 +573,11 @@ DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
     case FSCTL_EVENT_PROCESS_N_PULL:
       return DokanProcessAndPullEvents(&requestContext);
     case FSCTL_EVENT_RELEASE:
-      return DokanEventRelease(&requestContext, requestContext.Vcb->DeviceObject);
+      if (requestContext.Vcb == NULL) {
+        return STATUS_INVALID_PARAMETER;
+      }
+      return DokanEventRelease(&requestContext,
+                               requestContext.Vcb->DeviceObject);
     case FSCTL_EVENT_WRITE:
       return DokanEventWrite(&requestContext);
     case FSCTL_GET_VOLUME_METRICS:
