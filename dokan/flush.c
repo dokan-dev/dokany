@@ -46,8 +46,7 @@ VOID DispatchFlush(PDOKAN_IO_EVENT IoEvent) {
   if (status == STATUS_NOT_IMPLEMENTED) {
     IoEvent->EventResult->Status = STATUS_SUCCESS;
   } else {
-    IoEvent->EventResult->Status =
-        status != STATUS_SUCCESS ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
+    IoEvent->EventResult->Status = status;
   }
 
   EventCompletion(IoEvent);

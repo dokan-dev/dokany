@@ -36,53 +36,51 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   WCHAR finalBuffer[2048];
   PTOKEN_USER userToken = NULL;
   PTOKEN_GROUPS groupsToken = NULL;
-  HANDLE tokenHandle;
-  LPTSTR userSidString = NULL, groupSidString = NULL;
+  HANDLE tokenHandle = NULL;
+  LPTSTR userSidString = NULL;
+  LPTSTR groupSidString = NULL;
+  PSECURITY_DESCRIPTOR SecurityDescriptorTmp = NULL;
+  LPTSTR pStringBuffer = NULL;
+  ULONG Size = 0;
+  DWORD returnLength = 0;
+  NTSTATUS status = STATUS_NOT_IMPLEMENTED;
 
   UNREFERENCED_PARAMETER(FileName);
 
   if (OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &tokenHandle) ==
       FALSE) {
     DbgPrint("  OpenProcessToken failed: %d\n", GetLastError());
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
-  DWORD returnLength;
   if (!GetTokenInformation(tokenHandle, TokenUser, buffer, sizeof(buffer),
                            &returnLength)) {
     DbgPrint("  GetTokenInformation failed: %d\n", GetLastError());
-    CloseHandle(tokenHandle);
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
   userToken = (PTOKEN_USER)buffer;
   if (!ConvertSidToStringSid(userToken->User.Sid, &userSidString)) {
     DbgPrint("  ConvertSidToStringSid failed: %d\n", GetLastError());
-    CloseHandle(tokenHandle);
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
   if (!GetTokenInformation(tokenHandle, TokenGroups, buffer, sizeof(buffer),
                            &returnLength)) {
     DbgPrint("  GetTokenInformation failed: %d\n", GetLastError());
-    CloseHandle(tokenHandle);
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
   groupsToken = (PTOKEN_GROUPS)buffer;
   if (groupsToken->GroupCount > 0) {
     if (!ConvertSidToStringSid(groupsToken->Groups[0].Sid, &groupSidString)) {
       DbgPrint("  ConvertSidToStringSid failed: %d\n", GetLastError());
-      CloseHandle(tokenHandle);
-      return STATUS_NOT_IMPLEMENTED;
+      goto cleanup;
     }
     swprintf_s(buffer, 1024, L"O:%lsG:%ls", userSidString, groupSidString);
-  } else
+  } else {
     swprintf_s(buffer, 1024, L"O:%ls", userSidString);
-
-  LocalFree(userSidString);
-  LocalFree(groupSidString);
-  CloseHandle(tokenHandle);
+  }
 
   // Authenticated users rights
   if (DokanFileInfo->IsDirectory) {
@@ -91,18 +89,15 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
     swprintf_s(finalBuffer, 2048, L"%lsD:AI(A;ID;FA;;;AU)", buffer);
   }
 
-  PSECURITY_DESCRIPTOR SecurityDescriptorTmp = NULL;
-  ULONG Size = 0;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
           finalBuffer, SDDL_REVISION_1, &SecurityDescriptorTmp, &Size)) {
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
-  LPTSTR pStringBuffer = NULL;
   if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
           SecurityDescriptorTmp, SDDL_REVISION_1, *SecurityInformation,
           &pStringBuffer, NULL)) {
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
   LocalFree(SecurityDescriptorTmp);
@@ -110,21 +105,35 @@ NTSTATUS DefaultGetFileSecurity(LPCWSTR FileName,
   Size = 0;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
           pStringBuffer, SDDL_REVISION_1, &SecurityDescriptorTmp, &Size)) {
-    return STATUS_NOT_IMPLEMENTED;
+    goto cleanup;
   }
 
+  *LengthNeeded = Size;
   if (Size > BufferLength) {
-    *LengthNeeded = Size;
-    return STATUS_BUFFER_OVERFLOW;
+    status = STATUS_BUFFER_OVERFLOW;
+    goto cleanup;
   }
 
   memcpy(SecurityDescriptor, SecurityDescriptorTmp, Size);
-  *LengthNeeded = Size;
+  status = STATUS_SUCCESS;
 
-  LocalFree(pStringBuffer);
-  LocalFree(SecurityDescriptorTmp);
-
-  return STATUS_SUCCESS;
+cleanup:
+  if (pStringBuffer != NULL) {
+    LocalFree(pStringBuffer);
+  }
+  if (SecurityDescriptorTmp != NULL) {
+    LocalFree(SecurityDescriptorTmp);
+  }
+  if (groupSidString != NULL) {
+    LocalFree(groupSidString);
+  }
+  if (userSidString != NULL) {
+    LocalFree(userSidString);
+  }
+  if (tokenHandle != NULL) {
+    CloseHandle(tokenHandle);
+  }
+  return status;
 }
 
 VOID DispatchQuerySecurity(PDOKAN_IO_EVENT IoEvent) {
@@ -207,13 +216,8 @@ VOID DispatchSetSecurity(PDOKAN_IO_EVENT IoEvent) {
         IoEvent->EventContext->Operation.SetSecurity.BufferLength, &IoEvent->DokanFileInfo);
   }
 
-  if (status != STATUS_SUCCESS) {
-    IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
-    IoEvent->EventResult->BufferLength = 0;
-  } else {
-    IoEvent->EventResult->Status = STATUS_SUCCESS;
-    IoEvent->EventResult->BufferLength = 0;
-  }
+  IoEvent->EventResult->Status = status;
+  IoEvent->EventResult->BufferLength = 0;
 
   EventCompletion(IoEvent);
 }
