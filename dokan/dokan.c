@@ -173,7 +173,8 @@ VOID DeleteDokanInstance(PDOKAN_INSTANCE DokanInstance) {
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint) {
   size_t mountPointLength;
-  if (!mountPoint || *mountPoint == 0) {
+  if (!mountPoint || *mountPoint == 0 || mountPoint[0] == L'\\' ||
+      mountPoint[0] == L'/') {
     return FALSE;
   }
   mountPointLength = wcslen(mountPoint);
@@ -738,6 +739,17 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     g_DebugMode = TRUE;
   }
 
+  if ((DokanOptions->Options & DOKAN_OPTION_CURRENT_SESSION) &&
+      (DokanOptions->MountPoint == NULL ||
+       !IsMountPointDriveLetter(DokanOptions->MountPoint) ||
+       !IsValidDriveLetter(DokanOptions->MountPoint[0]))) {
+    DokanDbgPrintW(
+        L"Dokan Error: DOKAN_OPTION_CURRENT_SESSION can only be used with a "
+        L"drive letter mount point (\"%s\").\n",
+        DokanOptions->MountPoint ? DokanOptions->MountPoint : L"");
+    return DOKAN_MOUNT_POINT_ERROR;
+  }
+
   if ((DokanOptions->Options & DOKAN_OPTION_NETWORK) &&
       !IsMountPointDriveLetter(DokanOptions->MountPoint)) {
     DokanOptions->Options &= ~DOKAN_OPTION_NETWORK;
@@ -792,13 +804,35 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     wcscpy_s(dokanInstance->MountPoint,
              sizeof(dokanInstance->MountPoint) / sizeof(WCHAR),
              DokanOptions->MountPoint);
-    // When mount manager is enabled we will try to release the busy letter if we own it or get one assigned but otherwise we just fail here.
-    if (!(DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
-        IsMountPointDriveLetter(dokanInstance->MountPoint) &&
-        !CheckDriveLetterAvailability(dokanInstance->MountPoint[0])) {
-      DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
+    size_t mountPointLen = wcslen(dokanInstance->MountPoint);
+    if (IsMountPointDriveLetter(dokanInstance->MountPoint)) {
+      if (!IsValidDriveLetter(dokanInstance->MountPoint[0])) {
+        DokanDbgPrintW(
+            L"Dokan Error: Invalid drive letter mount point \"%s\" (must be "
+            L"A-Z).\n",
+            dokanInstance->MountPoint);
+        DeleteDokanInstance(dokanInstance);
+        return DOKAN_MOUNT_POINT_ERROR;
+      }
+      // When mount manager is enabled we will try to release the busy letter if
+      // we own it or get one assigned but otherwise we just fail here.
+      if (!(DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
+          !CheckDriveLetterAvailability(dokanInstance->MountPoint[0])) {
+        DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
+        DeleteDokanInstance(dokanInstance);
+        return DOKAN_MOUNT_ERROR;
+      }
+    } else if (mountPointLen > 0 && mountPointLen < 4) {
+      // The kernel treats any non-empty MountPoint shorter than 4 chars as a
+      // drive letter (sys/init.c), whereas no valid directory mount point is
+      // shorter than "C:\a". Reject malformed short strings here so userland
+      // and kernel never disagree on mount-point type.
+      DokanDbgPrintW(
+          L"Dokan Error: Invalid mount point \"%s\" (must be an A-Z drive "
+          L"letter or a directory path).\n",
+          dokanInstance->MountPoint);
       DeleteDokanInstance(dokanInstance);
-      return DOKAN_MOUNT_ERROR;
+      return DOKAN_MOUNT_POINT_ERROR;
     }
   }
 
