@@ -143,6 +143,7 @@ typedef enum _FILE_INFORMATION_CLASS {
 	FileDesiredStorageClassInformation,      // 67
 	FileStatInformation,                     // 68
 	FileMemoryPartitionInformation,          // 69
+	FileStatLxInformation = 70,
 
 	FileMaximumInformation
 } FILE_INFORMATION_CLASS,
@@ -234,6 +235,10 @@ typedef struct _FILE_DISPOSITION_INFORMATION {
 #define FILE_DISPOSITION_POSIX_SEMANTICS  0x00000002 // Specifies the system should perform a POSIX - style delete.
 #define FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK  0x00000004 // Specifies the system should force an image section check.
 #define FILE_DISPOSITION_ON_CLOSE 0x00000008 // Specifies if the system sets or clears the on - close state.
+#ifndef FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE
+// Specifies the system should ignore FILE_ATTRIBUTE_READONLY on delete.
+#define FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE 0x00000010
+#endif
 
 /**
  * \struct FILE_DISPOSITION_INFORMATION_EX
@@ -250,6 +255,7 @@ typedef struct _FILE_DISPOSITION_INFORMATION_EX {
    *    \li \c FILE_DISPOSITION_POSIX_SEMANTICS Specifies the system should perform a POSIX-style delete.
    *    \li \c FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK Specifies the system should force an image section check.
    *    \li \c FILE_DISPOSITION_ON_CLOSE Specifies if the system sets or clears the on-close state.
+   *    \li \c FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE Specifies the system should ignore FILE_ATTRIBUTE_READONLY on delete.
    */
   ULONG Flags;
 } FILE_DISPOSITION_INFORMATION_EX, *PFILE_DISPOSITION_INFORMATION_EX;
@@ -339,6 +345,34 @@ typedef struct _FILE_STANDARD_INFORMATION {
   */
   BOOLEAN Directory;
 } FILE_STANDARD_INFORMATION, *PFILE_STANDARD_INFORMATION;
+
+#ifndef DOKAN_FILE_STANDARD_LINK_INFORMATION_DEFINED
+#define DOKAN_FILE_STANDARD_LINK_INFORMATION_DEFINED
+/**
+ * \struct FILE_STANDARD_LINK_INFORMATION
+ * \brief Used to query link information for a file.
+ *
+ * The struct is requested during IRP_MJ_QUERY_INFORMATION with query FileStandardLinkInformation
+ */
+typedef struct _FILE_STANDARD_LINK_INFORMATION {
+  /**
+   * Number of non-deleted links to this file.
+   */
+  ULONG NumberOfAccessibleLinks;
+  /**
+   * Total number of links to this file, including files marked for deletion.
+   */
+  ULONG TotalNumberOfLinks;
+  /**
+   * TRUE to indicate that a file deletion has been requested; otherwise FALSE.
+   */
+  BOOLEAN DeletePending;
+  /**
+   * TRUE to indicate that the file is a directory; otherwise FALSE.
+   */
+  BOOLEAN Directory;
+} FILE_STANDARD_LINK_INFORMATION, *PFILE_STANDARD_LINK_INFORMATION;
+#endif
 
 /**
  * \struct FILE_POSITION_INFORMATION
@@ -875,6 +909,157 @@ typedef struct _FILE_ID_INFORMATION {
   FILE_ID_128 FileId;
 } FILE_ID_INFORMATION, *PFILE_ID_INFORMATION;
 
+// Windows SDK (e.g., 10.0.28000) <winnt.h> defines _FILE_STAT_INFORMATION and
+// _FILE_STAT_LX_INFORMATION unconditionally without struct-defined guard
+// macros, and defines LX_FILE_METADATA_HAS_UID right between them. Use
+// !defined(LX_FILE_METADATA_HAS_UID) as the SDK presence proxy guard.
+#if !defined(LX_FILE_METADATA_HAS_UID) &&                                      \
+    !defined(DOKAN_FILE_STAT_INFORMATION_DEFINED)
+#define DOKAN_FILE_STAT_INFORMATION_DEFINED
+/**
+ * \struct FILE_STAT_INFORMATION
+ * \brief Contains metadata about a file.
+ *
+ * The struct is requested during IRP_MJ_QUERY_INFORMATION with query FileStatInformation
+ */
+typedef struct _FILE_STAT_INFORMATION {
+  /**
+   * Specifies the ID of a file.
+   */
+  LARGE_INTEGER FileId;
+  /**
+   * Specifies the creation time of a file.
+   */
+  LARGE_INTEGER CreationTime;
+  /**
+   * Specifies the last time a file was accessed.
+   */
+  LARGE_INTEGER LastAccessTime;
+  /**
+   * Specifies the last time a file was written to.
+   */
+  LARGE_INTEGER LastWriteTime;
+  /**
+   * Specifies the last time a file was changed.
+   */
+  LARGE_INTEGER ChangeTime;
+  /**
+   * File allocation size, in bytes. Usually this value is a multiple of the
+   * sector or cluster size of the underlying physical device.
+   */
+  LARGE_INTEGER AllocationSize;
+  /**
+   * The absolute end-of-file position as a byte offset from the start of the
+   * file.
+   */
+  LARGE_INTEGER EndOfFile;
+  /**
+   * File attributes, which can be any valid combination of FILE_ATTRIBUTE_*
+   * flags.
+   */
+  ULONG FileAttributes;
+  /**
+   * Reparse point tag.
+   */
+  ULONG ReparseTag;
+  /**
+   * Specifies the number of links to the file.
+   */
+  ULONG NumberOfLinks;
+  /**
+   * Specifies the effective access rights granted to the caller for the file.
+   */
+  ACCESS_MASK EffectiveAccess;
+} FILE_STAT_INFORMATION, *PFILE_STAT_INFORMATION;
+#endif
+
+// See DOKAN_FILE_STAT_INFORMATION_DEFINED above for the
+// LX_FILE_METADATA_HAS_UID Windows SDK <winnt.h> presence proxy guard.
+#if !defined(LX_FILE_METADATA_HAS_UID) &&                                      \
+    !defined(DOKAN_FILE_STAT_LX_INFORMATION_DEFINED)
+#define DOKAN_FILE_STAT_LX_INFORMATION_DEFINED
+/**
+ * \struct FILE_STAT_LX_INFORMATION
+ * \brief Contains metadata about a file, including Linux subsystem (WSL)
+ * attributes.
+ *
+ * The struct is requested during IRP_MJ_QUERY_INFORMATION with query FileStatLxInformation
+ */
+typedef struct _FILE_STAT_LX_INFORMATION {
+  /**
+   * Specifies the ID of a file.
+   */
+  LARGE_INTEGER FileId;
+  /**
+   * Specifies the creation time of a file.
+   */
+  LARGE_INTEGER CreationTime;
+  /**
+   * Specifies the last time a file was accessed.
+   */
+  LARGE_INTEGER LastAccessTime;
+  /**
+   * Specifies the last time a file was written to.
+   */
+  LARGE_INTEGER LastWriteTime;
+  /**
+   * Specifies the last time a file was changed.
+   */
+  LARGE_INTEGER ChangeTime;
+  /**
+   * File allocation size, in bytes. Usually this value is a multiple of the
+   * sector or cluster size of the underlying physical device.
+   */
+  LARGE_INTEGER AllocationSize;
+  /**
+   * The absolute end-of-file position as a byte offset from the start of the
+   * file.
+   */
+  LARGE_INTEGER EndOfFile;
+  /**
+   * File attributes, which can be any valid combination of FILE_ATTRIBUTE_*
+   * flags.
+   */
+  ULONG FileAttributes;
+  /**
+   * Reparse point tag.
+   */
+  ULONG ReparseTag;
+  /**
+   * Specifies the number of links to the file.
+   */
+  ULONG NumberOfLinks;
+  /**
+   * Specifies the effective access rights granted to the caller for the file.
+   */
+  ACCESS_MASK EffectiveAccess;
+  /**
+   * Flags indicating which Linux metadata fields are present on the file.
+   */
+  ULONG LxFlags;
+  /**
+   * Specifies the Linux user ID (UID) of the file.
+   */
+  ULONG LxUid;
+  /**
+   * Specifies the Linux group ID (GID) of the file.
+   */
+  ULONG LxGid;
+  /**
+   * Specifies the Linux file type and permission bits.
+   */
+  ULONG LxMode;
+  /**
+   * Specifies the Linux device major number for device files.
+   */
+  ULONG LxDeviceIdMajor;
+  /**
+   * Specifies the Linux device minor number for device files.
+   */
+  ULONG LxDeviceIdMinor;
+} FILE_STAT_LX_INFORMATION, *PFILE_STAT_LX_INFORMATION;
+#endif
+
 /**
  * \struct FILE_EA_INFORMATION
  * \brief Used to query for the size of the extended attributes (EA) for a file.
@@ -996,18 +1181,53 @@ typedef struct _FILE_LINK_INFORMATION {
   WCHAR FileName[1];
 } FILE_LINK_INFORMATION, *PFILE_LINK_INFORMATION;
 
+#ifndef FILE_RENAME_REPLACE_IF_EXISTS
+#define FILE_RENAME_REPLACE_IF_EXISTS 0x00000001
+#endif
+#ifndef FILE_RENAME_POSIX_SEMANTICS
+#define FILE_RENAME_POSIX_SEMANTICS 0x00000002
+#endif
+#ifndef FILE_RENAME_SUPPRESS_PIN_STATE_INHERITANCE
+#define FILE_RENAME_SUPPRESS_PIN_STATE_INHERITANCE 0x00000004
+#endif
+#ifndef FILE_RENAME_SUPPRESS_STORAGE_RESERVE_INHERITANCE
+#define FILE_RENAME_SUPPRESS_STORAGE_RESERVE_INHERITANCE 0x00000008
+#endif
+#ifndef FILE_RENAME_NO_INCREASE_AVAILABLE_SPACE
+#define FILE_RENAME_NO_INCREASE_AVAILABLE_SPACE 0x00000010
+#endif
+#ifndef FILE_RENAME_NO_DECREASE_AVAILABLE_SPACE
+#define FILE_RENAME_NO_DECREASE_AVAILABLE_SPACE 0x00000020
+#endif
+#ifndef FILE_RENAME_IGNORE_READONLY_ATTRIBUTE
+#define FILE_RENAME_IGNORE_READONLY_ATTRIBUTE 0x00000040
+#endif
+#ifndef FILE_RENAME_FORCE_RESIZE_TARGET_SR
+#define FILE_RENAME_FORCE_RESIZE_TARGET_SR 0x00000080
+#endif
+
 /**
  * \struct FILE_RENAME_INFORMATION
  * \brief Used to rename a file.
  *
- * The struct is requested during IRP_MJ_SET_INFORMATION with query FileRenameInformation
+ * The struct is requested during IRP_MJ_SET_INFORMATION with query FileRenameInformation or FileRenameInformationEx
  */
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4201)
+#endif
 typedef struct _FILE_RENAME_INFORMATION {
-  /**
-  * Set to TRUE to specify that if a file with the given name already exists, it should be replaced with the given file.
-  * Set to FALSE if the rename operation should fail if a file with the given name already exists. 
-  */
-  BOOLEAN ReplaceIfExists;
+  union {
+    /**
+     * Set to TRUE to specify that if a file with the given name already exists, it should be replaced with the given file.
+     * Set to FALSE if the rename operation should fail if a file with the given name already exists.
+     */
+    BOOLEAN ReplaceIfExists;
+    /**
+     * Bitmask of FILE_RENAME_* flags used with FileRenameInformationEx.
+     */
+    ULONG Flags;
+  } DUMMYUNIONNAME;
   /**
   * If the file is not being moved to a different directory,
   * or if the FileName member contains the full pathname, this member is NULL. Otherwise,
@@ -1026,6 +1246,9 @@ typedef struct _FILE_RENAME_INFORMATION {
   */
   WCHAR FileName[1];
 } FILE_RENAME_INFORMATION, *PFILE_RENAME_INFORMATION;
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 /**
  * \struct FILE_STREAM_INFORMATION

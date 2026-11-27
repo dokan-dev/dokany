@@ -25,6 +25,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
+C_ASSERT(sizeof(DOKAN_FILE_INFO) == (sizeof(void *) == 8 ? 48 : 40));
+C_ASSERT(FIELD_OFFSET(DOKAN_FILE_INFO, CaseSensitive) ==
+         (sizeof(void *) == 8 ? 42 : 34));
+
 VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
                           PDOKAN_IO_SECURITY_CONTEXT ioSecurityContext) {
   PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjName = NULL;
@@ -153,6 +157,9 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   CreateDispatchCommon(IoEvent, 0, /*UseExtraMemoryPool=*/FALSE,
                        /*ClearNonPoolBuffer=*/TRUE);
+
+  IoEvent->DokanFileInfo.CaseSensitive =
+      (IoEvent->EventContext->Flags & SL_CASE_SENSITIVE) != 0;
 
   assert(IoEvent->DokanOpenInfo == NULL);
 

@@ -25,10 +25,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokani.h"
 #include "fileinfo.h"
 
-#ifndef FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE
-#define FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE 0x00000010
-#endif
-
 #define DOKAN_VALID_FILE_DISPOSITION_EX_FLAGS                                  \
   (FILE_DISPOSITION_DELETE | FILE_DISPOSITION_POSIX_SEMANTICS |                \
    FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK | FILE_DISPOSITION_ON_CLOSE |    \

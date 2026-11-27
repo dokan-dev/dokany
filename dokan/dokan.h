@@ -32,6 +32,27 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "public.h"
 
+/** \cond */
+#ifndef _In_
+#define _In_
+#endif
+#ifndef _In_opt_
+#define _In_opt_
+#endif
+#ifndef _Out_
+#define _Out_
+#endif
+#ifndef _Out_opt_
+#define _Out_opt_
+#endif
+#ifndef _Inout_
+#define _Inout_
+#endif
+#ifndef _Inout_opt_
+#define _Inout_opt_
+#endif
+/** \endcond */
+
 #ifdef _EXPORTING
 /** Export dokan API see also dokan.def for export */
 #define DOKANAPI __stdcall
@@ -206,8 +227,8 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR IsDirectory;
   /**
    * Flag if the file has to be deleted during \ref DOKAN_OPERATIONS.Cleanup event.
-   * 
-   * If a prior \ref DOKAN_OPERATIONS.ZwCreateFile call with \c FILE_FLAG_DELETE_ON_CLOSE or \ref DOKAN_OPERATIONS.DeleteFile
+   *
+   * If a prior \ref DOKAN_OPERATIONS.ZwCreateFile call with \c FILE_DELETE_ON_CLOSE or \ref DOKAN_OPERATIONS.DeleteFile
    * / \ref DOKAN_OPERATIONS.DeleteDirectory with DOKAN_FILE_INFO.DeletePending set to \c TRUE succeed on an object,
    * the last handle open on that object will have this variable set to \c TRUE and therefore will have to delete the object.
    */
@@ -220,6 +241,18 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR Nocache;
   /**  If \c TRUE, write to the current end of file instead of using the Offset parameter. */
   UCHAR WriteToEndOfFile;
+  /**
+   * TRUE if the current request carries SL_CASE_SENSITIVE (i.e. opened without
+   * OBJ_CASE_INSENSITIVE, such as FILE_FLAG_POSIX_SEMANTICS).
+   * Populated only during \ref DOKAN_OPERATIONS.ZwCreateFile (\c FALSE on
+   * subsequent callbacks); filesystems that need it later must persist it
+   * in \ref Context.
+   * Note: the current \c dokan3.sys driver still keys FCBs by mount-wide case
+   * sensitivity (\c DOKAN_OPTION_CASE_SENSITIVE), so filesystems must not
+   * resolve distinct case-colliding files on a case-insensitive mount until
+   * a future \c dokan3.sys update adds per-request FCB case keying.
+   */
+  UCHAR CaseSensitive;
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 #define DOKAN_EXCEPTION_NOT_INITIALIZED 0x0f0ff0ff
@@ -940,25 +973,30 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
 /**
- * \brief Checks whether Name matches Expression
+ * \brief Checks whether Name matches Expression per [MS-FSA 2.1.4.4]
  *
- * Behave like \c FsRtlIsNameInExpression routine from <a href="https://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx">Microsoft</a>\n
- * \c * (asterisk) Matches zero or more characters.\n
- * <tt>?</tt> (question mark) Matches a single character.\n
- * \c DOS_DOT (\c " quotation mark) Matches either a period or zero characters beyond the name string.\n
- * \c DOS_QM (\c > greater than) Matches any single character or, upon encountering a period or end
- *        of name string, advances the expression to the end of the set of
- *        contiguous DOS_QMs.\n
- * \c DOS_STAR (\c < less than) Matches zero or more characters until encountering and matching
- *          the final \c . in the name.
+ * Matches \a Name against \a Expression using Windows MS-DOS/NTFS wildcard
+ * semantics (similar to \c FsRtlIsNameInExpression):\n
+ * \c * (asterisk) Matches zero or more characters (including \c .).\n
+ * <tt>?</tt> (question mark) Matches any single character (including \c .).\n
+ * \c DOS_STAR (\c < less than) Matches zero or more characters without consuming
+ *        the final \c . in \a Name.\n
+ * \c DOS_QM (\c > greater than) Matches any single non-\c . character, or zero
+ *        characters when positioned at \c . or end of \a Name.\n
+ * \c DOS_DOT (\c " quotation mark) Matches a literal \c ., or zero characters at
+ *        end of \a Name.\n
+ * When \a IgnoreCase is \c TRUE, characters are case-folded using the OS Unicode
+ * case-folding table (\c RtlUpcaseUnicodeChar).
  *
- * \param Expression Expression can contain any of the above characters.
- * \param Name Name to check
- * \param IgnoreCase Case sensitive or not
- * \return result if name matches the expression
+ * \param Expression Expression that can contain any of the above wildcards.
+ * \param Name Name to check.
+ * \param IgnoreCase \c TRUE for case-insensitive matching, \c FALSE for exact
+ *        case matching.
+ * \return \c TRUE if \a Name matches \a Expression, \c FALSE otherwise.
  */
-BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, LPCWSTR Name,
-                                      BOOL IgnoreCase);
+BOOL DOKANAPI DokanIsNameInExpression(_In_opt_ LPCWSTR Expression,
+                                      _In_opt_ LPCWSTR Name,
+                                      _In_ BOOL IgnoreCase);
 
 /**
  * \brief Get the version of Dokan.

@@ -638,9 +638,9 @@ static PFN_RTL_UPCASE_UNICODE_CHAR DokanGetUpcaseUnicodeCharFn(VOID) {
 // time, O(nameLen) space) to avoid exponential backtracking on repeated
 // wildcards. Returns FALSE if heap allocation fails for names longer than
 // DOKAN_MATCH_STACK_LEN.
-BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, // matching pattern
-                                      LPCWSTR Name,       // file name
-                                      BOOL IgnoreCase) {
+BOOL DOKANAPI DokanIsNameInExpression(_In_opt_ LPCWSTR Expression, // matching pattern
+                                      _In_opt_ LPCWSTR Name,       // file name
+                                      _In_ BOOL IgnoreCase) {
   if (Expression == NULL || Name == NULL) {
     return FALSE;
   }
