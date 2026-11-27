@@ -163,6 +163,8 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   if (openTargetDirectory && wcscmp(fileName, L"\\") == 0) {
     // Per [MS-FSA 2.1.5.1.2], the volume root has no parent directory.
+    // Defense-in-depth: current dokan3.sys (sys/create.c) intercepts L"\\"
+    // with STATUS_ACCESS_DENIED before userland dispatch.
     status = STATUS_INVALID_PARAMETER;
     goto fail;
   }
@@ -260,6 +262,12 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
           } else if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
             DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
             childExisted = FALSE;
+          } else if (status == STATUS_OBJECT_NAME_INVALID ||
+                     status == STATUS_NAME_TOO_LONG ||
+                     status == STATUS_OBJECT_PATH_SYNTAX_BAD) {
+            IoEvent->DokanFileInfo.Context = 0;
+            IoEvent->DokanFileInfo.DeletePending = FALSE;
+            goto fail;
           }
 
           IoEvent->DokanFileInfo.Context = 0;
