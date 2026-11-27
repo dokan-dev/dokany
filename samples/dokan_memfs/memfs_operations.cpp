@@ -388,156 +388,142 @@ memfs_flushfilebuffers(LPCWSTR filename, PDOKAN_FILE_INFO dokanfileinfo) {
 }
 
 static NTSTATUS DOKAN_CALLBACK
-memfs_getfileInformation(LPCWSTR filename, LPBY_HANDLE_FILE_INFORMATION buffer,
+memfs_getfileInformation(LPCWSTR filename, PDOKAN_FILE_INFORMATION buffer,
                          PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   spdlog::info(L"GetFileInformation: {}", filename_str);
   auto f = filenodes->find(filename_str);
   if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
-  buffer->dwFileAttributes = f->attributes;
-  memfs_helper::LlongToFileTime(f->times.creation, buffer->ftCreationTime);
-  memfs_helper::LlongToFileTime(f->times.lastaccess, buffer->ftLastAccessTime);
-  memfs_helper::LlongToFileTime(f->times.lastwrite, buffer->ftLastWriteTime);
+  buffer->FileAttributes = f->attributes;
+  buffer->CreationTime.QuadPart = f->times.creation;
+  buffer->LastAccessTime.QuadPart = f->times.lastaccess;
+  buffer->LastWriteTime.QuadPart = f->times.lastwrite;
   auto strLength = f->get_filesize();
-  memfs_helper::LlongToDwLowHigh(strLength, buffer->nFileSizeLow,
-                                 buffer->nFileSizeHigh);
-  memfs_helper::LlongToDwLowHigh(f->fileindex, buffer->nFileIndexLow,
-                                 buffer->nFileIndexHigh);
+  buffer->EndOfFile.QuadPart = strLength;
+  buffer->FileIndex = static_cast<ULONG64>(f->fileindex);
   // We do not track the number of links to the file so we return a fake value.
-  buffer->nNumberOfLinks = 1;
-  buffer->dwVolumeSerialNumber = g_volumserial;
+  buffer->NumberOfLinks = 1;
+  buffer->VolumeSerialNumber = g_volumserial;
 
   spdlog::info(L"GetFileInformation: {} Attributes: {:x} Times: Creation {:x} "
                L"LastAccess {:x} LastWrite {:x} FileSize {} NumberOfLinks {} "
                L"VolumeSerialNumber {:x}",
                filename_str, f->attributes.load(), f->times.creation.load(),
                f->times.lastaccess.load(), f->times.lastwrite.load(), strLength,
-               buffer->nNumberOfLinks, buffer->dwVolumeSerialNumber);
+               buffer->NumberOfLinks, buffer->VolumeSerialNumber);
 
   return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK memfs_findfiles(LPCWSTR filename,
                                                PFillFindData fill_finddata,
+                                               ULONG /*find_flags*/,
                                                PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   auto files = filenodes->list_folder(filename_str);
-  WIN32_FIND_DATAW findData;
+  DOKAN_FIND_DATA findData;
   spdlog::info(L"FindFiles: {}", filename_str);
-  ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
+  ZeroMemory(&findData, sizeof(DOKAN_FIND_DATA));
   for (const auto& f : files) {
     if (f->main_stream) continue; // Do not list File Streams
     const auto fileNodeName = memfs_helper::GetFileName(f->get_filename());
-    if (fileNodeName.size() > MAX_PATH)
+    if (fileNodeName.size() >= MAX_PATH)
       continue;
     std::copy(fileNodeName.begin(), fileNodeName.end(),
-              std::begin(findData.cFileName));
-    findData.cFileName[fileNodeName.length()] = '\0';
-    findData.dwFileAttributes = f->attributes;
-    memfs_helper::LlongToFileTime(f->times.creation, findData.ftCreationTime);
-    memfs_helper::LlongToFileTime(f->times.lastaccess,
-                                  findData.ftLastAccessTime);
-    memfs_helper::LlongToFileTime(f->times.lastwrite, findData.ftLastWriteTime);
+              std::begin(findData.FileName));
+    findData.FileName[fileNodeName.length()] = L'\0';
+    findData.FileAttributes = f->attributes;
+    findData.CreationTime.QuadPart = f->times.creation;
+    findData.LastAccessTime.QuadPart = f->times.lastaccess;
+    findData.LastWriteTime.QuadPart = f->times.lastwrite;
     auto file_size = f->get_filesize();
-    memfs_helper::LlongToDwLowHigh(file_size, findData.nFileSizeLow,
-                                   findData.nFileSizeHigh);
+    findData.EndOfFile.QuadPart = file_size;
+    findData.FileIndex = static_cast<ULONG64>(f->fileindex);
     spdlog::info(
         L"FindFiles: {} fileNode: {} Attributes: {} Times: Creation {} "
         L"LastAccess {} LastWrite {} FileSize {}",
-        filename_str, fileNodeName, findData.dwFileAttributes,
+        filename_str, fileNodeName, findData.FileAttributes,
         f->times.creation.load(), f->times.lastaccess.load(),
         f->times.lastwrite.load(), file_size);
-    fill_finddata(&findData, dokanfileinfo);
+    if (fill_finddata(&findData, dokanfileinfo) != 0) {
+      return STATUS_NO_MEMORY;
+    }
   }
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK memfs_setfileattributes(
-    LPCWSTR filename, DWORD fileattributes, PDOKAN_FILE_INFO dokanfileinfo) {
+static NTSTATUS DOKAN_CALLBACK memfs_setfilebasicinformation(
+    LPCWSTR filename, const FILE_BASIC_INFORMATION *basic_info,
+    PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
   auto f = filenodes->find(filename_str);
-  spdlog::info(L"SetFileAttributes: {} fileattributes {}", filename_str,
-               fileattributes);
+  spdlog::info(L"SetFileBasicInformation: {} fileattributes {}", filename_str,
+               basic_info->FileAttributes);
   if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
 
-  // from https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileattributesw
-  DWORD const attributes_allowed_to_set =
-      FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NORMAL |
-      FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_OFFLINE |
-      FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM |
-      FILE_ATTRIBUTE_TEMPORARY;
+  if (basic_info->FileAttributes != 0) {
+    // from https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileattributesw
+    DWORD const attributes_allowed_to_set =
+        FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NORMAL |
+        FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_OFFLINE |
+        FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM |
+        FILE_ATTRIBUTE_TEMPORARY;
 
-  fileattributes &= attributes_allowed_to_set;
+    DWORD fileattributes =
+        basic_info->FileAttributes & attributes_allowed_to_set;
 
-  DWORD new_file_attributes =
-      (f->attributes & ~attributes_allowed_to_set) | fileattributes;
+    DWORD new_file_attributes =
+        (f->attributes & ~attributes_allowed_to_set) | fileattributes;
 
-  // FILE_ATTRIBUTE_NORMAL is overriden if any other attribute is set
-  if ((new_file_attributes & FILE_ATTRIBUTE_NORMAL) &&
-      (new_file_attributes & ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL)))
-    new_file_attributes &= ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL);
+    // FILE_ATTRIBUTE_NORMAL is overriden if any other attribute is set
+    if ((new_file_attributes & FILE_ATTRIBUTE_NORMAL) &&
+        (new_file_attributes & ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL)))
+      new_file_attributes &= ~static_cast<DWORD>(FILE_ATTRIBUTE_NORMAL);
 
-  f->attributes = new_file_attributes;
-  return STATUS_SUCCESS;
-}
+    f->attributes = new_file_attributes;
+  }
 
-static NTSTATUS DOKAN_CALLBACK
-memfs_setfiletime(LPCWSTR filename, CONST FILETIME* creationtime,
-                  CONST FILETIME* lastaccesstime, CONST FILETIME* lastwritetime,
-                  PDOKAN_FILE_INFO dokanfileinfo) {
-  auto filenodes = GET_FS_INSTANCE;
-  auto filename_str = std::wstring(filename);
-  auto f = filenodes->find(filename_str);
-  spdlog::info(L"SetFileTime: {}", filename_str);
-  if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
-  if (creationtime && !filetimes::empty(creationtime))
-    f->times.creation = memfs_helper::FileTimeToLlong(*creationtime);
-  if (lastaccesstime && !filetimes::empty(lastaccesstime))
-    f->times.lastaccess = memfs_helper::FileTimeToLlong(*lastaccesstime);
-  if (lastwritetime && !filetimes::empty(lastwritetime))
-    f->times.lastwrite = memfs_helper::FileTimeToLlong(*lastwritetime);
-  // We should update Change Time here but dokan use lastwritetime for both.
-  return STATUS_SUCCESS;
-}
-
-static NTSTATUS DOKAN_CALLBACK
-memfs_deletefile(LPCWSTR filename, PDOKAN_FILE_INFO dokanfileinfo) {
-  auto filenodes = GET_FS_INSTANCE;
-  auto filename_str = std::wstring(filename);
-  auto f = filenodes->find(filename_str);
-  spdlog::info(L"DeleteFile: {}", filename_str);
-
-  if (!f) return STATUS_OBJECT_NAME_NOT_FOUND;
-
-  if (f->is_directory) return STATUS_ACCESS_DENIED;
-
-  // Here prepare and check if the file can be deleted
-  // or if delete is canceled when dokanfileinfo->DeletePending false
+  if (basic_info->CreationTime.QuadPart != 0)
+    f->times.creation = basic_info->CreationTime.QuadPart;
+  if (basic_info->LastAccessTime.QuadPart != 0)
+    f->times.lastaccess = basic_info->LastAccessTime.QuadPart;
+  if (basic_info->LastWriteTime.QuadPart != 0)
+    f->times.lastwrite = basic_info->LastWriteTime.QuadPart;
 
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK
-memfs_deletedirectory(LPCWSTR filename, PDOKAN_FILE_INFO dokanfileinfo) {
+static NTSTATUS DOKAN_CALLBACK memfs_setfiledisposition(
+    LPCWSTR filename, ULONG disposition_flags, PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
-  spdlog::info(L"DeleteDirectory: {}", filename_str);
+  spdlog::info(L"SetFileDisposition: {} flags={:#x} is_dir={}", filename_str,
+               disposition_flags, dokanfileinfo->IsDirectory != 0);
 
-  if (filenodes->list_folder(filename_str).size())
-    return STATUS_DIRECTORY_NOT_EMPTY;
+  if ((disposition_flags & FILE_DISPOSITION_DELETE) == 0) {
+    return STATUS_SUCCESS;
+  }
 
-  // Here prepare and check if the directory can be deleted
-  // or if delete is canceled when dokanfileinfo->DeletePending false
+  if (dokanfileinfo->IsDirectory) {
+    if (filenodes->list_folder(filename_str).size())
+      return STATUS_DIRECTORY_NOT_EMPTY;
+    return STATUS_SUCCESS;
+  }
 
+  auto f = filenodes->find(filename_str);
+  if (!f)
+    return STATUS_OBJECT_NAME_NOT_FOUND;
+  if (f->is_directory)
+    return STATUS_ACCESS_DENIED;
   return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK memfs_movefile(LPCWSTR filename,
                                               LPCWSTR new_filename,
-                                              BOOL replace_if_existing,
+                                              ULONG rename_flags,
                                               PDOKAN_FILE_INFO dokanfileinfo) {
   auto filenodes = GET_FS_INSTANCE;
   auto filename_str = std::wstring(filename);
@@ -555,6 +541,8 @@ static NTSTATUS DOKAN_CALLBACK memfs_movefile(LPCWSTR filename,
                        L":" + new_stream_names.second;
   }
   spdlog::info(L"MoveFile: after {} to {}", filename_str, new_filename_str);
+  BOOL replace_if_existing =
+      (rename_flags & FILE_RENAME_REPLACE_IF_EXISTS) != 0 ? TRUE : FALSE;
   return filenodes->move(filename_str, new_filename_str, replace_if_existing);
 }
 
@@ -796,29 +784,34 @@ memfs_findstreams(LPCWSTR filename, PFillFindStreamData fill_findstreamdata,
   return STATUS_SUCCESS;
 }
 
-DOKAN_OPERATIONS memfs_operations = {memfs_createfile,
-                                     memfs_cleanup,
-                                     memfs_closeFile,
-                                     memfs_readfile,
-                                     memfs_writefile,
-                                     memfs_flushfilebuffers,
-                                     memfs_getfileInformation,
-                                     memfs_findfiles,
-                                     nullptr,  // FindFilesWithPattern
-                                     memfs_setfileattributes,
-                                     memfs_setfiletime,
-                                     memfs_deletefile,
-                                     memfs_deletedirectory,
-                                     memfs_movefile,
-                                     memfs_setendoffile,
-                                     memfs_setallocationsize,
-                                     memfs_lockfile,
-                                     memfs_unlockfile,
-                                     memfs_getdiskfreespace,
-                                     memfs_getvolumeinformation,
-                                     memfs_mounted,
-                                     memfs_unmounted,
-                                     memfs_getfilesecurity,
-                                     memfs_setfilesecurity,
-                                     memfs_findstreams};
+static DOKAN_OPERATIONS make_memfs_operations() {
+  DOKAN_OPERATIONS ops{};
+  ops.ZwCreateFile = memfs_createfile;
+  ops.Cleanup = memfs_cleanup;
+  ops.CloseFile = memfs_closeFile;
+  ops.ReadFile = memfs_readfile;
+  ops.WriteFile = memfs_writefile;
+  ops.FlushFileBuffers = memfs_flushfilebuffers;
+  ops.GetFileInformation = memfs_getfileInformation;
+  ops.FindFiles = memfs_findfiles;
+  ops.FindFilesWithPattern = nullptr;
+  ops.SetFileBasicInformation = memfs_setfilebasicinformation;
+  ops.SetFileDisposition = memfs_setfiledisposition;
+  ops.MoveFile = memfs_movefile;
+  ops.SetEndOfFile = memfs_setendoffile;
+  ops.SetAllocationSize = memfs_setallocationsize;
+  ops.SetValidDataLength = nullptr;
+  ops.LockFile = memfs_lockfile;
+  ops.UnlockFile = memfs_unlockfile;
+  ops.GetDiskFreeSpace = memfs_getdiskfreespace;
+  ops.GetVolumeInformation = memfs_getvolumeinformation;
+  ops.Mounted = memfs_mounted;
+  ops.Unmounted = memfs_unmounted;
+  ops.GetFileSecurity = memfs_getfilesecurity;
+  ops.SetFileSecurity = memfs_setfilesecurity;
+  ops.FindStreams = memfs_findstreams;
+  return ops;
+}
+
+DOKAN_OPERATIONS memfs_operations = make_memfs_operations();
 }  // namespace memfs

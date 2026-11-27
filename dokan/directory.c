@@ -47,24 +47,19 @@ static VOID SetDirEntryNextOffset(PVOID Entry, ULONG Offset) {
 }
 
 static VOID DokanFillDirTimesAndSizes(
-    PWIN32_FIND_DATAW FindData, PDOKAN_INSTANCE DokanInstance,
+    const DOKAN_FIND_DATA *FindData, PDOKAN_INSTANCE DokanInstance,
     PLARGE_INTEGER CreationTime, PLARGE_INTEGER LastAccessTime,
     PLARGE_INTEGER LastWriteTime, PLARGE_INTEGER ChangeTime,
     PLARGE_INTEGER EndOfFile, PLARGE_INTEGER AllocationSize) {
-  EndOfFile->HighPart = FindData->nFileSizeHigh;
-  EndOfFile->LowPart = FindData->nFileSizeLow;
-  AllocationSize->HighPart = FindData->nFileSizeHigh;
-  AllocationSize->LowPart = FindData->nFileSizeLow;
-  ALIGN_ALLOCATION_SIZE(AllocationSize, DokanInstance->DokanOptions);
-
-  CreationTime->HighPart = FindData->ftCreationTime.dwHighDateTime;
-  CreationTime->LowPart = FindData->ftCreationTime.dwLowDateTime;
-  LastAccessTime->HighPart = FindData->ftLastAccessTime.dwHighDateTime;
-  LastAccessTime->LowPart = FindData->ftLastAccessTime.dwLowDateTime;
-  LastWriteTime->HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-  LastWriteTime->LowPart = FindData->ftLastWriteTime.dwLowDateTime;
-  ChangeTime->HighPart = FindData->ftLastWriteTime.dwHighDateTime;
-  ChangeTime->LowPart = FindData->ftLastWriteTime.dwLowDateTime;
+  *EndOfFile = FindData->EndOfFile;
+  *AllocationSize =
+      DokanResolveAllocationSize(FindData->AllocationSize, FindData->EndOfFile,
+                                 DokanInstance->DokanOptions);
+  *CreationTime = FindData->CreationTime;
+  *LastAccessTime = FindData->LastAccessTime;
+  *LastWriteTime = FindData->LastWriteTime;
+  *ChangeTime =
+      DokanResolveChangeTime(FindData->ChangeTime, FindData->LastWriteTime);
 }
 
 static PWCHAR GetDirectorySearchPattern(PDOKAN_IO_EVENT IoEvent) {
@@ -101,11 +96,11 @@ static ULONG GetDirectoryInfoHeaderSize(FILE_INFORMATION_CLASS DirectoryInfo) {
 }
 
 // Zero-initialize Buffer for (headerBytes + CopyNameBytes) bytes and populate
-// the directory entry. NextEntryOffset and optional per-class fields not
-// carried by WIN32_FIND_DATAW (EaSize, ShortNameLength, ShortName,
-// ReparsePointTag, and FileId) remain zero.
+// the directory entry. NextEntryOffset and per-class fields not carried by
+// DOKAN_FIND_DATA (EaSize, ShortNameLength, ShortName) remain zero.
 static VOID DokanWriteDirectoryEntry(FILE_INFORMATION_CLASS DirectoryInfo,
-                                     PVOID Buffer, PWIN32_FIND_DATAW FindData,
+                                     PVOID Buffer,
+                                     const DOKAN_FIND_DATA *FindData,
                                      ULONG Index, ULONG NameBytes,
                                      ULONG CopyNameBytes,
                                      PDOKAN_INSTANCE DokanInstance) {
@@ -115,39 +110,69 @@ static VOID DokanWriteDirectoryEntry(FILE_INFORMATION_CLASS DirectoryInfo,
   }
   RtlZeroMemory(Buffer, headerBytes + CopyNameBytes);
 
-#define DOKAN_FILL_DIR_CASE(InfoClass, StructType)                             \
-  case InfoClass: {                                                            \
-    StructType *entry = (StructType *)Buffer;                                  \
-    entry->FileIndex = Index;                                                  \
-    entry->FileAttributes = FindData->dwFileAttributes;                        \
-    entry->FileNameLength = NameBytes;                                         \
-    DokanFillDirTimesAndSizes(FindData, DokanInstance, &entry->CreationTime,   \
-                              &entry->LastAccessTime, &entry->LastWriteTime,   \
-                              &entry->ChangeTime, &entry->EndOfFile,           \
-                              &entry->AllocationSize);                         \
+#define DOKAN_FILL_DIR_COMMON(entry)                                           \
+  do {                                                                         \
+    (entry)->FileIndex = Index;                                                \
+    (entry)->FileAttributes = FindData->FileAttributes;                        \
+    (entry)->FileNameLength = NameBytes;                                       \
+    DokanFillDirTimesAndSizes(FindData, DokanInstance, &(entry)->CreationTime, \
+                              &(entry)->LastAccessTime,                        \
+                              &(entry)->LastWriteTime, &(entry)->ChangeTime,   \
+                              &(entry)->EndOfFile, &(entry)->AllocationSize);  \
     if (CopyNameBytes > 0) {                                                   \
-      RtlCopyMemory(entry->FileName, FindData->cFileName, CopyNameBytes);      \
+      RtlCopyMemory((entry)->FileName, FindData->FileName, CopyNameBytes);     \
     }                                                                          \
-    break;                                                                     \
-  }
+  } while (0)
 
   switch (DirectoryInfo) {
-    DOKAN_FILL_DIR_CASE(FileDirectoryInformation, FILE_DIRECTORY_INFORMATION)
-    DOKAN_FILL_DIR_CASE(FileFullDirectoryInformation, FILE_FULL_DIR_INFORMATION)
-    DOKAN_FILL_DIR_CASE(FileIdFullDirectoryInformation,
-                        FILE_ID_FULL_DIR_INFORMATION)
-    DOKAN_FILL_DIR_CASE(FileBothDirectoryInformation, FILE_BOTH_DIR_INFORMATION)
-    DOKAN_FILL_DIR_CASE(FileIdBothDirectoryInformation,
-                        FILE_ID_BOTH_DIR_INFORMATION)
-    DOKAN_FILL_DIR_CASE(FileIdExtdDirectoryInformation, FILE_ID_EXTD_DIR_INFO)
-    DOKAN_FILL_DIR_CASE(FileIdExtdBothDirectoryInformation,
-                        FILE_ID_EXTD_BOTH_DIR_INFORMATION)
+  case FileDirectoryInformation: {
+    PFILE_DIRECTORY_INFORMATION entry = (PFILE_DIRECTORY_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    break;
+  }
+  case FileFullDirectoryInformation: {
+    PFILE_FULL_DIR_INFORMATION entry = (PFILE_FULL_DIR_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    break;
+  }
+  case FileIdFullDirectoryInformation: {
+    PFILE_ID_FULL_DIR_INFORMATION entry = (PFILE_ID_FULL_DIR_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    entry->FileId.QuadPart = (LONGLONG)FindData->FileIndex;
+    break;
+  }
+  case FileBothDirectoryInformation: {
+    PFILE_BOTH_DIR_INFORMATION entry = (PFILE_BOTH_DIR_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    break;
+  }
+  case FileIdBothDirectoryInformation: {
+    PFILE_ID_BOTH_DIR_INFORMATION entry = (PFILE_ID_BOTH_DIR_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    entry->FileId.QuadPart = (LONGLONG)FindData->FileIndex;
+    break;
+  }
+  case FileIdExtdDirectoryInformation: {
+    PFILE_ID_EXTD_DIR_INFO entry = (PFILE_ID_EXTD_DIR_INFO)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    entry->ReparsePointTag = FindData->ReparseTag;
+    DokanFillFileId128(FindData->FileIndex, &entry->FileId);
+    break;
+  }
+  case FileIdExtdBothDirectoryInformation: {
+    PFILE_ID_EXTD_BOTH_DIR_INFORMATION entry =
+        (PFILE_ID_EXTD_BOTH_DIR_INFORMATION)Buffer;
+    DOKAN_FILL_DIR_COMMON(entry);
+    entry->ReparsePointTag = FindData->ReparseTag;
+    DokanFillFileId128(FindData->FileIndex, &entry->FileId);
+    break;
+  }
   case FileNamesInformation: {
     PFILE_NAMES_INFORMATION entry = (PFILE_NAMES_INFORMATION)Buffer;
     entry->FileIndex = Index;
     entry->FileNameLength = NameBytes;
     if (CopyNameBytes > 0) {
-      RtlCopyMemory(entry->FileName, FindData->cFileName, CopyNameBytes);
+      RtlCopyMemory(entry->FileName, FindData->FileName, CopyNameBytes);
     }
     break;
   }
@@ -155,14 +180,16 @@ static VOID DokanWriteDirectoryEntry(FILE_INFORMATION_CLASS DirectoryInfo,
     break;
   }
 
-#undef DOKAN_FILL_DIR_CASE
+#undef DOKAN_FILL_DIR_COMMON
 }
 
-int WINAPI DokanFillFileData(PWIN32_FIND_DATAW FindData,
-                             PDOKAN_FILE_INFO FileInfo) {
+int WINAPI DokanFillFileData(_In_ const DOKAN_FIND_DATA *FindData,
+                             _Inout_ PDOKAN_FILE_INFO FileInfo) {
   assert(FileInfo->ProcessingContext);
   PDOKAN_VECTOR dirList = (PDOKAN_VECTOR)FileInfo->ProcessingContext;
-  DokanVector_PushBack(dirList, FindData);
+  if (!DokanVector_PushBack(dirList, (PVOID)FindData)) {
+    return 1;
+  }
   return 0;
 }
 
@@ -198,9 +225,9 @@ static NTSTATUS MatchFiles(PDOKAN_IO_EVENT IoEvent, PDOKAN_VECTOR DirList,
   ULONG nextIndex = startIndex;
 
   for (size_t i = startIndex; i < count; ++i) {
-    PWIN32_FIND_DATAW findData =
-        (PWIN32_FIND_DATAW)DokanVector_GetItem(DirList, i);
-    ULONG nameBytes = (ULONG)wcslen(findData->cFileName) * sizeof(WCHAR);
+    const DOKAN_FIND_DATA *findData =
+        (const DOKAN_FIND_DATA *)DokanVector_GetItem(DirList, i);
+    ULONG nameBytes = (ULONG)wcslen(findData->FileName) * sizeof(WCHAR);
     ULONG unalignedSize = headerBytes + nameBytes;
     if (unalignedSize < headerBytes) {
       break;
@@ -267,7 +294,7 @@ static VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent,
                                              BOOL FilterPattern) {
   BOOLEAN currentFolder = FALSE;
   BOOLEAN parentFolder = FALSE;
-  WIN32_FIND_DATAW findData;
+  DOKAN_FIND_DATA findData;
   FILETIME systime;
   PDOKAN_VECTOR dirList =
       (PDOKAN_VECTOR)IoEvent->DokanFileInfo.ProcessingContext;
@@ -297,12 +324,13 @@ static VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent,
   for (size_t i = 0;
        (!currentFolder || !parentFolder) && i < DokanVector_GetCount(dirList);
        ++i) {
-    PWIN32_FIND_DATAW find = (PWIN32_FIND_DATAW)DokanVector_GetItem(dirList, i);
-    if (wcscmp(find->cFileName, L".") == 0) {
+    const DOKAN_FIND_DATA *find =
+        (const DOKAN_FIND_DATA *)DokanVector_GetItem(dirList, i);
+    if (wcscmp(find->FileName, L".") == 0) {
       currentFolder = TRUE;
     }
 
-    if (wcscmp(find->cFileName, L"..") == 0) {
+    if (wcscmp(find->FileName, L"..") == 0) {
       parentFolder = TRUE;
     }
   }
@@ -310,25 +338,29 @@ static VOID AddMissingCurrentAndParentFolder(PDOKAN_IO_EVENT IoEvent,
   BOOL addCurrent = matchCurrent && !currentFolder;
   BOOL addParent = matchParent && !parentFolder;
   if (addCurrent || addParent) {
-    WIN32_FIND_DATAW missingItems[2];
+    DOKAN_FIND_DATA missingItems[2];
     ULONG missingCount = 0;
+    LARGE_INTEGER sysLi;
 
-    ZeroMemory(&findData, sizeof(WIN32_FIND_DATAW));
-    findData.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+    ZeroMemory(&findData, sizeof(DOKAN_FIND_DATA));
+    findData.FileAttributes = FILE_ATTRIBUTE_DIRECTORY;
     // Folders times should ideally be the real current and parent folder times.
     GetSystemTimeAsFileTime(&systime);
-    findData.ftCreationTime = systime;
-    findData.ftLastAccessTime = systime;
-    findData.ftLastWriteTime = systime;
+    sysLi.LowPart = systime.dwLowDateTime;
+    sysLi.HighPart = (LONG)systime.dwHighDateTime;
+    findData.CreationTime = sysLi;
+    findData.LastAccessTime = sysLi;
+    findData.LastWriteTime = sysLi;
+    findData.ChangeTime = sysLi;
     if (addCurrent) {
-      findData.cFileName[0] = L'.';
-      findData.cFileName[1] = L'\0';
+      findData.FileName[0] = L'.';
+      findData.FileName[1] = L'\0';
       missingItems[missingCount++] = findData;
     }
     if (addParent) {
-      findData.cFileName[0] = L'.';
-      findData.cFileName[1] = L'.';
-      findData.cFileName[2] = L'\0';
+      findData.FileName[0] = L'.';
+      findData.FileName[1] = L'.';
+      findData.FileName[2] = L'\0';
       missingItems[missingCount++] = findData;
     }
     if (missingCount > 0) {
@@ -349,12 +381,12 @@ static VOID FilterDirectoryList(PDOKAN_IO_EVENT IoEvent,
   size_t count = DokanVector_GetCount(DirList);
   size_t writeIdx = 0;
   for (size_t readIdx = 0; readIdx < count; ++readIdx) {
-    PWIN32_FIND_DATAW entry =
-        (PWIN32_FIND_DATAW)DokanVector_GetItem(DirList, readIdx);
-    if (DokanIsNameInExpression(pattern, entry->cFileName, !caseSensitive)) {
+    PDOKAN_FIND_DATA entry =
+        (PDOKAN_FIND_DATA)DokanVector_GetItem(DirList, readIdx);
+    if (DokanIsNameInExpression(pattern, entry->FileName, !caseSensitive)) {
       if (writeIdx != readIdx) {
-        PWIN32_FIND_DATAW dst =
-            (PWIN32_FIND_DATAW)DokanVector_GetItem(DirList, writeIdx);
+        PDOKAN_FIND_DATA dst =
+            (PDOKAN_FIND_DATA)DokanVector_GetItem(DirList, writeIdx);
         *dst = *entry;
       }
       ++writeIdx;
@@ -545,6 +577,13 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
 
   status = STATUS_NOT_IMPLEMENTED;
   BOOL patternFilterNeeded = FALSE;
+  ULONG findFlags = 0;
+  if (IoEvent->EventContext->Flags & SL_RESTART_SCAN) {
+    findFlags |= DOKAN_FIND_RESTART_SCAN;
+  }
+  if (IoEvent->EventContext->Flags & SL_RETURN_SINGLE_ENTRY) {
+    findFlags |= DOKAN_FIND_SINGLE_ENTRY;
+  }
 
   // Reminder: FindFilesWithPattern may not be implemented by returning
   // STATUS_NOT_IMPLEMENTED.
@@ -552,7 +591,7 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
       IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern) {
     status = IoEvent->DokanInstance->DokanOperations->FindFilesWithPattern(
         IoEvent->EventContext->Operation.Directory.DirectoryName,
-        searchPattern ? searchPattern : L"*", DokanFillFileData,
+        searchPattern ? searchPattern : L"*", DokanFillFileData, findFlags,
         &IoEvent->DokanFileInfo);
     if (status == STATUS_NOT_IMPLEMENTED) {
       EnterCriticalSection(&openInfo->CriticalSection);
@@ -567,7 +606,7 @@ VOID DispatchDirectoryInformation(PDOKAN_IO_EVENT IoEvent) {
     patternFilterNeeded = TRUE;
     status = IoEvent->DokanInstance->DokanOperations->FindFiles(
         IoEvent->EventContext->Operation.Directory.DirectoryName,
-        DokanFillFileData, &IoEvent->DokanFileInfo);
+        DokanFillFileData, findFlags, &IoEvent->DokanFileInfo);
   }
 
   if (status != STATUS_NOT_IMPLEMENTED) {

@@ -164,7 +164,7 @@ public:
 		PDOKAN_FILE_INFO dokan_file_info);
 
 	int get_file_information(LPCWSTR file_name,
-		LPBY_HANDLE_FILE_INFORMATION handle_file_information, 
+		PDOKAN_FILE_INFORMATION handle_file_information,
 		PDOKAN_FILE_INFO dokan_file_info);
 
 	int delete_file(LPCWSTR file_name, PDOKAN_FILE_INFO dokan_file_info);
