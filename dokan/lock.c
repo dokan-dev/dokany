@@ -51,8 +51,7 @@ VOID DispatchLock(PDOKAN_IO_EVENT IoEvent) {
           &IoEvent->DokanFileInfo);
 
       if (status != STATUS_NOT_IMPLEMENTED) {
-        IoEvent->EventResult->Status =
-            status != STATUS_SUCCESS ? STATUS_LOCK_NOT_GRANTED : STATUS_SUCCESS;
+        IoEvent->EventResult->Status = status;
       }
     }
     break;
@@ -71,8 +70,7 @@ VOID DispatchLock(PDOKAN_IO_EVENT IoEvent) {
           &IoEvent->DokanFileInfo);
 
       if (status != STATUS_NOT_IMPLEMENTED) {
-        IoEvent->EventResult->Status =
-            STATUS_SUCCESS; // always succeeds so it cannot fail ?
+        IoEvent->EventResult->Status = status;
       }
     }
     break;
