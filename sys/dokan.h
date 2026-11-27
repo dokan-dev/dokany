@@ -128,6 +128,10 @@ inline PVOID DokanAllocZero(SIZE_T size) {
 #define DOKAN_CHECK_INTERVAL (1000 * 5)                     // in millisecond
 
 extern LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
+extern size_t g_DokanIrpEntrySize;
+#define DOKAN_IRP_ENTRY_WORKITEM_OFFSET                                        \
+  ((sizeof(IRP_ENTRY) + (size_t)MEMORY_ALLOCATION_ALIGNMENT - 1) &             \
+   ~((size_t)MEMORY_ALLOCATION_ALIGNMENT - 1))
 #define DokanAllocateIrpEntry()                                                \
   ExAllocateFromLookasideListEx(&DokanIrpEntryLookasideList)
 #define DokanFreeIrpEntry(IrpEntry)                                            \
@@ -250,7 +254,6 @@ typedef struct _DokanDiskControlBlock {
 
   // When timeout is occuerd, KillEvent is triggered.
   KEVENT KillEvent;
-  KEVENT ForceTimeoutEvent;
   KEVENT ReleaseEvent;
 
   // the thread to deal with timeout
@@ -801,21 +804,20 @@ typedef struct _REQUEST_CONTEXT {
   // Nullify any logging activity for this request.
   BOOLEAN DoNotLogActivity;
 
-  // The IRP is forced timeout for being properly canceled.
-  // See DokanCreateIrpCancelRoutine.
-  BOOLEAN ForcedCanceled;
-
   // Whether if we are the top-level IRP.
   BOOLEAN IsTopLevelIrp;
 } REQUEST_CONTEXT, *PREQUEST_CONTEXT;
 
-// IRP list which has pending status
-// this structure is also used to store event notification IRP
+// IRP list which has pending status.
+// DokanIrpEntryLookasideList allocates PointerAlignSize(sizeof(IRP_ENTRY))
+// aligned to MEMORY_ALLOCATION_ALIGNMENT plus IoSizeofWorkItem() bytes so an
+// IO_WORKITEM can be initialized in-place at DISPATCH_LEVEL without pool
+// allocation failure.
 typedef struct _IRP_ENTRY {
   LIST_ENTRY ListEntry;
   ULONG SerialNumber;
   REQUEST_CONTEXT RequestContext;
-  BOOLEAN CancelRoutineFreeMemory;
+  ULONG EventInfoOffset;
   NTSTATUS AsyncStatus;
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
@@ -945,11 +947,16 @@ DokanDispatchSetSecurity(__in PREQUEST_CONTEXT RequestContext);
 
 DRIVER_UNLOAD DokanUnload;
 
-DRIVER_CANCEL DokanEventCancelRoutine;
-
 DRIVER_CANCEL DokanIrpCancelRoutine;
 
 DRIVER_CANCEL DokanCreateIrpCancelRoutine;
+
+// Removes IrpEntry from its IRP_LIST (caller MUST hold IrpList->ListLock) and
+// attempts to claim IRP ownership by clearing its cancel routine.
+// Returns TRUE if caller exclusively owns IrpEntry and its IRP; returns FALSE
+// if cancellation already claimed the IRP (cancel routine will complete the IRP
+// and free IrpEntry).
+BOOLEAN DokanPopIrpEntryLocked(__in PIRP_ENTRY IrpEntry);
 
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp);
 
@@ -1005,6 +1012,10 @@ AllocateEventContext(__in PREQUEST_CONTEXT RequestContext,
                      __in ULONG EventContextLength, __in_opt PDokanCCB Ccb);
 
 VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext);
+
+// Frees and clears any large-write EVENT_CONTEXT stashed in
+// Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT].
+VOID DokanFreeWriteEventContext(__in PIRP Irp);
 
 NTSTATUS
 DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,

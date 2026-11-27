@@ -171,6 +171,7 @@ Return Value:
       } else {
         DokanLogInfo(&logger, L"Unmounting due to keepalive close.");
         DokanUnmount(RequestContext, RequestContext->Dcb);
+        isUnmountPending = TRUE;
       }
     }
   }
@@ -192,12 +193,15 @@ Return Value:
   eventLength = sizeof(EVENT_CONTEXT) + fcb->FileName.Length;
   eventContext = AllocateEventContext(RequestContext, eventLength, ccb);
 
+  fileObject->Flags |= FO_CLEANUP_COMPLETE;
+
   if (eventContext == NULL) {
     DokanFCBUnlock(fcb);
-    return STATUS_INSUFFICIENT_RESOURCES;
+    // Windows FSDs must never fail IRP_MJ_CLEANUP; tear down local handle
+    // state and succeed.
+    DokanExecuteCleanup(RequestContext);
+    return STATUS_SUCCESS;
   }
-
-  fileObject->Flags |= FO_CLEANUP_COMPLETE;
 
   eventContext->Context = ccb->UserContext;
   eventContext->FileFlags |=
@@ -211,7 +215,14 @@ Return Value:
   DokanFCBUnlock(fcb);
 
   // register this IRP to pending IRP list
-  return DokanRegisterPendingIrp(RequestContext, eventContext);
+  NTSTATUS status = DokanRegisterPendingIrp(RequestContext, eventContext);
+  if (status != STATUS_PENDING) {
+    // Unmount or cancellation raced before user-mode dispatch; tear down local
+    // handle state synchronously and complete IRP_MJ_CLEANUP with success.
+    DokanExecuteCleanup(RequestContext);
+    return STATUS_SUCCESS;
+  }
+  return status;
 }
 
 VOID DokanCompleteCleanup(__in PREQUEST_CONTEXT RequestContext,

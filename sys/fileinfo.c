@@ -357,8 +357,8 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
     }
     DOKAN_LOG_FINE_IRP(
         RequestContext,
-        "CcFlushCache done FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb,
-        Fcb->OpenCount, Fcb->UncleanCount);
+        "FlushFcb data section done FCB=%p, OpenCount=%lu, UncleanCount=%lu.",
+        Fcb, Fcb->OpenCount, Fcb->UncleanCount);
   }
 }
 

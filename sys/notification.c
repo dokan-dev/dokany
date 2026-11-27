@@ -106,6 +106,14 @@ VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext) {
   DokanFree(driverEventContext);
 }
 
+VOID DokanFreeWriteEventContext(__in PIRP Irp) {
+  PVOID eventContext = Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
+  if (eventContext != NULL) {
+    DokanFreeEventContext((PEVENT_CONTEXT)eventContext);
+    Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+  }
+}
+
 VOID DokanEventNotification(__in PREQUEST_CONTEXT RequestContext,
                             __in PIRP_LIST NotifyEvent,
                             __in PEVENT_CONTEXT EventContext) {
@@ -134,7 +142,6 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
   PLIST_ENTRY listHead;
   PIRP_ENTRY irpEntry;
   KIRQL oldIrql;
-  PIRP irp;
 
   InitializeListHead(Dest);
 
@@ -142,33 +149,11 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
   KeAcquireSpinLock(&Source->ListLock, &oldIrql);
 
   while (!IsListEmpty(&Source->ListHead)) {
-    listHead = RemoveHeadList(&Source->ListHead);
+    listHead = Source->ListHead.Flink;
     irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    irp = irpEntry->RequestContext.Irp;
-    if (irp == NULL) {
-      // this IRP has already been canceled
-      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-      DokanFreeIrpEntry(irpEntry);
-      continue;
+    if (DokanPopIrpEntryLocked(irpEntry)) {
+      InsertTailList(Dest, &irpEntry->ListEntry);
     }
-
-    if (IoSetCancelRoutine(irp, NULL) == NULL) {
-      if (irpEntry->RequestContext.ForcedCanceled) {
-        // DokanCreateIrpCancelRoutine already ran and set ForcedCanceled,
-        // expecting the timeout thread to call DokanCancelCreateIrp. Forward
-        // this entry to the destination so the caller can complete the IRP
-        // rather than leaving it permanently orphaned.
-        irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-        InsertTailList(Dest, &irpEntry->ListEntry);
-      } else {
-        // Cancel routine will run as soon as we release the lock
-        InitializeListHead(&irpEntry->ListEntry);
-        irpEntry->CancelRoutineFreeMemory = TRUE;
-      }
-      continue;
-    }
-    irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-    InsertTailList(Dest, &irpEntry->ListEntry);
   }
 
   KeClearEvent(&Source->NotEmpty);
@@ -188,13 +173,7 @@ VOID DokanCancelPendingIrp(__in PREQUEST_CONTEXT RequestContext,
       // has been torn down (see DokanDispatchCleanup).
       Status = STATUS_SUCCESS;
     } else if (RequestContext->IrpSp->MajorFunction == IRP_MJ_WRITE) {
-      PVOID eventContext =
-          RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
-      if (eventContext != NULL) {
-        DokanFreeEventContext(eventContext);
-        RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] =
-            NULL;
-      }
+      DokanFreeWriteEventContext(RequestContext->Irp);
     }
     RequestContext->Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(RequestContext->Irp, Status);

@@ -48,6 +48,7 @@ size_t g_DokanFcbAvlNodeSize = 0;
 BOOLEAN g_FixFileNameForReparseMountPoint;
 
 LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
+size_t g_DokanIrpEntrySize = 0;
 
 FAST_IO_DISPATCH FastIoDispatch;
 FAST_IO_CHECK_IF_POSSIBLE DokanFastIoCheckIfPossible;
@@ -376,12 +377,14 @@ Return Value:
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
+  g_DokanIrpEntrySize = DOKAN_IRP_ENTRY_WORKITEM_OFFSET + IoSizeofWorkItem();
+
   struct {
     PLOOKASIDE_LIST_EX List;
     size_t ElementSize;
     PCSTR Name;
   } lookasideLists[] = {
-      {&DokanIrpEntryLookasideList, sizeof(IRP_ENTRY),
+      {&DokanIrpEntryLookasideList, g_DokanIrpEntrySize,
        "DokanIrpEntryLookasideList"},
       {&g_DokanCCBLookasideList, sizeof(DokanCCB), "g_DokanCCBLookasideList"},
       {&g_DokanFCBLookasideList, sizeof(DokanFCB), "g_DokanFCBLookasideList"},

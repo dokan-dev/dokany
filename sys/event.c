@@ -29,26 +29,98 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #pragma alloc_text(PAGE, DokanOplockComplete)
 #endif
 
+static __inline PIO_WORKITEM
+DokanGetIrpEntryWorkItem(__in PIRP_ENTRY IrpEntry) {
+  return (PIO_WORKITEM)((PUCHAR)IrpEntry + DOKAN_IRP_ENTRY_WORKITEM_OFFSET);
+}
+
+static IO_WORKITEM_ROUTINE DokanCancelIrpWorkItemRoutine;
+static VOID DokanCancelIrpWorkItemRoutine(_In_ PDEVICE_OBJECT DeviceObject,
+                                          _In_opt_ PVOID Context) {
+  UNREFERENCED_PARAMETER(DeviceObject);
+  if (Context == NULL) {
+    return;
+  }
+  PIRP_ENTRY irpEntry = (PIRP_ENTRY)Context;
+  REQUEST_CONTEXT requestContext = irpEntry->RequestContext;
+  NTSTATUS cancelStatus = irpEntry->AsyncStatus;
+
+  IoUninitializeWorkItem(DokanGetIrpEntryWorkItem(irpEntry));
+  DokanFreeIrpEntry(irpEntry);
+
+  FsRtlEnterFileSystem();
+  DokanCancelPendingIrp(&requestContext, cancelStatus);
+  FsRtlExitFileSystem();
+}
+
+static VOID DokanQueueCancelIrpWorkItem(_In_ PDEVICE_OBJECT DeviceObject,
+                                        _In_ PIRP_ENTRY IrpEntry,
+                                        _In_ NTSTATUS Status) {
+  PIO_WORKITEM workItem = DokanGetIrpEntryWorkItem(IrpEntry);
+  IrpEntry->AsyncStatus = Status;
+  IoInitializeWorkItem(DeviceObject, workItem);
+  IoQueueWorkItem(workItem, DokanCancelIrpWorkItemRoutine, DelayedWorkQueue,
+                  IrpEntry);
+}
+
+BOOLEAN DokanPopIrpEntryLocked(__in PIRP_ENTRY IrpEntry) {
+  PIRP irp = IrpEntry->RequestContext.Irp;
+  RemoveEntryList(&IrpEntry->ListEntry);
+  InitializeListHead(&IrpEntry->ListEntry);
+  if (irp == NULL) {
+    DokanFreeIrpEntry(IrpEntry);
+    return FALSE;
+  }
+  if (IoSetCancelRoutine(irp, NULL) == NULL) {
+    // Cancel routine has already been invoked and will unlink (idempotently),
+    // complete the IRP, and free IrpEntry once it acquires ListLock.
+    return FALSE;
+  }
+  irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+  return TRUE;
+}
+
 VOID DokanCreateIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
                                  _Inout_ _IRQL_uses_cancel_ PIRP Irp) {
-  // Cancellation of a Create is handled like a timeout. The whole effect of
-  // this routine is just to set the IRP entry's tick count so as to trigger a
-  // timeout, and then force the timeout thread to wake up. This simplifies the
-  // complex cleanup that needs to be done and can't be done on the unknown
-  // context where the cancel routine runs. For other types of IRPs, the cancel
-  // routine actually does cancelation/cleanup.
+  // Serialize with PendingIrp/PendingRetryIrp pop routines via IrpList->ListLock
+  // so ownership of both Irp and irpEntry is unambiguous, then defer
+  // DokanCancelCreateIrp to a PASSIVE_LEVEL system worker item.
+  KIRQL oldIrql;
+  PIRP_ENTRY irpEntry;
+
   IoReleaseCancelSpinLock(Irp->CancelIrql);
-  PIRP_ENTRY irpEntry =
-      Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY];
-  if (irpEntry != NULL) {
-    Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
-    InterlockedAnd64(&irpEntry->TickCount.QuadPart, 0);
-    irpEntry->AsyncStatus = STATUS_CANCELLED;
-    irpEntry->RequestContext.ForcedCanceled = TRUE;
-    PDokanVCB vcb = DeviceObject->DeviceExtension;
-    PDokanDCB dcb = vcb->Dcb;
-    KeSetEvent(&dcb->ForceTimeoutEvent, 0, FALSE);
+
+  irpEntry = Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY];
+  if (irpEntry == NULL) {
+    Irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(Irp, STATUS_CANCELLED);
+    return;
   }
+
+  PKSPIN_LOCK lock = &irpEntry->IrpList->ListLock;
+  ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+  KeAcquireSpinLock(lock, &oldIrql);
+
+  RemoveEntryList(&irpEntry->ListEntry);
+  InitializeListHead(&irpEntry->ListEntry);
+  if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
+    KeClearEvent(&irpEntry->IrpList->NotEmpty);
+  }
+
+  Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+  Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+
+  KeReleaseSpinLock(lock, oldIrql);
+
+  PFILE_OBJECT fileObject = irpEntry->RequestContext.IrpSp->FileObject;
+  if (fileObject != NULL && fileObject->FsContext2 != NULL) {
+    PDokanCCB ccb = (PDokanCCB)fileObject->FsContext2;
+    if (GetIdentifierType(ccb) == CCB && ccb->Fcb != NULL) {
+      OplockDebugRecordFlag(ccb->Fcb, DOKAN_OPLOCK_DEBUG_CANCELED_CREATE);
+    }
+  }
+
+  DokanQueueCancelIrpWorkItem(DeviceObject, irpEntry, STATUS_CANCELLED);
 }
 
 // Only used for non-Create IRPs.
@@ -56,7 +128,6 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
                            _Inout_ _IRQL_uses_cancel_ PIRP Irp) {
   KIRQL oldIrql;
   PIRP_ENTRY irpEntry;
-  ULONG serialNumber = 0;
   REQUEST_CONTEXT requestContext;
   NTSTATUS status;
   BOOLEAN needExecuteCleanup = FALSE;
@@ -83,8 +154,6 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
 
     DOKAN_LOG_FINE_IRP((&requestContext), "Start cancel");
 
-    serialNumber = irpEntry->SerialNumber;
-
     RemoveEntryList(&irpEntry->ListEntry);
     InitializeListHead(&irpEntry->ListEntry);
 
@@ -94,15 +163,10 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
                                         requestContext.IrpSp->MinorFunction),
                requestContext.IrpSp->FileObject);
 
-    // If Write is canceld before completion and buffer that saves writing
+    // If Write is canceled before completion and buffer that saves writing
     // content is not freed, free it here
     if (requestContext.IrpSp->MajorFunction == IRP_MJ_WRITE) {
-      PVOID eventContext =
-          Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
-      if (eventContext != NULL) {
-        DokanFreeEventContext(eventContext);
-      }
-      Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = NULL;
+      DokanFreeWriteEventContext(Irp);
     } else if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
       // Cannot call DokanExecuteCleanup here because it requires PASSIVE_LEVEL
       // (it acquires ERESOURCE locks). Mark for execution after spinlock release.
@@ -113,19 +177,18 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
       KeClearEvent(&irpEntry->IrpList->NotEmpty);
     }
 
-    irpEntry->RequestContext.Irp = NULL;
-
-    if (irpEntry->CancelRoutineFreeMemory == FALSE) {
-      InitializeListHead(&irpEntry->ListEntry);
-    } else {
-      DokanFreeIrpEntry(irpEntry);
-      irpEntry = NULL;
-    }
-
     Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
 
     KeReleaseSpinLock(lock, oldIrql);
     DOKAN_LOG_FINE_IRP((&requestContext), "Canceled");
+
+    if (needExecuteCleanup && KeGetCurrentIrql() > PASSIVE_LEVEL) {
+      irpEntry->RequestContext.IsTopLevelIrp = FALSE;
+      DokanQueueCancelIrpWorkItem(DeviceObject, irpEntry, STATUS_SUCCESS);
+      return;
+    }
+
+    DokanFreeIrpEntry(irpEntry);
 
     // Execute cleanup at PASSIVE_LEVEL after releasing spinlock
     if (needExecuteCleanup) {
@@ -204,8 +267,7 @@ VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
 NTSTATUS
 RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
                        __in_opt PEVENT_CONTEXT EventContext,
-                       __in PIRP_LIST IrpList, __in ULONG CheckMount,
-                       __in NTSTATUS CurrentStatus) {
+                       __in PIRP_LIST IrpList, __in ULONG CheckMount) {
   PIRP_ENTRY irpEntry;
   KIRQL oldIrql;
 
@@ -230,13 +292,15 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   irpEntry->SerialNumber = 0;
   irpEntry->RequestContext = *RequestContext;
   irpEntry->IrpList = IrpList;
-  irpEntry->AsyncStatus = CurrentStatus;
+  irpEntry->AsyncStatus = STATUS_SUCCESS;
 
   // Update the irp timeout for the entry
   if (RequestContext->Vcb) {
-    ExAcquireResourceExclusiveLite(&RequestContext->Dcb->Resource, TRUE);
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(&RequestContext->Dcb->Resource, TRUE);
     DokanUpdateTimeout(&irpEntry->TickCount, RequestContext->Dcb->IrpTimeout);
     ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+    KeLeaveCriticalRegion();
   } else {
     DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
   }
@@ -265,7 +329,6 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   // cancel routine, to ensure that if the cancel routine fires immediately, it has
   // valid pointers to work with (e.g., irpEntry).
   IoMarkIrpPending(RequestContext->Irp);
-  irpEntry->CancelRoutineFreeMemory = FALSE;
   RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] =
       irpEntry;
 
@@ -330,8 +393,7 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
   } else {
     status = RegisterPendingIrpMain(RequestContext, EventContext,
                                     &RequestContext->Dcb->PendingIrp,
-                                    /*CheckMount=*/TRUE,
-                                    /*CurrentStatus=*/STATUS_SUCCESS);
+                                    /*CheckMount=*/TRUE);
   }
 
   if (status == STATUS_PENDING) {
@@ -358,10 +420,26 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext) {
     DokanCCBFlagsSetBit(ccb, DOKAN_RETRY_CREATE);
     OplockDebugRecordFlag(ccb->Fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRY_QUEUED);
   }
-  RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
-                         &RequestContext->Dcb->PendingRetryIrp,
-                         /*CheckMount=*/TRUE,
-                         /*CurrentStatus=*/STATUS_SUCCESS);
+  NTSTATUS status = RegisterPendingIrpMain(
+      RequestContext, /*EventContext=*/NULL,
+      &RequestContext->Dcb->PendingRetryIrp, /*CheckMount=*/TRUE);
+  if (status != STATUS_PENDING) {
+    // The IRP was already marked pending by DokanPrePostIrp during the oplock
+    // break, so we must complete/unwind it if registration failed (e.g. due to
+    // concurrent unmount or cancellation).
+    PIRP_ENTRY irpEntry = DokanAllocateIrpEntry();
+    if (irpEntry != NULL) {
+      RtlZeroMemory(irpEntry, sizeof(IRP_ENTRY));
+      irpEntry->RequestContext = *RequestContext;
+      DokanQueueCancelIrpWorkItem(RequestContext->DeviceObject, irpEntry,
+                                  status);
+    } else if (KeGetCurrentIrql() <= APC_LEVEL) {
+      DokanCancelPendingIrp(RequestContext, status);
+    } else {
+      RequestContext->Irp->IoStatus.Information = 0;
+      DokanCompleteIrpRequest(RequestContext->Irp, status);
+    }
+  }
 }
 
 VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
@@ -369,10 +447,19 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
   if (!RequestContext->Vcb) {
     return;
   }
-  RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
-                         &RequestContext->Dcb->PendingIrp,
-                         /*CheckMount=*/TRUE, /*CurrentStatus=*/Status);
-  KeSetEvent(&RequestContext->Dcb->ForceTimeoutEvent, 0, FALSE);
+  PIRP_ENTRY irpEntry = DokanAllocateIrpEntry();
+  if (irpEntry != NULL) {
+    RtlZeroMemory(irpEntry, sizeof(IRP_ENTRY));
+    irpEntry->RequestContext = *RequestContext;
+    DokanQueueCancelIrpWorkItem(RequestContext->DeviceObject, irpEntry, Status);
+    return;
+  }
+  if (KeGetCurrentIrql() <= APC_LEVEL) {
+    DokanCancelCreateIrp(RequestContext, Status);
+  } else {
+    RequestContext->Irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(RequestContext->Irp, Status);
+  }
 }
 
 void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
@@ -461,7 +548,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   PLIST_ENTRY thisEntry, nextEntry, listHead;
   PIRP_ENTRY irpEntry;
   LIST_ENTRY completeList;
-  LIST_ENTRY forceCancelList;
   ULONG offset = 0;
   ULONG eventInfoSize = 0;
   ULONG lastSerialNumber = 0;
@@ -486,7 +572,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   ASSERT(buffer != NULL);
 
   InitializeListHead(&completeList);
-  InitializeListHead(&forceCancelList);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
   KeAcquireSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, &oldIrql);
@@ -510,35 +595,13 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
     if (irpEntry->SerialNumber != eventInfo->SerialNumber) {
       continue;
     }
-    RemoveEntryList(thisEntry);
-    if (irpEntry->RequestContext.Irp == NULL) {
-      // This IRP is already canceled; just discard it.
-      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
-      DokanFreeIrpEntry(irpEntry);
-    } else if (irpEntry->RequestContext.ForcedCanceled) {
-      // DokanCreateIrpCancelRoutine already ran and set ForcedCanceled,
-      // expecting the timeout thread to call DokanCancelCreateIrp. We have
-      // removed the entry from PendingIrp.ListHead above, so the timeout
-      // thread can no longer find it. We must call DokanCancelCreateIrp here
-      // instead. The cancel routine already cleared IoSetCancelRoutine, so we
-      // only need to clear DRIVER_CONTEXT_IRP_ENTRY and queue the entry.
-      irpEntry->RequestContext.Irp->Tail.Overlay
-          .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
-      InsertTailList(&forceCancelList, thisEntry);
-    } else if (IoSetCancelRoutine(irpEntry->RequestContext.Irp, NULL) == NULL) {
-      // Cancellation is already in progress, and the cancel routine will run as
-      // soon as we release the lock.
-      InitializeListHead(&irpEntry->ListEntry);
-      irpEntry->CancelRoutineFreeMemory = TRUE;
-    } else {
-      // IrpEntry is saved here for CancelRoutine
-      // Clear it to prevent to be completed by CancelRoutine twice
-      irpEntry->RequestContext.Irp->Tail.Overlay
-          .DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+    UCHAR majorFunction = irpEntry->RequestContext.IrpSp->MajorFunction;
+    ULONG entryOffset = offset;
+    offset += GetEventInfoSize(majorFunction, eventInfo);
+    if (DokanPopIrpEntryLocked(irpEntry)) {
+      irpEntry->EventInfoOffset = entryOffset;
       InsertTailList(&completeList, thisEntry);
     }
-    offset += GetEventInfoSize(irpEntry->RequestContext.IrpSp->MajorFunction,
-                               eventInfo);
     // Everything through offset - 1 must be readable by the completion function
     // that receives the EVENT_INFORMATION object.
     if (offset > bufferLength) {
@@ -583,19 +646,6 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
   }
   KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
 
-  // Complete any Create IRPs that were ForcedCanceled before user-mode replied.
-  // The cancel routine set ForcedCanceled and expected the timeout thread to
-  // call DokanCancelCreateIrp, but we removed these entries from the list so
-  // the timeout thread cannot find them. Discard the user-mode reply and
-  // cancel each such IRP with STATUS_CANCELLED.
-  while (!IsListEmpty(&forceCancelList)) {
-    listHead = RemoveHeadList(&forceCancelList);
-    irpEntry = CONTAINING_RECORD(listHead, IRP_ENTRY, ListEntry);
-    DokanCancelCreateIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
-    DokanFreeIrpEntry(irpEntry);
-  }
-
-  offset = 0;
   eventInfo = NULL;
   if (IsListEmpty(&completeList)) {
     DokanLogInfo(&logger, L"Warning: no matching IRPs found for reply.");
@@ -610,16 +660,21 @@ DokanCompleteIrp(__in PREQUEST_CONTEXT RequestContext) {
       // complete every entry in completeList before returning.
       DokanCancelPendingIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
       result = STATUS_NO_SUCH_DEVICE;
-    } else if (offset >= bufferLength) {
+    } else if (irpEntry->EventInfoOffset + sizeof(EVENT_INFORMATION) >
+               bufferLength) {
       DokanLogInfo(&logger, L"Unexpected end of event info list.");
       DokanCancelPendingIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
     } else {
-      eventInfo = (PEVENT_INFORMATION)(buffer + offset);
+      eventInfo = (PEVENT_INFORMATION)(buffer + irpEntry->EventInfoOffset);
       eventInfoSize = GetEventInfoSize(
-          irpEntry->RequestContext.IrpSp->MajorFunction,
-                                       eventInfo);
-      DokanDispatchCompletion(RequestContext->DeviceObject, irpEntry, eventInfo);
-      offset += eventInfoSize;
+          irpEntry->RequestContext.IrpSp->MajorFunction, eventInfo);
+      if (eventInfoSize > bufferLength - irpEntry->EventInfoOffset) {
+        DokanLogInfo(&logger, L"Truncated EVENT_INFORMATION in reply batch.");
+        DokanCancelPendingIrp(&irpEntry->RequestContext, STATUS_CANCELLED);
+      } else {
+        DokanDispatchCompletion(RequestContext->DeviceObject, irpEntry,
+                                eventInfo);
+      }
     }
     DokanFreeIrpEntry(irpEntry);
     irpEntry = NULL;
@@ -1264,17 +1319,15 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
     writeIrp = irpEntry->RequestContext.Irp;
     if (writeIrp == NULL) {
       // this IRP has already been canceled
-      ASSERT(irpEntry->CancelRoutineFreeMemory == FALSE);
       RemoveEntryList(&irpEntry->ListEntry);
       DokanFreeIrpEntry(irpEntry);
       continue;
     }
 
-    if (IoSetCancelRoutine(writeIrp, DokanIrpCancelRoutine) == NULL) {
+    if (IoSetCancelRoutine(writeIrp, NULL) == NULL) {
       // Cancel routine will run as soon as we release the lock
       RemoveEntryList(&irpEntry->ListEntry);
       InitializeListHead(&irpEntry->ListEntry);
-      irpEntry->CancelRoutineFreeMemory = TRUE;
       continue;
     }
 
@@ -1316,7 +1369,22 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
     DokanFreeEventContext(eventContext);
     writeIrp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
 
+    BOOLEAN writeCanceled = FALSE;
+    IoSetCancelRoutine(writeIrp, DokanIrpCancelRoutine);
+    if (writeIrp->Cancel && IoSetCancelRoutine(writeIrp, NULL) != NULL) {
+      RemoveEntryList(&irpEntry->ListEntry);
+      InitializeListHead(&irpEntry->ListEntry);
+      writeIrp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+      writeCanceled = TRUE;
+    }
+
     KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
+
+    if (writeCanceled) {
+      DokanFreeIrpEntry(irpEntry);
+      writeIrp->IoStatus.Information = 0;
+      DokanCompleteIrpRequest(writeIrp, STATUS_CANCELLED);
+    }
 
     RequestContext->Irp->IoStatus.Status = status;
     RequestContext->Irp->IoStatus.Information = info;
