@@ -418,7 +418,7 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
 
       // Update the mount point on the DCB for the volume.
       if (dcb->MountPoint) {
-        DokanFree(dcb->MountPoint);
+        DokanFreeUnicodeString(dcb->MountPoint);
       }
       dcb->MountPoint = DokanAllocDuplicateString(&mountdevNameString);
       if (dcb->MountPoint == NULL) {

@@ -1263,13 +1263,19 @@ Return Value:
       DokanFree(relatedFileName);
     }
 
+    if (newFileSecurityDescriptor != NULL) {
+      SeDeassignSecurity(&newFileSecurityDescriptor);
+      newFileSecurityDescriptor = NULL;
+    }
+
+    // DokanRegisterPendingIrp consumes eventContext. Free it on any exit path
+    // where it was not handed off (including STATUS_PENDING from async oplock
+    // breaks, where NT_SUCCESS(status) is TRUE).
+    if (!eventContextConsumed && eventContext) {
+      DokanFreeEventContext(eventContext);
+    }
+
     if (!NT_SUCCESS(status)) {
-
-      // DokanRegisterPendingIrp consumes event context
-
-      if (!eventContextConsumed && eventContext) {
-        DokanFreeEventContext(eventContext);
-      }
       if (ccb) {
         DokanFreeCCB(RequestContext, ccb);
       }

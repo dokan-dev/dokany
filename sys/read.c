@@ -231,6 +231,7 @@ Return Value:
       //
       // FsRtlCheckLockForReadAccess does not block.
       if (!FsRtlCheckLockForReadAccess(&fcb->FileLock, RequestContext->Irp)) {
+        DokanFreeEventContext(eventContext);
         status = STATUS_FILE_LOCK_CONFLICT;
         __leave;
       }

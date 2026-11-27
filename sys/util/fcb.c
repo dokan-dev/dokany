@@ -55,6 +55,7 @@ VOID DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
   Fcb->AdvancedFCBHeader.FileSize.QuadPart = 4096;
 
   Fcb->AdvancedFCBHeader.IsFastIoPossible = FastIoIsNotPossible;
+  FsRtlInitializeFileLock(&Fcb->FileLock, NULL, NULL);
   FsRtlInitializeOplock(DokanGetFcbOplock(Fcb));
 
   InitializeListHead(&Fcb->NextCCB);
@@ -223,6 +224,7 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
   Fcb->FileName.Length = 0;
   Fcb->FileName.MaximumLength = 0;
 
+  FsRtlUninitializeFileLock(&Fcb->FileLock);
   FsRtlUninitializeOplock(DokanGetFcbOplock(Fcb));
 
   FsRtlTeardownPerStreamContexts(&Fcb->AdvancedFCBHeader);

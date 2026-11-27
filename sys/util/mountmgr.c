@@ -52,6 +52,7 @@ DokanSendIoContlToMountManager(__in ULONG IoControlCode,
                                       OutputLength, FALSE, &driverEvent, &iosb);
 
   if (irp == NULL) {
+    ObDereferenceObject(mountFileObject);
     DOKAN_LOG("IoBuildDeviceIoControlRequest failed");
     return STATUS_INSUFFICIENT_RESOURCES;
   }

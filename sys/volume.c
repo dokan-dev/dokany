@@ -270,25 +270,31 @@ VOID DokanCompleteQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext,
   ASSERT(buffer != NULL);
 
   if (RequestContext->IrpSp->Parameters.QueryVolume.FsInformationClass ==
-          FileFsVolumeInformation &&
-      RequestContext->Dcb->VolumeLabel != NULL) {
-    PFILE_FS_VOLUME_INFORMATION volumeInfo =
-        (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
+      FileFsVolumeInformation) {
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(&RequestContext->Dcb->Resource, TRUE);
+    if (RequestContext->Dcb->VolumeLabel != NULL) {
+      PFILE_FS_VOLUME_INFORMATION volumeInfo =
+          (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
 
-    ULONG remainingLength = bufferLen;
-    remainingLength -= FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
-    ULONG bytesToCopy =
-        (ULONG)wcslen(RequestContext->Dcb->VolumeLabel) * sizeof(WCHAR);
-    if (remainingLength < bytesToCopy) {
-      bytesToCopy = remainingLength;
+      ULONG remainingLength = bufferLen;
+      remainingLength -=
+          FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG bytesToCopy =
+          (ULONG)wcslen(RequestContext->Dcb->VolumeLabel) * sizeof(WCHAR);
+      if (remainingLength < bytesToCopy) {
+        bytesToCopy = remainingLength;
+      }
+
+      volumeInfo->VolumeLabelLength = bytesToCopy;
+      RtlCopyMemory(volumeInfo->VolumeLabel, RequestContext->Dcb->VolumeLabel,
+                    bytesToCopy);
+      remainingLength -= bytesToCopy;
+
+      EventInfo->BufferLength = bufferLen - remainingLength;
     }
-
-    volumeInfo->VolumeLabelLength = bytesToCopy;
-    RtlCopyMemory(volumeInfo->VolumeLabel, RequestContext->Dcb->VolumeLabel,
-                  bytesToCopy);
-    remainingLength -= bytesToCopy;
-
-    EventInfo->BufferLength = bufferLen - remainingLength;
+    ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+    KeLeaveCriticalRegion();
   }
 
   RtlZeroMemory(buffer, bufferLen);
@@ -339,11 +345,10 @@ DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
         DokanFree(RequestContext->Dcb->VolumeLabel);
       }
       RequestContext->Dcb->VolumeLabel = newVolumeLabel;
-      ExReleaseResourceLite(&RequestContext->Dcb->Resource);
-      KeLeaveCriticalRegion();
-
       DOKAN_LOG_FINE_IRP(RequestContext, "Volume label changed to %ws",
                          RequestContext->Dcb->VolumeLabel);
+      ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+      KeLeaveCriticalRegion();
 
       return STATUS_SUCCESS;
     }

@@ -218,6 +218,9 @@ None.
   PAGED_CODE();
 
   if (Irp == NULL) {
+    if (Context != NULL) {
+      DokanFreeEventContext((PEVENT_CONTEXT)Context);
+    }
     DOKAN_LOG("NULL Irp received");
     return;
   }
@@ -227,6 +230,9 @@ None.
   NTSTATUS status = DokanBuildRequestContext(
       irpSp->DeviceObject, Irp, /*IsTopLevelIrp=*/FALSE, &requestContext);
   if (!NT_SUCCESS(status)) {
+    if (Context != NULL) {
+      DokanFreeEventContext((PEVENT_CONTEXT)Context);
+    }
     DOKAN_LOG_("Failed to build request context for IRP=%p Status=%s", Irp,
                DokanGetNTSTATUSStr(status));
     return;
@@ -241,8 +247,21 @@ None.
   //  Check on the return value in the Irp.
   //
   if (Irp->IoStatus.Status == STATUS_SUCCESS) {
-    DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
+    status = DokanRegisterPendingIrp(&requestContext, (PEVENT_CONTEXT)Context);
+    if (status != STATUS_PENDING) {
+      if (requestContext.IrpSp->MajorFunction == IRP_MJ_WRITE) {
+        DokanFreeWriteEventContext(Irp);
+      }
+      Irp->IoStatus.Information = 0;
+      DokanCompleteIrpRequest(Irp, status);
+    }
   } else {
+    if (Context != NULL) {
+      DokanFreeEventContext((PEVENT_CONTEXT)Context);
+    }
+    if (requestContext.IrpSp->MajorFunction == IRP_MJ_WRITE) {
+      DokanFreeWriteEventContext(Irp);
+    }
     Irp->IoStatus.Information = 0;
     DokanCompleteIrpRequest(Irp, Irp->IoStatus.Status);
   }

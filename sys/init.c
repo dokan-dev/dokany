@@ -54,6 +54,10 @@ static VOID FreeDcbNames(__in PDokanDCB Dcb) {
     DokanFreeUnicodeString(Dcb->PersistentSymbolicLinkName);
     Dcb->PersistentSymbolicLinkName = NULL;
   }
+  if (Dcb->VolumeLabel != NULL) {
+    DokanFree(Dcb->VolumeLabel);
+    Dcb->VolumeLabel = NULL;
+  }
 }
 
 VOID DokanInitIrpList(__in PIRP_LIST IrpList, __in BOOLEAN EventEnabled) {
