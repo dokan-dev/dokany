@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Runs inside the CI test VM: installs Dokan, checks Driver Verifier, and runs one test shard.
 
@@ -28,10 +28,281 @@ param(
     [switch]$SimulateHang,
     # Internal parameters used when relaunched inside interactive Session 1.
     [switch]$InSession1,
+    [string]$PidFile = '',
     [string]$ExitFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Write-AtomicAsciiFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+    $tmp = "$Path.tmp"
+    [System.IO.File]::WriteAllText($tmp, $Value, [System.Text.Encoding]::ASCII)
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+}
+
+function Read-GuestLogChunk {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ref]$ByteOffset,
+        [scriptblock]$Writer = { param([string]$Text) [Console]::Write($Text) }
+    )
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    $share = [System.IO.FileShare]([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+    $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+    try {
+        if ($fs.Length -le $ByteOffset.Value) { return }
+        $fs.Seek($ByteOffset.Value, [System.IO.SeekOrigin]::Begin) | Out-Null
+        $sr = New-Object System.IO.StreamReader($fs)
+        $text = $sr.ReadToEnd()
+        $ByteOffset.Value = $fs.Position
+        if ($text.Length -gt 0) {
+            & $Writer $text
+        }
+    } finally {
+        $fs.Close()
+    }
+}
+
+function Open-GuestSession1Process {
+    param(
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$ExpectedProcessName,
+        [Parameter(Mandatory = $true)][scriptblock]$GetProcessById
+    )
+    try {
+        $proc = & $GetProcessById $ProcessId
+    } catch [System.ArgumentException] {
+        return @{ Process = $null; Reason = 'ProcessExited'; ExitCode = $null; Warning = '' }
+    }
+    if ($null -eq $proc) {
+        return @{ Process = $null; Reason = 'ProcessExited'; ExitCode = $null; Warning = '' }
+    }
+
+    $attached = $false
+    try {
+        # Reading HasExited opens and retains the native OS process handle before checking
+        # ProcessName, preventing PID reuse while the handle is held.
+        if ([bool]$proc.HasExited) {
+            $code = try { $proc.ExitCode } catch { $null }
+            return @{ Process = $null; Reason = 'ProcessExited'; ExitCode = $code; Warning = '' }
+        }
+        $procName = try { [string]$proc.ProcessName } catch { '' }
+        if ([string]::IsNullOrEmpty($procName) -and [bool]$proc.HasExited) {
+            $code = try { $proc.ExitCode } catch { $null }
+            return @{ Process = $null; Reason = 'ProcessExited'; ExitCode = $code; Warning = '' }
+        }
+        if (-not [string]::IsNullOrEmpty($ExpectedProcessName) -and $procName -ine $ExpectedProcessName) {
+            return @{
+                Process  = $null
+                Reason   = 'PidReused'
+                ExitCode = $null
+                Warning  = "Session 1 PID $ProcessId belongs to '$procName' instead of '$ExpectedProcessName'; treating original process as exited."
+            }
+        }
+        $attached = $true
+        return @{ Process = $proc; Reason = 'Attached'; ExitCode = $null; Warning = '' }
+    } finally {
+        if (-not $attached) {
+            try {
+                $proc.Dispose()
+            } catch {
+                Write-Verbose "Ignoring Session 1 process handle dispose error: $($_.Exception.Message)"
+            }
+        }
+    }
+}
+
+function Wait-GuestSession1Task {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)][string]$TaskName,
+        [Parameter(Mandatory = $true)][string]$LogPath,
+        [Parameter(Mandatory = $true)][string]$PidPath,
+        [Parameter(Mandatory = $true)][string]$ExitPath,
+        [int]$StartTimeoutSeconds = 60,
+        [int]$ExitGraceSeconds = 15,
+        [int]$PollIntervalMs = 400,
+        [int]$TaskPollIntervalMs = 2000,
+        [int]$FinalDrainMs = 200,
+        [string]$ExpectedProcessName = 'powershell',
+        [scriptblock]$GetTaskState = { param($Name) (Get-ScheduledTask -TaskName $Name).State.ToString() },
+        [scriptblock]$GetTaskInfo = { param($Name) Get-ScheduledTaskInfo -TaskName $Name -ErrorAction SilentlyContinue },
+        [scriptblock]$GetProcessById = { param($Id) [System.Diagnostics.Process]::GetProcessById($Id) },
+        [scriptblock]$LogWriter = { param([string]$Text) [Console]::Write($Text) }
+    )
+
+    $offset = [int64]0
+    $taskPollErrors = 0
+    $childPid = $null
+    $childProc = $null
+    $childProcExitCode = $null
+    $childExited = $false
+    $hasExit = $false
+    $exitReason = ''
+
+    try {
+        # Phase 1: Startup window — wait until Session 1 writes its PID (or exit) file.
+        # Poll Get-ScheduledTask slowly inside try/catch so transient WMI/CIM errors (e.g., 0x80070002)
+        # warn and retry instead of aborting. Always enforce StartTimeoutSeconds until a handoff file appears.
+        $sawTaskRunning = $false
+        $lastTaskState = '<unknown>'
+        $lastTaskError = ''
+        $startDeadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
+        $nextTaskPoll = Get-Date
+
+        while ($true) {
+            Read-GuestLogChunk -Path $LogPath -ByteOffset ([ref]$offset) -Writer $LogWriter
+
+            if (Test-Path -LiteralPath $PidPath -PathType Leaf) {
+                $rawPid = Get-Content -LiteralPath $PidPath -Raw -ErrorAction SilentlyContinue
+                if ($null -ne $rawPid -and $rawPid.Trim() -match '^\d+$') {
+                    $childPid = [int]$rawPid.Trim()
+                    break
+                }
+            }
+            if (Test-Path -LiteralPath $ExitPath -PathType Leaf) {
+                $childExited = $true
+                $exitReason = 'ExitFile'
+                break
+            }
+
+            $now = Get-Date
+            if ($now -ge $nextTaskPoll) {
+                $nextTaskPoll = $now.AddMilliseconds($TaskPollIntervalMs)
+                try {
+                    $state = & $GetTaskState $TaskName
+                    if (-not [string]::IsNullOrWhiteSpace($state)) {
+                        $lastTaskState = $state
+                        if ($state -eq 'Running') { $sawTaskRunning = $true }
+                    }
+                } catch {
+                    $taskPollErrors++
+                    $lastTaskError = $_.Exception.Message
+                    if ($taskPollErrors -eq 1 -or ($taskPollErrors % 5) -eq 0) {
+                        [Console]::Out.Flush()
+                        Write-Warning "Transient scheduled task query error #$taskPollErrors for '$TaskName': $lastTaskError"
+                    }
+                }
+            }
+
+            if ($sawTaskRunning -and $lastTaskState -ne 'Running' -and $lastTaskState -ne 'Queued') {
+                $childExited = $true
+                $exitReason = 'TaskExitedBeforePid'
+                break
+            }
+            if ($now -gt $startDeadline) {
+                $taskInfo = try { & $GetTaskInfo $TaskName } catch { $null }
+                $lastResult = if ($null -ne $taskInfo -and $null -ne $taskInfo.PSObject.Properties['LastTaskResult']) {
+                    $taskInfo.LastTaskResult
+                } else {
+                    '<unavailable>'
+                }
+                $errSuffix = if (-not [string]::IsNullOrEmpty($lastTaskError)) { ", LastCimError=$lastTaskError" } else { '' }
+                throw "Scheduled task '$TaskName' never started Session 1 within ${StartTimeoutSeconds}s (State=$lastTaskState, LastTaskResult=$lastResult$errSuffix)."
+            }
+
+            Start-Sleep -Milliseconds $PollIntervalMs
+        }
+
+        # Phase 2: Direct OS process monitoring — zero WMI/CIM calls for the rest of the shard.
+        if ($null -ne $childPid) {
+            $attach = Open-GuestSession1Process `
+                -ProcessId $childPid `
+                -ExpectedProcessName $ExpectedProcessName `
+                -GetProcessById $GetProcessById
+            $childProc = $attach.Process
+            if (-not [string]::IsNullOrEmpty($attach.Warning)) {
+                [Console]::Out.Flush()
+                Write-Warning $attach.Warning
+            }
+
+            if ($null -eq $childProc) {
+                $childExited = $true
+                $exitReason = $attach.Reason
+                $childProcExitCode = $attach.ExitCode
+            } else {
+                $exitFileSeenAt = $null
+                while ($true) {
+                    Read-GuestLogChunk -Path $LogPath -ByteOffset ([ref]$offset) -Writer $LogWriter
+                    $hasExit = Test-Path -LiteralPath $ExitPath -PathType Leaf
+                    if ($hasExit -and $null -eq $exitFileSeenAt) {
+                        $exitFileSeenAt = Get-Date
+                    }
+                    if ([bool]$childProc.HasExited) {
+                        $childExited = $true
+                        $exitReason = 'ProcessExited'
+                        break
+                    }
+                    if ($hasExit -and ((Get-Date) - $exitFileSeenAt).TotalSeconds -ge $ExitGraceSeconds) {
+                        [Console]::Out.Flush()
+                        Write-Warning "Session 1 wrote $ExitPath but PID $childPid did not exit within ${ExitGraceSeconds}s; proceeding."
+                        $exitReason = 'ExitFileGraceTimeout'
+                        break
+                    }
+                    Start-Sleep -Milliseconds $PollIntervalMs
+                }
+            }
+        }
+
+        # Final log drain and exit-file reconciliation.
+        Read-GuestLogChunk -Path $LogPath -ByteOffset ([ref]$offset) -Writer $LogWriter
+        if ($FinalDrainMs -gt 0) {
+            Start-Sleep -Milliseconds $FinalDrainMs
+            Read-GuestLogChunk -Path $LogPath -ByteOffset ([ref]$offset) -Writer $LogWriter
+        }
+
+        $hasExit = Test-Path -LiteralPath $ExitPath -PathType Leaf
+        if ($hasExit) {
+            if ($exitReason -ne 'ExitFileGraceTimeout') {
+                $exitReason = 'ExitFile'
+            }
+        } elseif ($exitReason -eq 'ProcessExited') {
+            $exitReason = 'ProcessExitedWithoutExitFile'
+            $procExitCode = if ($null -ne $childProc) {
+                try { $childProc.ExitCode } catch { $null }
+            } else {
+                $childProcExitCode
+            }
+            $codeDesc = if ($null -ne $procExitCode) {
+                $u32 = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$procExitCode), 0)
+                "$procExitCode (0x{0:X8})" -f $u32
+            } else {
+                '<unknown>'
+            }
+            [Console]::Out.Flush()
+            Write-Warning "Session 1 process (PID $childPid) exited with code $codeDesc without writing $ExitPath."
+        }
+    } finally {
+        if ($null -ne $childProc) {
+            try {
+                $childProc.Dispose()
+            } catch {
+                Write-Verbose "Ignoring Session 1 process handle dispose error: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $childExit = 1
+    if ($hasExit) {
+        $rawExit = Get-Content -LiteralPath $ExitPath -Raw -ErrorAction SilentlyContinue
+        if ($null -ne $rawExit -and $rawExit.Trim() -match '^-?\d+$') {
+            $childExit = [int]$rawExit.Trim()
+        }
+    }
+    return @{
+        ExitCode       = $childExit
+        ChildPid       = $childPid
+        ChildExited    = $childExited
+        SawExitFile    = $hasExit
+        ExitReason     = $exitReason
+        TaskPollErrors = $taskPollErrors
+    }
+}
 
 # Win32-OpenSSH runs in Session 0 (non-interactive service WindowStation), where IFSTest's
 # CreateProcessWithLogonW tests (SetOwnerSecurityTest, DirectoryTraverseTest) fail with
@@ -59,12 +330,25 @@ if (-not $InSession1 -and (Get-Process -Id $PID).SessionId -eq 0) {
     $consoleUser = "$env:COMPUTERNAME\Administrator"
     Write-Host "=== Trampolining from Session 0 into interactive Session 1 as $consoleUser ===" -ForegroundColor Cyan
 
+    # TaskScheduler/Operational is disabled by default on Windows Server; enable it best-effort
+    # so failure diagnostics capture task lifecycle events without modifying baked VM images.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & wevtutil.exe sl 'Microsoft-Windows-TaskScheduler/Operational' /e:true 2>&1 | Out-Null
+    } catch {
+        Write-Verbose "Skipping TaskScheduler/Operational enablement: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+
     $taskName = 'DokanCITests'
     $logPath = 'C:\ci\guest_tests.log'
+    $pidPath = 'C:\ci\guest_tests.pid'
     $exitPath = 'C:\ci\guest_tests.exit'
-    Remove-Item -LiteralPath $logPath, $exitPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $logPath, $pidPath, "$pidPath.tmp", $exitPath, "$exitPath.tmp" -Force -ErrorAction SilentlyContinue
 
-    $psArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -InSession1 -Shard $Shard -ExitFile `"$exitPath`""
+    $psArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -InSession1 -Shard $Shard -PidFile `"$pidPath`" -ExitFile `"$exitPath`""
     if ($SimulateBugCheck) { $psArgs += ' -SimulateBugCheck' }
     if ($SimulateHang) { $psArgs += ' -SimulateHang' }
 
@@ -73,67 +357,32 @@ if (-not $InSession1 -and (Get-Process -Id $PID).SessionId -eq 0) {
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
 
-    $offset = [int64]0
-    function Read-GuestLogChunk {
-        param([string]$Path, [ref]$ByteOffset)
-        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
-        $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        try {
-            if ($fs.Length -le $ByteOffset.Value) { return }
-            $fs.Seek($ByteOffset.Value, [System.IO.SeekOrigin]::Begin) | Out-Null
-            $sr = New-Object System.IO.StreamReader($fs)
-            $text = $sr.ReadToEnd()
-            $ByteOffset.Value = $fs.Position
-            if ($text.Length -gt 0) {
-                [Console]::Write($text)
-            }
-        } finally {
-            $fs.Close()
-        }
-    }
-
+    $childExited = $false
+    $waitResult = $null
     try {
         Start-ScheduledTask -TaskName $taskName
-        $sawRunning = $false
-        $startDeadline = (Get-Date).AddSeconds(60)
-        while ($true) {
-            Read-GuestLogChunk -Path $logPath -ByteOffset ([ref]$offset)
-            $taskState = (Get-ScheduledTask -TaskName $taskName).State
-            $hasExit = Test-Path -LiteralPath $exitPath -PathType Leaf
-            if ($taskState -eq 'Running') {
-                $sawRunning = $true
-            }
-            if ($hasExit -and $taskState -ne 'Running') {
-                break
-            }
-            if ($sawRunning -and $taskState -ne 'Running' -and $taskState -ne 'Queued') {
-                Start-Sleep -Seconds 1
-                Read-GuestLogChunk -Path $logPath -ByteOffset ([ref]$offset)
-                break
-            }
-            if (-not $sawRunning -and -not $hasExit -and (Get-Date) -gt $startDeadline) {
-                $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
-                throw "Scheduled task '$taskName' never entered Running state within 60s (State=$taskState, LastTaskResult=$($taskInfo.LastTaskResult))."
-            }
-            Start-Sleep -Milliseconds 400
-        }
-        Read-GuestLogChunk -Path $logPath -ByteOffset ([ref]$offset)
+        $waitResult = Wait-GuestSession1Task `
+            -TaskName $taskName `
+            -LogPath $logPath `
+            -PidPath $pidPath `
+            -ExitPath $exitPath
+        $childExited = $waitResult.ChildExited
     } finally {
+        if (-not $childExited) {
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        }
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     }
 
-    $childExit = 1
-    if (Test-Path -LiteralPath $exitPath -PathType Leaf) {
-        $rawExit = (Get-Content -LiteralPath $exitPath -Raw).Trim()
-        if ($rawExit -match '^-?\d+$') {
-            $childExit = [int]$rawExit
-        }
+    if ($waitResult.ExitCode -ne 0 -or $waitResult.TaskPollErrors -gt 0) {
+        Write-Host "=== Session 1 trampoline summary: PID=$($waitResult.ChildPid), Reason=$($waitResult.ExitReason), Exit=$($waitResult.ExitCode), TaskPollErrors=$($waitResult.TaskPollErrors) ===" -ForegroundColor Yellow
     }
-    exit $childExit
+    exit $waitResult.ExitCode
 }
 
-. (Join-Path -Path $PSScriptRoot -ChildPath 'repo\scripts\build_helper.ps1')
-. (Join-Path -Path $PSScriptRoot -ChildPath 'verifier_helpers.ps1')
+if (-not [string]::IsNullOrWhiteSpace($PidFile)) {
+    Write-AtomicAsciiFile -Path $PidFile -Value "$PID"
+}
 
 function Assert-NoBugCheck {
     $bugChecks = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 1001; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting' } -ErrorAction SilentlyContinue
@@ -145,6 +394,8 @@ function Assert-NoBugCheck {
 
 $scriptExit = 1
 try {
+    . (Join-Path -Path $PSScriptRoot -ChildPath 'repo\scripts\build_helper.ps1')
+    . (Join-Path -Path $PSScriptRoot -ChildPath 'verifier_helpers.ps1')
     $os = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
     $sessionId = (Get-Process -Id $PID).SessionId
     Write-Host "=== $($os.ProductName), build $($os.CurrentBuildNumber).$($os.UBR), Session $sessionId, shard $Shard ===" -ForegroundColor Cyan
@@ -331,7 +582,7 @@ public static class TokenPrivileges {
     $scriptExit = 1
 } finally {
     if (-not [string]::IsNullOrWhiteSpace($ExitFile)) {
-        Set-Content -LiteralPath $ExitFile -Value $scriptExit -Encoding ASCII
+        Write-AtomicAsciiFile -Path $ExitFile -Value "$scriptExit"
     }
 }
 exit $scriptExit

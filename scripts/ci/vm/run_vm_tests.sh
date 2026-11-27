@@ -189,7 +189,7 @@ stage_guest_files() {
   if [[ -d "$PAYLOAD_DIR/fstest" ]]; then
     cp -r "$PAYLOAD_DIR/fstest" "$stage/"
   fi
-  cp "$SCRIPT_DIR/run_guest_tests.ps1" "$SCRIPT_DIR/provisioning/verifier_helpers.ps1" "$stage/"
+  cp "$SCRIPT_DIR/run_guest_tests.ps1" "$SCRIPT_DIR/collect_guest_diagnostics.ps1" "$SCRIPT_DIR/provisioning/verifier_helpers.ps1" "$stage/"
   cp "$REPO_ROOT/samples/memfs_test.ps1" "$REPO_ROOT/samples/mirror_test.ps1" "$stage/repo/samples/"
   cp "$REPO_ROOT/scripts/run_ifstest.ps1" "$REPO_ROOT/scripts/fstest_common.ps1" "$REPO_ROOT/scripts/build_helper.ps1" "$stage/repo/scripts/"
   guest_ssh 'Remove-Item -Recurse -Force C:\ci -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path C:\ci | Out-Null'
@@ -204,6 +204,19 @@ inject_nmi() {
 }
 
 DUMP_COLLECTED=false
+# Failure-only guest diagnostics (System/Application/TaskScheduler/WMI events, live test processes,
+# and trampoline files/task state). Runs collect_guest_diagnostics.ps1 staged into C:\ci\ so it
+# never slows passing runs or interferes with MEMORY.DMP collection or ALLOW_PATCHGUARD_0X109.
+collect_failure_diagnostics() {
+  local test_rc="$1" dump_rc="$2" diag_file="$RESULTS_DIR/guest_diagnostics.txt"
+  log "Collecting failure diagnostics -> $diag_file"
+  {
+    printf '=== Host Context ===\nHost UTC: %s\nShard: %s\nTest exit code: %s\nDump check rc: %s\nNMI injected: %s\nDump collected: %s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHARD" "$test_rc" "$dump_rc" "$NMI_INJECTED" "$DUMP_COLLECTED"
+    timeout 45 ssh "${SSH_OPTS[@]}" Administrator@127.0.0.1 '& C:\ci\collect_guest_diagnostics.ps1'
+  } > "$diag_file" 2>&1 || true
+}
+
 # Brings the guest back after a crash or hang if needed, then copies logs, scorecards and MEMORY.DMP.
 collect_results() {
   local test_rc="$1" prev_boot="$2" guest_up=false expect_crash=0
@@ -280,6 +293,10 @@ collect_results() {
     echo "ERROR: an NMI was injected but Windows wrote no MEMORY.DMP." >&2
   fi
 
+  if [[ "$SIMULATE" == "none" && ( $test_rc -ne 0 || $dump_rc -eq 42 ) ]]; then
+    collect_failure_diagnostics "$test_rc" "$dump_rc"
+  fi
+
   # Best-effort graceful shutdown with a 15s cap (overlay is throw-away and artifacts are already copied).
   guest_ssh 'Stop-Computer -Force' >/dev/null 2>&1 || true
   for _ in $(seq 1 15); do
@@ -318,7 +335,8 @@ while true; do
   boot_retries=0
   rm -rf "$RESULTS_DIR/fstest-results" "$RESULTS_DIR/MEMORY.DMP.7z" \
     "$RESULTS_DIR/no-ssh-screen.ppm" "$RESULTS_DIR/hang-screen.ppm" \
-    "$RESULTS_DIR/guest_tests.log" "$RESULTS_DIR"/dokan_install*.log
+    "$RESULTS_DIR/guest_tests.log" "$RESULTS_DIR/guest_diagnostics.txt" \
+    "$RESULTS_DIR"/dokan_install*.log
 
   log "Booting guest (shard=$SHARD, simulate=$SIMULATE, attempt=$attempt/$max_attempts)"
   t_boot_total=$(date +%s)
