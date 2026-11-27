@@ -259,6 +259,41 @@ VOID CheckAllocationUnitSectorSize(PDOKAN_OPTIONS DokanOptions) {
             DokanOptions->AllocationUnitSize, DokanOptions->SectorSize);
 }
 
+// Resolves the main pull-thread count from process affinity and determines
+// whether IPC event batching should be enabled without mutating DokanOptions.
+static DWORD ResolvePullThreadsAndIpcBatching(const DOKAN_OPTIONS *DokanOptions,
+                                              BOOL *OutAllowIpcBatching) {
+  DWORD_PTR processAffinityMask = 0;
+  DWORD_PTR systemAffinityMask = 0;
+  DWORD mainPullThreadCount = 0;
+  BOOL allowIpcBatching =
+      (DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) != 0;
+  if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask,
+                             &systemAffinityMask)) {
+    while (processAffinityMask) {
+      mainPullThreadCount += (DWORD)(processAffinityMask & 1);
+      processAffinityMask >>= 1;
+    }
+  } else {
+    DbgPrintW(L"Dokan Error: GetProcessAffinityMask failed with Error %lu\n",
+              GetLastError());
+  }
+  if (DokanOptions->SingleThread) {
+    mainPullThreadCount = 1; // Really not recommended
+    allowIpcBatching = FALSE;
+  } else if (mainPullThreadCount < DOKAN_MAIN_PULL_THREAD_COUNT_MIN) {
+    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MIN;
+  } else if (mainPullThreadCount > DOKAN_MAIN_PULL_THREAD_COUNT_MAX) {
+    // Thread pool will allocate more threads when pulling batched events
+    allowIpcBatching = TRUE;
+    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MAX;
+  }
+  if (OutAllowIpcBatching != NULL) {
+    *OutAllowIpcBatching = allowIpcBatching;
+  }
+  return mainPullThreadCount;
+}
+
 VOID SetupIOEventForProcessing(PDOKAN_IO_EVENT IoEvent) {
   // The event should not have a pending result from a previous request.
   assert(IoEvent->EventResult == NULL);
@@ -766,6 +801,14 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
              DokanOptions->UNCName);
   }
 
+  // Finalize pull-thread count and IPC batching setting before DokanStart so
+  // the kernel receives the same DOKAN_EVENT_ALLOW_IPC_BATCHING setting that
+  // userland uses when queueing pull callbacks, without mutating DokanOptions.
+  DWORD mainPullThreadCount = ResolvePullThreadsAndIpcBatching(
+      DokanOptions, &dokanInstance->AllowIpcBatching);
+  DbgPrintW(L"Dokan: Using %lu main pull threads with ipc batching: %d\n",
+            mainPullThreadCount, dokanInstance->AllowIpcBatching);
+
   int result = DokanStart(dokanInstance);
   if (result != DOKAN_SUCCESS) {
     DeleteDokanInstance(dokanInstance);
@@ -790,33 +833,6 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
     return DOKAN_DRIVER_INSTALL_ERROR;
   }
 
-  DWORD_PTR processAffinityMask;
-  DWORD_PTR systemAffinityMask;
-  DWORD mainPullThreadCount = 0;
-  if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinityMask,
-                             &systemAffinityMask)) {
-    while (processAffinityMask) {
-      mainPullThreadCount += 1;
-      processAffinityMask >>= 1;
-    }
-  } else {
-    DbgPrintW(L"Dokan Error: GetProcessAffinityMask failed with Error %d\n",
-              GetLastError());
-  }
-  if (DokanOptions->SingleThread) {
-    mainPullThreadCount = 1; // Really not recommanded
-    DokanOptions->Options &= ~DOKAN_OPTION_ALLOW_IPC_BATCHING;
-  } else if (mainPullThreadCount < DOKAN_MAIN_PULL_THREAD_COUNT_MIN) {
-    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MIN;
-  } else if (mainPullThreadCount > DOKAN_MAIN_PULL_THREAD_COUNT_MAX) {
-    // Thread pool will allocate more threads when pulling batched events
-    DokanOptions->Options |= DOKAN_OPTION_ALLOW_IPC_BATCHING;
-    mainPullThreadCount = DOKAN_MAIN_PULL_THREAD_COUNT_MAX;
-  }
-  BOOLEAN allowIpcBatching =
-      (DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) != 0;
-  DbgPrintW(L"Dokan: Using %d main pull threads with ipc batching: %d\n",
-            mainPullThreadCount, allowIpcBatching);
   for (DWORD x = 0; x < mainPullThreadCount; ++x) {
     PDOKAN_IO_EVENT ioEvent = PopIoEventBuffer();
     if (!ioEvent) {
@@ -825,7 +841,7 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
       return DOKAN_MOUNT_ERROR;
     }
     ioEvent->DokanInstance = dokanInstance;
-    QueueIoEvent(ioEvent, allowIpcBatching
+    QueueIoEvent(ioEvent, dokanInstance->AllowIpcBatching
                               ? DispatchBatchIoCallback
                               : DispatchDedicatedIoCallback);
   }
@@ -1131,7 +1147,7 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
       DOKAN_OPTION_DISPATCH_DRIVER_LOGS) {
     eventStart->Flags |= DOKAN_EVENT_DISPATCH_DRIVER_LOGS;
   }
-  if (DokanInstance->DokanOptions->Options & DOKAN_OPTION_ALLOW_IPC_BATCHING) {
+  if (DokanInstance->AllowIpcBatching) {
     eventStart->Flags |= DOKAN_EVENT_ALLOW_IPC_BATCHING;
   }
   if (driverLetter && mountManager &&
