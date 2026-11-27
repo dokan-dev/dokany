@@ -24,6 +24,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <dbt.h>
 #include <shlobj.h>
 #include <stdio.h>
+#include <strsafe.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4201)
@@ -410,6 +411,61 @@ BOOL DOKANAPI DokanNetworkProviderUninstall() {
   return TRUE;
 }
 
+static VOID FormatSystemErrorMessage(DWORD ErrorCode, LPWSTR Buffer,
+                                     DWORD BufferChars) {
+  if (Buffer == NULL || BufferChars == 0) {
+    return;
+  }
+  Buffer[0] = L'\0';
+  DWORD len =
+      FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                     NULL, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                     Buffer, BufferChars, NULL);
+  if (len == 0) {
+    (void)StringCchCopyW(Buffer, BufferChars, L"Unknown error");
+    return;
+  }
+  while (len > 0 && (Buffer[len - 1] == L'\r' || Buffer[len - 1] == L'\n' ||
+                     Buffer[len - 1] == L' ')) {
+    Buffer[--len] = L'\0';
+  }
+}
+
+static LPCWSTR GetMountPointErrorHint(DWORD ErrorCode) {
+  switch (ErrorCode) {
+  case ERROR_FILE_NOT_FOUND:
+  case ERROR_PATH_NOT_FOUND:
+    return L" (mount point directory does not exist)";
+  case ERROR_ACCESS_DENIED:
+    return L" (insufficient permissions for mount point directory)";
+  case ERROR_DIR_NOT_EMPTY:
+    return L" (mount point directory must be empty)";
+  case ERROR_INVALID_FUNCTION:
+  case ERROR_NOT_SUPPORTED:
+  case ERROR_DIRECTORY:
+    return L" (mount point must be an existing empty directory on an NTFS "
+           L"volume)";
+  case ERROR_SHARING_VIOLATION:
+    return L" (mount point directory is in use)";
+  default:
+    return L"";
+  }
+}
+
+static VOID LogMountPointError(LPCWSTR Operation, LPCWSTR MountPoint,
+                               LPCWSTR TargetDeviceName, DWORD ErrorCode) {
+  WCHAR errorMsg[256];
+  FormatSystemErrorMessage(ErrorCode, errorMsg, ARRAYSIZE(errorMsg));
+  LPCWSTR hint = GetMountPointErrorHint(ErrorCode);
+  if (TargetDeviceName != NULL) {
+    DokanDbgPrintW(L"Dokan Error: %s %s -> %s failed: (%lu) %s%s\n", Operation,
+                   MountPoint, TargetDeviceName, ErrorCode, errorMsg, hint);
+  } else {
+    DokanDbgPrintW(L"Dokan Error: %s %s failed: (%lu) %s%s\n", Operation,
+                   MountPoint, ErrorCode, errorMsg, hint);
+  }
+}
+
 BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
   HANDLE handle;
   PREPARSE_DATA_BUFFER reparseData;
@@ -418,7 +474,6 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
   BOOL result;
   ULONG resultLength;
   WCHAR targetDeviceName[MAX_PATH];
-  WCHAR errorMsg[256];
 
   ZeroMemory(targetDeviceName, sizeof(targetDeviceName));
   wcscat_s(targetDeviceName, MAX_PATH, L"\\??");
@@ -430,11 +485,8 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
                       NULL);
 
   if (handle == INVALID_HANDLE_VALUE) {
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
-                  NULL);
-    DbgPrintW(L"Use %s as mount point failed: (%d) %s", MountPoint,
-              GetLastError(), errorMsg);
+    DWORD lastError = GetLastError();
+    LogMountPointError(L"Use mount point", MountPoint, NULL, lastError);
     return FALSE;
   }
 
@@ -466,6 +518,7 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
 
   result = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, reparseData,
                            bufferLength, NULL, 0, &resultLength, NULL);
+  DWORD lastError = result ? ERROR_SUCCESS : GetLastError();
 
   CloseHandle(handle);
   free(reparseData);
@@ -474,11 +527,8 @@ BOOL CreateMountPoint(LPCWSTR MountPoint, LPCWSTR DeviceName) {
     DbgPrintW(L"CreateMountPoint %s -> %s success\n", MountPoint,
               targetDeviceName);
   } else {
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
-                  NULL);
-    DbgPrintW(L"CreateMountPoint %s -> %s failed: (%d) %s", MountPoint,
-              targetDeviceName, GetLastError(), errorMsg);
+    LogMountPointError(L"CreateMountPoint", MountPoint, targetDeviceName,
+                       lastError);
   }
   return result;
 }
@@ -488,14 +538,17 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   BOOL result;
   ULONG resultLength;
   REPARSE_GUID_DATA_BUFFER reparseData = {0};
-  WCHAR errorMsg[256];
 
   handle = CreateFile(MountPoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
                       FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
                       NULL);
 
   if (handle == INVALID_HANDLE_VALUE) {
-    DbgPrintW(L"CreateFile failed: %s (%d)\n", MountPoint, GetLastError());
+    DWORD lastError = GetLastError();
+    WCHAR errorMsg[256];
+    FormatSystemErrorMessage(lastError, errorMsg, ARRAYSIZE(errorMsg));
+    DbgPrintW(L"DeleteMountPoint CreateFile %s failed: (%lu) %s\n", MountPoint,
+              lastError, errorMsg);
     return FALSE;
   }
 
@@ -504,22 +557,22 @@ BOOL DeleteMountPoint(LPCWSTR MountPoint) {
   result = DeviceIoControl(handle, FSCTL_DELETE_REPARSE_POINT, &reparseData,
                            REPARSE_GUID_DATA_BUFFER_HEADER_SIZE, NULL, 0,
                            &resultLength, NULL);
+  DWORD lastError = result ? ERROR_SUCCESS : GetLastError();
 
   CloseHandle(handle);
 
   if (result) {
     DbgPrintW(L"DeleteMountPoint %s success\n", MountPoint);
   } else {
-    if (GetLastError() == ERROR_NOT_A_REPARSE_POINT) {
+    if (lastError == ERROR_NOT_A_REPARSE_POINT) {
       // Not a failure for us as this happen when mount manager
       // is used and reparse point is removed from kernel.
       return TRUE;
     }
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 256,
-                  NULL);
-    DbgPrintW(L"DeleteMountPoint %s failed: (%d) %s", MountPoint,
-              GetLastError(), errorMsg);
+    WCHAR errorMsg[256];
+    FormatSystemErrorMessage(lastError, errorMsg, ARRAYSIZE(errorMsg));
+    DbgPrintW(L"DeleteMountPoint %s failed: (%lu) %s\n", MountPoint, lastError,
+              errorMsg);
   }
   return result;
 }
