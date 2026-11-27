@@ -88,6 +88,8 @@ typedef struct _DOKAN_INSTANCE {
   HANDLE KeepaliveHandle;
   /** Whether the filesystem was intentionally stopped */
   BOOL FileSystemStopped;
+  /** Whether IPC event batching is enabled for this mount instance */
+  BOOL AllowIpcBatching;
   /**
    * Whether the Unmounted notification was called.
    * Only the first incrementer thread will call it.
