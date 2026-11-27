@@ -18,11 +18,6 @@
           "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and DokanFillFileStandardInfo derives AllocationSize from EndOfFile",
           "gap": "GAP-09"
         },
-        "CreateOpenTest.NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch": {
-          "reason": "dokan/create.c DispatchCreate parent-folder DELETE fallback opens the parent temp directory without updating DokanOpenInfo->UserContext on hidden/system FILE_SUPERSEDE, permanently leaking the parent directory handle in mirror.exe across OS builds until process exit",
-          "gap": "GAP-02",
-          "skip_crash": true
-        },
         "CreateOpenTest.NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf": {
           "reason": "dokan3.sys/mirror FILE_SUPERSEDE does not enforce FILE_SHARE_DELETE sharing check",
           "gap": "GAP-06"
@@ -46,11 +41,6 @@
         "DataIoTest.CompressionSetGetAndCompressedFileSize": {
           "reason": "Dokan does not support NTFS file compression (FSCTL_SET_COMPRESSION returns ERROR_INVALID_FUNCTION)",
           "gap": "GAP-25"
-        },
-        "DataIoTest.CopyFileExOverReadOnlyDestinationFailsAccessDenied": {
-          "reason": "dokan/create.c parent-folder DELETE fallback leaks an exclusive ShareMode=0 handle on the parent temp directory when CopyFileExW fails ACCESS_DENIED on a READONLY destination, blocking teardown until mirror.exe exits",
-          "gap": "GAP-02",
-          "skip_crash": true
         },
         "DataIoTest.DirectoryCompressionInheritanceAndNoCompressionOption": {
           "reason": "Dokan does not support NTFS file compression (FSCTL_SET_COMPRESSION returns ERROR_INVALID_FUNCTION)",
@@ -92,10 +82,6 @@
         },
         "DataIoTest.ReadWriteOnDirectoryHandleFailsInvalidFunction": {
           "reason": "dokan3.sys DokanDispatchRead (sys/read.c:146) and DokanDispatchWrite (sys/write.c:75) return STATUS_INVALID_PARAMETER instead of STATUS_INVALID_DEVICE_REQUEST (ERROR_INVALID_FUNCTION) on directory handles",
-          "gap": "GAP-09"
-        },
-        "DataIoTest.SetEndOfFileAndAllocationOnDirectoryFails": {
-          "reason": "dokan3.sys/mirror accepts FileAllocationInformation on directory handles instead of returning STATUS_INVALID_PARAMETER",
           "gap": "GAP-09"
         },
         "DataIoTest.SetZeroDataInvalidRangeFailsInvalidParameter": {
@@ -179,7 +165,7 @@
           "gap": "GAP-05"
         },
         "DeleteTest.DispositionInfoExIgnoreReadOnly": {
-          "reason": "Dokan does not honor FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE in FileDispositionInformationEx",
+          "reason": "dokan/setfile.c bypasses its readonly guard under FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE, but MirrorDeleteFile (samples/dokan_mirror/mirror.c:850-856) still calls Win32 FileDispositionInfo without FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE",
           "gap": "GAP-21"
         },
         "DeleteTest.DispositionInfoExPosixOnEmptyDirectory": {
@@ -198,10 +184,6 @@
           "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
           "gap": "GAP-23"
         },
-        "DirEnumTest.EnumerateRegularFileFailsNotDirectory": {
-          "reason": "dokan3.sys DokanQueryDirectory does not reject non-directory handles, so MirrorFindFiles returns STATUS_NOT_A_DIRECTORY via FindFirstFileW instead of STATUS_INVALID_PARAMETER",
-          "gap": "GAP-12"
-        },
         "DirEnumTest.FileFullDirectoryInfoReportsEaSize": {
           "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
           "gap": "GAP-26"
@@ -210,20 +192,8 @@
           "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillIdExtdDirInfo hardcodes ReparsePointTag = 0)",
           "gap": "GAP-22"
         },
-        "DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor": {
-          "reason": "dokan/directory.c MatchFiles returns STATUS_BUFFER_OVERFLOW with 0 bytes instead of writing a partial filename with full FileNameLength while preserving (not advancing) the directory scan cursor on an undersized first entry",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.NtQueryDirectoryDosWildcards": {
-          "reason": "dokan/directory.c DokanIsNameInExpression does not fully implement DOS_QM ('>') and DOS_DOT ('\"') wildcards",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.NtQueryDirectoryExactFitFinalEntryBuffer": {
-          "reason": "dokan/directory.c:300-333 requires QuadAlign(sizeof(FILE_BOTH_DIR_INFORMATION) + nameBytes) instead of FIELD_OFFSET(FileName) + nameBytes for the final directory entry, returning STATUS_BUFFER_OVERFLOW on exact-fit buffers",
-          "gap": "GAP-12"
-        },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
-          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:122-154)",
+          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:121-153)",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
@@ -527,10 +497,6 @@
           "reason": "mirror.exe prepends backing directory path and exceeds MAX_PATH for 255-char components",
           "gap": "GAP-14"
         },
-        "NamingPathsTest.ParentIsFilePathErrorsAllApis": {
-          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and forcing FILE_DIRECTORY_FILE on the regular-file parent, so MirrorCreateFile (mirror.c:372-376) returns STATUS_NOT_A_DIRECTORY (ERROR_DIRECTORY) instead of STATUS_INVALID_PARAMETER (ERROR_INVALID_PARAMETER)",
-          "gap": "GAP-29"
-        },
         "NamingPathsTest.PerDirectoryCaseSensitivityFlag": {
           "reason": "dokan3.sys does not implement FileCaseSensitiveInformation (returns STATUS_INVALID_PARAMETER)",
           "gap": "GAP-28"
@@ -555,10 +521,6 @@
           "reason": "mirror.exe forwards non-verbatim Win32 paths to backing NTFS without \\\\?\\ escaping, redirecting path-qualified DOS device names with extensions on builds < 22000",
           "gap": "GAP-14",
           "os_max_build": 21999
-        },
-        "NamingPathsTest.VerbatimDotDotTraversalRejected": {
-          "reason": "Neither dokan3.sys nor dokan/dokan.c CheckFileName rejects '..' components in verbatim/NT paths, and mirror.c:86-90 passes non-verbatim paths to Win32 CreateFileW which resolves '..' instead of failing STATUS_OBJECT_NAME_INVALID",
-          "gap": "GAP-14"
         },
         "NamingPathsTest.VerbatimReservedDosDeviceNamesAreLiteralFiles": {
           "reason": "mirror.exe strips '\\\\?\\' and forwards AUX/NUL to Win32 CreateFileW, opening \\Device\\Serial0 (COM1) on hosts with a serial port and blocking ReadFile until dokan3.sys operation timeout kills the mount",
@@ -602,17 +564,13 @@
           "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
           "gap": "GAP-23"
         },
-        "RenameMoveTest.RenameMissingTargetParentFailsPathNotFound": {
-          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and opening the parent with FILE_DIRECTORY_FILE, discarding the child probe's STATUS_OBJECT_PATH_NOT_FOUND (:199-213) and forwarding MirrorCreateFile's STATUS_OBJECT_NAME_NOT_FOUND verbatim instead of translating it to STATUS_OBJECT_PATH_NOT_FOUND",
-          "gap": "GAP-29"
-        },
         "RenameMoveTest.RenameOverDataMappedTargetPreservesMappedView": {
           "reason": "dokan3.sys indexes FCBs by path name; MoveFileExW(REPLACE_EXISTING) over a data-mapped target faults replacement bytes into the old view when pages are not already resident",
           "gap": "GAP-04",
           "allow_xpass": true
         },
         "RenameMoveTest.RenameUpdatesFileChangeTime": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so mirror does not return an updated file ChangeTime after rename",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not return an updated file ChangeTime after rename",
           "gap": "GAP-09"
         },
         "SecurityAclTest.DirectoryTraverseAccessEnforcement": {
@@ -641,10 +599,6 @@
         },
         "SecurityAclTest.OwnerRestoresDaclUnderDenyReadAce": {
           "reason": "mirror.exe Win32 CreateFile adds FILE_READ_ATTRIBUTES|SYNCHRONIZE, blocking owner WRITE_DAC restore under D:P(D;;GR;;;WD)",
-          "gap": "GAP-19"
-        },
-        "SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner": {
-          "reason": "dokan/security.c:210-211 DispatchSetSecurity rewrites every non-STATUS_SUCCESS return from MirrorSetFileSecurity (including STATUS_INVALID_OWNER) to STATUS_INVALID_PARAMETER",
           "gap": "GAP-19"
         },
         "SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner": {
@@ -700,7 +654,7 @@
           "gap": "GAP-13"
         },
         "TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so mirror does not preserve ChangeTime round-trip via FileBasicInformation",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so mirror does not preserve ChangeTime round-trip via FileBasicInformation",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.HardLinkCreationUpdatesChangeTimeNotLastWriteTime": {
@@ -712,11 +666,11 @@
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after rename",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after rename",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SecurityChangeUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after security descriptor change",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after security descriptor change",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SetFileAttributesCannotClearSparseFlag": {
@@ -805,10 +759,6 @@
         },
         "LocksOplocksTest.OplockRhBrokenByRenameAndDeleteWithShareDelete": {
           "reason": "dokan3.sys PopulateRenameEventInformations fails absolute-path FileRenameInformation with STATUS_OBJECT_PATH_NOT_FOUND on UNC mounts",
-          "gap": "GAP-03"
-        },
-        "NamingPathsTest.MountRootRenameRejected": {
-          "reason": "dokan3.sys PopulateRenameEventInformations fails MoveFileExW on volume root with ERROR_PATH_NOT_FOUND on UNC mounts",
           "gap": "GAP-03"
         },
         "RenameMoveTest.CaseOnlyRenameFileAndDirectory": {

@@ -23,35 +23,27 @@ behavior in `dokan3.sys` (`sys/`), `dokan3.dll` (`dokan/`), `memfs.exe`
 
 ## Top Critical Bugs
 
-Five high-impact defects stand out because they crash the filesystem daemon,
-leak exclusive directory handles across runs, break all UNC renames, or
-corrupt mapped-file and image-delete invariants:
+Four high-impact defects stand out because they crash the filesystem daemon,
+break all UNC renames, or corrupt mapped-file and image-delete invariants:
 
 1. **[GAP-01](#gap-01-recursive-move-crash-on-subtree-or-volume-root) —
    Infinite recursion crash in `memfs` (`Crash / Handle Leak`):**
    `fs_filenodes::move` in `samples/dokan_memfs/filenodes.cpp` does not reject
-   moving `\` or moving a directory into its own descendant, causing unbounded
-   recursion and a stack-overflow crash in `memfs.exe`.
-2. **[GAP-02](#gap-02-parent-directory-delete-fallback-handle-leak) —
-   Parent-directory `DELETE` fallback handle leak (`Crash / Handle Leak`):**
-   `DispatchCreate` in `dokan/create.c` retries failed `STATUS_ACCESS_DENIED`
-   opens carrying `DELETE` against the parent directory and returns
-   `STATUS_SUCCESS` without updating `DokanOpenInfo->UserContext`, permanently
-   leaking the opened parent handle (often `ShareMode = 0`) in `mirror.exe`
-   across OS builds.
-3. **[GAP-03](#gap-03-unc-prefix-not-stripped-in-fully-qualified-renames) —
+   moving a directory into its own descendant, causing unbounded recursion and
+   a stack-overflow crash in `memfs.exe`.
+2. **[GAP-03](#gap-03-unc-prefix-not-stripped-in-fully-qualified-renames) —
    Broken renames on UNC mounts (`Semantic Bug`):**
    `PopulateRenameEventInformations` in `sys/fileinfo.c` copies
    `targetFileObject->FileName` verbatim without stripping `Dcb->UNCName`,
    failing `MoveFileExW`, `ReplaceFileW`, and absolute-path
    `FileRenameInformation` tests on `mirror_unc`.
-4. **[GAP-04](#gap-04-path-keyed-fcb-aliasing-on-mapped-rename) —
+3. **[GAP-04](#gap-04-path-keyed-fcb-aliasing-on-mapped-rename) —
    Path-keyed FCB aliasing on rename over data-mapped files (`Semantic Bug`):**
    `DokanCompareFcb` and `DokanRenameFcb` in `sys/util/fcb.c` key
    `Vcb->FcbTable` strictly by path name; when a data-mapped file is replaced
    by rename, subsequent paging reads on the old section fault bytes from the
    replacement file at that path.
-5. **[GAP-05](#gap-05-deleting-image-mapped-and-user-mapped-files) —
+4. **[GAP-05](#gap-05-deleting-image-mapped-and-user-mapped-files) —
    Deleting `SEC_IMAGE`-mapped files despite `STATUS_CANNOT_DELETE`
    (`Semantic Bug`):** `DokanCompleteSetInformation` in `sys/fileinfo.c` calls
    `MmFlushImageSection(..., MmFlushForDelete)` only *after* user-mode
@@ -74,7 +66,6 @@ modifiers live in the JSON manifests under `baselines/`.
 | Cluster | Title | Affected Targets | Severity |
 | :--- | :--- | :--- | :--- |
 | [GAP-01](#gap-01-recursive-move-crash-on-subtree-or-volume-root) | Recursive Move Crash on Subtree or Volume Root | `memfs` | Crash / Handle Leak |
-| [GAP-02](#gap-02-parent-directory-delete-fallback-handle-leak) | Parent-Directory `DELETE` Fallback Handle Leak | `memfs`, `mirror` | Crash / Handle Leak |
 | [GAP-03](#gap-03-unc-prefix-not-stripped-in-fully-qualified-renames) | UNC Prefix Not Stripped in Fully Qualified Renames | `mirror_unc` | Semantic Bug |
 | [GAP-04](#gap-04-path-keyed-fcb-aliasing-on-mapped-rename) | Path-Keyed FCB Aliasing on Mapped Rename | `memfs`, `mirror` (local) | Semantic Bug |
 | [GAP-05](#gap-05-deleting-image-mapped-and-user-mapped-files) | Deleting Image-Mapped and User-Mapped Files | `memfs`, `mirror` | Semantic Bug |
@@ -101,7 +92,6 @@ modifiers live in the JSON manifests under `baselines/`.
 | [GAP-26](#gap-26-extended-attributes-query-and-set) | Extended Attributes (`IRP_MJ_QUERY_EA` / `SET_EA`) | `memfs`, `mirror` | Unimplemented NTFS Feature |
 | [GAP-27](#gap-27-open-by-file-id-and-ntfs-object-ids) | Open-by-File-ID and NTFS Object IDs | `memfs`, `mirror` | Unimplemented NTFS Feature |
 | [GAP-28](#gap-28-modern-info-classes-and-volume-feature-flags) | Modern Info Classes and Volume Feature Flags | `memfs`, `mirror` | Unimplemented NTFS Feature |
-| [GAP-29](#gap-29-sl_open_target_directory-parent-open-status-translation) | `SL_OPEN_TARGET_DIRECTORY` Parent-Open Status Translation | `memfs`, `mirror` | Semantic Bug |
 | [GAP-30](#gap-30-missing-vcb-lock-on-filerenameinformationex-fcb-rename) | Missing VCB Lock on `FileRenameInformationEx` FCB Rename | `memfs`, `mirror` | Crash / Handle Leak |
 
 <!-- markdownlint-enable MD013 -->
@@ -115,13 +105,15 @@ an unsupported feature rather than failing an assertion. These skipped domains
 are intentionally absent from `baselines/dokan_*.json` and tracked here instead:
 
 - **8.3 Short Names (`REQUIRE_SHORT_NAMES_ENABLED()`):** In `dokan/directory.c`,
-  `DokanFillIdBothDirInfo` (`:150`), `DokanFillIdExtdBothDirInfo` (`:218`), and
-  `DokanFillBothDirInfo` (`:253`) hardcode `ShortNameLength = 0`, discarding
-  `WIN32_FIND_DATAW::cAlternateFileName` even when `mirror.c` populates it from
-  an 8.3-enabled backing NTFS volume, and `DispatchSetInformation`
-  (`dokan/setfile.c:225-271`) does not handle `FileShortNameInformation`. As a
-  result, `ProbeShortNamesEnabled` observes `short_name_length == 0` and the
-  five 8.3 tests (`DirEnumTest.FindFirstFileMatches8dot3ShortNameWildcard`,
+  `DokanWriteDirectoryEntry` (`:107-159`) leaves `ShortNameLength`
+  zero-initialized for `FileBothDirectoryInformation`,
+  `FileIdBothDirectoryInformation`, and `FileIdExtdBothDirectoryInformation`,
+  discarding `WIN32_FIND_DATAW::cAlternateFileName` even when `mirror.c`
+  populates it from an 8.3-enabled backing NTFS volume, and
+  `DispatchSetInformation` (`dokan/setfile.c:283-329`) does not handle
+  `FileShortNameInformation`. As a result, `ProbeShortNamesEnabled` observes
+  `short_name_length == 0` and the five 8.3 tests
+  (`DirEnumTest.FindFirstFileMatches8dot3ShortNameWildcard`,
   `InfoQueriesTest.NtQueryFileAlternateNameInformation`,
   `NamingPathsTest.SetFileShortNameExplicit`,
   `NamingPathsTest.ShortName8dot3CollisionSequence`, and
@@ -145,55 +137,17 @@ moving a directory into one of its own descendants is invalid and must fail
 without mutating the directory hierarchy.
 
 **Observed Dokan Behavior:**
-In `samples/dokan_memfs/filenodes.cpp`, `fs_filenodes::move` never checks
-whether `old_filename` is `L"\\"` or an ancestor prefix of `new_filename`.
-It first calls `add(f, {})` (inserting the moved directory inside its own
-descendant map) and then iterates `list_folder(old_filename)`, calling
-`move(...)` recursively until stack exhaustion crashes `memfs.exe`.
+While `DokanSetRenameInformation` (`dokan/setfile.c`) rejects renaming the
+volume root `L"\\"` centrally with `STATUS_ACCESS_DENIED`, `fs_filenodes::move`
+in `samples/dokan_memfs/filenodes.cpp` never checks whether `old_filename` is
+an ancestor prefix of `new_filename`. It first calls `add(f, {})` (inserting
+the moved directory inside its own descendant map) and then iterates
+`list_folder(old_filename)`, calling `move(...)` recursively until stack
+exhaustion crashes `memfs.exe`.
 
 **Covered Tests:**
 
-- `NamingPathsTest.MountRootRenameRejected` (`memfs`, `skip_crash`)
 - `RenameMoveTest.RenameDirectoryIntoOwnSubtreeFails` (`memfs`, `skip_crash`)
-
-### GAP-02: Parent-Directory `DELETE` Fallback Handle Leak
-
-- **Severity:** Crash / Handle Leak
-- **Affected Targets:** `memfs`, `mirror` (`skip_crash: true` on `mirror`)
-
-**NTFS Specification (Microsoft proof):**
-Per [MS-FSA 2.1.5.1.2 (Open of an Existing File)][ms-fsa-open-existing] and
-[`ZwCreateFile`][wdk-zwcreatefile], `FILE_SUPERSEDE` and `FILE_OVERWRITE_IF`
-must fail with `STATUS_ACCESS_DENIED` when an existing file has
-`FILE_ATTRIBUTE_HIDDEN` or `FILE_ATTRIBUTE_SYSTEM` not specified in the
-create request, and write/overwrite opens against a `FILE_ATTRIBUTE_READONLY`
-target must fail `STATUS_ACCESS_DENIED` without opening or locking the parent
-directory.
-
-**Observed Dokan Behavior:**
-Both `memfs_createfile` (`samples/dokan_memfs/memfs_operations.cpp`, lines
-126–132 and 149–154) and `MirrorCreateFile` (`samples/dokan_mirror/mirror.c`,
-lines 420–427 for hidden/system mismatch and lines 452–454, 464–468 for
-read-only overwrite via Win32 `CreateFile`) return `STATUS_ACCESS_DENIED`.
-However, `DispatchCreate` (`dokan/create.c`,
-lines 237 and 250–292) saves `IoEvent->DokanOpenInfo->UserContext` before
-checking the result of `ZwCreateFile`. Whenever `ZwCreateFile` returns
-`STATUS_ACCESS_DENIED` with `DesiredAccess & DELETE`, it strips the final path
-component and invokes `ZwCreateFile` a second time on the parent directory.
-When that parent open succeeds, `DispatchCreate` converts the error into
-`STATUS_SUCCESS` / `FILE_OPENED` without updating `DokanOpenInfo->UserContext`
-or closing the opened parent handle—turning required `STATUS_ACCESS_DENIED`
-failures into false successes on both `memfs` and `mirror`, and permanently
-leaking the backing parent-directory handle (including exclusive
-`ShareMode = 0` handles from `CopyFileExW`) inside `mirror.exe` across OS
-builds until process exit.
-
-**Covered Tests:**
-
-- `CreateOpenTest.NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch`
-  (`memfs`; `mirror`, `skip_crash`)
-- `DataIoTest.CopyFileExOverReadOnlyDestinationFailsAccessDenied`
-  (`memfs`; `mirror`, `skip_crash`)
 
 ### GAP-03: UNC Prefix Not Stripped in Fully Qualified Renames
 
@@ -230,7 +184,6 @@ to fail with `ERROR_PATH_NOT_FOUND` / `STATUS_OBJECT_PATH_NOT_FOUND`.
 - `LocksOplocksTest.OplockRhBrokenByMoveFileEx` (`mirror_unc`)
 - `LocksOplocksTest.OplockRhBrokenByRenameAndDeleteWithShareDelete`
   (`mirror_unc`)
-- `NamingPathsTest.MountRootRenameRejected` (`mirror_unc`)
 - `RenameMoveTest.CaseOnlyRenameFileAndDirectory` (`mirror_unc`)
 - `RenameMoveTest.ConcurrentRenameAndEnumerateStress` (`mirror_unc`)
 - `RenameMoveTest.FileRenameInfoExNonPosixBasicAndReplace` (`mirror_unc`)
@@ -391,7 +344,8 @@ existing attributes on `FILE_SUPERSEDE` per
 [MS-FSA 2.1.5.1.2][ms-fsa-open-existing] prose instead of retaining
 `FILE_ATTRIBUTE_TEMPORARY` as observed on real NTFS (an NTFS-observed vs
 `[MS-FSA]` prose divergence; `mirror` matches NTFS here only because
-`dokan/dokan.c:1380-1386` collapses `FILE_SUPERSEDE` into `CREATE_ALWAYS`).
+`DokanMapKernelToUserCreateFileFlags` in `dokan/dokan.c` collapses
+`FILE_SUPERSEDE` into `CREATE_ALWAYS`).
 
 **Covered Tests:**
 
@@ -506,7 +460,7 @@ The `DOKAN_OPERATIONS` ABI (`dokan/dokan.h`) uses Win32
 neither `ChangeTime` nor independent `AllocationSize`, and `CREATE_CONTEXT`
 (`sys/public.h:207-216`) / `DOKAN_OPERATIONS::ZwCreateFile` do not forward
 create-time `Irp->Overlay.AllocationSize`. Consequently,
-`DokanFillFileBasicInfo` (`dokan/fileinfo.c:48-49`) and
+`DokanFillFileBasicInfo` (`dokan/fileinfo.c:46-47`) and
 `DokanFillNetworkOpenInfo` copy `ftLastWriteTime` into `ChangeTime` (note that
 this aliasing also makes any assertion checking only that `ChangeTime` equals
 `LastWriteTime`—or advances alongside `LastWriteTime`—vacuous on `mirror` and
@@ -517,17 +471,12 @@ and `DokanFillFileStandardInfo` synthesizes `AllocationSize` by rounding
 `DokanInitializeFcb` (`sys/util/fcb.c:54-57`) initializes `ValidDataLength`
 to `MAXLONGLONG`, `sys/fileinfo.c` performs no `SeManageVolumePrivilege` or
 bounds validation, and `DokanSetValidDataLengthInformation`
-(`dokan/setfile.c:182-195`) forwards the request directly to
-`DokanOperations->SetEndOfFile`. In addition, `MirrorSetAllocationSize`
-(`samples/dokan_mirror/mirror.c`) ignores `AllocSize > fileSize`,
-`memfs_setendoffile` and `memfs_setallocationsize`
-(`samples/dokan_memfs/memfs_operations.cpp:561-583`) both call
-`set_endoffile(...)` without rejecting directory handles,
-`DokanDispatchSetInformation` (`sys/fileinfo.c`) does not reject
-`FileEndOfFileInformation` or `FileAllocationInformation` on directories, and
-`DokanDispatchRead` (`sys/read.c:146`) / `DokanDispatchWrite` (`sys/write.c:75`)
-return `STATUS_INVALID_PARAMETER` instead of `STATUS_INVALID_DEVICE_REQUEST`
-(`ERROR_INVALID_FUNCTION`) on directory handles.
+(`dokan/setfile.c:232-253`) forwards the request directly to
+`DokanOperations->SetEndOfFile`. In addition, `MirrorSetAllocationSize` (`samples/dokan_mirror/mirror.c`)
+ignores `AllocSize > fileSize`, and `DokanDispatchRead` (`sys/read.c:146`) /
+`DokanDispatchWrite` (`sys/write.c:75`) return `STATUS_INVALID_PARAMETER`
+instead of `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`) on
+directory handles.
 
 **Covered Tests:**
 
@@ -536,7 +485,6 @@ return `STATUS_INVALID_PARAMETER` instead of `STATUS_INVALID_DEVICE_REQUEST`
 - `DataIoTest.FileValidDataLengthExtend` (`memfs`, `mirror`)
 - `DataIoTest.ReadWriteOnDirectoryHandleFailsInvalidFunction`
   (`memfs`, `mirror`)
-- `DataIoTest.SetEndOfFileAndAllocationOnDirectoryFails` (`memfs`, `mirror`)
 - `RenameMoveTest.RenameUpdatesFileChangeTime`
   (`memfs`, `mirror` without `mirror_unc`)
 - `TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently`
@@ -572,21 +520,15 @@ sets `FILE_ATTRIBUTE_ARCHIVE` on create/truncate, but `memfs_writefile`
 (`:327-374`), `memfs_setendoffile` (`:561-571`), and `memfs_setallocationsize`
 (`:573-583`) never update `times.lastwrite` or re-set `FILE_ATTRIBUTE_ARCHIVE`
 (breaking both `SetEndOfFile` and Win32 `TRUNCATE_EXISTING`, which truncates
-via `SetAllocationSize`/`SetEndOfFile`). `memfs_setfiletime` (`:488-504`)
-stores any non-zero `FILETIME` verbatim without rejecting values `< -2` and
-does not track per-handle freeze/unfreeze state for explicit sets, `-1`, or
-`-2`; `memfs_readfile` never advances `times.lastaccess` when the host NTFS
+via `SetAllocationSize`/`SetEndOfFile`). `memfs_setfiletime` (`:488-504`) stores any non-zero `FILETIME` verbatim
+without tracking per-handle freeze/unfreeze state for explicit sets, `-1`, or
+`-2`; and `memfs_readfile` never advances `times.lastaccess` when the host NTFS
 `NtfsDisableLastAccessUpdate` registry policy enables last-access updates
-(note: that policy key is `ntfs.sys`-private); and `memfs_setfileattributes`
-(`:467-483`) accepts `FILE_ATTRIBUTE_TEMPORARY` on directories instead of
-returning `STATUS_INVALID_PARAMETER` and lacks a `fileattributes == 0` guard,
-so `DokanSetBasicInformation` (`dokan/setfile.c:70-72`) calling
-`SetFileAttributes(0)` before `SetFileTime` wipes existing file attributes on
-`memfs`. In `samples/dokan_memfs/filenodes.cpp`,
-`fs_filenodes::add`, `fs_filenodes::remove`, and `fs_filenodes::move` never
-update parent directory `filenode` `times.lastwrite`, and `memfs` implements no
-15-second metadata tunneling cache (`FsRtlAddToTunnelCache` /
-`FsRtlFindInTunnelCache`).
+(note: that policy key is `ntfs.sys`-private). In
+`samples/dokan_memfs/filenodes.cpp`, `fs_filenodes::add`,
+`fs_filenodes::remove`, and `fs_filenodes::move` never update parent directory
+`filenode` `times.lastwrite`, and `memfs` implements no 15-second metadata
+tunneling cache (`FsRtlAddToTunnelCache` / `FsRtlFindInTunnelCache`).
 
 **Covered Tests:**
 
@@ -597,7 +539,6 @@ update parent directory `filenode` `times.lastwrite`, and `memfs` implements no
 - `TimestampsAttrsTest.ArchiveBitSetOnCreateAndWriteAfterClear` (`memfs`)
 - `TimestampsAttrsTest.HandleExplicitSetFileTimeFreezesSubsequentAutoUpdateOnSameHandle`
   (`memfs`)
-- `TimestampsAttrsTest.InvalidNegativeTimestampLessThanMinusTwoFails` (`memfs`)
 - `TimestampsAttrsTest.ParentDirLastWriteTimeOnChildCreateDeleteNotWrite`
   (`memfs`)
 - `TimestampsAttrsTest.ReadAdvancesLastAccessTimeWhenUpdatesEnabled` (`memfs`)
@@ -605,8 +546,6 @@ update parent directory `filenode` `times.lastwrite`, and `memfs` implements no
 - `TimestampsAttrsTest.SentinelMinusTwoRestoresTimestampUpdates` (`memfs`)
 - `TimestampsAttrsTest.SetEndOfFileAndTruncateUpdateLastWriteAndArchive`
   (`memfs`)
-- `TimestampsAttrsTest.SetFileTimePreservesExistingFileAttributes` (`memfs`)
-- `TimestampsAttrsTest.TemporaryAttributeRejectedOnDirectory` (`memfs`)
 - `TimestampsAttrsTest.WriteUpdatesLastWriteTimeAndChangeTime` (`memfs`)
 
 <!-- markdownlint-enable MD013 -->
@@ -671,60 +610,25 @@ the string terminator, and honor `SL_RETURN_SINGLE_ENTRY` (`0x02`) without
 advancing the scan cursor when `SL_NO_CURSOR_UPDATE` (`0x10`) is set.
 
 **Observed Dokan Behavior:**
-In `dokan/directory.c`, `DokanFillIdFullDirInfo` (`:137`),
-`DokanFillIdBothDirInfo` (`:171`), `DokanFillIdExtdDirInfo` (`:205`), and
-`DokanFillIdExtdBothDirInfo` (`:240`) hardcode `FileId = 0`, causing both
+In `dokan/directory.c`, `DokanWriteDirectoryEntry` (`:107-159`) leaves `FileId`
+zero-initialized for `FileIdFullDirectoryInformation`,
+`FileIdBothDirectoryInformation`, `FileIdExtdDirectoryInformation`, and
+`FileIdExtdBothDirectoryInformation`, causing both
 `NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds` and
 `NtQueryDirectoryIdFullAndIdExtdInfoClasses` to fail `FileId` verification on
-`memfs` and `mirror`. `dokan/directory.c` `MatchFiles` (`:454-460`) also
-returns `STATUS_BUFFER_OVERFLOW` with zero bytes written instead of writing a
-partial filename (with full untruncated `FileNameLength`) without advancing the
-scan cursor when the first entry overflows a small output buffer.
-`dokan/directory.c` (`:300-333`) also requires
-`QuadAlign(sizeof(FILE_BOTH_DIR_INFORMATION) + nameBytes)` instead of
-`FIELD_OFFSET(FileName) + nameBytes` for the final directory entry (rejecting
-exact-fit buffers with `STATUS_BUFFER_OVERFLOW`), and
-`AddMissingCurrentAndParentFolder` (`dokan/directory.c:480-484`) returns early
-whenever `pattern != L"*"`, omitting synthesized `.` and `..` entries on
-`memfs` for non-`*` wildcard patterns.
-`DokanIsNameInExpression` (`dokan/directory.c:799-836`)
-does not fully implement `DOS_QM` / `DOS_DOT` semantics, and its `?` and
-`DOS_QM` branches (`:802-803, 824-826`) advance `ni++` without checking
-`Name[ni] != L'\0'`. Because `memfs` sets `FindFilesWithPattern = nullptr`
-(`samples/dokan_memfs/memfs_operations.cpp:807`), `MatchFiles` runs
-`DokanIsNameInExpression` on `memfs_findfiles`'s reused `WIN32_FIND_DATAW`
-buffer (`memfs_operations.cpp:429-437`), reading stale trailing characters
-beyond `cFileName`'s NUL terminator depending on
-`std::set<std::shared_ptr<filenode>>` heap pointer ordering
-(`samples/dokan_memfs/filenodes.h:93-94`). `DokanQueryDirectory` and
-`DokanCompleteDirectoryControl` (`sys/directory.c:55-222, 316`) ignore
+`memfs` and `mirror`. Separately, `DokanQueryDirectory` and
+`DokanCompleteDirectoryControl` (`sys/directory.c:121-153, 316`) ignore
 `SL_NO_CURSOR_UPDATE` (`0x10`) alongside `SL_RETURN_SINGLE_ENTRY` (`0x02`)
-(unconditionally advancing `ccb->Context`), ignore non-initial
-`QueryDirectory.FileName` patterns whenever `initial == FALSE`
-(`sys/directory.c:122-154`), and never check
-`DOKAN_FILE_DIRECTORY` before dispatching to user mode—returning
-`STATUS_NOT_A_DIRECTORY` on `mirror` (`MirrorFindFiles` via `FindFirstFileW`)
-and `STATUS_NO_MORE_FILES` on `memfs` instead of `STATUS_INVALID_PARAMETER`.
+(unconditionally advancing `ccb->Context`) and ignore non-initial
+`QueryDirectory.FileName` patterns whenever `initial == FALSE`.
 
 **Covered Tests:**
 
-<!-- markdownlint-disable MD013 -->
-
-- `DirEnumTest.DotAndDotDotMatchedByNonStarWildcards` (`memfs`)
-- `DirEnumTest.EnumerateRegularFileFailsNotDirectory` (`memfs`, `mirror`)
-- `DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor`
-  (`memfs`, `mirror`)
-- `DirEnumTest.NtQueryDirectoryDosWildcards` (`memfs`, `mirror`)
-- `DirEnumTest.NtQueryDirectoryExactFitFinalEntryBuffer` (`memfs`, `mirror`)
 - `DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate`
   (`memfs`, `mirror`)
 - `DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds`
   (`memfs`, `mirror`)
 - `DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses` (`memfs`, `mirror`)
-- `DirEnumTest.Win32WildcardQuestionMarkMatchesSingleCharacter`
-  (`memfs`, `allow_xpass`)
-
-<!-- markdownlint-enable MD013 -->
 
 ### GAP-13: File Info Queries, Change Notify, and Mount Manager
 
@@ -822,9 +726,7 @@ both `memfs` and `mirror`. In `samples/dokan_mirror/mirror.c`, although
 trailing dots/spaces, redirect DOS device names (including `<device>.<ext>` on
 Windows builds `<= 21999`, i.e., `< 22000`), and reject paths exceeding
 `MAX_PATH` (including 255-character components or stream names prefixed by
-`gRootDirectory`), and normalize `..` components in verbatim/NT paths rather
-than rejecting them with `STATUS_OBJECT_NAME_INVALID` (neither `sys/create.c`
-nor `dokan/dokan.c` `CheckFileName` validates `..`).
+`gRootDirectory`).
 
 **Covered Tests:**
 
@@ -836,7 +738,6 @@ nor `dokan/dokan.c` `CheckFileName` validates `..`).
 - `NamingPathsTest.TrailingDotsAndSpacesWin32VsVerbatim` (`mirror`)
 - `NamingPathsTest.VerbatimDosDeviceNamesWithExtensionsAreLiteralFiles`
   (`mirror`, `os_max_build: 21999`)
-- `NamingPathsTest.VerbatimDotDotTraversalRejected` (`mirror`)
 - `NamingPathsTest.VerbatimReservedDosDeviceNamesAreLiteralFiles`
   (`mirror`, `skip_crash`)
 - `NamingPathsTest.Win32CreateDirectoryConRejectedBefore24H2` (`mirror`)
@@ -862,21 +763,20 @@ intermediate path component is a regular file.
 
 **Observed Dokan Behavior:**
 `memfs::start` (`samples/dokan_memfs/memfs.cpp:39-40`) unconditionally sets
-`DOKAN_OPTION_CASE_SENSITIVE`, which causes `MatchFiles`
-(`dokan/directory.c:394-395, 418-419`) to invoke
+`DOKAN_OPTION_CASE_SENSITIVE`, which causes `FilterDirectoryList`
+(`dokan/directory.c`) to invoke
 `DokanIsNameInExpression(..., IgnoreCase=FALSE)` during directory wildcard
 enumeration. Likewise, `fs_filenodes` (`samples/dokan_memfs/filenodes.h`)
 indexes nodes in an exact-match `std::unordered_map<std::wstring, ...>`
 (`_filenodes`), breaking both ASCII and Unicode `$UpCase` case-insensitive
 lookups. `memfs_createfile` (`samples/dokan_memfs/memfs_operations.cpp`)
-performs no invalid-character or verbatim `..`-component validation, and
+performs no invalid-character validation, and
 `fs_filenodes::find` (`samples/dokan_memfs/filenodes.cpp:140-144`) returns
 `std::shared_ptr<filenode>` (`nullptr`) rather than an `NTSTATUS`;
 `memfs_createfile` and `memfs_getfileInformation` translate `nullptr` into
 `STATUS_OBJECT_NAME_NOT_FOUND` (`ERROR_FILE_NOT_FOUND`) without checking
 whether an ancestor path component is missing or is a regular file (including
-source opens during `MoveFileExW`; note that `ParentIsFilePathErrorsAllApis`'s
-rename leg also hits `GAP-29`).
+source opens during `MoveFileExW`).
 
 **Covered Tests:**
 
@@ -885,7 +785,6 @@ rename leg also hits `GAP-29`).
 - `NamingPathsTest.InvalidFilenameCharactersRejected` (`memfs`)
 - `NamingPathsTest.ParentIsFilePathErrorsAllApis` (`memfs`)
 - `NamingPathsTest.UnicodeCaseFoldingInsensitive` (`memfs`)
-- `NamingPathsTest.VerbatimDotDotTraversalRejected` (`memfs`)
 - `RenameMoveTest.RenameMissingSourceFailsNotFound` (`memfs`)
 
 ### GAP-16: `memfs` Non-Empty Dir Delete and Rename Validation
@@ -1079,17 +978,11 @@ deny-read DACLs to fail with `ERROR_ACCESS_DENIED`. `wmain` enables only
 `SeBackupPrivilege`, `SeRestorePrivilege`, or `SeTakeOwnershipPrivilege`. By
 default (`samples/mirror_test.ps1`), `mirror.exe` also runs without `/p`
 caller impersonation (`mirror.c:1522, 1632-1634`), bypassing restricted-token
-`FILE_TRAVERSE` and low-integrity `NO_WRITE_UP` checks. On execute-only files,
-`MirrorReadFile` fails backing
-reads (or reopens with `GENERIC_READ`), causing `NtCreateSection(SEC_IMAGE)`
-to fail with `STATUS_INVALID_FILE_FOR_SECTION`. In addition,
-`DispatchSetSecurity` (`dokan/security.c:210-211`) rewrites every
-non-`STATUS_SUCCESS` return from `MirrorSetFileSecurity` (such as
-`STATUS_INVALID_OWNER`) to `STATUS_INVALID_PARAMETER`.
+`FILE_TRAVERSE` and low-integrity `NO_WRITE_UP` checks. On execute-only files, `MirrorReadFile` fails backing reads (or reopens with
+`GENERIC_READ`), causing `NtCreateSection(SEC_IMAGE)` to fail with
+`STATUS_INVALID_FILE_FOR_SECTION`.
 
 **Covered Tests:**
-
-<!-- markdownlint-disable MD013 -->
 
 - `CreateOpenTest.BackupPrivilegeBypassesDenyDacl` (`mirror`)
 - `CreateOpenTest.RestorePrivilegeBypassesWriteDenyDacl` (`mirror`)
@@ -1099,11 +992,7 @@ non-`STATUS_SUCCESS` return from `MirrorSetFileSecurity` (such as
 - `SecurityAclTest.NullDaclGrantsAllVsEmptyDaclDeniesAll` (`mirror`)
 - `SecurityAclTest.OwnerImplicitReadControlAndWriteDac` (`mirror`)
 - `SecurityAclTest.OwnerRestoresDaclUnderDenyReadAce` (`mirror`)
-- `SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner`
-  (`mirror`)
 - `SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner` (`mirror`)
-
-<!-- markdownlint-enable MD013 -->
 
 ### GAP-20: `memfs` Persistent ACLs, Inheritance, and Access Checks
 
@@ -1131,12 +1020,9 @@ implements `memfs_getfilesecurity` and `memfs_setfilesecurity`
 (`samples/dokan_memfs/memfs_operations.cpp:647-734`), `filenode::filenode`
 (`samples/dokan_memfs/filenode.cpp:40-43`) leaves `descriptor == nullptr` and
 `descriptor_size == 0` on default-created nodes (whenever no explicit
-`SecurityDescriptor` is passed at create time). Subsequent
-`memfs_setfilesecurity` calls (`:717-728`) therefore pass a 0-byte `HeapAlloc`
-buffer to `SetPrivateObjectSecurity`, which fails, and `DispatchSetSecurity`
-(`dokan/security.c:210-211`) replaces any non-`STATUS_SUCCESS` return with
-`STATUS_INVALID_PARAMETER`, rejecting `SetFileSecurity` /
-`NtSetSecurityObject` DACL and SACL updates.
+`SecurityDescriptor` is passed at create time). Subsequent `memfs_setfilesecurity` calls (`:717-728`) therefore pass a 0-byte
+`HeapAlloc` buffer to `SetPrivateObjectSecurity`, which fails and rejects
+`SetFileSecurity` / `NtSetSecurityObject` DACL and SACL updates.
 
 **Covered Tests:**
 
@@ -1174,8 +1060,6 @@ buffer to `SetPrivateObjectSecurity`, which fails, and `DispatchSetSecurity`
 - `SecurityAclTest.SecurityDescriptorPreservedAcrossIntraVolumeRename` (`memfs`)
 - `SecurityAclTest.SecurityObjectApisEnforceHandleAccessMasks` (`memfs`)
 - `SecurityAclTest.SetDenyReadDaclEnforcesAccessDenied` (`memfs`)
-- `SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner`
-  (`memfs`)
 - `SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner` (`memfs`)
 - `SecurityAclTest.WriteDataAndAppendDataAccessEnforcement` (`memfs`)
 - `StreamsTest.SecurityDescriptorSharedBetweenBaseFileAndAlternateStream`
@@ -1204,10 +1088,13 @@ Windows 10 1809+) and `FILE_RENAME_IGNORE_READONLY_ATTRIBUTE`.
 
 **Observed Dokan Behavior:**
 `DokanDispatchSetInformation` (`sys/fileinfo.c`) and
-`DokanSetDispositionInformation` (`dokan/setfile.c`) extract only the
-`FILE_DISPOSITION_DELETE` bit from `FileDispositionInformationEx`—ignoring
-`POSIX_SEMANTICS` and `ON_CLOSE` and unconditionally failing read-only files
-with `STATUS_CANNOT_DELETE` even when `IGNORE_READONLY_ATTRIBUTE` is set. On
+`DokanSetDispositionInformation` (`dokan/setfile.c`) ignore
+`POSIX_SEMANTICS` and `ON_CLOSE` on `FileDispositionInformationEx`. While
+`DokanSetDispositionInformation` honors
+`FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE` to bypass its central read-only
+guard (fixing `memfs`), `MirrorDeleteFile`
+(`samples/dokan_mirror/mirror.c:850-856`) still calls Win32
+`FileDispositionInfo` without `FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE`. On
 Windows 11 24H2+ (build `>= 26100`), `DeleteFileW` uses POSIX unlink on
 data-mapped files, which therefore fails `ERROR_ACCESS_DENIED` on both `memfs`
 and `mirror`.
@@ -1223,7 +1110,7 @@ allowing non-POSIX overwrite of an open data-mapped target, per `GAP-16`).
   (`memfs`, `mirror`)
 - `DeleteTest.DeleteFileWhileOpenPosix` (`memfs`, `mirror`)
 - `DeleteTest.DispositionInfoExDeleteOnCloseFlag` (`memfs`, `mirror`)
-- `DeleteTest.DispositionInfoExIgnoreReadOnly` (`memfs`, `mirror`)
+- `DeleteTest.DispositionInfoExIgnoreReadOnly` (`mirror`)
 - `DeleteTest.DispositionInfoExPosixOnEmptyDirectory` (`memfs`, `mirror`)
 - `DeleteTest.DispositionInfoExPosixUnlinkAndReuseName` (`memfs`, `mirror`)
 - `RenameMoveTest.FileRenameInfoExIgnoreReadOnlyTarget` (`memfs`, `mirror`)
@@ -1255,9 +1142,10 @@ in `WIN32_FIND_DATAW::dwReserved0`, `FileAttributeTagInformation`, and
 `STATUS_NOT_A_REPARSE_POINT` for `FSCTL_GET_REPARSE_POINT` and returns
 `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`) for
 `FSCTL_SET_REPARSE_POINT` and `FSCTL_DELETE_REPARSE_POINT`.
-`DokanFillFileAttributeTagInfo` (`dokan/fileinfo.c`) and `dokan/directory.c`
-(`DokanFillIdExtdDirInfo`, `DokanFillIdExtdBothDirInfo`) hardcode
-`ReparseTag = 0` / `ReparsePointTag = 0`, and `sys/create.c` has no
+`DokanFillFileAttributeTagInfo` (`dokan/fileinfo.c`) hardcodes
+`ReparseTag = 0`, `DokanWriteDirectoryEntry` (`dokan/directory.c:107-159`)
+leaves `ReparsePointTag` zero-initialized for `FileIdExtdDirectoryInformation`
+and `FileIdExtdBothDirectoryInformation`, and `sys/create.c` has no
 `STATUS_REPARSE` dispatch path.
 
 **Covered Tests:**
@@ -1416,7 +1304,7 @@ children (unless `FILE_NO_COMPRESSION` is specified), updates
 `DokanVolumeUserFsRequest` (`sys/fscontrol.c`) rejects
 `FSCTL_SET_COMPRESSION` and `FSCTL_GET_COMPRESSION` with
 `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`), and
-`DokanEndDispatchGetFileInformation` (`dokan/fileinfo.c:374-377`) returns
+`DokanEndDispatchGetFileInformation` (`dokan/fileinfo.c:410-413`) returns
 `STATUS_NOT_IMPLEMENTED` for `FileCompressionInformation`.
 
 **Covered Tests:**
@@ -1544,44 +1432,6 @@ passing `/b` overwrites those flags with only
 - `NamingPathsTest.PerDirectoryCaseSensitivityInheritanceAndMoveSemantics`
   (`memfs`, `mirror`)
 - `NamingPathsTest.PerDirectoryCaseSensitivityRejectedOnNonEmptyDirectory`
-  (`memfs`, `mirror`)
-
-### GAP-29: `SL_OPEN_TARGET_DIRECTORY` Parent-Open Status Translation
-
-- **Severity:** Semantic Bug
-- **Affected Targets:** `memfs`, `mirror`
-
-**NTFS Specification (Microsoft proof):**
-Per [MS-FSA 2.1.5.1 (Open of a File)][ms-fsa-events],
-[MS-FSA 2.1.5.15.12 (`FileRenameInformation`)][ms-fsa-rename], and Windows I/O
-Manager `SL_OPEN_TARGET_DIRECTORY` (`IopOpenLinkOrRenameTarget`) semantics,
-opening a rename target whose parent directory does not exist must fail with
-`STATUS_OBJECT_PATH_NOT_FOUND` (`ERROR_PATH_NOT_FOUND`), and opening a rename
-target whose parent component is a regular file must fail with
-`STATUS_INVALID_PARAMETER` (`ERROR_INVALID_PARAMETER`).
-
-**Observed Dokan Behavior:**
-Before issuing `IRP_MJ_SET_INFORMATION(FileRenameInformation)`, the Windows I/O
-Manager sends `IRP_MJ_CREATE` with `SL_OPEN_TARGET_DIRECTORY` for the target
-path. `DispatchCreate` (`dokan/create.c:153-245`) strips the leaf component,
-forces `FILE_DIRECTORY_FILE` (`:163-164`), probes the child (`:199-213`,
-discarding `MirrorCreateFile`'s `STATUS_OBJECT_PATH_NOT_FOUND`), and then opens
-the stripped parent via `ZwCreateFile` (`:221-225`)—never reaching
-`memfs_movefile` (where `samples/dokan_memfs/filenodes.cpp:214-218` already
-returns `STATUS_OBJECT_PATH_NOT_FOUND`) or `MirrorMoveFile`. When the parent
-does not exist, `memfs_createfile` (`memfs_operations.cpp:119`) and
-`MirrorCreateFile` (`mirror.c:388-404`) return `STATUS_OBJECT_NAME_NOT_FOUND`,
-which `dokan/create.c:239-245` forwards verbatim instead of translating to
-`STATUS_OBJECT_PATH_NOT_FOUND`. When the parent is a regular file, the forced
-`FILE_DIRECTORY_FILE` option causes `MirrorCreateFile` (`mirror.c:372-376`) and
-`memfs_createfile` (`memfs_operations.cpp:118`) to return
-`STATUS_NOT_A_DIRECTORY` (`ERROR_DIRECTORY`) instead of
-`STATUS_INVALID_PARAMETER`.
-
-**Covered Tests:**
-
-- `NamingPathsTest.ParentIsFilePathErrorsAllApis` (`mirror`)
-- `RenameMoveTest.RenameMissingTargetParentFailsPathNotFound`
   (`memfs`, `mirror`)
 
 ### GAP-30: Missing VCB Lock on `FileRenameInformationEx` FCB Rename
