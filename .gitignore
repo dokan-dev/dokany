@@ -64,4 +64,7 @@ ReleasePS
 /tests/fstest/build/
 /tests/fstest/build-*/
 /tests/fstest/ci-bin/
+/tests/np/build/
+/tests/np/build-*/
+/ci-np-unit-results/
 /fstest-results/

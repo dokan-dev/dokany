@@ -47,6 +47,155 @@ function Resolve-TargetPath {
     return (Join-Path -Path $BasePath -ChildPath $Path)
 }
 
+function Convert-PeRvaToFileOffset {
+    param(
+        [Parameter(Mandatory = $true)][uint32]$Rva,
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][int]$SectionTableOffset,
+        [Parameter(Mandatory = $true)][uint16]$NumberOfSections
+    )
+
+    if ($Rva -eq 0) { return -1 }
+    for ($i = 0; $i -lt $NumberOfSections; $i++) {
+        $secOff = $SectionTableOffset + ($i * 40)
+        if ($secOff + 40 -gt $Bytes.Length) { break }
+        $vAddr = [BitConverter]::ToUInt32($Bytes, $secOff + 12)
+        $rawSize = [BitConverter]::ToUInt32($Bytes, $secOff + 16)
+        $rawPtr = [BitConverter]::ToUInt32($Bytes, $secOff + 20)
+        if ($rawSize -eq 0 -or ([int64]$rawPtr + [int64]$rawSize) -gt $Bytes.Length) { continue }
+        if ($Rva -ge $vAddr -and ($Rva - $vAddr) -lt $rawSize) {
+            $off = [int64]$rawPtr + ([int64]$Rva - [int64]$vAddr)
+            return [int]$off
+        }
+    }
+    return -1
+}
+
+function Read-PeAsciiStringAtRva {
+    param(
+        [Parameter(Mandatory = $true)][uint32]$Rva,
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][int]$SectionTableOffset,
+        [Parameter(Mandatory = $true)][uint16]$NumberOfSections
+    )
+
+    $off = Convert-PeRvaToFileOffset -Rva $Rva -Bytes $Bytes -SectionTableOffset $SectionTableOffset -NumberOfSections $NumberOfSections
+    if ($off -lt 0) {
+        throw "Invalid PE string RVA 0x$($Rva.ToString('X8'))."
+    }
+    $end = $off
+    while ($end -lt $Bytes.Length -and $Bytes[$end] -ne 0) {
+        $end++
+    }
+    if ($end -ge $Bytes.Length) {
+        throw "Unterminated PE string at offset $off."
+    }
+    return [System.Text.Encoding]::ASCII.GetString($Bytes, $off, $end - $off)
+}
+
+function Get-DokanPEImportedDlls {
+    param([Parameter(Mandatory = $true)][string]$BinaryPath)
+
+    [byte[]]$bytes = [System.IO.File]::ReadAllBytes($BinaryPath)
+    if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+        throw "$BinaryPath is not a valid PE file (missing MZ header)."
+    }
+    $lfanew = [int64][BitConverter]::ToInt32($bytes, 60)
+    if ($lfanew -lt 0 -or ($lfanew + 24) -gt $bytes.Length) {
+        throw "$BinaryPath has invalid e_lfanew ($lfanew)."
+    }
+    if ($bytes[$lfanew] -ne 0x50 -or $bytes[$lfanew + 1] -ne 0x45 -or $bytes[$lfanew + 2] -ne 0 -or $bytes[$lfanew + 3] -ne 0) {
+        throw "$BinaryPath is missing PE signature."
+    }
+
+    $fileHeaderOff = [int]$lfanew + 4
+    $numSections = [BitConverter]::ToUInt16($bytes, $fileHeaderOff + 2)
+    $sizeOfOpt = [int][BitConverter]::ToUInt16($bytes, $fileHeaderOff + 16)
+    $optOff = [int64]$fileHeaderOff + 20
+    $secOff = $optOff + $sizeOfOpt
+    if ($sizeOfOpt -lt 2 -or $secOff + ([int64]$numSections * 40) -gt $bytes.Length) {
+        throw "$BinaryPath has truncated OptionalHeader or section headers."
+    }
+
+    $magic = [BitConverter]::ToUInt16($bytes, [int]$optOff)
+    if ($magic -eq 0x010B) {
+        # PE32
+        $numRvaOff = $optOff + 92
+        $dirOff = $optOff + 96
+    } elseif ($magic -eq 0x020B) {
+        # PE32+
+        $numRvaOff = $optOff + 108
+        $dirOff = $optOff + 112
+    } else {
+        throw "$BinaryPath has unsupported OptionalHeader magic 0x$($magic.ToString('X4'))."
+    }
+    if (($numRvaOff + 4) -gt $secOff) {
+        throw "$BinaryPath OptionalHeader truncated before NumberOfRvaAndSizes."
+    }
+    $numRva = [BitConverter]::ToUInt32($bytes, [int]$numRvaOff)
+
+    $imports = New-Object System.Collections.Generic.List[string]
+    if ($numRva -gt 1 -and ($dirOff + 16) -le $secOff) {
+        $impRva = [BitConverter]::ToUInt32($bytes, [int]$dirOff + 8)
+        if ($impRva -ne 0) {
+            $impOff = Convert-PeRvaToFileOffset -Rva $impRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
+            if ($impOff -lt 0) {
+                throw "$BinaryPath has invalid Import Directory RVA."
+            }
+            while ($impOff + 20 -le $bytes.Length) {
+                $origFirstThunk = [BitConverter]::ToUInt32($bytes, $impOff)
+                $nameRva = [BitConverter]::ToUInt32($bytes, $impOff + 12)
+                $firstThunk = [BitConverter]::ToUInt32($bytes, $impOff + 16)
+                if ($origFirstThunk -eq 0 -and $nameRva -eq 0 -and $firstThunk -eq 0) {
+                    break
+                }
+                if ($nameRva -ne 0) {
+                    $dllName = Read-PeAsciiStringAtRva -Rva $nameRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
+                    $imports.Add($dllName)
+                }
+                $impOff += 20
+            }
+        }
+    }
+
+    $delayImports = New-Object System.Collections.Generic.List[string]
+    if ($numRva -gt 13 -and ($dirOff + (14 * 8)) -le $secOff) {
+        $delayRva = [BitConverter]::ToUInt32($bytes, [int]$dirOff + (13 * 8))
+        if ($delayRva -ne 0) {
+            $delayOff = Convert-PeRvaToFileOffset -Rva $delayRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
+            if ($delayOff -lt 0) {
+                throw "$BinaryPath has invalid Delay-Load Import Directory RVA."
+            }
+            while ($delayOff + 32 -le $bytes.Length) {
+                $dllNameRva = [BitConverter]::ToUInt32($bytes, $delayOff + 4)
+                if ($dllNameRva -eq 0) {
+                    break
+                }
+                $dllName = Read-PeAsciiStringAtRva -Rva $dllNameRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
+                $delayImports.Add($dllName)
+                $delayOff += 32
+            }
+        }
+    }
+
+    return @{
+        Imports      = @($imports)
+        DelayImports = @($delayImports)
+    }
+}
+
+function Assert-DokanNpKernel32OnlyImports {
+    param([Parameter(Mandatory = $true)][string]$BinaryPath)
+
+    $pe = Get-DokanPEImportedDlls -BinaryPath $BinaryPath
+    if ($pe.Imports.Count -ne 1 -or ($pe.Imports[0] -ine 'KERNEL32.dll')) {
+        throw "PE import check failed for ${BinaryPath}: expected ONLY KERNEL32.dll, got [$($pe.Imports -join ', ')]."
+    }
+    if ($pe.DelayImports.Count -ne 0) {
+        throw "PE delay-load import check failed for ${BinaryPath}: expected none, got [$($pe.DelayImports -join ', ')]."
+    }
+}
+
 function Invoke-WithRetry {
     param(
         [Parameter(Mandatory = $true)]
@@ -224,6 +373,16 @@ try {
     if ($hasMsys2) { $buildParts += 'msys2' }
     Write-Host "Building Dokan parts: $($buildParts -join ', ')"
     Exec-External { & .\scripts\build.ps1 -BuildPart $buildParts -Configurations $Configuration }
+
+    # Verify dokannp3.dll PE import table (Win32, x64, ARM64) imports ONLY KERNEL32.dll.
+    foreach ($arch in @('Win32', 'x64', 'ARM64')) {
+        $npDll = Join-Path $repoRoot "$arch\$Configuration\dokannp3.dll"
+        if (-not (Test-Path -LiteralPath $npDll -PathType Leaf)) {
+            throw "Expected dokannp3.dll not found at $npDll"
+        }
+        Assert-DokanNpKernel32OnlyImports -BinaryPath $npDll
+        Write-Host "PE import check passed ($arch): $npDll imports KERNEL32.dll only."
+    }
 
     # Test-sign all binaries.
     Exec-External { & .\cert\dokan-sign.ps1 }

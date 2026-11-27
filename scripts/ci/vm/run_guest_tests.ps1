@@ -7,6 +7,7 @@
         C:\ci\DokanSetup.exe
         C:\ci\verifier_helpers.ps1
         C:\ci\fstest\dokan_fstest.exe, C:\ci\fstest\baselines\
+        C:\ci\np\x64\dokan_np_test.exe, C:\ci\np\x86\dokan_np_test.exe
         C:\ci\repo\samples\memfs_test.ps1, mirror_test.ps1, fstools\src\fsx\fsx.exe
         C:\ci\repo\scripts\run_ifstest.ps1, fstest_common.ps1, build_helper.ps1
     The samples\ harnesses are the same scripts developers run locally, so CI and local runs stay identical.
@@ -17,7 +18,7 @@
 
     Shards (measured 10-16 min each under Driver Verifier, shard1 being the longer one):
         shard1: real NTFS --strict gate, memfs x64 + x86, mirror x64 (drive, dirJunction, driveRemovable, netUnc)
-        shard2: mirror x64 (driveMntMgr, driveRemovableMntMgr), mirror x86 (drive, netUnc)
+        shard2: mirror x64 (driveMntMgr, driveRemovableMntMgr), mirror x86 (drive, netUnc), dokan_np x64 + x86 (mpr.dll, Shell, multi-session, hygiene)
         all:    everything above
 #>
 param(
@@ -567,6 +568,17 @@ public static class TokenPrivileges {
         }
     } finally {
         Pop-Location
+    }
+
+    if ($Shard -in @('all', 'shard2')) {
+        $npResultsDir = 'C:\ci\np-results'
+        New-Item -ItemType Directory -Force -Path $npResultsDir | Out-Null
+        $npTestX64 = 'C:\ci\np\x64\dokan_np_test.exe'
+        $npTestX86 = 'C:\ci\np\x86\dokan_np_test.exe'
+        Write-Host '=== Running dokan_np_test (x64) ===' -ForegroundColor Cyan
+        Exec-External { & $npTestX64 "--mirror_exe=$mirrorX64" '--secondary_user=dokan_ifstest' '--secondary_pass=D0kan_1fstest' '--test_live_registry' "--gtest_output=xml:$npResultsDir\dokan_np_test_x64.xml" }
+        Write-Host '=== Running dokan_np_test (x86 / WOW64) ===' -ForegroundColor Cyan
+        Exec-External { & $npTestX86 "--mirror_exe=$mirrorX86" '--secondary_user=dokan_ifstest' '--secondary_pass=D0kan_1fstest' "--gtest_output=xml:$npResultsDir\dokan_np_test_x86.xml" }
     }
 
     Write-Host '=== Driver Verifier statistics ===' -ForegroundColor Cyan

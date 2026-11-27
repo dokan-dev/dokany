@@ -32,9 +32,9 @@ demand (`workflow_dispatch`, with optional `os` and `crash_selftest` inputs). A 
 
 | Job | Runner | What it does |
 | :--- | :--- | :--- |
-| `Validate CI scripts` | `ubuntu-latest` | [`test_ci_scripts.sh`](test_ci_scripts.sh): behavioral unit tests for `cleanup-pr-caches.yml` (`jq` run matcher), `scripts/run_ifstest.ps1` (`Find-IfsTestCreateProcFailure`), `scripts/ci/install_cygwin.ps1` (`Assert-CygwinGpgVerification`), and Driver Verifier checks in `vm/provisioning/verifier_helpers.ps1`. Skipped on `schedule` and `crash_selftest` runs. |
-| `Build, sign and package` | `windows-2025-vs2026` | [`install_cygwin.ps1`](install_cygwin.ps1) + [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
-| `Build test tools` | `windows-2025-vs2026` | [`build_test_tools.ps1`](build_test_tools.ps1): builds `dokan_fstest.exe` (static CRT, Server 2016 import gate, self-tests) and `fsx.exe`. Publishes single-zipped (`archive: false`) `dokan-fstest-<version>.zip` (prefixed `pr-<N>-` on pull requests) and `dokan-test-tools`. Runs in parallel with the Dokan build; skipped on `schedule` and `crash_selftest` runs. |
+| `Validate CI scripts` | `ubuntu-latest` | [`test_ci_scripts.sh`](test_ci_scripts.sh): behavioral unit tests for `cleanup-pr-caches.yml` (`jq` run matcher), `scripts/run_ifstest.ps1` (`Find-IfsTestCreateProcFailure`), `scripts/ci/install_cygwin.ps1` (`Assert-CygwinGpgVerification`), `scripts/ci/build_and_package.ps1` (`Assert-DokanNpKernel32OnlyImports`), and Driver Verifier checks in `vm/provisioning/verifier_helpers.ps1`. Skipped on `schedule` and `crash_selftest` runs. |
+| `Build, sign and package` | `windows-2025-vs2026` | [`install_cygwin.ps1`](install_cygwin.ps1) + [`build_and_package.ps1`](build_and_package.ps1): builds Win32/x64/ARM64 and Cygwin + MSYS2 `dokan_fuse`, verifies `dokannp3.dll` (Win32/x64/ARM64) PE imports contain only `KERNEL32.dll`, test-signs with `cert/DokanSign.pfx`, builds the WiX bundle. Publishes direct (`archive: false`) release artifacts `DokanSetup-<version>.exe` and `dokan-<version>.zip` (prefixed `pr-<N>-` on pull requests), plus `dokan-test-payload`. |
+| `Build test tools` | `windows-2025-vs2026` | [`build_test_tools.ps1`](build_test_tools.ps1): builds `dokan_fstest.exe` (static CRT, Server 2016 import gate, self-tests), builds `tests/np` (`dokan_np_unit_test.exe` and `dokan_np_test.exe` for x64 and Win32 using cached GoogleTest), runs Tier 1 `dokan_np_unit_test.exe` (x64 + Win32, with PageHeap when `gflags.exe` is available) and uploads JUnit XML (`dokan-np-unit-results`), and builds `fsx.exe`. Publishes single-zipped (`archive: false`) `dokan-fstest-<version>.zip` (prefixed `pr-<N>-` on pull requests) and `dokan-test-tools`. Runs in parallel with the Dokan build; skipped on `schedule` and `crash_selftest` runs. |
 | `Prepare VM image (<os>)` | `ubuntu-latest` | Computes the per-OS cache key via [`vm/image_cache_key.sh`](vm/image_cache_key.sh). On a cache miss, [`vm/bake_image.sh`](vm/bake_image.sh) installs Windows Server Core from Microsoft's evaluation ISO, provisions it (see below), and saves it to the Actions cache. On the 5-day `schedule:` run on `master`, restores each cached image to refresh its last-accessed time. |
 | `Test (<os>, <shard>)` | `ubuntu-latest` | Depends on `Build, sign and package`, `Build test tools`, and `Prepare VM image`. Restores the cached image, downloads `dokan-test-payload` and `dokan-test-tools` via `actions/download-artifact`, and runs [`vm/run_vm_tests.sh`](vm/run_vm_tests.sh) (QEMU/KVM) and [`vm/run_guest_tests.ps1`](vm/run_guest_tests.ps1) inside the guest. |
 | `Find crash dumps` / `Analyze crash dumps` | `ubuntu-latest` / `windows-2022` | When any `crash-dump-*-a<attempt>` artifact exists for the current run attempt, [`analyze_crash_dumps.ps1`](analyze_crash_dumps.ps1) runs `kd.exe` with `dokan3.sys`/`dokan3.pdb`, uploads the full reports in the `crash-analysis` artifact, and writes a summary to the job summary. |
@@ -61,7 +61,7 @@ former AppVeyor FsTest coverage:
 | Shard | Tests |
 | :--- | :--- |
 | `shard1` | Real NTFS `dokan_fstest --strict` gate; `samples/memfs_test.ps1` (x64, x86); `samples/mirror_test.ps1` x64 (`drive`, `dirJunction`, `driveRemovable`, `netUnc`) |
-| `shard2` | `samples/mirror_test.ps1` x64 (`driveMntMgr`, `driveRemovableMntMgr`), x86 (`drive`, `netUnc`) |
+| `shard2` | `samples/mirror_test.ps1` x64 (`driveMntMgr`, `driveRemovableMntMgr`), x86 (`drive`, `netUnc`); `dokan_np_test.exe` x64 + x86 (`mpr.dll`, `IShellFolder`, multi-session, PE import/DBWIN/registry hygiene) |
 
 Each mount runs `fsx`, `dokan_fstest` against the `tests/fstest/baselines` manifests, and HLK IFSTest,
 using the same `samples/*.ps1` harnesses as local runs. Because Win32-OpenSSH executes in non-interactive
@@ -194,4 +194,18 @@ scripts/ci/vm/bake_image.sh server2022 ~/dokan-vm/server2022
 scripts/ci/vm/run_vm_tests.sh ~/dokan-vm/server2022 ~/dokan-payload ~/dokan-results-1 shard1
 # Override SSH_PORT (default 2222) when running multiple shards concurrently on the same host:
 SSH_PORT=2223 scripts/ci/vm/run_vm_tests.sh ~/dokan-vm/server2022 ~/dokan-payload ~/dokan-results-2 shard2
+```
+
+### Network Provider (`tests/np/`) local execution (Windows)
+
+Tier 1 hermetic unit tests require zero admin rights and no driver installed:
+
+```powershell
+cmake -S tests\np -B tests\np\build-x64 -A x64 && cmake --build tests\np\build-x64 --config Release --parallel && .\tests\np\build-x64\bin\Release\dokan_np_unit_test.exe
+```
+
+Tier 2 real-OS `mpr.dll` + Shell integration tests (requires Dokan installed with `dokannp3.dll` registered):
+
+```powershell
+.\tests\np\build-x64\bin\Release\dokan_np_test.exe --mirror_exe=x64\Release\mirror.exe
 ```
