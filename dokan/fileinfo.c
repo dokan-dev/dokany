@@ -28,8 +28,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <assert.h>
 #include <stddef.h>
 
-#define DOKAN_STREAM_ENTRY_ALIGNMENT 8
-
 NTSTATUS
 DokanFillFileBasicInfo(PFILE_BASIC_INFORMATION BasicInfo,
                        PBY_HANDLE_FILE_INFORMATION FileInfo,
@@ -242,76 +240,110 @@ DokanFillIdInfo(PFILE_ID_INFORMATION IdInfo,
 }
 
 /**
- * \struct DOKAN_FIND_STREAM_DATA
- * \brief Dokan find stream list
- *
- * Used by FindStreams
+ * \struct DOKAN_FIND_STREAM_CONTEXT
+ * \brief Context for filling FILE_STREAM_INFORMATION entries during a
+ * FindStreams dispatch.
  */
-typedef struct _DOKAN_FIND_STREAM_DATA {
-  /**
-  * Stream data information link
-  */
-  WIN32_FIND_STREAM_DATA FindStreamData;
-  /**
-  * Current list entry informations
-  */
-  LIST_ENTRY ListEntry;
-} DOKAN_FIND_STREAM_DATA, *PDOKAN_FIND_STREAM_DATA;
+typedef struct _DOKAN_FIND_STREAM_CONTEXT {
+  /** Active IO event receiving the stream information buffer. */
+  PDOKAN_IO_EVENT IoEvent;
+  /** Maximum byte capacity of the result buffer for this query. */
+  ULONG ResultBufferSize;
+  /** Byte offset of the most recently written stream entry. */
+  ULONG LastEntryOffset;
+  /** Unaligned byte size of the most recently written stream entry. */
+  ULONG LastUnalignedSize;
+  /** Whether at least one complete stream entry has been written. */
+  BOOL HasEntries;
+  /** Whether an entry failed to fit in the result buffer. */
+  BOOL Overflowed;
+} DOKAN_FIND_STREAM_CONTEXT, *PDOKAN_FIND_STREAM_CONTEXT;
 
-BOOL WINAPI DokanFillFindStreamData(PWIN32_FIND_STREAM_DATA FindStreamData,
-                                    PVOID FindStreamContext) {
+static ULONG GetQueryResultBufferSize(PDOKAN_IO_EVENT IoEvent) {
+  ULONG resultBufferSize = IoEvent->EventContext->Operation.File.BufferLength;
+  ULONG allocBufferSize = (ULONG)IOEVENT_RESULT_BUFFER_SIZE(IoEvent);
+  return resultBufferSize < allocBufferSize ? resultBufferSize
+                                            : allocBufferSize;
+}
 
-  PDOKAN_IO_EVENT ioEvent = (PDOKAN_IO_EVENT)FindStreamContext;
-  ULONG offset = (ULONG)ioEvent->EventResult->BufferLength;
-  ULONG resultBufferSize =
-      ioEvent->EventContext->Operation.File.BufferLength;
-
-  ULONG streamNameLength =
-      (ULONG)wcslen(FindStreamData->cStreamName) * sizeof(WCHAR);
-
-  // Must be aligned on a 8-byte boundary.
-  ULONG entrySize =
-      QuadAlign(sizeof(FILE_STREAM_INFORMATION) + streamNameLength);
-  assert(entrySize % DOKAN_STREAM_ENTRY_ALIGNMENT == 0);
-
-  PFILE_STREAM_INFORMATION streamInfo =
-      (PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[offset];
-  if (offset + entrySize + streamInfo->NextEntryOffset > resultBufferSize) {
+static BOOL WINAPI DokanFillFindStreamData(
+    PWIN32_FIND_STREAM_DATA FindStreamData, PVOID FindStreamContext) {
+  PDOKAN_FIND_STREAM_CONTEXT context =
+      (PDOKAN_FIND_STREAM_CONTEXT)FindStreamContext;
+  if (context->Overflowed) {
     return FALSE;
   }
 
-  // If this isn't the first entry move to the next
-  // memory location
-  if (streamInfo->NextEntryOffset != 0) {
-    offset += streamInfo->NextEntryOffset;
-    streamInfo =
-        (PFILE_STREAM_INFORMATION)&ioEvent->EventResult->Buffer[offset];
+  PDOKAN_IO_EVENT ioEvent = context->IoEvent;
+  ULONG resultBufferSize = context->ResultBufferSize;
+  ULONG headerBytes = (ULONG)FIELD_OFFSET(FILE_STREAM_INFORMATION, StreamName);
+  ULONG streamNameLength =
+      (ULONG)wcslen(FindStreamData->cStreamName) * sizeof(WCHAR);
+  ULONG unalignedSize = headerBytes + streamNameLength;
+
+  if (unalignedSize < headerBytes) {
+    context->Overflowed = TRUE;
+    return FALSE;
   }
 
-  assert(streamInfo->NextEntryOffset == 0);
+  PCHAR baseBuffer = (PCHAR)ioEvent->EventResult->Buffer;
+  ULONG entryOffset = 0;
 
-  // Fill the new entry
+  if (context->HasEntries) {
+    ULONG prevAlignedSize = (ULONG)QuadAlign(context->LastUnalignedSize);
+    if (prevAlignedSize < context->LastUnalignedSize ||
+        context->LastEntryOffset > resultBufferSize ||
+        prevAlignedSize > resultBufferSize - context->LastEntryOffset) {
+      context->Overflowed = TRUE;
+      return FALSE;
+    }
+    entryOffset = context->LastEntryOffset + prevAlignedSize;
+    if (unalignedSize > resultBufferSize - entryOffset) {
+      context->Overflowed = TRUE;
+      return FALSE;
+    }
+    if (prevAlignedSize > context->LastUnalignedSize) {
+      RtlZeroMemory(baseBuffer + context->LastEntryOffset +
+                        context->LastUnalignedSize,
+                    prevAlignedSize - context->LastUnalignedSize);
+    }
+    ((PFILE_STREAM_INFORMATION)(baseBuffer + context->LastEntryOffset))
+        ->NextEntryOffset = prevAlignedSize;
+  } else if (unalignedSize > resultBufferSize) {
+    context->Overflowed = TRUE;
+    return FALSE;
+  }
+
+  PFILE_STREAM_INFORMATION streamInfo =
+      (PFILE_STREAM_INFORMATION)(baseBuffer + entryOffset);
+  streamInfo->NextEntryOffset = 0;
   streamInfo->StreamNameLength = streamNameLength;
-  memcpy_s(streamInfo->StreamName, streamNameLength,
-           FindStreamData->cStreamName, streamNameLength);
+  if (streamNameLength > 0) {
+    RtlCopyMemory(streamInfo->StreamName, FindStreamData->cStreamName,
+                  streamNameLength);
+  }
   streamInfo->StreamSize = FindStreamData->StreamSize;
   streamInfo->StreamAllocationSize = FindStreamData->StreamSize;
-  streamInfo->NextEntryOffset = entrySize;
   ALIGN_ALLOCATION_SIZE(&streamInfo->StreamAllocationSize,
                         ioEvent->DokanInstance->DokanOptions);
-  ioEvent->EventResult->BufferLength = offset;
+
+  context->LastEntryOffset = entryOffset;
+  context->LastUnalignedSize = unalignedSize;
+  context->HasEntries = TRUE;
   return TRUE;
 }
 
-VOID DOKANAPI DokanEndDispatchGetFileInformation(
-    PDOKAN_IO_EVENT IoEvent, PBY_HANDLE_FILE_INFORMATION ByHandleFileInfo,
-    NTSTATUS Status) {
-  ULONG remainingLength = IoEvent->EventContext->Operation.File.BufferLength;
+static VOID
+DokanEndDispatchGetFileInformation(PDOKAN_IO_EVENT IoEvent,
+                                   PBY_HANDLE_FILE_INFORMATION ByHandleFileInfo,
+                                   NTSTATUS Status) {
+  ULONG initialLength = GetQueryResultBufferSize(IoEvent);
+  ULONG remainingLength = initialLength;
 
   DbgPrint("\tresult =  %lx\n", Status);
 
   if (Status != STATUS_SUCCESS) {
-    IoEvent->EventResult->Status = STATUS_INVALID_PARAMETER;
+    IoEvent->EventResult->Status = Status;
     IoEvent->EventResult->BufferLength = 0;
   } else {
     ULONG fileInformationClass =
@@ -340,9 +372,13 @@ VOID DOKANAPI DokanEndDispatchGetFileInformation(
 
     case FileEaInformation:
       DbgPrint("\tFileEaInformation\n");
-      // status = STATUS_NOT_IMPLEMENTED;
-      Status = STATUS_SUCCESS;
-      remainingLength -= sizeof(FILE_EA_INFORMATION);
+      if (remainingLength < sizeof(FILE_EA_INFORMATION)) {
+        Status = STATUS_BUFFER_OVERFLOW;
+      } else {
+        ((PFILE_EA_INFORMATION)IoEvent->EventResult->Buffer)->EaSize = 0;
+        Status = STATUS_SUCCESS;
+        remainingLength -= sizeof(FILE_EA_INFORMATION);
+      }
       break;
 
     case FileStandardInformation:
@@ -415,36 +451,18 @@ VOID DOKANAPI DokanEndDispatchGetFileInformation(
     }
 
     IoEvent->EventResult->Status = Status;
-    IoEvent->EventResult->BufferLength =
-        IoEvent->EventContext->Operation.File.BufferLength - remainingLength;
+    IoEvent->EventResult->BufferLength = initialLength - remainingLength;
   }
 
   DbgPrint("\tDispatchQueryInformation result =  %lx\n", Status);
   EventCompletion(IoEvent);
 }
 
-VOID DOKANAPI DokanEndDispatchFindStreams(PDOKAN_IO_EVENT IoEvent,
-                                          NTSTATUS Status) {
-  ULONG resultBufferSize = IOEVENT_RESULT_BUFFER_SIZE(IoEvent);
-  PFILE_STREAM_INFORMATION streamInfo =
-      (PFILE_STREAM_INFORMATION)&IoEvent->EventResult
-          ->Buffer[IoEvent->EventResult->BufferLength];
+static VOID DokanEndDispatchFindStreams(PDOKAN_FIND_STREAM_CONTEXT Context,
+                                        NTSTATUS Status) {
+  PDOKAN_IO_EVENT ioEvent = Context->IoEvent;
 
   DbgPrint("\tresult =  %lx\n", Status);
-
-  // Entries must be 8 byte aligned
-  assert(streamInfo->NextEntryOffset % DOKAN_STREAM_ENTRY_ALIGNMENT == 0);
-
-  // Ensure that the last entry doesn't point to another entry.
-  IoEvent->EventResult->BufferLength += streamInfo->NextEntryOffset;
-  streamInfo->NextEntryOffset = 0;
-
-  assert(IoEvent->EventResult->BufferLength <= resultBufferSize);
-
-  if (IoEvent->EventResult->BufferLength > resultBufferSize) {
-    IoEvent->EventResult->BufferLength = 0;
-    Status = STATUS_BUFFER_OVERFLOW;
-  }
 
   // STATUS_PENDING should not be passed to this function
   if (Status == STATUS_PENDING) {
@@ -453,9 +471,24 @@ VOID DOKANAPI DokanEndDispatchFindStreams(PDOKAN_IO_EVENT IoEvent,
     Status = STATUS_INTERNAL_ERROR;
   }
 
-  IoEvent->EventResult->Status = Status;
+  if (Status == STATUS_SUCCESS && Context->Overflowed) {
+    Status = STATUS_BUFFER_OVERFLOW;
+  }
+
+  if ((Status == STATUS_SUCCESS || Status == STATUS_BUFFER_OVERFLOW) &&
+      Context->HasEntries) {
+    assert(Context->LastEntryOffset <= Context->ResultBufferSize &&
+           Context->LastUnalignedSize <=
+               Context->ResultBufferSize - Context->LastEntryOffset);
+    ioEvent->EventResult->BufferLength =
+        Context->LastEntryOffset + Context->LastUnalignedSize;
+  } else {
+    ioEvent->EventResult->BufferLength = 0;
+  }
+
+  ioEvent->EventResult->Status = Status;
   DbgPrint("\tDokanEndDispatchFindStreams result =  0x%x\n", Status);
-  EventCompletion(IoEvent);
+  EventCompletion(ioEvent);
 }
 
 VOID DispatchQueryInformation(PDOKAN_IO_EVENT IoEvent) {
@@ -478,29 +511,40 @@ VOID DispatchQueryInformation(PDOKAN_IO_EVENT IoEvent) {
   if (IoEvent->EventContext->Operation.File.FileInformationClass ==
       FileStreamInformation) {
     DbgPrint("FileStreamInformation\n");
-    // https://msdn.microsoft.com/en-us/library/windows/hardware/ff540364(v=vs.85).aspx
-    if (IoEvent->EventContext->Operation.File.BufferLength <
-        sizeof(FILE_STREAM_INFORMATION)) {
-
+    // https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_stream_information
+    ULONG resultBufferSize = GetQueryResultBufferSize(IoEvent);
+    if (resultBufferSize <
+        (ULONG)FIELD_OFFSET(FILE_STREAM_INFORMATION, StreamName)) {
       status = STATUS_BUFFER_TOO_SMALL;
     } else if (IoEvent->DokanInstance->DokanOperations->FindStreams) {
+      DOKAN_FIND_STREAM_CONTEXT findStreamContext;
+      findStreamContext.IoEvent = IoEvent;
+      findStreamContext.ResultBufferSize = resultBufferSize;
+      findStreamContext.LastEntryOffset = 0;
+      findStreamContext.LastUnalignedSize = 0;
+      findStreamContext.HasEntries = FALSE;
+      findStreamContext.Overflowed = FALSE;
 
       status = IoEvent->DokanInstance->DokanOperations->FindStreams(
           IoEvent->EventContext->Operation.File.FileName,
-          DokanFillFindStreamData, IoEvent, &IoEvent->DokanFileInfo);
-      DokanEndDispatchFindStreams(IoEvent, status);
+          DokanFillFindStreamData, &findStreamContext, &IoEvent->DokanFileInfo);
+      DokanEndDispatchFindStreams(&findStreamContext, status);
+      return;
     } else {
       status = STATUS_NOT_IMPLEMENTED;
     }
   } else if (IoEvent->DokanInstance->DokanOperations->GetFileInformation) {
-
     ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
     status = IoEvent->DokanInstance->DokanOperations->GetFileInformation(
         IoEvent->EventContext->Operation.File.FileName, &byHandleFileInfo,
         &IoEvent->DokanFileInfo);
     DokanEndDispatchGetFileInformation(IoEvent, &byHandleFileInfo, status);
+    return;
   } else {
-
     status = STATUS_NOT_IMPLEMENTED;
   }
+
+  IoEvent->EventResult->BufferLength = 0;
+  IoEvent->EventResult->Status = status;
+  EventCompletion(IoEvent);
 }
