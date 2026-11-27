@@ -387,6 +387,7 @@ Return Value:
   BOOLEAN openRequiringOplock = FALSE;
   BOOLEAN unwindShareAccess = FALSE;
   BOOLEAN eventContextConsumed = FALSE;
+  BOOLEAN openFileCountIncremented = FALSE;
   DWORD disposition = 0;
   BOOLEAN fcbLocked = FALSE;
   DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
@@ -423,7 +424,30 @@ Return Value:
       __leave;
     }
 
+    BOOLEAN isRetryCreate = FALSE;
+    if (fileObject->FsContext2 != NULL) {
+      PDokanCCB existingCcb = (PDokanCCB)fileObject->FsContext2;
+      if (GetIdentifierType(existingCcb) == CCB &&
+          DokanCCBFlagsIsSet(existingCcb, DOKAN_RETRY_CREATE)) {
+        isRetryCreate = TRUE;
+        ccb = existingCcb;
+        fcb = ccb->Fcb;
+      }
+    }
+
+    // Track every open on VCB (CCB opens, VolumeFileHeader opens, and
+    // pre-HasEventWait opens). Increment before checking Vcb->Condition so a
+    // concurrent DokanEventRelease -> DokanCheckForDismount observes either
+    // OpenFileCount > 0 or our back-out sees Vcb->Condition != VcbGood.
+    if (!isRetryCreate) {
+      InterlockedIncrement(&RequestContext->Vcb->OpenFileCount);
+    }
+    openFileCountIncremented = TRUE;
+
     if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+      if (isRetryCreate) {
+        DokanCCBFlagsClearBit(ccb, DOKAN_RETRY_CREATE);
+      }
       DOKAN_LOG_FINE_IRP(RequestContext, "IdentifierType is VCB which is not mounted");
       status = STATUS_NO_SUCH_DEVICE;
       __leave;
@@ -439,7 +463,7 @@ Return Value:
       if (relatedFileObject != NULL) {
         fileObject->Vpb = relatedFileObject->Vpb;
       } else {
-        fileObject->Vpb = RequestContext->Dcb->DeviceObject->Vpb;
+        fileObject->Vpb = RequestContext->Vcb->Vpb;
       }
     }
 
@@ -470,6 +494,7 @@ Return Value:
         DokanLogInfo(&logger,
                      L"Handle created before IOCTL_EVENT_WAIT for file \"%wZ\"",
                      &fileObject->FileName);
+        SetFileObjectForVCB(fileObject, RequestContext->Vcb);
         status = STATUS_SUCCESS;
         __leave;
       }
@@ -1287,8 +1312,14 @@ Return Value:
       // contexts on the FILE_OBJECT pointing to them, or they might be misused
       // later. The pgpfsfd filter driver has been seen to do that when saving
       // attachments from Outlook.
-      fileObject->FsContext = NULL;
-      fileObject->FsContext2 = NULL;
+      if (fileObject != NULL) {
+        fileObject->FsContext = NULL;
+        fileObject->FsContext2 = NULL;
+      }
+
+      if (openFileCountIncremented) {
+        RequestContext->DecrementOpenFileCount = TRUE;
+      }
     }
 
     // If it's SL_OPEN_TARGET_DIRECTORY then
@@ -1380,7 +1411,9 @@ VOID DokanCompleteCreate(__in PREQUEST_CONTEXT RequestContext,
     DokanFCBUnlock(fcb);
     DokanFreeFCB(RequestContext->Vcb, fcb);
     fcb = NULL;
+    RequestContext->IrpSp->FileObject->FsContext = NULL;
     RequestContext->IrpSp->FileObject->FsContext2 = NULL;
+    RequestContext->DecrementOpenFileCount = TRUE;
   }
 
   if (fcb)

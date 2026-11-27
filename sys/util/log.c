@@ -75,7 +75,10 @@ static VOID DokanPrintToSysLog(__in PDRIVER_OBJECT DriverObject,
   UCHAR packetSize = 0;
 
   __try {
-  	if (KeGetCurrentIrql() > PASSIVE_LEVEL) {
+    if (DriverObject == NULL) {
+      __leave;
+    }
+    if (KeGetCurrentIrql() > PASSIVE_LEVEL) {
       DOKAN_LOG_("Event viewer logging called at a too high IRQL\n");
       __leave;
     }
@@ -500,11 +503,16 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
 
   PAGED_CODE();
 
-  // Is that a global log or a Vcb log that has driver log disptached
-  // enabled ?
-  if (requestContext && requestContext->Vcb && requestContext->Vcb->Dcb &&
-      !requestContext->Vcb->Dcb->DispatchDriverLogs) {
-    return;
+  // Is that a global log or a Vcb log that has driver log dispatched
+  // enabled ? Skip once the VCB is no longer VcbGood so teardown never races
+  // with late DOKAN_LOG_END_MJ caching.
+  if (requestContext && requestContext->Vcb) {
+    if (InterlockedCompareExchange(&requestContext->Vcb->Condition, 0, 0) !=
+            VcbGood ||
+        requestContext->Vcb->Dcb == NULL ||
+        !requestContext->Vcb->Dcb->DispatchDriverLogs) {
+      return;
+    }
   }
 
   __try {
@@ -546,8 +554,13 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
     ++g_DokanLogEntryList.NumberOfCachedEntries;
     InsertTailList(&g_DokanLogEntryList.Log, &logEntry->ListEntry);
 
-    if (requestContext && requestContext->Vcb && requestContext->Vcb->Dcb) {
-      PopDokanLogEntry(requestContext, requestContext->Vcb);
+    if (requestContext && requestContext->Vcb) {
+      LONG cond =
+          InterlockedCompareExchange(&requestContext->Vcb->Condition, 0, 0);
+      if ((cond == VcbGood || cond == VcbDismountStarting) &&
+          requestContext->Vcb->Dcb) {
+        PopDokanLogEntry(requestContext, requestContext->Vcb);
+      }
     }
   } __finally {
     DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
@@ -615,6 +628,26 @@ VOID IncrementVcbLogCacheCount() {
   }
 }
 
+VOID DecrementVcbLogCacheCount() {
+  InterlockedDecrement(&g_DokanVcbDriverLogCacheCount);
+}
+
+VOID DokanCleanupLogCache() {
+  g_DokanDriverLogCacheEnabled = FALSE;
+  g_DokanVcbDriverLogCacheCount = 0;
+
+  DokanResourceLockRW(&(g_DokanLogEntryList.Resource));
+  while (!IsListEmpty(&(g_DokanLogEntryList.Log))) {
+    PLIST_ENTRY listEntry = RemoveHeadList(&(g_DokanLogEntryList.Log));
+    PDOKAN_LOG_ENTRY logEntry =
+        CONTAINING_RECORD(listEntry, DOKAN_LOG_ENTRY, ListEntry);
+    DokanFree(logEntry);
+    --g_DokanLogEntryList.NumberOfCachedEntries;
+  }
+  DokanResourceUnlock(&(g_DokanLogEntryList.Resource));
+  ExDeleteResourceLite(&(g_DokanLogEntryList.Resource));
+}
+
 VOID CleanDokanLogEntry(_In_ PVOID Vcb) {
   PLIST_ENTRY listEntry;
   PLIST_ENTRY nextListEntry;
@@ -627,7 +660,8 @@ VOID CleanDokanLogEntry(_In_ PVOID Vcb) {
     return;
   }
 
-  InterlockedDecrement(&g_DokanVcbDriverLogCacheCount);
+  vcb->Dcb->DispatchDriverLogs = FALSE;
+  DecrementVcbLogCacheCount();
 
   __try {
     DokanResourceLockRW(&(g_DokanLogEntryList.Resource));

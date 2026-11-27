@@ -54,8 +54,16 @@ Return Value:
   fileObject = RequestContext->IrpSp->FileObject;
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-  if (fileObject == NULL || RequestContext->Vcb == NULL ||
-      !fileObject->FsContext2) {
+  if (fileObject == NULL || RequestContext->Vcb == NULL) {
+    return STATUS_SUCCESS;
+  }
+
+  if (!fileObject->FsContext2) {
+    // Direct volume open or pre-HasEventWait open (SetFileObjectForVCB).
+    if (fileObject->FsContext == &RequestContext->Vcb->VolumeFileHeader) {
+      fileObject->FsContext = NULL;
+      RequestContext->DecrementOpenFileCount = TRUE;
+    }
     return STATUS_SUCCESS;
   }
 
@@ -72,7 +80,9 @@ Return Value:
 
     DokanFreeFCB(RequestContext->Vcb, fcb);
 
+    fileObject->FsContext = NULL;
     fileObject->FsContext2 = NULL;
+    RequestContext->DecrementOpenFileCount = TRUE;
     return STATUS_SUCCESS;
   }
 
@@ -91,6 +101,9 @@ Return Value:
     DokanFreeCCB(RequestContext, ccb);
     DokanFCBUnlock(fcb);
     DokanFreeFCB(RequestContext->Vcb, fcb);
+    fileObject->FsContext = NULL;
+    fileObject->FsContext2 = NULL;
+    RequestContext->DecrementOpenFileCount = TRUE;
     return STATUS_SUCCESS;
   }
 
@@ -103,6 +116,9 @@ Return Value:
     DokanFreeCCB(RequestContext, ccb);
     DokanFCBUnlock(fcb);
     DokanFreeFCB(RequestContext->Vcb, fcb);
+    fileObject->FsContext = NULL;
+    fileObject->FsContext2 = NULL;
+    RequestContext->DecrementOpenFileCount = TRUE;
     return STATUS_SUCCESS;
   }
 
@@ -117,11 +133,14 @@ Return Value:
   DokanFreeCCB(RequestContext, ccb);
   DokanFCBUnlock(fcb);
   DokanFreeFCB(RequestContext->Vcb, fcb);
+  fileObject->FsContext = NULL;
+  fileObject->FsContext2 = NULL;
 
   // Close can not be pending status don't register this IRP
 
   // inform it to user-mode
   DokanEventNotification(RequestContext, &RequestContext->Dcb->NotifyEvent, eventContext);
 
+  RequestContext->DecrementOpenFileCount = TRUE;
   return STATUS_SUCCESS;
 }

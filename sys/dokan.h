@@ -138,18 +138,6 @@ extern size_t g_DokanIrpEntrySize;
   ExFreeToLookasideListEx(&DokanIrpEntryLookasideList, IrpEntry)
 
 //
-//  Undocumented definition of ExtensionFlags
-//
-
-#ifndef DOE_UNLOAD_PENDING
-#define DOE_UNLOAD_PENDING 0x00000001
-#define DOE_DELETE_PENDING 0x00000002
-#define DOE_REMOVE_PENDING 0x00000004
-#define DOE_REMOVE_PROCESSED 0x00000008
-#define DOE_START_PENDING 0x00000010
-#endif
-
-//
 // FSD_IDENTIFIER_TYPE
 //
 // Identifiers used to mark the structures
@@ -186,6 +174,52 @@ typedef struct _IRP_LIST {
   KSPIN_LOCK ListLock;
 } IRP_LIST, *PIRP_LIST;
 
+// Explicit VCB lifecycle state machine (modeled on FastFat VCB_CONDITION):
+//   VcbNotMounted -> VcbGood -> VcbDismountStarting -> VcbDismountInProgress
+//     -> VcbDismounted -> VcbDeleted
+// VcbDismountStarting claims exclusive dismount ownership while
+// DokanDeleteMountPoint completes MountManager's re-entrant IOCTL_MOUNTDEV_*
+// handshake; VcbDismountInProgress begins rejecting all new I/O.
+typedef enum _DOKAN_VCB_CONDITION {
+  VcbNotMounted = 0,
+  VcbGood,
+  VcbDismountStarting,
+  VcbDismountInProgress,
+  VcbDismounted,
+  VcbDeleted,
+} DOKAN_VCB_CONDITION;
+
+// Explicit DCB lifecycle state machine:
+//   DcbActive -> DcbDeletePending -> DcbDeleted
+typedef enum _DOKAN_DCB_CONDITION {
+  DcbActive = 0,
+  DcbDeletePending,
+  DcbDeleted,
+} DOKAN_DCB_CONDITION;
+
+// Lock Hierarchy (strictly acquire in ascending order; never hold any lock
+// other than MountManagerLock across external MountManager IOCTLs, and never
+// hold any lock across NTFS reparse FSCTLs, DokanTriggerVolumeMount, or MM/CC
+// flush/purge calls):
+//   0. DokanGlobal->MountManagerLock       (standalone AutoMount switch during
+//                                           directory-junction mount; acquired
+//                                           with no other Dokan lock held)
+//   1. DokanGlobal->Resource              (DokanEventStart / MountId)
+//   2. DokanGlobal->VcbListLock           (VcbList & serializing
+//                                          DokanCheckForDismount so
+//                                          ExDeleteResourceLite(&Vcb->Resource)
+//                                          cannot race a concurrent waiter on
+//                                          Vcb->Resource, matching FastFat's
+//                                          FatData.Resource; disjoint from #1)
+//   3. DokanGlobal->MountPointListLock
+//   4. mountEntry->Resource
+//   5. Vcb->Resource
+//   6. Fcb->MainResource -> Fcb->PagingIoResource
+//   7. Dcb->Resource                      (leaf ERESOURCE)
+//   8. g_DokanLogEntryList.Resource       (leaf ERESOURCE, diagnostic logging)
+//   9. DokanGlobal->SessionMountPointLock (FAST_MUTEX, leaf)
+//  10. IoAcquireVpbSpinLock               (DISPATCH_LEVEL, leaf)
+//  11. IRP_LIST.ListLock / atomics        (DISPATCH_LEVEL, leaf)
 typedef struct _DOKAN_GLOBAL {
   FSD_IDENTIFIER Identifier;
   ERESOURCE Resource;
@@ -194,7 +228,8 @@ typedef struct _DOKAN_GLOBAL {
   PDEVICE_OBJECT FsCdDeviceObject;
   ULONG MountId;
 
-  PKTHREAD DeviceDeleteThread;
+  ERESOURCE VcbListLock;
+  LIST_ENTRY VcbList;
 
   ERESOURCE MountPointListLock;
   LIST_ENTRY MountPointList;
@@ -204,8 +239,13 @@ typedef struct _DOKAN_GLOBAL {
   FAST_MUTEX SessionMountPointLock;
   LIST_ENTRY SessionMountPointList;
 
-  LIST_ENTRY DeviceDeleteList;
-  KEVENT KillDeleteDeviceEvent;
+  // Signaled during CleanupGlobalDiskDevice so deferred dismount work items and
+  // backoff timers stop re-arming on driver unload.
+  KEVENT UnloadEvent;
+
+  // Drains all in-flight asynchronous dismount/release work items and backoff
+  // timers in CleanupGlobalDiskDevice before deleting DOKAN_GLOBAL ERESOURCEs.
+  EX_RUNDOWN_REF TeardownRundown;
 
   ULONG DriverVersion;
   
@@ -234,6 +274,9 @@ typedef struct _DokanDiskControlBlock {
   PDEVICE_OBJECT DeviceObject;
 
   PVOID Vcb;
+
+  // DOKAN_DCB_CONDITION state (accessed atomically via Interlocked*).
+  volatile LONG Condition;
 
   // Pending IRPs
   IRP_LIST PendingIrp;
@@ -381,9 +424,22 @@ typedef struct _DokanVolumeControlBlock {
   ERESOURCE Resource;
   PDEVICE_OBJECT DeviceObject;
   PDokanDCB Dcb;
+  // Target device object supplied by IopMountVolume (top of disk stack).
+  // IopMountVolume transfers a +1 ObReferenceObject reference to the FSD on
+  // STATUS_SUCCESS; DokanDeleteVcb releases it (matching FastFat).
+  PDEVICE_OBJECT TargetDeviceObject;
+  PDOKAN_GLOBAL Global;
+  PVPB Vpb;
+  LIST_ENTRY VcbLinks;
 
   // Avl Table storing the DokanFCB instances.
   RTL_AVL_TABLE FcbTable;
+
+  // FCBs displaced from FcbTable by rename-over-open-target (ReplacedByRename)
+  // that are still pinned by open handles or Memory Manager sections. Guarded
+  // by Vcb->Resource so DokanPurgeVolumeCachedSections can evict their standby
+  // sections on unmount.
+  LIST_ENTRY ReplacedFcbList;
 
   // NotifySync is used by notify directory change
   PNOTIFY_SYNC NotifySync;
@@ -393,11 +449,18 @@ typedef struct _DokanVolumeControlBlock {
   LONG FcbFreed;
   LONG CcbAllocated;
   LONG CcbFreed;
-  ULONG Flags;
-  // Atomically claimed via InterlockedCompareExchange at entry to
-  // DokanEventRelease to prevent concurrent teardown races while preserving
-  // MountManager IOCTL handling during DokanDeleteMountPoint.
-  volatile LONG ReleaseStarted;
+  // Active FILE_OBJECT opens on this VCB (includes CCB opens, direct volume
+  // opens via VolumeFileHeader, and pre-HasEventWait opens).
+  volatile LONG OpenFileCount;
+  // DOKAN_VCB_CONDITION state (accessed atomically via Interlocked*).
+  volatile LONG Condition;
+  // Coalesces deferred DokanCheckForDismount work item / backoff timer state
+  // (0 = idle, 1 = work item or backoff timer active).
+  volatile LONG DismountWorkItemQueued;
+  PIO_WORKITEM DismountWorkItem;
+  KTIMER DismountTimer;
+  KDPC DismountDpc;
+  ULONG DismountRetryCount;
   BOOLEAN HasEventWait;
   DokanResourceDebugInfo ResourceDebugInfo;
   DOKAN_LOGGER ResourceLogger;
@@ -417,12 +480,7 @@ typedef struct _DokanVolumeControlBlock {
   VOLUME_METRICS VolumeMetrics;
 } DokanVCB, *PDokanVCB;
 
-// Flags for volume
-#define VCB_MOUNTED 0x00000004
-#define VCB_DISMOUNT_PENDING 0x00000008
-
 // Flags for device
-#define DCB_DELETE_PENDING 0x00000001
 #define DCB_MOUNTPOINT_DELETED 0x00000004
 
 // Captures information about how oplocks have been used with an FCB for the
@@ -571,6 +629,9 @@ typedef struct _DokanFileControlBlock {
   // but due to a Dokan bug, this is actually possible. Until it is fixed, we
   // reproduce the behavior prior to the Avl table.
   BOOLEAN ReplacedByRename;
+  // Link in Vcb->ReplacedFcbList while ReplacedByRename is TRUE. Guarded by
+  // Vcb->Resource.
+  LIST_ENTRY NextReplacedFcb;
 } DokanFCB, *PDokanFCB;
 
 #define DokanResourceLockRO(resource)                                          \
@@ -815,6 +876,10 @@ typedef struct _REQUEST_CONTEXT {
 
   // Whether if we are the top-level IRP.
   BOOLEAN IsTopLevelIrp;
+
+  // Defer decrementing Vcb->OpenFileCount until after DOKAN_LOG_END_MJ so
+  // Vcb, Vcb->Resource, and Dcb stay alive across IRP completion.
+  BOOLEAN DecrementOpenFileCount;
 } REQUEST_CONTEXT, *PREQUEST_CONTEXT;
 
 // IRP list which has pending status.
@@ -831,15 +896,6 @@ typedef struct _IRP_ENTRY {
   LARGE_INTEGER TickCount;
   PIRP_LIST IrpList;
 } IRP_ENTRY, *PIRP_ENTRY;
-
-typedef struct _DEVICE_ENTRY {
-  LIST_ENTRY ListEntry;
-  PDEVICE_OBJECT DiskDeviceObject;
-  PDEVICE_OBJECT VolumeDeviceObject;
-  ULONG SessionId;
-  ULONG Counter;
-  UNICODE_STRING MountPoint;
-} DEVICE_ENTRY, *PDEVICE_ENTRY;
 
 typedef struct _DRIVER_EVENT_CONTEXT {
   LIST_ENTRY ListEntry;
@@ -995,6 +1051,10 @@ NTSTATUS
 DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
                   __in PDEVICE_OBJECT DeviceObject);
 
+// Defers DokanEventRelease onto a system worker thread (used by callers holding
+// Dcb->RemoveLock such as IOCTL_MOUNTDEV_LINK_DELETED or badUsageByCaller).
+VOID DokanQueueEventRelease(__in PDEVICE_OBJECT VolumeDeviceObject);
+
 NTSTATUS
 DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext);
 
@@ -1025,6 +1085,14 @@ VOID DokanFreeEventContext(__in PEVENT_CONTEXT EventContext);
 // Frees and clears any large-write EVENT_CONTEXT stashed in
 // Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT].
 VOID DokanFreeWriteEventContext(__in PIRP Irp);
+
+// Completes and logs RequestContext (preserving Vcb->OpenFileCount across
+// DOKAN_LOG_END_MJ), then decrements OpenFileCount and triggers synchronous or
+// deferred DokanCheckForDismount when the volume is dismounted with no opens.
+VOID DokanCompleteRequestAndCheckDismount(__in PREQUEST_CONTEXT RequestContext,
+                                          __in UCHAR MajorFunction,
+                                          __in NTSTATUS Status,
+                                          __in BOOLEAN AllowSyncDismount);
 
 NTSTATUS
 DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
@@ -1106,8 +1174,12 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
                       __out PDOKAN_CONTROL DokanControl);
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
-VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
-                             __in PDokanDCB Dcb);
+BOOLEAN DokanCheckForDismount(__in PDokanVCB Vcb, __in ULONG ResidualVpbRefs);
+VOID DokanQueueDismountWorkItem(__in PDokanVCB Vcb);
+KDEFERRED_ROUTINE DokanDismountTimerDpc;
+VOID DokanDeleteVcb(__in PDokanVCB Vcb);
+VOID DokanDeleteDcb(__in PDokanDCB Dcb);
+VOID DokanPurgeVolumeCachedSections(__in PDokanVCB Vcb);
 VOID DokanRecordSessionMountPoint(__in PDOKAN_GLOBAL DokanGlobal,
                                   __in ULONG SessionId,
                                   __in_opt PUNICODE_STRING MountPoint);
@@ -1127,6 +1199,7 @@ PCHAR CreateRemoveReparsePointRequest(__in_opt PREQUEST_CONTEXT RequestContext,
 
 // Open a Directory path and send a FsControl with the input buffer.
 NTSTATUS SendDirectoryFsctl(__in_opt PREQUEST_CONTEXT RequestContext,
+                            __in PDRIVER_OBJECT DriverObject,
                             __in PUNICODE_STRING Path, __in ULONG Code,
                             __in PCHAR Input, __in ULONG Length);
 
@@ -1209,10 +1282,16 @@ BOOLEAN IsUnmountPendingVcb(__in PDokanVCB vcb);
 BOOLEAN InsertMountEntry(PDOKAN_GLOBAL DokanGlobal,
                          PDOKAN_CONTROL DokanControl);
 
+VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
+                      __in PDOKAN_CONTROL DokanControl);
+
+KSTART_ROUTINE DokanDeregisterUncProvider;
+
 // Returns the mount entry for the given DokanControl if present.
 // The mount entry returned has its resource locked
 // and must be released when its access is no longer required.
-// This function should not be called while already holding a MountEntry lock.
+// Caller must have normal kernel APCs disabled (FsRtlEnterFileSystem or
+// KeEnterCriticalRegion) and must not already hold a MountEntry lock.
 _Ret_maybenull_
 _When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
 _When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
@@ -1223,6 +1302,8 @@ PMOUNT_ENTRY FindMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
 // Returns the mount entry for the given names if present.
 // The mount entry returned has its resource locked
 // and must be released when its access is no longer required.
+// Caller must have normal kernel APCs disabled (FsRtlEnterFileSystem or
+// KeEnterCriticalRegion) and must not already hold a MountEntry lock.
 _Ret_maybenull_
 _When_(ExclusiveLock, _Acquires_exclusive_lock_(return->Resource))
 _When_(!ExclusiveLock, _Acquires_shared_lock_(return->Resource))
@@ -1245,9 +1326,6 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB fcb,
 
 BOOLEAN
 DokanLookasideCreate(__in LOOKASIDE_LIST_EX *pCache, __in size_t cbElement);
-
-PDEVICE_ENTRY
-FindDeviceForDeleteBySessionId(PDOKAN_GLOBAL dokanGlobal, ULONG sessionId);
 
 BOOLEAN DeleteMountPointSymbolicLink(__in PUNICODE_STRING MountPoint);
 

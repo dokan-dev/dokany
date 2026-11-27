@@ -59,6 +59,7 @@ VOID DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
   FsRtlInitializeOplock(DokanGetFcbOplock(Fcb));
 
   InitializeListHead(&Fcb->NextCCB);
+  InitializeListHead(&Fcb->NextReplacedFcb);
 
   InterlockedIncrement(&RequestContext->Vcb->FcbAllocated);
   InterlockedAnd64(&RequestContext->Vcb->ValidFcbMask, (LONG64)Fcb);
@@ -213,6 +214,10 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
     BOOLEAN removed = RtlDeleteElementGenericTableAvl(&Vcb->FcbTable, &Fcb);
     ASSERT(removed);
     UNREFERENCED_PARAMETER(removed);
+  } else if (Fcb->ReplacedByRename) {
+    RemoveEntryList(&Fcb->NextReplacedFcb);
+    InitializeListHead(&Fcb->NextReplacedFcb);
+    Fcb->ReplacedByRename = FALSE;
   }
   ASSERT(IsListEmpty(&Fcb->NextCCB));
   InitializeListHead(&Fcb->NextCCB);
@@ -468,10 +473,16 @@ VOID DokanFreeFcbAvl(__in struct _RTL_AVL_TABLE *Table, __in PVOID Buffer) {
 
 VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
                     __in PWCH FileName, __in USHORT FileNameLength) {
-  BOOLEAN removed =
-      RtlDeleteElementGenericTableAvl(&RequestContext->Vcb->FcbTable, &Fcb);
-  ASSERT(removed);
-  UNREFERENCED_PARAMETER(removed);
+  if (Fcb->ReplacedByRename) {
+    RemoveEntryList(&Fcb->NextReplacedFcb);
+    InitializeListHead(&Fcb->NextReplacedFcb);
+    Fcb->ReplacedByRename = FALSE;
+  } else {
+    BOOLEAN removed =
+        RtlDeleteElementGenericTableAvl(&RequestContext->Vcb->FcbTable, &Fcb);
+    ASSERT(removed);
+    UNREFERENCED_PARAMETER(removed);
+  }
 
   Fcb->FileName = DokanWrapUnicodeString(FileName, FileNameLength);
 
@@ -494,6 +505,8 @@ VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
   } else {
     // This cannot happen on NTFS. See Fcb::PendingDeletion doc.
     conflictingFcb->ReplacedByRename = TRUE;
+    InsertTailList(&RequestContext->Vcb->ReplacedFcbList,
+                   &conflictingFcb->NextReplacedFcb);
   }
 
   // Reinsert the Fcb with the updated name

@@ -398,44 +398,52 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
                      L"Link created when unmount is pending; ignoring.");
         break;
       }
+      BOOLEAN updateMountEntry = FALSE;
+      KeEnterCriticalRegion();
+      ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
       if (!dcb->PersistentSymbolicLinkName &&
           StartsWithVolumeGuidPrefix(&mountdevNameString)) {
         dcb->PersistentSymbolicLinkName =
             DokanAllocDuplicateString(&mountdevNameString);
-        break;
-      }
-      if (!StartsWithDosDevicesPrefix(&mountdevNameString)) {
+      } else if (!StartsWithDosDevicesPrefix(&mountdevNameString)) {
         DokanLogInfo(&logger, L"Link name is not under DosDevices; ignoring.");
-        break;
-      }
-      if (dcb->MountPoint &&
-          RtlEqualUnicodeString(dcb->MountPoint, &mountdevNameString,
-                                /*CaseInsensitive=*/FALSE)) {
+      } else if (dcb->MountPoint &&
+                 RtlEqualUnicodeString(dcb->MountPoint, &mountdevNameString,
+                                       /*CaseInsensitive=*/FALSE)) {
         dcb->MountPointDetermined = TRUE;
         DokanLogInfo(&logger, L"Link name matches the current one.");
+      } else {
+        // Update the mount point on the DCB for the volume.
+        PUNICODE_STRING newMountPoint =
+            DokanAllocDuplicateString(&mountdevNameString);
+        if (newMountPoint == NULL) {
+          status = STATUS_INSUFFICIENT_RESOURCES;
+        } else {
+          if (dcb->MountPoint) {
+            DokanFreeUnicodeString(dcb->MountPoint);
+          }
+          dcb->MountPoint = newMountPoint;
+          dcb->MountPointDetermined = TRUE;
+          updateMountEntry = TRUE;
+        }
+      }
+      ExReleaseResourceLite(&dcb->Resource);
+      KeLeaveCriticalRegion();
+
+      if (!updateMountEntry) {
         break;
       }
 
-      // Update the mount point on the DCB for the volume.
-      if (dcb->MountPoint) {
-        DokanFreeUnicodeString(dcb->MountPoint);
-      }
-      dcb->MountPoint = DokanAllocDuplicateString(&mountdevNameString);
-      if (dcb->MountPoint == NULL) {
-        status = STATUS_INSUFFICIENT_RESOURCES;
-        break;
-      }
-      dcb->MountPointDetermined = TRUE;
-
-      // Update the mount point in dokan's global list, so that other dokan
-      // functions (e.g. for unmounting) can look up the drive by mount point
-      // later.
+      // Update the mount point in dokan's global list AFTER releasing
+      // Dcb->Resource so lock order (MountPointListLock -> mountEntry->Resource)
+      // is strictly preserved.
       PMOUNT_ENTRY mountEntry =
           FindMountEntryByName(dcb->Global, dcb->DiskDeviceName, dcb->UNCName,
                                /*ExclusiveLock=*/TRUE);
       if (mountEntry != NULL) {
         RtlStringCchCopyUnicodeString(mountEntry->MountControl.MountPoint,
-                                      MAXIMUM_FILENAME_LENGTH, dcb->MountPoint);
+                                      MAXIMUM_FILENAME_LENGTH,
+                                      &mountdevNameString);
         ExReleaseResourceLite(&mountEntry->Resource);
       } else {
         DokanLogInfo(&logger, L"Cannot find associated MountEntry to update.");
@@ -462,22 +470,31 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
             L" deletion; ignoring.");
         break;
       }
+      BOOLEAN shouldRelease = FALSE;
+      KeEnterCriticalRegion();
+      ExAcquireResourceSharedLite(&dcb->Resource, TRUE);
       if (!dcb->MountPoint || dcb->MountPoint->Length == 0) {
         DokanLogInfo(&logger,
                      L"Deleting the device even though it never had the mount "
                      L"point set.");
-        status = DokanEventRelease(RequestContext, vcb->DeviceObject);
-        break;
-      }
-      if (!RtlEqualUnicodeString(dcb->MountPoint, &mountdevNameString,
-                                 /*CaseInsensitive=*/FALSE)) {
+        shouldRelease = TRUE;
+      } else if (!RtlEqualUnicodeString(dcb->MountPoint, &mountdevNameString,
+                                        /*CaseInsensitive=*/FALSE)) {
         DokanLogInfo(&logger,
                      L"Ignoring deletion because device has different mount "
                      L"point: \"%wZ\"",
                      dcb->MountPoint);
-        break;
+      } else {
+        shouldRelease = TRUE;
       }
-      status = DokanEventRelease(RequestContext, vcb->DeviceObject);
+      ExReleaseResourceLite(&dcb->Resource);
+      KeLeaveCriticalRegion();
+      if (shouldRelease && vcb != NULL) {
+        // Defer DokanEventRelease to a work item because DiskDeviceControlWithLock
+        // currently holds dcb->RemoveLock (synchronous DokanEventRelease would
+        // self-deadlock on IoReleaseRemoveLockAndWait).
+        DokanQueueEventRelease(vcb->DeviceObject);
+      }
     } break;
 
     case IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS: {
@@ -693,6 +710,13 @@ DiskDeviceControlWithLock(__in PREQUEST_CONTEXT RequestContext,
   }
   status = DiskDeviceControl(RequestContext, DeviceObject);
 
+  if (status != STATUS_PENDING && status != STATUS_INVALID_DEVICE_REQUEST &&
+      IsDeletePending(DeviceObject)) {
+    DOKAN_LOG_FINE_IRP(RequestContext, "DeviceObject is no longer valid.");
+    status = STATUS_DEVICE_REMOVED;
+    RequestContext->Irp->IoStatus.Information = 0;
+  }
+
   IoReleaseRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
 
   return status;
@@ -765,8 +789,7 @@ DokanDispatchDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
       RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode,
       "DeviceControl");
 
-  if (RequestContext->DeviceObject->DriverObject == NULL ||
-      RequestContext->DeviceObject->ReferenceCount < 0) {
+  if (RequestContext->DeviceObject->DriverObject == NULL) {
     return STATUS_DEVICE_DOES_NOT_EXIST;
   }
 
@@ -777,14 +800,6 @@ DokanDispatchDeviceControl(__in PREQUEST_CONTEXT RequestContext) {
   } else if (RequestContext->Dcb) {
     status =
         DiskDeviceControlWithLock(RequestContext, RequestContext->DeviceObject);
-  }
-
-  if (status != STATUS_PENDING && status != STATUS_INVALID_DEVICE_REQUEST) {
-    if (IsDeletePending(RequestContext->DeviceObject)) {
-      DOKAN_LOG_FINE_IRP(RequestContext, "DeviceObject is not longer valid.");
-      status = STATUS_DEVICE_REMOVED;
-      RequestContext->Irp->IoStatus.Information = 0;
-    }
   }
 
   return status;

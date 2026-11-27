@@ -190,14 +190,18 @@ DokanLookasideCreate(__in LOOKASIDE_LIST_EX *pCache, __in size_t cbElement) {
 VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
   UNICODE_STRING symbolicLinkName;
+  PDEVICE_OBJECT deviceObject = dokanGlobal->DeviceObject;
+  PDEVICE_OBJECT fsDiskDeviceObject = dokanGlobal->FsDiskDeviceObject;
+  PDEVICE_OBJECT fsCdDeviceObject = dokanGlobal->FsCdDeviceObject;
 
-  KeSetEvent(&dokanGlobal->KillDeleteDeviceEvent, 0, FALSE);
+  KeSetEvent(&dokanGlobal->UnloadEvent, 0, FALSE);
+  ExWaitForRundownProtectionRelease(&dokanGlobal->TeardownRundown);
 
   RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
   IoDeleteSymbolicLink(&symbolicLinkName);
 
-  IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
-  IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
+  IoUnregisterFileSystem(fsDiskDeviceObject);
+  IoUnregisterFileSystem(fsCdDeviceObject);
 
   // Drain any remaining session mount point cleanup entries.
   ExAcquireFastMutex(&dokanGlobal->SessionMountPointLock);
@@ -212,12 +216,25 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   }
   ExReleaseFastMutex(&dokanGlobal->SessionMountPointLock);
 
-  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-  IoDeleteDevice(dokanGlobal->DeviceObject);
+  ASSERT(IsListEmpty(&dokanGlobal->VcbList));
+  ASSERT(IsListEmpty(&dokanGlobal->MountPointList));
+
+  // Delete all ERESOURCEs in the DOKAN_GLOBAL extension strictly before
+  // IoDeleteDevice / ObDereferenceObject can free the extension.
   ExDeleteResourceLite(&dokanGlobal->Resource);
+  ExDeleteResourceLite(&dokanGlobal->VcbListLock);
   ExDeleteResourceLite(&dokanGlobal->MountPointListLock);
   ExDeleteResourceLite(&dokanGlobal->MountManagerLock);
+
+  // Pair with ObReferenceObject in DokanCreateGlobalDiskDevice BEFORE
+  // IoDeleteDevice (IoCreateDevice's ref keeps each object alive until
+  // IoDeleteDevice runs).
+  ObDereferenceObject(fsDiskDeviceObject);
+  IoDeleteDevice(fsDiskDeviceObject);
+  ObDereferenceObject(fsCdDeviceObject);
+  IoDeleteDevice(fsCdDeviceObject);
+  ObDereferenceObject(deviceObject);
+  IoDeleteDevice(deviceObject);
 }
 
 VOID InitMultiVersionResources() {
@@ -446,15 +463,18 @@ Return Value:
 
 {
 
-  PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
-  PDOKAN_GLOBAL dokanGlobal;
-
   PAGED_CODE();
 
-  dokanGlobal = deviceObject->DeviceExtension;
-  if (GetIdentifierType(dokanGlobal) == DGL) {
-    DOKAN_LOG("Delete Global DeviceObject");
-    CleanupGlobalDiskDevice(dokanGlobal);
+  // IoCreateDevice prepends to DriverObject->DeviceObject, so Dokan_3 (DGL) is
+  // behind DokanCdFs3 and DokanFs3 (whose DeviceExtensions are NULL).
+  for (PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
+       deviceObject != NULL; deviceObject = deviceObject->NextDevice) {
+    if (deviceObject->DeviceExtension != NULL &&
+        GetIdentifierType(deviceObject->DeviceExtension) == DGL) {
+      DOKAN_LOG("Delete Global DeviceObject");
+      CleanupGlobalDiskDevice((PDOKAN_GLOBAL)deviceObject->DeviceExtension);
+      break;
+    }
   }
 
   ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
@@ -464,6 +484,7 @@ Return Value:
   ExDeleteLookasideListEx(&g_DokanFcbAvlNodeLookasideList);
 
   DOKAN_LOG("All resources released");
+  DokanCleanupLogCache();
 }
 
 NTSTATUS

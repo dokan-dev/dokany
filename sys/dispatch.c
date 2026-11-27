@@ -51,6 +51,71 @@ NTSTATUS DokanBuildRequest(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp) {
   return status;
 }
 
+VOID DokanCompleteRequestAndCheckDismount(__in PREQUEST_CONTEXT RequestContext,
+                                          __in UCHAR MajorFunction,
+                                          __in NTSTATUS Status,
+                                          __in BOOLEAN AllowSyncDismount) {
+  // Keep Vcb->OpenFileCount elevated across DOKAN_LOG_END_MJ so Vcb,
+  // Vcb->Resource, and Dcb cannot be torn down concurrently before the IRP
+  // finishes completing and logging. Pin volDeviceObject before
+  // DOKAN_LOG_END_MJ, then decrement OpenFileCount and run teardown strictly
+  // after completion.
+  PDEVICE_OBJECT dismountVolumeDevice = NULL;
+  BOOLEAN deferDismount = TRUE;
+  ULONG residualVpbRefs = 0;
+  BOOLEAN decrementOpenFileCount = RequestContext->DecrementOpenFileCount;
+
+  if (RequestContext->Vcb != NULL &&
+      (decrementOpenFileCount ||
+       (MajorFunction == IRP_MJ_CREATE && !NT_SUCCESS(Status)))) {
+    dismountVolumeDevice = RequestContext->Vcb->DeviceObject;
+    ObReferenceObject(dismountVolumeDevice);
+    // Matching FastFat (close.c): only run synchronous CheckForDismount on
+    // top-level IRP_MJ_CLOSE with no Vcb->Resource held. Because
+    // OpenFileCount is still >= 1 here, Vcb->Resource is guaranteed live, and
+    // because DokanDispatchClose owns the IRP synchronously until
+    // DOKAN_LOG_END_MJ completes it, IrpSp->FileObject is safe to inspect here.
+    // Recursive closes (e.g. under Fcb->MainResource or MM/CC/filter locks) and
+    // failed IRP_MJ_CREATEs (where IopParseDevice decrements
+    // Vpb->ReferenceCount after IRP completion unwinds) defer to the
+    // non-blocking dismount work item / backoff timer.
+    if (AllowSyncDismount && !RequestContext->DoNotComplete &&
+        MajorFunction == IRP_MJ_CLOSE && decrementOpenFileCount &&
+        RequestContext->IsTopLevelIrp &&
+        ExIsResourceAcquiredSharedLite(&RequestContext->Vcb->Resource) == 0 &&
+        !ExIsResourceAcquiredExclusiveLite(&RequestContext->Vcb->Resource)) {
+      deferDismount = FALSE;
+      PFILE_OBJECT fileObject = RequestContext->IrpSp->FileObject;
+      // ntoskrnl!IopDeleteFile decrements FileObject->Vpb->ReferenceCount only
+      // after IRP_MJ_CLOSE returns (matching FastFat's ResidualReferenceCount).
+      if (fileObject != NULL && RequestContext->Vcb->Vpb != NULL &&
+          fileObject->Vpb == RequestContext->Vcb->Vpb) {
+        residualVpbRefs = 1;
+      }
+    }
+  }
+
+  DOKAN_LOG_END_MJ(RequestContext, Status);
+
+  if (dismountVolumeDevice != NULL) {
+    PDokanVCB vcbToDismount = (PDokanVCB)dismountVolumeDevice->DeviceExtension;
+    LONG remainingOpens =
+        decrementOpenFileCount
+            ? InterlockedDecrement(&vcbToDismount->OpenFileCount)
+            : InterlockedCompareExchange(&vcbToDismount->OpenFileCount, 0, 0);
+    if (remainingOpens == 0 &&
+        InterlockedCompareExchange(&vcbToDismount->Condition, 0, 0) ==
+            VcbDismounted) {
+      if (deferDismount) {
+        DokanQueueDismountWorkItem(vcbToDismount);
+      } else {
+        DokanCheckForDismount(vcbToDismount, residualVpbRefs);
+      }
+    }
+    ObDereferenceObject(dismountVolumeDevice);
+  }
+}
+
 VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                           __in NTSTATUS Status) {
   BOOLEAN isTopLevelIrp = FALSE;
@@ -69,7 +134,9 @@ VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
       eventInfo.Status = Status;
       DokanCompleteCreate(RequestContext, &eventInfo);
 
-      DOKAN_LOG_END_MJ(RequestContext, RequestContext->Irp->IoStatus.Status);
+      DokanCompleteRequestAndCheckDismount(RequestContext, IRP_MJ_CREATE,
+                                           RequestContext->Irp->IoStatus.Status,
+                                           /*AllowSyncDismount=*/FALSE);
 
     } __except (
         DokanExceptionFilter(RequestContext->Irp, GetExceptionInformation())) {
@@ -131,6 +198,12 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
     return buildRequestStatus;
   }
 
+  // Capture MajorFunction before dispatching because handlers such as
+  // FsRtlNotifyFullChangeDirectory, FsRtlProcessFileLock, FsRtlOplockFsctrl,
+  // or async pending IRP registration may complete and free the IRP before
+  // __finally runs.
+  const UCHAR majorFunction = requestContext.IrpSp->MajorFunction;
+
   DOKAN_LOG_BEGIN_MJ((&requestContext));
 
   __try {
@@ -138,7 +211,13 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
         requestContext.IrpSp->MajorFunction != IRP_MJ_SHUTDOWN &&
         requestContext.IrpSp->MajorFunction != IRP_MJ_CLEANUP &&
         requestContext.IrpSp->MajorFunction != IRP_MJ_CLOSE) {
-      if (IsUnmountPending(DeviceObject)) {
+      // Do not short-circuit a DOKAN_RETRY_CREATE IRP before DokanDispatchCreate
+      // can unwind its already-allocated CCB, FCB, and OpenFileCount.
+      BOOLEAN isRetryCreate =
+          requestContext.IrpSp->MajorFunction == IRP_MJ_CREATE &&
+          requestContext.IrpSp->FileObject != NULL &&
+          requestContext.IrpSp->FileObject->FsContext2 != NULL;
+      if (!isRetryCreate && IsUnmountPending(DeviceObject)) {
         DOKAN_LOG_FINE_IRP(
             (&requestContext),
             "Volume is not mounted so return STATUS_NO_SUCH_DEVICE");
@@ -221,7 +300,8 @@ DokanDispatchRequest(__in PDEVICE_OBJECT DeviceObject, __in PIRP Irp,
         break;
     }
   } __finally {
-    DOKAN_LOG_END_MJ((&requestContext), status);
+    DokanCompleteRequestAndCheckDismount(&requestContext, majorFunction, status,
+                                         /*AllowSyncDismount=*/TRUE);
   }
   return status;
 }

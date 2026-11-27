@@ -63,6 +63,13 @@ BOOLEAN IsLogCacheEnabled(_In_opt_ PVOID RequestContext);
 // global caching if not already.
 VOID IncrementVcbLogCacheCount();
 
+// Decrement the active Volume count having cache logging enabled.
+VOID DecrementVcbLogCacheCount();
+
+// Free all remaining global log cache entries and delete its ERESOURCE on
+// driver unload.
+VOID DokanCleanupLogCache();
+
 // Stringify variable name
 #define STR(x) #x
 

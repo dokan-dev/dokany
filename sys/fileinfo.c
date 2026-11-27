@@ -865,7 +865,8 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
       // currently open FCBs for a matching name. However, we need to lock that
       // before the FCB so that the lock order is consistent everywhere.
       if (NT_SUCCESS(RequestContext->Irp->IoStatus.Status) &&
-          infoClass == FileRenameInformation) {
+          (infoClass == FileRenameInformation ||
+           infoClass == FileRenameInformationEx)) {
         DokanVCBLockRW(RequestContext->Vcb);
         vcbLocked = TRUE;
       }

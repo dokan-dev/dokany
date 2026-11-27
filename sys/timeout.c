@@ -25,18 +25,31 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/str.h"
 
 VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) {
-  PDokanVCB vcb = Dcb->Vcb;
+  PDEVICE_OBJECT volDeviceObject = NULL;
 
   DOKAN_LOG("Start");
-  if (vcb) {
+  if (NT_SUCCESS(IoAcquireRemoveLock(&Dcb->RemoveLock, (PVOID)DokanUnmount))) {
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(&Dcb->Resource, TRUE);
+    PDokanVCB vcb = (PDokanVCB)Dcb->Vcb;
+    if (vcb != NULL && GetIdentifierType(vcb) == VCB) {
+      volDeviceObject = vcb->DeviceObject;
+      ObReferenceObject(volDeviceObject);
+    }
+    ExReleaseResourceLite(&Dcb->Resource);
+    KeLeaveCriticalRegion();
+    IoReleaseRemoveLock(&Dcb->RemoveLock, (PVOID)DokanUnmount);
+  }
+  if (volDeviceObject != NULL) {
     FsRtlEnterFileSystem();
-    DokanEventRelease(RequestContext, vcb->DeviceObject);
+    DokanEventRelease(RequestContext, volDeviceObject);
     FsRtlExitFileSystem();
+    ObDereferenceObject(volDeviceObject);
   }
   DOKAN_LOG("End");
 }
 
-NTSTATUS
+BOOLEAN
 ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   KIRQL oldIrql;
   PLIST_ENTRY thisEntry, nextEntry, listHead;
@@ -57,7 +70,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
   if (IsListEmpty(&Dcb->PendingIrp.ListHead)) {
     KeReleaseSpinLock(&Dcb->PendingIrp.ListLock, oldIrql);
     DOKAN_LOG("IrpQueue is Empty");
-    return STATUS_SUCCESS;
+    return FALSE;
   }
 
   KeQueryTickCount(&tickCount);
@@ -126,7 +139,7 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
 
   DOKAN_LOG("End");
 
-  return STATUS_SUCCESS;
+  return shouldUnmount;
 }
 
 NTSTATUS
@@ -186,7 +199,8 @@ Routine Description:
   LARGE_INTEGER LastTime = {0};
   LARGE_INTEGER CurrentTime = {0};
   PDokanDCB Dcb = pDcb;
-  DOKAN_INIT_LOGGER(logger, Dcb->DeviceObject->DriverObject, 0);
+  PDEVICE_OBJECT diskDeviceObject = Dcb->DeviceObject;
+  DOKAN_INIT_LOGGER(logger, diskDeviceObject->DriverObject, 0);
 
   DOKAN_LOG("Start");
 
@@ -216,7 +230,12 @@ Routine Description:
           ((DOKAN_CHECK_INTERVAL + 2000) * 10000)) {
         DokanLogInfo(&logger, L"Wake from sleep detected.");
       } else {
-        ReleaseTimeoutPendingIrp(Dcb);
+        if (ReleaseTimeoutPendingIrp(Dcb)) {
+          // Self-unmount ran; exit immediately without touching Dcb->KillEvent
+          // again now that Dcb may already be deleted.
+          waitObj = FALSE;
+          break;
+        }
       }
       KeQuerySystemTime(&LastTime);
     }
@@ -225,6 +244,9 @@ Routine Description:
   KeCancelTimer(&timer);
 
   DOKAN_LOG("Stop");
+
+  // Pair with ObReferenceObject(Dcb->DeviceObject) in DokanStartCheckThread.
+  ObDereferenceObject(diskDeviceObject);
 
   PsTerminateSystemThread(STATUS_SUCCESS);
 }
@@ -242,10 +264,15 @@ Routine Description:
   NTSTATUS status;
   HANDLE thread;
 
+  // Pin diskDeviceObject for the lifetime of DokanTimeoutThread so a
+  // self-initiated DokanUnmount cannot free Dcb while this thread is exiting.
+  ObReferenceObject(Dcb->DeviceObject);
+
   status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
                                 (PKSTART_ROUTINE)DokanTimeoutThread, Dcb);
 
   if (!NT_SUCCESS(status)) {
+    ObDereferenceObject(Dcb->DeviceObject);
     DOKAN_LOG("Failed to create Thread");
     return status;
   }
