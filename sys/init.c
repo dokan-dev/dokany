@@ -68,6 +68,38 @@ VOID DokanInitIrpList(__in PIRP_LIST IrpList, __in BOOLEAN EventEnabled,
   IrpList->EventEnabled = EventEnabled;
 }
 
+VOID DokanRecordSessionMountPoint(__in PDOKAN_GLOBAL DokanGlobal,
+                                  __in ULONG SessionId,
+                                  __in_opt PUNICODE_STRING MountPoint) {
+  if (SessionId == (ULONG)-1 || MountPoint == NULL || MountPoint->Length == 0 ||
+      MountPoint->Buffer == NULL) {
+    return;
+  }
+
+  PSESSION_MOUNT_POINT_ENTRY entry =
+      DokanAllocZero(sizeof(SESSION_MOUNT_POINT_ENTRY));
+  if (entry == NULL) {
+    DOKAN_LOG("Failed to allocate SESSION_MOUNT_POINT_ENTRY");
+    return;
+  }
+
+  entry->MountPoint.Buffer = DokanAlloc(MountPoint->MaximumLength);
+  if (entry->MountPoint.Buffer == NULL) {
+    DOKAN_LOG("Failed to allocate session MountPoint buffer");
+    DokanFree(entry);
+    return;
+  }
+
+  entry->SessionId = SessionId;
+  entry->MountPoint.MaximumLength = MountPoint->MaximumLength;
+  RtlUnicodeStringCopy(&entry->MountPoint, MountPoint);
+  InitializeListHead(&entry->ListEntry);
+
+  ExAcquireFastMutex(&DokanGlobal->SessionMountPointLock);
+  InsertTailList(&DokanGlobal->SessionMountPointList, &entry->ListEntry);
+  ExReleaseFastMutex(&DokanGlobal->SessionMountPointLock);
+}
+
 PDEVICE_ENTRY
 InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
                      PDEVICE_OBJECT VolumeDeviceObject, ULONG SessionId,
@@ -755,10 +787,12 @@ DokanCreateGlobalDiskDevice(__in PDRIVER_OBJECT DriverObject,
   dokanGlobal->DriverVersion = DOKAN_DRIVER_VERSION;
 
   InitializeListHead(&dokanGlobal->MountPointList);
+  InitializeListHead(&dokanGlobal->SessionMountPointList);
   InitializeListHead(&dokanGlobal->DeviceDeleteList);
   ExInitializeResourceLite(&dokanGlobal->Resource);
   ExInitializeResourceLite(&dokanGlobal->MountPointListLock);
   ExInitializeResourceLite(&dokanGlobal->MountManagerLock);
+  ExInitializeFastMutex(&dokanGlobal->SessionMountPointLock);
 
   dokanGlobal->Identifier.Type = DGL;
   dokanGlobal->Identifier.Size = sizeof(DOKAN_GLOBAL);
@@ -924,6 +958,13 @@ VOID DokanDeleteMountPoint(__in_opt PREQUEST_CONTEXT RequestContext,
         DOKAN_LOG("Device mounted for current session only so run "
                   "DokanDeleteMountPointProc without System thread.");
         DokanDeleteMountPointSysProc(Dcb);
+        if (!IsFlagOn(Dcb->Flags, DCB_MOUNTPOINT_DELETED) &&
+            Dcb->SessionId != (ULONG)-1) {
+          // Could not delete session-local symlink from current session/System
+          // context; record it for FSCTL_MOUNTPOINT_CLEANUP from that session.
+          DokanRecordSessionMountPoint(Dcb->Global, Dcb->SessionId,
+                                       Dcb->MountPoint);
+        }
       }
     }
   }

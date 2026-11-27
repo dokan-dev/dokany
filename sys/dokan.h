@@ -199,6 +199,11 @@ typedef struct _DOKAN_GLOBAL {
   ERESOURCE MountPointListLock;
   LIST_ENTRY MountPointList;
 
+  // Lightweight per-session symbolic link cleanup list (decoupled from
+  // DEVICE_OBJECT lifetimes) drained by FSCTL_MOUNTPOINT_CLEANUP.
+  FAST_MUTEX SessionMountPointLock;
+  LIST_ENTRY SessionMountPointList;
+
   LIST_ENTRY DeviceDeleteList;
   KEVENT KillDeleteDeviceEvent;
 
@@ -210,6 +215,12 @@ typedef struct _DOKAN_GLOBAL {
   ERESOURCE MountManagerLock;
 
 } DOKAN_GLOBAL, *PDOKAN_GLOBAL;
+
+typedef struct _SESSION_MOUNT_POINT_ENTRY {
+  LIST_ENTRY ListEntry;
+  ULONG SessionId;
+  UNICODE_STRING MountPoint;
+} SESSION_MOUNT_POINT_ENTRY, *PSESSION_MOUNT_POINT_ENTRY;
 
 // make sure Identifier is the top of struct
 typedef struct _DokanDiskControlBlock {
@@ -1097,6 +1108,9 @@ DokanCreateDiskDevice(__in PDRIVER_OBJECT DriverObject, __in ULONG MountId,
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice);
 VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
                              __in PDokanDCB Dcb);
+VOID DokanRecordSessionMountPoint(__in PDOKAN_GLOBAL DokanGlobal,
+                                  __in ULONG SessionId,
+                                  __in_opt PUNICODE_STRING MountPoint);
 VOID DokanDeleteMountPoint(__in_opt PREQUEST_CONTEXT RequestContext,
                            __in PDokanDCB Dcb);
 

@@ -199,6 +199,19 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
   IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
 
+  // Drain any remaining session mount point cleanup entries.
+  ExAcquireFastMutex(&dokanGlobal->SessionMountPointLock);
+  while (!IsListEmpty(&dokanGlobal->SessionMountPointList)) {
+    PLIST_ENTRY entry = RemoveHeadList(&dokanGlobal->SessionMountPointList);
+    PSESSION_MOUNT_POINT_ENTRY sessionEntry =
+        CONTAINING_RECORD(entry, SESSION_MOUNT_POINT_ENTRY, ListEntry);
+    if (sessionEntry->MountPoint.Buffer != NULL) {
+      DokanFree(sessionEntry->MountPoint.Buffer);
+    }
+    DokanFree(sessionEntry);
+  }
+  ExReleaseFastMutex(&dokanGlobal->SessionMountPointLock);
+
   IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
   IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
   IoDeleteDevice(dokanGlobal->DeviceObject);

@@ -833,27 +833,32 @@ VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
     return;
   }
 
-  KeEnterCriticalRegion();
-  if (!ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
-                                      TRUE)) {
-    KeLeaveCriticalRegion();
-    DOKAN_LOG("Not able to acquire dokanGlobal->Resource \n");
-    return;
-  }
-  PDEVICE_ENTRY foundEntry;
-  while ((foundEntry = FindDeviceForDeleteBySessionId(
-              RequestContext->DokanGlobal, sessionId)) != NULL) {
-    DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
-    foundEntry->SessionId = (ULONG)-1;
-    if (foundEntry->MountPoint.Buffer != NULL) {
-      DokanFree(foundEntry->MountPoint.Buffer);
-      foundEntry->MountPoint.Buffer = NULL;
-      foundEntry->MountPoint.Length = 0;
-      foundEntry->MountPoint.MaximumLength = 0;
+  LIST_ENTRY toDeleteList;
+  InitializeListHead(&toDeleteList);
+
+  ExAcquireFastMutex(&RequestContext->DokanGlobal->SessionMountPointLock);
+  PLIST_ENTRY listHead = &RequestContext->DokanGlobal->SessionMountPointList;
+  for (PLIST_ENTRY entry = listHead->Flink, nextEntry = entry->Flink;
+       entry != listHead; entry = nextEntry, nextEntry = entry->Flink) {
+    PSESSION_MOUNT_POINT_ENTRY sessionEntry =
+        CONTAINING_RECORD(entry, SESSION_MOUNT_POINT_ENTRY, ListEntry);
+    if (sessionEntry->SessionId == sessionId) {
+      RemoveEntryList(&sessionEntry->ListEntry);
+      InsertTailList(&toDeleteList, &sessionEntry->ListEntry);
     }
   }
-  ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
-  KeLeaveCriticalRegion();
+  ExReleaseFastMutex(&RequestContext->DokanGlobal->SessionMountPointLock);
+
+  while (!IsListEmpty(&toDeleteList)) {
+    PLIST_ENTRY entry = RemoveHeadList(&toDeleteList);
+    PSESSION_MOUNT_POINT_ENTRY sessionEntry =
+        CONTAINING_RECORD(entry, SESSION_MOUNT_POINT_ENTRY, ListEntry);
+    DeleteMountPointSymbolicLink(&sessionEntry->MountPoint);
+    if (sessionEntry->MountPoint.Buffer != NULL) {
+      DokanFree(sessionEntry->MountPoint.Buffer);
+    }
+    DokanFree(sessionEntry);
+  }
 }
 
 // start event dispatching
