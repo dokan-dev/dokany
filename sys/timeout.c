@@ -29,7 +29,9 @@ VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) 
 
   DOKAN_LOG("Start");
   if (vcb) {
+    FsRtlEnterFileSystem();
     DokanEventRelease(RequestContext, vcb->DeviceObject);
+    FsRtlExitFileSystem();
   }
   DOKAN_LOG("End");
 }

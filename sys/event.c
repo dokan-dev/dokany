@@ -755,22 +755,31 @@ BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
 
 VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
                           __in ULONG sessionId) {
-  if (sessionId == -1) {
+  if (sessionId == (ULONG)-1) {
     return;
   }
 
+  KeEnterCriticalRegion();
   if (!ExAcquireResourceExclusiveLite(&RequestContext->DokanGlobal->Resource,
                                       TRUE)) {
+    KeLeaveCriticalRegion();
     DOKAN_LOG("Not able to acquire dokanGlobal->Resource \n");
+    return;
   }
   PDEVICE_ENTRY foundEntry;
   while ((foundEntry = FindDeviceForDeleteBySessionId(
               RequestContext->DokanGlobal, sessionId)) != NULL) {
     DeleteMountPointSymbolicLink(&foundEntry->MountPoint);
     foundEntry->SessionId = (ULONG)-1;
-    foundEntry->MountPoint.Buffer = NULL;
+    if (foundEntry->MountPoint.Buffer != NULL) {
+      DokanFree(foundEntry->MountPoint.Buffer);
+      foundEntry->MountPoint.Buffer = NULL;
+      foundEntry->MountPoint.Length = 0;
+      foundEntry->MountPoint.MaximumLength = 0;
+    }
   }
   ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
+  KeLeaveCriticalRegion();
 }
 
 // start event dispatching

@@ -65,8 +65,8 @@ VOID DokanInitIrpList(__in PIRP_LIST IrpList, __in BOOLEAN EventEnabled) {
 
 PDEVICE_ENTRY
 InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
-                     PDEVICE_OBJECT VolumeDeviceObject, BOOLEAN lockGlobal,
-                     ULONG SessionId, PUNICODE_STRING MountPoint) {
+                     PDEVICE_OBJECT VolumeDeviceObject, ULONG SessionId,
+                     PUNICODE_STRING MountPoint) {
   PDEVICE_ENTRY deviceEntry;
 
   ASSERT(DiskDeviceObject != NULL);
@@ -80,7 +80,8 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
   deviceEntry->VolumeDeviceObject = VolumeDeviceObject;
   deviceEntry->SessionId = SessionId;
 
-  if (SessionId != -1) {
+  if (SessionId != (ULONG)-1 && MountPoint != NULL &&
+      MountPoint->MaximumLength > 0) {
     deviceEntry->MountPoint.Buffer = DokanAlloc(MountPoint->MaximumLength);
     if (deviceEntry->MountPoint.Buffer == NULL) {
       DOKAN_LOG("MountPoint allocation failed");
@@ -93,27 +94,24 @@ InsertDeviceToDelete(PDOKAN_GLOBAL dokanGlobal, PDEVICE_OBJECT DiskDeviceObject,
 
   InitializeListHead(&deviceEntry->ListEntry);
 
-  if (lockGlobal) {
-    ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
-  }
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, TRUE);
 
   InsertTailList(&dokanGlobal->DeviceDeleteList, &deviceEntry->ListEntry);
 
-  if (lockGlobal) {
-    ExReleaseResourceLite(&dokanGlobal->Resource);
-  }
+  ExReleaseResourceLite(&dokanGlobal->Resource);
+  KeLeaveCriticalRegion();
   return deviceEntry;
 }
 
 PDEVICE_ENTRY
-InsertDcbToDelete(PDokanDCB Dcb, PDEVICE_OBJECT VolumeDeviceObject,
-                  BOOLEAN lockGlobal) {
+InsertDcbToDelete(PDokanDCB Dcb, PDEVICE_OBJECT VolumeDeviceObject) {
   if (IsFlagOn(Dcb->Flags, DCB_MOUNTPOINT_DELETED)) {
     DOKAN_LOG("MountPoint has been deleted so reset the sessionid");
     Dcb->SessionId = (ULONG)-1;
   }
   return InsertDeviceToDelete(Dcb->Global, Dcb->DeviceObject,
-                              VolumeDeviceObject, lockGlobal, Dcb->SessionId,
+                              VolumeDeviceObject, Dcb->SessionId,
                               Dcb->MountPoint);
 }
 
@@ -127,9 +125,11 @@ InsertMountEntry(PDOKAN_GLOBAL DokanGlobal, PDOKAN_CONTROL DokanControl) {
   ExInitializeResourceLite(&mountEntry->Resource);
   InitializeListHead(&mountEntry->ListEntry);
   RtlCopyMemory(&mountEntry->MountControl, DokanControl, sizeof(DOKAN_CONTROL));
+  KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
   InsertTailList(&DokanGlobal->MountPointList, &mountEntry->ListEntry);
   ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
+  KeLeaveCriticalRegion();
   return TRUE;
 }
 
@@ -174,13 +174,16 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
 
   InitializeListHead(&completeList);
 
+  KeEnterCriticalRegion();
   if (!ExAcquireResourceExclusiveLite(&dokanGlobal->Resource, FALSE)) {
+    KeLeaveCriticalRegion();
     DOKAN_LOG("Not able to acquire dokanGlobal->Resource");
     return;
   }
 
   if (IsListEmpty(&dokanGlobal->DeviceDeleteList)) {
     ExReleaseResourceLite(&dokanGlobal->Resource);
+    KeLeaveCriticalRegion();
     return;
   }
 
@@ -255,9 +258,14 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
 
       if (deviceEntry->VolumeDeviceObject == NULL &&
           deviceEntry->DiskDeviceObject == NULL) {
-        if (deviceEntry->SessionId == -1) {
+        if (deviceEntry->SessionId == (ULONG)-1) {
           RemoveEntryList(&deviceEntry->ListEntry);
           InitializeListHead(&deviceEntry->ListEntry);
+          if (deviceEntry->MountPoint.Buffer != NULL) {
+            DokanFree(deviceEntry->MountPoint.Buffer);
+            deviceEntry->MountPoint.Buffer = NULL;
+          }
+          DokanFree(deviceEntry);
         } else {
           DOKAN_LOG("Device is just there because of the sessionId");
         }
@@ -268,6 +276,7 @@ VOID DeleteDeviceDelayed(PDOKAN_GLOBAL dokanGlobal) {
   DOKAN_LOG_("Total devices to delete in the list %lu", totalCount);
 
   ExReleaseResourceLite(&dokanGlobal->Resource);
+  KeLeaveCriticalRegion();
 }
 
 KSTART_ROUTINE DokanDeleteDeviceThread;
@@ -348,6 +357,7 @@ execute DokanDeviceDeleteDelayedThread
 
 VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
                       __in PDOKAN_CONTROL DokanControl) {
+  KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(&DokanGlobal->MountPointListLock, TRUE);
 
   // We need to refetch the entry to get the correct locking order
@@ -358,6 +368,8 @@ VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
       FindMountEntry(DokanGlobal, DokanControl, /*ExclusiveLock=*/TRUE);
   if (!mountEntry) {
     // Already removed
+    ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
+    KeLeaveCriticalRegion();
     return;
   }
   RemoveEntryList(&mountEntry->ListEntry);
@@ -367,6 +379,7 @@ VOID RemoveMountEntry(__in PDOKAN_GLOBAL DokanGlobal,
   DokanFree(mountEntry);
 
   ExReleaseResourceLite(&DokanGlobal->MountPointListLock);
+  KeLeaveCriticalRegion();
 }
 
 BOOLEAN IsMounted(__in PDEVICE_OBJECT DeviceObject) {
@@ -586,6 +599,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
     sessionId = 0;
   }
 
+  KeEnterCriticalRegion();
   ExAcquireResourceExclusiveLite(
       &RequestContext->DokanGlobal->MountPointListLock, TRUE);
 
@@ -634,6 +648,7 @@ DokanGetMountPointList(__in PREQUEST_CONTEXT RequestContext) {
   }
 
   ExReleaseResourceLite(&RequestContext->DokanGlobal->MountPointListLock);
+  KeLeaveCriticalRegion();
 
   return status;
 }
@@ -1252,7 +1267,7 @@ VOID DokanDeleteDeviceObject(__in_opt PREQUEST_CONTEXT RequestContext,
     volumeDeviceObject = vcb->DeviceObject;
   }
 
-  InsertDcbToDelete(Dcb, volumeDeviceObject, FALSE);
+  InsertDcbToDelete(Dcb, volumeDeviceObject);
 
   DokanLogInfo(&logger, L"Finished deleting device.");
 }
