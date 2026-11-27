@@ -1053,9 +1053,14 @@ VOID DOKANAPI DokanMapKernelToUserCreateFileFlags(
  * changes made in the mirrored directory so that those changes will
  * be automatically reflected in the implemented mirror file system.
  *
- * This requires the FilePath passed to the respective DokanNotify*-functions
- * to include the absolute path of the changed file including the drive-letter
- * and the path to the mount point, e.g. "C:\Dokan\ChangedFile.txt".
+ * The FilePath passed to the respective DokanNotify* functions must be an
+ * absolute path targeting the mounted volume. Supported path forms are
+ * drive-letter paths (e.g. `M:\ChangedFile.txt`), NTFS directory mount point
+ * paths (e.g. `C:\Dokan\ChangedFile.txt`), UNC paths (e.g.
+ * `\\server\share\ChangedFile.txt`), and Win32 extended-length paths
+ * (`\\?\...` and `\\?\UNC\...`). Mount prefix matching is case-insensitive
+ * using Windows ordinal comparison, and redundant trailing backslashes are
+ * normalized.
  *
  * These functions SHOULD NOT be called from within the implemented
  * file system and thus be independent of any Dokan file system operation.
