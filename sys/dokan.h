@@ -41,7 +41,6 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
-extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 // Global lookaside list for FCB AVL table nodes (opaque RTL_AVL_TABLE node
 // header + PDokanFCB payload, probed dynamically in DriverEntry). Kept
 // driver-global so late IRP_MJ_CLOSE requests after volume unmount can safely
@@ -477,6 +476,8 @@ typedef struct _DokanFileControlBlock {
   // Locking: FIXME
   FAST_MUTEX AdvancedFCBHeaderMutex;
 
+  // Locking: Main FCB resource (AdvancedFCBHeader.Resource points here).
+  ERESOURCE MainResource;
   // Locking: Lock for paging io.
   ERESOURCE PagingIoResource;
 

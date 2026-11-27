@@ -28,23 +28,15 @@ const UNICODE_STRING g_NotificationFileName =
     RTL_CONSTANT_STRING(DOKAN_NOTIFICATION_FILE_NAME);
 
 // We must NOT call without VCB lock
-BOOLEAN DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
-                           __in PDokanFCB Fcb) {
-  Fcb->AdvancedFCBHeader.Resource =
-      ExAllocateFromLookasideListEx(&g_DokanEResourceLookasideList);
-  if (Fcb->AdvancedFCBHeader.Resource == NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext,
-                       "Failed to allocate FCB ERESOURCE for %p", Fcb);
-    return FALSE;
-  }
-
+VOID DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
+                        __in PDokanFCB Fcb) {
   Fcb->Identifier.Type = FCB;
   Fcb->Identifier.Size = sizeof(DokanFCB);
 
   Fcb->Vcb = RequestContext->Vcb;
 
+  ExInitializeResourceLite(&Fcb->MainResource);
   ExInitializeResourceLite(&Fcb->PagingIoResource);
-  ExInitializeResourceLite(Fcb->AdvancedFCBHeader.Resource);
 
   ExInitializeFastMutex(&Fcb->AdvancedFCBHeaderMutex);
 
@@ -56,6 +48,7 @@ BOOLEAN DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
   // us a SetFilelnformation IRP to update this value
   Fcb->AdvancedFCBHeader.ValidDataLength.QuadPart = MAXLONGLONG;
 
+  Fcb->AdvancedFCBHeader.Resource = &Fcb->MainResource;
   Fcb->AdvancedFCBHeader.PagingIoResource = &Fcb->PagingIoResource;
 
   Fcb->AdvancedFCBHeader.AllocationSize.QuadPart = 4096;
@@ -77,7 +70,6 @@ BOOLEAN DokanInitializeFcb(__in PREQUEST_CONTEXT RequestContext,
   if (RtlEqualUnicodeString(&Fcb->FileName, &g_NotificationFileName, FALSE)) {
     Fcb->BlockUserModeDispatch = TRUE;
   }
-  return TRUE;
 }
 
 PDokanFCB GetOrCreateUninitializedFcb(__in PREQUEST_CONTEXT RequestContext,
@@ -130,18 +122,7 @@ PDokanFCB DokanGetFCB(__in PREQUEST_CONTEXT RequestContext,
   if (newElement) {
     DOKAN_LOG_FINE_IRP(RequestContext, "New FCB %p allocated for %wZ", fcb,
                        &fcb->FileName);
-    if (!DokanInitializeFcb(RequestContext, fcb)) {
-      BOOLEAN removed =
-          RtlDeleteElementGenericTableAvl(&RequestContext->Vcb->FcbTable, &fcb);
-      ASSERT(removed);
-      UNREFERENCED_PARAMETER(removed);
-      DOKAN_LOG_FINE_IRP(RequestContext, "Failed to init FCB %p for %wZ", fcb,
-                         &fcb->FileName);
-      DokanFree(FileName);
-      ExFreeToLookasideListEx(&g_DokanFCBLookasideList, fcb);
-      DokanVCBUnlock(RequestContext->Vcb);
-      return NULL;
-    }
+    DokanInitializeFcb(RequestContext, fcb);
   } else {
     DOKAN_LOG_FINE_IRP(RequestContext, "Found existing FCB %p for %wZ", fcb,
                        &fcb->FileName);
@@ -248,9 +229,7 @@ VOID DokanDeleteFcb(__in PDokanVCB Vcb, __in PDokanFCB Fcb,
 
   Fcb->Identifier.Type = FREED_FCB;
   DokanFCBUnlock(Fcb);
-  ExDeleteResourceLite(Fcb->AdvancedFCBHeader.Resource);
-  ExFreeToLookasideListEx(&g_DokanEResourceLookasideList,
-                          Fcb->AdvancedFCBHeader.Resource);
+  ExDeleteResourceLite(&Fcb->MainResource);
   ExDeleteResourceLite(&Fcb->PagingIoResource);
 
   InterlockedIncrement(&Vcb->FcbFreed);

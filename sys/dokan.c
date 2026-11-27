@@ -43,7 +43,6 @@ static size_t DokanProbeFcbAvlNodeSize();
 
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
-LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 LOOKASIDE_LIST_EX g_DokanFcbAvlNodeLookasideList;
 size_t g_DokanFcbAvlNodeSize = 0;
 BOOLEAN g_FixFileNameForReparseMountPoint;
@@ -386,8 +385,6 @@ Return Value:
        "DokanIrpEntryLookasideList"},
       {&g_DokanCCBLookasideList, sizeof(DokanCCB), "g_DokanCCBLookasideList"},
       {&g_DokanFCBLookasideList, sizeof(DokanFCB), "g_DokanFCBLookasideList"},
-      {&g_DokanEResourceLookasideList, sizeof(ERESOURCE),
-       "g_DokanEResourceLookasideList"},
       {&g_DokanFcbAvlNodeLookasideList, g_DokanFcbAvlNodeSize,
        "g_DokanFcbAvlNodeLookasideList"},
   };
@@ -448,7 +445,6 @@ Return Value:
 
   ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
   ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
-  ExDeleteLookasideListEx(&g_DokanEResourceLookasideList);
   ExDeleteLookasideListEx(&g_DokanFcbAvlNodeLookasideList);
 
   DOKAN_LOG("All resources released");
