@@ -105,6 +105,8 @@ typedef struct _DOKAN_INSTANCE {
  */
 typedef struct _DOKAN_OPEN_INFO {
   CRITICAL_SECTION CriticalSection;
+  /** Serializes directory enumeration dispatches on this open handle (lock order: DirScanLock -> CriticalSection). */
+  CRITICAL_SECTION DirScanLock;
   /** Dokan instance linked to the open */
   PDOKAN_INSTANCE DokanInstance;
   PDOKAN_VECTOR DirList;
@@ -113,6 +115,10 @@ typedef struct _DOKAN_OPEN_INFO {
   BOOLEAN UnimplementedFindFilesWithPattern;
   /** Whether the opener token held enabled SeManageVolumePrivilege at create time */
   BOOLEAN HasManageVolumePrivilege;
+  /** Whether the filesystem returned STATUS_MORE_ENTRIES and has more directory chunks */
+  BOOLEAN MoreItems;
+  /** Logical 0-based directory index of DirList[0] for chunked directory streaming */
+  ULONG BaseIndex;
   /** User Context see DOKAN_FILE_INFO.Context */
   LONG64 UserContext;
   /** Event Id */

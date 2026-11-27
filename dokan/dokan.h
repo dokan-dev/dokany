@@ -573,11 +573,22 @@ typedef struct _DOKAN_OPERATIONS {
   * \ref DOKAN_OPERATIONS.FindFilesWithPattern is checked first. If it is not implemented or
   * returns \c STATUS_NOT_IMPLEMENTED, then FindFiles is called, if assigned.
   *
-  * To stream large directories incrementally, implementations may emit a chunk of entries
-  * via \a FillFindData and return \c STATUS_MORE_ENTRIES. Every new enumeration (including
-  * the initial scan and restarts after errors) carries \ref DOKAN_FIND_RESTART_SCAN;
-  * continuation chunks omit it until \c STATUS_SUCCESS is returned. Simple implementations
-  * may ignore \a FindFlags, emit all entries, and return \c STATUS_SUCCESS.
+  * To stream large directories incrementally, implementations may keep a per-handle cursor
+  * in \ref DOKAN_FILE_INFO.Context, emit a chunk of entries via \a FillFindData, and return
+  * \c STATUS_MORE_ENTRIES. Every new enumeration (including the initial scan and restarts
+  * after errors) carries \ref DOKAN_FIND_RESTART_SCAN (the cursor must be reset to the start);
+  * continuation chunks omit it until \c STATUS_SUCCESS or an error is returned. Implementations
+  * returning \c STATUS_MORE_ENTRIES must make forward progress so enumeration terminates.
+  * For non-root directories, any \c "." and \c ".." entries must appear in the initial chunk
+  * (continuation-chunk \c "." and \c ".." entries are ignored, and missing ones are synthesized
+  * only on the initial chunk). \ref DOKAN_FIND_SINGLE_ENTRY is an advisory hint (suppressed when
+  * Dokan falls back to \c FindFiles for a non-\c "*" search pattern); if an implementation honors
+  * it and more entries remain, it must return \c STATUS_MORE_ENTRIES (returning \c STATUS_SUCCESS
+  * caches the emitted entries as the complete directory and serves later queries from cache).
+  * Dokan serializes concurrent directory-enumeration callbacks on the same open handle, so a
+  * concurrent query waiting behind a scan longer than \ref DOKAN_OPTIONS.Timeout may be canceled
+  * by the driver. Simple implementations may ignore \a FindFlags, emit all entries, and return
+  * \c STATUS_SUCCESS.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param FillFindData Callback invoked with each \ref DOKAN_FIND_DATA entry.
@@ -606,7 +617,15 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * Like \ref FindFiles, every new enumeration (including the initial scan and restarts
   * after errors) carries \ref DOKAN_FIND_RESTART_SCAN, while continuation chunks after
-  * \c STATUS_MORE_ENTRIES omit it.
+  * \c STATUS_MORE_ENTRIES omit it. Streaming implementations should store their per-handle
+  * cursor in \ref DOKAN_FILE_INFO.Context, ensure forward progress on \c STATUS_MORE_ENTRIES,
+  * and emit \c "." / \c ".." only in the initial chunk (continuation-chunk \c "." / \c ".."
+  * entries are ignored). \ref DOKAN_FIND_SINGLE_ENTRY is an advisory hint: if honored while
+  * more entries remain, the callback must return \c STATUS_MORE_ENTRIES (returning
+  * \c STATUS_SUCCESS caches the emitted entries as the complete directory and serves later
+  * queries from cache). Dokan serializes concurrent directory-enumeration callbacks on the
+  * same open handle (so a concurrent query waiting behind a scan longer than
+  * \ref DOKAN_OPTIONS.Timeout may be canceled by the driver).
   *
   * \param PathName Path requested by the Kernel on the FileSystem.
   * \param SearchPattern Search pattern.
