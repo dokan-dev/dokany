@@ -21,6 +21,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "dokani.h"
+#include "np_registry.h"
 #include <dbt.h>
 #include <shlobj.h>
 #include <stdio.h>
@@ -300,115 +301,16 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter) {
   return DokanRemoveMountPoint(mountPoint);
 }
 
-#define DOKAN_NP_SERVICE_KEY                                                   \
-  L"System\\CurrentControlSet\\Services\\dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_DEVICE_NAME                                                   \
-  L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
-#define DOKAN_NP_PATH                                                          \
-  L"%SystemRoot%\\System32\\dokannp" DOKAN_MAJOR_API_VERSION L".dll"
-#define DOKAN_BINARY_NAME L"dokannp" DOKAN_MAJOR_API_VERSION L".dll"
-#define DOKAN_NP_ORDER_KEY                                                     \
-  L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order"
-
 BOOL DOKANAPI DokanNetworkProviderInstall() {
-  HKEY key;
-  DWORD position;
-  DWORD type;
-  WCHAR commanp[64];
-  WCHAR buffer[1024];
-  DWORD buffer_size = sizeof(buffer);
-
-  ZeroMemory(&buffer, sizeof(buffer));
-  ZeroMemory(commanp, sizeof(commanp));
-
-  if (RegCreateKeyEx(HKEY_LOCAL_MACHINE,
-                     DOKAN_NP_SERVICE_KEY L"\\NetworkProvider", 0, NULL,
-                     REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key,
-                     &position) != ERROR_SUCCESS) {
-    return FALSE;
-  }
-
-  RegSetValueEx(key, L"DeviceName", 0, REG_SZ, (BYTE *)DOKAN_NP_DEVICE_NAME,
-                (DWORD)(wcslen(DOKAN_NP_DEVICE_NAME) + 1) * sizeof(WCHAR));
-
-  RegSetValueEx(key, L"Name", 0, REG_SZ, (BYTE *)DOKAN_NP_NAME,
-                (DWORD)(wcslen(DOKAN_NP_NAME) + 1) * sizeof(WCHAR));
-
-  RegSetValueEx(key, L"ProviderPath", 0, REG_EXPAND_SZ, (BYTE *)DOKAN_NP_PATH,
-                (DWORD)(wcslen(DOKAN_NP_PATH) + 1) * sizeof(WCHAR));
-
-  RegCloseKey(key);
-
-  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS,
-                   &key) != ERROR_SUCCESS) {
-    return FALSE;
-  }
-  
-
-  if (RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
-                      &buffer_size) != ERROR_SUCCESS) {
-    return FALSE;
-  }
-
-  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
-  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
-
-  if (wcsstr(buffer, commanp) == NULL) {
-    wcscat_s(buffer, sizeof(buffer) / sizeof(WCHAR), commanp);
-    if (RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer,
-                      (DWORD)(wcslen(buffer) + 1) * sizeof(WCHAR))
-            != ERROR_SUCCESS) {
-      return FALSE;
-    }
-  }
-
-  RegCloseKey(key);
-  return TRUE;
+  DWORD error = DokanNetworkProviderInstallAt(HKEY_LOCAL_MACHINE);
+  SetLastError(error);
+  return error == ERROR_SUCCESS;
 }
 
 BOOL DOKANAPI DokanNetworkProviderUninstall() {
-  HKEY key;
-  DWORD type;
-  WCHAR commanp[64];
-  WCHAR buffer[1024];
-  WCHAR buffer2[1024];
-
-  DWORD buffer_size = sizeof(buffer);
-  ZeroMemory(&buffer, sizeof(buffer));
-  ZeroMemory(&buffer2, sizeof(buffer));
-  ZeroMemory(commanp, sizeof(commanp));
-
-  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_SERVICE_KEY, 0, KEY_ALL_ACCESS,
-                   &key) == ERROR_SUCCESS) {
-    RegDeleteKey(key, L"NetworkProvider");
-    RegCloseKey(key);
-  }
-
-  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, DOKAN_NP_ORDER_KEY, 0, KEY_ALL_ACCESS,
-                   &key) != ERROR_SUCCESS) {
-    return TRUE;
-  }
-
-  RegQueryValueEx(key, L"ProviderOrder", 0, &type, (BYTE *)&buffer,
-                  &buffer_size);
-
-  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), L",");
-  wcscat_s(commanp, sizeof(commanp) / sizeof(WCHAR), DOKAN_NP_NAME);
-
-  WCHAR *dokan_pos = wcsstr(buffer, commanp);
-  if (dokan_pos == NULL)
-    return TRUE;
-  wcsncpy_s(buffer2, sizeof(buffer2) / sizeof(WCHAR), buffer,
-            dokan_pos - buffer);
-  wcscat_s(buffer2, sizeof(buffer2) / sizeof(WCHAR),
-           dokan_pos + wcslen(commanp));
-  RegSetValueEx(key, L"ProviderOrder", 0, REG_SZ, (BYTE *)&buffer2,
-                (DWORD)(wcslen(buffer2) + 1) * sizeof(WCHAR));
-
-  RegCloseKey(key);
-
-  return TRUE;
+  DWORD error = DokanNetworkProviderUninstallAt(HKEY_LOCAL_MACHINE);
+  SetLastError(error);
+  return error == ERROR_SUCCESS;
 }
 
 static VOID FormatSystemErrorMessage(DWORD ErrorCode, LPWSTR Buffer,
@@ -748,7 +650,7 @@ void GenerateUnmountPoint(LPCWSTR MountPoint, WCHAR *Result,
     Result[0] = MountPoint[0];
   } else {
     wcscpy_s(Result, ResultMaxChars, MountPoint);
-    if (Result[length - 1] == L'\\') {
+    if (length > 0 && Result[length - 1] == L'\\') {
       Result[length - 1] = L'\0';
     }
   }

@@ -35,9 +35,9 @@ BEGIN
             VALUE "CompanyName", "Dokan Project"
             VALUE "FileDescription", "Dokan Network Provider"
             VALUE "FileVersion", "3.0.0.1000"
-            VALUE "InternalName", "dokan.dll"
+            VALUE "InternalName", "dokannp3.dll"
             VALUE "LegalCopyright", "Copyright (C) 2021"
-            VALUE "OriginalFilename", "dokannp.dll"
+            VALUE "OriginalFilename", "dokannp3.dll"
             VALUE "ProductName", "Dokan"
             VALUE "ProductVersion", "3.0.0.1000"
         END

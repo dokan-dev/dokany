@@ -271,6 +271,7 @@
     <ClCompile Include="flush.c" />
     <ClCompile Include="lock.c" />
     <ClCompile Include="mount.c" />
+    <ClCompile Include="np_registry.c" />
     <ClCompile Include="ntstatus.c" />
     <ClCompile Include="read.c" />
     <ClCompile Include="security.c" />
@@ -287,6 +288,7 @@
     <ClInclude Include="dokan_pool.h" />
     <ClInclude Include="dokan_vector.h" />
     <ClInclude Include="list.h" />
+    <ClInclude Include="np_registry.h" />
     <ClInclude Include="fileinfo.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
