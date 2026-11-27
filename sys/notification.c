@@ -126,11 +126,15 @@ VOID DokanEventNotification(__in PREQUEST_CONTEXT RequestContext,
 
   KIRQL oldIrql;
   KeAcquireSpinLock(&NotifyEvent->ListLock, &oldIrql);
-  InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
-  if (!KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
-    KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
-                  &RequestContext->Dcb->NotifyIrpEventQueueList);
+  if (IsDeletePending(RequestContext->Dcb->DeviceObject) ||
+      (RequestContext->Vcb != NULL &&
+       IsUnmountPendingVcb(RequestContext->Vcb))) {
+    KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
+    DokanFree(driverEventContext);
+    return;
   }
+  InsertTailList(&NotifyEvent->ListHead, &driverEventContext->ListEntry);
+  KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
   KeReleaseSpinLock(&NotifyEvent->ListLock, oldIrql);
 }
 
@@ -360,12 +364,15 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
   DokanLogInfo(&logger, L"Starting unmount for device \"%wZ\"",
                         dcb->DiskDeviceName);
 
+  // Permanently signal ReleaseEvent so all waiting and late-entering pull
+  // threads wake immediately.
+  KeSetEvent(&dcb->ReleaseEvent, IO_NO_INCREMENT, FALSE);
+
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingRetryIrp);
   ReleaseNotifyEvent(&dcb->NotifyEvent);
   DokanStopCheckThread(dcb);
   DokanStopEventNotificationThread(dcb);
-  KeRundownQueue(&dcb->NotifyIrpEventQueue);
 
   // Note that the garbage collector thread also gets signalled to stop by
   // DokanStopEventNotificationThread. TODO(drivefs-team): maybe seperate out

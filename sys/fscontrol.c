@@ -496,11 +496,9 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
       break;
     }
   }
-  // If there is still pending items we need to reflag the queue for when we come back
-  if (!IsListEmpty(&NotifyEvent->ListHead) &&
-       !KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
-     KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
-                   &RequestContext->Dcb->NotifyIrpEventQueueList);
+  // If there are still pending items, re-signal NotEmpty for the next pull.
+  if (!IsListEmpty(&NotifyEvent->ListHead)) {
+    KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
   }
   KeReleaseSpinLock(&NotifyEvent->ListLock, workQueueIrql);
   RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -543,17 +541,19 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
     timeout.QuadPart += (LONGLONG)waitTimeoutMs * 10000; // Ms to 100 nano
   }
 
-  // 4 - Wait for new event indefinitely if we are the main pull thread
-  // or wait for the requested time.
-  PLIST_ENTRY listEntry;
-  KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode, TRUE,
-                  waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
-  if (listEntry != &RequestContext->Dcb->NotifyIrpEventQueueList) {
-    // Here we got interrupted: Alert / Timeout.
-    // In that case listEntry is an NTSTATUS (See KeRemoveQueue doc).
-
-    // Were we awake due to the device being unmount ?
-    if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+  // 4 - Wait for either unmount (ReleaseEvent) or a queued event
+  // (NotifyEvent.NotEmpty). Using a permanent NotificationEvent for
+  // ReleaseEvent ensures all waiting and late-entering threads wake
+  // immediately without KeRundownQueue races.
+  PVOID waitEvents[2];
+  waitEvents[0] = &RequestContext->Dcb->ReleaseEvent;
+  waitEvents[1] = &RequestContext->Dcb->NotifyEvent.NotEmpty;
+  NTSTATUS waitStatus =
+      KeWaitForMultipleObjects(2, waitEvents, WaitAny, Executive, KernelMode,
+                               TRUE, waitTimeoutMs ? &timeout : NULL, NULL);
+  if (waitStatus != STATUS_WAIT_1) {
+    if (waitStatus == STATUS_WAIT_0 ||
+        IsUnmountPendingVcb(RequestContext->Vcb)) {
       return STATUS_NO_SUCH_DEVICE;
     }
     return STATUS_SUCCESS;

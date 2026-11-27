@@ -228,8 +228,6 @@ typedef struct _DokanDiskControlBlock {
   IRP_LIST PendingIrp;
   // Pending IRPs waiting to be dispatched to userland
   IRP_LIST NotifyEvent;
-  LIST_ENTRY NotifyIrpEventQueueList;
-  KQUEUE NotifyIrpEventQueue;
   // IRPs that need to be retried in kernel mode, e.g. due to oplock breaks
   // asynchronously requested on an earlier try. These are IRPs that have never
   // yet been dispatched to user mode. The IRPs are supposed to be added here at
