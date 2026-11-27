@@ -104,6 +104,34 @@ BOOL CreateSuccesStatusCheck(NTSTATUS status, ULONG disposition) {
   return FALSE;
 }
 
+// Reject literal "." and ".." path components per [MS-FSA 2.1.5.1]. Win32
+// canonicalizes "." and ".." before calling the kernel, so literal segments
+// only reach the filesystem via verbatim "\\?\" or native NtCreateFile paths.
+// Scanning handles both '\' and '/' separators and stops at the first ':'
+// because anything after ':' is an alternate data stream suffix (where "."
+// and ".." are valid stream names rather than directory traversal components).
+static BOOL HasLiteralDotOrDotDotSegment(LPCWSTR FileName) {
+  LPCWSTR p = FileName;
+  while (*p != L'\0' && *p != L':') {
+    while (*p == L'\\' || *p == L'/') {
+      ++p;
+    }
+    if (*p == L'\0' || *p == L':') {
+      break;
+    }
+    LPCWSTR segStart = p;
+    while (*p != L'\0' && *p != L'\\' && *p != L'/' && *p != L':') {
+      ++p;
+    }
+    size_t segLen = (size_t)(p - segStart);
+    if ((segLen == 1 && segStart[0] == L'.') ||
+        (segLen == 2 && segStart[0] == L'.' && segStart[1] == L'.')) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   static volatile LONG globalEventId = 0;
   ULONG currentEventId = InterlockedIncrement(&globalEventId);
@@ -113,6 +141,8 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   DOKAN_IO_SECURITY_CONTEXT ioSecurityContext;
   WCHAR *fileName;
   BOOL childExisted = TRUE;
+  BOOL openTargetDirectory =
+      (IoEvent->EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) != 0;
   WCHAR *origFileName = NULL;
   DWORD origOptions;
 
@@ -126,7 +156,22 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   assert(IoEvent->DokanOpenInfo == NULL);
 
+  if (HasLiteralDotOrDotDotSegment(fileName)) {
+    status = STATUS_OBJECT_NAME_INVALID;
+    goto fail;
+  }
+
+  if (openTargetDirectory && wcscmp(fileName, L"\\") == 0) {
+    // Per [MS-FSA 2.1.5.1.2], the volume root has no parent directory.
+    status = STATUS_INVALID_PARAMETER;
+    goto fail;
+  }
+
   IoEvent->DokanOpenInfo = PopFileOpenInfo();
+  if (!IoEvent->DokanOpenInfo) {
+    status = STATUS_INSUFFICIENT_RESOURCES;
+    goto fail;
+  }
   IoEvent->DokanOpenInfo->OpenCount = 1;
   IoEvent->DokanOpenInfo->EventContext = IoEvent->EventContext;
   IoEvent->DokanOpenInfo->DokanInstance = IoEvent->DokanInstance;
@@ -144,89 +189,101 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   origOptions = options;
 
-  // to open directory
-  // even if this flag is not specified,
-  // there is a case to open a directory
-  if (options & FILE_DIRECTORY_FILE) {
-    // DbgPrint("FILE_DIRECTORY_FILE\n");
-    IoEvent->DokanFileInfo.IsDirectory = TRUE;
-  } else if (IoEvent->EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+  if (openTargetDirectory) {
     // NOTE: SL_OPEN_TARGET_DIRECTORY means open the parent directory of the
-    // specified file
-    // We pull out the parent directory name and then switch the flags to make
-    // it look like it was
-    // a regular request to open a directory.
-    // https://msdn.microsoft.com/en-us/library/windows/hardware/ff548630(v=vs.85).aspx
-
+    // specified file without creating, truncating, or deleting the child or
+    // parent ([MS-FSA 2.1.5.1.2] / WDK IRP_MJ_CREATE). We pull out the parent
+    // directory name and switch the flags to open it as a directory.
+    // https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/irp-mj-create
     origFileName = _wcsdup(fileName);
 
     options |= FILE_DIRECTORY_FILE;
-    options &= ~FILE_NON_DIRECTORY_FILE;
+    options &= ~(DWORD)(FILE_NON_DIRECTORY_FILE | FILE_DELETE_ON_CLOSE);
 
     DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
 
-    // strip the last section of the file path
+    // Strip the last section of the file path.
     WCHAR *lastP = NULL;
-
     for (WCHAR *p = fileName; *p; p++) {
-      if ((*p == L'\\' || *p == L'/') && p[1])
+      if ((*p == L'\\' || *p == L'/') && p[1]) {
         lastP = p;
+      }
     }
 
     if (lastP) {
-      *lastP = 0;
+      *lastP = L'\0';
     }
 
     if (!fileName[0]) {
-      fileName[0] = '\\';
-      fileName[1] = 0;
+      fileName[0] = L'\\';
+      fileName[1] = L'\0';
     }
+  } else if (options & FILE_DIRECTORY_FILE) {
+    // To open directory (even if this flag is not specified, a directory can
+    // still be opened).
+    IoEvent->DokanFileInfo.IsDirectory = TRUE;
   }
 
   DbgPrint("###Create file handle = 0x%p, eventID = %04d, event Info = 0x%p\n",
            IoEvent->DokanOpenInfo, currentEventId, IoEvent);
 
-  if (IoEvent->DokanInstance->DokanOperations->ZwCreateFile) {
-
+  if (openTargetDirectory && origFileName == NULL) {
+    status = STATUS_INSUFFICIENT_RESOURCES;
+  } else if (IoEvent->DokanInstance->DokanOperations->ZwCreateFile) {
     SetIOSecurityContext(IoEvent->EventContext, &ioSecurityContext);
 
-    if ((IoEvent->EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) &&
-        IoEvent->DokanInstance->DokanOperations->Cleanup &&
-        IoEvent->DokanInstance->DokanOperations->CloseFile) {
+    if ((origOptions & FILE_NON_DIRECTORY_FILE) &&
+        (origOptions & FILE_DIRECTORY_FILE)) {
+      status = STATUS_INVALID_PARAMETER;
+    } else {
+      if (openTargetDirectory) {
+        if (IoEvent->DokanInstance->DokanOperations->Cleanup &&
+            IoEvent->DokanInstance->DokanOperations->CloseFile) {
+          // Non-destructive child existence probe per [MS-FSA 2.1.5.1.2].
+          ACCESS_MASK origDesiredAccess = ioSecurityContext.DesiredAccess;
+          DWORD probeOptions = (origOptions & FILE_OPEN_REPARSE_POINT);
 
-      if (options & FILE_NON_DIRECTORY_FILE && options & FILE_DIRECTORY_FILE)
-        status = STATUS_INVALID_PARAMETER;
-      else
-        status = IoEvent->DokanInstance->DokanOperations->ZwCreateFile(
-            origFileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
-            IoEvent->EventContext->Operation.Create.FileAttributes,
-            IoEvent->EventContext->Operation.Create.ShareAccess, disposition,
-            origOptions, &IoEvent->DokanFileInfo);
+          ioSecurityContext.DesiredAccess = FILE_READ_ATTRIBUTES;
+          IoEvent->DokanFileInfo.IsDirectory = FALSE;
+          status = IoEvent->DokanInstance->DokanOperations->ZwCreateFile(
+              origFileName, &ioSecurityContext, FILE_READ_ATTRIBUTES,
+              /*FileAttributes=*/0,
+              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
+              probeOptions, &IoEvent->DokanFileInfo);
+          ioSecurityContext.DesiredAccess = origDesiredAccess;
 
-      if (CreateSuccesStatusCheck(status, disposition)) {
-        IoEvent->DokanInstance->DokanOperations->Cleanup(origFileName, &IoEvent->DokanFileInfo);
-        IoEvent->DokanInstance->DokanOperations->CloseFile(
-            origFileName, &IoEvent->DokanFileInfo);
-      } else if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
-        DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
-        childExisted = FALSE;
+          if (CreateSuccesStatusCheck(status, FILE_OPEN)) {
+            IoEvent->DokanInstance->DokanOperations->Cleanup(
+                origFileName, &IoEvent->DokanFileInfo);
+            IoEvent->DokanInstance->DokanOperations->CloseFile(
+                origFileName, &IoEvent->DokanFileInfo);
+          } else if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
+            DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
+            childExisted = FALSE;
+          }
+
+          IoEvent->DokanFileInfo.Context = 0;
+          IoEvent->DokanFileInfo.DeletePending = FALSE;
+        }
+        IoEvent->DokanFileInfo.IsDirectory = TRUE;
       }
 
-      IoEvent->DokanFileInfo.IsDirectory = TRUE;
-    }
-
-    if (options & FILE_NON_DIRECTORY_FILE && options & FILE_DIRECTORY_FILE)
-      status = STATUS_INVALID_PARAMETER;
-    else
       status = IoEvent->DokanInstance->DokanOperations->ZwCreateFile(
           fileName, &ioSecurityContext, ioSecurityContext.DesiredAccess,
-          IoEvent->EventContext->Operation.Create.FileAttributes,
-          IoEvent->EventContext->Operation.Create.ShareAccess, disposition,
-          options, &IoEvent->DokanFileInfo);
+          openTargetDirectory
+              ? 0
+              : IoEvent->EventContext->Operation.Create.FileAttributes,
+          IoEvent->EventContext->Operation.Create.ShareAccess,
+          openTargetDirectory ? FILE_OPEN : disposition, options,
+          &IoEvent->DokanFileInfo);
 
-    if (CreateSuccesStatusCheck(status, disposition)
-      && !childExisted) {
-      IoEvent->EventResult->Operation.Create.Information = FILE_DOES_NOT_EXIST;
+      if (openTargetDirectory) {
+        if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
+          status = STATUS_OBJECT_PATH_NOT_FOUND;
+        } else if (status == STATUS_NOT_A_DIRECTORY) {
+          status = STATUS_INVALID_PARAMETER;
+        }
+      }
     }
   } else {
     status = STATUS_NOT_IMPLEMENTED;
@@ -236,68 +293,19 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   IoEvent->DokanOpenInfo->IsDirectory = IoEvent->DokanFileInfo.IsDirectory;
   IoEvent->DokanOpenInfo->UserContext = IoEvent->DokanFileInfo.Context;
 
-  if (!CreateSuccesStatusCheck(status, disposition)) {
-    if (IoEvent->EventContext->Flags & SL_OPEN_TARGET_DIRECTORY) {
+  if (!CreateSuccesStatusCheck(status,
+                               openTargetDirectory ? FILE_OPEN : disposition)) {
+    if (openTargetDirectory) {
       DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
     }
-    IoEvent->EventResult->Operation.Create.Information = FILE_DOES_NOT_EXIST;
-    IoEvent->EventResult->Status = status;
+    goto fail;
+  }
 
-    if (status == STATUS_OBJECT_NAME_COLLISION) {
-      IoEvent->EventResult->Operation.Create.Information = FILE_EXISTS;
-    }
-
-    if (STATUS_ACCESS_DENIED == status &&
-        IoEvent->DokanInstance->DokanOperations->ZwCreateFile &&
-        (IoEvent->EventContext->Operation.Create.SecurityContext.DesiredAccess &
-         DELETE)) {
-      DbgPrint("Delete failed, ask parent folder if we have the right\n");
-      // strip the last section of the file path
-      WCHAR *lastP = NULL;
-      for (WCHAR *p = fileName; *p; p++) {
-        if ((*p == L'\\' || *p == L'/') && p[1])
-          lastP = p;
-      }
-      if (lastP) {
-        *lastP = 0;
-      }
-
-      SetIOSecurityContext(IoEvent->EventContext, &ioSecurityContext);
-      ACCESS_MASK newDesiredAccess =
-          (MAXIMUM_ALLOWED & ioSecurityContext.DesiredAccess)
-              ? (FILE_DELETE_CHILD | FILE_LIST_DIRECTORY)
-              : (((DELETE & ioSecurityContext.DesiredAccess) ? FILE_DELETE_CHILD
-                                                             : 0) |
-                 ((FILE_READ_ATTRIBUTES & ioSecurityContext.DesiredAccess)
-                      ? FILE_LIST_DIRECTORY
-                      : 0));
-
-      options |= FILE_OPEN_FOR_BACKUP_INTENT; //Enable open directory
-      options &= ~FILE_NON_DIRECTORY_FILE;    //Remove non dir flag
-
-      status = IoEvent->DokanInstance->DokanOperations->ZwCreateFile(
-          fileName, &ioSecurityContext, newDesiredAccess,
-          IoEvent->EventContext->Operation.Create.FileAttributes,
-          IoEvent->EventContext->Operation.Create.ShareAccess, disposition,
-          options, &IoEvent->DokanFileInfo);
-
-      if (status == STATUS_SUCCESS) {
-        DbgPrint("Parent give us the right to delete\n");
-        IoEvent->EventResult->Status = STATUS_SUCCESS;
-        IoEvent->EventResult->Operation.Create.Information = FILE_OPENED;
-      } else {
-        DbgPrint("Parent CreateFile failed status = %lx\n", status);
-        PushFileOpenInfo(IoEvent->DokanOpenInfo);
-        IoEvent->DokanOpenInfo = NULL;
-      }
-    } else {
-      PushFileOpenInfo(IoEvent->DokanOpenInfo);
-      IoEvent->DokanOpenInfo = NULL;
-    }
-
+  IoEvent->EventResult->Status = STATUS_SUCCESS;
+  if (openTargetDirectory) {
+    IoEvent->EventResult->Operation.Create.Information =
+        childExisted ? FILE_EXISTS : FILE_DOES_NOT_EXIST;
   } else {
-
-    IoEvent->EventResult->Status = STATUS_SUCCESS;
     IoEvent->EventResult->Operation.Create.Information = FILE_OPENED;
 
     if (disposition == FILE_CREATE || disposition == FILE_OPEN_IF ||
@@ -308,23 +316,37 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
         if (disposition == FILE_OPEN_IF) {
           IoEvent->EventResult->Operation.Create.Information = FILE_OPENED;
         } else if (disposition == FILE_OVERWRITE_IF) {
-          IoEvent->EventResult->Operation.Create.Information =
-              FILE_OVERWRITTEN;
+          IoEvent->EventResult->Operation.Create.Information = FILE_OVERWRITTEN;
         } else if (disposition == FILE_SUPERSEDE) {
           IoEvent->EventResult->Operation.Create.Information = FILE_SUPERSEDED;
         }
       }
     }
 
-    if (disposition == FILE_OVERWRITE)
+    if (disposition == FILE_OVERWRITE) {
       IoEvent->EventResult->Operation.Create.Information = FILE_OVERWRITTEN;
-
-    if (IoEvent->DokanFileInfo.IsDirectory)
-      IoEvent->EventResult->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+    }
   }
 
-  if (origFileName)
+  if (IoEvent->DokanFileInfo.IsDirectory) {
+    IoEvent->EventResult->Operation.Create.Flags |= DOKAN_FILE_DIRECTORY;
+  }
+  goto cleanup;
+
+fail:
+  IoEvent->EventResult->Operation.Create.Information =
+      (status == STATUS_OBJECT_NAME_COLLISION) ? FILE_EXISTS
+                                               : FILE_DOES_NOT_EXIST;
+  IoEvent->EventResult->Status = status;
+  if (IoEvent->DokanOpenInfo) {
+    PushFileOpenInfo(IoEvent->DokanOpenInfo);
+    IoEvent->DokanOpenInfo = NULL;
+  }
+
+cleanup:
+  if (origFileName) {
     free(origFileName);
+  }
 
   if (!NT_SUCCESS(IoEvent->EventResult->Status)) {
     IoEvent->EventResult->Context = 0;
