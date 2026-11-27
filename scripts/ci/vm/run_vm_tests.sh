@@ -12,6 +12,9 @@
 #   GUEST_TEST_TIMEOUT    Seconds before a running shard is declared hung (default: 1800; 300 for bugcheck, 120 for hang).
 #   SSH_PORT              Loopback port forwarded to guest SSH (default: 2222; override for concurrent local runs).
 #   QEMU_CPU              Override the QEMU -cpu model (for investigations).
+#   BOOT_MAX_ATTEMPTS     Number of fresh-overlay boot attempts before failing (default: 4).
+#   BOOT_ATTEMPT_TIMEOUT  Seconds per boot attempt to wait for SSH (default: 60).
+#   BOOT_STALL_DIAG_DELAY Seconds between the two QEMU monitor snapshots captured on timeout (default: 5).
 #   ALLOW_PATCHGUARD_0X109  If 'true', retry once on known nested-KVM PatchGuard 0x109 (type 0x115) and warn
 #                           instead of failing if it reproduces (dump is still uploaded for kd.exe verification).
 #
@@ -40,6 +43,15 @@ else
 fi
 SSH_PORT="${SSH_PORT:-2222}"
 ALLOW_PATCHGUARD_0X109="${ALLOW_PATCHGUARD_0X109:-false}"
+BOOT_MAX_ATTEMPTS="${BOOT_MAX_ATTEMPTS:-4}"
+BOOT_ATTEMPT_TIMEOUT="${BOOT_ATTEMPT_TIMEOUT:-60}"
+BOOT_STALL_DIAG_DELAY="${BOOT_STALL_DIAG_DELAY:-5}"
+if [[ ! "$BOOT_MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] \
+    || [[ ! "$BOOT_ATTEMPT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] \
+    || [[ ! "$BOOT_STALL_DIAG_DELAY" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: BOOT_MAX_ATTEMPTS and BOOT_ATTEMPT_TIMEOUT must be positive integers and BOOT_STALL_DIAG_DELAY must be a non-negative integer." >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -130,6 +142,74 @@ qemu_monitor() {
   printf '%s\n' "$@" | socat - "UNIX-CONNECT:$MON_SOCK" >/dev/null 2>&1 || true
 }
 
+qemu_monitor_query() {
+  # Keep stdin open briefly so QEMU HMP flushes queued command output before seeing EOF,
+  # and strip CR / readline ANSI escape sequences for clean plain-text diagnostics.
+  (
+    printf '%s\n' "$@"
+    sleep 0.5
+  ) | timeout 15 socat -t 2 - "UNIX-CONNECT:$MON_SOCK" 2>&1 \
+    | sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g' \
+    | tr -d '\r' || true
+}
+
+collect_boot_stall_diagnostics() {
+  local context="$1" diag_file="$RESULTS_DIR/boot-stall-diag.txt"
+  local snap param val
+  local -a monitor_cmds=(
+    "info status"
+    "info cpus"
+    "info registers -a"
+    "info lapic 0"
+    "info lapic 1"
+    "info lapic 2"
+    "info lapic 3"
+    "info irq"
+    "info pic"
+  )
+  {
+    printf '=== Boot/SSH Stall Diagnostics (%s) ===\n' "$context"
+    printf 'Host UTC: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'Shard: %s\n' "$SHARD"
+    printf 'Host CPU: %s\n' "$(host_cpu_model 2>/dev/null || echo '<unknown>')"
+    printf 'QEMU CPU: %s\n' "$QEMU_CPU"
+    printf 'Kernel: %s\n' "$(uname -r 2>/dev/null || echo '<unknown>')"
+    printf 'QEMU version:\n'
+    qemu-system-x86_64 --version 2>&1 || true
+    printf '\n--- lsmod | grep kvm ---\n'
+    if command -v lsmod >/dev/null 2>&1; then
+      lsmod 2>/dev/null | grep -i kvm || echo "(no kvm modules listed)"
+    elif [[ -r /proc/modules ]]; then
+      grep -i kvm /proc/modules || echo "(no kvm modules listed)"
+    else
+      echo "(lsmod unavailable)"
+    fi
+    printf '\n--- /sys/module/kvm_amd/parameters/* ---\n'
+    if [[ -d /sys/module/kvm_amd/parameters ]]; then
+      for param in /sys/module/kvm_amd/parameters/*; do
+        [[ -f "$param" ]] || continue
+        val="$(tr '\n' ' ' < "$param" 2>/dev/null || echo '<unreadable>')"
+        printf '%s=%s\n' "${param##*/}" "${val% }"
+      done
+    else
+      echo "(kvm_amd parameters not present)"
+    fi
+
+    for snap in 1 2; do
+      if [[ $snap -eq 2 ]] && (( BOOT_STALL_DIAG_DELAY > 0 )); then
+        sleep "$BOOT_STALL_DIAG_DELAY"
+      fi
+      printf '\n--- QEMU Monitor Snapshot %d (%s) ---\n' "$snap" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      if [[ -n "$QEMU_PID" ]] && kill -0 "$QEMU_PID" 2>/dev/null; then
+        qemu_monitor_query "${monitor_cmds[@]}"
+      else
+        echo "(QEMU process not running)"
+      fi
+    done
+    printf '\n'
+  } >> "$diag_file" 2>&1 || true
+}
+
 SSH_OPTS=(-F /dev/null -i "$SSH_KEY" -o IdentitiesOnly=yes -o ForwardAgent=no -o ForwardX11=no
           -o ClearAllForwardings=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
@@ -146,7 +226,10 @@ get_guest_boot_time() {
 }
 
 wait_for_ssh() {
-  local max_wait="$1" prev_boot="${2:-}" start attempt=0 err="" cur_boot=""
+  local max_wait="$1" prev_boot="${2:-}" diag_label="${3:-}" start attempt=0 err="" cur_boot="" poll_sleep=3
+  if (( max_wait < poll_sleep )); then
+    poll_sleep="$max_wait"
+  fi
   start=$(date +%s)
   while true; do
     attempt=$((attempt + 1))
@@ -168,11 +251,12 @@ wait_for_ssh() {
       echo "[wait_for_ssh +$(( $(date +%s) - start ))s] $(echo "$err" | tr '\n' ' ' | cut -c1-200)"
     fi
     if (( $(date +%s) - start >= max_wait )); then
-      echo "ERROR: no SSH after ${max_wait}s; saving screenshot." >&2
+      echo "ERROR: no SSH after ${max_wait}s; saving screenshot and monitor diagnostics." >&2
       qemu_monitor "screendump $RESULTS_DIR/no-ssh-screen.ppm"
+      collect_boot_stall_diagnostics "${diag_label:-wait_for_ssh timeout (max_wait=${max_wait}s, prev_boot=${prev_boot:-none})}"
       return 1
     fi
-    sleep 3
+    sleep "$poll_sleep"
   done
 }
 
@@ -335,19 +419,31 @@ while true; do
   boot_retries=0
   rm -rf "$RESULTS_DIR/fstest-results" "$RESULTS_DIR/MEMORY.DMP.7z" \
     "$RESULTS_DIR/no-ssh-screen.ppm" "$RESULTS_DIR/hang-screen.ppm" \
+    "$RESULTS_DIR/boot-stall-diag.txt" \
     "$RESULTS_DIR/guest_tests.log" "$RESULTS_DIR/guest_diagnostics.txt" \
     "$RESULTS_DIR"/dokan_install*.log
 
   log "Booting guest (shard=$SHARD, simulate=$SIMULATE, attempt=$attempt/$max_attempts)"
   t_boot_total=$(date +%s)
-  start_qemu
-  # Under nested KVM Windows occasionally stalls on the boot logo; retry once with a fresh overlay.
-  if ! wait_for_ssh 90; then
-    boot_retries=1
-    echo "WARNING: guest not reachable after 90s; retrying boot once with a fresh overlay." >&2
+  boot_ok=false
+  # Under nested KVM Windows occasionally stalls on the pre-spinner boot logo; retry on a fresh
+  # overlay up to BOOT_MAX_ATTEMPTS times (default: 4 x 60s = 240s budget, vs 17-26s normal boot).
+  # Retain boot-stall-diag.txt and no-ssh-screen.ppm even when a retry succeeds so transient
+  # stalls still upload monitor dumps in vm-logs.
+  for (( boot_attempt = 1; boot_attempt <= BOOT_MAX_ATTEMPTS; boot_attempt++ )); do
     start_qemu
-    wait_for_ssh 150
-    rm -f "$RESULTS_DIR/no-ssh-screen.ppm"
+    if wait_for_ssh "$BOOT_ATTEMPT_TIMEOUT" "" "boot attempt ${boot_attempt}/${BOOT_MAX_ATTEMPTS} (max_wait=${BOOT_ATTEMPT_TIMEOUT}s)"; then
+      boot_ok=true
+      break
+    fi
+    if (( boot_attempt < BOOT_MAX_ATTEMPTS )); then
+      boot_retries=$((boot_retries + 1))
+      echo "WARNING: guest not reachable after ${BOOT_ATTEMPT_TIMEOUT}s (boot attempt ${boot_attempt}/${BOOT_MAX_ATTEMPTS}); retrying with a fresh overlay." >&2
+    fi
+  done
+  if [[ "$boot_ok" != true ]]; then
+    echo "ERROR: guest failed to boot after ${BOOT_MAX_ATTEMPTS} attempts." >&2
+    exit 1
   fi
   boot_secs=$(( $(date +%s) - t_boot_total ))
   log "Guest reachable over SSH after ${boot_secs}s (boot retries: ${boot_retries})"
