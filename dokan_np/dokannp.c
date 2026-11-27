@@ -27,10 +27,12 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "../dokan/dokan.h"
+#include <limits.h>
 #include <malloc.h>
 #include <npapi.h>
 #include <stdio.h>
 #include <strsafe.h>
+#include <wchar.h>
 #include <windows.h>
 #include <winnetwk.h>
 
@@ -224,11 +226,49 @@ DWORD APIENTRY NPAddConnection3(__in HWND WndOwner,
   return status;
 }
 
+static BOOL IsAsciiDriveLetter(WCHAR c) {
+  return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z');
+}
+
+static WCHAR ToUpperAsciiDriveLetter(WCHAR c) {
+  return (c >= L'a' && c <= L'z') ? (WCHAR)(c - L'a' + L'A') : c;
+}
+
 DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
-  DbgPrintW(L"NpCancelConnection %s %d\n", Name, Force);
+  DbgPrintW(L"NpCancelConnection %s %d\n", Name ? Name : L"(null)", Force);
+
+  if (Name == NULL || Name[0] == L'\0') {
+    return WN_NOT_CONNECTED;
+  }
+
+  size_t nameLen = wcslen(Name);
+  BOOL isDriveLetter =
+      ((nameLen == 2 && Name[1] == L':') ||
+       (nameLen == 3 && Name[1] == L':' && Name[2] == L'\\')) &&
+      IsAsciiDriveLetter(Name[0]);
+  BOOL isUncName = (!isDriveLetter && nameLen > 2 && Name[0] == L'\\' &&
+                    Name[1] == L'\\' && Name[2] != L'\\');
+
+  WCHAR dosDevice[] = L"\\DosDevices\\C:";
+  LPCWSTR uncCandidate = NULL;
+  size_t uncCandidateLen = 0;
+
+  if (isDriveLetter) {
+    dosDevice[12] = ToUpperAsciiDriveLetter(Name[0]);
+  } else if (isUncName) {
+    uncCandidate = &Name[1];
+    uncCandidateLen = nameLen - 1;
+    while (uncCandidateLen > 0 && uncCandidate[uncCandidateLen - 1] == L'\\') {
+      --uncCandidateLen;
+    }
+    if (uncCandidateLen <= 1 || uncCandidateLen > (size_t)INT_MAX) {
+      return WN_NOT_CONNECTED;
+    }
+  } else {
+    return WN_NOT_CONNECTED;
+  }
 
   ULONG nbRead = 0;
-  WCHAR dosDevice[] = L"\\DosDevices\\C:";
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo =
       DokanGetMountPointList(FALSE, &nbRead);
   if (dokanMountPointInfo == NULL) {
@@ -236,22 +276,78 @@ DWORD APIENTRY NPCancelConnection(__in LPWSTR Name, __in BOOL Force) {
     return WN_NOT_CONNECTED;
   }
 
-  dosDevice[12] = Name[0];
+  DWORD currentSessionId = 0;
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &currentSessionId)) {
+    currentSessionId = 0;
+  }
 
-  for (unsigned int i = 0; i < nbRead; ++i) {
-    if (wcscmp(dokanMountPointInfo[i].MountPoint, dosDevice) == 0) {
-      if (dokanMountPointInfo[i].MountOptions &
-          DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT) {
-        DokanReleaseMountPointList(dokanMountPointInfo);
-        if (DokanRemoveMountPoint(Name)) {
-          DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint succeeded\n");
-          return WN_SUCCESS;
-        } else {
-          DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint failed\n");
-          return WN_BAD_VALUE;
-        }
+  const WCHAR dosPrefix[] = L"\\DosDevices\\";
+  const size_t dosPrefixLen = ARRAYSIZE(dosPrefix) - 1;
+  WCHAR removeTarget[MAX_PATH];
+  removeTarget[0] = L'\0';
+  BOOL shouldRemove = FALSE;
+
+  for (ULONG i = 0; i < nbRead; ++i) {
+    if (dokanMountPointInfo[i].SessionId != (ULONG)-1 &&
+        dokanMountPointInfo[i].SessionId != currentSessionId) {
+      continue;
+    }
+
+    BOOL matched = FALSE;
+    if (isDriveLetter) {
+      size_t mountPointLen =
+          wcsnlen(dokanMountPointInfo[i].MountPoint,
+                  ARRAYSIZE(dokanMountPointInfo[i].MountPoint));
+      matched = (mountPointLen <= (size_t)INT_MAX &&
+                 CompareStringOrdinal(dokanMountPointInfo[i].MountPoint,
+                                      (int)mountPointLen, dosDevice, -1,
+                                      /*bIgnoreCase=*/TRUE) == CSTR_EQUAL);
+    } else {
+      size_t entryUncLen = wcsnlen(dokanMountPointInfo[i].UNCName,
+                                   ARRAYSIZE(dokanMountPointInfo[i].UNCName));
+      while (entryUncLen > 0 &&
+             dokanMountPointInfo[i].UNCName[entryUncLen - 1] == L'\\') {
+        --entryUncLen;
+      }
+      matched = (entryUncLen > 1 && entryUncLen <= (size_t)INT_MAX &&
+                 CompareStringOrdinal(uncCandidate, (int)uncCandidateLen,
+                                      dokanMountPointInfo[i].UNCName,
+                                      (int)entryUncLen,
+                                      /*bIgnoreCase=*/TRUE) == CSTR_EQUAL);
+    }
+
+    if (matched && (dokanMountPointInfo[i].MountOptions &
+                    DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT)) {
+      LPCWSTR mountPoint = dokanMountPointInfo[i].MountPoint;
+      size_t mountPointLen =
+          wcsnlen(mountPoint, ARRAYSIZE(dokanMountPointInfo[i].MountPoint));
+      LPCWSTR targetSrc = mountPoint;
+      size_t targetLen = mountPointLen;
+      if (mountPointLen >= dosPrefixLen &&
+          CompareStringOrdinal(mountPoint, (int)dosPrefixLen, dosPrefix,
+                               (int)dosPrefixLen,
+                               /*bIgnoreCase=*/TRUE) == CSTR_EQUAL) {
+        targetSrc = mountPoint + dosPrefixLen;
+        targetLen = mountPointLen - dosPrefixLen;
+      }
+      if (targetLen > 0 &&
+          SUCCEEDED(StringCchCopyNW(removeTarget, ARRAYSIZE(removeTarget),
+                                    targetSrc, targetLen))) {
+        shouldRemove = TRUE;
+        break;
       }
     }
+  }
+
+  DokanReleaseMountPointList(dokanMountPointInfo);
+
+  if (shouldRemove) {
+    if (DokanRemoveMountPoint(removeTarget)) {
+      DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint succeeded\n");
+      return WN_SUCCESS;
+    }
+    DbgPrintW(L"NpCancelConnection: DokanRemoveMountPoint failed\n");
+    return WN_BAD_VALUE;
   }
 
   DbgPrintW(L"NpCancelConnection Disconnect was ignored\n");

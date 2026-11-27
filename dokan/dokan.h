@@ -998,11 +998,15 @@ HANDLE DOKANAPI DokanOpenRequestorToken(PDOKAN_FILE_INFO DokanFileInfo);
 /**
  * \brief Get active Dokan mount points.
  *
- * Returned array need to be released by calling \ref DokanReleaseMountPointList
+ * Returned array needs to be released by calling
+ * \ref DokanReleaseMountPointList. When no matching mount points exist, this
+ * function returns a valid non-NULL allocation with \c *nbRead set to 0, which
+ * must still be released with \ref DokanReleaseMountPointList.
  *
  * \param uncOnly Get only instances that have UNC Name.
  * \param nbRead Number of instances successfully retrieved.
- * \return Allocate array of DOKAN_MOUNT_POINT_INFO.
+ * \return Allocated array of DOKAN_MOUNT_POINT_INFO (possibly with
+ *         \c *nbRead == 0 when empty), or \c NULL on error.
  */
 PDOKAN_MOUNT_POINT_INFO DOKANAPI DokanGetMountPointList(BOOL uncOnly, PULONG nbRead);
 
