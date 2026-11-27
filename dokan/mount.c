@@ -547,6 +547,22 @@ BOOL EnableTokenPrivilege(LPCTSTR lpszSystemName, BOOL bEnable) {
   return FALSE;
 }
 
+/**
+ * \struct DOKAN_BROADCAST_CONTEXT
+ * \brief Parameters passed to DokanBroadcastCallback for async volume
+ *        arrival and removal broadcasts.
+ */
+typedef struct _DOKAN_BROADCAST_CONTEXT {
+  /** Uppercase ASCII drive letter ('A'-'Z') for the volume. */
+  WCHAR DriveLetter;
+  /** Whether the mount is a network volume (sets DBTF_NET). */
+  BOOL IsNetwork;
+  /** BroadcastSystemMessage recipient bitmask. */
+  DWORD Recipients;
+  /** TRUE on unmount (DBT_DEVICEREMOVECOMPLETE), FALSE on mount. */
+  BOOL IsRemoved;
+} DOKAN_BROADCAST_CONTEXT, *PDOKAN_BROADCAST_CONTEXT;
+
 VOID CALLBACK DokanBroadcastCallback(PTP_CALLBACK_INSTANCE Instance,
                                      PVOID Parameter) {
   // Release the library reference taken in DokanBroadcastLink once this
@@ -559,76 +575,96 @@ VOID CALLBACK DokanBroadcastCallback(PTP_CALLBACK_INSTANCE Instance,
     FreeLibraryWhenCallbackReturns(Instance, self);
   }
 
-  DWORD device_event;
+  PDOKAN_BROADCAST_CONTEXT context = (PDOKAN_BROADCAST_CONTEXT)Parameter;
+  if (context == NULL) {
+    return;
+  }
+
+  WCHAR upperLetter = ToUpperAsciiDriveLetter(context->DriveLetter);
+  BOOL isNetwork = context->IsNetwork;
+  DWORD recipients = context->Recipients;
+  BOOL isRemoved = context->IsRemoved;
+  free(context);
+
+  if (!IsValidDriveLetter(upperLetter)) {
+    return;
+  }
+
+  DWORD device_event = isRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
   DEV_BROADCAST_VOLUME params;
-  WCHAR cLetter = (size_t)Parameter & 0xff;
-  DWORD receipients = ((size_t)Parameter >> 16) & 0x7fff;
-  BOOL bRemoved = ((size_t)Parameter >> 31) & 0x1;
-
-  device_event = bRemoved ? DBT_DEVICEREMOVECOMPLETE : DBT_DEVICEARRIVAL;
-
   ZeroMemory(&params, sizeof(params));
   params.dbcv_size = sizeof(params);
   params.dbcv_devicetype = DBT_DEVTYP_VOLUME;
   params.dbcv_reserved = 0;
-  params.dbcv_unitmask = (1 << cLetter);
-  params.dbcv_flags = 0;
+  params.dbcv_unitmask = (1UL << (ULONG)(upperLetter - L'A'));
+  params.dbcv_flags = isNetwork ? DBTF_NET : 0;
 
-  if (BroadcastSystemMessage(BSF_NOHANG | BSF_FORCEIFHUNG, &receipients,
+  if (BroadcastSystemMessage(BSF_NOHANG | BSF_FORCEIFHUNG, &recipients,
                              WM_DEVICECHANGE, device_event,
                              (LPARAM)&params) <= 0) {
-
     DbgPrint("DokanBroadcastLink: BroadcastSystemMessage failed - %d\n",
              GetLastError());
   }
 }
 
 VOID DokanBroadcastLink(PDOKAN_INSTANCE DokanInstance, BOOL bRemoved) {
-  DWORD receipients = BSM_APPLICATIONS;
+  DWORD recipients = BSM_APPLICATIONS;
   WCHAR drive[4] = L"C:\\";
   LONG wEventId;
   WCHAR cLetter = DokanInstance->MountPoint[0];
 
-  if (!isalpha(cLetter)) {
+  if (!IsValidDriveLetter(cLetter)) {
     DbgPrint("DokanBroadcastLink: invalid parameter\n");
     return;
   }
+  WCHAR upperLetter = ToUpperAsciiDriveLetter(cLetter);
 
   // Unsafe to call Advapi32.dll during DLL_PROCESS_DETACH
   if (EnableTokenPrivilege(SE_TCB_NAME, TRUE)) {
-    receipients |= BSM_ALLDESKTOPS;
+    recipients |= BSM_ALLDESKTOPS;
   }
 
-  // Async call BroadcastSystemMessage to avoid possible hangs from receiver apps.
-  // The broadcast must not run on the instance callback environment (or on any
-  // environment whose cleanup group is waited for in DeleteDokanInstance /
-  // CleanupPool): BroadcastSystemMessage with BSF_FORCEIFHUNG waits about 5
-  // seconds for each top-level window that is not processing messages, so a
-  // single hung window delayed DokanCloseHandle by 5 or 10 seconds. It is
-  // submitted to the default pool instead, and the library is pinned with a
-  // module reference that the callback releases when it returns.
-  // Store the event information inside the "unused" pointer value:
-  PVOID parameter =
-      (PVOID)(size_t)((bRemoved << 31) | ((receipients & 0x7fff) << 16) |
-                      ((toupper(cLetter) - 'A') & 0xff));
-  HMODULE self = NULL;
-  if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                          (LPCWSTR)DokanBroadcastCallback, &self)) {
-    DbgPrintW(L"Dokan Error: GetModuleHandleEx() has returned error code "
-              L"%u.\n",
-              GetLastError());
-    return;
-  }
-  if (!TrySubmitThreadpoolCallback(DokanBroadcastCallback, parameter, NULL)) {
-    DWORD lastError = GetLastError();
-    DbgPrintW(L"Dokan Error: TrySubmitThreadpoolCallback() has returned error "
-              L"code %u.\n",
-              lastError);
-    FreeLibrary(self);
-    return;
+  // Async call BroadcastSystemMessage to avoid possible hangs from receiver
+  // apps. The broadcast must not run on the instance callback environment (or
+  // on any environment whose cleanup group is waited for in
+  // DeleteDokanInstance / CleanupPool): BroadcastSystemMessage with
+  // BSF_FORCEIFHUNG waits about 5 seconds for each top-level window that is
+  // not processing messages, so a single hung window delayed DokanCloseHandle
+  // by 5 or 10 seconds. It is submitted to the default pool instead, and the
+  // library is pinned with a module reference that the callback releases when
+  // it returns.
+  PDOKAN_BROADCAST_CONTEXT context =
+      (PDOKAN_BROADCAST_CONTEXT)malloc(sizeof(DOKAN_BROADCAST_CONTEXT));
+  if (context == NULL) {
+    DbgPrintW(L"Dokan Error: Failed to allocate broadcast context.\n");
+  } else {
+    context->DriveLetter = upperLetter;
+    context->IsNetwork =
+        DokanInstance->DokanOptions != NULL &&
+        (DokanInstance->DokanOptions->Options & DOKAN_OPTION_NETWORK) != 0;
+    context->Recipients = recipients;
+    context->IsRemoved = bRemoved;
+
+    HMODULE self = NULL;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                            (LPCWSTR)DokanBroadcastCallback, &self)) {
+      DWORD lastError = GetLastError();
+      DbgPrintW(L"Dokan Error: GetModuleHandleEx() has returned error code "
+                L"%u.\n",
+                lastError);
+      free(context);
+    } else if (!TrySubmitThreadpoolCallback(DokanBroadcastCallback, context,
+                                            NULL)) {
+      DWORD lastError = GetLastError();
+      DbgPrintW(L"Dokan Error: TrySubmitThreadpoolCallback() has returned "
+                L"error code %u.\n",
+                lastError);
+      FreeLibrary(self);
+      free(context);
+    }
   }
 
-  drive[0] = towupper(cLetter);
+  drive[0] = upperLetter;
   wEventId = bRemoved ? SHCNE_DRIVEREMOVED : SHCNE_DRIVEADD;
   SHChangeNotify(wEventId, SHCNF_PATH, drive, NULL);
 }

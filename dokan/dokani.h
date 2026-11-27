@@ -221,6 +221,10 @@ BOOL DokanMount(PDOKAN_INSTANCE DokanInstance,
 
 BOOL IsMountPointDriveLetter(LPCWSTR mountPoint);
 
+BOOL IsValidDriveLetter(WCHAR DriveLetter);
+
+WCHAR ToUpperAsciiDriveLetter(WCHAR DriveLetter);
+
 VOID EventCompletion(PDOKAN_IO_EVENT EventInfo);
 
 VOID CreateDispatchCommon(PDOKAN_IO_EVENT IoEvent, ULONG SizeOfEventInfo,

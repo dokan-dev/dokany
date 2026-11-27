@@ -191,12 +191,18 @@ BOOL IsValidDriveLetter(WCHAR DriveLetter) {
          (L'A' <= DriveLetter && DriveLetter <= L'Z');
 }
 
+WCHAR ToUpperAsciiDriveLetter(WCHAR DriveLetter) {
+  return (DriveLetter >= L'a' && DriveLetter <= L'z')
+             ? (WCHAR)(DriveLetter - L'a' + L'A')
+             : DriveLetter;
+}
+
 BOOL CheckDriveLetterAvailability(WCHAR DriveLetter) {
   DWORD result = 0;
   WCHAR buffer[MAX_PATH];
   WCHAR dosDevice[] = L"\\\\.\\C:";
   WCHAR driveName[] = L"C:";
-  WCHAR driveLetter = towupper(DriveLetter);
+  WCHAR driveLetter = ToUpperAsciiDriveLetter(DriveLetter);
   HANDLE device = NULL;
   dosDevice[4] = driveLetter;
   driveName[0] = driveLetter;
