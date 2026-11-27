@@ -70,8 +70,10 @@ Session 0 (where IFSTest multi-process security tests using `CreateProcessWithLo
 (`AutoAdminLogon` / `WinSta0\Default`) via a one-shot Scheduled Task and streams output back over SSH;
 [`scripts/run_ifstest.ps1`](../run_ifstest.ps1) explicitly fails the run (in both CI and local runs) if
 `SetOwnerSecurityTest` or `DirectoryTraverseTest` reports `IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE`.
-Scorecards (`fstest-results/*.json`), install logs, `guest_tests.log`, the serial console log, and
-(on failures) `guest_diagnostics.txt` (recent `System`/`Application`/`TaskScheduler`/`WMI-Activity`
+Scorecards (`fstest-results/*.json`), install logs, `guest_tests.log`, the serial console log,
+(on boot/SSH stalls, even if a retry recovers) `no-ssh-screen.ppm` and `boot-stall-diag.txt`
+(host kernel/QEMU/`kvm_amd` parameters plus two QEMU monitor snapshots 5s apart), and
+(on test failures) `guest_diagnostics.txt` (recent `System`/`Application`/`TaskScheduler`/`WMI-Activity`
 events, live test processes, and trampoline state) are uploaded as `vm-logs-<os>-<shard>`.
 
 ## Crashes and hangs

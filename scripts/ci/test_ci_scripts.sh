@@ -6,6 +6,7 @@
 #   3. scripts/ci/install_cygwin.ps1 Assert-CygwinGpgVerification (GOODSIG/EXPKEYSIG/REVKEYSIG)
 #   4. scripts/ci/vm/provisioning/verifier_helpers.ps1 Driver Verifier guards
 #   5. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & collect_guest_diagnostics.ps1 syntax
+#   6. scripts/ci/vm/run_vm_tests.sh boot retries & QEMU monitor stall diagnostics
 # Uses only tools preinstalled on ubuntu-latest (jq, pwsh, python3 stdlib).
 set -euo pipefail
 
@@ -469,5 +470,188 @@ if ($r.ExitCode -ne 0 -or $r.ChildExited -or -not $r.SawExitFile -or $r.ExitReas
 Write-Output 'run_guest_tests.ps1 trampoline & collect_guest_diagnostics.ps1 unit tests passed.'
 PWSH
 pwsh -NoProfile -File "$WORK_DIR/test_ps.ps1"
+
+echo "=== 3. run_vm_tests.sh boot retries & QEMU monitor stall diagnostics ==="
+VM_TEST_DIR="$WORK_DIR/vm-boot-test"
+MOCK_BIN="$VM_TEST_DIR/bin"
+MOCK_IMG="$VM_TEST_DIR/image"
+MOCK_PAY="$VM_TEST_DIR/payload"
+mkdir -p "$MOCK_BIN" "$MOCK_IMG" "$MOCK_PAY/fstest"
+: > "$MOCK_IMG/base.qcow2"
+: > "$MOCK_IMG/id_ed25519"
+: > "$MOCK_PAY/DokanSetup.exe"
+: > "$MOCK_PAY/fsx.exe"
+: > "$MOCK_PAY/fstest/dokan_fstest.exe"
+
+cat <<'STUB' > "$MOCK_BIN/lscpu"
+#!/usr/bin/env bash
+echo "Model name:             AMD EPYC 7763 64-Core Processor"
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/qemu-img"
+#!/usr/bin/env bash
+: > "${@: -1}"
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/qemu-system-x86_64"
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--version" ]]; then
+  echo "QEMU emulator version 10.2.1 (stub)"
+  exit 0
+fi
+count=0
+if [[ -f "$MOCK_STATE/qemu_starts" ]]; then
+  count="$(cat "$MOCK_STATE/qemu_starts")"
+fi
+echo $((count + 1)) > "$MOCK_STATE/qemu_starts"
+echo "$$" > "$MOCK_STATE/qemu.pid"
+exec sleep 60
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/socat"
+#!/usr/bin/env bash
+printf 'QEMU 10.2.1 monitor - type '\''help'\'' for more information\r\n'
+while IFS= read -r line; do
+  if [[ "$line" == screendump\ * ]]; then
+    out_path="${line#screendump }"
+    printf 'P6\n1 1\n255\n000' > "$out_path"
+  else
+    printf '\x1b[K(qemu) %s\r\nstub-out: %s\r\n' "$line" "$line"
+  fi
+done
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/ssh"
+#!/usr/bin/env bash
+boot_num=0
+if [[ -f "$MOCK_STATE/qemu_starts" ]]; then
+  boot_num="$(cat "$MOCK_STATE/qemu_starts")"
+fi
+cmd="${@: -1}"
+if (( boot_num < MOCK_SUCCEED_ON_BOOT )); then
+  echo "ssh: connect to host 127.0.0.1 port 2222: Connection refused" >&2
+  exit 255
+fi
+case "$cmd" in
+  *"Write-Output ready"*)
+    echo "ready"
+    ;;
+  *"LastBootUpTime"*)
+    echo "2026-11-27T19:00:00.0000000Z"
+    ;;
+  *"Stop-Computer"*)
+    if [[ -f "$MOCK_STATE/qemu.pid" ]]; then
+      kill "$(cat "$MOCK_STATE/qemu.pid")" 2>/dev/null || true
+    fi
+    ;;
+  *)
+    ;;
+esac
+exit 0
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/scp"
+#!/usr/bin/env bash
+exit 0
+STUB
+
+cat <<'STUB' > "$MOCK_BIN/lsmod"
+#!/usr/bin/env bash
+printf 'Module                  Size  Used by\nkvm_amd               204800  0\nkvm                  1413120  1 kvm_amd\n'
+STUB
+
+chmod +x "$MOCK_BIN"/*
+
+# 3a. Transient boot stall on attempt 1, recovery on attempt 2: preserves boot-stall-diag.txt & screenshot.
+STATE_3A="$VM_TEST_DIR/state-3a"
+RES_3A="$VM_TEST_DIR/results-3a"
+mkdir -p "$STATE_3A" "$RES_3A"
+OUT_3A="$VM_TEST_DIR/out-3a.log"
+PATH="$MOCK_BIN:$PATH" \
+  MOCK_STATE="$STATE_3A" \
+  MOCK_SUCCEED_ON_BOOT=2 \
+  BOOT_MAX_ATTEMPTS=4 \
+  BOOT_ATTEMPT_TIMEOUT=1 \
+  BOOT_STALL_DIAG_DELAY=0 \
+  ./scripts/ci/vm/run_vm_tests.sh "$MOCK_IMG" "$MOCK_PAY" "$RES_3A" shard1 > "$OUT_3A" 2>&1
+
+if [[ "$(cat "$STATE_3A/qemu_starts")" != "2" ]]; then
+  echo "FAIL (3a): expected 2 QEMU starts, got $(cat "$STATE_3A/qemu_starts")" >&2
+  cat "$OUT_3A" >&2
+  exit 1
+fi
+grep -q 'Boot to SSH:.*(retries: 1)' "$OUT_3A" || { echo "FAIL (3a): missing retries: 1 in summary" >&2; cat "$OUT_3A" >&2; exit 1; }
+[[ -s "$RES_3A/no-ssh-screen.ppm" ]] || { echo "FAIL (3a): no-ssh-screen.ppm was not retained on retry recovery" >&2; exit 1; }
+[[ -s "$RES_3A/boot-stall-diag.txt" ]] || { echo "FAIL (3a): boot-stall-diag.txt missing after transient stall" >&2; exit 1; }
+for expected in \
+    "boot attempt 1/4" \
+    "QEMU emulator version 10.2.1 (stub)" \
+    "kvm_amd" \
+    "QEMU Monitor Snapshot 1" \
+    "QEMU Monitor Snapshot 2" \
+    "stub-out: info status" \
+    "stub-out: info cpus" \
+    "stub-out: info registers -a" \
+    "stub-out: info lapic 0" \
+    "stub-out: info lapic 3" \
+    "stub-out: info irq" \
+    "stub-out: info pic"; do
+  grep -Fq "$expected" "$RES_3A/boot-stall-diag.txt" || {
+    echo "FAIL (3a): boot-stall-diag.txt missing '$expected'" >&2
+    cat "$RES_3A/boot-stall-diag.txt" >&2
+    exit 1
+  }
+done
+python3 - "$RES_3A/boot-stall-diag.txt" <<'PY'
+import sys
+with open(sys.argv[1], 'rb') as f:
+    raw = f.read()
+assert b'\r' not in raw, 'CR bytes were not stripped from boot-stall-diag.txt'
+assert b'\x1b[' not in raw, 'ANSI CSI escapes were not stripped from boot-stall-diag.txt'
+PY
+
+# 3b. Exhausting all 4 boot attempts fails cleanly and records 4 stalls (8 monitor snapshots).
+STATE_3B="$VM_TEST_DIR/state-3b"
+RES_3B="$VM_TEST_DIR/results-3b"
+mkdir -p "$STATE_3B" "$RES_3B"
+OUT_3B="$VM_TEST_DIR/out-3b.log"
+rc_3b=0
+PATH="$MOCK_BIN:$PATH" \
+  MOCK_STATE="$STATE_3B" \
+  MOCK_SUCCEED_ON_BOOT=99 \
+  BOOT_MAX_ATTEMPTS=4 \
+  BOOT_ATTEMPT_TIMEOUT=1 \
+  BOOT_STALL_DIAG_DELAY=0 \
+  ./scripts/ci/vm/run_vm_tests.sh "$MOCK_IMG" "$MOCK_PAY" "$RES_3B" shard2 > "$OUT_3B" 2>&1 || rc_3b=$?
+
+if [[ $rc_3b -eq 0 ]]; then
+  echo "FAIL (3b): expected non-zero exit when all 4 boot attempts stall" >&2
+  exit 1
+fi
+if [[ "$(cat "$STATE_3B/qemu_starts")" != "4" ]]; then
+  echo "FAIL (3b): expected 4 QEMU starts, got $(cat "$STATE_3B/qemu_starts")" >&2
+  exit 1
+fi
+[[ -s "$RES_3B/no-ssh-screen.ppm" ]] || { echo "FAIL (3b): no-ssh-screen.ppm missing" >&2; exit 1; }
+snap_count="$(grep -c -- '--- QEMU Monitor Snapshot ' "$RES_3B/boot-stall-diag.txt")"
+if [[ "$snap_count" != "8" ]]; then
+  echo "FAIL (3b): expected 8 monitor snapshots across 4 failed boots, got $snap_count" >&2
+  exit 1
+fi
+for n in 1 2 3 4; do
+  grep -Fq "boot attempt ${n}/4" "$RES_3B/boot-stall-diag.txt" || {
+    echo "FAIL (3b): missing boot attempt ${n}/4 in boot-stall-diag.txt" >&2
+    exit 1
+  }
+done
+
+# 3c. Invalid boot retry env var is rejected immediately with exit code 2.
+rc_3c=0
+BOOT_MAX_ATTEMPTS=0 ./scripts/ci/vm/run_vm_tests.sh "$MOCK_IMG" "$MOCK_PAY" "$RES_3B" shard1 >/dev/null 2>&1 || rc_3c=$?
+if [[ $rc_3c -ne 2 ]]; then
+  echo "FAIL (3c): expected exit code 2 for BOOT_MAX_ATTEMPTS=0, got $rc_3c" >&2
+  exit 1
+fi
+echo "run_vm_tests.sh boot retry & monitor stall diagnostics unit tests passed."
 
 echo "=== All CI script unit tests passed ==="
