@@ -43,6 +43,7 @@ FSCTL_EVENT_PROCESS_N_PULL:
 */
 
 #include "dokan.h"
+#include "util/fcb.h"
 #include "util/irp_buffer_helper.h"
 
 VOID SetCommonEventContext(__in PREQUEST_CONTEXT RequestContext,
@@ -157,6 +158,7 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
         // expecting the timeout thread to call DokanCancelCreateIrp. Forward
         // this entry to the destination so the caller can complete the IRP
         // rather than leaving it permanently orphaned.
+        irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
         InsertTailList(Dest, &irpEntry->ListEntry);
       } else {
         // Cancel routine will run as soon as we release the lock
@@ -165,11 +167,38 @@ VOID MoveIrpList(__in PIRP_LIST Source, __out LIST_ENTRY* Dest) {
       }
       continue;
     }
+    irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
     InsertTailList(Dest, &irpEntry->ListEntry);
   }
 
   KeClearEvent(&Source->NotEmpty);
   KeReleaseSpinLock(&Source->ListLock, oldIrql);
+}
+
+VOID DokanCancelPendingIrp(__in PREQUEST_CONTEXT RequestContext,
+                           __in NTSTATUS Status) {
+  if (RequestContext->IrpSp->MajorFunction == IRP_MJ_CREATE &&
+      RequestContext->IrpSp->FileObject != NULL &&
+      RequestContext->IrpSp->FileObject->FsContext2 != NULL) {
+    DokanCancelCreateIrp(RequestContext, Status);
+  } else {
+    if (RequestContext->IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
+      DokanExecuteCleanup(RequestContext);
+      // Windows FSDs must never fail IRP_MJ_CLEANUP once local handle state
+      // has been torn down (see DokanDispatchCleanup).
+      Status = STATUS_SUCCESS;
+    } else if (RequestContext->IrpSp->MajorFunction == IRP_MJ_WRITE) {
+      PVOID eventContext =
+          RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
+      if (eventContext != NULL) {
+        DokanFreeEventContext(eventContext);
+        RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] =
+            NULL;
+      }
+    }
+    RequestContext->Irp->IoStatus.Information = 0;
+    DokanCompleteIrpRequest(RequestContext->Irp, Status);
+  }
 }
 
 VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
@@ -189,11 +218,7 @@ VOID ReleasePendingIrp(__in PIRP_LIST PendingIrp) {
                DokanGetMinorFunctionStr(requestContext.IrpSp->MajorFunction,
                                         requestContext.IrpSp->MinorFunction),
                requestContext.IrpSp->FileObject);
-    if (requestContext.IrpSp->MajorFunction == IRP_MJ_CLEANUP) {
-      DokanExecuteCleanup(&requestContext);
-    }
-    requestContext.Irp->IoStatus.Information = 0;
-    DokanCompleteIrpRequest(requestContext.Irp, STATUS_CANCELLED);
+    DokanCancelPendingIrp(&requestContext, STATUS_CANCELLED);
   }
 }
 
@@ -286,19 +311,7 @@ DokanStartEventNotificationThread(__in PDokanDCB Dcb) {
 }
 
 VOID DokanStopEventNotificationThread(__in PDokanDCB Dcb) {
-  DOKAN_LOG("Stopping Thread");
-  if (KeSetEvent(&Dcb->ReleaseEvent, 0, FALSE) > 0 &&
-      Dcb->EventNotificationThread) {
-    DOKAN_LOG("Waiting for thread to terminate");
-    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
-    if (Dcb->EventNotificationThread) {
-      KeWaitForSingleObject(Dcb->EventNotificationThread, Executive, KernelMode,
-                            FALSE, NULL);
-      DOKAN_LOG("Thread successfully terminated");
-      ObDereferenceObject(Dcb->EventNotificationThread);
-      Dcb->EventNotificationThread = NULL;
-    }
-  }
+  DokanStopSystemThread(&Dcb->ReleaseEvent, &Dcb->EventNotificationThread);
 }
 
 VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb) {
@@ -310,11 +323,15 @@ VOID DokanCleanupAllChangeNotificationWaiters(__in PDokanVCB Vcb) {
 }
 
 VOID DokanStopFcbGarbageCollectorThread(__in PDokanVCB Vcb) {
-  if (Vcb->FcbGarbageCollectorThread != NULL) {
-    KeWaitForSingleObject(Vcb->FcbGarbageCollectorThread, Executive, KernelMode,
-                          FALSE, NULL);
-    ObDereferenceObject(Vcb->FcbGarbageCollectorThread);
+  PKTHREAD gcThread = Vcb->FcbGarbageCollectorThread;
+  if (gcThread != NULL) {
+    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+    KeWaitForSingleObject(gcThread, Executive, KernelMode, FALSE, NULL);
+    DokanVCBLockRW(Vcb);
+    DokanForceFcbGarbageCollection(Vcb);
     Vcb->FcbGarbageCollectorThread = NULL;
+    DokanVCBUnlock(Vcb);
+    ObDereferenceObject(gcThread);
   }
 }
 
@@ -339,17 +356,12 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
     return DokanLogError(&logger, STATUS_INVALID_PARAMETER,
                          L"VCB being released has wrong identifier type.");
   }
-  dcb = vcb->Dcb;
-
-  if (IsDeletePending(dcb->DeviceObject)) {
-    DokanLogInfo(&logger, L"Event release is already running for this device.");
-    return STATUS_SUCCESS;
-  }
-
-  if (IsUnmountPendingVcb(vcb)) {
+  if (InterlockedCompareExchange(&vcb->ReleaseStarted, 1, 0) != 0 ||
+      IsDeletePending(vcb->Dcb->DeviceObject) || IsUnmountPendingVcb(vcb)) {
     DokanLogInfo(&logger, L"Event release is already running for this volume.");
     return STATUS_SUCCESS;
   }
+  dcb = vcb->Dcb;
 
   status = IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext);
   if (!NT_SUCCESS(status)) {
@@ -382,9 +394,6 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
   DokanStopFcbGarbageCollectorThread(vcb);
   ClearLongFlag(vcb->Flags, VCB_MOUNTED);
 
-  if (vcb->FCBAvlNodeLookasideListInit) {
-    ExDeleteLookasideListEx(&vcb->FCBAvlNodeLookasideList);
-  }
   DokanCleanupAllChangeNotificationWaiters(vcb);
   IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext);
 
@@ -443,21 +452,36 @@ NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
     return STATUS_BUFFER_TOO_SMALL;
   }
 
-  PDEVICE_OBJECT volumeDeviceObject = mountEntry->MountControl.VolumeDeviceObject;
+  PDEVICE_OBJECT volumeDeviceObject =
+      mountEntry->MountControl.VolumeDeviceObject;
+  PDEVICE_OBJECT diskDeviceObject = mountEntry->MountControl.DiskDeviceObject;
+  if (volumeDeviceObject != NULL) {
+    ObReferenceObject(volumeDeviceObject);
+  }
+  if (diskDeviceObject != NULL) {
+    ObReferenceObject(diskDeviceObject);
+  }
   ExReleaseResourceLite(&mountEntry->Resource);
 
-  if (IsDeletePending(volumeDeviceObject)) {
+  NTSTATUS status;
+  if (volumeDeviceObject == NULL || IsDeletePending(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");
-    return STATUS_DEVICE_REMOVED;
-  }
-
-  if (!IsMounted(volumeDeviceObject)) {
+    status = STATUS_DEVICE_REMOVED;
+  } else if (!IsMounted(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(
         RequestContext,
         "Device is still not mounted, so an unmount not possible at this "
         "point");
-    return STATUS_DEVICE_BUSY;
+    status = STATUS_DEVICE_BUSY;
+  } else {
+    status = DokanEventRelease(RequestContext, volumeDeviceObject);
   }
 
-  return DokanEventRelease(RequestContext, volumeDeviceObject);
+  if (volumeDeviceObject != NULL) {
+    ObDereferenceObject(volumeDeviceObject);
+  }
+  if (diskDeviceObject != NULL) {
+    ObDereferenceObject(diskDeviceObject);
+  }
+  return status;
 }

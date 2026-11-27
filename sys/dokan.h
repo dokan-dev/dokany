@@ -42,6 +42,12 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
 extern LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
+// Global lookaside list for FCB AVL table nodes (opaque RTL_AVL_TABLE node
+// header + PDokanFCB payload, probed dynamically in DriverEntry). Kept
+// driver-global so late IRP_MJ_CLOSE requests after volume unmount can safely
+// delete AVL nodes without racing VCB teardown.
+extern LOOKASIDE_LIST_EX g_DokanFcbAvlNodeLookasideList;
+extern size_t g_DokanFcbAvlNodeSize;
 extern BOOLEAN g_FixFileNameForReparseMountPoint;
 
 // GetSystemRoutineAddress Function Pointer
@@ -367,11 +373,6 @@ typedef struct _DokanVolumeControlBlock {
 
   // Avl Table storing the DokanFCB instances.
   RTL_AVL_TABLE FcbTable;
-  // Lookaside list for the FCB Avl table node containing the Avl header and a
-  // pointer to our DokanFCB that is allocated by the global fcb lookaside list.
-  LOOKASIDE_LIST_EX FCBAvlNodeLookasideList;
-  // Whether the lookaside list was initialized.
-  BOOLEAN FCBAvlNodeLookasideListInit;
 
   // NotifySync is used by notify directory change
   PNOTIFY_SYNC NotifySync;
@@ -382,6 +383,10 @@ typedef struct _DokanVolumeControlBlock {
   LONG CcbAllocated;
   LONG CcbFreed;
   ULONG Flags;
+  // Atomically claimed via InterlockedCompareExchange at entry to
+  // DokanEventRelease to prevent concurrent teardown races while preserving
+  // MountManager IOCTL handling during DokanDeleteMountPoint.
+  volatile LONG ReleaseStarted;
   BOOLEAN HasEventWait;
   DokanResourceDebugInfo ResourceDebugInfo;
   DOKAN_LOGGER ResourceLogger;
@@ -1033,6 +1038,11 @@ VOID DokanCompleteSetInformation(__in PREQUEST_CONTEXT RequestContext,
 VOID DokanCancelCreateIrp(__in PREQUEST_CONTEXT RequestContext,
                           __in NTSTATUS Status);
 
+// Unwinds and completes a pending IRP that has already been removed from its
+// IRP_LIST with its cancel routine cleared (for unmount or error teardown).
+VOID DokanCancelPendingIrp(__in PREQUEST_CONTEXT RequestContext,
+                           __in NTSTATUS Status);
+
 VOID DokanCompleteCreate(__in PREQUEST_CONTEXT RequestContext,
                          __in PEVENT_INFORMATION EventInfo);
 
@@ -1138,6 +1148,10 @@ PDokanCCB DokanAllocateCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB 
 
 NTSTATUS
 DokanFreeCCB(__in PREQUEST_CONTEXT RequestContext, __in PDokanCCB Ccb);
+
+// Signals StopEvent, waits for *Thread to terminate (unless called on *Thread
+// itself), clears *Thread, and drops the thread object reference.
+VOID DokanStopSystemThread(__in PKEVENT StopEvent, __inout PKTHREAD *Thread);
 
 NTSTATUS
 DokanStartCheckThread(__in PDokanDCB Dcb);

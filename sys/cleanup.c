@@ -177,6 +177,10 @@ Return Value:
   if (isUnmountPending || fcb->BlockUserModeDispatch) {
     // Request will not reach Userland and therefore `DokanCompleteCleanup`
     // will not run, releasing the resources now.
+    if (!fcb->BlockUserModeDispatch) {
+      FlushFcb(RequestContext, fcb, fileObject);
+    }
+    fileObject->Flags |= FO_CLEANUP_COMPLETE;
     DokanExecuteCleanup(RequestContext);
     return STATUS_SUCCESS;
   }

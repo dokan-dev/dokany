@@ -338,10 +338,13 @@ VOID FlushFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
   }
 
   if (Fcb->SectionObjectPointers.DataSectionObject != NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext,
-                       "CcFlushCache FCB=%p, OpenCount=%lu, UncleanCount=%lu.",
-                       Fcb, Fcb->OpenCount, Fcb->UncleanCount);
-    CcFlushCache(&Fcb->SectionObjectPointers, NULL, 0, NULL);
+    if (!IsUnmountPendingVcb(RequestContext->Vcb)) {
+      DOKAN_LOG_FINE_IRP(
+          RequestContext,
+          "CcFlushCache FCB=%p, OpenCount=%lu, UncleanCount=%lu.", Fcb,
+          Fcb->OpenCount, Fcb->UncleanCount);
+      CcFlushCache(&Fcb->SectionObjectPointers, NULL, 0, NULL);
+    }
 
     DokanPagingIoLockRW(Fcb);
     DokanPagingIoUnlock(Fcb);
