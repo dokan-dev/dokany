@@ -819,7 +819,9 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
       // we own it or get one assigned but otherwise we just fail here.
       if (!(DokanOptions->Options & DOKAN_OPTION_MOUNT_MANAGER) &&
           !CheckDriveLetterAvailability(dokanInstance->MountPoint[0])) {
-        DokanDbgPrint("Dokan Error: CheckDriveLetterAvailability Failed\n");
+        DokanDbgPrintW(
+            L"Dokan Error: Drive letter \"%c:\" is already in use.\n",
+            ToUpperAsciiDriveLetter(dokanInstance->MountPoint[0]));
         DeleteDokanInstance(dokanInstance);
         return DOKAN_MOUNT_ERROR;
       }
@@ -889,7 +891,8 @@ int DOKANAPI DokanCreateFileSystem(_In_ PDOKAN_OPTIONS DokanOptions,
 
   if (!DokanMount(dokanInstance, DokanOptions)) {
     SendReleaseIRP(dokanInstance->DeviceName);
-    DokanDbgPrint("Dokan Error: DokanMount Failed\n");
+    DokanDbgPrintW(L"Dokan Error: Failed to mount volume at \"%s\".\n",
+                   dokanInstance->MountPoint);
     DeleteDokanInstance(dokanInstance);
     return DOKAN_MOUNT_ERROR;
   }
@@ -1231,9 +1234,18 @@ int DokanStart(_In_ PDOKAN_INSTANCE DokanInstance) {
       DokanDbgPrint("Dokan Error: driver version mismatch, driver %X, dll %X\n",
                     driverInfo->DriverVersion, eventStart->UserVersion);
       status = DOKAN_VERSION_ERROR;
-    } else if (driverInfo->Flags == DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
-      DokanDbgPrint("Dokan Error: Driver failed to set mount point %s\n",
-                    eventStart->MountPoint);
+    } else if (driverInfo->Flags & DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED) {
+      if (driverInfo->Flags & DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED) {
+        DokanDbgPrintW(
+            L"Dokan Error: Driver failed to set reparse point on mount point "
+            L"\"%s\" (ensure it is an existing empty directory on an NTFS "
+            L"volume).\n",
+            eventStart->MountPoint);
+      } else {
+        DokanDbgPrintW(
+            L"Dokan Error: Driver failed to assign mount point \"%s\".\n",
+            eventStart->MountPoint);
+      }
       status = DOKAN_MOUNT_ERROR;
     } else {
       DokanDbgPrint("Dokan Error: driver start error\n");
