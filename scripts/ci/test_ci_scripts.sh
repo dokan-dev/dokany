@@ -5,6 +5,7 @@
 #   2. scripts/run_ifstest.ps1 Find-IfsTestCreateProcFailure (Set-StrictMode -Version 2)
 #   3. scripts/ci/install_cygwin.ps1 Assert-CygwinGpgVerification (GOODSIG/EXPKEYSIG/REVKEYSIG)
 #   4. scripts/ci/vm/provisioning/verifier_helpers.ps1 Driver Verifier guards
+#   5. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & collect_guest_diagnostics.ps1 syntax
 # Uses only tools preinstalled on ubuntu-latest (jq, pwsh, python3 stdlib).
 set -euo pipefail
 
@@ -225,6 +226,247 @@ foreach ($badCase in @(
     if (-not $threw) { throw "Assert-DriverVerifierActive unexpectedly accepted $($badCase.Name)" }
 }
 Write-Output 'verifier_helpers.ps1 Assert-DriverVerifierActive unit tests passed.'
+
+# 2d. Session-0 -> Session-1 trampoline (scripts/ci/vm/run_guest_tests.ps1) & collect_guest_diagnostics.ps1 syntax
+foreach ($psFile in @('scripts/ci/vm/run_guest_tests.ps1', 'scripts/ci/vm/collect_guest_diagnostics.ps1')) {
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $psFile).Path, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        throw "Parse error(s) in ${psFile}: $(($parseErrors | ForEach-Object { $_.Message }) -join '; ')"
+    }
+}
+
+foreach ($fn in @('Read-GuestLogChunk', 'Open-GuestSession1Process', 'Wait-GuestSession1Task')) {
+    Invoke-Expression (Import-AstFunction -FilePath 'scripts/ci/vm/run_guest_tests.ps1' -FunctionName $fn)
+}
+
+$trampDir = Join-Path -Path $PSScriptRoot -ChildPath 'trampoline_tests'
+function New-TrampolineCase {
+    param([string]$Name)
+    $dir = Join-Path -Path $trampDir -ChildPath $Name
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    return @{
+        Log  = Join-Path $dir 'guest.log'
+        Pid  = Join-Path $dir 'guest.pid'
+        Exit = Join-Path $dir 'guest.exit'
+    }
+}
+
+function New-MockProcess {
+    param(
+        [string]$ProcessName = 'powershell',
+        [int]$ExitAfterMs = 40,
+        [int]$ExitCode = 0,
+        [scriptblock]$OnExit = $null
+    )
+    $state = @{
+        Disposed    = $false
+        Exited      = ($ExitAfterMs -eq 0)
+        ExitAfterMs = $ExitAfterMs
+        ExitAt      = $null
+        OnExit      = $OnExit
+    }
+    $obj = New-Object PSObject -Property @{
+        ProcessName = $ProcessName
+        ExitCode    = $ExitCode
+        _State      = $state
+    }
+    $obj | Add-Member -MemberType ScriptProperty -Name 'HasExited' -Value {
+        if (-not $this._State.Exited -and $this._State.ExitAfterMs -gt 0) {
+            if ($null -eq $this._State.ExitAt) {
+                $this._State.ExitAt = (Get-Date).AddMilliseconds($this._State.ExitAfterMs)
+            } elseif ((Get-Date) -ge $this._State.ExitAt) {
+                $this._State.Exited = $true
+                if ($null -ne $this._State.OnExit) { & $this._State.OnExit }
+            }
+        }
+        return $this._State.Exited
+    }
+    $obj | Add-Member -MemberType ScriptMethod -Name 'Dispose' -Value {
+        $this._State.Disposed = $true
+    }
+    return $obj
+}
+
+# Read-GuestLogChunk: missing file, incremental read, no-op re-read, trailing bytes without newline
+$c = New-TrampolineCase 'chunks'
+$buf = New-Object System.Text.StringBuilder
+$off = [int64]0
+$writer = { param([string]$t) [void]$buf.Append($t) }
+Read-GuestLogChunk -Path $c.Log -ByteOffset ([ref]$off) -Writer $writer
+[System.IO.File]::WriteAllText($c.Log, "line1`r`n", [System.Text.Encoding]::ASCII)
+Read-GuestLogChunk -Path $c.Log -ByteOffset ([ref]$off) -Writer $writer
+Read-GuestLogChunk -Path $c.Log -ByteOffset ([ref]$off) -Writer $writer
+[System.IO.File]::AppendAllText($c.Log, 'trailing', [System.Text.Encoding]::ASCII)
+Read-GuestLogChunk -Path $c.Log -ByteOffset ([ref]$off) -Writer $writer
+if ($buf.ToString() -ne "line1`r`ntrailing") { throw "Read-GuestLogChunk mismatch: '$($buf.ToString())'" }
+
+# Happy path: PID attach stops all WMI/CIM Get-ScheduledTask polling and drains trailing output
+$c = New-TrampolineCase 'happy'
+$out = New-Object System.Text.StringBuilder
+$polls = 0
+$pidReady = $false
+$proc = New-MockProcess -ExitAfterMs 50 -ExitCode 0 -OnExit {
+    [System.IO.File]::AppendAllText($c.Log, "tail`n", [System.Text.Encoding]::ASCII)
+    [System.IO.File]::WriteAllText($c.Exit, '0', [System.Text.Encoding]::ASCII)
+}
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -ExitGraceSeconds 2 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -WarningVariable warns -WarningAction SilentlyContinue `
+    -GetTaskState {
+        param($Name)
+        if ($pidReady) { throw 'Get-ScheduledTask must not be called after PID attach!' }
+        $script:polls++
+        [System.IO.File]::WriteAllText($c.Log, "start`n", [System.Text.Encoding]::ASCII)
+        [System.IO.File]::WriteAllText($c.Pid, '4242', [System.Text.Encoding]::ASCII)
+        $script:pidReady = $true
+        return 'Queued'
+    } `
+    -GetProcessById { param($Id) if ($Id -ne 4242) { throw "Unexpected PID $Id" }; return $proc } `
+    -LogWriter { param([string]$t) [void]$out.Append($t) }
+if ($r.ExitCode -ne 0 -or -not $r.ChildExited -or $r.ExitReason -ne 'ExitFile' -or
+    $polls -ne 1 -or -not $proc._State.Disposed -or $out.ToString() -ne "start`ntail`n" -or $warns.Count -ne 0) {
+    throw "Happy path failed: $($r | ConvertTo-Json -Compress) polls=$polls out='$($out.ToString())'"
+}
+
+# Transient Get-ScheduledTask 0x80070002 during startup recovers once PID file appears
+$c = New-TrampolineCase 'transient_cim'
+$cimCalls = 0
+$proc = New-MockProcess -ExitAfterMs 40 -ExitCode 0 -OnExit {
+    [System.IO.File]::WriteAllText($c.Exit, '0', [System.Text.Encoding]::ASCII)
+}
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -ExitGraceSeconds 2 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -WarningVariable warns -WarningAction SilentlyContinue `
+    -GetTaskState {
+        param($Name)
+        $script:cimCalls++
+        if ($script:cimCalls -ge 2) { [System.IO.File]::WriteAllText($c.Pid, '5150', [System.Text.Encoding]::ASCII) }
+        throw 'The system cannot find the file specified. (HRESULT 0x80070002)'
+    } `
+    -GetProcessById { param($Id) return $proc } `
+    -LogWriter { param([string]$t) }
+if ($r.ExitCode -ne 0 -or -not $r.ChildExited -or $r.TaskPollErrors -lt 2 -or $warns.Count -lt 1 -or -not $proc._State.Disposed) {
+    throw "Transient CIM recovery case failed: $($r | ConvertTo-Json -Compress)"
+}
+
+# Fast exit race: exercises real default Process.GetProcessById on a non-existent PID
+$c = New-TrampolineCase 'fast_exit'
+$out = New-Object System.Text.StringBuilder
+[System.IO.File]::WriteAllText($c.Log, "fast-done`n", [System.Text.Encoding]::ASCII)
+[System.IO.File]::WriteAllText($c.Pid, '2147483647', [System.Text.Encoding]::ASCII)
+[System.IO.File]::WriteAllText($c.Exit, '42', [System.Text.Encoding]::ASCII)
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -GetTaskState { param($Name) throw 'Should not query task when PID file already exists' } `
+    -LogWriter { param([string]$t) [void]$out.Append($t) }
+if ($r.ExitCode -ne 42 -or -not $r.ChildExited -or $r.ExitReason -ne 'ExitFile' -or $out.ToString() -ne "fast-done`n") {
+    throw "Fast exit race case failed: $($r | ConvertTo-Json -Compress)"
+}
+
+# Abnormal child crash without ExitFile (0xC0000005) exits 1 and warns with hex exit code
+$c = New-TrampolineCase 'crash_no_exitfile'
+$out = New-Object System.Text.StringBuilder
+[System.IO.File]::WriteAllText($c.Pid, '7001', [System.Text.Encoding]::ASCII)
+$proc = New-MockProcess -ExitAfterMs 30 -ExitCode ([int]-1073741819) -OnExit {
+    [System.IO.File]::WriteAllText($c.Log, "before-crash`n", [System.Text.Encoding]::ASCII)
+}
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -WarningVariable warns -WarningAction SilentlyContinue `
+    -GetTaskState { param($Name) throw 'Should not query task after PID attach' } `
+    -GetProcessById { param($Id) return $proc } `
+    -LogWriter { param([string]$t) [void]$out.Append($t) }
+if ($r.ExitCode -ne 1 -or -not $r.ChildExited -or $r.SawExitFile -or $r.ExitReason -ne 'ProcessExitedWithoutExitFile' -or
+    -not $proc._State.Disposed -or $out.ToString() -ne "before-crash`n" -or ($warns -join '; ') -notmatch '0xC0000005') {
+    throw "Abnormal child crash case failed: $($r | ConvertTo-Json -Compress) warns=$($warns -join '; ')"
+}
+
+# Recycled PID mismatch before attach returns promptly without hanging
+$c = New-TrampolineCase 'pid_reused'
+[System.IO.File]::WriteAllText($c.Pid, '8001', [System.Text.Encoding]::ASCII)
+$proc = New-MockProcess -ProcessName 'svchost' -ExitAfterMs -1
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -WarningVariable warns -WarningAction SilentlyContinue `
+    -GetTaskState { param($Name) throw 'Should not query task when PID file already exists' } `
+    -GetProcessById { param($Id) return $proc } `
+    -LogWriter { param([string]$t) }
+if ($r.ExitCode -ne 1 -or -not $r.ChildExited -or $r.ExitReason -ne 'PidReused' -or
+    -not $proc._State.Disposed -or ($warns -join '; ') -notmatch 'svchost') {
+    throw "PID reuse guard case failed: $($r | ConvertTo-Json -Compress)"
+}
+
+# Task exits during startup before writing PID file -> fails fast and drains error output
+$c = New-TrampolineCase 'task_exit_before_pid'
+$out = New-Object System.Text.StringBuilder
+$states = @('Running', 'Ready')
+$idx = 0
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 10 -PollIntervalMs 10 -TaskPollIntervalMs 10 -FinalDrainMs 10 `
+    -GetTaskState {
+        param($Name)
+        $s = $states[[math]::Min($script:idx, $states.Count - 1)]
+        if ($script:idx -eq 1) { [System.IO.File]::WriteAllText($c.Log, "parse error`n", [System.Text.Encoding]::ASCII) }
+        $script:idx++
+        return $s
+    } `
+    -LogWriter { param([string]$t) [void]$out.Append($t) }
+if ($r.ExitCode -ne 1 -or -not $r.ChildExited -or $r.ExitReason -ne 'TaskExitedBeforePid' -or $out.ToString() -ne "parse error`n") {
+    throw "TaskExitedBeforePid case failed: $($r | ConvertTo-Json -Compress) out='$($out.ToString())'"
+}
+
+# Startup timeout MUST fire even after seeing Running once if PID never arrives and CIM errors begin
+$c = New-TrampolineCase 'start_timeout_after_running'
+$threw = $false
+$errMsg = ''
+$pollIdx = 0
+try {
+    [void](Wait-GuestSession1Task `
+        -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+        -StartTimeoutSeconds 1 -PollIntervalMs 20 -TaskPollIntervalMs 40 -FinalDrainMs 0 `
+        -WarningAction SilentlyContinue `
+        -GetTaskState {
+            param($Name)
+            $script:pollIdx++
+            if ($script:pollIdx -eq 1) { return 'Running' }
+            throw 'CIM boom 0x80070002'
+        } `
+        -GetTaskInfo { param($Name) return $null } `
+        -LogWriter { param([string]$t) })
+} catch {
+    $threw = $true
+    $errMsg = $_.Exception.Message
+}
+if (-not $threw -or $errMsg -notmatch 'never started Session 1' -or
+    $errMsg -notmatch 'LastTaskResult=<unavailable>' -or $errMsg -notmatch 'CIM boom 0x80070002') {
+    throw "Startup timeout case failed: threw=$threw msg='$errMsg'"
+}
+
+# ExitFile written while child hangs on teardown -> grace timeout leaves ChildExited=$false so caller stops task
+$c = New-TrampolineCase 'exit_grace_timeout'
+[System.IO.File]::WriteAllText($c.Pid, '9001', [System.Text.Encoding]::ASCII)
+[System.IO.File]::WriteAllText($c.Exit, '0', [System.Text.Encoding]::ASCII)
+$proc = New-MockProcess -ExitAfterMs -1
+$r = Wait-GuestSession1Task `
+    -TaskName 'DokanCITests' -LogPath $c.Log -PidPath $c.Pid -ExitPath $c.Exit `
+    -StartTimeoutSeconds 3 -ExitGraceSeconds 1 -PollIntervalMs 20 -TaskPollIntervalMs 20 -FinalDrainMs 0 `
+    -WarningVariable warns -WarningAction SilentlyContinue `
+    -GetTaskState { param($Name) throw 'Should not query task after PID attach' } `
+    -GetProcessById { param($Id) return $proc } `
+    -LogWriter { param([string]$t) }
+if ($r.ExitCode -ne 0 -or $r.ChildExited -or -not $r.SawExitFile -or $r.ExitReason -ne 'ExitFileGraceTimeout' -or
+    -not $proc._State.Disposed -or $warns.Count -lt 1) {
+    throw "ExitFileGraceTimeout case failed: $($r | ConvertTo-Json -Compress)"
+}
+
+Write-Output 'run_guest_tests.ps1 trampoline & collect_guest_diagnostics.ps1 unit tests passed.'
 PWSH
 pwsh -NoProfile -File "$WORK_DIR/test_ps.ps1"
 
