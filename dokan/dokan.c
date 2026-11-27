@@ -26,6 +26,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan_pool.h"
 
 #include <conio.h>
+#include <limits.h>
 #include <process.h>
 #include <stdlib.h>
 #include <tchar.h>
@@ -1291,8 +1292,9 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
 
   if (device == INVALID_HANDLE_VALUE) {
     DWORD dwErrorCode = GetLastError();
-    DbgPrintW(L"Dokan Error: Failed to open %ws with code %d\n", DeviceName,
+    DbgPrintW(L"Dokan Error: Failed to open %ws with code %lu\n", DeviceName,
               dwErrorCode);
+    SetLastError(dwErrorCode);
     return FALSE;
   }
 
@@ -1305,12 +1307,14 @@ BOOL SendToDevice(LPCWSTR DeviceName, DWORD IoControlCode, PVOID InputBuffer,
                            ReturnedLength, // Bytes placed in buffer.
                            NULL            // synchronous call
   );
+  DWORD lastError = status ? ERROR_SUCCESS : GetLastError();
 
   CloseHandle(device);
 
   if (!status) {
-    DbgPrint("DokanError: Ioctl 0x%x failed with code %d on Device %ws\n",
-             IoControlCode, GetLastError(), DeviceName);
+    DbgPrint("DokanError: Ioctl 0x%x failed with code %lu on Device %ws\n",
+             IoControlCode, lastError, DeviceName);
+    SetLastError(lastError);
     return FALSE;
   }
 
@@ -1321,48 +1325,64 @@ PDOKAN_MOUNT_POINT_INFO DOKANAPI DokanGetMountPointList(BOOL uncOnly,
                                                         PULONG nbRead) {
   ULONG returnedLength = 0;
   PDOKAN_MOUNT_POINT_INFO dokanMountPointInfo = NULL;
-  PDOKAN_MOUNT_POINT_INFO results = NULL;
   ULONG bufferLength = 32 * sizeof(*dokanMountPointInfo);
   BOOL success;
 
+  if (nbRead == NULL) {
+    return NULL;
+  }
   *nbRead = 0;
 
   do {
-    if (dokanMountPointInfo != NULL)
+    if (dokanMountPointInfo != NULL) {
       free(dokanMountPointInfo);
-    dokanMountPointInfo = malloc(bufferLength);
-    if (dokanMountPointInfo == NULL)
+    }
+    dokanMountPointInfo = (PDOKAN_MOUNT_POINT_INFO)malloc(bufferLength);
+    if (dokanMountPointInfo == NULL) {
       return NULL;
+    }
     ZeroMemory(dokanMountPointInfo, bufferLength);
 
     success = SendToDevice(DOKAN_GLOBAL_DEVICE_NAME,
                            FSCTL_EVENT_MOUNTPOINT_LIST, NULL, 0,
                            dokanMountPointInfo, bufferLength, &returnedLength);
 
-    if (!success && GetLastError() != ERROR_MORE_DATA) {
-      free(dokanMountPointInfo);
-      return NULL;
+    if (!success) {
+      if (GetLastError() != ERROR_MORE_DATA || bufferLength > ULONG_MAX / 2) {
+        free(dokanMountPointInfo);
+        return NULL;
+      }
+      bufferLength *= 2;
     }
-    bufferLength *= 2;
   } while (!success);
 
-  if (returnedLength == 0) {
-    free(dokanMountPointInfo);
-    return NULL;
+  ULONG totalCount = returnedLength / sizeof(DOKAN_MOUNT_POINT_INFO);
+  ULONG capacity = bufferLength / sizeof(DOKAN_MOUNT_POINT_INFO);
+  if (totalCount > capacity) {
+    totalCount = capacity;
+  }
+  if (!uncOnly) {
+    *nbRead = totalCount;
+    return dokanMountPointInfo;
   }
 
-  *nbRead = returnedLength / sizeof(DOKAN_MOUNT_POINT_INFO);
-  results = malloc(returnedLength);
-  if (results != NULL) {
-    ZeroMemory(results, returnedLength);
-    for (ULONG i = 0; i < *nbRead; ++i) {
-      if (!uncOnly || wcscmp(dokanMountPointInfo[i].UNCName, L"") != 0)
-        CopyMemory(&results[i], &dokanMountPointInfo[i],
-                   sizeof(DOKAN_MOUNT_POINT_INFO));
+  ULONG matchCount = 0;
+  for (ULONG i = 0; i < totalCount; ++i) {
+    if (dokanMountPointInfo[i].UNCName[0] != L'\0') {
+      if (matchCount != i) {
+        dokanMountPointInfo[matchCount] = dokanMountPointInfo[i];
+      }
+      ++matchCount;
     }
   }
-  free(dokanMountPointInfo);
-  return results;
+  if (matchCount < totalCount) {
+    ZeroMemory(&dokanMountPointInfo[matchCount],
+               (size_t)(totalCount - matchCount) *
+                   sizeof(DOKAN_MOUNT_POINT_INFO));
+  }
+
+  *nbRead = matchCount;
+  return dokanMountPointInfo;
 }
 
 VOID DOKANAPI DokanReleaseMountPointList(PDOKAN_MOUNT_POINT_INFO list) {
