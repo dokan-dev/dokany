@@ -15,7 +15,7 @@
           "gap": "GAP-06"
         },
         "CreateOpenTest.NtCreateFileInitialAllocationSize": {
-          "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and DokanFillFileStandardInfo derives AllocationSize from EndOfFile",
+          "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and mirror.exe leaves DOKAN_FILE_INFORMATION::AllocationSize = 0 so DokanFillFileStandardInfo auto-aligns EndOfFile",
           "gap": "GAP-09"
         },
         "CreateOpenTest.NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf": {
@@ -51,7 +51,7 @@
           "gap": "GAP-09"
         },
         "DataIoTest.FileValidDataLengthExtend": {
-          "reason": "dokan3.sys initializes ValidDataLength to MAXLONGLONG without privilege or range checks and dokan/setfile.c forwards FileValidDataLengthInformation straight to SetEndOfFile",
+          "reason": "dokan3.sys initializes ValidDataLength to MAXLONGLONG without privilege or range checks, and mirror.exe leaves DOKAN_OPERATIONS::SetValidDataLength NULL (returning STATUS_NOT_IMPLEMENTED)",
           "gap": "GAP-09"
         },
         "DataIoTest.ImageMappedFileRejectsWriteOpen": {
@@ -129,11 +129,11 @@
           "gap": "GAP-24"
         },
         "DeleteTest.CreateChildInDeletePendingDirFailsDeletePending": {
-          "reason": "dokan3.sys DokanDispatchCreate only checks DOKAN_FCB_STATE_DELETE_PENDING (sys/public.h:108, via DokanFCBIsPendingDeletion at sys/create.c:294-295) on the target FCB, not on parent directory FCBs, and MirrorDeleteDirectory defers deletion to Cleanup without marking the backing directory delete-pending",
+          "reason": "dokan3.sys DokanDispatchCreate only checks DOKAN_FCB_STATE_DELETE_PENDING (sys/public.h:108, via DokanFCBIsPendingDeletion at sys/create.c:294-295) on the target FCB, not on parent directory FCBs, and MirrorSetFileDisposition (MirrorDeleteDirectoryHelper) defers deletion to Cleanup without marking the backing directory delete-pending",
           "gap": "GAP-06"
         },
         "DeleteTest.DeleteFileWOnMappedFileFailsBeforeWin11_24H2": {
-          "reason": "MirrorDeleteFile (samples/dokan_mirror/mirror.c:850-856) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition",
+          "reason": "MirrorSetFileDisposition (MirrorDeleteFileHelper in samples/dokan_mirror/mirror.c) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition",
           "gap": "GAP-05"
         },
         "DeleteTest.DeleteFileWOnMappedFilePosixUnlinksOnWin11_24H2": {
@@ -149,7 +149,7 @@
           "gap": "GAP-05"
         },
         "DeleteTest.DeleteMappedFileFailsCannotDelete": {
-          "reason": "MirrorDeleteFile (samples/dokan_mirror/mirror.c:850-856) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition",
+          "reason": "MirrorSetFileDisposition (MirrorDeleteFileHelper in samples/dokan_mirror/mirror.c) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition",
           "gap": "GAP-05"
         },
         "DeleteTest.DeleteOnCloseThroughHardLinkRemovesOnlyThatLink": {
@@ -161,11 +161,11 @@
           "gap": "GAP-21"
         },
         "DeleteTest.DispositionInfoExForceImageSectionCheck": {
-          "reason": "MirrorDeleteFile (samples/dokan_mirror/mirror.c:850-856) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition, deleting the SEC_IMAGE file on unmap",
+          "reason": "MirrorSetFileDisposition (MirrorDeleteFileHelper in samples/dokan_mirror/mirror.c) sets FileDispositionInfo = TRUE on the backing NTFS handle before DokanCompleteSetInformation (sys/fileinfo.c:876-881) returns STATUS_CANNOT_DELETE without rolling back user-mode disposition, deleting the SEC_IMAGE file on unmap",
           "gap": "GAP-05"
         },
         "DeleteTest.DispositionInfoExIgnoreReadOnly": {
-          "reason": "dokan/setfile.c bypasses its readonly guard under FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE, but MirrorDeleteFile (samples/dokan_mirror/mirror.c:850-856) still calls Win32 FileDispositionInfo without FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE",
+          "reason": "dokan/setfile.c bypasses its readonly guard under FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE, but MirrorSetFileDisposition (MirrorDeleteFileHelper in samples/dokan_mirror/mirror.c) still calls Win32 FileDispositionInfo without FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE",
           "gap": "GAP-21"
         },
         "DeleteTest.DispositionInfoExPosixOnEmptyDirectory": {
@@ -189,7 +189,7 @@
           "gap": "GAP-26"
         },
         "DirEnumTest.FileIdExtdDirectoryInfoReportsReparseTag": {
-          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillIdExtdDirInfo hardcodes ReparsePointTag = 0)",
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and mirror.exe leaves DOKAN_FIND_DATA::ReparseTag = 0)",
           "gap": "GAP-22"
         },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
@@ -197,11 +197,11 @@
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
-          "reason": "dokan/directory.c DokanFillIdBothDirInfo hardcodes FileId = 0 instead of reporting the file's 64-bit FileId",
+          "reason": "samples/dokan_mirror/mirror.c MirrorFindFiles still enumerates via Win32 FindFirstFileW/FindNextFileW without file IDs, leaving DOKAN_FIND_DATA.FileIndex = 0",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses": {
-          "reason": "dokan/directory.c DokanFillIdFullDirInfo and DokanFillIdExtdDirInfo hardcode FileId = 0 instead of reporting real 64-bit and 128-bit FileIds",
+          "reason": "samples/dokan_mirror/mirror.c MirrorFindFiles still enumerates via Win32 FindFirstFileW/FindNextFileW without file IDs, leaving DOKAN_FIND_DATA.FileIndex = 0",
           "gap": "GAP-12"
         },
         "InfoQueriesTest.ExtendedAttributesCreateWithEaBuffer": {
@@ -253,7 +253,7 @@
           "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryFileAttributeTagJunctionReparsePoint": {
-          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillFileAttributeTagInfo hardcodes ReparseTag = 0)",
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and mirror.exe leaves DOKAN_FILE_INFORMATION::ReparseTag = 0)",
           "gap": "GAP-22"
         },
         "InfoQueriesTest.NtQueryFileCompressionInformation": {
@@ -271,14 +271,6 @@
         "InfoQueriesTest.NtQueryFileNameAndNormalizedNameInfo": {
           "reason": "dokan3.sys FileNormalizedNameInformation returns caller casing instead of canonical on-disk casing",
           "gap": "GAP-13"
-        },
-        "InfoQueriesTest.NtQueryFileStandardLinkInfo": {
-          "reason": "dokan3.sys does not support FileStandardLinkInformation (STATUS_INVALID_PARAMETER)",
-          "gap": "GAP-28"
-        },
-        "InfoQueriesTest.NtQueryFileStatAndStatLxInformation": {
-          "reason": "dokan3.sys does not support FileStatInformation / FileStatLxInformation (STATUS_INVALID_PARAMETER)",
-          "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryVolumeFsControlInformation": {
           "reason": "dokan3.sys DokanDispatchQueryVolumeInformation (sys/volume.c) does not handle FileFsControlInformation (returns STATUS_INVALID_PARAMETER)",
@@ -570,7 +562,7 @@
           "allow_xpass": true
         },
         "RenameMoveTest.RenameUpdatesFileChangeTime": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not return an updated file ChangeTime after rename",
+          "reason": "mirror.exe MirrorGetFileInformation uses GetFileInformationByHandle and leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime in dokan/fileinfo.c), so mirror does not return an updated file ChangeTime after rename",
           "gap": "GAP-09"
         },
         "SecurityAclTest.DirectoryTraverseAccessEnforcement": {
@@ -654,7 +646,7 @@
           "gap": "GAP-13"
         },
         "TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so mirror does not preserve ChangeTime round-trip via FileBasicInformation",
+          "reason": "mirror.exe MirrorSetFileBasicInformation uses Win32 SetFileTime (dropping ChangeTime) and MirrorGetFileInformation leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime), so mirror does not preserve ChangeTime round-trip via FileBasicInformation",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.HardLinkCreationUpdatesChangeTimeNotLastWriteTime": {
@@ -666,11 +658,11 @@
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after rename",
+          "reason": "mirror.exe MirrorGetFileInformation leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime in dokan/fileinfo.c), so mirror does not reflect updated ChangeTime after rename",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SecurityChangeUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so mirror does not reflect updated ChangeTime after security descriptor change",
+          "reason": "mirror.exe MirrorGetFileInformation leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime in dokan/fileinfo.c), so mirror does not reflect updated ChangeTime after security descriptor change",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SetFileAttributesCannotClearSparseFlag": {
