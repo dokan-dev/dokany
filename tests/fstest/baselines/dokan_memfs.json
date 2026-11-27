@@ -6,7 +6,7 @@
       "description": "memfs.exe mounted on a local drive letter (/l M)",
       "xfails": {
         "CreateOpenTest.BackupPrivilegeBypassesDenyDacl": {
-          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "CreateOpenTest.MaximumAllowedGrantsEffectiveAccessAndQueriesFileAccessInfo": {
@@ -21,16 +21,12 @@
           "reason": "Observed-NTFS vs [MS-FSA] 2.1.5.1.2 divergence: memfs_createfile (samples/dokan_memfs/memfs_operations.cpp:163-166) replaces attributes on FILE_SUPERSEDE per [MS-FSA] instead of retaining FILE_ATTRIBUTE_TEMPORARY as NTFS does (reporting 0x1020 instead of 0x1120)",
           "gap": "GAP-06"
         },
-        "CreateOpenTest.NtSupersedeAndOverwriteRejectHiddenOrSystemMismatch": {
-          "reason": "memfs_createfile returns STATUS_ACCESS_DENIED on hidden/system mismatch, but dokan/create.c DispatchCreate parent-folder DELETE fallback converts it into STATUS_SUCCESS",
-          "gap": "GAP-02"
-        },
         "CreateOpenTest.NtSupersedeRequiresDeleteSharingUnlikeOverwriteIf": {
           "reason": "dokan3.sys/memfs FILE_SUPERSEDE does not enforce FILE_SHARE_DELETE sharing check",
           "gap": "GAP-06"
         },
         "CreateOpenTest.NtSupersedeVsOverwriteDaclAccess": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c) and does not evaluate DACLs",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity and does not evaluate DACLs",
           "gap": "GAP-20"
         },
         "CreateOpenTest.OverwriteAndSupersedeOfUserMappedFileFail": {
@@ -46,7 +42,7 @@
           "gap": "GAP-06"
         },
         "CreateOpenTest.RestorePrivilegeBypassesWriteDenyDacl": {
-          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not enforce persistent DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "CreateOpenTest.TrailingBackslashOnFileFailsNotADirectory": {
@@ -54,16 +50,12 @@
           "gap": "GAP-14"
         },
         "CreateOpenTest.ZeroDesiredAccessOpensMetadataThroughExclusiveAndDenyDacl": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "DataIoTest.CompressionSetGetAndCompressedFileSize": {
           "reason": "Dokan does not support NTFS file compression (FSCTL_SET_COMPRESSION returns ERROR_INVALID_FUNCTION)",
           "gap": "GAP-25"
-        },
-        "DataIoTest.CopyFileExOverReadOnlyDestinationFailsAccessDenied": {
-          "reason": "memfs_createfile returns STATUS_ACCESS_DENIED on READONLY overwrite, but dokan/create.c DispatchCreate parent-folder DELETE fallback converts it into STATUS_SUCCESS",
-          "gap": "GAP-02"
         },
         "DataIoTest.CopyFileExPreservesAlternateStreams": {
           "reason": "memfs CopyFileExW fails with ERROR_FILE_NOT_FOUND when copying files with alternate data streams",
@@ -99,10 +91,6 @@
         },
         "DataIoTest.ReadWriteOnDirectoryHandleFailsInvalidFunction": {
           "reason": "dokan3.sys DokanDispatchRead (sys/read.c:146) and DokanDispatchWrite (sys/write.c:75) return STATUS_INVALID_PARAMETER instead of STATUS_INVALID_DEVICE_REQUEST (ERROR_INVALID_FUNCTION) on directory handles",
-          "gap": "GAP-09"
-        },
-        "DataIoTest.SetEndOfFileAndAllocationOnDirectoryFails": {
-          "reason": "dokan3.sys/memfs accepts both FileEndOfFileInformation (memfs_setendoffile) and FileAllocationInformation (memfs_setallocationsize) on directory handles instead of returning STATUS_INVALID_PARAMETER",
           "gap": "GAP-09"
         },
         "DataIoTest.SetZeroDataInvalidRangeFailsInvalidParameter": {
@@ -179,10 +167,6 @@
           "reason": "dokan3.sys accepts FILE_DISPOSITION_ON_CLOSE on non-delete-on-close handles instead of returning STATUS_NOT_SUPPORTED",
           "gap": "GAP-21"
         },
-        "DeleteTest.DispositionInfoExIgnoreReadOnly": {
-          "reason": "Dokan does not honor FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE in FileDispositionInformationEx",
-          "gap": "GAP-21"
-        },
         "DeleteTest.DispositionInfoExPosixOnEmptyDirectory": {
           "reason": "Dokan does not unlink directory immediately under FILE_DISPOSITION_POSIX_SEMANTICS",
           "gap": "GAP-21"
@@ -203,14 +187,6 @@
           "reason": "memfs deletes non-empty directory on NtDeleteFile instead of preserving it",
           "gap": "GAP-16"
         },
-        "DirEnumTest.DotAndDotDotMatchedByNonStarWildcards": {
-          "reason": "dokan/directory.c:480-484 AddMissingCurrentAndParentFolder returns early whenever pattern != L\"*\", dropping synthesized '.' and '..' entries for non-'*' wildcard patterns on memfs",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.EnumerateRegularFileFailsNotDirectory": {
-          "reason": "dokan3.sys DokanQueryDirectory does not reject non-directory handles, so memfs_findfiles returns STATUS_NO_MORE_FILES instead of STATUS_INVALID_PARAMETER",
-          "gap": "GAP-12"
-        },
         "DirEnumTest.FileFullDirectoryInfoReportsEaSize": {
           "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
           "gap": "GAP-26"
@@ -219,24 +195,12 @@
           "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillIdExtdDirInfo hardcodes ReparsePointTag = 0)",
           "gap": "GAP-22"
         },
-        "DirEnumTest.NtQueryDirectoryBufferOverflowReturnsPartialNameAndPreservesCursor": {
-          "reason": "dokan/directory.c MatchFiles returns STATUS_BUFFER_OVERFLOW with 0 bytes instead of writing a partial filename with full FileNameLength while preserving (not advancing) the directory scan cursor on an undersized first entry",
-          "gap": "GAP-12"
-        },
         "DirEnumTest.NtQueryDirectoryCaseInsensitiveWildcards": {
-          "reason": "memfs::start unconditionally sets DOKAN_OPTION_CASE_SENSITIVE, causing dokan/directory.c MatchFiles to invoke DokanIsNameInExpression with IgnoreCase=FALSE",
+          "reason": "memfs::start unconditionally sets DOKAN_OPTION_CASE_SENSITIVE, causing dokan/directory.c FilterDirectoryList to invoke DokanIsNameInExpression with IgnoreCase=FALSE",
           "gap": "GAP-15"
         },
-        "DirEnumTest.NtQueryDirectoryDosWildcards": {
-          "reason": "dokan/directory.c DokanIsNameInExpression does not fully implement DOS_QM ('>') and DOS_DOT ('\"') wildcards",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.NtQueryDirectoryExactFitFinalEntryBuffer": {
-          "reason": "dokan/directory.c:300-333 requires QuadAlign(sizeof(FILE_BOTH_DIR_INFORMATION) + nameBytes) instead of FIELD_OFFSET(FileName) + nameBytes for the final directory entry, returning STATUS_BUFFER_OVERFLOW on exact-fit buffers",
-          "gap": "GAP-12"
-        },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
-          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:122-154)",
+          "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:121-153)",
           "gap": "GAP-12"
         },
         "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
@@ -246,11 +210,6 @@
         "DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses": {
           "reason": "dokan/directory.c DokanFillIdFullDirInfo and DokanFillIdExtdDirInfo hardcode FileId = 0 instead of reporting real 64-bit and 128-bit FileIds",
           "gap": "GAP-12"
-        },
-        "DirEnumTest.Win32WildcardQuestionMarkMatchesSingleCharacter": {
-          "reason": "memfs sets FindFilesWithPattern = nullptr; dokan/directory.c DokanIsNameInExpression advances ni++ for '?' and DOS_QM without checking Name[ni] != L'\\0', reading stale trailing bytes left in memfs_findfiles's reused WIN32_FIND_DATAW::cFileName buffer depending on std::set<std::shared_ptr<filenode>> heap pointer order",
-          "gap": "GAP-12",
-          "allow_xpass": true
         },
         "InfoQueriesTest.ExtendedAttributesCreateWithEaBuffer": {
           "reason": "Dokan does not support Extended Attributes (STATUS_INVALID_DEVICE_REQUEST)",
@@ -349,7 +308,7 @@
           "gap": "GAP-13"
         },
         "InfoQueriesTest.ReadDirectoryChangesSecurityFilter": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "InfoQueriesTest.ReadDirectoryChangesSizeFilter": {
@@ -545,11 +504,6 @@
           "reason": "memfs does not implement an NTFS 15-second metadata tunneling cache, assigning a fresh CreationTime when a deleted or renamed file is immediately recreated",
           "gap": "GAP-10"
         },
-        "NamingPathsTest.MountRootRenameRejected": {
-          "reason": "samples/dokan_memfs/filenodes.cpp fs_filenodes::move infinitely recurses and crashes memfs.exe when moving root '\\'",
-          "gap": "GAP-01",
-          "skip_crash": true
-        },
         "NamingPathsTest.ParentIsFilePathErrorsAllApis": {
           "reason": "memfs_createfile and memfs_getfileInformation translate fs_filenodes::find nullptr into STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) without checking whether an ancestor component is a regular file",
           "gap": "GAP-15"
@@ -572,10 +526,6 @@
         },
         "NamingPathsTest.UnicodeCaseFoldingInsensitive": {
           "reason": "memfs filenode lookup is case-sensitive and does not perform NTFS Unicode $UpCase folding",
-          "gap": "GAP-15"
-        },
-        "NamingPathsTest.VerbatimDotDotTraversalRejected": {
-          "reason": "Neither dokan3.sys nor memfs rejects '..' components in verbatim/NT paths with STATUS_OBJECT_NAME_INVALID (memfs returns STATUS_OBJECT_NAME_NOT_FOUND)",
           "gap": "GAP-15"
         },
         "RenameMoveTest.ConcurrentFileRenameInfoExAndCreateStress": {
@@ -632,10 +582,6 @@
           "reason": "memfs_createfile (samples/dokan_memfs/memfs_operations.cpp:253) translates fs_filenodes::find nullptr into STATUS_OBJECT_NAME_NOT_FOUND (ERROR_FILE_NOT_FOUND) instead of STATUS_OBJECT_PATH_NOT_FOUND (ERROR_PATH_NOT_FOUND) when MoveFileExW opens a source under a missing parent directory",
           "gap": "GAP-15"
         },
-        "RenameMoveTest.RenameMissingTargetParentFailsPathNotFound": {
-          "reason": "dokan/create.c:153-245 DispatchCreate handles SL_OPEN_TARGET_DIRECTORY by stripping the leaf and opening the parent with FILE_DIRECTORY_FILE, forwarding memfs_createfile's STATUS_OBJECT_NAME_NOT_FOUND verbatim instead of translating it to STATUS_OBJECT_PATH_NOT_FOUND (memfs_movefile is never reached)",
-          "gap": "GAP-29"
-        },
         "RenameMoveTest.RenameOntoDeletePendingTargetFailsAccessDenied": {
           "reason": "samples/dokan_memfs/filenodes.cpp:200-218 fs_filenodes::move lacks both open-target rejection (legacy STATUS_ACCESS_DENIED) and delete-pending validation on rename targets",
           "gap": "GAP-16"
@@ -657,59 +603,59 @@
           "gap": "GAP-10"
         },
         "RenameMoveTest.RenameUpdatesFileChangeTime": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so memfs never reports an updated file ChangeTime after rename",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so memfs never reports an updated file ChangeTime after rename",
           "gap": "GAP-09"
         },
         "SecurityAclTest.CopyFileInheritsDestinationDaclUnlikeMove": {
-          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.CreatorGroupSidExpandsOnInheritedAce": {
-          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.CreatorOwnerSidExpandsOnInheritedAce": {
-          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DaclInheritanceFromParentDirectory": {
-          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance/access checks and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DeleteRightVsParentDeleteChildRight": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DirectoryAddFileVsAddSubdirectoryRightsDistinct": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DirectoryGenericRightsMapToSpecificRights": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c)",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DirectoryListAndCreateFileAccessEnforcement": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.DirectoryTraverseAccessEnforcement": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.ExplicitDenyOverridesAllowAndExplicitChildAllowOverridesInheritedDeny": {
-          "reason": "memfs does not evaluate DACLs or inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs or inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.FileExecuteOnlyAllowsImageMappingDeniesReadData": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.GranularAttributeAndEaAccessRightsEnforcement": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.InheritanceFlagsInheritOnlyAndNoPropagate": {
-          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.LowIntegrityCallerDeniedWriteUpToUnlabeledFile": {
@@ -721,55 +667,51 @@
           "gap": "GAP-06"
         },
         "SecurityAclTest.NtQueryAndSetSecurityObjectDirect": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.NullDaclGrantsAllVsEmptyDaclDeniesAll": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.ObjectInheritOnlyVsContainerInheritOnly": {
-          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.OwnerImplicitReadControlAndWriteDac": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.RenameAllowedByParentDeleteChildWhenFileDeniesDelete": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.RenameDeniedWithoutDeleteOrParentDeleteChild": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.SaclGetAndSet": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.SecurityDescriptorPreservedAcrossIntraVolumeRename": {
-          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not implement DACL inheritance and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.SecurityObjectApisEnforceHandleAccessMasks": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/security.c replaces the error with STATUS_INVALID_PARAMETER",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.SetDenyReadDaclEnforcesAccessDenied": {
-          "reason": "memfs does not enforce deny-read DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
-          "gap": "GAP-20"
-        },
-        "SecurityAclTest.SetSecurityUnassignableOwnerWithoutRestorePrivilegeFailsInvalidOwner": {
-          "reason": "memfs_setfilesecurity does not validate owner assignability (and fails on null default descriptors), and dokan/security.c:210-211 rewrites every non-STATUS_SUCCESS return to STATUS_INVALID_PARAMETER instead of STATUS_INVALID_OWNER",
+          "reason": "memfs does not enforce deny-read DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.TakeOwnershipWithPrivilegeAndWriteOwner": {
-          "reason": "memfs does not evaluate DACLs/ownership and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs/ownership and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "SecurityAclTest.WriteDataAndAppendDataAccessEnforcement": {
-          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs does not evaluate DACLs and leaves default filenode security descriptors null, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "StreamsTest.BackupReadAndBackupWritePreservesStreams": {
@@ -843,7 +785,7 @@
           "gap": "GAP-18"
         },
         "StreamsTest.SecurityDescriptorSharedBetweenBaseFileAndAlternateStream": {
-          "reason": "memfs models streams as separate filenodes with null default security descriptors, causing memfs_setfilesecurity to fail via dokan/security.c",
+          "reason": "memfs models streams as separate filenodes with null default security descriptors, causing memfs_setfilesecurity to fail SetPrivateObjectSecurity",
           "gap": "GAP-20"
         },
         "StreamsTest.SparseNamedStreamZeroDataAndAllocatedRanges": {
@@ -892,7 +834,7 @@
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so memfs does not persist ChangeTime independently",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so memfs does not persist ChangeTime independently",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.HandleExplicitSetFileTimeFreezesSubsequentAutoUpdateOnSameHandle": {
@@ -902,10 +844,6 @@
         "TimestampsAttrsTest.HardLinkCreationUpdatesChangeTimeNotLastWriteTime": {
           "reason": "Dokan does not support hard links (CreateHardLinkW fails ERROR_INVALID_PARAMETER)",
           "gap": "GAP-23"
-        },
-        "TimestampsAttrsTest.InvalidNegativeTimestampLessThanMinusTwoFails": {
-          "reason": "memfs accepts negative FILETIME values < -2 instead of returning STATUS_INVALID_PARAMETER",
-          "gap": "GAP-10"
         },
         "TimestampsAttrsTest.MetadataChangeUpdatesChangeTimeNotLastWriteTime": {
           "reason": "memfs does not update ChangeTime on metadata changes",
@@ -920,11 +858,11 @@
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:48-49 copies LastWriteTime into ChangeTime, so memfs never reports an updated ChangeTime after rename",
+          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so memfs never reports an updated ChangeTime after rename",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SecurityChangeUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity (mapped to STATUS_INVALID_PARAMETER by dokan/security.c), and dokan/fileinfo.c:48-49 aliases ChangeTime to LastWriteTime",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/fileinfo.c:46-47 aliases ChangeTime to LastWriteTime",
           "gap": "GAP-20"
         },
         "TimestampsAttrsTest.SentinelMinusOneFreezesTimestampUpdates": {
@@ -942,14 +880,6 @@
         "TimestampsAttrsTest.SetFileAttributesCannotClearSparseFlag": {
           "reason": "Dokan does not support sparse files (FSCTL_SET_SPARSE returns ERROR_INVALID_FUNCTION)",
           "gap": "GAP-24"
-        },
-        "TimestampsAttrsTest.SetFileTimePreservesExistingFileAttributes": {
-          "reason": "dokan/setfile.c:70-72 unconditionally calls SetFileAttributes(basicInfo->FileAttributes) even when FileAttributes == 0, and memfs_setfileattributes (samples/dokan_memfs/memfs_operations.cpp:467-483) lacks a zero guard, wiping existing attributes on SetFileTime",
-          "gap": "GAP-10"
-        },
-        "TimestampsAttrsTest.TemporaryAttributeRejectedOnDirectory": {
-          "reason": "memfs_setfileattributes accepts FILE_ATTRIBUTE_TEMPORARY on directories instead of returning STATUS_INVALID_PARAMETER",
-          "gap": "GAP-10"
         },
         "TimestampsAttrsTest.WriteUpdatesLastWriteTimeAndChangeTime": {
           "reason": "memfs does not update LastWriteTime and ChangeTime on WriteFile",
