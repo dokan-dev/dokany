@@ -1548,24 +1548,147 @@ VOID DOKANAPI DokanShutdown() {
   DeleteCriticalSection(&g_InstanceCriticalSection);
 }
 
-BOOL DOKANAPI DokanNotifyPath(_In_ DOKAN_HANDLE DokanInstance,
-                              _In_ LPCWSTR FilePath,
-                              _In_ ULONG CompletionFilter, _In_ ULONG Action) {
-  DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
-  if (FilePath == NULL || !instance || !instance->NotifyHandle) {
+// Matches Prefix (without trailing backslashes) case-insensitively using
+// Windows ordinal rules at a path boundary. Returns static L"\\" on an exact
+// match, or a slice into FilePath starting at the last leading backslash
+// (collapsing redundant leading '\\').
+static LPCWSTR StripNormalizedPrefix(LPCWSTR FilePath, size_t FilePathLen,
+                                     LPCWSTR Prefix, size_t PrefixLen) {
+  if (PrefixLen == 0 || PrefixLen > (size_t)INT_MAX ||
+      FilePathLen < PrefixLen) {
+    return NULL;
+  }
+  if (CompareStringOrdinal(FilePath, (int)PrefixLen, Prefix, (int)PrefixLen,
+                           /*bIgnoreCase=*/TRUE) != CSTR_EQUAL) {
+    return NULL;
+  }
+  if (FilePath[PrefixLen] == L'\0') {
+    return L"\\";
+  }
+  if (FilePath[PrefixLen] == L'\\') {
+    LPCWSTR relativePath = FilePath + PrefixLen;
+    while (relativePath[0] == L'\\' && relativePath[1] == L'\\') {
+      ++relativePath;
+    }
+    return relativePath;
+  }
+  return NULL;
+}
+
+static size_t StripTrailingBackslashes(LPWSTR Path, size_t Length) {
+  while (Length > 0 && Path[Length - 1] == L'\\') {
+    --Length;
+  }
+  Path[Length] = L'\0';
+  return Length;
+}
+
+// Resolves FilePath to a volume-relative path starting with L"\\". Handles
+// drive-letter, NTFS directory mount, UNC, and Win32 extended-length
+// ("\\?\" and "\\?\UNC\") paths. Checks MountPoint before UNCName so both
+// drive-letter and UNC paths work on network mounts.
+static LPCWSTR ResolveNotifyRelativePath(const DOKAN_INSTANCE *Instance,
+                                         LPCWSTR FilePath) {
+  size_t filePathLen = wcslen(FilePath);
+  BOOL isExtendedUnc = filePathLen >= 8 &&
+                       CompareStringOrdinal(FilePath, 8, L"\\\\?\\UNC\\", 8,
+                                            /*bIgnoreCase=*/TRUE) == CSTR_EQUAL;
+  BOOL isExtendedPath =
+      !isExtendedUnc && filePathLen >= 4 &&
+      CompareStringOrdinal(FilePath, 4, L"\\\\?\\", 4,
+                           /*bIgnoreCase=*/FALSE) == CSTR_EQUAL;
+
+  if (!isExtendedUnc && Instance->MountPoint[0] != L'\0') {
+    LPCWSTR mountFilePath = isExtendedPath ? (FilePath + 4) : FilePath;
+    size_t mountFilePathLen = isExtendedPath ? (filePathLen - 4) : filePathLen;
+    WCHAR mountPrefix[ARRAYSIZE(Instance->MountPoint) + 2];
+    mountPrefix[0] = L'\0';
+    size_t prefixLen = 0;
+    if (IsMountPointDriveLetter(Instance->MountPoint)) {
+      mountPrefix[0] = Instance->MountPoint[0];
+      mountPrefix[1] = L':';
+      mountPrefix[2] = L'\0';
+      prefixLen = 2;
+    } else if (SUCCEEDED(StringCchCopyW(mountPrefix, ARRAYSIZE(mountPrefix),
+                                        Instance->MountPoint))) {
+      prefixLen = StripTrailingBackslashes(mountPrefix, wcslen(mountPrefix));
+    }
+    if (prefixLen > 0) {
+      LPCWSTR relativePath = StripNormalizedPrefix(
+          mountFilePath, mountFilePathLen, mountPrefix, prefixLen);
+      if (relativePath != NULL) {
+        return relativePath;
+      }
+    }
+  }
+
+  if (!isExtendedPath && Instance->UNCName[0] != L'\0') {
+    WCHAR uncPrefix[ARRAYSIZE(Instance->UNCName) + 3];
+    uncPrefix[0] = L'\0';
+    HRESULT hr;
+    if (Instance->UNCName[0] == L'\\' && Instance->UNCName[1] == L'\\') {
+      hr = StringCchCopyW(uncPrefix, ARRAYSIZE(uncPrefix), Instance->UNCName);
+    } else if (Instance->UNCName[0] == L'\\') {
+      hr = StringCchPrintfW(uncPrefix, ARRAYSIZE(uncPrefix), L"\\%s",
+                            Instance->UNCName);
+    } else {
+      hr = StringCchPrintfW(uncPrefix, ARRAYSIZE(uncPrefix), L"\\\\%s",
+                            Instance->UNCName);
+    }
+    if (SUCCEEDED(hr)) {
+      size_t prefixLen = StripTrailingBackslashes(uncPrefix, wcslen(uncPrefix));
+      // Require more than the leading "\\" so a malformed UNCName cannot match
+      // arbitrary UNC paths.
+      if (prefixLen > 2 && uncPrefix[2] != L'\\') {
+        LPCWSTR uncFilePath = isExtendedUnc ? (FilePath + 8) : FilePath;
+        size_t uncFilePathLen = isExtendedUnc ? (filePathLen - 8) : filePathLen;
+        LPCWSTR matchPrefix = isExtendedUnc ? (uncPrefix + 2) : uncPrefix;
+        size_t matchPrefixLen = isExtendedUnc ? (prefixLen - 2) : prefixLen;
+        LPCWSTR relativePath = StripNormalizedPrefix(
+            uncFilePath, uncFilePathLen, matchPrefix, matchPrefixLen);
+        if (relativePath != NULL) {
+          return relativePath;
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+
+static BOOL PrepareNotifyRelativePath(const DOKAN_INSTANCE *Instance,
+                                      LPCWSTR FilePath,
+                                      LPCWSTR *OutRelativePath,
+                                      USHORT *OutByteLength) {
+  if (FilePath == NULL || Instance == NULL || Instance->NotifyHandle == NULL ||
+      Instance->NotifyHandle == INVALID_HANDLE_VALUE) {
     return FALSE;
   }
-  size_t length = wcslen(FilePath);
-  const size_t prefixSize = 2; // size of mount letter plus ":"
-  if (length <= prefixSize) {
+  LPCWSTR relativePath = ResolveNotifyRelativePath(Instance, FilePath);
+  if (relativePath == NULL) {
     return FALSE;
   }
-  // remove the mount letter and colon from length, for example: "G:"
-  length -= prefixSize;
-  ULONG returnedLength;
-  ULONG inputLength = (ULONG)(sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) +
-                              (length * sizeof(WCHAR)));
-  PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = malloc(inputLength);
+  size_t relativeLength = wcslen(relativePath);
+  while (relativeLength > 1 && relativePath[relativeLength - 1] == L'\\') {
+    --relativeLength;
+  }
+  if (relativeLength == 0 || relativeLength > (USHRT_MAX / sizeof(WCHAR))) {
+    return FALSE;
+  }
+  *OutRelativePath = relativePath;
+  *OutByteLength = (USHORT)(relativeLength * sizeof(WCHAR));
+  return TRUE;
+}
+
+static BOOL SendNotifyRelativePath(const DOKAN_INSTANCE *Instance,
+                                   LPCWSTR OriginalFilePath,
+                                   LPCWSTR RelativePath, USHORT ByteLength,
+                                   ULONG CompletionFilter, ULONG Action) {
+  ULONG returnedLength = 0;
+  ULONG inputLength =
+      (ULONG)(sizeof(DOKAN_NOTIFY_PATH_INTERMEDIATE) + ByteLength);
+  PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath =
+      (PDOKAN_NOTIFY_PATH_INTERMEDIATE)malloc(inputLength);
   if (pNotifyPath == NULL) {
     DbgPrint("Failed to allocate NotifyPath\n");
     return FALSE;
@@ -1573,16 +1696,30 @@ BOOL DOKANAPI DokanNotifyPath(_In_ DOKAN_HANDLE DokanInstance,
   ZeroMemory(pNotifyPath, inputLength);
   pNotifyPath->CompletionFilter = CompletionFilter;
   pNotifyPath->Action = Action;
-  pNotifyPath->Length = (USHORT)(length * sizeof(WCHAR));
-  CopyMemory(pNotifyPath->Buffer, FilePath + prefixSize, pNotifyPath->Length);
-  if (!DeviceIoControl(instance->NotifyHandle, FSCTL_NOTIFY_PATH, pNotifyPath,
-                       inputLength, NULL, 0, &returnedLength, NULL)) {
-    DbgPrint("Failed to send notify path command:%ws\n", FilePath);
-    free(pNotifyPath);
-    return FALSE;
+  pNotifyPath->Length = ByteLength;
+  CopyMemory(pNotifyPath->Buffer, RelativePath, ByteLength);
+  BOOL result =
+      DeviceIoControl(Instance->NotifyHandle, FSCTL_NOTIFY_PATH, pNotifyPath,
+                      inputLength, NULL, 0, &returnedLength, NULL);
+  if (!result) {
+    DbgPrint("Failed to send notify path command:%ws\n", OriginalFilePath);
   }
   free(pNotifyPath);
-  return TRUE;
+  return result ? TRUE : FALSE;
+}
+
+BOOL DOKANAPI DokanNotifyPath(_In_ DOKAN_HANDLE DokanInstance,
+                              _In_ LPCWSTR FilePath,
+                              _In_ ULONG CompletionFilter, _In_ ULONG Action) {
+  DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
+  LPCWSTR relativePath = NULL;
+  USHORT byteLength = 0;
+  if (!PrepareNotifyRelativePath(instance, FilePath, &relativePath,
+                                 &byteLength)) {
+    return FALSE;
+  }
+  return SendNotifyRelativePath(instance, FilePath, relativePath, byteLength,
+                                CompletionFilter, Action);
 }
 
 BOOL DOKANAPI DokanNotifyCreate(_In_ DOKAN_HANDLE DokanInstance,
@@ -1617,13 +1754,26 @@ BOOL DOKANAPI DokanNotifyRename(_In_ DOKAN_HANDLE DokanInstance,
                                 _In_ LPCWSTR OldPath, _In_ LPCWSTR NewPath,
                                 _In_ BOOL IsDirectory,
                                 _In_ BOOL IsInSameDirectory) {
-  BOOL success = DokanNotifyPath(
-      DokanInstance, OldPath,
-      IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
-      IsInSameDirectory ? FILE_ACTION_RENAMED_OLD_NAME : FILE_ACTION_REMOVED);
-  success &= DokanNotifyPath(
-      DokanInstance, NewPath,
-      IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME,
+  DOKAN_INSTANCE *instance = (DOKAN_INSTANCE *)DokanInstance;
+  LPCWSTR oldRelativePath = NULL;
+  LPCWSTR newRelativePath = NULL;
+  USHORT oldByteLength = 0;
+  USHORT newByteLength = 0;
+  if (!PrepareNotifyRelativePath(instance, OldPath, &oldRelativePath,
+                                 &oldByteLength) ||
+      !PrepareNotifyRelativePath(instance, NewPath, &newRelativePath,
+                                 &newByteLength)) {
+    return FALSE;
+  }
+  ULONG completionFilter =
+      IsDirectory ? FILE_NOTIFY_CHANGE_DIR_NAME : FILE_NOTIFY_CHANGE_FILE_NAME;
+  if (!SendNotifyRelativePath(instance, OldPath, oldRelativePath, oldByteLength,
+                              completionFilter,
+                              IsInSameDirectory ? FILE_ACTION_RENAMED_OLD_NAME
+                                                : FILE_ACTION_REMOVED)) {
+    return FALSE;
+  }
+  return SendNotifyRelativePath(
+      instance, NewPath, newRelativePath, newByteLength, completionFilter,
       IsInSameDirectory ? FILE_ACTION_RENAMED_NEW_NAME : FILE_ACTION_ADDED);
-  return success;
 }
