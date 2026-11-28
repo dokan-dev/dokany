@@ -5,7 +5,8 @@
 #   2. scripts/run_ifstest.ps1 Find-IfsTestCreateProcFailure (Set-StrictMode -Version 2)
 #   3. scripts/ci/install_cygwin.ps1 Assert-CygwinGpgVerification (GOODSIG/EXPKEYSIG/REVKEYSIG)
 #   4. scripts/ci/vm/provisioning/verifier_helpers.ps1 Driver Verifier guards
-#   5. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & collect_guest_diagnostics.ps1 syntax
+#   5. scripts/ci/build_and_package.ps1 Assert-DokanNpKernel32OnlyImports PE import gate
+#   6. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & CI PowerShell script syntax
 # Uses only tools preinstalled on ubuntu-latest (jq, pwsh, python3 stdlib).
 set -euo pipefail
 
@@ -227,14 +228,111 @@ foreach ($badCase in @(
 }
 Write-Output 'verifier_helpers.ps1 Assert-DriverVerifierActive unit tests passed.'
 
-# 2d. Session-0 -> Session-1 trampoline (scripts/ci/vm/run_guest_tests.ps1) & collect_guest_diagnostics.ps1 syntax
-foreach ($psFile in @('scripts/ci/vm/run_guest_tests.ps1', 'scripts/ci/vm/collect_guest_diagnostics.ps1')) {
+# 2d. Session-0 -> Session-1 trampoline (scripts/ci/vm/run_guest_tests.ps1) & CI script syntax
+foreach ($psFile in @('scripts/build_helper.ps1', 'scripts/build_fstest.ps1', 'scripts/ci/vm/run_guest_tests.ps1', 'scripts/ci/vm/collect_guest_diagnostics.ps1', 'scripts/ci/build_and_package.ps1', 'scripts/ci/build_test_tools.ps1')) {
     $parseErrors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $psFile).Path, [ref]$null, [ref]$parseErrors)
     if ($parseErrors.Count -gt 0) {
         throw "Parse error(s) in ${psFile}: $(($parseErrors | ForEach-Object { $_.Message }) -join '; ')"
     }
 }
+
+# 2e. PE import checker unit tests (scripts/ci/build_and_package.ps1)
+foreach ($fn in @('Convert-PeRvaToFileOffset', 'Read-PeAsciiStringAtRva', 'Get-DokanPEImportedDlls', 'Assert-DokanNpKernel32OnlyImports')) {
+    Invoke-Expression (Import-AstFunction -FilePath 'scripts/ci/build_and_package.ps1' -FunctionName $fn)
+}
+
+function New-SyntheticPe {
+    param(
+        [bool]$IsPe32Plus = $true,
+        [string[]]$Imports = @('KERNEL32.dll'),
+        [string[]]$DelayImports = @()
+    )
+    $buf = New-Object byte[] 4096
+    # MZ header + e_lfanew = 0x80
+    $buf[0] = 0x4D; $buf[1] = 0x5A
+    [BitConverter]::GetBytes([int]0x80).CopyTo($buf, 60)
+    # PE\0\0 at 0x80
+    $buf[0x80] = 0x50; $buf[0x81] = 0x45
+    # IMAGE_FILE_HEADER: NumberOfSections = 1, SizeOfOptionalHeader = 0xF0 (PE32+) or 0xE0 (PE32)
+    $optSize = if ($IsPe32Plus) { [uint16]0xF0 } else { [uint16]0xE0 }
+    [BitConverter]::GetBytes([uint16]1).CopyTo($buf, 0x84 + 2)
+    [BitConverter]::GetBytes($optSize).CopyTo($buf, 0x84 + 16)
+    $optOff = 0x84 + 20
+    $magic = if ($IsPe32Plus) { [uint16]0x020B } else { [uint16]0x010B }
+    [BitConverter]::GetBytes($magic).CopyTo($buf, $optOff)
+    $numRvaOff = if ($IsPe32Plus) { $optOff + 108 } else { $optOff + 92 }
+    $dirOff = if ($IsPe32Plus) { $optOff + 112 } else { $optOff + 96 }
+    [BitConverter]::GetBytes([uint32]16).CopyTo($buf, $numRvaOff)
+
+    # Single section ".rdata" at VA=0x1000, RawPtr=0x400, Size=0xC00
+    $secOff = $optOff + $optSize
+    [System.Text.Encoding]::ASCII.GetBytes('.rdata').CopyTo($buf, $secOff)
+    [BitConverter]::GetBytes([uint32]0xC00).CopyTo($buf, $secOff + 8)
+    [BitConverter]::GetBytes([uint32]0x1000).CopyTo($buf, $secOff + 12)
+    [BitConverter]::GetBytes([uint32]0xC00).CopyTo($buf, $secOff + 16)
+    [BitConverter]::GetBytes([uint32]0x400).CopyTo($buf, $secOff + 20)
+
+    $strCursor = 0x800
+    if ($Imports.Count -gt 0) {
+        [BitConverter]::GetBytes([uint32]0x1000).CopyTo($buf, $dirOff + 8)
+        $descOff = 0x400
+        foreach ($dll in $Imports) {
+            $nameRva = [uint32](0x1000 + ($strCursor - 0x400))
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($dll + "`0")
+            $bytes.CopyTo($buf, $strCursor)
+            $strCursor += $bytes.Length
+            [BitConverter]::GetBytes($nameRva).CopyTo($buf, $descOff + 12)
+            $descOff += 20
+        }
+    }
+    if ($DelayImports.Count -gt 0) {
+        [BitConverter]::GetBytes([uint32]0x1200).CopyTo($buf, $dirOff + (13 * 8))
+        $descOff = 0x600
+        foreach ($dll in $DelayImports) {
+            $nameRva = [uint32](0x1000 + ($strCursor - 0x400))
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($dll + "`0")
+            $bytes.CopyTo($buf, $strCursor)
+            $strCursor += $bytes.Length
+            [BitConverter]::GetBytes($nameRva).CopyTo($buf, $descOff + 4)
+            $descOff += 32
+        }
+    }
+    return $buf
+}
+
+$peDir = Join-Path $PSScriptRoot 'pe_tests'
+New-Item -ItemType Directory -Force -Path $peDir | Out-Null
+
+$goodPe64 = Join-Path $peDir 'good64.dll'
+[System.IO.File]::WriteAllBytes($goodPe64, (New-SyntheticPe -IsPe32Plus $true -Imports @('KERNEL32.dll')))
+Assert-DokanNpKernel32OnlyImports -BinaryPath $goodPe64
+
+$goodPe32 = Join-Path $peDir 'good32.dll'
+[System.IO.File]::WriteAllBytes($goodPe32, (New-SyntheticPe -IsPe32Plus $false -Imports @('kernel32.dll')))
+Assert-DokanNpKernel32OnlyImports -BinaryPath $goodPe32
+
+foreach ($badPe in @(
+    @{ Name = 'extra-dokan3'; Imports = @('KERNEL32.dll', 'dokan3.dll'); Delay = @() },
+    @{ Name = 'wrong-dll'; Imports = @('ADVAPI32.dll'); Delay = @() },
+    @{ Name = 'empty-imports'; Imports = @(); Delay = @() },
+    @{ Name = 'delay-import'; Imports = @('KERNEL32.dll'); Delay = @('USER32.dll') }
+)) {
+    $badPath = Join-Path $peDir "$($badPe.Name).dll"
+    [System.IO.File]::WriteAllBytes($badPath, (New-SyntheticPe -IsPe32Plus $true -Imports $badPe.Imports -DelayImports $badPe.Delay))
+    $threw = $false
+    try { Assert-DokanNpKernel32OnlyImports -BinaryPath $badPath } catch { $threw = $true }
+    if (-not $threw) { throw "Assert-DokanNpKernel32OnlyImports unexpectedly accepted $($badPe.Name)" }
+}
+# Malformed non-terminator import descriptor with zero Name RVA must fail closed.
+$malformedPe = New-SyntheticPe -IsPe32Plus $true -Imports @('KERNEL32.dll')
+[BitConverter]::GetBytes([uint32]0x1050).CopyTo($malformedPe, 0x400 + 20 + 16)
+$malformedPath = Join-Path $peDir 'zero-name-rva.dll'
+[System.IO.File]::WriteAllBytes($malformedPath, $malformedPe)
+$threw = $false
+try { Assert-DokanNpKernel32OnlyImports -BinaryPath $malformedPath } catch { $threw = $true }
+if (-not $threw) { throw 'Assert-DokanNpKernel32OnlyImports unexpectedly accepted zero-name-rva descriptor' }
+Write-Output 'build_and_package.ps1 PE import gate unit tests passed.'
 
 foreach ($fn in @('Read-GuestLogChunk', 'Open-GuestSession1Process', 'Wait-GuestSession1Task')) {
     Invoke-Expression (Import-AstFunction -FilePath 'scripts/ci/vm/run_guest_tests.ps1' -FunctionName $fn)

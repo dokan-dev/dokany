@@ -246,20 +246,22 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dokannp.c" />
+    <ClCompile Include="np_core.c" />
+    <ClCompile Include="np_mount_table.c" />
+    <ClCompile Include="np_transport_live.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="dokannp.def" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="np_core.h" />
+    <ClInclude Include="np_mount_table.h" />
+    <ClInclude Include="np_transport_live.h" />
+    <ClInclude Include="np_util.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dokan_np.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\dokan\dokan.vcxproj">
-      <Project>{f25ba22f-2ab8-4859-9b89-8fe1e774b472}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

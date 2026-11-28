@@ -218,7 +218,7 @@ jobs:
           path: ${{ runner.temp }}/fstest-deps
           key: fstest-deps-${{ hashFiles('tests/fstest/deps.json') }}
 
-      - name: Build dokan_fstest and fsx
+      - name: Build test tools and run dokan_np Tier 1 unit tests
         id: build
         shell: powershell
         run: |
@@ -226,8 +226,18 @@ jobs:
             -BuildNumber ([int]$env:GITHUB_RUN_NUMBER + [int]$env:BUILD_NUMBER_OFFSET) `
             -OutputDir ci-test-tools `
             -ReleaseDir ci-release-fstest `
+            -NpUnitResultsDir ci-np-unit-results `
             -ArtifactPrefix "$env:ARTIFACT_PREFIX" `
             -FsTestDepsCacheDir "$env:RUNNER_TEMP\fstest-deps"
+
+      - name: Upload dokan_np Tier 1 unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dokan-np-unit-results
+          path: ci-np-unit-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Save dokan_fstest dependencies cache
         if: github.event_name != 'pull_request' && steps.fstest-cache.outputs.cache-hit != 'true'

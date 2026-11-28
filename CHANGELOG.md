@@ -6,10 +6,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 ## [Unreleased] - 3.0.0.1000
 
 ### Added
+
+- NetworkProvider - Add hermetic unit/fuzz test suite (`dokan_np_unit_test.exe`) and real-OS `mpr.dll`, Shell namespace, multi-session, and hygiene integration suite (`dokan_np_test.exe`, x64 and Win32) under `tests/np/` and wire them into GitHub Actions CI (#1378, #1379, #1380, #1383).
 - FsTest - Add standalone C++20 NTFS conformance test suite and CLI runner (`tests/fstest/`: `ntfs_helpers`, 472-test `ntfs_suite` across 12 NTFS domains, `dokan_fstest.exe` baseline/scorecard runner, `memfs`/`mirror` baseline manifests, and `CONFORMANCE_GAPS.md` defect catalog) (#1365).
 - Documentation - Add `winget` installation instructions (#1319).
 
 ### Changed
+
 - CI - Replace AppVeyor with the GitHub Actions `Build and Test` workflow (`build-and-test.yml`, plus `cleanup-pr-caches.yml`): builds, test-signs, and packages Dokan (Win32/x64/ARM64, Cygwin/MSYS2 `dokan_fuse`, `DokanSetup-<version>.exe`, `dokan-<version>.zip`) and test tools (`dokan-fstest-<version>.zip`, `fsx.exe`) in parallel, then installs Dokan with Driver Verifier (`/standard` + `0x02000000` Code integrity / HVCI checks) in cached Windows Server 2016-2025 QEMU/KVM VMs (two shards per OS) to run the NTFS `--strict` gate and `memfs`/`mirror` `fsx`, `dokan_fstest`, and IFSTest suites, with automatic `kd.exe` crash/NMI-hang dump analysis.
 - Kernel - Enforce HVCI / NX-pool compliance directly for Windows 10+: use `NonPagedPoolNx` and `MdlMappingNoExecute` unconditionally (removing `POOL_NX_OPTIN` / `DokanMdlSafePriority`), migrate `DokanIrpEntryLookasideList` to `LOOKASIDE_LIST_EX` with `NonPagedPoolNx` and failure-path cleanup, and run `InitMultiVersionResources` before `DokanCreateGlobalDiskDevice`.
 - Breaking / Major Version - Bump major version from `dokan2` to `dokan3` (`dokan3.sys`, `dokan3.dll`, `dokannp3.dll`, `dokanfuse3.dll`, `DokanLibrary3`, `DOKAN_VERSION`/`DOKAN_MINIMUM_COMPATIBLE_VERSION` = `300`, new `DOKAN_BASE_GUID`, `DCB` identifier tag, and installer GUIDs) to enable side-by-side installation with Dokan 2.x.
@@ -17,15 +20,24 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 - Build - Migrate solutions, projects, and build scripts to Visual Studio 2026 (`v145` / `$(DefaultPlatformToolset)`) and WDK `10.0.28000` via NuGet (`sys/packages.config`), enabling Spectre mitigation and Control Flow Guard (CFG) for the kernel driver.
 - Installer - Migrate WiX v5 bundle signing in `Bootstrapper.wixproj` to native `SignOutput` / `SignBundleEngine` / `SignBundle` targets (removing WiX v3 `insignia.exe`), retarget `SetAssemblyVersion` to .NET Framework 4.8, and update Chocolatey packaging for 64-bit Windows 10+.
 - CI - Migrate AppVeyor main build to Visual Studio 2026 with WDK NuGet restore, move SonarCloud (SonarScanner CLI 8.5), Doxygen (`1.18.0` with `doxygen-awesome-css`), and `clang-format` checks to GitHub Actions (#1358), refresh HLK IFSTest kits (dropping Windows 8.1 HCK and adding OS-matched multi-MSI support) (#1360), and replace `winfstest` with `dokan_fstest` across AppVeyor, GitHub Actions, and sample test scripts (#1365).
+- NetworkProvider - Rewrite `dokannp3.dll` on an injectable mount table seam (`np_mount_table`, `np_core`, `np_transport_live`) (#1383): it now queries the driver directly (`FSCTL_EVENT_MOUNTPOINT_LIST` / `FSCTL_EVENT_RELEASE`) and imports only `KERNEL32.dll` instead of `dokan3.dll`, takes one mount list snapshot per enumeration, advertises only implemented capabilities (adds `NPFormatNetworkName` and `RESOURCE_CONTEXT`, drops `WNNC_ENUM_SHAREABLE`), and emits no debug output in release builds.
+- Library - `DokanNetworkProviderInstall` / `DokanNetworkProviderUninstall` parse `ProviderOrder` as exact comma-separated tokens, preserve other providers and the value type intact, maintain `HwOrder\ProviderOrder` when present, register `Class = WN_NETWORK_CLASS`, and report failures through `GetLastError` (#1383).
 - FUSE / Build - Decouple Cygwin and MSYS2 builds and installer components (`BuildCygwin` / `BuildMsys2`), migrate 64-bit MSYS2 (`x64/Msys2/libdokanfuse3.dll`) from deprecated `MINGW64` (`msvcrt.dll`) to `UCRT64` (`ucrtbase.dll`) while keeping `Win32/Msys2` on `MINGW32` (#1362), and make `fuse.pc` relocatable via `${pcfiledir}`.
 
 ### Removed
+
+- NetworkProvider - Remove the unused `NPLogonNotify` / `NPPasswordChangeNotify` exports from `dokannp3.dll` (#1383).
 - CI - Remove AppVeyor configuration (`appveyor.yml`).
 - Build / Installer - Drop support for Windows 7, Windows 8, and Windows 8.1; minimum supported OS is now Windows 10 (1507) / Windows Server 2016.
 - Build / Installer - Drop ARM32 and 32-bit (x86) kernel driver support and remove `Dokan_x86.msi` (32-bit applications on 64-bit Windows remain supported via WOW64 DLLs included in `Dokan_x64.msi`).
 - FUSE / Installer - Remove the broken duplicate 64-bit `Win32/Cygwin` FUSE build and its x86 installer entries (32-bit Cygwin was discontinued upstream; 64-bit Cygwin remains supported in `x64/Cygwin`) (#1362).
 
 ### Fixed
+
+- NetworkProvider - Fix `NPGetConnection` character-count contract and out-of-bounds write (also reached through `NPGetUniversalName`), case-sensitive drive letter matching, and claiming non-network Dokan drives (#1383).
+- NetworkProvider - Fix Network enumeration: uninitialized entries and non-terminated server names in the server list, duplicate servers, shares of every server listed under any server, folder mount points reported as drive connections, and ignored type/usage filters (#952, #1383).
+- NetworkProvider - Only claim UNC names of active Dokan mounts in `NPGetResourceInformation` / `NPGetResourceParent` / `NPAddConnection3` instead of every `\\server\share`, and fix `NPGetResourceParent` trailing backslash handling (#952, #1383).
+- Library - Fix registry handle leaks, unterminated `ProviderOrder` reads, and corruption of providers whose name starts with `Dokan3` during network provider (un)registration (#1383).
 - Kernel - Fix IRP cancellation race condition in `RegisterPendingIrpMain` and `IRQL_NOT_LESS_OR_EQUAL` BSOD in `DokanIrpCancelRoutine` by deferring `DokanExecuteCleanup` until after releasing the spinlock.
 - Library - `DokanStart` - Move large `EVENT_START` struct from stack to heap.
 - Library - Fix `DOKAN_OPTION_ALLOW_IPC_BATCHING` flag truncation to zero when cast to `BOOLEAN` in `DokanCreateFileSystem` (#1340).
