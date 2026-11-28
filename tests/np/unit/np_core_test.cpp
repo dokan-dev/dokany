@@ -10,10 +10,6 @@
 namespace dokan_np_test {
 namespace {
 
-// Helper to avoid signed/unsigned mismatch warnings (C4389 / -Wsign-compare)
-// when GoogleTest compares DWORD returns against long WN_*/ERROR_* constants.
-inline DWORD Dw(long code) { return static_cast<DWORD>(code); }
-
 TEST(NpCoreCapsTest, ReportsExactSupportedCapabilities) {
   EXPECT_EQ(DokanNpGetCaps(WNNC_SPEC_VERSION),
             static_cast<DWORD>(WNNC_SPEC_VERSION51));
@@ -158,27 +154,44 @@ TEST(NpCoreGetUniversalNameTest, UniversalAndRemoteNameLevelsAndValidation) {
                    ->lpUniversalName,
                L"\\\\SrvA\\Share1\\");
 
+  // Unconnected drive -> WN_NOT_CONNECTED.
+  size = static_cast<DWORD>(buf.size());
+  EXPECT_EQ(DokanNpGetUniversalName(&t, L"Z:\\dir\\file.txt",
+                                    UNIVERSAL_NAME_INFO_LEVEL, buf.data(),
+                                    &size),
+            Dw(WN_NOT_CONNECTED));
+
   // REMOTE_NAME_INFO_LEVEL on deep path and root.
   size = 0;
   EXPECT_EQ(DokanNpGetUniversalName(&t, L"m:\\dir\\file.txt",
                                     REMOTE_NAME_INFO_LEVEL, nullptr, &size),
             Dw(WN_MORE_DATA));
+  const DWORD expected_rem_bytes =
+      sizeof(REMOTE_NAME_INFOW) +
+      static_cast<DWORD>(((wcslen(L"\\\\SrvA\\Share1\\dir\\file.txt") + 1) +
+                          (wcslen(L"\\\\SrvA\\Share1") + 1) +
+                          (wcslen(L"\\dir\\file.txt") + 1)) *
+                         sizeof(WCHAR));
+  EXPECT_EQ(size, expected_rem_bytes);
   std::vector<uint8_t> exact_rem(size, 0);
   retry_size = size;
   ASSERT_EQ(DokanNpGetUniversalName(&t, L"m:\\dir\\file.txt",
                                     REMOTE_NAME_INFO_LEVEL, exact_rem.data(),
                                     &retry_size),
             Dw(WN_SUCCESS));
+  EXPECT_EQ(retry_size, size);
   const auto *rem =
       reinterpret_cast<const REMOTE_NAME_INFOW *>(exact_rem.data());
   EXPECT_STREQ(rem->lpUniversalName, L"\\\\SrvA\\Share1\\dir\\file.txt");
   EXPECT_STREQ(rem->lpConnectionName, L"\\\\SrvA\\Share1");
   EXPECT_STREQ(rem->lpRemainingPath, L"\\dir\\file.txt");
 
+  // Larger buffer MUST NOT shrink *BufferSize on WN_SUCCESS.
   size = static_cast<DWORD>(buf.size());
   ASSERT_EQ(DokanNpGetUniversalName(&t, L"M:", REMOTE_NAME_INFO_LEVEL,
                                     buf.data(), &size),
             Dw(WN_SUCCESS));
+  EXPECT_EQ(size, static_cast<DWORD>(buf.size()));
   rem = reinterpret_cast<const REMOTE_NAME_INFOW *>(buf.data());
   EXPECT_STREQ(rem->lpUniversalName, L"\\\\SrvA\\Share1");
   EXPECT_STREQ(rem->lpConnectionName, L"\\\\SrvA\\Share1");
@@ -188,6 +201,7 @@ TEST(NpCoreGetUniversalNameTest, UniversalAndRemoteNameLevelsAndValidation) {
   ASSERT_EQ(DokanNpGetUniversalName(&t, L"M:\\", REMOTE_NAME_INFO_LEVEL,
                                     buf.data(), &size),
             Dw(WN_SUCCESS));
+  EXPECT_EQ(size, static_cast<DWORD>(buf.size()));
   rem = reinterpret_cast<const REMOTE_NAME_INFOW *>(buf.data());
   EXPECT_STREQ(rem->lpUniversalName, L"\\\\SrvA\\Share1\\");
   EXPECT_STREQ(rem->lpConnectionName, L"\\\\SrvA\\Share1");
@@ -343,6 +357,19 @@ TEST(NpCoreEnumTest, ConnectedGlobalNetContextAndFiltering) {
                             nullptr, &bad_h),
             Dw(WN_NOT_SUPPORTED));
 
+  // RESOURCE_CONTEXT ignores dwUsage per npapi.h (only RESOURCE_GLOBALNET
+  // filters by dwUsage).
+  const auto ctx_ignore_usage = EnumAll(&t, RESOURCE_CONTEXT, RESOURCETYPE_ANY,
+                                        RESOURCEUSAGE_CONNECTABLE, nullptr);
+  EXPECT_EQ(ctx_ignore_usage, root_servers);
+
+  // RESOURCE_GLOBALNET with non-zero dwUsage having neither CONNECTABLE nor
+  // CONTAINER selects all resources per npapi.h.
+  const auto attached_servers =
+      EnumAll(&t, RESOURCE_GLOBALNET, RESOURCETYPE_ANY, RESOURCEUSAGE_ATTACHED,
+              nullptr);
+  EXPECT_EQ(attached_servers, root_servers);
+
   // Type & usage filters.
   EXPECT_TRUE(
       EnumAll(&t, RESOURCE_GLOBALNET, RESOURCETYPE_PRINT, 0, &nr_srv1).empty());
@@ -413,7 +440,47 @@ TEST(NpCoreEnumTest, SnapshotStabilityPaginationZeroCountAndOddBufferSize) {
   EXPECT_EQ(seen[1], L"\\\\srv1\\s2");
   EXPECT_EQ(seen[2], L"\\\\srv2\\s3");
 
+  // Repeated calls after exhaustion stay at WN_NO_MORE_ENTRIES.
+  count = 0xFFFFFFFF;
+  size = static_cast<DWORD>(buf.size());
+  EXPECT_EQ(DokanNpEnumResource(h, &count, buf.data(), &size),
+            Dw(WN_NO_MORE_ENTRIES));
+  EXPECT_EQ(count, 0u);
   EXPECT_EQ(DokanNpCloseEnum(h), Dw(WN_SUCCESS));
+
+  // Multi-page pagination with *lpcCount == 0xFFFFFFFF and a buffer that holds
+  // only one entry at a time.
+  fake.mounts = {
+      {L"\\\\srv1\\s1", L'M', 0, L"M:"},
+      {L"\\\\srv1\\s2", L'N', 0, L"N:"},
+      {L"\\\\srv2\\s3", L'O', 0, L"O:"},
+  };
+  HANDLE h2 = nullptr;
+  ASSERT_EQ(DokanNpOpenEnum(&t, RESOURCE_CONNECTED, RESOURCETYPE_ANY, 0,
+                            nullptr, &h2),
+            Dw(WN_SUCCESS));
+  DWORD one_entry_bytes = 0;
+  DWORD probe_cnt = 1;
+  ASSERT_EQ(DokanNpEnumResource(h2, &probe_cnt, nullptr, &one_entry_bytes),
+            Dw(WN_MORE_DATA));
+  std::vector<uint8_t> page(one_entry_bytes + 8, 0);
+  std::vector<std::wstring> paged_seen;
+  for (;;) {
+    DWORD c = 0xFFFFFFFF;
+    DWORD sz = static_cast<DWORD>(page.size());
+    DWORD err = DokanNpEnumResource(h2, &c, page.data(), &sz);
+    if (err == WN_NO_MORE_ENTRIES) {
+      break;
+    }
+    ASSERT_EQ(err, Dw(WN_SUCCESS));
+    ASSERT_EQ(c, 1u);
+    const auto *nr = reinterpret_cast<const NETRESOURCEW *>(page.data());
+    AssertNetResourcePointersContained(nr, c, page.data(),
+                                       static_cast<DWORD>(page.size()));
+    paged_seen.emplace_back(nr->lpRemoteName);
+  }
+  EXPECT_EQ(paged_seen, seen);
+  EXPECT_EQ(DokanNpCloseEnum(h2), Dw(WN_SUCCESS));
 }
 
 TEST(NpCoreResourceInfoAndParentTest, OwnershipCanonicalCasingAndParentWalk) {
@@ -567,30 +634,66 @@ TEST(NpCoreFormatNetworkNameTest, InEnumAndNonEnumCharCountContract) {
             Dw(WN_MORE_DATA));
   EXPECT_EQ(len, 5u);
 
-  // Without WNFMT_INENUM: full name preserved (trailing slash stripped).
+  // Bare server name with WNFMT_INENUM strips leading backslashes.
+  WCHAR bare_srv[] = L"\\\\srv1";
+  len = 64;
+  EXPECT_EQ(DokanNpFormatNetworkName(bare_srv, out, &len, WNFMT_INENUM, 80),
+            Dw(WN_SUCCESS));
+  EXPECT_STREQ(out, L"srv1");
+
+  // Without WNFMT_INENUM (including WNFMT_ABBREVIATED): full name preserved
+  // verbatim.
   len = 64;
   EXPECT_EQ(DokanNpFormatNetworkName(share, out, &len, 0, 80), Dw(WN_SUCCESS));
   EXPECT_STREQ(out, L"\\\\srv1\\myshare");
+
+  len = 64;
+  EXPECT_EQ(
+      DokanNpFormatNetworkName(share_trail, out, &len, WNFMT_ABBREVIATED, 80),
+      Dw(WN_SUCCESS));
+  EXPECT_STREQ(out, L"\\\\srv1\\myshare\\");
+
+  // Validation: NULL RemoteName or Length -> WN_BAD_VALUE; over-cap ->
+  // WN_BAD_NETNAME.
+  len = 64;
+  EXPECT_EQ(DokanNpFormatNetworkName(nullptr, out, &len, 0, 80),
+            Dw(WN_BAD_VALUE));
+  EXPECT_EQ(DokanNpFormatNetworkName(share, out, nullptr, 0, 80),
+            Dw(WN_BAD_VALUE));
+  std::wstring too_long(32768, L'a');
+  len = 64;
+  EXPECT_EQ(DokanNpFormatNetworkName(too_long.data(), out, &len, 0, 80),
+            Dw(WN_BAD_NETNAME));
 }
 
 TEST(NpCoreAddAndCancelConnectionTest, AliasDisambiguationAndValidation) {
   FakeTransport fake;
+  // Intentionally place alias BEFORE primary to verify UNC-keyed operations
+  // skip alias entries regardless of mount table order.
   fake.mounts = {
-      {L"\\\\srv1\\share1", L'M', DOKAN_NP_MOUNT_CANCELABLE, L"M:"},
       {L"\\\\srv1\\share1", L'Y',
        DOKAN_NP_MOUNT_CANCELABLE | DOKAN_NP_MOUNT_ALIAS, L"Y:"},
+      {L"\\\\srv1\\share1", L'M', DOKAN_NP_MOUNT_CANCELABLE, L"M:"},
       {L"\\\\srv1\\locked", L'L', 0, L"L:"},
   };
   DOKAN_NP_TRANSPORT t = fake.MakeTransport();
 
-  // AddConnection: unowned UNC -> WN_BAD_NETNAME (even if M: is connected).
+  // Precedence: bad provider rejected before bad netname; unowned netname
+  // rejected before bad dwType.
   WCHAR m_drive[] = L"M:";
   WCHAR unowned[] = L"\\\\other\\share";
+  WCHAR wrong_prov[] = L"OtherProvider";
   NETRESOURCEW nr{};
   nr.lpLocalName = m_drive;
   nr.lpRemoteName = unowned;
+  nr.lpProvider = wrong_prov;
+  nr.dwType = RESOURCETYPE_PRINT;
+  EXPECT_EQ(DokanNpAddConnection3(&t, nullptr, &nr, nullptr, nullptr, 0),
+            Dw(WN_BAD_PROVIDER));
+  nr.lpProvider = nullptr;
   EXPECT_EQ(DokanNpAddConnection3(&t, nullptr, &nr, nullptr, nullptr, 0),
             Dw(WN_BAD_NETNAME));
+  nr.dwType = RESOURCETYPE_DISK;
 
   // Owned + CONNECT_REDIRECT with empty local name -> WN_NOT_SUPPORTED.
   WCHAR owned[] = L"\\\\srv1\\share1";
@@ -631,15 +734,17 @@ TEST(NpCoreAddAndCancelConnectionTest, AliasDisambiguationAndValidation) {
   EXPECT_EQ(DokanNpAddConnection3(&t, nullptr, &nr, nullptr, nullptr, 0),
             Dw(WN_NOT_SUPPORTED));
 
-  // CancelConnection("Y:") targets alias; CancelConnection("\\srv1\share1")
-  // targets primary!
-  WCHAR y_drive[] = L"y:";
+  // CancelConnection("y:\") with trailing slash targets alias;
+  // CancelConnection("\\srv1\share1\") targets primary even when alias came
+  // first in the table!
+  WCHAR y_drive[] = L"y:\\";
   EXPECT_EQ(DokanNpCancelConnection(&t, y_drive, FALSE), Dw(WN_SUCCESS));
   ASSERT_EQ(fake.cancels.size(), 1u);
   EXPECT_EQ(fake.cancels[0].drive_letter, L'Y');
   EXPECT_NE(fake.cancels[0].flags & DOKAN_NP_MOUNT_ALIAS, 0u);
 
-  EXPECT_EQ(DokanNpCancelConnection(&t, owned, TRUE), Dw(WN_SUCCESS));
+  WCHAR owned_trail[] = L"\\\\srv1\\share1\\";
+  EXPECT_EQ(DokanNpCancelConnection(&t, owned_trail, TRUE), Dw(WN_SUCCESS));
   ASSERT_EQ(fake.cancels.size(), 2u);
   EXPECT_EQ(fake.cancels[1].drive_letter, L'M');
   EXPECT_EQ(fake.cancels[1].flags & DOKAN_NP_MOUNT_ALIAS, 0u);

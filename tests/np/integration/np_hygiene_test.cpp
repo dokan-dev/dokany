@@ -178,22 +178,26 @@ bool ParsePeImports(const std::wstring &path, std::vector<std::string> *imports,
   if (num_dirs > IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT &&
       dirs[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT].VirtualAddress != 0) {
     size_t dimp_off = 0;
-    if (RvaToFileOffset(dirs[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT].VirtualAddress,
-                        sections, fh->NumberOfSections, bytes.size(),
-                        &dimp_off)) {
-      while (dimp_off + sizeof(IMAGE_DELAYLOAD_DESCRIPTOR) <= bytes.size()) {
-        IMAGE_DELAYLOAD_DESCRIPTOR desc{};
-        std::memcpy(&desc, bytes.data() + dimp_off, sizeof(desc));
-        if (desc.DllNameRVA == 0) {
-          break;
-        }
-        std::string dll_name;
-        if (ReadCStringAtRva(bytes, desc.DllNameRVA, sections,
-                             fh->NumberOfSections, &dll_name)) {
-          delay_imports->push_back(dll_name);
-        }
-        dimp_off += sizeof(IMAGE_DELAYLOAD_DESCRIPTOR);
+    if (!RvaToFileOffset(
+            dirs[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT].VirtualAddress, sections,
+            fh->NumberOfSections, bytes.size(), &dimp_off)) {
+      *error_out = "Invalid Delay-Load Import Directory RVA";
+      return false;
+    }
+    while (dimp_off + sizeof(IMAGE_DELAYLOAD_DESCRIPTOR) <= bytes.size()) {
+      IMAGE_DELAYLOAD_DESCRIPTOR desc{};
+      std::memcpy(&desc, bytes.data() + dimp_off, sizeof(desc));
+      if (desc.DllNameRVA == 0) {
+        break;
       }
+      std::string dll_name;
+      if (!ReadCStringAtRva(bytes, desc.DllNameRVA, sections,
+                            fh->NumberOfSections, &dll_name)) {
+        *error_out = "Invalid delay-load import DLL name RVA";
+        return false;
+      }
+      delay_imports->push_back(dll_name);
+      dimp_off += sizeof(IMAGE_DELAYLOAD_DESCRIPTOR);
     }
   }
   return true;
@@ -243,17 +247,28 @@ TEST(HygieneTest, InstalledDokanNpImportsOnlyKernel32) {
                                  k32, "GetSystemWow64DirectoryW"))
                            : nullptr;
 
+  struct Wow64RedirGuard {
+    Wow64RevertFn revert = nullptr;
+    PVOID old_value = nullptr;
+    bool disabled = false;
+    ~Wow64RedirGuard() {
+      if (disabled && revert != nullptr) {
+        revert(old_value);
+      }
+    }
+  };
+
   bool checked_any = false;
   {
-    PVOID old_redir = nullptr;
-    const bool disabled = wow_disable != nullptr && wow_disable(&old_redir);
+    Wow64RedirGuard redir_guard;
+    redir_guard.revert = wow_revert;
+    if (wow_disable != nullptr && wow_disable(&redir_guard.old_value)) {
+      redir_guard.disabled = true;
+    }
     const DWORD attrs = ::GetFileAttributesW(native_path.c_str());
     if (attrs != INVALID_FILE_ATTRIBUTES) {
       AssertDokanNpImportsKernel32Only(native_path);
       checked_any = true;
-    }
-    if (disabled && wow_revert != nullptr) {
-      wow_revert(old_redir);
     }
   }
 
@@ -325,8 +340,11 @@ TEST(HygieneTest, ZeroReleaseOutputDebugStringSpamAcrossWNetCalls) {
   }
 
   const DWORD self_pid = ::GetCurrentProcessId();
+  HANDLE listener_ready = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  ASSERT_NE(listener_ready, nullptr);
   dbwin.listener = std::thread([&]() {
     ::SetEvent(dbwin.buf_ready);
+    ::SetEvent(listener_ready);
     while (!dbwin.stop.load()) {
       const DWORD rc = ::WaitForSingleObject(dbwin.data_ready, 50);
       if (rc == WAIT_OBJECT_0) {
@@ -343,6 +361,8 @@ TEST(HygieneTest, ZeroReleaseOutputDebugStringSpamAcrossWNetCalls) {
       }
     }
   });
+  ::WaitForSingleObject(listener_ready, 5000);
+  ::CloseHandle(listener_ready);
 
   {
     MirrorMount mount;
@@ -353,22 +373,26 @@ TEST(HygieneTest, ZeroReleaseOutputDebugStringSpamAcrossWNetCalls) {
         << WideToUtf8(err);
     WCHAR conn[256]{};
     DWORD conn_len = 256;
-    ::WNetGetConnectionW(mount.drive_name().c_str(), conn, &conn_len);
+    EXPECT_EQ(::WNetGetConnectionW(mount.drive_name().c_str(), conn, &conn_len),
+              static_cast<DWORD>(NO_ERROR));
 
     uint8_t uni_buf[1024]{};
     DWORD uni_sz = sizeof(uni_buf);
-    ::WNetGetUniversalNameW((mount.drive_root() + L"probe.txt").c_str(),
-                            UNIVERSAL_NAME_INFO_LEVEL, uni_buf, &uni_sz);
+    EXPECT_EQ(
+        ::WNetGetUniversalNameW((mount.drive_root() + L"probe.txt").c_str(),
+                                UNIVERSAL_NAME_INFO_LEVEL, uni_buf, &uni_sz),
+        static_cast<DWORD>(NO_ERROR));
 
     HANDLE h = nullptr;
-    if (::WNetOpenEnumW(RESOURCE_GLOBALNET, RESOURCETYPE_ANY, 0, nullptr, &h) ==
-        NO_ERROR) {
-      uint8_t enum_buf[4096]{};
-      DWORD cnt = 0xFFFFFFFF;
-      DWORD esz = sizeof(enum_buf);
-      ::WNetEnumResourceW(h, &cnt, enum_buf, &esz);
-      ::WNetCloseEnum(h);
-    }
+    ASSERT_EQ(
+        ::WNetOpenEnumW(RESOURCE_GLOBALNET, RESOURCETYPE_ANY, 0, nullptr, &h),
+        static_cast<DWORD>(NO_ERROR));
+    uint8_t enum_buf[4096]{};
+    DWORD cnt = 0xFFFFFFFF;
+    DWORD esz = sizeof(enum_buf);
+    const DWORD enum_rc = ::WNetEnumResourceW(h, &cnt, enum_buf, &esz);
+    EXPECT_TRUE(enum_rc == NO_ERROR || enum_rc == ERROR_NO_MORE_ITEMS);
+    ::WNetCloseEnum(h);
 
     std::wstring unc = mount.unc_name();
     WCHAR prov[64]{};
@@ -379,14 +403,17 @@ TEST(HygieneTest, ZeroReleaseOutputDebugStringSpamAcrossWNetCalls) {
     nr.lpProvider = prov;
     LPWSTR sys_part = nullptr;
     DWORD info_sz = sizeof(uni_buf);
-    ::WNetGetResourceInformationW(&nr, uni_buf, &info_sz, &sys_part);
+    EXPECT_EQ(::WNetGetResourceInformationW(&nr, uni_buf, &info_sz, &sys_part),
+              static_cast<DWORD>(NO_ERROR));
     info_sz = sizeof(uni_buf);
-    ::WNetGetResourceParentW(&nr, uni_buf, &info_sz);
+    EXPECT_EQ(::WNetGetResourceParentW(&nr, uni_buf, &info_sz),
+              static_cast<DWORD>(NO_ERROR));
 
     WCHAR fmt[64]{};
     DWORD fmt_len = 64;
-    CallWNetFormatNetworkNameW(prov, unc.data(), fmt, &fmt_len, WNFMT_INENUM,
-                               80);
+    EXPECT_EQ(CallWNetFormatNetworkNameW(prov, unc.data(), fmt, &fmt_len,
+                                         WNFMT_INENUM, 80),
+              static_cast<DWORD>(NO_ERROR));
   }
 
   dbwin.stop.store(true);
@@ -436,14 +463,34 @@ TEST(HygieneTest, RegistryInstallUninstallRoundTrip) {
             ERROR_SUCCESS);
   ::RegCloseKey(order_key);
 
+  auto read_hkcu_order = [&]() -> std::wstring {
+    HKEY k = nullptr;
+    if (::RegOpenKeyExW(
+            hkcu_root,
+            L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order", 0,
+            KEY_QUERY_VALUE, &k) != ERROR_SUCCESS) {
+      return L"";
+    }
+    WCHAR buf[512]{};
+    DWORD sz = sizeof(buf);
+    const DWORD rc = ::RegQueryValueExW(k, L"ProviderOrder", nullptr, nullptr,
+                                        reinterpret_cast<BYTE *>(buf), &sz);
+    ::RegCloseKey(k);
+    return rc == ERROR_SUCCESS ? std::wstring(buf) : L"";
+  };
+
   EXPECT_EQ(DokanNetworkProviderInstallAt(hkcu_root),
             static_cast<DWORD>(ERROR_SUCCESS));
+  EXPECT_EQ(read_hkcu_order(), L"LanmanWorkstation,RDPNP,Dokan2,Dokan3");
   EXPECT_EQ(DokanNetworkProviderInstallAt(hkcu_root),
             static_cast<DWORD>(ERROR_SUCCESS));
+  EXPECT_EQ(read_hkcu_order(), L"LanmanWorkstation,RDPNP,Dokan2,Dokan3");
   EXPECT_EQ(DokanNetworkProviderUninstallAt(hkcu_root),
             static_cast<DWORD>(ERROR_SUCCESS));
+  EXPECT_EQ(read_hkcu_order(), L"LanmanWorkstation,RDPNP,Dokan2");
   EXPECT_EQ(DokanNetworkProviderInstallAt(hkcu_root),
             static_cast<DWORD>(ERROR_SUCCESS));
+  EXPECT_EQ(read_hkcu_order(), L"LanmanWorkstation,RDPNP,Dokan2,Dokan3");
 
   // Live HKLM round-trip only when explicitly requested in VM.
   if (cfg.test_live_registry) {

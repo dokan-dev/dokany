@@ -6,7 +6,7 @@
 #   shard:    all | shard1 | shard2 (validated by run_guest_tests.ps1; default: all)
 #   simulate: none | bugcheck | hang (default: none; crash-capture self-test)
 #
-# <payload_dir> must contain DokanSetup.exe (plus fsx.exe and fstest/dokan_fstest.exe when simulate=none).
+# <payload_dir> must contain DokanSetup.exe (plus fsx.exe, fstest/dokan_fstest.exe, and np/{x64,x86}/dokan_np_test.exe when simulate=none).
 #
 # Environment:
 #   GUEST_TEST_TIMEOUT    Seconds before a running shard is declared hung (default: 1800; 300 for bugcheck, 120 for hang).

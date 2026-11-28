@@ -27,9 +27,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "np_registry.h"
 
+#define DOKAN_NP_SERVICE_NAME L"dokan" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_PROVIDER_KEY                                                  \
-  L"System\\CurrentControlSet\\Services\\doka"                                 \
-  L"n" DOKAN_MAJOR_API_VERSION L"\\NetworkProvider"
+  L"System\\CurrentControlSet\\Services"                                       \
+  L"\\" DOKAN_NP_SERVICE_NAME L"\\NetworkProvider"
 #define DOKAN_NP_DEVICE_NAME                                                   \
   L"\\Device\\DokanRedirector" DOKAN_MAJOR_API_VERSION
 #define DOKAN_NP_PATH                                                          \
@@ -40,13 +41,14 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
   L"System\\CurrentControlSet\\Control\\NetworkProvider\\HwOrder"
 #define DOKAN_NP_ORDER_VALUE L"ProviderOrder"
 
-// Largest ProviderOrder value accepted, in bytes.
+// Largest ProviderOrder value accepted, in bytes and WCHARs.
 #define DOKAN_NP_MAX_ORDER_BYTES (1024 * 1024)
+#define DOKAN_NP_MAX_ORDER_CHARS (DOKAN_NP_MAX_ORDER_BYTES / sizeof(WCHAR))
 
-static SIZE_T NpRegLength(LPCWSTR Text) {
+static SIZE_T NpRegBoundedLength(LPCWSTR Text, SIZE_T Max) {
   SIZE_T length = 0;
   if (Text != NULL) {
-    while (Text[length] != L'\0') {
+    while (length < Max && Text[length] != L'\0') {
       ++length;
     }
   }
@@ -65,18 +67,23 @@ static VOID NpRegTrim(LPCWSTR *Token, SIZE_T *Length) {
   }
 }
 
-static BOOL NpRegTokenEquals(LPCWSTR Token, SIZE_T Length, LPCWSTR Provider,
-                             SIZE_T ProviderLength) {
-  NpRegTrim(&Token, &Length);
+static BOOL NpRegTrimmedEquals(LPCWSTR Token, SIZE_T Length, LPCWSTR Provider,
+                               SIZE_T ProviderLength) {
   return Length > 0 && Length == ProviderLength &&
          CompareStringOrdinal(Token, (int)Length, Provider, (int)ProviderLength,
                               /*bIgnoreCase=*/TRUE) == CSTR_EQUAL;
 }
 
+static BOOL NpRegTokenEquals(LPCWSTR Token, SIZE_T Length, LPCWSTR Provider,
+                             SIZE_T ProviderLength) {
+  NpRegTrim(&Token, &Length);
+  return NpRegTrimmedEquals(Token, Length, Provider, ProviderLength);
+}
+
 // A provider name is a single non-blank token.
 static BOOL NpRegIsValidProvider(LPCWSTR Provider, SIZE_T *Length) {
-  SIZE_T length = NpRegLength(Provider);
-  if (length == 0 || length > DOKAN_NP_MAX_ORDER_BYTES / sizeof(WCHAR)) {
+  SIZE_T length = NpRegBoundedLength(Provider, DOKAN_NP_MAX_ORDER_CHARS + 1);
+  if (length == 0 || length > DOKAN_NP_MAX_ORDER_CHARS) {
     return FALSE;
   }
   for (SIZE_T i = 0; i < length; ++i) {
@@ -119,7 +126,10 @@ DWORD DokanProviderOrderAdd(LPCWSTR Order, LPCWSTR Provider, LPWSTR *NewOrder) {
   if (Order == NULL) {
     Order = L"";
   }
-  SIZE_T orderLength = NpRegLength(Order);
+  SIZE_T orderLength = NpRegBoundedLength(Order, DOKAN_NP_MAX_ORDER_CHARS + 1);
+  if (orderLength > DOKAN_NP_MAX_ORDER_CHARS) {
+    return ERROR_INVALID_DATA;
+  }
 
   SIZE_T start = 0;
   for (SIZE_T i = 0; i <= orderLength; ++i) {
@@ -166,7 +176,10 @@ DWORD DokanProviderOrderRemove(LPCWSTR Order, LPCWSTR Provider,
   if (Order == NULL) {
     return ERROR_SUCCESS;
   }
-  SIZE_T orderLength = NpRegLength(Order);
+  SIZE_T orderLength = NpRegBoundedLength(Order, DOKAN_NP_MAX_ORDER_CHARS + 1);
+  if (orderLength > DOKAN_NP_MAX_ORDER_CHARS) {
+    return ERROR_INVALID_DATA;
+  }
   LPWSTR result = NpRegAllocString(orderLength);
   if (result == NULL) {
     return ERROR_NOT_ENOUGH_MEMORY;
@@ -178,12 +191,11 @@ DWORD DokanProviderOrderRemove(LPCWSTR Order, LPCWSTR Provider,
   SIZE_T start = 0;
   for (SIZE_T i = 0; i <= orderLength; ++i) {
     if (i == orderLength || Order[i] == L',') {
-      LPCWSTR token = Order + start;
-      SIZE_T tokenLength = i - start;
-      LPCWSTR trimmed = token;
-      SIZE_T trimmedLength = tokenLength;
+      LPCWSTR trimmed = Order + start;
+      SIZE_T trimmedLength = i - start;
       NpRegTrim(&trimmed, &trimmedLength);
-      if (NpRegTokenEquals(token, tokenLength, Provider, providerLength)) {
+      if (NpRegTrimmedEquals(trimmed, trimmedLength, Provider,
+                             providerLength)) {
         found = TRUE;
       } else if (trimmedLength > 0) {
         if (position > 0) {
@@ -253,11 +265,36 @@ static DWORD NpRegReadOrder(HKEY Key, LPWSTR *Value, DWORD *Type) {
   return ERROR_MORE_DATA;
 }
 
-static DWORD NpRegUpdateOrder(HKEY Root, LPCWSTR SubKey, BOOL Add,
-                              BOOL KeyRequired) {
-  HKEY key = NULL;
-  DWORD error =
-      RegOpenKeyExW(Root, SubKey, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &key);
+static DWORD NpRegSetString(HKEY Key, LPCWSTR Name, DWORD Type, LPCWSTR Value) {
+  SIZE_T length = NpRegBoundedLength(Value, DOKAN_NP_MAX_ORDER_CHARS + 1);
+  if (length > DOKAN_NP_MAX_ORDER_CHARS) {
+    return ERROR_INVALID_DATA;
+  }
+  return RegSetValueExW(Key, Name, 0, Type, (const BYTE *)Value,
+                        (DWORD)((length + 1) * sizeof(WCHAR)));
+}
+
+typedef struct _NP_ORDER_PLAN {
+  HKEY Key;
+  LPWSTR NewOrder;
+  DWORD Type;
+} NP_ORDER_PLAN;
+
+static VOID NpOrderPlanClose(NP_ORDER_PLAN *Plan) {
+  DokanProviderOrderFree(Plan->NewOrder);
+  Plan->NewOrder = NULL;
+  if (Plan->Key != NULL) {
+    RegCloseKey(Plan->Key);
+    Plan->Key = NULL;
+  }
+}
+
+static DWORD NpOrderPlanPrepare(HKEY Root, LPCWSTR SubKey, BOOL Add,
+                                BOOL KeyRequired, NP_ORDER_PLAN *Plan) {
+  ZeroMemory(Plan, sizeof(*Plan));
+  Plan->Type = REG_SZ;
+  DWORD error = RegOpenKeyExW(Root, SubKey, 0, KEY_QUERY_VALUE | KEY_SET_VALUE,
+                              &Plan->Key);
   if (error == ERROR_FILE_NOT_FOUND && !KeyRequired) {
     return ERROR_SUCCESS;
   }
@@ -266,32 +303,29 @@ static DWORD NpRegUpdateOrder(HKEY Root, LPCWSTR SubKey, BOOL Add,
   }
 
   LPWSTR order = NULL;
-  LPWSTR newOrder = NULL;
-  DWORD type = REG_SZ;
-  error = NpRegReadOrder(key, &order, &type);
+  error = NpRegReadOrder(Plan->Key, &order, &Plan->Type);
   if (error == ERROR_FILE_NOT_FOUND) {
     // A missing list is an empty list.
     error = ERROR_SUCCESS;
   }
   if (error == ERROR_SUCCESS) {
-    error = Add ? DokanProviderOrderAdd(order, DOKAN_NP_NAME, &newOrder)
-                : DokanProviderOrderRemove(order, DOKAN_NP_NAME, &newOrder);
+    error =
+        Add ? DokanProviderOrderAdd(order, DOKAN_NP_NAME, &Plan->NewOrder)
+            : DokanProviderOrderRemove(order, DOKAN_NP_NAME, &Plan->NewOrder);
   }
-  if (error == ERROR_SUCCESS && newOrder != NULL) {
-    error = RegSetValueExW(
-        key, DOKAN_NP_ORDER_VALUE, 0, type, (const BYTE *)newOrder,
-        (DWORD)((NpRegLength(newOrder) + 1) * sizeof(WCHAR)));
-  }
-
-  DokanProviderOrderFree(newOrder);
   DokanProviderOrderFree(order);
-  RegCloseKey(key);
+  if (error != ERROR_SUCCESS) {
+    NpOrderPlanClose(Plan);
+  }
   return error;
 }
 
-static DWORD NpRegSetString(HKEY Key, LPCWSTR Name, DWORD Type, LPCWSTR Value) {
-  return RegSetValueExW(Key, Name, 0, Type, (const BYTE *)Value,
-                        (DWORD)((NpRegLength(Value) + 1) * sizeof(WCHAR)));
+static DWORD NpOrderPlanCommit(const NP_ORDER_PLAN *Plan) {
+  if (Plan->Key == NULL || Plan->NewOrder == NULL) {
+    return ERROR_SUCCESS;
+  }
+  return NpRegSetString(Plan->Key, DOKAN_NP_ORDER_VALUE, Plan->Type,
+                        Plan->NewOrder);
 }
 
 DWORD DokanNetworkProviderInstallAt(HKEY Root) {
@@ -299,36 +333,55 @@ DWORD DokanNetworkProviderInstallAt(HKEY Root) {
     return ERROR_INVALID_HANDLE;
   }
 
-  HKEY key = NULL;
-  DWORD error =
-      RegCreateKeyExW(Root, DOKAN_NP_PROVIDER_KEY, 0, NULL,
-                      REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &key, NULL);
+  // Validate both Order and HwOrder before mutating any key so a malformed
+  // value in either list leaves the registry untouched.
+  NP_ORDER_PLAN orderPlan;
+  NP_ORDER_PLAN hwOrderPlan;
+  ZeroMemory(&hwOrderPlan, sizeof(hwOrderPlan));
+  DWORD error = NpOrderPlanPrepare(Root, DOKAN_NP_ORDER_KEY, /*Add=*/TRUE,
+                                   /*KeyRequired=*/TRUE, &orderPlan);
+  if (error == ERROR_SUCCESS) {
+    error = NpOrderPlanPrepare(Root, DOKAN_NP_HWORDER_KEY, /*Add=*/TRUE,
+                               /*KeyRequired=*/FALSE, &hwOrderPlan);
+  }
   if (error != ERROR_SUCCESS) {
+    NpOrderPlanClose(&hwOrderPlan);
+    NpOrderPlanClose(&orderPlan);
     return error;
   }
-  DWORD providerClass = WN_NETWORK_CLASS;
-  error = NpRegSetString(key, L"DeviceName", REG_SZ, DOKAN_NP_DEVICE_NAME);
+
+  HKEY key = NULL;
+  error =
+      RegCreateKeyExW(Root, DOKAN_NP_PROVIDER_KEY, 0, NULL,
+                      REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &key, NULL);
   if (error == ERROR_SUCCESS) {
-    error = NpRegSetString(key, L"Name", REG_SZ, DOKAN_NP_NAME);
+    DWORD providerClass = WN_NETWORK_CLASS;
+    error = NpRegSetString(key, L"DeviceName", REG_SZ, DOKAN_NP_DEVICE_NAME);
+    if (error == ERROR_SUCCESS) {
+      error = NpRegSetString(key, L"Name", REG_SZ, DOKAN_NP_NAME);
+    }
+    if (error == ERROR_SUCCESS) {
+      error =
+          NpRegSetString(key, L"ProviderPath", REG_EXPAND_SZ, DOKAN_NP_PATH);
+    }
+    if (error == ERROR_SUCCESS) {
+      error =
+          RegSetValueExW(key, L"Class", 0, REG_DWORD,
+                         (const BYTE *)&providerClass, sizeof(providerClass));
+    }
+    RegCloseKey(key);
   }
-  if (error == ERROR_SUCCESS) {
-    error = NpRegSetString(key, L"ProviderPath", REG_EXPAND_SZ, DOKAN_NP_PATH);
-  }
-  if (error == ERROR_SUCCESS) {
-    error = RegSetValueExW(key, L"Class", 0, REG_DWORD,
-                           (const BYTE *)&providerClass, sizeof(providerClass));
-  }
-  RegCloseKey(key);
 
   // The provider key exists before MPR can see the name in the order lists.
   if (error == ERROR_SUCCESS) {
-    error = NpRegUpdateOrder(Root, DOKAN_NP_ORDER_KEY, /*Add=*/TRUE,
-                             /*KeyRequired=*/TRUE);
+    error = NpOrderPlanCommit(&orderPlan);
   }
   if (error == ERROR_SUCCESS) {
-    error = NpRegUpdateOrder(Root, DOKAN_NP_HWORDER_KEY, /*Add=*/TRUE,
-                             /*KeyRequired=*/FALSE);
+    error = NpOrderPlanCommit(&hwOrderPlan);
   }
+
+  NpOrderPlanClose(&hwOrderPlan);
+  NpOrderPlanClose(&orderPlan);
   return error;
 }
 
@@ -337,18 +390,32 @@ DWORD DokanNetworkProviderUninstallAt(HKEY Root) {
     return ERROR_INVALID_HANDLE;
   }
 
-  // The name leaves the order lists before the provider key goes away.
-  DWORD error = NpRegUpdateOrder(Root, DOKAN_NP_ORDER_KEY, /*Add=*/FALSE,
-                                 /*KeyRequired=*/FALSE);
-  if (error == ERROR_SUCCESS) {
-    error = NpRegUpdateOrder(Root, DOKAN_NP_HWORDER_KEY, /*Add=*/FALSE,
-                             /*KeyRequired=*/FALSE);
+  // The name leaves the primary Order list before the provider key goes away.
+  // A corrupt optional HwOrder value is still reported, without blocking
+  // cleanup of the primary Order list and NetworkProvider key.
+  NP_ORDER_PLAN orderPlan;
+  DWORD error = NpOrderPlanPrepare(Root, DOKAN_NP_ORDER_KEY, /*Add=*/FALSE,
+                                   /*KeyRequired=*/FALSE, &orderPlan);
+  if (error != ERROR_SUCCESS) {
+    return error;
+  }
+
+  NP_ORDER_PLAN hwOrderPlan;
+  DWORD hwError = NpOrderPlanPrepare(Root, DOKAN_NP_HWORDER_KEY, /*Add=*/FALSE,
+                                     /*KeyRequired=*/FALSE, &hwOrderPlan);
+
+  error = NpOrderPlanCommit(&orderPlan);
+  if (error == ERROR_SUCCESS && hwError == ERROR_SUCCESS) {
+    hwError = NpOrderPlanCommit(&hwOrderPlan);
   }
   if (error == ERROR_SUCCESS) {
-    error = RegDeleteKeyW(Root, DOKAN_NP_PROVIDER_KEY);
-    if (error == ERROR_FILE_NOT_FOUND) {
-      error = ERROR_SUCCESS;
+    DWORD deleteError = RegDeleteKeyW(Root, DOKAN_NP_PROVIDER_KEY);
+    if (deleteError != ERROR_SUCCESS && deleteError != ERROR_FILE_NOT_FOUND) {
+      error = deleteError;
     }
   }
-  return error;
+
+  NpOrderPlanClose(&hwOrderPlan);
+  NpOrderPlanClose(&orderPlan);
+  return error != ERROR_SUCCESS ? error : hwError;
 }

@@ -250,7 +250,7 @@ TEST(NpTransportLiveMappingTest,
                               alignof(DOKAN_MOUNT_POINT_INFO), 0);
   ASSERT_TRUE(guard_arr.valid());
   auto *guarded_info = static_cast<DOKAN_MOUNT_POINT_INFO *>(guard_arr.data());
-  guarded_info->Type = DOKAN_NETWORK_FILE_SYSTEM;
+  guarded_info->Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   wcscpy_s(guarded_info->MountPoint, L"\\DosDevices\\N:");
   // Fill all 64 WCHARs of UNCName AND all 64 WCHARs of DeviceName with NO NUL
   // terminator so an unbounded wcslen(UNCName) visibly overruns into
@@ -294,11 +294,11 @@ TEST(NpTransportLiveMappingTest,
   EXPECT_TRUE(guard_arr.CheckCanaries());
 
   // Multi-entry synthetic array covering all live mapping rules.
-  std::vector<DOKAN_MOUNT_POINT_INFO> infos(6);
+  std::vector<DOKAN_MOUNT_POINT_INFO> infos(7);
   std::memset(infos.data(), 0, infos.size() * sizeof(DOKAN_MOUNT_POINT_INFO));
 
   // 0: 63-char NUL-terminated UNC, global session (-1), lowercase \dosdevices\z:.
-  infos[0].Type = DOKAN_NETWORK_FILE_SYSTEM;
+  infos[0].Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   wcscpy_s(infos[0].MountPoint, L"\\dosdevices\\z:");
   for (size_t i = 0; i < 63; ++i) {
     infos[0].UNCName[i] = i < 6 ? L"\\srv0\\"[i] : L'x';
@@ -308,38 +308,46 @@ TEST(NpTransportLiveMappingTest,
   infos[0].MountOptions = 0;
 
   // 1: Folder mount \DosDevices\C:\mnt\x -> DriveLetter MUST be 0 (not 'C'!).
-  infos[1].Type = DOKAN_NETWORK_FILE_SYSTEM;
+  infos[1].Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   wcscpy_s(infos[1].MountPoint, L"\\DosDevices\\C:\\mnt\\x");
   wcscpy_s(infos[1].UNCName, L"\\srv1\\folder_mount");
   infos[1].SessionId = 7;
   infos[1].MountOptions = DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
 
   // 2: Mismatched session (SessionId = 99 vs CurrentSessionId = 7) -> excluded.
-  infos[2].Type = DOKAN_NETWORK_FILE_SYSTEM;
+  infos[2].Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   wcscpy_s(infos[2].MountPoint, L"\\DosDevices\\Y:");
   wcscpy_s(infos[2].UNCName, L"\\srv2\\other_session");
   infos[2].SessionId = 99;
   infos[2].MountOptions = DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
 
   // 3: Disk-mode mount (empty UNCName) -> excluded.
-  infos[3].Type = DOKAN_DISK_FILE_SYSTEM;
+  infos[3].Type = FILE_DEVICE_DISK_FILE_SYSTEM;
   wcscpy_s(infos[3].MountPoint, L"\\DosDevices\\D:");
   infos[3].UNCName[0] = L'\0';
   infos[3].SessionId = static_cast<ULONG>(-1);
 
   // 4: Driveless / empty MountPoint with valid UNC -> kept with DriveLetter=0.
-  infos[4].Type = DOKAN_NETWORK_FILE_SYSTEM;
+  infos[4].Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   infos[4].MountPoint[0] = L'\0';
   wcscpy_s(infos[4].UNCName, L"\\srv3\\driveless");
   infos[4].SessionId = 7;
   infos[4].MountOptions = 0;
 
   // 5: Standard matching session drive mount with unmount enabled.
-  infos[5].Type = DOKAN_NETWORK_FILE_SYSTEM;
+  infos[5].Type = FILE_DEVICE_NETWORK_FILE_SYSTEM;
   wcscpy_s(infos[5].MountPoint, L"\\DosDevices\\M:");
   wcscpy_s(infos[5].UNCName, L"\\srv1\\share1");
   infos[5].SessionId = 7;
   infos[5].MountOptions = DOKAN_EVENT_ENABLE_NETWORK_UNMOUNT;
+
+  // 6: Disk-mode mount that still carries a non-empty UNCName (folder mount
+  // where dokan/dokan.c cleared DOKAN_OPTION_NETWORK) -> MUST be excluded.
+  infos[6].Type = FILE_DEVICE_DISK_FILE_SYSTEM;
+  wcscpy_s(infos[6].MountPoint, L"\\DosDevices\\C:\\mnt\\disk_folder");
+  wcscpy_s(infos[6].UNCName, L"\\srv_disk\\folder");
+  infos[6].SessionId = 7;
+  infos[6].MountOptions = 0;
 
   DOKAN_NP_MOUNT_TABLE *table = nullptr;
   ASSERT_EQ(DokanNpTableFromMountPointInfo(

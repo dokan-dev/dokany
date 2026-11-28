@@ -22,9 +22,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "np_mount_table.h"
 
-// Upper bounds keeping every size computation far away from overflow.
-#define DOKAN_NP_MAX_NAME_LENGTH 32767
-#define DOKAN_NP_MAX_ENTRIES 4096
+#include "np_util.h"
 
 #define DOKAN_NP_KNOWN_FLAGS (DOKAN_NP_MOUNT_CANCELABLE | DOKAN_NP_MOUNT_ALIAS)
 
@@ -53,12 +51,6 @@ static PVOID NpAlloc(SIZE_T Size) {
 static VOID NpFree(PVOID Memory) {
   if (Memory != NULL) {
     HeapFree(GetProcessHeap(), 0, Memory);
-  }
-}
-
-static VOID NpCopyChars(LPWSTR Destination, LPCWSTR Source, SIZE_T Length) {
-  for (SIZE_T i = 0; i < Length; ++i) {
-    Destination[i] = Source[i];
   }
 }
 
@@ -146,6 +138,22 @@ static BOOL NpNormalizeUncName(LPCWSTR UncName, SIZE_T UncNameLength,
   return TRUE;
 }
 
+static DWORD NpBuilderGrow(DOKAN_NP_TABLE_BUILDER *Builder) {
+  ULONG capacity = Builder->Capacity == 0 ? 8 : Builder->Capacity * 2;
+  DOKAN_NP_PENDING_MOUNT *entries = (DOKAN_NP_PENDING_MOUNT *)NpAlloc(
+      (SIZE_T)capacity * sizeof(DOKAN_NP_PENDING_MOUNT));
+  if (entries == NULL) {
+    return ERROR_NOT_ENOUGH_MEMORY;
+  }
+  for (ULONG i = 0; i < Builder->Count; ++i) {
+    entries[i] = Builder->Entries[i];
+  }
+  NpFree(Builder->Entries);
+  Builder->Entries = entries;
+  Builder->Capacity = capacity;
+  return ERROR_SUCCESS;
+}
+
 DWORD DokanNpTableBuilderAdd(DOKAN_NP_TABLE_BUILDER *Builder, LPCWSTR UncName,
                              SIZE_T UncNameLength, WCHAR DriveLetter,
                              ULONG Flags, LPCWSTR TransportKey,
@@ -162,10 +170,8 @@ DWORD DokanNpTableBuilderAdd(DOKAN_NP_TABLE_BUILDER *Builder, LPCWSTR UncName,
     return ERROR_INVALID_NAME;
   }
 
-  if (DriveLetter >= L'a' && DriveLetter <= L'z') {
-    DriveLetter = (WCHAR)(DriveLetter - L'a' + L'A');
-  }
-  if (DriveLetter != 0 && (DriveLetter < L'A' || DriveLetter > L'Z')) {
+  DriveLetter = NpToUpperAscii(DriveLetter);
+  if (DriveLetter != 0 && !NpIsAsciiLetter(DriveLetter)) {
     return ERROR_INVALID_NAME;
   }
   if ((Flags & ~DOKAN_NP_KNOWN_FLAGS) != 0) {
@@ -182,18 +188,10 @@ DWORD DokanNpTableBuilderAdd(DOKAN_NP_TABLE_BUILDER *Builder, LPCWSTR UncName,
   }
 
   if (Builder->Count == Builder->Capacity) {
-    ULONG capacity = Builder->Capacity == 0 ? 8 : Builder->Capacity * 2;
-    DOKAN_NP_PENDING_MOUNT *entries = (DOKAN_NP_PENDING_MOUNT *)NpAlloc(
-        (SIZE_T)capacity * sizeof(DOKAN_NP_PENDING_MOUNT));
-    if (entries == NULL) {
-      return ERROR_NOT_ENOUGH_MEMORY;
+    DWORD growError = NpBuilderGrow(Builder);
+    if (growError != ERROR_SUCCESS) {
+      return growError;
     }
-    for (ULONG i = 0; i < Builder->Count; ++i) {
-      entries[i] = Builder->Entries[i];
-    }
-    NpFree(Builder->Entries);
-    Builder->Entries = entries;
-    Builder->Capacity = capacity;
   }
 
   // Both lengths are bounded by DOKAN_NP_MAX_NAME_LENGTH.

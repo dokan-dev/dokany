@@ -254,8 +254,20 @@ bool RunScheduledProbeTask(const std::wstring &task_name,
     ::Sleep(150);
   }
 
+  // Capture task state and stop any still-running task before TaskGuard deletes
+  // it.
+  DWORD q_code = 0;
+  std::wstring q_out;
+  RunProcessCapture(L"schtasks.exe /Query /TN \"" + task_name +
+                        L"\" /V /FO LIST",
+                    10000, &q_code, &q_out);
+  DWORD end_code = 0;
+  std::wstring end_out;
+  RunProcessCapture(L"schtasks.exe /End /TN \"" + task_name + L"\"", 10000,
+                    &end_code, &end_out);
   ::DeleteFileW(out_path.c_str());
-  *diag_out = L"Timed out waiting for probe output file " + out_path;
+  *diag_out = L"Timed out waiting for probe output file " + out_path +
+              L"\nTask state:\n" + q_out;
   return false;
 }
 
@@ -264,6 +276,12 @@ TEST(SessionIsolationTest,
   if (!IsProcessElevated()) {
     GTEST_SKIP() << "Elevated rights required for Scheduled Task cross-session "
                     "probes";
+  }
+
+  const DWORD my_session = GetCurrentProcessSessionId();
+  if (my_session == 0) {
+    GTEST_SKIP() << "Already running in Session 0; cannot verify Session 1 vs "
+                    "Session 0 isolation";
   }
 
   MirrorMount session_mount;
@@ -291,31 +309,25 @@ TEST(SessionIsolationTest,
         static_cast<DWORD>(NO_ERROR));
   }
 
-  const DWORD my_session = GetCurrentProcessSessionId();
-  if (my_session == 0) {
-    GTEST_SKIP() << "Already running in Session 0; cannot verify Session 1 vs "
-                    "Session 0 isolation";
-  }
-
   const std::wstring probe_dir = GetSharedProbeDir();
   struct ProbeDirGuard {
     std::wstring dir;
-    ~ProbeDirGuard() { ::RemoveDirectoryW(dir.c_str()); }
+    ~ProbeDirGuard() { DeleteDirectoryRecursive(dir); }
   } dir_guard{probe_dir};
 
-  // Session 0 (NT AUTHORITY\SYSTEM) must NOT see the /c per-session mount,
-  // and MUST see the global mount.
+  // Session 0 (SYSTEM, locale-neutral for schtasks /RU) must NOT see the /c
+  // per-session mount, and MUST see the global mount.
   const std::wstring pid_str = std::to_wstring(::GetCurrentProcessId());
   std::wstring diag;
   EXPECT_TRUE(RunScheduledProbeTask(
-      L"DokanNpProbeSysHidden_" + pid_str, probe_dir, L"NT AUTHORITY\\SYSTEM",
-      L"", session_mount.drive_name(), session_mount.unc_name(),
+      L"DokanNpProbeSysHidden_" + pid_str, probe_dir, L"SYSTEM", L"",
+      session_mount.drive_name(), session_mount.unc_name(),
       /*expect_visible=*/false, &diag))
       << WideToUtf8(diag);
 
   EXPECT_TRUE(RunScheduledProbeTask(
-      L"DokanNpProbeSysGlobal_" + pid_str, probe_dir, L"NT AUTHORITY\\SYSTEM",
-      L"", global_mount.drive_name(), global_mount.unc_name(),
+      L"DokanNpProbeSysGlobal_" + pid_str, probe_dir, L"SYSTEM", L"",
+      global_mount.drive_name(), global_mount.unc_name(),
       /*expect_visible=*/true, &diag))
       << WideToUtf8(diag);
 

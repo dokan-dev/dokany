@@ -24,16 +24,16 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <npapi.h>
 
-// Longest name accepted from callers, in WCHARs. Keeps every size computation
-// far away from overflow.
-#define NP_MAX_NAME_LENGTH 32767
+#include "np_util.h"
 
 #define NP_PROVIDER_NAME_LENGTH (ARRAYSIZE(DOKAN_NP_NAME) - 1)
 
 // Kind of the items of an enumeration.
-#define NP_ITEM_SERVER 1
-#define NP_ITEM_MOUNT 2
-#define NP_ITEM_CONNECTION 3
+typedef enum _NP_ITEM_KIND {
+  NP_ITEM_SERVER = 1,
+  NP_ITEM_MOUNT = 2,
+  NP_ITEM_CONNECTION = 3
+} NP_ITEM_KIND;
 
 // Remote name supplied by a caller, validated by NpParseRemoteName.
 typedef struct _NP_REMOTE_NAME {
@@ -50,6 +50,7 @@ typedef struct _NP_RESOURCE {
   DWORD Type;
   DWORD DisplayType;
   DWORD Usage;
+  WCHAR LocalNameBuffer[3];
   LPCWSTR LocalName;
   SIZE_T LocalNameLength;
   LPCWSTR RemoteName;
@@ -62,30 +63,12 @@ typedef struct _NP_RESOURCE {
 // entries to return.
 typedef struct _NP_ENUM {
   DOKAN_NP_MOUNT_TABLE *Table;
-  ULONG Kind;
+  NP_ITEM_KIND Kind;
   DWORD Scope;
   ULONG Next;
   ULONG ItemCount;
   ULONG Items[ANYSIZE_ARRAY];
 } NP_ENUM;
-
-static SIZE_T NpLength(LPCWSTR Text, SIZE_T Max) {
-  SIZE_T length = 0;
-  if (Text == NULL) {
-    return 0;
-  }
-  while (length < Max && Text[length] != L'\0') {
-    ++length;
-  }
-  return length;
-}
-
-static VOID NpCopyChars(LPWSTR Destination, LPCWSTR Source, SIZE_T Length) {
-  // Forward copy: also correct when Destination <= Source overlap.
-  for (SIZE_T i = 0; i < Length; ++i) {
-    Destination[i] = Source[i];
-  }
-}
 
 static BOOL NpEqualNoCase(LPCWSTR Left, SIZE_T LeftLength, LPCWSTR Right,
                           SIZE_T RightLength) {
@@ -95,22 +78,14 @@ static BOOL NpEqualNoCase(LPCWSTR Left, SIZE_T LeftLength, LPCWSTR Right,
   if (LeftLength == 0) {
     return TRUE;
   }
-  // Both lengths are bounded by NP_MAX_NAME_LENGTH.
+  // Both lengths are bounded by DOKAN_NP_MAX_NAME_LENGTH.
   return CompareStringOrdinal(Left, (int)LeftLength, Right, (int)RightLength,
                               /*bIgnoreCase=*/TRUE) == CSTR_EQUAL;
 }
 
-static BOOL NpIsAsciiLetter(WCHAR Char) {
-  return (Char >= L'a' && Char <= L'z') || (Char >= L'A' && Char <= L'Z');
-}
-
-static WCHAR NpToUpperAscii(WCHAR Char) {
-  return (Char >= L'a' && Char <= L'z') ? (WCHAR)(Char - L'a' + L'A') : Char;
-}
-
 // Returns the uppercase drive letter of "X:" (or "X:\" when allowed), else 0.
 static WCHAR NpParseDriveName(LPCWSTR Name, BOOL AllowTrailingBackslash) {
-  SIZE_T length = NpLength(Name, 4);
+  SIZE_T length = NpBoundedLength(Name, 4);
   if ((length == 2 ||
        (length == 3 && AllowTrailingBackslash && Name[2] == L'\\')) &&
       NpIsAsciiLetter(Name[0]) && Name[1] == L':') {
@@ -122,8 +97,8 @@ static WCHAR NpParseDriveName(LPCWSTR Name, BOOL AllowTrailingBackslash) {
 // Accepts "\\server[\...]" with exactly two leading backslashes and strips
 // trailing backslashes.
 static BOOL NpParseRemoteName(LPCWSTR Name, NP_REMOTE_NAME *Remote) {
-  SIZE_T length = NpLength(Name, NP_MAX_NAME_LENGTH + 1);
-  if (length < 3 || length > NP_MAX_NAME_LENGTH || Name[0] != L'\\' ||
+  SIZE_T length = NpBoundedLength(Name, DOKAN_NP_MAX_NAME_LENGTH + 1);
+  if (length < 3 || length > DOKAN_NP_MAX_NAME_LENGTH || Name[0] != L'\\' ||
       Name[1] != L'\\' || Name[2] == L'\\') {
     return FALSE;
   }
@@ -141,7 +116,7 @@ static BOOL NpParseRemoteName(LPCWSTR Name, NP_REMOTE_NAME *Remote) {
 }
 
 static BOOL NpIsProviderName(LPCWSTR Name) {
-  return NpEqualNoCase(Name, NpLength(Name, NP_PROVIDER_NAME_LENGTH + 1),
+  return NpEqualNoCase(Name, NpBoundedLength(Name, NP_PROVIDER_NAME_LENGTH + 1),
                        DOKAN_NP_NAME, NP_PROVIDER_NAME_LENGTH);
 }
 
@@ -225,17 +200,7 @@ NpFindPrimaryMount(const DOKAN_NP_MOUNT_TABLE *Table,
 
 static DWORD NpQueryMounts(const DOKAN_NP_TRANSPORT *Transport,
                            DOKAN_NP_MOUNT_TABLE **Table) {
-  *Table = NULL;
-  if (Transport == NULL || Transport->QueryMounts == NULL) {
-    return WN_NO_NETWORK;
-  }
-  DWORD status = Transport->QueryMounts(Transport->Context, Table);
-  if (status != WN_SUCCESS) {
-    DokanNpTableFree(*Table);
-    *Table = NULL;
-    return status;
-  }
-  return *Table != NULL ? WN_SUCCESS : WN_OUT_OF_MEMORY;
+  return DokanNpTransportQueryMounts(Transport, Table);
 }
 
 static SIZE_T NpStringBytes(LPCWSTR Text, SIZE_T Length) {
@@ -305,16 +270,14 @@ static VOID NpDescribeMount(const DOKAN_NP_MOUNT *Mount, DWORD Scope,
   Resource->ProviderLength = NP_PROVIDER_NAME_LENGTH;
 }
 
-// LocalNameBuffer must outlive Resource.
 static VOID NpDescribeConnection(const DOKAN_NP_MOUNT *Mount,
-                                 WCHAR LocalNameBuffer[3],
                                  NP_RESOURCE *Resource) {
   NpDescribeMount(Mount, RESOURCE_CONNECTED, Resource);
   if (Mount->DriveLetter != 0) {
-    LocalNameBuffer[0] = Mount->DriveLetter;
-    LocalNameBuffer[1] = L':';
-    LocalNameBuffer[2] = L'\0';
-    Resource->LocalName = LocalNameBuffer;
+    Resource->LocalNameBuffer[0] = Mount->DriveLetter;
+    Resource->LocalNameBuffer[1] = L':';
+    Resource->LocalNameBuffer[2] = L'\0';
+    Resource->LocalName = Resource->LocalNameBuffer;
     Resource->LocalNameLength = 2;
   }
 }
@@ -416,7 +379,6 @@ DWORD DokanNpAddConnection3(const DOKAN_NP_TRANSPORT *Transport, HWND Owner,
 
   const DOKAN_NP_MOUNT *target = NpFindPrimaryMount(table, &remote);
   LPCWSTR localName = NetResource->lpLocalName;
-  WCHAR driveLetter = 0;
   if (target == NULL) {
     status = WN_BAD_NETNAME;
   } else if (!NpIsDiskType(NetResource->dwType)) {
@@ -424,16 +386,16 @@ DWORD DokanNpAddConnection3(const DOKAN_NP_TRANSPORT *Transport, HWND Owner,
   } else if (localName == NULL || localName[0] == L'\0') {
     // The share is already reachable through its UNC name.
     status = (Flags & CONNECT_REDIRECT) ? WN_NOT_SUPPORTED : WN_SUCCESS;
-  } else if ((driveLetter = NpParseDriveName(localName,
-                                             /*AllowTrailingBackslash=*/
-                                             FALSE)) == 0) {
-    status = WN_BAD_LOCALNAME;
-  } else if (NpFindDrive(table, driveLetter) != NULL) {
-    status = WN_ALREADY_CONNECTED;
-  } else if (Transport->AddDriveAlias == NULL) {
-    status = WN_NOT_SUPPORTED;
   } else {
-    status = Transport->AddDriveAlias(Transport->Context, target, driveLetter);
+    WCHAR driveLetter =
+        NpParseDriveName(localName, /*AllowTrailingBackslash=*/FALSE);
+    if (driveLetter == 0) {
+      status = WN_BAD_LOCALNAME;
+    } else if (NpFindDrive(table, driveLetter) != NULL) {
+      status = WN_ALREADY_CONNECTED;
+    } else {
+      status = DokanNpTransportAddDriveAlias(Transport, target, driveLetter);
+    }
   }
 
   DokanNpTableFree(table);
@@ -465,10 +427,8 @@ DWORD DokanNpCancelConnection(const DOKAN_NP_TRANSPORT *Transport, LPWSTR Name,
     status = WN_NOT_CONNECTED;
   } else if ((mount->Flags & DOKAN_NP_MOUNT_CANCELABLE) == 0) {
     status = WN_ACCESS_DENIED;
-  } else if (Transport->CancelMount == NULL) {
-    status = WN_NOT_SUPPORTED;
   } else {
-    status = Transport->CancelMount(Transport->Context, mount, Force);
+    status = DokanNpTransportCancelMount(Transport, mount, Force);
   }
 
   DokanNpTableFree(table);
@@ -511,6 +471,103 @@ DWORD DokanNpGetConnection(const DOKAN_NP_TRANSPORT *Transport,
   return status;
 }
 
+static DWORD NpResolveEnumTarget(DWORD Scope, LPNETRESOURCEW NetResource,
+                                 NP_ITEM_KIND *Kind, NP_REMOTE_NAME *Server) {
+  ZeroMemory(Server, sizeof(*Server));
+  switch (Scope) {
+  case RESOURCE_CONNECTED:
+    *Kind = NP_ITEM_CONNECTION;
+    return WN_SUCCESS;
+  case RESOURCE_CONTEXT:
+    // The caller's network context has no container argument.
+    if (NetResource != NULL) {
+      return NpIsOurProvider(NetResource->lpProvider) ? WN_BAD_VALUE
+                                                      : WN_BAD_PROVIDER;
+    }
+    *Kind = NP_ITEM_SERVER;
+    return WN_SUCCESS;
+  case RESOURCE_GLOBALNET:
+    if (NetResource != NULL && !NpIsOurProvider(NetResource->lpProvider)) {
+      return WN_BAD_PROVIDER;
+    }
+    if (NetResource == NULL || NetResource->lpRemoteName == NULL ||
+        NetResource->lpRemoteName[0] == L'\0' ||
+        NpIsProviderName(NetResource->lpRemoteName)) {
+      *Kind = NP_ITEM_SERVER;
+      return WN_SUCCESS;
+    }
+    if (NpParseRemoteName(NetResource->lpRemoteName, Server)) {
+      *Kind = NP_ITEM_MOUNT;
+      return WN_SUCCESS;
+    }
+    return WN_BAD_NETNAME;
+  default:
+    return WN_NOT_SUPPORTED;
+  }
+}
+
+static BOOL NpIsDuplicateEnumItem(const DOKAN_NP_MOUNT_TABLE *Table,
+                                  NP_ITEM_KIND Kind, ULONG Index) {
+  const DOKAN_NP_MOUNT *mount = &Table->Entries[Index];
+  for (ULONG j = 0; j < Index; ++j) {
+    const DOKAN_NP_MOUNT *previous = &Table->Entries[j];
+    if (Kind == NP_ITEM_SERVER) {
+      if (NpSameServer(mount, previous)) {
+        return TRUE;
+      }
+    } else if (Kind == NP_ITEM_MOUNT) {
+      if (NpSameRemoteName(mount, previous)) {
+        return TRUE;
+      }
+    } else if (mount->DriveLetter != 0) {
+      if (previous->DriveLetter == mount->DriveLetter) {
+        return TRUE;
+      }
+    } else if (previous->DriveLetter == 0 &&
+               (previous->Flags & DOKAN_NP_MOUNT_ALIAS) == 0 &&
+               NpSameRemoteName(mount, previous)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static VOID NpCollectEnumItems(NP_ENUM *Context, BOOL WantDisk, DWORD Usage,
+                               const NP_REMOTE_NAME *Server) {
+  const DOKAN_NP_MOUNT_TABLE *table = Context->Table;
+  if (!WantDisk) {
+    return;
+  }
+  for (ULONG i = 0; i < table->Count; ++i) {
+    const DOKAN_NP_MOUNT *mount = &table->Entries[i];
+    BOOL include = TRUE;
+    if (Context->Kind == NP_ITEM_SERVER) {
+      include = (Usage & RESOURCEUSAGE_CONTAINER) != 0;
+    } else if (Context->Kind == NP_ITEM_MOUNT) {
+      include = (Usage & RESOURCEUSAGE_CONNECTABLE) != 0 &&
+                NpServerMatches(mount, Server);
+    } else if (mount->DriveLetter == 0) {
+      // Driveless connections are listed once per remote name, aliases never.
+      include = (mount->Flags & DOKAN_NP_MOUNT_ALIAS) == 0;
+    }
+    if (include && !NpIsDuplicateEnumItem(table, Context->Kind, i)) {
+      Context->Items[Context->ItemCount++] = i;
+    }
+  }
+}
+
+static VOID NpDescribeEnumItem(const NP_ENUM *Context,
+                               const DOKAN_NP_MOUNT *Mount,
+                               NP_RESOURCE *Resource) {
+  if (Context->Kind == NP_ITEM_SERVER) {
+    NpDescribeServer(Mount, Context->Scope, Resource);
+  } else if (Context->Kind == NP_ITEM_MOUNT) {
+    NpDescribeMount(Mount, Context->Scope, Resource);
+  } else {
+    NpDescribeConnection(Mount, Resource);
+  }
+}
+
 DWORD DokanNpOpenEnum(const DOKAN_NP_TRANSPORT *Transport, DWORD Scope,
                       DWORD Type, DWORD Usage, LPNETRESOURCEW NetResource,
                       LPHANDLE Enum) {
@@ -519,46 +576,24 @@ DWORD DokanNpOpenEnum(const DOKAN_NP_TRANSPORT *Transport, DWORD Scope,
   }
   *Enum = NULL;
 
-  if (Usage == 0) {
-    Usage = RESOURCEUSAGE_CONNECTABLE | RESOURCEUSAGE_CONTAINER;
+  // Per npapi.h, dwUsage is ignored unless dwScope == RESOURCE_GLOBALNET; a
+  // mask with neither CONNECTABLE nor CONTAINER selects all resources.
+  DWORD effectiveUsage = RESOURCEUSAGE_CONNECTABLE | RESOURCEUSAGE_CONTAINER;
+  if (Scope == RESOURCE_GLOBALNET &&
+      (Usage & (RESOURCEUSAGE_CONNECTABLE | RESOURCEUSAGE_CONTAINER)) != 0) {
+    effectiveUsage = Usage;
   }
   BOOL wantDisk = Type == RESOURCETYPE_ANY || (Type & RESOURCETYPE_DISK) != 0;
 
-  ULONG kind = 0;
+  NP_ITEM_KIND kind = NP_ITEM_SERVER;
   NP_REMOTE_NAME server;
-  ZeroMemory(&server, sizeof(server));
-  switch (Scope) {
-  case RESOURCE_CONNECTED:
-    kind = NP_ITEM_CONNECTION;
-    break;
-  case RESOURCE_CONTEXT:
-    // The caller's network context has no container argument.
-    if (NetResource != NULL) {
-      return NpIsOurProvider(NetResource->lpProvider) ? WN_BAD_VALUE
-                                                      : WN_BAD_PROVIDER;
-    }
-    kind = NP_ITEM_SERVER;
-    break;
-  case RESOURCE_GLOBALNET:
-    if (NetResource != NULL && !NpIsOurProvider(NetResource->lpProvider)) {
-      return WN_BAD_PROVIDER;
-    }
-    if (NetResource == NULL || NetResource->lpRemoteName == NULL ||
-        NetResource->lpRemoteName[0] == L'\0' ||
-        NpIsProviderName(NetResource->lpRemoteName)) {
-      kind = NP_ITEM_SERVER;
-    } else if (NpParseRemoteName(NetResource->lpRemoteName, &server)) {
-      kind = NP_ITEM_MOUNT;
-    } else {
-      return WN_BAD_NETNAME;
-    }
-    break;
-  default:
-    return WN_NOT_SUPPORTED;
+  DWORD status = NpResolveEnumTarget(Scope, NetResource, &kind, &server);
+  if (status != WN_SUCCESS) {
+    return status;
   }
 
   DOKAN_NP_MOUNT_TABLE *table = NULL;
-  DWORD status = NpQueryMounts(Transport, &table);
+  status = NpQueryMounts(Transport, &table);
   if (status != WN_SUCCESS) {
     return status;
   }
@@ -588,37 +623,7 @@ DWORD DokanNpOpenEnum(const DOKAN_NP_TRANSPORT *Transport, DWORD Scope,
   context->Table = table;
   context->Kind = kind;
   context->Scope = Scope;
-
-  for (ULONG i = 0; i < table->Count; ++i) {
-    const DOKAN_NP_MOUNT *mount = &table->Entries[i];
-    BOOL include = wantDisk;
-    if (kind == NP_ITEM_SERVER) {
-      include = include && (Usage & RESOURCEUSAGE_CONTAINER) != 0;
-    } else if (kind == NP_ITEM_MOUNT) {
-      include = include && (Usage & RESOURCEUSAGE_CONNECTABLE) != 0 &&
-                NpServerMatches(mount, &server);
-    } else if (mount->DriveLetter == 0) {
-      // Driveless connections are listed once per remote name, aliases never.
-      include = include && (mount->Flags & DOKAN_NP_MOUNT_ALIAS) == 0;
-    }
-    for (ULONG j = 0; include && j < i; ++j) {
-      const DOKAN_NP_MOUNT *previous = &table->Entries[j];
-      if (kind == NP_ITEM_SERVER) {
-        include = !NpSameServer(mount, previous);
-      } else if (kind == NP_ITEM_MOUNT) {
-        include = !NpSameRemoteName(mount, previous);
-      } else if (mount->DriveLetter != 0) {
-        include = previous->DriveLetter != mount->DriveLetter;
-      } else {
-        include = previous->DriveLetter != 0 ||
-                  (previous->Flags & DOKAN_NP_MOUNT_ALIAS) != 0 ||
-                  !NpSameRemoteName(mount, previous);
-      }
-    }
-    if (include) {
-      context->Items[context->ItemCount++] = i;
-    }
-  }
+  NpCollectEnumItems(context, wantDisk, effectiveUsage, &server);
 
   *Enum = (HANDLE)context;
   return WN_SUCCESS;
@@ -635,10 +640,10 @@ DWORD DokanNpEnumResource(HANDLE Enum, LPDWORD Count, LPVOID Buffer,
   }
 
   DWORD requested = *Count;
-  *Count = 0;
   if (requested == 0) {
     return WN_SUCCESS;
   }
+  *Count = 0;
   if (context->Next >= context->ItemCount) {
     return WN_NO_MORE_ENTRIES;
   }
@@ -659,14 +664,7 @@ DWORD DokanNpEnumResource(HANDLE Enum, LPDWORD Count, LPVOID Buffer,
     const DOKAN_NP_MOUNT *mount =
         &context->Table->Entries[context->Items[context->Next]];
     NP_RESOURCE resource;
-    WCHAR localName[3] = {0};
-    if (context->Kind == NP_ITEM_SERVER) {
-      NpDescribeServer(mount, context->Scope, &resource);
-    } else if (context->Kind == NP_ITEM_MOUNT) {
-      NpDescribeMount(mount, context->Scope, &resource);
-    } else {
-      NpDescribeConnection(mount, localName, &resource);
-    }
+    NpDescribeEnumItem(context, mount, &resource);
 
     SIZE_T stringBytes = NpResourceStringBytes(&resource);
     SIZE_T needed = sizeof(NETRESOURCEW) + stringBytes;
@@ -687,7 +685,7 @@ DWORD DokanNpEnumResource(HANDLE Enum, LPDWORD Count, LPVOID Buffer,
   }
 
   if (copied == 0) {
-    // Bounded by a few NP_MAX_NAME_LENGTH strings.
+    // Bounded by a few DOKAN_NP_MAX_NAME_LENGTH strings.
     *BufferSize = (DWORD)firstRequired;
     return WN_MORE_DATA;
   }
@@ -703,6 +701,15 @@ DWORD DokanNpCloseEnum(HANDLE Enum) {
   DokanNpTableFree(context->Table);
   HeapFree(GetProcessHeap(), 0, context);
   return WN_SUCCESS;
+}
+
+static LPWSTR NpPutUniversalString(LPWSTR Destination, LPCWSTR RemoteName,
+                                   SIZE_T RemoteLength, LPCWSTR Tail,
+                                   SIZE_T TailLength) {
+  NpCopyChars(Destination, RemoteName, RemoteLength);
+  NpCopyChars(Destination + RemoteLength, Tail, TailLength);
+  Destination[RemoteLength + TailLength] = L'\0';
+  return Destination + RemoteLength + TailLength + 1;
 }
 
 DWORD DokanNpGetUniversalName(const DOKAN_NP_TRANSPORT *Transport,
@@ -721,8 +728,8 @@ DWORD DokanNpGetUniversalName(const DOKAN_NP_TRANSPORT *Transport,
     return WN_BAD_LOCALNAME;
   }
   LPCWSTR tail = LocalPath + 2;
-  SIZE_T tailLength = NpLength(tail, NP_MAX_NAME_LENGTH + 1);
-  if (tailLength > NP_MAX_NAME_LENGTH) {
+  SIZE_T tailLength = NpBoundedLength(tail, DOKAN_NP_MAX_NAME_LENGTH + 1);
+  if (tailLength > DOKAN_NP_MAX_NAME_LENGTH) {
     return WN_BAD_LOCALNAME;
   }
 
@@ -751,24 +758,21 @@ DWORD DokanNpGetUniversalName(const DOKAN_NP_TRANSPORT *Transport,
   }
 
   if (Buffer == NULL || *BufferSize < required) {
-    // Bounded by a few NP_MAX_NAME_LENGTH strings.
+    // Bounded by a few DOKAN_NP_MAX_NAME_LENGTH strings.
     *BufferSize = (DWORD)required;
     status = WN_MORE_DATA;
   } else if (InfoLevel == UNIVERSAL_NAME_INFO_LEVEL) {
     UNIVERSAL_NAME_INFOW *info = (UNIVERSAL_NAME_INFOW *)Buffer;
     LPWSTR universal = (LPWSTR)(info + 1);
-    NpCopyChars(universal, mount->RemoteName, remoteLength);
-    NpCopyChars(universal + remoteLength, tail, tailLength);
-    universal[remoteLength + tailLength] = L'\0';
+    NpPutUniversalString(universal, mount->RemoteName, remoteLength, tail,
+                         tailLength);
     info->lpUniversalName = universal;
     status = WN_SUCCESS;
   } else {
     REMOTE_NAME_INFOW *info = (REMOTE_NAME_INFOW *)Buffer;
     LPWSTR universal = (LPWSTR)(info + 1);
-    NpCopyChars(universal, mount->RemoteName, remoteLength);
-    NpCopyChars(universal + remoteLength, tail, tailLength);
-    universal[remoteLength + tailLength] = L'\0';
-    LPWSTR cursor = universal + universalChars;
+    LPWSTR cursor = NpPutUniversalString(universal, mount->RemoteName,
+                                         remoteLength, tail, tailLength);
     info->lpUniversalName = universal;
     info->lpConnectionName =
         NpPutString(&cursor, mount->RemoteName, remoteLength);
@@ -916,8 +920,8 @@ DWORD DokanNpFormatNetworkName(LPWSTR RemoteName, LPWSTR FormattedName,
   if (RemoteName == NULL || Length == NULL) {
     return WN_BAD_VALUE;
   }
-  SIZE_T length = NpLength(RemoteName, NP_MAX_NAME_LENGTH + 1);
-  if (length > NP_MAX_NAME_LENGTH) {
+  SIZE_T length = NpBoundedLength(RemoteName, DOKAN_NP_MAX_NAME_LENGTH + 1);
+  if (length > DOKAN_NP_MAX_NAME_LENGTH) {
     return WN_BAD_NETNAME;
   }
 

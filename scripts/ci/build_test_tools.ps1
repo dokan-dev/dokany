@@ -29,44 +29,6 @@ if ($ArtifactPrefix -notmatch '^[A-Za-z0-9_.-]*$') {
     throw "Invalid ArtifactPrefix '$ArtifactPrefix': only ASCII letters, digits, '_', '.', and '-' are allowed."
 }
 
-function Resolve-TargetPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$BasePath,
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-    return (Join-Path -Path $BasePath -ChildPath $Path)
-}
-
-function Invoke-WithRetry {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Description,
-        [Parameter(Mandatory = $true)]
-        [scriptblock]$Action,
-        [int]$MaxAttempts = 3,
-        [int]$DelaySeconds = 10
-    )
-
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        try {
-            & $Action
-            return
-        } catch {
-            if ($attempt -ge $MaxAttempts) {
-                throw
-            }
-            Write-Warning "$Description failed (attempt $attempt/$MaxAttempts): $($_.Exception.Message). Retrying in ${DelaySeconds}s..."
-            Start-Sleep -Seconds $DelaySeconds
-        }
-    }
-}
-
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $repoRoot
 
@@ -100,175 +62,17 @@ if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
 }
 
 # 1b. Build tests/np (x64 and Win32), verify static CRT + Server 2016 imports, and run Tier 1 unit tests.
-function Resolve-NpWindowsTool {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExeName,
-        [string[]]$Candidates = @(),
-        [switch]$Required
-    )
-    $cygwinDir = if (-not [string]::IsNullOrWhiteSpace($env:CYGWIN_INST_DIR)) { $env:CYGWIN_INST_DIR } else { 'C:\cygwin64' }
-    $msys2Dir = if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_INST_DIR)) { $env:MSYS2_INST_DIR } else { 'C:\msys64' }
-    $excluded = @(
-        ([System.IO.Path]::GetFullPath($cygwinDir).TrimEnd('\') + '\'),
-        ([System.IO.Path]::GetFullPath($msys2Dir).TrimEnd('\') + '\')
-    )
-    foreach ($cmd in @(Get-Command $ExeName -All -CommandType Application -ErrorAction SilentlyContinue)) {
-        if (-not $cmd.Source) { continue }
-        $full = [System.IO.Path]::GetFullPath($cmd.Source)
-        $isUnix = $false
-        foreach ($pfx in $excluded) {
-            if ($full.StartsWith($pfx, [System.StringComparison]::OrdinalIgnoreCase)) { $isUnix = $true; break }
-        }
-        if (-not $isUnix) { return $full }
-    }
-    foreach ($cand in ($Candidates | Select-Object -Unique)) {
-        if (-not [string]::IsNullOrWhiteSpace($cand) -and (Test-Path -LiteralPath $cand -PathType Leaf)) {
-            return [System.IO.Path]::GetFullPath($cand)
-        }
-    }
-    if ($Required) {
-        throw "Required Windows tool '$ExeName' not found."
-    }
-    return $null
-}
-
-function Invoke-WithVsDevArch {
-    param(
-        [Parameter(Mandatory = $true)][string]$VsPath,
-        [Parameter(Mandatory = $true)][string]$Arch,
-        [Parameter(Mandatory = $true)][scriptblock]$Action
-    )
-    $vsDevCmd = Join-Path $VsPath 'Common7\Tools\VsDevCmd.bat'
-    if (-not (Test-Path -LiteralPath $vsDevCmd -PathType Leaf)) {
-        throw "VsDevCmd.bat not found at $vsDevCmd"
-    }
-    $savedEnv = @{}
-    foreach ($entry in [System.Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
-        $savedEnv[$entry.Key] = $entry.Value
-    }
-    $sentinel = '===NP_VSDEV_ENV_START==='
-    $tempCmd = Join-Path ([System.IO.Path]::GetTempPath()) ("np_vsdev_" + [guid]::NewGuid().ToString('N') + '.cmd')
-    try {
-        $cmdLines = @(
-            '@echo off'
-            'set VSCMD_SKIP_SENDTELEMETRY=1'
-            "call `"$vsDevCmd`" -arch=$Arch -host_arch=amd64 -no_logo"
-            'if errorlevel 1 exit /b %errorlevel%'
-            "echo $sentinel"
-            'set'
-        ) -join "`r`n"
-        [System.IO.File]::WriteAllText($tempCmd, $cmdLines + "`r`n", [System.Text.UTF8Encoding]::new($false))
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
-        $psi.Arguments = "/d /c `"$tempCmd`""
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $true
-        $proc = New-Object System.Diagnostics.Process
-        $proc.StartInfo = $psi
-        try {
-            [void]$proc.Start()
-            $stderrTask = $proc.StandardError.ReadToEndAsync()
-            $stdout = $proc.StandardOutput.ReadToEnd()
-            $proc.WaitForExit()
-            $stderr = $stderrTask.GetAwaiter().GetResult()
-            if ($proc.ExitCode -ne 0) {
-                throw "VsDevCmd.bat -arch=$Arch failed (exit $($proc.ExitCode)):`n$stdout`n$stderr"
-            }
-        } finally {
-            $proc.Dispose()
-        }
-        $inEnv = $false
-        foreach ($rawLine in ($stdout -split "`r?`n")) {
-            if (-not $inEnv) {
-                if ($rawLine -eq $sentinel) { $inEnv = $true }
-                continue
-            }
-            $eq = $rawLine.IndexOf('=')
-            if ($eq -gt 0) {
-                [System.Environment]::SetEnvironmentVariable($rawLine.Substring(0, $eq), $rawLine.Substring($eq + 1), 'Process')
-            }
-        }
-        & $Action
-    } finally {
-        Remove-Item -LiteralPath $tempCmd -Force -ErrorAction SilentlyContinue
-        foreach ($key in @([System.Environment]::GetEnvironmentVariables('Process').Keys)) {
-            if (-not $savedEnv.ContainsKey($key)) {
-                [System.Environment]::SetEnvironmentVariable($key, $null, 'Process')
-            }
-        }
-        foreach ($kv in $savedEnv.GetEnumerator()) {
-            [System.Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, 'Process')
-        }
-    }
-}
-
-function Test-NpBinaryImports {
-    param(
-        [Parameter(Mandatory = $true)][string]$BinaryPath,
-        [Parameter(Mandatory = $true)][string[]]$Allowlist
-    )
-    $dumpbin = Get-Command dumpbin.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $dumpbin) {
-        throw "dumpbin.exe not found on PATH; cannot verify imports for $BinaryPath"
-    }
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $out = @(& $dumpbin.Source /nologo /imports $BinaryPath 2>&1)
-        $rc = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $prev
-    }
-    if ($rc -ne 0) {
-        throw "dumpbin /imports failed for $BinaryPath (exit $rc):`n$($out -join "`n")"
-    }
-    $dlls = New-Object System.Collections.Generic.List[string]
-    $seen = @{}
-    foreach ($line in $out) {
-        $s = [string]$line
-        if ($s -match '^\s*Summary\s*$') { break }
-        if ($s -match '^\s+([A-Za-z0-9._-]+\.dll)\s*$') {
-            $d = $Matches[1]
-            $k = $d.ToLowerInvariant()
-            if (-not $seen.ContainsKey($k)) {
-                $seen[$k] = $true
-                $dlls.Add($d)
-            }
-        }
-    }
-    if ($dlls.Count -eq 0) {
-        throw "Failed to parse imported DLLs from $BinaryPath"
-    }
-    $deny = @('VCRUNTIME*', 'MSVCP*', 'ucrtbase*', 'CONCRT*', 'api-ms-win-crt-*', 'dokan*')
-    foreach ($d in $dlls) {
-        foreach ($pat in $deny) {
-            if ($d -like $pat) {
-                throw "Import gate failed for ${BinaryPath}: denied CRT/Dokan import '$d' (all: $($dlls -join ', '))"
-            }
-        }
-        if ($Allowlist -notcontains $d) {
-            throw "Import gate failed for ${BinaryPath}: '$d' outside Server 2016 allowlist ($($Allowlist -join ', '))"
-        }
-    }
-    Write-Host "Import gate passed ($BinaryPath): $($dlls -join ', ')"
-}
-
 $npSourceDir = Join-Path $repoRoot 'tests\np'
 if (-not (Test-Path -LiteralPath (Join-Path $npSourceDir 'CMakeLists.txt') -PathType Leaf)) {
     throw "tests/np/CMakeLists.txt not found at $npSourceDir"
 }
-$vsInfo = Find-DokanVisualStudio -Requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -Latest -IncludeVersion -RequireVsWhere | Select-Object -First 1
-if (-not $vsInfo) {
-    $vsInfo = Find-DokanVisualStudio -Requires 'Microsoft.Component.MSBuild' -Latest -IncludeVersion -RequireVsWhere | Select-Object -First 1
-}
-$cmakeExe = Resolve-NpWindowsTool -ExeName 'cmake.exe' -Required -Candidates @(
+$vsInfo = Resolve-DokanVisualStudioInfo
+$cmakeExe = Resolve-DokanWindowsTool -ExeName 'cmake.exe' -Required -Candidates @(
     "${env:ProgramFiles}\CMake\bin\cmake.exe",
     "${env:ProgramFiles(x86)}\CMake\bin\cmake.exe",
     (Join-Path $vsInfo.Path 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe')
 )
-$ninjaExe = Resolve-NpWindowsTool -ExeName 'ninja.exe' -Candidates @(
+$ninjaExe = Resolve-DokanWindowsTool -ExeName 'ninja.exe' -Candidates @(
     (Join-Path $vsInfo.Path 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe'),
     "${env:ProgramFiles}\Ninja\ninja.exe",
     'C:\ProgramData\chocolatey\bin\ninja.exe'
@@ -285,7 +89,7 @@ $npTestBinaries = @{}
 
 foreach ($spec in $npArchSpecs) {
     $npBuildDir = Join-Path $npSourceDir "build-$($spec.Stage)"
-    Invoke-WithVsDevArch -VsPath $vsInfo.Path -Arch $spec.VsArch -Action {
+    Invoke-DokanWithVsDevEnv -VsPath $vsInfo.Path -Arch $spec.VsArch -Action {
         $cmArgs = @('-S', $npSourceDir, '-B', $npBuildDir)
         if ($ninjaExe) {
             $cmArgs += @(
@@ -296,9 +100,7 @@ foreach ($spec in $npArchSpecs) {
                 '-DCMAKE_CXX_COMPILER=cl.exe'
             )
         } else {
-            $vsGen = 'Visual Studio 17 2022'
-            if ($vsInfo.Version -match '^18\.') { $vsGen = 'Visual Studio 18 2026' }
-            elseif ($vsInfo.Version -match '^16\.') { $vsGen = 'Visual Studio 16 2019' }
+            $vsGen = Resolve-DokanVisualStudioGenerator -CMakeExe $cmakeExe -VsVersion $vsInfo.Version
             $cmArgs += @('-G', $vsGen, '-A', $spec.CMakeArch)
         }
         $cmArgs += @(
@@ -309,7 +111,7 @@ foreach ($spec in $npArchSpecs) {
             '-DNP_TEST_WERROR=ON'
         )
         if (-not [string]::IsNullOrWhiteSpace($FsTestDepsCacheDir)) {
-            $resolvedNpCache = if ([System.IO.Path]::IsPathRooted($FsTestDepsCacheDir)) { $FsTestDepsCacheDir } else { Join-Path $repoRoot $FsTestDepsCacheDir }
+            $resolvedNpCache = Resolve-DokanTargetPath -BasePath $repoRoot -Path $FsTestDepsCacheDir
             $cmArgs += ("-DDOKAN_DEPS_CACHE_DIR=" + ($resolvedNpCache -replace '\\', '/'))
         }
         Write-Host "Configuring tests/np ($($spec.Stage))..."
@@ -325,18 +127,20 @@ foreach ($spec in $npArchSpecs) {
                 throw "Expected tests/np binary missing: $bin"
             }
         }
-        Test-NpBinaryImports -BinaryPath $unitExe -Allowlist $npUnitAllowlist
-        Test-NpBinaryImports -BinaryPath $testExe -Allowlist $npTestAllowlist
+        $unitDlls = Test-DokanStaticCrtImports -BinaryPath $unitExe -Allowlist $npUnitAllowlist
+        Write-Host "Import gate passed ($unitExe): $($unitDlls -join ', ')"
+        $testDlls = Test-DokanStaticCrtImports -BinaryPath $testExe -Allowlist $npTestAllowlist
+        Write-Host "Import gate passed ($testExe): $($testDlls -join ', ')"
         $npUnitBinaries[$spec.Stage] = $unitExe
         $npTestBinaries[$spec.Stage] = $testExe
     }
 }
 
-$npResultsAbs = Resolve-TargetPath -BasePath $repoRoot -Path $NpUnitResultsDir
+$npResultsAbs = Resolve-DokanTargetPath -BasePath $repoRoot -Path $NpUnitResultsDir
 Remove-Item -LiteralPath $npResultsAbs -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $npResultsAbs | Out-Null
 
-$gflagsExe = Resolve-NpWindowsTool -ExeName 'gflags.exe' -Candidates @(
+$gflagsExe = Resolve-DokanWindowsTool -ExeName 'gflags.exe' -Candidates @(
     'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\gflags.exe',
     'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\gflags.exe'
 )
@@ -375,7 +179,7 @@ try {
     if (-not (Test-Path -LiteralPath '.git')) {
         Exec-External { & git init -q }
     }
-    Invoke-WithRetry -Description "git fetch fstools $fstoolsRevision" -Action {
+    Invoke-DokanWithRetry -Description "git fetch fstools $fstoolsRevision" -Action {
         Exec-External { & git fetch -q --depth 1 https://github.com/Liryna/fstools.git $fstoolsRevision }
     }
     Exec-External { & git checkout -q --detach FETCH_HEAD }
@@ -385,8 +189,8 @@ try {
 }
 
 # 3. Stage the tools and the dokan-fstest release zip (same layout as the former AppVeyor artifact).
-$outputAbs = Resolve-TargetPath -BasePath $repoRoot -Path $OutputDir
-$releaseAbs = Resolve-TargetPath -BasePath $repoRoot -Path $ReleaseDir
+$outputAbs = Resolve-DokanTargetPath -BasePath $repoRoot -Path $OutputDir
+$releaseAbs = Resolve-DokanTargetPath -BasePath $repoRoot -Path $ReleaseDir
 foreach ($dir in @($outputAbs, $releaseAbs)) {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $dir | Out-Null

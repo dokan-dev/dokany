@@ -20,6 +20,8 @@ using ShParseDisplayNameFn = HRESULT(WINAPI *)(PCWSTR, IBindCtx *,
                                                PIDLIST_ABSOLUTE *, SFGAOF,
                                                SFGAOF *);
 using ShGetDesktopFolderFn = HRESULT(WINAPI *)(IShellFolder **);
+using ShBindToParentFn = HRESULT(WINAPI *)(PCIDLIST_ABSOLUTE, REFIID, void **,
+                                           PCUITEMID_CHILD *);
 using IlFreeFn = void(WINAPI *)(PIDLIST_RELATIVE);
 
 struct ShellApis {
@@ -30,6 +32,7 @@ struct ShellApis {
   CoTaskMemFreeFn co_free = nullptr;
   ShParseDisplayNameFn sh_parse = nullptr;
   ShGetDesktopFolderFn sh_desktop = nullptr;
+  ShBindToParentFn sh_bind_to_parent = nullptr;
   IlFreeFn il_free = nullptr;
 
   bool Load() {
@@ -48,8 +51,21 @@ struct ShellApis {
         ::GetProcAddress(shell32, "SHParseDisplayName"));
     sh_desktop = reinterpret_cast<ShGetDesktopFolderFn>(
         ::GetProcAddress(shell32, "SHGetDesktopFolder"));
+    sh_bind_to_parent = reinterpret_cast<ShBindToParentFn>(
+        ::GetProcAddress(shell32, "SHBindToParent"));
     il_free = reinterpret_cast<IlFreeFn>(::GetProcAddress(shell32, "ILFree"));
-    return co_init && co_uninit && co_free && sh_parse && sh_desktop;
+    return co_init && co_uninit && co_free && sh_parse && sh_desktop &&
+           sh_bind_to_parent;
+  }
+
+  void FreePidl(PIDLIST_ABSOLUTE pidl) const {
+    if (pidl != nullptr) {
+      if (il_free != nullptr) {
+        il_free(pidl);
+      } else {
+        co_free(pidl);
+      }
+    }
   }
 
   ~ShellApis() {
@@ -58,6 +74,35 @@ struct ShellApis {
     }
     if (ole32 != nullptr) {
       ::FreeLibrary(ole32);
+    }
+  }
+};
+
+struct ComInitGuard {
+  CoUninitFn uninit = nullptr;
+  bool active = false;
+  ~ComInitGuard() {
+    if (active && uninit != nullptr) {
+      uninit();
+    }
+  }
+};
+
+template <typename T> struct ComReleaseGuard {
+  T *ptr = nullptr;
+  ~ComReleaseGuard() {
+    if (ptr != nullptr) {
+      ptr->Release();
+    }
+  }
+};
+
+struct PidlGuard {
+  const ShellApis *apis = nullptr;
+  PIDLIST_ABSOLUTE pidl = nullptr;
+  ~PidlGuard() {
+    if (apis != nullptr && pidl != nullptr) {
+      apis->FreePidl(pidl);
     }
   }
 };
@@ -136,28 +181,17 @@ TEST(ShellNamespaceTest, ScopedShareDisplayNameAndDisappearanceAfterUnmount) {
     FAIL() << "Failed to load ole32/shell32 Shell APIs on Desktop Windows";
   }
 
+  // Declare COM/interface/PIDL guards AFTER ShellApis so destruction releases
+  // COM objects and calls CoUninitialize before FreeLibrary(ole32/shell32).
   const HRESULT co_hr = apis.co_init(nullptr, COINIT_APARTMENTTHREADED);
-  const bool need_uninit = SUCCEEDED(co_hr);
+  ComInitGuard co_guard{apis.co_uninit, SUCCEEDED(co_hr)};
   if (FAILED(co_hr) && co_hr != RPC_E_CHANGED_MODE) {
     FAIL() << "CoInitializeEx failed: 0x" << std::hex << co_hr;
   }
 
-  auto free_pidl = [&](PIDLIST_ABSOLUTE pidl) {
-    if (pidl != nullptr) {
-      if (apis.il_free != nullptr) {
-        apis.il_free(pidl);
-      } else {
-        apis.co_free(pidl);
-      }
-    }
-  };
-
-  IShellFolder *desktop = nullptr;
-  HRESULT hr = apis.sh_desktop(&desktop);
-  if (FAILED(hr) || desktop == nullptr) {
-    if (need_uninit) {
-      apis.co_uninit();
-    }
+  ComReleaseGuard<IShellFolder> desktop;
+  HRESULT hr = apis.sh_desktop(&desktop.ptr);
+  if (FAILED(hr) || desktop.ptr == nullptr) {
     if (!is_desktop && (hr == REGDB_E_CLASSNOTREG || hr == E_NOTIMPL ||
                         hr == CLASS_E_CLASSNOTAVAILABLE)) {
       GTEST_SKIP() << "Server Core: SHGetDesktopFolder returned 0x" << std::hex
@@ -168,42 +202,32 @@ TEST(ShellNamespaceTest, ScopedShareDisplayNameAndDisappearanceAfterUnmount) {
 
   // Scoped strictly to our active Dokan UNC path (NEVER enumerate all of
   // CLSID_NetworkPlaces).
-  PIDLIST_ABSOLUTE share_pidl = nullptr;
-  hr =
-      apis.sh_parse(mount.unc_name().c_str(), nullptr, &share_pidl, 0, nullptr);
-  if (FAILED(hr) || share_pidl == nullptr) {
-    desktop->Release();
-    if (need_uninit) {
-      apis.co_uninit();
+  {
+    PidlGuard share_pidl{&apis, nullptr};
+    hr = apis.sh_parse(mount.unc_name().c_str(), nullptr, &share_pidl.pidl, 0,
+                       nullptr);
+    if (FAILED(hr) || share_pidl.pidl == nullptr) {
+      if (!is_desktop && (hr == REGDB_E_CLASSNOTREG || hr == E_NOTIMPL ||
+                          hr == CLASS_E_CLASSNOTAVAILABLE ||
+                          hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))) {
+        GTEST_SKIP() << "Server Core: Shell network namespace unavailable for "
+                        "SHParseDisplayName (hr=0x"
+                     << std::hex << hr << ")";
+      }
+      FAIL() << "SHParseDisplayName(" << WideToUtf8(mount.unc_name())
+             << ") failed: 0x" << std::hex << hr;
     }
-    if (!is_desktop && (hr == REGDB_E_CLASSNOTREG || hr == E_NOTIMPL ||
-                        hr == CLASS_E_CLASSNOTAVAILABLE ||
-                        hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))) {
-      GTEST_SKIP() << "Server Core: Shell network namespace unavailable for "
-                      "SHParseDisplayName (hr=0x"
-                   << std::hex << hr << ")";
-    }
-    FAIL() << "SHParseDisplayName(" << WideToUtf8(mount.unc_name())
-           << ") failed: 0x" << std::hex << hr;
-  }
 
-  // Walk to parent IShellFolder and ask SHGDN_INFOLDER display name.
-  PCUITEMID_CHILD child_rel = nullptr;
-  IShellFolder *parent_folder = nullptr;
-  // Find SHBindToParent dynamically on shell32 so Server Core imports remain
-  // zero-risk.
-  using ShBindToParentFn =
-      HRESULT(WINAPI *)(PCIDLIST_ABSOLUTE, REFIID, void **, PCUITEMID_CHILD *);
-  auto sh_bind_to_parent = reinterpret_cast<ShBindToParentFn>(
-      ::GetProcAddress(apis.shell32, "SHBindToParent"));
-  if (sh_bind_to_parent != nullptr) {
-    hr = sh_bind_to_parent(share_pidl, IID_IShellFolder,
-                           reinterpret_cast<void **>(&parent_folder),
-                           &child_rel);
+    // Bind to parent IShellFolder and query the child's SHGDN_INFOLDER name.
+    PCUITEMID_CHILD child_rel = nullptr;
+    ComReleaseGuard<IShellFolder> parent_folder;
+    hr = apis.sh_bind_to_parent(share_pidl.pidl, IID_IShellFolder,
+                                reinterpret_cast<void **>(&parent_folder.ptr),
+                                &child_rel);
     EXPECT_TRUE(SUCCEEDED(hr)) << "SHBindToParent failed: 0x" << std::hex << hr;
-    if (SUCCEEDED(hr) && parent_folder != nullptr && child_rel != nullptr) {
+    if (SUCCEEDED(hr) && parent_folder.ptr != nullptr && child_rel != nullptr) {
       STRRET sr{};
-      hr = parent_folder->GetDisplayNameOf(child_rel, SHGDN_INFOLDER, &sr);
+      hr = parent_folder.ptr->GetDisplayNameOf(child_rel, SHGDN_INFOLDER, &sr);
       EXPECT_TRUE(SUCCEEDED(hr))
           << "GetDisplayNameOf failed: 0x" << std::hex << hr;
       if (SUCCEEDED(hr)) {
@@ -213,21 +237,8 @@ TEST(ShellNamespaceTest, ScopedShareDisplayNameAndDisappearanceAfterUnmount) {
             << "Unexpected Shell display name: " << WideToUtf8(display);
         EXPECT_EQ(display.find(DOKAN_NP_NAME), std::wstring::npos);
       }
-      parent_folder->Release();
-    }
-  } else {
-    STRRET sr{};
-    hr = desktop->GetDisplayNameOf(share_pidl, SHGDN_INFOLDER, &sr);
-    EXPECT_TRUE(SUCCEEDED(hr))
-        << "desktop->GetDisplayNameOf failed: 0x" << std::hex << hr;
-    if (SUCCEEDED(hr)) {
-      const std::wstring display = StrRetToWString(
-          sr, reinterpret_cast<PCUITEMID_CHILD>(share_pidl), apis.co_free);
-      EXPECT_EQ(_wcsicmp(display.c_str(), L"myshare"), 0)
-          << "Unexpected Shell display name: " << WideToUtf8(display);
     }
   }
-  free_pidl(share_pidl);
 
   // Unmount via WNetCancelConnection2W and assert disappearance (#952, #1326).
   ASSERT_EQ(::WNetCancelConnection2W(mount.drive_name().c_str(), 0, FALSE),
@@ -245,18 +256,12 @@ TEST(ShellNamespaceTest, ScopedShareDisplayNameAndDisappearanceAfterUnmount) {
       ::WNetGetResourceInformationW(&nr, info_buf.data(), &info_sz, &sys_part),
       static_cast<DWORD>(NO_ERROR));
 
-  PIDLIST_ABSOLUTE after_pidl = nullptr;
-  const HRESULT after_hr =
-      apis.sh_parse(mount.unc_name().c_str(), nullptr, &after_pidl, 0, nullptr);
-  if (SUCCEEDED(after_hr) && after_pidl != nullptr) {
-    free_pidl(after_pidl);
+  PidlGuard after_pidl{&apis, nullptr};
+  const HRESULT after_hr = apis.sh_parse(mount.unc_name().c_str(), nullptr,
+                                         &after_pidl.pidl, 0, nullptr);
+  if (SUCCEEDED(after_hr) && after_pidl.pidl != nullptr) {
     ADD_FAILURE() << "SHParseDisplayName still resolved unmounted share "
                   << WideToUtf8(mount.unc_name());
-  }
-
-  desktop->Release();
-  if (need_uninit) {
-    apis.co_uninit();
   }
 }
 

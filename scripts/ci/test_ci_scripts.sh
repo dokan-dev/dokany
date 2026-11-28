@@ -5,7 +5,8 @@
 #   2. scripts/run_ifstest.ps1 Find-IfsTestCreateProcFailure (Set-StrictMode -Version 2)
 #   3. scripts/ci/install_cygwin.ps1 Assert-CygwinGpgVerification (GOODSIG/EXPKEYSIG/REVKEYSIG)
 #   4. scripts/ci/vm/provisioning/verifier_helpers.ps1 Driver Verifier guards
-#   5. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & collect_guest_diagnostics.ps1 syntax
+#   5. scripts/ci/build_and_package.ps1 Assert-DokanNpKernel32OnlyImports PE import gate
+#   6. scripts/ci/vm/run_guest_tests.ps1 Session-0 trampoline & CI PowerShell script syntax
 # Uses only tools preinstalled on ubuntu-latest (jq, pwsh, python3 stdlib).
 set -euo pipefail
 
@@ -228,7 +229,7 @@ foreach ($badCase in @(
 Write-Output 'verifier_helpers.ps1 Assert-DriverVerifierActive unit tests passed.'
 
 # 2d. Session-0 -> Session-1 trampoline (scripts/ci/vm/run_guest_tests.ps1) & CI script syntax
-foreach ($psFile in @('scripts/ci/vm/run_guest_tests.ps1', 'scripts/ci/vm/collect_guest_diagnostics.ps1', 'scripts/ci/build_and_package.ps1', 'scripts/ci/build_test_tools.ps1')) {
+foreach ($psFile in @('scripts/build_helper.ps1', 'scripts/build_fstest.ps1', 'scripts/ci/vm/run_guest_tests.ps1', 'scripts/ci/vm/collect_guest_diagnostics.ps1', 'scripts/ci/build_and_package.ps1', 'scripts/ci/build_test_tools.ps1')) {
     $parseErrors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $psFile).Path, [ref]$null, [ref]$parseErrors)
     if ($parseErrors.Count -gt 0) {
@@ -323,6 +324,14 @@ foreach ($badPe in @(
     try { Assert-DokanNpKernel32OnlyImports -BinaryPath $badPath } catch { $threw = $true }
     if (-not $threw) { throw "Assert-DokanNpKernel32OnlyImports unexpectedly accepted $($badPe.Name)" }
 }
+# Malformed non-terminator import descriptor with zero Name RVA must fail closed.
+$malformedPe = New-SyntheticPe -IsPe32Plus $true -Imports @('KERNEL32.dll')
+[BitConverter]::GetBytes([uint32]0x1050).CopyTo($malformedPe, 0x400 + 20 + 16)
+$malformedPath = Join-Path $peDir 'zero-name-rva.dll'
+[System.IO.File]::WriteAllBytes($malformedPath, $malformedPe)
+$threw = $false
+try { Assert-DokanNpKernel32OnlyImports -BinaryPath $malformedPath } catch { $threw = $true }
+if (-not $threw) { throw 'Assert-DokanNpKernel32OnlyImports unexpectedly accepted zero-name-rva descriptor' }
 Write-Output 'build_and_package.ps1 PE import gate unit tests passed.'
 
 foreach ($fn in @('Read-GuestLogChunk', 'Open-GuestSession1Process', 'Wait-GuestSession1Task')) {

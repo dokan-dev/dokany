@@ -85,21 +85,24 @@ TEST(NpFuzzTest, FormatNetworkNameBoundaryGuardPages) {
 
   for (DWORD chars :
        {0UL, 1UL, 2UL, exact_chars - 1, exact_chars, exact_chars + 1}) {
-    PageGuardedBuffer buf(static_cast<size_t>(chars) * sizeof(WCHAR),
-                          sizeof(WCHAR));
-    ASSERT_TRUE(buf.valid());
-    DWORD len = chars;
-    auto *out = chars == 0 ? nullptr : static_cast<LPWSTR>(buf.data());
-    const DWORD err =
-        DokanNpFormatNetworkName(input, out, &len, WNFMT_INENUM, 80);
-    EXPECT_TRUE(buf.CheckCanaries()) << "chars=" << chars;
-    if (chars < exact_chars) {
-      EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA));
-      EXPECT_EQ(len, exact_chars);
-    } else {
-      EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS));
-      EXPECT_EQ(len, chars);
-      EXPECT_STREQ(out, L"fuzz-share");
+    for (const bool use_nonnull : (chars == 0 ? std::vector<bool>{false, true}
+                                              : std::vector<bool>{true})) {
+      PageGuardedBuffer buf(static_cast<size_t>(chars) * sizeof(WCHAR),
+                            sizeof(WCHAR));
+      ASSERT_TRUE(buf.valid());
+      DWORD len = chars;
+      auto *out = use_nonnull ? static_cast<LPWSTR>(buf.data()) : nullptr;
+      const DWORD err =
+          DokanNpFormatNetworkName(input, out, &len, WNFMT_INENUM, 80);
+      EXPECT_TRUE(buf.CheckCanaries()) << "chars=" << chars;
+      if (chars < exact_chars) {
+        EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA));
+        EXPECT_EQ(len, exact_chars);
+      } else {
+        EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS));
+        EXPECT_EQ(len, chars);
+        EXPECT_STREQ(out, L"fuzz-share");
+      }
     }
   }
 }
@@ -123,27 +126,31 @@ TEST(NpFuzzTest, GetUniversalNameBoundaryGuardPages) {
             : static_cast<DWORD>(sizeof(REMOTE_NAME_INFOW));
 
     for (DWORD sz : BoundarySizes(exact, min_struct)) {
-      PageGuardedBuffer buf(sz, sizeof(void *));
-      ASSERT_TRUE(buf.valid());
-      DWORD reported = sz;
-      void *out = sz == 0 ? nullptr : buf.data();
-      const DWORD err = DokanNpGetUniversalName(&t, L"M:\\sub\\file.txt", level,
-                                                out, &reported);
-      EXPECT_TRUE(buf.CheckCanaries()) << "level=" << level << " sz=" << sz;
-      if (sz < exact) {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA))
-            << "level=" << level << " sz=" << sz;
-        EXPECT_EQ(reported, exact);
-      } else {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS))
-            << "level=" << level << " sz=" << sz;
-      }
+      for (const bool use_nonnull : (sz == 0 ? std::vector<bool>{false, true}
+                                             : std::vector<bool>{true})) {
+        PageGuardedBuffer buf(sz, sizeof(void *));
+        ASSERT_TRUE(buf.valid());
+        DWORD reported = sz;
+        void *out = use_nonnull ? buf.data() : nullptr;
+        const DWORD err = DokanNpGetUniversalName(&t, L"M:\\sub\\file.txt",
+                                                  level, out, &reported);
+        EXPECT_TRUE(buf.CheckCanaries()) << "level=" << level << " sz=" << sz;
+        if (sz < exact) {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA))
+              << "level=" << level << " sz=" << sz;
+          EXPECT_EQ(reported, exact);
+        } else {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS))
+              << "level=" << level << " sz=" << sz;
+        }
 
-      HeapGuardedBuffer hbuf(sz);
-      DWORD hreported = sz;
-      EXPECT_EQ(DokanNpGetUniversalName(&t, L"M:\\sub\\file.txt", level,
-                                        hbuf.data(), &hreported),
-                err);
+        HeapGuardedBuffer hbuf(sz);
+        DWORD hreported = sz;
+        EXPECT_EQ(DokanNpGetUniversalName(
+                      &t, L"M:\\sub\\file.txt", level,
+                      use_nonnull ? hbuf.nonnull_data() : nullptr, &hreported),
+                  err);
+      }
     }
   }
 }
@@ -167,27 +174,30 @@ TEST(NpFuzzTest, ResourceInformationAndParentBoundaryGuardPages) {
       static_cast<DWORD>(WN_MORE_DATA));
   for (DWORD sz :
        BoundarySizes(info_exact, static_cast<DWORD>(sizeof(NETRESOURCEW)))) {
-    PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
-    ASSERT_TRUE(buf.valid());
-    DWORD reported = sz;
-    sys_part = nullptr;
-    void *out = sz == 0 ? nullptr : buf.data();
-    const DWORD err =
-        DokanNpGetResourceInformation(&t, &nr, out, &reported, &sys_part);
-    EXPECT_TRUE(buf.CheckCanaries()) << "info sz=" << sz;
-    if (sz < info_exact) {
-      EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA)) << "info sz=" << sz;
-      EXPECT_EQ(reported, info_exact);
-    } else {
-      EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS)) << "info sz=" << sz;
-      AssertNetResourcePointersContained(static_cast<const NETRESOURCEW *>(out),
-                                         1, out, sz);
-      ASSERT_NE(sys_part, nullptr);
-      const auto sys_addr = reinterpret_cast<uintptr_t>(sys_part);
-      const auto buf_addr = reinterpret_cast<uintptr_t>(out);
-      EXPECT_EQ(sys_addr % alignof(WCHAR), 0u);
-      EXPECT_GE(sys_addr, buf_addr + sizeof(NETRESOURCEW));
-      EXPECT_LT(sys_addr, buf_addr + sz);
+    for (const bool use_nonnull :
+         (sz == 0 ? std::vector<bool>{false, true} : std::vector<bool>{true})) {
+      PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
+      ASSERT_TRUE(buf.valid());
+      DWORD reported = sz;
+      sys_part = nullptr;
+      void *out = use_nonnull ? buf.data() : nullptr;
+      const DWORD err =
+          DokanNpGetResourceInformation(&t, &nr, out, &reported, &sys_part);
+      EXPECT_TRUE(buf.CheckCanaries()) << "info sz=" << sz;
+      if (sz < info_exact) {
+        EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA)) << "info sz=" << sz;
+        EXPECT_EQ(reported, info_exact);
+      } else {
+        EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS)) << "info sz=" << sz;
+        AssertNetResourcePointersContained(
+            static_cast<const NETRESOURCEW *>(out), 1, out, sz);
+        ASSERT_NE(sys_part, nullptr);
+        const auto sys_addr = reinterpret_cast<uintptr_t>(sys_part);
+        const auto buf_addr = reinterpret_cast<uintptr_t>(out);
+        EXPECT_EQ(sys_addr % alignof(WCHAR), 0u);
+        EXPECT_GE(sys_addr, buf_addr + sizeof(NETRESOURCEW));
+        EXPECT_LT(sys_addr, buf_addr + sz);
+      }
     }
   }
 
@@ -200,19 +210,23 @@ TEST(NpFuzzTest, ResourceInformationAndParentBoundaryGuardPages) {
               static_cast<DWORD>(WN_MORE_DATA));
     for (DWORD sz : BoundarySizes(parent_exact,
                                   static_cast<DWORD>(sizeof(NETRESOURCEW)))) {
-      PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
-      ASSERT_TRUE(buf.valid());
-      DWORD reported = sz;
-      void *out = sz == 0 ? nullptr : buf.data();
-      const DWORD err = DokanNpGetResourceParent(&t, &nr, out, &reported);
-      EXPECT_TRUE(buf.CheckCanaries()) << "parent sz=" << sz;
-      if (sz < parent_exact) {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA)) << "parent sz=" << sz;
-        EXPECT_EQ(reported, parent_exact);
-      } else {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS)) << "parent sz=" << sz;
-        AssertNetResourcePointersContained(
-            static_cast<const NETRESOURCEW *>(out), 1, out, sz);
+      for (const bool use_nonnull : (sz == 0 ? std::vector<bool>{false, true}
+                                             : std::vector<bool>{true})) {
+        PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
+        ASSERT_TRUE(buf.valid());
+        DWORD reported = sz;
+        void *out = use_nonnull ? buf.data() : nullptr;
+        const DWORD err = DokanNpGetResourceParent(&t, &nr, out, &reported);
+        EXPECT_TRUE(buf.CheckCanaries()) << "parent sz=" << sz;
+        if (sz < parent_exact) {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA))
+              << "parent sz=" << sz;
+          EXPECT_EQ(reported, parent_exact);
+        } else {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS)) << "parent sz=" << sz;
+          AssertNetResourcePointersContained(
+              static_cast<const NETRESOURCEW *>(out), 1, out, sz);
+        }
       }
     }
   }
@@ -242,27 +256,30 @@ TEST(NpFuzzTest, EnumResourceBoundaryGuardPagesAcrossScopes) {
 
     for (DWORD sz :
          BoundarySizes(exact, static_cast<DWORD>(sizeof(NETRESOURCEW)))) {
-      ASSERT_EQ(DokanNpOpenEnum(&t, scope, RESOURCETYPE_ANY, 0, nullptr, &h),
-                static_cast<DWORD>(WN_SUCCESS));
-      PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
-      ASSERT_TRUE(buf.valid());
-      DWORD c = 0xFFFFFFFF;
-      DWORD reported = sz;
-      void *out = sz == 0 ? nullptr : buf.data();
-      const DWORD err = DokanNpEnumResource(h, &c, out, &reported);
-      EXPECT_TRUE(buf.CheckCanaries()) << "scope=" << scope << " sz=" << sz;
-      if (sz < exact) {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA))
-            << "scope=" << scope << " sz=" << sz;
-        EXPECT_GE(reported, exact);
-      } else {
-        EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS))
-            << "scope=" << scope << " sz=" << sz;
-        EXPECT_GE(c, 1u);
-        AssertNetResourcePointersContained(
-            static_cast<const NETRESOURCEW *>(out), c, out, sz);
+      for (const bool use_nonnull : (sz == 0 ? std::vector<bool>{false, true}
+                                             : std::vector<bool>{true})) {
+        ASSERT_EQ(DokanNpOpenEnum(&t, scope, RESOURCETYPE_ANY, 0, nullptr, &h),
+                  static_cast<DWORD>(WN_SUCCESS));
+        PageGuardedBuffer buf(sz, alignof(NETRESOURCEW));
+        ASSERT_TRUE(buf.valid());
+        DWORD c = 0xFFFFFFFF;
+        DWORD reported = sz;
+        void *out = use_nonnull ? buf.data() : nullptr;
+        const DWORD err = DokanNpEnumResource(h, &c, out, &reported);
+        EXPECT_TRUE(buf.CheckCanaries()) << "scope=" << scope << " sz=" << sz;
+        if (sz < exact) {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_MORE_DATA))
+              << "scope=" << scope << " sz=" << sz;
+          EXPECT_GE(reported, exact);
+        } else {
+          EXPECT_EQ(err, static_cast<DWORD>(WN_SUCCESS))
+              << "scope=" << scope << " sz=" << sz;
+          EXPECT_GE(c, 1u);
+          AssertNetResourcePointersContained(
+              static_cast<const NETRESOURCEW *>(out), c, out, sz);
+        }
+        EXPECT_EQ(DokanNpCloseEnum(h), static_cast<DWORD>(WN_SUCCESS));
       }
-      EXPECT_EQ(DokanNpCloseEnum(h), static_cast<DWORD>(WN_SUCCESS));
     }
   }
 }

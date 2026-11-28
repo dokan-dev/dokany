@@ -10,11 +10,11 @@
 namespace dokan_np_test {
 namespace {
 
+constexpr wchar_t kServiceKey[] =
+    L"System\\CurrentControlSet\\Services\\dokan" DOKAN_MAJOR_API_VERSION;
 constexpr wchar_t kServiceNpKey[] =
     L"System\\CurrentControlSet\\Services\\doka"
     L"n" DOKAN_MAJOR_API_VERSION L"\\NetworkProvider";
-constexpr wchar_t kServiceKey[] =
-    L"System\\CurrentControlSet\\Services\\dokan" DOKAN_MAJOR_API_VERSION;
 constexpr wchar_t kOrderKey[] =
     L"System\\CurrentControlSet\\Control\\NetworkProvider\\Order";
 constexpr wchar_t kHwOrderKey[] =
@@ -235,6 +235,43 @@ TEST_F(ScopedHkcuSandbox, HandlesUnterminatedRegSzAndRejectsDword) {
             static_cast<DWORD>(ERROR_INVALID_DATATYPE));
   EXPECT_EQ(DokanNetworkProviderUninstallAt(root_),
             static_cast<DWORD>(ERROR_INVALID_DATATYPE));
+}
+
+TEST_F(ScopedHkcuSandbox, CorruptHwOrderAndMissingOrderValueHandling) {
+  // Existing Order key without ProviderOrder value -> treated as empty list.
+  HKEY empty_order = nullptr;
+  ASSERT_EQ(::RegCreateKeyExW(root_, kOrderKey, 0, nullptr,
+                              REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, nullptr,
+                              &empty_order, nullptr),
+            ERROR_SUCCESS);
+  ::RegCloseKey(empty_order);
+
+  // Corrupt HwOrder on install must fail without mutating Order or creating
+  // the NetworkProvider key.
+  const DWORD bad_val = 7;
+  SeedOrderValue(kHwOrderKey, REG_DWORD, &bad_val, sizeof(bad_val));
+  EXPECT_EQ(DokanNetworkProviderInstallAt(root_),
+            static_cast<DWORD>(ERROR_INVALID_DATATYPE));
+  HKEY missing_np = nullptr;
+  EXPECT_EQ(
+      ::RegOpenKeyExW(root_, kServiceNpKey, 0, KEY_QUERY_VALUE, &missing_np),
+      ERROR_FILE_NOT_FOUND);
+
+  // Remove corrupt HwOrder, install cleanly into the empty Order key.
+  ::RegDeleteTreeW(root_, kHwOrderKey);
+  ASSERT_EQ(DokanNetworkProviderInstallAt(root_),
+            static_cast<DWORD>(ERROR_SUCCESS));
+  EXPECT_EQ(ReadOrderString(kOrderKey).second, L"Dokan3");
+
+  // Re-introduce corrupt HwOrder before uninstall: Uninstall reports the
+  // HwOrder error while still cleaning up Order and deleting NetworkProvider.
+  SeedOrderValue(kHwOrderKey, REG_DWORD, &bad_val, sizeof(bad_val));
+  EXPECT_EQ(DokanNetworkProviderUninstallAt(root_),
+            static_cast<DWORD>(ERROR_INVALID_DATATYPE));
+  EXPECT_EQ(ReadOrderString(kOrderKey).second, L"");
+  EXPECT_EQ(
+      ::RegOpenKeyExW(root_, kServiceNpKey, 0, KEY_QUERY_VALUE, &missing_np),
+      ERROR_FILE_NOT_FOUND);
 }
 
 } // namespace

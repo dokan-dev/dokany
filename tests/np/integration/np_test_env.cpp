@@ -38,31 +38,6 @@ std::wstring GetTempBaseDir() {
   return res;
 }
 
-void DeleteDirectoryRecursive(const std::wstring &dir) {
-  if (dir.empty()) {
-    return;
-  }
-  WIN32_FIND_DATAW fd{};
-  HANDLE h = ::FindFirstFileW((dir + L"\\*").c_str(), &fd);
-  if (h != INVALID_HANDLE_VALUE) {
-    do {
-      if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) {
-        continue;
-      }
-      const std::wstring child = dir + L"\\" + fd.cFileName;
-      if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-        DeleteDirectoryRecursive(child);
-      } else {
-        ::SetFileAttributesW(child.c_str(), FILE_ATTRIBUTE_NORMAL);
-        ::DeleteFileW(child.c_str());
-      }
-    } while (::FindNextFileW(h, &fd));
-    ::FindClose(h);
-  }
-  ::SetFileAttributesW(dir.c_str(), FILE_ATTRIBUTE_NORMAL);
-  ::RemoveDirectoryW(dir.c_str());
-}
-
 std::wstring ReadEnvVar(const wchar_t *name) {
   const DWORD needed = ::GetEnvironmentVariableW(name, nullptr, 0);
   if (needed == 0) {
@@ -93,6 +68,72 @@ std::wstring GetExeDir() {
 TestConfig &GetTestConfig() {
   static TestConfig cfg;
   return cfg;
+}
+
+void DeleteDirectoryRecursive(const std::wstring &dir) {
+  if (dir.empty()) {
+    return;
+  }
+  WIN32_FIND_DATAW fd{};
+  HANDLE h = ::FindFirstFileW((dir + L"\\*").c_str(), &fd);
+  if (h != INVALID_HANDLE_VALUE) {
+    do {
+      if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) {
+        continue;
+      }
+      const std::wstring child = dir + L"\\" + fd.cFileName;
+      if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+        DeleteDirectoryRecursive(child);
+      } else {
+        ::SetFileAttributesW(child.c_str(), FILE_ATTRIBUTE_NORMAL);
+        ::DeleteFileW(child.c_str());
+      }
+    } while (::FindNextFileW(h, &fd));
+    ::FindClose(h);
+  }
+  ::SetFileAttributesW(dir.c_str(), FILE_ATTRIBUTE_NORMAL);
+  ::RemoveDirectoryW(dir.c_str());
+}
+
+DWORD EnumWNet(DWORD scope, DWORD type, DWORD usage, LPNETRESOURCEW nr,
+               std::vector<EnumEntry> *out) {
+  out->clear();
+  HANDLE h = nullptr;
+  DWORD err = ::WNetOpenEnumW(scope, type, usage, nr, &h);
+  if (err != NO_ERROR) {
+    return err;
+  }
+  std::vector<uint8_t> buf(16384);
+  for (;;) {
+    DWORD count = 0xFFFFFFFF;
+    DWORD size = static_cast<DWORD>(buf.size());
+    err = ::WNetEnumResourceW(h, &count, buf.data(), &size);
+    if (err == ERROR_MORE_DATA) {
+      buf.resize(size);
+      continue;
+    }
+    if (err == ERROR_NO_MORE_ITEMS) {
+      err = NO_ERROR;
+      break;
+    }
+    if (err != NO_ERROR) {
+      break;
+    }
+    const auto *res = reinterpret_cast<const NETRESOURCEW *>(buf.data());
+    for (DWORD i = 0; i < count; ++i) {
+      EnumEntry e;
+      e.scope = res[i].dwScope;
+      e.type = res[i].dwType;
+      e.display_type = res[i].dwDisplayType;
+      e.usage = res[i].dwUsage;
+      e.local_name = res[i].lpLocalName ? res[i].lpLocalName : L"";
+      e.remote_name = res[i].lpRemoteName ? res[i].lpRemoteName : L"";
+      e.provider = res[i].lpProvider ? res[i].lpProvider : L"";
+      out->push_back(std::move(e));
+    }
+  }
+  ::WNetCloseEnum(h);
+  return err;
 }
 
 std::wstring Utf8ToWide(const std::string &s) {
@@ -224,36 +265,20 @@ int RunProbeMode() {
   }
 
   bool enum_visible = false;
-  HANDLE h_enum = nullptr;
-  const DWORD open_err = ::WNetOpenEnumW(RESOURCE_CONNECTED, RESOURCETYPE_ANY,
-                                         0, nullptr, &h_enum);
+  std::vector<EnumEntry> connected;
+  const DWORD open_err =
+      EnumWNet(RESOURCE_CONNECTED, RESOURCETYPE_ANY, 0, nullptr, &connected);
   if (open_err == NO_ERROR) {
-    std::vector<uint8_t> buf(16384);
-    for (;;) {
-      DWORD count = 0xFFFFFFFF;
-      DWORD size = static_cast<DWORD>(buf.size());
-      const DWORD enum_err =
-          ::WNetEnumResourceW(h_enum, &count, buf.data(), &size);
-      if (enum_err == ERROR_MORE_DATA) {
-        buf.resize(size);
-        continue;
+    for (const auto &entry : connected) {
+      if (!cfg.probe_unc.empty() &&
+          _wcsicmp(entry.remote_name.c_str(), cfg.probe_unc.c_str()) == 0) {
+        enum_visible = true;
       }
-      if (enum_err != NO_ERROR) {
-        break;
-      }
-      const auto *nr = reinterpret_cast<const NETRESOURCEW *>(buf.data());
-      for (DWORD i = 0; i < count; ++i) {
-        if (!cfg.probe_unc.empty() && nr[i].lpRemoteName != nullptr &&
-            _wcsicmp(nr[i].lpRemoteName, cfg.probe_unc.c_str()) == 0) {
-          enum_visible = true;
-        }
-        if (!cfg.probe_drive.empty() && nr[i].lpLocalName != nullptr &&
-            _wcsicmp(nr[i].lpLocalName, cfg.probe_drive.c_str()) == 0) {
-          enum_visible = true;
-        }
+      if (!cfg.probe_drive.empty() &&
+          _wcsicmp(entry.local_name.c_str(), cfg.probe_drive.c_str()) == 0) {
+        enum_visible = true;
       }
     }
-    ::WNetCloseEnum(h_enum);
   }
 
   const bool visible = conn_visible || enum_visible;
@@ -417,9 +442,7 @@ bool RunProcessCapture(const std::wstring &cmd_line, DWORD timeout_ms,
 
   std::string bytes;
   char chunk[4096];
-  const ULONGLONG deadline = ::GetTickCount64() + timeout_ms;
-  bool timed_out = false;
-  for (;;) {
+  auto drain_pipe = [&]() {
     DWORD avail = 0;
     while (::PeekNamedPipe(read_pipe, nullptr, 0, nullptr, &avail, nullptr) &&
            avail > 0) {
@@ -432,18 +455,13 @@ bool RunProcessCapture(const std::wstring &cmd_line, DWORD timeout_ms,
       }
       bytes.append(chunk, read_bytes);
     }
+  };
+  const ULONGLONG deadline = ::GetTickCount64() + timeout_ms;
+  bool timed_out = false;
+  for (;;) {
+    drain_pipe();
     if (::WaitForSingleObject(pi.hProcess, 25) == WAIT_OBJECT_0) {
-      while (::PeekNamedPipe(read_pipe, nullptr, 0, nullptr, &avail, nullptr) &&
-             avail > 0) {
-        DWORD read_bytes = 0;
-        const DWORD to_read =
-            std::min<DWORD>(avail, static_cast<DWORD>(sizeof(chunk)));
-        if (!::ReadFile(read_pipe, chunk, to_read, &read_bytes, nullptr) ||
-            read_bytes == 0) {
-          break;
-        }
-        bytes.append(chunk, read_bytes);
-      }
+      drain_pipe();
       break;
     }
     if (::GetTickCount64() >= deadline) {
@@ -508,7 +526,7 @@ void ReleaseDriveLetter(WCHAR letter) {
 MirrorMount::~MirrorMount() { Stop(); }
 
 bool MirrorMount::SendDokanRelease(const std::wstring &mount_point) {
-  if (mount_point.empty()) {
+  if (mount_point.empty() || mount_point.size() >= MAX_PATH) {
     return false;
   }
   constexpr wchar_t kDokanGlobalDeviceName[] =

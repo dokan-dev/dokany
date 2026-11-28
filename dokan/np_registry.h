@@ -38,6 +38,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
+/** \cond INTERNAL */
+
 // Appends Provider to the comma separated Order (NULL means empty) unless it
 // is already one of its tokens (compared case-insensitively, ignoring
 // surrounding blanks). On success *NewOrder is NULL when Order needs no change,
@@ -58,6 +60,8 @@ VOID DokanProviderOrderFree(LPWSTR Order);
 // Returns a Win32 error code.
 DWORD DokanNetworkProviderInstallAt(HKEY Root);
 DWORD DokanNetworkProviderUninstallAt(HKEY Root);
+
+/** \endcond */
 
 #ifdef __cplusplus
 }

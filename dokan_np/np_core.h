@@ -42,24 +42,35 @@ extern "C" {
 #define DOKAN_NP_NAME L"Dokan" DOKAN_MAJOR_API_VERSION
 #endif
 
+// All size parameters follow the npapi.h no-shrink contract: *BufferSize /
+// *Length is updated only when returning WN_MORE_DATA and left untouched on
+// WN_SUCCESS.
+
 DWORD DokanNpGetCaps(DWORD Index);
 
 DWORD DokanNpAddConnection(const DOKAN_NP_TRANSPORT *Transport,
                            LPNETRESOURCEW NetResource, LPWSTR Password,
                            LPWSTR UserName);
 
+// Only targets already-mounted Dokan shares (deviceless validation or drive
+// aliasing via Transport->AddDriveAlias); never spawns processes or prompts.
 DWORD DokanNpAddConnection3(const DOKAN_NP_TRANSPORT *Transport, HWND Owner,
                             LPNETRESOURCEW NetResource, LPWSTR Password,
                             LPWSTR UserName, DWORD Flags);
 
+// Accepts either a drive ("X:" / "X:\") or a primary UNC name ("\\srv\share")
+// and forwards cancelable entries to Transport->CancelMount.
 DWORD DokanNpCancelConnection(const DOKAN_NP_TRANSPORT *Transport, LPWSTR Name,
                               BOOL Force);
 
-// BufferSize is a count of WCHARs.
+// BufferSize is a count of WCHARs (including the terminating NUL on
+// WN_MORE_DATA).
 DWORD DokanNpGetConnection(const DOKAN_NP_TRANSPORT *Transport,
                            LPWSTR LocalName, LPWSTR RemoteName,
                            LPDWORD BufferSize);
 
+// Captures one mount-table snapshot for the lifetime of *Enum. Usage is
+// honored only for RESOURCE_GLOBALNET per npapi.h.
 DWORD DokanNpOpenEnum(const DOKAN_NP_TRANSPORT *Transport, DWORD Scope,
                       DWORD Type, DWORD Usage, LPNETRESOURCEW NetResource,
                       LPHANDLE Enum);
@@ -70,23 +81,26 @@ DWORD DokanNpEnumResource(HANDLE Enum, LPDWORD Count, LPVOID Buffer,
 
 DWORD DokanNpCloseEnum(HANDLE Enum);
 
-// BufferSize is a count of bytes.
+// BufferSize is a count of bytes. Supports UNIVERSAL_NAME_INFO_LEVEL and
+// REMOTE_NAME_INFO_LEVEL.
 DWORD DokanNpGetUniversalName(const DOKAN_NP_TRANSPORT *Transport,
                               LPCWSTR LocalPath, DWORD InfoLevel, LPVOID Buffer,
                               LPDWORD BufferSize);
 
-// BufferSize is a count of bytes.
+// BufferSize is a count of bytes. NetResource and its strings may reside inside
+// Buffer (buffer aliasing is safe).
 DWORD DokanNpGetResourceParent(const DOKAN_NP_TRANSPORT *Transport,
                                LPNETRESOURCEW NetResource, LPVOID Buffer,
                                LPDWORD BufferSize);
 
-// BufferSize is a count of bytes. On success *System is NULL or points inside
+// BufferSize is a count of bytes. NetResource and its strings may reside inside
+// Buffer (buffer aliasing is safe). On success *System is NULL or points inside
 // Buffer.
 DWORD DokanNpGetResourceInformation(const DOKAN_NP_TRANSPORT *Transport,
                                     LPNETRESOURCEW NetResource, LPVOID Buffer,
                                     LPDWORD BufferSize, LPWSTR *System);
 
-// Length is a count of WCHARs.
+// Length is a count of WCHARs (including the terminating NUL on WN_MORE_DATA).
 DWORD DokanNpFormatNetworkName(LPWSTR RemoteName, LPWSTR FormattedName,
                                LPDWORD Length, DWORD Flags,
                                DWORD AveCharPerLine);

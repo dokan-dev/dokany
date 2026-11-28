@@ -70,7 +70,7 @@ Session 0 (where IFSTest multi-process security tests using `CreateProcessWithLo
 (`AutoAdminLogon` / `WinSta0\Default`) via a one-shot Scheduled Task and streams output back over SSH;
 [`scripts/run_ifstest.ps1`](../run_ifstest.ps1) explicitly fails the run (in both CI and local runs) if
 `SetOwnerSecurityTest` or `DirectoryTraverseTest` reports `IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE`.
-Scorecards (`fstest-results/*.json`), install logs, `guest_tests.log`, the serial console log, and
+Scorecards (`fstest-results/*.json`), Network Provider JUnit results (`np-results/*.xml`), install logs, `guest_tests.log`, the serial console log, and
 (on failures) `guest_diagnostics.txt` (recent `System`/`Application`/`TaskScheduler`/`WMI-Activity`
 events, live test processes, and trampoline state) are uploaded as `vm-logs-<os>-<shard>`.
 
@@ -201,7 +201,9 @@ SSH_PORT=2223 scripts/ci/vm/run_vm_tests.sh ~/dokan-vm/server2022 ~/dokan-payloa
 Tier 1 hermetic unit tests require zero admin rights and no driver installed:
 
 ```powershell
-cmake -S tests\np -B tests\np\build-x64 -A x64 && cmake --build tests\np\build-x64 --config Release --parallel && .\tests\np\build-x64\bin\Release\dokan_np_unit_test.exe
+cmake -S tests\np -B tests\np\build-x64 -A x64
+cmake --build tests\np\build-x64 --config Release --parallel
+.\tests\np\build-x64\bin\Release\dokan_np_unit_test.exe
 ```
 
 Tier 2 real-OS `mpr.dll` + Shell integration tests (requires Dokan installed with `dokannp3.dll` registered):

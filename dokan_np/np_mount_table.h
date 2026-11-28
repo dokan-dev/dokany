@@ -34,6 +34,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <ntstatus.h>
 #endif
 
+#include <winnetwk.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -76,14 +78,15 @@ typedef struct _DOKAN_NP_MOUNT_TABLE {
 } DOKAN_NP_MOUNT_TABLE, *PDOKAN_NP_MOUNT_TABLE;
 
 // Builder: the only way to create a table, so that every transport produces
-// identically normalized entries.
+// identically normalized entries. Builder functions return Win32 ERROR_* codes.
 typedef struct _DOKAN_NP_TABLE_BUILDER DOKAN_NP_TABLE_BUILDER;
 
-// Returns ERROR_SUCCESS or ERROR_NOT_ENOUGH_MEMORY.
+// Returns ERROR_SUCCESS, ERROR_INVALID_PARAMETER or ERROR_NOT_ENOUGH_MEMORY.
 DWORD DokanNpTableBuilderCreate(DOKAN_NP_TABLE_BUILDER **Builder);
 
 // Adds one mount. UncName is "\server\share[\more]" or "\\server\share[\more]"
-// (UncNameLength WCHARs, not necessarily NUL-terminated). TransportKey may be
+// (UncNameLength WCHARs, not necessarily NUL-terminated). DriveLetter may be
+// 'A'..'Z', 'a'..'z', or 0 (folder or driveless UNC mount). TransportKey may be
 // NULL only when TransportKeyLength is 0.
 // Returns ERROR_SUCCESS when added, ERROR_INVALID_NAME when the entry is
 // rejected (not a valid network-visible mount; the caller continues with the
@@ -101,27 +104,75 @@ DWORD DokanNpTableBuilderFinish(DOKAN_NP_TABLE_BUILDER *Builder,
 // Releases a builder that will not be finished. Accepts NULL.
 VOID DokanNpTableBuilderAbort(DOKAN_NP_TABLE_BUILDER *Builder);
 
-// Accepts NULL.
+// Releases a table produced by DokanNpTableBuilderFinish. Accepts NULL.
 VOID DokanNpTableFree(DOKAN_NP_MOUNT_TABLE *Table);
 
+// Transport callbacks (return WN_* status codes). All callbacks must be
+// callable concurrently from any thread.
+
+// Returns a snapshot of the mounts visible to the calling process. Visibility
+// policy (session/SID/cross-session filtering) lives in the transport, never in
+// np_core.c. Returns WN_SUCCESS (with a possibly empty table) or
+// WN_OUT_OF_MEMORY. A missing or stopped driver yields an empty table.
+typedef DWORD (*DOKAN_NP_QUERY_MOUNTS_FN)(PVOID Context,
+                                          DOKAN_NP_MOUNT_TABLE **Table);
+
+// Disconnects an entry of a table produced by this transport. Unmount versus
+// alias removal is transport policy keyed by Mount->TransportKey. Force is
+// forwarded from NPCancelConnection (transports without a graceful release mode
+// may ignore it). Returns WN_SUCCESS, WN_NOT_CONNECTED, WN_ACCESS_DENIED,
+// WN_FUNCTION_BUSY or WN_OPEN_FILES.
+typedef DWORD (*DOKAN_NP_CANCEL_MOUNT_FN)(PVOID Context,
+                                          const DOKAN_NP_MOUNT *Mount,
+                                          BOOL Force);
+
+// Optional (NULL when unsupported): maps DriveLetter ('A'..'Z') onto the
+// already-mounted primary Target.
+typedef DWORD (*DOKAN_NP_ADD_DRIVE_ALIAS_FN)(PVOID Context,
+                                             const DOKAN_NP_MOUNT *Target,
+                                             WCHAR DriveLetter);
+
 // Transport: the only boundary between the protocol logic and the driver.
-// All callbacks must be callable concurrently from any thread.
 typedef struct _DOKAN_NP_TRANSPORT {
-  // Snapshot of the mounts visible to the calling process. The visibility
-  // policy lives here, never in the protocol logic. Returns WN_SUCCESS (with a
-  // possibly empty table) or WN_OUT_OF_MEMORY. A missing or stopped driver is
-  // an empty table.
-  DWORD (*QueryMounts)(PVOID Context, DOKAN_NP_MOUNT_TABLE **Table);
-  // Disconnects an entry of a table produced by this transport. Unmount versus
-  // alias removal is transport policy keyed by Mount->TransportKey.
-  // Returns WN_SUCCESS, WN_NOT_CONNECTED, WN_ACCESS_DENIED or WN_OPEN_FILES.
-  DWORD (*CancelMount)(PVOID Context, const DOKAN_NP_MOUNT *Mount, BOOL Force);
-  // Optional (NULL when unsupported): maps DriveLetter onto the
-  // already-mounted Target.
-  DWORD (*AddDriveAlias)(PVOID Context, const DOKAN_NP_MOUNT *Target,
-                         WCHAR DriveLetter);
+  DOKAN_NP_QUERY_MOUNTS_FN QueryMounts;
+  DOKAN_NP_CANCEL_MOUNT_FN CancelMount;
+  DOKAN_NP_ADD_DRIVE_ALIAS_FN AddDriveAlias;
   PVOID Context;
 } DOKAN_NP_TRANSPORT, *PDOKAN_NP_TRANSPORT;
+
+static __inline DWORD
+DokanNpTransportQueryMounts(const DOKAN_NP_TRANSPORT *Transport,
+                            DOKAN_NP_MOUNT_TABLE **Table) {
+  *Table = NULL;
+  if (Transport == NULL || Transport->QueryMounts == NULL) {
+    return WN_NO_NETWORK;
+  }
+  DWORD status = Transport->QueryMounts(Transport->Context, Table);
+  if (status != WN_SUCCESS) {
+    DokanNpTableFree(*Table);
+    *Table = NULL;
+    return status;
+  }
+  return *Table != NULL ? WN_SUCCESS : WN_OUT_OF_MEMORY;
+}
+
+static __inline DWORD
+DokanNpTransportCancelMount(const DOKAN_NP_TRANSPORT *Transport,
+                            const DOKAN_NP_MOUNT *Mount, BOOL Force) {
+  if (Transport == NULL || Transport->CancelMount == NULL) {
+    return WN_NOT_SUPPORTED;
+  }
+  return Transport->CancelMount(Transport->Context, Mount, Force);
+}
+
+static __inline DWORD
+DokanNpTransportAddDriveAlias(const DOKAN_NP_TRANSPORT *Transport,
+                              const DOKAN_NP_MOUNT *Target, WCHAR DriveLetter) {
+  if (Transport == NULL || Transport->AddDriveAlias == NULL) {
+    return WN_NOT_SUPPORTED;
+  }
+  return Transport->AddDriveAlias(Transport->Context, Target, DriveLetter);
+}
 
 #ifdef __cplusplus
 }

@@ -20,8 +20,10 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Transport talking directly to the Dokan driver control device, so that
-// dokannp3.dll only depends on KERNEL32.dll.
+// Transport talking directly to the Dokan driver control device
+// ("\\.\Dokan_<N>") via DeviceIoControl so that dokannp3.dll avoids loading
+// dokan<N>.dll into Explorer and every MPR caller and imports only
+// KERNEL32.dll.
 
 #ifndef DOKAN_NP_TRANSPORT_LIVE_H_
 #define DOKAN_NP_TRANSPORT_LIVE_H_
@@ -36,8 +38,9 @@ extern "C" {
 
 extern const DOKAN_NP_TRANSPORT g_DokanNpLiveTransport;
 
-// Converts the driver mount point list into a mount table, keeping the entries
-// visible from CurrentSessionId (global mounts and mounts of that session).
+// Converts the driver mount point list into a mount table, keeping only
+// FILE_DEVICE_NETWORK_FILE_SYSTEM entries visible from CurrentSessionId (global
+// mounts with SessionId == (ULONG)-1 and mounts of CurrentSessionId).
 // Returns ERROR_SUCCESS, ERROR_NOT_ENOUGH_MEMORY or ERROR_INVALID_PARAMETER.
 DWORD DokanNpTableFromMountPointInfo(const DOKAN_MOUNT_POINT_INFO *Entries,
                                      ULONG EntryCount, ULONG CurrentSessionId,

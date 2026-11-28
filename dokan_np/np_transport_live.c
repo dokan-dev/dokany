@@ -25,6 +25,8 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <winioctl.h>
 #include <winnetwk.h>
 
+#include "np_util.h"
+
 // Same device as DOKAN_GLOBAL_DEVICE_NAME in dokan/dokanc.h.
 #define DOKAN_NP_GLOBAL_DEVICE_NAME L"\\\\.\\Dokan_" DOKAN_MAJOR_API_VERSION
 
@@ -33,21 +35,16 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #define DOKAN_NP_DOS_DEVICES_PREFIX_LENGTH                                     \
   (ARRAYSIZE(DOKAN_NP_DOS_DEVICES_PREFIX) - 1)
 
-// Initial and maximum number of entries requested from the driver.
+// Initial number of entries requested from the driver (grows up to
+// DOKAN_NP_MAX_ENTRIES on ERROR_MORE_DATA).
 #define DOKAN_NP_INITIAL_LIST_ENTRIES 32
-#define DOKAN_NP_MAX_LIST_ENTRIES 4096
+
+// SessionId value reported by the driver for global (all-session) mounts.
+#define DOKAN_NP_GLOBAL_SESSION 0xFFFFFFFFUL
 
 // Session id matching no session, used when the caller's session is unknown:
 // only global mounts stay visible.
-#define DOKAN_NP_NO_SESSION ((ULONG) - 2)
-
-static SIZE_T NpFixedLength(const WCHAR *Text, SIZE_T Capacity) {
-  SIZE_T length = 0;
-  while (length < Capacity && Text[length] != L'\0') {
-    ++length;
-  }
-  return length;
-}
+#define DOKAN_NP_NO_SESSION 0xFFFFFFFEUL
 
 static BOOL NpHasDosDevicesPrefix(const WCHAR *Text, SIZE_T Length) {
   return Length >= DOKAN_NP_DOS_DEVICES_PREFIX_LENGTH &&
@@ -76,14 +73,21 @@ DWORD DokanNpTableFromMountPointInfo(const DOKAN_MOUNT_POINT_INFO *Entries,
 
   for (ULONG i = 0; i < EntryCount; ++i) {
     const DOKAN_MOUNT_POINT_INFO *entry = &Entries[i];
-    if (entry->SessionId != (ULONG)-1 && entry->SessionId != CurrentSessionId) {
+    // For elevated/admin callers FSCTL_EVENT_MOUNTPOINT_LIST returns entries
+    // from all sessions; keep only mounts visible in the caller's session.
+    if (entry->SessionId != DOKAN_NP_GLOBAL_SESSION &&
+        entry->SessionId != CurrentSessionId) {
+      continue;
+    }
+    // Folder mounts may clear DOKAN_OPTION_NETWORK while retaining UNCName,
+    // yielding a disk device entry that is not a network redirector mount.
+    if (entry->Type != FILE_DEVICE_NETWORK_FILE_SYSTEM) {
       continue;
     }
     // The driver does not guarantee NUL termination of the fixed arrays.
     SIZE_T uncNameLength =
-        NpFixedLength(entry->UNCName, ARRAYSIZE(entry->UNCName));
+        NpBoundedLength(entry->UNCName, ARRAYSIZE(entry->UNCName));
     if (uncNameLength == 0) {
-      // Not a network mount.
       continue;
     }
 
@@ -91,14 +95,12 @@ DWORD DokanNpTableFromMountPointInfo(const DOKAN_MOUNT_POINT_INFO *Entries,
     // the form FSCTL_EVENT_RELEASE expects ("X:" or "C:\mount\point").
     const WCHAR *key = entry->MountPoint;
     SIZE_T keyLength =
-        NpFixedLength(entry->MountPoint, ARRAYSIZE(entry->MountPoint));
+        NpBoundedLength(entry->MountPoint, ARRAYSIZE(entry->MountPoint));
     WCHAR driveLetter = 0;
     if (NpHasDosDevicesPrefix(key, keyLength)) {
       key += DOKAN_NP_DOS_DEVICES_PREFIX_LENGTH;
       keyLength -= DOKAN_NP_DOS_DEVICES_PREFIX_LENGTH;
-      if (keyLength == 2 && key[1] == L':' &&
-          ((key[0] >= L'A' && key[0] <= L'Z') ||
-           (key[0] >= L'a' && key[0] <= L'z'))) {
+      if (keyLength == 2 && key[1] == L':' && NpIsAsciiLetter(key[0])) {
         driveLetter = key[0];
       }
     }
@@ -170,7 +172,7 @@ static DWORD NpLiveQueryMounts(PVOID Context, DOKAN_NP_MOUNT_TABLE **Table) {
     DWORD error = GetLastError();
     HeapFree(GetProcessHeap(), 0, entries);
     entries = NULL;
-    if (error != ERROR_MORE_DATA || capacity >= DOKAN_NP_MAX_LIST_ENTRIES) {
+    if (error != ERROR_MORE_DATA || capacity >= DOKAN_NP_MAX_ENTRIES) {
       CloseHandle(device);
       return NpEmptyTable(Table);
     }
@@ -200,7 +202,7 @@ static DWORD NpLiveCancelMount(PVOID Context, const DOKAN_NP_MOUNT *Mount,
   if (Mount == NULL || Mount->TransportKey == NULL) {
     return WN_NOT_CONNECTED;
   }
-  SIZE_T keyLength = NpFixedLength(Mount->TransportKey, MAX_PATH);
+  SIZE_T keyLength = NpBoundedLength(Mount->TransportKey, MAX_PATH);
   if (keyLength == 0 || keyLength >= MAX_PATH) {
     return WN_NOT_CONNECTED;
   }
@@ -230,8 +232,11 @@ static DWORD NpLiveCancelMount(PVOID Context, const DOKAN_NP_MOUNT *Mount,
       case ERROR_ACCESS_DENIED:
         status = WN_ACCESS_DENIED;
         break;
-      case ERROR_BUSY:
+      case ERROR_OPEN_FILES:
         status = WN_OPEN_FILES;
+        break;
+      case ERROR_BUSY:
+        status = WN_FUNCTION_BUSY;
         break;
       default:
         // Includes the "no such mount point" reply of the driver.
@@ -247,4 +252,8 @@ static DWORD NpLiveCancelMount(PVOID Context, const DOKAN_NP_MOUNT *Mount,
 }
 
 const DOKAN_NP_TRANSPORT g_DokanNpLiveTransport = {
-    NpLiveQueryMounts, NpLiveCancelMount, NULL, NULL};
+    .QueryMounts = NpLiveQueryMounts,
+    .CancelMount = NpLiveCancelMount,
+    .AddDriveAlias = NULL,
+    .Context = NULL,
+};

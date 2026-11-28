@@ -48,6 +48,20 @@ DWORD GetCurrentProcessSessionId();
 std::wstring FormatWin32Error(DWORD err);
 std::wstring Utf8ToWide(const std::string &s);
 std::string WideToUtf8(const std::wstring &w);
+void DeleteDirectoryRecursive(const std::wstring &dir);
+
+struct EnumEntry {
+  DWORD scope = 0;
+  DWORD type = 0;
+  DWORD display_type = 0;
+  DWORD usage = 0;
+  std::wstring local_name;
+  std::wstring remote_name;
+  std::wstring provider;
+};
+
+DWORD EnumWNet(DWORD scope, DWORD type, DWORD usage, LPNETRESOURCEW nr,
+               std::vector<EnumEntry> *out);
 
 // Dynamically resolves and invokes WNetFormatNetworkNameW from mpr.dll
 // (exported at runtime by mpr.dll, omitted from public <winnetwk.h> / mpr.lib).

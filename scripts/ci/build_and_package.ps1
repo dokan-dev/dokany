@@ -33,20 +33,6 @@ if ($ArtifactPrefix -notmatch '^[A-Za-z0-9_.-]*$') {
     throw "Invalid ArtifactPrefix '$ArtifactPrefix': only ASCII letters, digits, '_', '.', and '-' are allowed."
 }
 
-function Resolve-TargetPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$BasePath,
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-    return (Join-Path -Path $BasePath -ChildPath $Path)
-}
-
 function Convert-PeRvaToFileOffset {
     param(
         [Parameter(Mandatory = $true)][uint32]$Rva,
@@ -149,10 +135,11 @@ function Get-DokanPEImportedDlls {
                 if ($origFirstThunk -eq 0 -and $nameRva -eq 0 -and $firstThunk -eq 0) {
                     break
                 }
-                if ($nameRva -ne 0) {
-                    $dllName = Read-PeAsciiStringAtRva -Rva $nameRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
-                    $imports.Add($dllName)
+                if ($nameRva -eq 0) {
+                    throw "$BinaryPath has malformed Import Descriptor with zero Name RVA."
                 }
+                $dllName = Read-PeAsciiStringAtRva -Rva $nameRva -Bytes $bytes -SectionTableOffset ([int]$secOff) -NumberOfSections $numSections
+                $imports.Add($dllName)
                 $impOff += 20
             }
         }
@@ -193,30 +180,6 @@ function Assert-DokanNpKernel32OnlyImports {
     }
     if ($pe.DelayImports.Count -ne 0) {
         throw "PE delay-load import check failed for ${BinaryPath}: expected none, got [$($pe.DelayImports -join ', ')]."
-    }
-}
-
-function Invoke-WithRetry {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Description,
-        [Parameter(Mandatory = $true)]
-        [scriptblock]$Action,
-        [int]$MaxAttempts = 3,
-        [int]$DelaySeconds = 10
-    )
-
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        try {
-            & $Action
-            return
-        } catch {
-            if ($attempt -ge $MaxAttempts) {
-                throw
-            }
-            Write-Warning "$Description failed (attempt $attempt/$MaxAttempts): $($_.Exception.Message). Retrying in ${DelaySeconds}s..."
-            Start-Sleep -Seconds $DelaySeconds
-        }
     }
 }
 
@@ -265,7 +228,7 @@ foreach ($pkg in @($packagesXml.packages.package)) {
 }
 if (-not $packagesComplete) {
     Write-Host 'Restoring WDK NuGet packages from sys\packages.config...'
-    Invoke-WithRetry -Description 'nuget restore sys\packages.config' -Action {
+    Invoke-DokanWithRetry -Description 'nuget restore sys\packages.config' -Action {
         Exec-External { & nuget restore $sysPackagesConfig -PackagesDirectory $packagesDir }
     }
 }
@@ -283,7 +246,7 @@ try {
     }
     foreach ($proj in $wixProjects) {
         $projPath = $proj.FullName
-        Invoke-WithRetry -Description "nuget restore $($proj.Name)" -Action {
+        Invoke-DokanWithRetry -Description "nuget restore $($proj.Name)" -Action {
             Exec-External { & nuget restore $projPath -SolutionDirectory . }
         }
     }
@@ -411,8 +374,8 @@ try {
 }
 
 # 6. Stage release artifacts (same names as the former AppVeyor artifacts).
-$payloadAbs = Resolve-TargetPath -BasePath $repoRoot -Path $PayloadDir
-$releaseAbs = Resolve-TargetPath -BasePath $repoRoot -Path $ReleaseDir
+$payloadAbs = Resolve-DokanTargetPath -BasePath $repoRoot -Path $PayloadDir
+$releaseAbs = Resolve-DokanTargetPath -BasePath $repoRoot -Path $ReleaseDir
 foreach ($dir in @($payloadAbs, $releaseAbs)) {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $dir | Out-Null

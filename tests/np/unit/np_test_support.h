@@ -29,6 +29,10 @@
 
 namespace dokan_np_test {
 
+// Avoid signed/unsigned mismatch warnings (C4389 / -Wsign-compare) when
+// GoogleTest compares DWORD returns against long WN_*/ERROR_* constants.
+inline DWORD Dw(long code) { return static_cast<DWORD>(code); }
+
 // Allocates virtual memory with a trailing PAGE_NOACCESS guard page.
 // The writable region of `size_bytes` is placed immediately before the guard
 // page (aligned up to `align` when `align > 1`, with trailing canary bytes

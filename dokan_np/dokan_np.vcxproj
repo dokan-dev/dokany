@@ -257,6 +257,7 @@
     <ClInclude Include="np_core.h" />
     <ClInclude Include="np_mount_table.h" />
     <ClInclude Include="np_transport_live.h" />
+    <ClInclude Include="np_util.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
