@@ -105,12 +105,20 @@ typedef struct _DOKAN_INSTANCE {
  */
 typedef struct _DOKAN_OPEN_INFO {
   CRITICAL_SECTION CriticalSection;
+  /** Serializes directory enumeration dispatches on this open handle (lock order: DirScanLock -> CriticalSection). */
+  CRITICAL_SECTION DirScanLock;
   /** Dokan instance linked to the open */
   PDOKAN_INSTANCE DokanInstance;
   PDOKAN_VECTOR DirList;
   PWCHAR DirListSearchPattern;
   /** Whether the FindFilesWithPattern has returned STATUS_NOT_IMPLEMENTED */
   BOOLEAN UnimplementedFindFilesWithPattern;
+  /** Whether the opener token held enabled SeManageVolumePrivilege at create time */
+  BOOLEAN HasManageVolumePrivilege;
+  /** Whether the filesystem returned STATUS_MORE_ENTRIES and has more directory chunks */
+  BOOLEAN MoreItems;
+  /** Logical 0-based directory index of DirList[0] for chunked directory streaming */
+  ULONG BaseIndex;
   /** User Context see DOKAN_FILE_INFO.Context */
   LONG64 UserContext;
   /** Event Id */
@@ -216,6 +224,17 @@ GetRawDeviceName(LPCWSTR DeviceName, LPWSTR DestinationBuffer,
 
 VOID ALIGN_ALLOCATION_SIZE(PLARGE_INTEGER size, PDOKAN_OPTIONS DokanOptions);
 
+LARGE_INTEGER DokanResolveChangeTime(LARGE_INTEGER ChangeTime,
+                                     LARGE_INTEGER LastWriteTime);
+
+LARGE_INTEGER DokanResolveAllocationSize(LARGE_INTEGER AllocationSize,
+                                         LARGE_INTEGER EndOfFile,
+                                         PDOKAN_OPTIONS DokanOptions);
+
+ACCESS_MASK DokanResolveEffectiveAccess(ACCESS_MASK EffectiveAccess);
+
+VOID DokanFillFileId128(ULONG64 FileIndex, FILE_ID_128 *FileId);
+
 BOOL DokanMount(PDOKAN_INSTANCE DokanInstance,
                 PDOKAN_OPTIONS DokanOptions);
 
@@ -265,6 +284,8 @@ VOID CheckFileName(LPWSTR FileName);
 VOID ReleaseDokanOpenInfo(PDOKAN_IO_EVENT IoEvent);
 
 VOID DokanNotifyUnmounted(PDOKAN_INSTANCE DokanInstance);
+
+HANDLE DokanOpenRequestorTokenForEvent(_In_ PDOKAN_IO_EVENT IoEvent);
 
 #ifdef __cplusplus
 }

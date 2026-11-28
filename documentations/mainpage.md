@@ -86,8 +86,8 @@ directory listing requests. One of the two functions should be implemented.
 
 For each directory entry, file system applications should call the function FillFindData (passed as a
 function pointer to FindFiles, FindFilesWithPattern) with the
-\c WIN32_FIND_DATAW structure filled with directory information:
-\c FillFindData( &win32FindDataw, DokanFileInfo ).  It is the
+\ref DOKAN_FIND_DATA structure filled with directory information:
+\c FillFindData( &dokanFindData, DokanFileInfo ).  It is the
 responsibility of file systems to process wildcard patterns because
 shells in Windows are not designed to work properly with pattern
 matching. When file system applications only implement FindFiles, the

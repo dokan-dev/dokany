@@ -40,16 +40,18 @@ DOKAN_VECTOR *DokanVector_AllocWithCapacity(size_t ItemSize, size_t MaxItems);
 VOID DokanVector_Free(PDOKAN_VECTOR Vector);
 
 // Appends an item to the vector at the Front. Expensive, please use PushBack instead.
-BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item);
+BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, LPCVOID Item);
 
 // Appends an array of items to the vector at the Front.
-BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, PVOID Items, size_t Count);
+BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, LPCVOID Items,
+                                size_t Count);
 
 // Appends an item to the vector.
-BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item);
+BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, LPCVOID Item);
 
 // Appends an array of items to the vector.
-BOOL DokanVector_PushBackArray(PDOKAN_VECTOR Vector, PVOID Items, size_t Count);
+BOOL DokanVector_PushBackArray(PDOKAN_VECTOR Vector, LPCVOID Items,
+                               size_t Count);
 
 // Removes an item from the end of the vector.
 VOID DokanVector_PopBack(PDOKAN_VECTOR Vector);

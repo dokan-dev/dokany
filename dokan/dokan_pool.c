@@ -559,12 +559,16 @@ PDOKAN_OPEN_INFO PopFileOpenInfo() {
     }
     RtlZeroMemory(fileInfo, sizeof(DOKAN_OPEN_INFO));
     InitializeCriticalSection(&fileInfo->CriticalSection);
+    InitializeCriticalSection(&fileInfo->DirScanLock);
   }
   if (fileInfo) {
     fileInfo->DokanInstance = NULL;
     fileInfo->DirList = NULL;
-    fileInfo->DirListSearchPattern= NULL;
+    fileInfo->DirListSearchPattern = NULL;
     fileInfo->UnimplementedFindFilesWithPattern = FALSE;
+    fileInfo->HasManageVolumePrivilege = FALSE;
+    fileInfo->MoreItems = FALSE;
+    fileInfo->BaseIndex = 0;
     fileInfo->UserContext = 0;
     fileInfo->EventId = 0;
     fileInfo->IsDirectory = FALSE;
@@ -590,6 +594,8 @@ VOID CleanupFileOpenInfo(PDOKAN_OPEN_INFO FileInfo) {
       dirList = FileInfo->DirList;
       FileInfo->DirList = NULL;
     }
+    FileInfo->MoreItems = FALSE;
+    FileInfo->BaseIndex = 0;
   }
   LeaveCriticalSection(&FileInfo->CriticalSection);
   if (dirList) {
@@ -600,6 +606,7 @@ VOID CleanupFileOpenInfo(PDOKAN_OPEN_INFO FileInfo) {
 VOID FreeFileOpenInfo(PDOKAN_OPEN_INFO FileInfo) {
   if (FileInfo) {
     CleanupFileOpenInfo(FileInfo);
+    DeleteCriticalSection(&FileInfo->DirScanLock);
     DeleteCriticalSection(&FileInfo->CriticalSection);
     free(FileInfo);
   }
@@ -634,7 +641,7 @@ PDOKAN_VECTOR PopDirectoryList() {
   }
   LeaveCriticalSection(&g_DirectoryListCriticalSection);
   if (!directoryList) {
-    directoryList = DokanVector_Alloc(sizeof(WIN32_FIND_DATAW));
+    directoryList = DokanVector_Alloc(sizeof(DOKAN_FIND_DATA));
   }
   if (directoryList) {
     DokanVector_Clear(directoryList);
@@ -644,7 +651,7 @@ PDOKAN_VECTOR PopDirectoryList() {
 
 VOID PushDirectoryList(PDOKAN_VECTOR DirectoryList) {
   assert(DirectoryList);
-  assert(DokanVector_GetItemSize(DirectoryList) == sizeof(WIN32_FIND_DATAW));
+  assert(DokanVector_GetItemSize(DirectoryList) == sizeof(DOKAN_FIND_DATA));
   EnterCriticalSection(&g_DirectoryListCriticalSection);
   {
     if (DokanVector_GetCount(g_DirectoryListPool) <

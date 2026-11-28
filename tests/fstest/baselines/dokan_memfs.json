@@ -14,7 +14,7 @@
           "gap": "GAP-06"
         },
         "CreateOpenTest.NtCreateFileInitialAllocationSize": {
-          "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and DokanFillFileStandardInfo derives AllocationSize from EndOfFile",
+          "reason": "dokan3.sys CREATE_CONTEXT and DOKAN_OPERATIONS::ZwCreateFile do not forward initial AllocationSize, and memfs leaves DOKAN_FILE_INFORMATION::AllocationSize = 0 so DokanFillFileStandardInfo auto-aligns EndOfFile",
           "gap": "GAP-09"
         },
         "CreateOpenTest.NtSupersedeAndOverwriteIfMergeAttributes": {
@@ -70,7 +70,7 @@
           "gap": "GAP-09"
         },
         "DataIoTest.FileValidDataLengthExtend": {
-          "reason": "dokan3.sys initializes ValidDataLength to MAXLONGLONG without privilege or range checks and dokan/setfile.c forwards FileValidDataLengthInformation straight to SetEndOfFile",
+          "reason": "dokan3.sys initializes ValidDataLength to MAXLONGLONG without privilege or range checks, and memfs leaves DOKAN_OPERATIONS::SetValidDataLength NULL (returning STATUS_NOT_IMPLEMENTED)",
           "gap": "GAP-09"
         },
         "DataIoTest.ImageMappedFileRejectsWriteOpen": {
@@ -138,7 +138,7 @@
           "gap": "GAP-24"
         },
         "DeleteTest.CreateChildInDeletePendingDirFailsDeletePending": {
-          "reason": "dokan3.sys DokanDispatchCreate only checks DOKAN_FCB_STATE_DELETE_PENDING (sys/public.h:108, via DokanFCBIsPendingDeletion at sys/create.c:294-295) on the target FCB, not on parent directory FCBs, and memfs_deletedirectory defers deletion to Cleanup without marking the directory delete-pending",
+          "reason": "dokan3.sys DokanDispatchCreate only checks DOKAN_FCB_STATE_DELETE_PENDING (sys/public.h:108, via DokanFCBIsPendingDeletion at sys/create.c:294-295) on the target FCB, not on parent directory FCBs, and memfs_setfiledisposition defers directory deletion to Cleanup without marking the directory delete-pending",
           "gap": "GAP-06"
         },
         "DeleteTest.DeleteFileWOnMappedFilePosixUnlinksOnWin11_24H2": {
@@ -192,7 +192,7 @@
           "gap": "GAP-26"
         },
         "DirEnumTest.FileIdExtdDirectoryInfoReportsReparseTag": {
-          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillIdExtdDirInfo hardcodes ReparsePointTag = 0)",
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and memfs leaves DOKAN_FIND_DATA::ReparseTag = 0)",
           "gap": "GAP-22"
         },
         "DirEnumTest.NtQueryDirectoryCaseInsensitiveWildcards": {
@@ -201,14 +201,6 @@
         },
         "DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate": {
           "reason": "dokan3.sys ignores SL_NO_CURSOR_UPDATE (0x10) alongside SL_RETURN_SINGLE_ENTRY (0x02) in NtQueryDirectoryFileEx (always advancing ccb->Context at sys/directory.c:316) and ignores non-initial QueryDirectory.FileName patterns when initial == FALSE (sys/directory.c:121-153)",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds": {
-          "reason": "dokan/directory.c DokanFillIdBothDirInfo hardcodes FileId = 0 instead of reporting the file's 64-bit FileId",
-          "gap": "GAP-12"
-        },
-        "DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses": {
-          "reason": "dokan/directory.c DokanFillIdFullDirInfo and DokanFillIdExtdDirInfo hardcode FileId = 0 instead of reporting real 64-bit and 128-bit FileIds",
           "gap": "GAP-12"
         },
         "InfoQueriesTest.ExtendedAttributesCreateWithEaBuffer": {
@@ -256,7 +248,7 @@
           "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryFileAttributeTagJunctionReparsePoint": {
-          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and DokanFillFileAttributeTagInfo hardcodes ReparseTag = 0)",
+          "reason": "Dokan does not support reparse points (FSCTL_SET_REPARSE_POINT returns ERROR_INVALID_FUNCTION and memfs leaves DOKAN_FILE_INFORMATION::ReparseTag = 0)",
           "gap": "GAP-22"
         },
         "InfoQueriesTest.NtQueryFileCompressionInformation": {
@@ -274,14 +266,6 @@
         "InfoQueriesTest.NtQueryFileNameAndNormalizedNameInfo": {
           "reason": "memfs case-insensitive open or FileNormalizedNameInformation does not preserve canonical case",
           "gap": "GAP-13"
-        },
-        "InfoQueriesTest.NtQueryFileStandardLinkInfo": {
-          "reason": "dokan3.sys does not support FileStandardLinkInformation (STATUS_INVALID_PARAMETER)",
-          "gap": "GAP-28"
-        },
-        "InfoQueriesTest.NtQueryFileStatAndStatLxInformation": {
-          "reason": "dokan3.sys does not support FileStatInformation / FileStatLxInformation (STATUS_INVALID_PARAMETER)",
-          "gap": "GAP-28"
         },
         "InfoQueriesTest.NtQueryVolumeFsControlInformation": {
           "reason": "dokan3.sys DokanDispatchQueryVolumeInformation (sys/volume.c) does not handle FileFsControlInformation (returns STATUS_INVALID_PARAMETER)",
@@ -603,7 +587,7 @@
           "gap": "GAP-10"
         },
         "RenameMoveTest.RenameUpdatesFileChangeTime": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so memfs never reports an updated file ChangeTime after rename",
+          "reason": "memfs does not track ChangeTime and leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime in dokan/fileinfo.c), so memfs never reports an updated file ChangeTime after rename",
           "gap": "GAP-09"
         },
         "SecurityAclTest.CopyFileInheritsDestinationDaclUnlikeMove": {
@@ -834,7 +818,7 @@
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.ExplicitChangeTimeRoundTripsIndependently": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime and dokan/setfile.c drops ChangeTime, so memfs does not persist ChangeTime independently",
+          "reason": "memfs_setfilebasicinformation ignores ChangeTime and memfs_getfileInformation leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime), so memfs does not persist ChangeTime independently",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.HandleExplicitSetFileTimeFreezesSubsequentAutoUpdateOnSameHandle": {
@@ -858,11 +842,11 @@
           "gap": "GAP-10"
         },
         "TimestampsAttrsTest.RenameUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "dokan/fileinfo.c:46-47 copies LastWriteTime into ChangeTime, so memfs never reports an updated ChangeTime after rename",
+          "reason": "memfs does not track ChangeTime and leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime in dokan/fileinfo.c), so memfs never reports an updated ChangeTime after rename",
           "gap": "GAP-09"
         },
         "TimestampsAttrsTest.SecurityChangeUpdatesChangeTimeNotLastWriteTime": {
-          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and dokan/fileinfo.c:46-47 aliases ChangeTime to LastWriteTime",
+          "reason": "memfs leaves default filenode security descriptors null so memfs_setfilesecurity fails SetPrivateObjectSecurity, and memfs leaves DOKAN_FILE_INFORMATION::ChangeTime = 0 (falling back to LastWriteTime)",
           "gap": "GAP-20"
         },
         "TimestampsAttrsTest.SentinelMinusOneFreezesTimestampUpdates": {

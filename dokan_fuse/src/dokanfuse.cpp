@@ -22,6 +22,11 @@
   reinterpret_cast<impl_fuse_context *>(                                       \
       DokanFileInfo->DokanOptions->GlobalContext)
 
+static_assert(sizeof(DOKAN_FILE_INFORMATION) == 80,
+              "DOKAN_FILE_INFORMATION ABI size mismatch");
+static_assert(sizeof(DOKAN_FIND_DATA) == 592,
+              "DOKAN_FIND_DATA ABI size mismatch");
+
 HINSTANCE hFuseDllInstance;
 
 extern "C" BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason,
@@ -48,7 +53,7 @@ static int WalkDirectoryWithSetFuseContext(PDOKAN_FILE_INFO DokanFileInfo, void 
 static NTSTATUS DOKAN_CALLBACK
 FuseFindFiles(LPCWSTR FileName,
               PFillFindData FillFindData, // function pointer
-              PDOKAN_FILE_INFO DokanFileInfo) {
+              ULONG /*FindFlags*/, PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
     FPRINTF(stderr, "FindFiles: %ls\n", FileName);
@@ -66,17 +71,6 @@ static void DOKAN_CALLBACK FuseCleanup(LPCWSTR FileName,
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
   impl->cleanup(FileName, DokanFileInfo);
-}
-
-static NTSTATUS DOKAN_CALLBACK
-FuseDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
-  impl_fuse_context *impl = the_impl;
-  if (impl->debug())
-	  FPRINTF(stderr, "DeleteDirectory: %ls\n", FileName);
-
-  impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-  return errno_to_ntstatus_error(
-      impl->delete_directory(FileName, DokanFileInfo));
 }
 
 struct Constant {
@@ -265,7 +259,7 @@ FuseFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseGetFileInformation(
-    LPCWSTR FileName, LPBY_HANDLE_FILE_INFORMATION HandleFileInformation,
+    LPCWSTR FileName, PDOKAN_FILE_INFORMATION HandleFileInformation,
     PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
@@ -276,27 +270,36 @@ static NTSTATUS DOKAN_CALLBACK FuseGetFileInformation(
       FileName, HandleFileInformation, DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseDeleteFile(LPCWSTR FileName,
-                                              PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseSetFileDisposition(
+    LPCWSTR FileName, ULONG DispositionFlags, PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
-    FPRINTF(stderr, "DeleteFile: %ls\n", FileName);
+    FPRINTF(stderr, "SetFileDisposition: %ls\n", FileName);
+
+  if ((DispositionFlags & FILE_DISPOSITION_DELETE) == 0) {
+    return STATUS_SUCCESS;
+  }
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
+  if (DokanFileInfo->IsDirectory) {
+    return errno_to_ntstatus_error(
+        impl->delete_directory(FileName, DokanFileInfo));
+  }
   return errno_to_ntstatus_error(impl->delete_file(FileName, DokanFileInfo));
 }
 
-static NTSTATUS DOKAN_CALLBACK
-FuseMoveFile(LPCWSTR FileName, // existing file name
-             LPCWSTR NewFileName, BOOL ReplaceIfExisting,
-             PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseMoveFile(
+    LPCWSTR FileName, // existing file name
+    LPCWSTR NewFileName, ULONG RenameFlags, PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
     FPRINTF(stderr, "MoveFile: %ls -> %ls\n\n", FileName, NewFileName);
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
+  BOOL replaceIfExisting =
+      (RenameFlags & FILE_RENAME_REPLACE_IF_EXISTS) != 0 ? TRUE : FALSE;
   return errno_to_ntstatus_error(
-      impl->move_file(FileName, NewFileName, ReplaceIfExisting, DokanFileInfo));
+      impl->move_file(FileName, NewFileName, replaceIfExisting, DokanFileInfo));
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseLockFile(LPCWSTR FileName,
@@ -344,20 +347,15 @@ static NTSTATUS DOKAN_CALLBACK FuseSetAllocationSize(
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
 
-  BY_HANDLE_FILE_INFORMATION byHandleFileInfo;
-  ZeroMemory(&byHandleFileInfo, sizeof(BY_HANDLE_FILE_INFORMATION));
+  DOKAN_FILE_INFORMATION dokanFileInfo;
+  ZeroMemory(&dokanFileInfo, sizeof(DOKAN_FILE_INFORMATION));
 
   NTSTATUS ret = errno_to_ntstatus_error(
-      impl->get_file_information(FileName, &byHandleFileInfo, DokanFileInfo));
-
-  LARGE_INTEGER fileSize;
-  fileSize.LowPart = byHandleFileInfo.nFileSizeLow;
-  fileSize.HighPart = byHandleFileInfo.nFileSizeHigh;
+      impl->get_file_information(FileName, &dokanFileInfo, DokanFileInfo));
 
   if (ret != 0) {
     return ret;
-  }
-  else if (ByteOffset < fileSize.QuadPart) {
+  } else if (ByteOffset < dokanFileInfo.EndOfFile.QuadPart) {
     /* https://msdn.microsoft.com/en-us/library/windows/hardware/ff540232(v=vs.85).aspx
     * The end-of-file position must always be less than or equal to the
     * allocation size. If the allocation size is set to a value that is
@@ -365,35 +363,48 @@ static NTSTATUS DOKAN_CALLBACK FuseSetAllocationSize(
     * is automatically adjusted to match the allocation size.*/
     return errno_to_ntstatus_error(
         impl->set_end_of_file(FileName, ByteOffset, DokanFileInfo));
-  }
-  else {
+  } else {
     return 0;
   }
 }
 
-static NTSTATUS DOKAN_CALLBACK FuseSetFileAttributes(
-    LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK FuseSetFileBasicInformation(
+    LPCWSTR FileName, const FILE_BASIC_INFORMATION *BasicInfo,
+    PDOKAN_FILE_INFO DokanFileInfo) {
   impl_fuse_context *impl = the_impl;
   if (impl->debug())
-    FPRINTF(stderr, "SetFileAttributes: %ls\n", FileName);
+    FPRINTF(stderr, "SetFileBasicInformation: %ls\n", FileName);
 
   impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-  return errno_to_ntstatus_error(
-      impl->set_file_attributes(FileName, FileAttributes, DokanFileInfo));
-}
+  if (BasicInfo->FileAttributes != 0) {
+    NTSTATUS attrStatus = errno_to_ntstatus_error(impl->set_file_attributes(
+        FileName, BasicInfo->FileAttributes, DokanFileInfo));
+    if (attrStatus != STATUS_SUCCESS) {
+      return attrStatus;
+    }
+  }
 
-static NTSTATUS DOKAN_CALLBACK FuseSetFileTime(LPCWSTR FileName,
-                                               CONST FILETIME *CreationTime,
-                                               CONST FILETIME *LastAccessTime,
-                                               CONST FILETIME *LastWriteTime,
-                                               PDOKAN_FILE_INFO DokanFileInfo) {
-  impl_fuse_context *impl = the_impl;
-  if (impl->debug())
-    FPRINTF(stderr, "SetFileTime: %ls\n", FileName);
+  if (BasicInfo->CreationTime.QuadPart != 0 ||
+      BasicInfo->LastAccessTime.QuadPart != 0 ||
+      BasicInfo->LastWriteTime.QuadPart != 0) {
+    FILETIME creation;
+    FILETIME lastAccess;
+    FILETIME lastWrite;
+    creation.dwLowDateTime = BasicInfo->CreationTime.LowPart;
+    creation.dwHighDateTime =
+        static_cast<DWORD>(BasicInfo->CreationTime.HighPart);
+    lastAccess.dwLowDateTime = BasicInfo->LastAccessTime.LowPart;
+    lastAccess.dwHighDateTime =
+        static_cast<DWORD>(BasicInfo->LastAccessTime.HighPart);
+    lastWrite.dwLowDateTime = BasicInfo->LastWriteTime.LowPart;
+    lastWrite.dwHighDateTime =
+        static_cast<DWORD>(BasicInfo->LastWriteTime.HighPart);
 
-  impl_chain_guard guard(impl, DokanFileInfo->ProcessId);
-  return errno_to_ntstatus_error(impl->set_file_time(
-      FileName, CreationTime, LastAccessTime, LastWriteTime, DokanFileInfo));
+    return errno_to_ntstatus_error(impl->set_file_time(
+        FileName, &creation, &lastAccess, &lastWrite, DokanFileInfo));
+  }
+
+  return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK FuseGetDiskFreeSpace(
@@ -449,32 +460,37 @@ int fuse_interrupted(void) {
   return 0; // TODO: fix this
 }
 
-static DOKAN_OPERATIONS dokanOperations = {
-    FuseCreateFile,
-    FuseCleanup,
-    FuseCloseFile,
-    FuseReadFile,
-    FuseWriteFile,
-    FuseFlushFileBuffers,
-    FuseGetFileInformation,
-    FuseFindFiles,
-    nullptr, // FindFilesWithPattern
-    FuseSetFileAttributes,
-    FuseSetFileTime,
-    FuseDeleteFile,
-    FuseDeleteDirectory,
-    FuseMoveFile,
-    FuseSetEndOfFile,
-    FuseSetAllocationSize,
-    FuseLockFile,
-    FuseUnlockFile,
-    FuseGetDiskFreeSpace,
-    GetVolumeInformation,
-    FuseMounted,
-    FuseUnmounted,
-    nullptr, // GetFileSecurity
-    nullptr, // SetFileSecurity
-};
+static DOKAN_OPERATIONS make_dokan_operations() {
+  DOKAN_OPERATIONS ops;
+  ZeroMemory(&ops, sizeof(DOKAN_OPERATIONS));
+  ops.ZwCreateFile = FuseCreateFile;
+  ops.Cleanup = FuseCleanup;
+  ops.CloseFile = FuseCloseFile;
+  ops.ReadFile = FuseReadFile;
+  ops.WriteFile = FuseWriteFile;
+  ops.FlushFileBuffers = FuseFlushFileBuffers;
+  ops.GetFileInformation = FuseGetFileInformation;
+  ops.FindFiles = FuseFindFiles;
+  ops.FindFilesWithPattern = nullptr;
+  ops.SetFileBasicInformation = FuseSetFileBasicInformation;
+  ops.SetFileDisposition = FuseSetFileDisposition;
+  ops.MoveFile = FuseMoveFile;
+  ops.SetEndOfFile = FuseSetEndOfFile;
+  ops.SetAllocationSize = FuseSetAllocationSize;
+  ops.SetValidDataLength = nullptr;
+  ops.LockFile = FuseLockFile;
+  ops.UnlockFile = FuseUnlockFile;
+  ops.GetDiskFreeSpace = FuseGetDiskFreeSpace;
+  ops.GetVolumeInformation = GetVolumeInformation;
+  ops.Mounted = FuseMounted;
+  ops.Unmounted = FuseUnmounted;
+  ops.GetFileSecurity = nullptr;
+  ops.SetFileSecurity = nullptr;
+  ops.FindStreams = nullptr;
+  return ops;
+}
+
+static DOKAN_OPERATIONS dokanOperations = make_dokan_operations();
 
 int do_fuse_loop(struct fuse *fs, bool mt) {
   if (!fs->ch.get() || fs->ch->mountpoint.empty())

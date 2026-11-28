@@ -32,6 +32,27 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "fileinfo.h"
 #include "public.h"
 
+/** \cond */
+#ifndef _In_
+#define _In_
+#endif
+#ifndef _In_opt_
+#define _In_opt_
+#endif
+#ifndef _Out_
+#define _Out_
+#endif
+#ifndef _Out_opt_
+#define _Out_opt_
+#endif
+#ifndef _Inout_
+#define _Inout_
+#endif
+#ifndef _Inout_opt_
+#define _Inout_opt_
+#endif
+/** \endcond */
+
 #ifdef _EXPORTING
 /** Export dokan API see also dokan.def for export */
 #define DOKANAPI __stdcall
@@ -206,10 +227,11 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR IsDirectory;
   /**
    * Flag if the file has to be deleted during \ref DOKAN_OPERATIONS.Cleanup event.
-   * 
-   * If a prior \ref DOKAN_OPERATIONS.ZwCreateFile call with \c FILE_FLAG_DELETE_ON_CLOSE or \ref DOKAN_OPERATIONS.DeleteFile
-   * / \ref DOKAN_OPERATIONS.DeleteDirectory with DOKAN_FILE_INFO.DeletePending set to \c TRUE succeed on an object,
-   * the last handle open on that object will have this variable set to \c TRUE and therefore will have to delete the object.
+   *
+   * If a prior \ref DOKAN_OPERATIONS.ZwCreateFile call with \c FILE_DELETE_ON_CLOSE or
+   * \ref DOKAN_OPERATIONS.SetFileDisposition with \c FILE_DISPOSITION_DELETE set
+   * succeeds on an object, the last handle open on that object will have this variable set to
+   * \c TRUE and therefore will have to delete the object.
    */
   UCHAR DeletePending;
   /** Read or write is paging IO. */
@@ -220,6 +242,18 @@ typedef struct _DOKAN_FILE_INFO {
   UCHAR Nocache;
   /**  If \c TRUE, write to the current end of file instead of using the Offset parameter. */
   UCHAR WriteToEndOfFile;
+  /**
+   * TRUE if the current request carries SL_CASE_SENSITIVE (i.e. opened without
+   * OBJ_CASE_INSENSITIVE, such as FILE_FLAG_POSIX_SEMANTICS).
+   * Populated only during \ref DOKAN_OPERATIONS.ZwCreateFile (\c FALSE on
+   * subsequent callbacks); filesystems that need it later must persist it
+   * in \ref Context.
+   * Note: the current \c dokan3.sys driver still keys FCBs by mount-wide case
+   * sensitivity (\c DOKAN_OPTION_CASE_SENSITIVE), so filesystems must not
+   * resolve distinct case-colliding files on a case-insensitive mount until
+   * a future \c dokan3.sys update adds per-request FCB case keying.
+   */
+  UCHAR CaseSensitive;
 } DOKAN_FILE_INFO, *PDOKAN_FILE_INFO;
 
 #define DOKAN_EXCEPTION_NOT_INITIALIZED 0x0f0ff0ff
@@ -227,16 +261,132 @@ typedef struct _DOKAN_FILE_INFO {
 #define DOKAN_EXCEPTION_SHUTDOWN_FAILED 0x0fbadf00
 
 /**
- * \brief FillFindData Used to add an entry in FindFiles operation
- * \return 1 if buffer is full, otherwise 0 (currently it never returns 1)
+ * Explicit zero-on-disk AllocationSize sentinel.
+ * When AllocationSize is 0 (or any negative value other than
+ * DOKAN_ALLOCATION_SIZE_ZERO) and EndOfFile > 0, Dokan auto-computes a
+ * cluster-aligned AllocationSize from EndOfFile (making ZeroMemory-initialized
+ * structs safe by default). Set AllocationSize.QuadPart to
+ * DOKAN_ALLOCATION_SIZE_ZERO to report a literal 0-byte AllocationSize on a
+ * non-empty file (for example, cloud placeholders or sparse files).
+ *
+ * Note: the current \c dokan3.sys driver copies reported \c AllocationSize
+ * directly into \c AdvancedFCBHeader.AllocationSize (\c sys/fileinfo.c), which
+ * can affect kernel oplock, byte-range lock, and truncation header checks when
+ * \c AllocationSize < \c EndOfFile until a future \c dokan3.sys update clamps
+ * the FCB header to \c max(reported, RoundUp(FileSize)).
  */
-typedef int(WINAPI *PFillFindData)(PWIN32_FIND_DATAW, PDOKAN_FILE_INFO);
+#define DOKAN_ALLOCATION_SIZE_ZERO (-(LONGLONG)1)
 
 /**
- * \brief FillFindStreamData Used to add an entry in FindStreams
- * \return FALSE if the buffer is full, otherwise TRUE
+ * \defgroup DOKAN_FIND DOKAN_FIND
+ * \brief Flags passed in FindFlags to \ref DOKAN_OPERATIONS.FindFiles and
+ *        \ref DOKAN_OPERATIONS.FindFilesWithPattern.
  */
-typedef BOOL(WINAPI *PFillFindStreamData)(PWIN32_FIND_STREAM_DATA, PVOID);
+/** @{ */
+
+/**
+ * Start a new enumeration from the beginning of the directory. Set on every
+ * new enumeration (including the initial scan and restarts after errors), and
+ * omitted on continuation chunks following \c STATUS_MORE_ENTRIES.
+ */
+#define DOKAN_FIND_RESTART_SCAN 0x00000001
+/**
+ * Advisory hint that the caller requested at most a single matching entry.
+ * If a filesystem honors this hint and more entries remain in the directory,
+ * it must return \c STATUS_MORE_ENTRIES; returning \c STATUS_SUCCESS caches
+ * the emitted entries as the complete directory and serves later queries from
+ * that cache.
+ */
+#define DOKAN_FIND_SINGLE_ENTRY 0x00000002
+
+/** @} */
+
+/**
+ * \struct DOKAN_FILE_INFORMATION
+ * \brief NT-native file metadata returned by \ref DOKAN_OPERATIONS.GetFileInformation.
+ */
+typedef struct _DOKAN_FILE_INFORMATION {
+  /** Bitmask of FILE_ATTRIBUTE_* flags. */
+  ULONG FileAttributes;
+  /** File creation time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER CreationTime;
+  /** File last access time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER LastAccessTime;
+  /** File last write time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER LastWriteTime;
+  /** File metadata change time. If 0, Dokan defaults to LastWriteTime. */
+  LARGE_INTEGER ChangeTime;
+  /**
+   * File allocation size in bytes. Positive values are reported verbatim;
+   * \ref DOKAN_ALLOCATION_SIZE_ZERO reports 0; 0 (or any other negative value)
+   * auto-aligns EndOfFile to \ref DOKAN_OPTIONS.AllocationUnitSize.
+   */
+  LARGE_INTEGER AllocationSize;
+  /** Logical file size (end-of-file offset) in bytes. */
+  LARGE_INTEGER EndOfFile;
+  /** Volume serial number hosting the file. */
+  ULONG VolumeSerialNumber;
+  /** Number of hard links to the file. */
+  ULONG NumberOfLinks;
+  /** 64-bit FileId; zero-extended little-endian into the low 64 bits of FILE_ID_128. */
+  ULONG64 FileIndex;
+  /** Reparse point tag for FileAttributeTagInformation, FileStatInformation, and FileStatLxInformation. */
+  ULONG ReparseTag;
+  /**
+   * Effective access mask for FileStatInformation and FileStatLxInformation.
+   * If 0, Dokan defaults to \c FILE_ALL_ACCESS.
+   */
+  ACCESS_MASK EffectiveAccess;
+} DOKAN_FILE_INFORMATION, *PDOKAN_FILE_INFORMATION;
+
+/**
+ * \struct DOKAN_FIND_DATA
+ * \brief NT-native directory entry passed to \ref PFillFindData during directory enumeration.
+ */
+typedef struct _DOKAN_FIND_DATA {
+  /** Bitmask of FILE_ATTRIBUTE_* flags. */
+  ULONG FileAttributes;
+  /** Entry creation time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER CreationTime;
+  /** Entry last access time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER LastAccessTime;
+  /** Entry last write time (100-nanosecond intervals since January 1, 1601 UTC). */
+  LARGE_INTEGER LastWriteTime;
+  /** Entry metadata change time. If 0, Dokan defaults to LastWriteTime. */
+  LARGE_INTEGER ChangeTime;
+  /**
+   * Entry allocation size in bytes. Positive values are reported verbatim;
+   * \ref DOKAN_ALLOCATION_SIZE_ZERO reports 0; 0 (or any other negative value)
+   * auto-aligns EndOfFile to \ref DOKAN_OPTIONS.AllocationUnitSize.
+   */
+  LARGE_INTEGER AllocationSize;
+  /** Logical entry size (end-of-file offset) in bytes. */
+  LARGE_INTEGER EndOfFile;
+  /** 64-bit FileId; zero-extended little-endian into FILE_ID_128 for FileIdExtd* queries. */
+  ULONG64 FileIndex;
+  /** Reparse point tag for FileIdExtd* directory queries. */
+  ULONG ReparseTag;
+  /** NUL-terminated directory entry component name (NTFS max = 255 WCHARs). */
+  WCHAR FileName[MAX_PATH];
+} DOKAN_FIND_DATA, *PDOKAN_FIND_DATA;
+
+/**
+ * \brief FillFindData Used to add an entry in FindFiles / FindFilesWithPattern operations.
+ * \param FindData Directory entry metadata to append.
+ * \param DokanFileInfo Information about the directory handle being enumerated.
+ * \return 1 if memory allocation failed, otherwise 0.
+ */
+typedef int(WINAPI *PFillFindData)(_In_ const DOKAN_FIND_DATA *FindData,
+                                   _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
+
+/**
+ * \brief FillFindStreamData Used to add an entry in FindStreams.
+ * \param FindStreamData Stream metadata entry to append.
+ * \param FindStreamContext Opaque context passed to \ref DOKAN_OPERATIONS.FindStreams.
+ * \return FALSE if the buffer is full, otherwise TRUE.
+ */
+typedef BOOL(WINAPI *PFillFindStreamData)(
+    _In_ PWIN32_FIND_STREAM_DATA FindStreamData, _In_ PVOID FindStreamContext);
 
 // clang-format off
 
@@ -260,7 +410,7 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * CreateFile is called each time a request is made on a file system object.
   *
-  * In case \c OPEN_ALWAYS & \c CREATE_ALWAYS are successfully opening an
+  * When \c FILE_OPEN_IF, \c FILE_OVERWRITE_IF, or \c FILE_SUPERSEDE successfully opens an
   * existing file, \c STATUS_OBJECT_NAME_COLLISION should be returned instead of \c STATUS_SUCCESS .
   * This will inform Dokan that the file has been opened and not created during the request.
   *
@@ -270,9 +420,12 @@ typedef struct _DOKAN_OPERATIONS {
   * On the other hand, if DOKAN_FILE_INFO.IsDirectory is set to \c TRUE
   * but the path targets a file, \c STATUS_NOT_A_DIRECTORY must be returned.
   *
-  * DOKAN_FILE_INFO.Context can be used to store Data (like \c HANDLE)
-  * that can be retrieved in all other requests related to the Context.
-  * To avoid memory leak, Context needs to be released in DOKAN_OPERATIONS.Cleanup.
+  * DOKAN_FILE_INFO.Context can be used to store per-open state (like a \c HANDLE
+  * or a heap-allocated context struct) that can be retrieved in all other requests
+  * related to the handle. Any underlying OS file handle should be closed in
+  * \ref DOKAN_OPERATIONS.Cleanup so share modes are released synchronously on
+  * \c CloseHandle, while heap-allocated Context memory must remain valid for
+  * post-cleanup paging I/O and be freed in \ref DOKAN_OPERATIONS.CloseFile.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param SecurityContext SecurityContext, see https://msdn.microsoft.com/en-us/library/windows/hardware/ff550613(v=vs.85).aspx
@@ -286,14 +439,15 @@ typedef struct _DOKAN_OPERATIONS {
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/hardware/ff566424(v=vs.85).aspx">See ZwCreateFile for more information about the parameters of this callback (MSDN).</a>
   * \see DokanMapKernelToUserCreateFileFlags
   */
-  NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(LPCWSTR FileName,
-      PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
-      ACCESS_MASK DesiredAccess,
-      ULONG FileAttributes,
-      ULONG ShareAccess,
-      ULONG CreateDisposition,
-      ULONG CreateOptions,
-      PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *ZwCreateFile)(
+      _In_ LPCWSTR FileName,
+      _In_ PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
+      _In_ ACCESS_MASK DesiredAccess,
+      _In_ ULONG FileAttributes,
+      _In_ ULONG ShareAccess,
+      _In_ ULONG CreateDisposition,
+      _In_ ULONG CreateOptions,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Cleanup Dokan API callback
@@ -301,17 +455,17 @@ typedef struct _DOKAN_OPERATIONS {
   * Cleanup request before \ref CloseFile is called.
   *
   * When DOKAN_FILE_INFO.DeletePending is \c TRUE, the file in Cleanup must be deleted.
-  * The function cannot fail therefore the filesystem need to ensure ahead
-  * that a the delete can safely happen during Cleanup. 
-  * See DeleteFile documentation for explanation.
+  * The function cannot fail therefore the filesystem needs to ensure ahead
+  * that the delete can safely happen during Cleanup.
+  * See \ref SetFileDisposition documentation for explanation.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param DokanFileInfo Information about the file or directory.
-  * \see DeleteFile
-  * \see DeleteDirectory
+  * \see SetFileDisposition
   */
-  void(DOKAN_CALLBACK *Cleanup)(LPCWSTR FileName,
-                                PDOKAN_FILE_INFO DokanFileInfo);
+  void(DOKAN_CALLBACK *Cleanup)(
+      _In_ LPCWSTR FileName,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief CloseFile Dokan API callback
@@ -324,8 +478,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \param FileName File path requested by the Kernel on the FileSystem.
   * \param DokanFileInfo Information about the file or directory.
   */
-  void(DOKAN_CALLBACK *CloseFile)(LPCWSTR FileName,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  void(DOKAN_CALLBACK *CloseFile)(
+      _In_ LPCWSTR FileName,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief ReadFile Dokan API callback
@@ -346,18 +501,19 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see WriteFile
   */
-  NTSTATUS(DOKAN_CALLBACK *ReadFile)(LPCWSTR FileName,
-    LPVOID Buffer,
-    DWORD BufferLength,
-    LPDWORD ReadLength,
-    LONGLONG Offset,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *ReadFile)(
+      _In_ LPCWSTR FileName,
+      _Out_ LPVOID Buffer,
+      _In_ DWORD BufferLength,
+      _Out_ LPDWORD ReadLength,
+      _In_ LONGLONG Offset,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief WriteFile Dokan API callback
   *
   * WriteFile callback on the file previously opened in DOKAN_OPERATIONS.ZwCreateFile
-  * It can be called by different threads at the same time, sp the write/context has to be thread safe.
+  * It can be called by different threads at the same time, so the write/context has to be thread safe.
   *
   * When apps make use of memory mapped files ( DOKAN_FILE_INFO.PagingIo ),
   * DOKAN_OPERATIONS.WriteFile or DOKAN_OPERATIONS.ReadFile
@@ -374,12 +530,13 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see ReadFile
   */
-  NTSTATUS(DOKAN_CALLBACK *WriteFile)(LPCWSTR FileName,
-    LPCVOID Buffer,
-    DWORD NumberOfBytesToWrite,
-    LPDWORD NumberOfBytesWritten,
-    LONGLONG Offset,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *WriteFile)(
+      _In_ LPCWSTR FileName,
+      _In_ LPCVOID Buffer,
+      _In_ DWORD NumberOfBytesToWrite,
+      _Out_ LPDWORD NumberOfBytesWritten,
+      _In_ LONGLONG Offset,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FlushFileBuffers Dokan API callback
@@ -390,40 +547,63 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)(LPCWSTR FileName,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FlushFileBuffers)(
+      _In_ LPCWSTR FileName,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetFileInformation Dokan API callback
   *
-  * Get specific information on a file.
+  * Get NT-native metadata for a file or directory.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param Buffer BY_HANDLE_FILE_INFORMATION struct to fill.
+  * \param Buffer \ref DOKAN_FILE_INFORMATION struct to fill (zero-initialized by Dokan before the call).
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)(LPCWSTR FileName,
-    LPBY_HANDLE_FILE_INFORMATION Buffer,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetFileInformation)(
+      _In_ LPCWSTR FileName,
+      _Out_ PDOKAN_FILE_INFORMATION Buffer,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindFiles Dokan API callback
   *
-  * List all files in the requested path.
+  * List files in the requested directory.
   * \ref DOKAN_OPERATIONS.FindFilesWithPattern is checked first. If it is not implemented or
   * returns \c STATUS_NOT_IMPLEMENTED, then FindFiles is called, if assigned.
-  * It is recommended to have this implemented for performance reason.
+  *
+  * To stream large directories incrementally, implementations may keep a per-handle cursor
+  * in \ref DOKAN_FILE_INFO.Context, emit a chunk of entries via \a FillFindData, and return
+  * \c STATUS_MORE_ENTRIES. Every new enumeration (including the initial scan and restarts
+  * after errors) carries \ref DOKAN_FIND_RESTART_SCAN (the cursor must be reset to the start);
+  * continuation chunks omit it until \c STATUS_SUCCESS or an error is returned. Implementations
+  * returning \c STATUS_MORE_ENTRIES must make forward progress so enumeration terminates.
+  * For non-root directories, any \c "." and \c ".." entries must appear in the initial chunk
+  * (continuation-chunk \c "." and \c ".." entries are ignored, and missing ones are synthesized
+  * only on the initial chunk). \ref DOKAN_FIND_SINGLE_ENTRY is an advisory hint (suppressed when
+  * Dokan falls back to \c FindFiles for a non-\c "*" search pattern); if an implementation honors
+  * it and more entries remain, it must return \c STATUS_MORE_ENTRIES (returning \c STATUS_SUCCESS
+  * caches the emitted entries as the complete directory and serves later queries from cache).
+  * Dokan serializes concurrent directory-enumeration callbacks on the same open handle, so a
+  * concurrent query waiting behind a scan longer than \ref DOKAN_OPTIONS.Timeout may be canceled
+  * by the driver. Simple implementations may ignore \a FindFlags, emit all entries, and return
+  * \c STATUS_SUCCESS.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param FillFindData Callback that has to be called with PWIN32_FIND_DATAW that contain file information.
-  * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
+  * \param FillFindData Callback invoked with each \ref DOKAN_FIND_DATA entry.
+  * \param FindFlags Bitmask of \ref DOKAN_FIND flags (\c DOKAN_FIND_RESTART_SCAN,
+  *        \c DOKAN_FIND_SINGLE_ENTRY).
+  * \param DokanFileInfo Information about the directory handle.
+  * \return \c STATUS_SUCCESS when enumeration completes, \c STATUS_MORE_ENTRIES when more chunks
+  *         remain, or an appropriate \c NTSTATUS error.
   * \see FindFilesWithPattern
   */
-  NTSTATUS(DOKAN_CALLBACK *FindFiles)(LPCWSTR FileName,
-    PFillFindData FillFindData,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindFiles)(
+      _In_ LPCWSTR FileName,
+      _In_ PFillFindData FillFindData,
+      _In_ ULONG FindFlags,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindFilesWithPattern Dokan API callback
@@ -434,123 +614,110 @@ typedef struct _DOKAN_OPERATIONS {
   *
   * If the function is not implemented, \ref DOKAN_OPERATIONS.FindFiles
   * will be called instead and the result will be filtered internally by the library.
-  * It is recommended to have this implemented for performance reason.
+  *
+  * Like \ref FindFiles, every new enumeration (including the initial scan and restarts
+  * after errors) carries \ref DOKAN_FIND_RESTART_SCAN, while continuation chunks after
+  * \c STATUS_MORE_ENTRIES omit it. Streaming implementations should store their per-handle
+  * cursor in \ref DOKAN_FILE_INFO.Context, ensure forward progress on \c STATUS_MORE_ENTRIES,
+  * and emit \c "." / \c ".." only in the initial chunk (continuation-chunk \c "." / \c ".."
+  * entries are ignored). \ref DOKAN_FIND_SINGLE_ENTRY is an advisory hint: if honored while
+  * more entries remain, the callback must return \c STATUS_MORE_ENTRIES (returning
+  * \c STATUS_SUCCESS caches the emitted entries as the complete directory and serves later
+  * queries from cache). Dokan serializes concurrent directory-enumeration callbacks on the
+  * same open handle (so a concurrent query waiting behind a scan longer than
+  * \ref DOKAN_OPTIONS.Timeout may be canceled by the driver).
   *
   * \param PathName Path requested by the Kernel on the FileSystem.
   * \param SearchPattern Search pattern.
-  * \param FillFindData Callback that has to be called with PWIN32_FIND_DATAW that contains file information.
-  * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
+  * \param FillFindData Callback invoked with each matching \ref DOKAN_FIND_DATA entry.
+  * \param FindFlags Bitmask of \ref DOKAN_FIND flags (\c DOKAN_FIND_RESTART_SCAN,
+  *        \c DOKAN_FIND_SINGLE_ENTRY).
+  * \param DokanFileInfo Information about the directory handle.
+  * \return \c STATUS_SUCCESS when enumeration completes, \c STATUS_MORE_ENTRIES when more chunks
+  *         remain, or an appropriate \c NTSTATUS error.
   * \see FindFiles
   * \see DokanIsNameInExpression
   */
-  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)(LPCWSTR PathName,
-    LPCWSTR SearchPattern,
-    PFillFindData FillFindData,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindFilesWithPattern)(
+      _In_ LPCWSTR PathName,
+      _In_ LPCWSTR SearchPattern,
+      _In_ PFillFindData FillFindData,
+      _In_ ULONG FindFlags,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
-  * \brief SetFileAttributes Dokan API callback
+  * \brief SetFileBasicInformation Dokan API callback
   *
-  * Set file attributes on a specific file
+  * Atomically updates file timestamps and/or attributes from \c FileBasicInformation.
+  * Per [MS-FSCC], a timestamp of 0 means do not change, -1 freezes automatic timestamp
+  * updates on the handle, and -2 restores automatic updates. A \c FileAttributes value of 0
+  * means do not modify attributes.
   *
   * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param FileAttributes FileAttributes to set on file.
+  * \param BasicInfo Pointer to \ref FILE_BASIC_INFORMATION containing timestamps and attributes.
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetFileAttributes)(LPCWSTR FileName,
-    DWORD FileAttributes,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetFileBasicInformation)(
+      _In_ LPCWSTR FileName,
+      _In_ const FILE_BASIC_INFORMATION *BasicInfo,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
-  * \brief SetFileTime Dokan API callback
+  * \brief SetFileDisposition Dokan API callback
   *
-  * Set file attributes on a specific file
+  * Sets or clears delete disposition on a file or directory (distinguished via
+  * \ref DOKAN_FILE_INFO.IsDirectory).
   *
-  * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param CreationTime Creation FILETIME.
-  * \param LastAccessTime LastAccess FILETIME.
-  * \param LastWriteTime LastWrite FILETIME.
+  * Legacy \c FileDispositionInformation is normalized to \c FILE_DISPOSITION_DELETE or
+  * \c FILE_DISPOSITION_DO_NOT_DELETE; \c FileDispositionInformationEx forwards its
+  * \c FILE_DISPOSITION_* flags verbatim. \c (DispositionFlags & FILE_DISPOSITION_DELETE)
+  * is canonical; \ref DOKAN_FILE_INFO.DeletePending mirrors it for convenience.
+  *
+  * Note: \c FILE_DISPOSITION_POSIX_SEMANTICS and \c FILE_DISPOSITION_ON_CLOSE are not
+  * yet kernel-backed in the current \c dokan3.sys driver; filesystems must not unlink
+  * or detach namespace entries immediately inside SetFileDisposition until a future
+  * \c dokan3.sys update supports them.
+  *
+  * The object should not be unlinked here; instead validate that deletion can succeed
+  * (for example, checking that a directory is empty and returning \c STATUS_DIRECTORY_NOT_EMPTY
+  * otherwise). When \c STATUS_SUCCESS is returned, a \ref Cleanup call follows on the last
+  * open handle with \ref DOKAN_FILE_INFO.DeletePending set to \c TRUE.
+  *
+  * \param FileName File or directory path requested by the Kernel on the FileSystem.
+  * \param DispositionFlags Bitmask of \c FILE_DISPOSITION_* flags.
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
-  */
-  NTSTATUS(DOKAN_CALLBACK *SetFileTime)(LPCWSTR FileName,
-    CONST FILETIME *CreationTime,
-    CONST FILETIME *LastAccessTime,
-    CONST FILETIME *LastWriteTime,
-    PDOKAN_FILE_INFO DokanFileInfo);
-
-  /**
-  * \brief DeleteFile Dokan API callback
-  *
-  * Check if it is possible to delete a file.
-  *
-  * DeleteFile will also be called with DOKAN_FILE_INFO.DeletePending set to \c FALSE
-  * to notify the driver when the file is no longer requested to be deleted.
-  *
-  * The file in DeleteFile should not be deleted, but instead the file
-  * must be checked as to whether or not it can be deleted,
-  * and \c STATUS_SUCCESS should be returned (when it can be deleted) or
-  * appropriate error codes, such as \c STATUS_ACCESS_DENIED or
-  * \c STATUS_OBJECT_NAME_NOT_FOUND, should be returned.
-  *
-  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards
-  * on the last context open on this object with DOKAN_FILE_INFO.DeletePending set to \c TRUE,
-  * Only then must the closing file be deleted.
-  *
-  * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
-  * \see DeleteDirectory
   * \see Cleanup
   */
-  NTSTATUS(DOKAN_CALLBACK *DeleteFile)(LPCWSTR FileName,
-    PDOKAN_FILE_INFO DokanFileInfo);
-
-  /**
-  * \brief DeleteDirectory Dokan API callback
-  *
-  * Check if it is possible to delete a directory.
-  *
-  * DeleteDirectory will also be called with DOKAN_FILE_INFO.DeletePending set to \c FALSE
-  * to notify the driver when the file is no longer requested to be deleted.
-  *
-  * The Directory in DeleteDirectory should not be deleted, but instead
-  * must be checked as to whether or not it can be deleted,
-  * and \c STATUS_SUCCESS should be returned (when it can be deleted) or
-  * appropriate error codes, such as \c STATUS_ACCESS_DENIED,
-  * \c STATUS_OBJECT_PATH_NOT_FOUND, or \c STATUS_DIRECTORY_NOT_EMPTY, should
-  * be returned.
-  *
-  * When \c STATUS_SUCCESS is returned, a Cleanup call is received afterwards
-  * on the last context open on this object with DOKAN_FILE_INFO.DeletePending set to \c TRUE,
-  * Only then must the closing file be deleted.
-  *
-  * \param FileName File path requested by the Kernel on the FileSystem.
-  * \param DokanFileInfo Information about the file or directory.
-  * \return \c STATUS_SUCCESS on success or \c NTSTATUS appropriate to the request result.
-  * \ref DeleteFile
-  * \ref Cleanup
-  */
-  NTSTATUS(DOKAN_CALLBACK *DeleteDirectory)(LPCWSTR FileName,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetFileDisposition)(
+      _In_ LPCWSTR FileName,
+      _In_ ULONG DispositionFlags,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief MoveFile Dokan API callback
   *
-  * Move a file or directory to a new destination
+  * Move or rename a file, directory, or alternate data stream to a new destination.
+  * Legacy \c FileRenameInformation is normalized to \c FILE_RENAME_REPLACE_IF_EXISTS or 0;
+  * \c FileRenameInformationEx passes its \c FILE_RENAME_* flags in \a RenameFlags.
   *
-  * \param FileName Path for the file to be moved.
-  * \param NewFileName Path for the new location of the file.
-  * \param ReplaceIfExisting If destination already exists, can it be replaced?
+  * Note: \c FILE_RENAME_POSIX_SEMANTICS and \c FILE_RENAME_IGNORE_READONLY_ATTRIBUTE are
+  * not yet kernel-backed in the current \c dokan3.sys driver (\c dokan3.sys still lacks
+  * FCB locking on \c FileRenameInformationEx and POSIX detach semantics until a future
+  * \c dokan3.sys update supports them).
+  *
+  * \param FileName Path for the file or directory to be moved.
+  * \param NewFileName Path for the new location of the file or directory.
+  * \param RenameFlags Bitmask of \c FILE_RENAME_* flags (such as \c FILE_RENAME_REPLACE_IF_EXISTS).
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *MoveFile)(LPCWSTR FileName,
-    LPCWSTR NewFileName,
-    BOOL ReplaceIfExisting,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *MoveFile)(
+      _In_ LPCWSTR FileName,
+      _In_ LPCWSTR NewFileName,
+      _In_ ULONG RenameFlags,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetEndOfFile Dokan API callback
@@ -563,9 +730,10 @@ typedef struct _DOKAN_OPERATIONS {
   * \see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/75241cca-3167-472f-8058-a52d77c6bb17"> FileEndOfFileInformation (MSDN)</a>
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)(LPCWSTR FileName,
-    LONGLONG ByteOffset,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetEndOfFile)(
+      _In_ LPCWSTR FileName,
+      _In_ LONGLONG ByteOffset,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetAllocationSize Dokan API callback
@@ -578,9 +746,28 @@ typedef struct _DOKAN_OPERATIONS {
   * \see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/0201c69b-50db-412d-bab3-dd97aeede13b"> FileAllocationInformation (MSDN)</a>
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)(LPCWSTR FileName,
-    LONGLONG AllocSize,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetAllocationSize)(
+      _In_ LPCWSTR FileName,
+      _In_ LONGLONG AllocSize,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
+
+  /**
+  * \brief SetValidDataLength Dokan API callback
+  *
+  * Sets the valid data length (VDL) of a file via \c FileValidDataLengthInformation.
+  * Optional callback: leave \c NULL to return \c STATUS_NOT_IMPLEMENTED.
+  * Dokan centrally validates that the target is not a directory, \a ValidDataLength is
+  * non-negative, and the handle was opened with \c SeManageVolumePrivilege enabled.
+  *
+  * \param FileName File path requested by the Kernel on the FileSystem.
+  * \param ValidDataLength New valid data length in bytes.
+  * \param DokanFileInfo Information about the file.
+  * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
+  */
+  NTSTATUS(DOKAN_CALLBACK *SetValidDataLength)(
+      _In_ LPCWSTR FileName,
+      _In_ LONGLONG ValidDataLength,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief LockFile Dokan API callback
@@ -595,10 +782,11 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see UnlockFile
   */
-  NTSTATUS(DOKAN_CALLBACK *LockFile)(LPCWSTR FileName,
-    LONGLONG ByteOffset,
-    LONGLONG Length,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *LockFile)(
+      _In_ LPCWSTR FileName,
+      _In_ LONGLONG ByteOffset,
+      _In_ LONGLONG Length,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief UnlockFile Dokan API callback
@@ -613,16 +801,17 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   * \see LockFile
   */
-  NTSTATUS(DOKAN_CALLBACK *UnlockFile)(LPCWSTR FileName,
-    LONGLONG ByteOffset,
-    LONGLONG Length,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *UnlockFile)(
+      _In_ LPCWSTR FileName,
+      _In_ LONGLONG ByteOffset,
+      _In_ LONGLONG Length,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetDiskFreeSpace Dokan API callback
   *
   * Retrieves information about the amount of space that is available on a disk volume.
-  * It consits of the total amount of space, the total amount of free space, and
+  * It consists of the total amount of space, the total amount of free space, and
   * the total amount of free space available to the user that is associated with the calling thread.
   *
   * Neither GetDiskFreeSpace nor \ref GetVolumeInformation
@@ -638,10 +827,11 @@ typedef struct _DOKAN_OPERATIONS {
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx"> GetDiskFreeSpaceEx function (MSDN)</a>
   * \see GetVolumeInformation
   */
-  NTSTATUS(DOKAN_CALLBACK *GetDiskFreeSpace)(PULONGLONG FreeBytesAvailable,
-    PULONGLONG TotalNumberOfBytes,
-    PULONGLONG TotalNumberOfFreeBytes,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetDiskFreeSpace)(
+      _Out_ PULONGLONG FreeBytesAvailable,
+      _Out_ PULONGLONG TotalNumberOfBytes,
+      _Out_ PULONGLONG TotalNumberOfFreeBytes,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetVolumeInformation Dokan API callback
@@ -677,14 +867,15 @@ typedef struct _DOKAN_OPERATIONS {
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa364993(v=vs.85).aspx"> GetVolumeInformation function (MSDN)</a>
   * \see GetDiskFreeSpace
   */
-  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformation)(LPWSTR VolumeNameBuffer,
-    DWORD VolumeNameSize,
-    LPDWORD VolumeSerialNumber,
-    LPDWORD MaximumComponentLength,
-    LPDWORD FileSystemFlags,
-    LPWSTR FileSystemNameBuffer,
-    DWORD FileSystemNameSize,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetVolumeInformation)(
+      _Out_ LPWSTR VolumeNameBuffer,
+      _In_ DWORD VolumeNameSize,
+      _Out_ LPDWORD VolumeSerialNumber,
+      _Out_ LPDWORD MaximumComponentLength,
+      _Out_ LPDWORD FileSystemFlags,
+      _Out_ LPWSTR FileSystemNameBuffer,
+      _In_ DWORD FileSystemNameSize,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Mounted Dokan API callback
@@ -699,7 +890,9 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result. The value is currently not used by the library.
   * \see Unmounted
   */
-  NTSTATUS(DOKAN_CALLBACK *Mounted)(LPCWSTR MountPoint, PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *Mounted)(
+      _In_ LPCWSTR MountPoint,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief Unmounted Dokan API callback
@@ -710,7 +903,8 @@ typedef struct _DOKAN_OPERATIONS {
   * \return \c STATUS_SUCCESS on success or \c NTSTATUS appropriate to the request result. The value is currently not used by the library.
   * \see Mounted
   */
-  NTSTATUS(DOKAN_CALLBACK *Unmounted)(PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *Unmounted)(
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief GetFileSecurity Dokan API callback
@@ -731,12 +925,13 @@ typedef struct _DOKAN_OPERATIONS {
   * \see SetFileSecurity
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa446639(v=vs.85).aspx">GetFileSecurity function (MSDN)</a>
   */
-  NTSTATUS(DOKAN_CALLBACK *GetFileSecurity)(LPCWSTR FileName,
-    PSECURITY_INFORMATION SecurityInformation,
-    PSECURITY_DESCRIPTOR SecurityDescriptor,
-    ULONG BufferLength,
-    PULONG LengthNeeded,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *GetFileSecurity)(
+      _In_ LPCWSTR FileName,
+      _In_ PSECURITY_INFORMATION SecurityInformation,
+      _Out_opt_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+      _In_ ULONG BufferLength,
+      _Out_ PULONG LengthNeeded,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief SetFileSecurity Dokan API callback
@@ -753,11 +948,12 @@ typedef struct _DOKAN_OPERATIONS {
   * \see GetFileSecurity
   * \see <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa379577(v=vs.85).aspx">SetFileSecurity function (MSDN)</a>
   */
-  NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)(LPCWSTR FileName,
-    PSECURITY_INFORMATION SecurityInformation,
-    PSECURITY_DESCRIPTOR SecurityDescriptor,
-    ULONG BufferLength,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *SetFileSecurity)(
+      _In_ LPCWSTR FileName,
+      _In_ PSECURITY_INFORMATION SecurityInformation,
+      _In_ PSECURITY_DESCRIPTOR SecurityDescriptor,
+      _In_ ULONG BufferLength,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
   /**
   * \brief FindStreams Dokan API callback
@@ -772,10 +968,11 @@ typedef struct _DOKAN_OPERATIONS {
   * \param DokanFileInfo Information about the file or directory.
   * \return \c STATUS_SUCCESS on success or NTSTATUS appropriate to the request result.
   */
-  NTSTATUS(DOKAN_CALLBACK *FindStreams)(LPCWSTR FileName,
-    PFillFindStreamData FillFindStreamData,
-    PVOID FindStreamContext,
-    PDOKAN_FILE_INFO DokanFileInfo);
+  NTSTATUS(DOKAN_CALLBACK *FindStreams)(
+      _In_ LPCWSTR FileName,
+      _In_ PFillFindStreamData FillFindStreamData,
+      _In_ PVOID FindStreamContext,
+      _Inout_ PDOKAN_FILE_INFO DokanFileInfo);
 
 } DOKAN_OPERATIONS, *PDOKAN_OPERATIONS;
 
@@ -940,25 +1137,30 @@ BOOL DOKANAPI DokanUnmount(WCHAR DriveLetter);
 BOOL DOKANAPI DokanRemoveMountPoint(LPCWSTR MountPoint);
 
 /**
- * \brief Checks whether Name matches Expression
+ * \brief Checks whether Name matches Expression per [MS-FSA 2.1.4.4]
  *
- * Behave like \c FsRtlIsNameInExpression routine from <a href="https://msdn.microsoft.com/en-us/library/ff546850(v=VS.85).aspx">Microsoft</a>\n
- * \c * (asterisk) Matches zero or more characters.\n
- * <tt>?</tt> (question mark) Matches a single character.\n
- * \c DOS_DOT (\c " quotation mark) Matches either a period or zero characters beyond the name string.\n
- * \c DOS_QM (\c > greater than) Matches any single character or, upon encountering a period or end
- *        of name string, advances the expression to the end of the set of
- *        contiguous DOS_QMs.\n
- * \c DOS_STAR (\c < less than) Matches zero or more characters until encountering and matching
- *          the final \c . in the name.
+ * Matches \a Name against \a Expression using Windows MS-DOS/NTFS wildcard
+ * semantics (similar to \c FsRtlIsNameInExpression):\n
+ * \c * (asterisk) Matches zero or more characters (including \c .).\n
+ * <tt>?</tt> (question mark) Matches any single character (including \c .).\n
+ * \c DOS_STAR (\c < less than) Matches zero or more characters without consuming
+ *        the final \c . in \a Name.\n
+ * \c DOS_QM (\c > greater than) Matches any single non-\c . character, or zero
+ *        characters when positioned at \c . or end of \a Name.\n
+ * \c DOS_DOT (\c " quotation mark) Matches a literal \c ., or zero characters at
+ *        end of \a Name.\n
+ * When \a IgnoreCase is \c TRUE, characters are case-folded using the OS Unicode
+ * case-folding table (\c RtlUpcaseUnicodeChar).
  *
- * \param Expression Expression can contain any of the above characters.
- * \param Name Name to check
- * \param IgnoreCase Case sensitive or not
- * \return result if name matches the expression
+ * \param Expression Expression that can contain any of the above wildcards.
+ * \param Name Name to check.
+ * \param IgnoreCase \c TRUE for case-insensitive matching, \c FALSE for exact
+ *        case matching.
+ * \return \c TRUE if \a Name matches \a Expression, \c FALSE otherwise.
  */
-BOOL DOKANAPI DokanIsNameInExpression(LPCWSTR Expression, LPCWSTR Name,
-                                      BOOL IgnoreCase);
+BOOL DOKANAPI DokanIsNameInExpression(_In_opt_ LPCWSTR Expression,
+                                      _In_opt_ LPCWSTR Name,
+                                      _In_ BOOL IgnoreCase);
 
 /**
  * \brief Get the version of Dokan.

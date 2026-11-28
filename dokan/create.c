@@ -25,6 +25,10 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
+C_ASSERT(sizeof(DOKAN_FILE_INFO) == (sizeof(void *) == 8 ? 48 : 40));
+C_ASSERT(FIELD_OFFSET(DOKAN_FILE_INFO, CaseSensitive) ==
+         (sizeof(void *) == 8 ? 42 : 34));
+
 VOID SetIOSecurityContext(PEVENT_CONTEXT EventContext,
                           PDOKAN_IO_SECURITY_CONTEXT ioSecurityContext) {
   PDOKAN_UNICODE_STRING_INTERMEDIATE intermediateObjName = NULL;
@@ -132,6 +136,100 @@ static BOOL HasLiteralDotOrDotDotSegment(LPCWSTR FileName) {
   return FALSE;
 }
 
+static BOOL CALLBACK DokanInitManageVolumePrivilegeLuid(PINIT_ONCE InitOnce,
+                                                        PVOID Parameter,
+                                                        PVOID *Context) {
+  UNREFERENCED_PARAMETER(InitOnce);
+  UNREFERENCED_PARAMETER(Context);
+  PLUID luid = (PLUID)Parameter;
+  return LookupPrivilegeValueW(NULL, SE_MANAGE_VOLUME_NAME, luid);
+}
+
+static BOOL DokanGetManageVolumePrivilegeLuid(PLUID Luid) {
+  static INIT_ONCE initOnce = INIT_ONCE_STATIC_INIT;
+  static LUID cachedLuid = {0, 0};
+
+  if (!InitOnceExecuteOnce(&initOnce, DokanInitManageVolumePrivilegeLuid,
+                           &cachedLuid, NULL)) {
+    return FALSE;
+  }
+  *Luid = cachedLuid;
+  return TRUE;
+}
+
+// Capture whether the caller's token holds enabled SeManageVolumePrivilege at
+// create time (required by FileValidDataLengthInformation per [MS-FSA]).
+// Rejects impersonation tokens below SecurityImpersonation and inspects
+// TokenPrivileges via GetTokenInformation rather than PrivilegeCheck, because
+// FSCTL_GET_ACCESS_TOKEN returns a TokenPrimary handle for non-impersonating
+// callers.
+static BOOLEAN DokanCaptureManageVolumePrivilege(PDOKAN_IO_EVENT IoEvent) {
+  LUID manageVolLuid;
+  if (!DokanGetManageVolumePrivilegeLuid(&manageVolLuid)) {
+    return FALSE;
+  }
+
+  HANDLE token = DokanOpenRequestorTokenForEvent(IoEvent);
+  if (token == INVALID_HANDLE_VALUE) {
+    return FALSE;
+  }
+
+  BOOLEAN hasPrivilege = FALSE;
+  ULONG64 stackBuf[128];
+  PTOKEN_PRIVILEGES privs = (PTOKEN_PRIVILEGES)stackBuf;
+  PTOKEN_PRIVILEGES heapPrivs = NULL;
+
+  TOKEN_TYPE tokenType = TokenPrimary;
+  DWORD typeLen = 0;
+  if (!GetTokenInformation(token, TokenType, &tokenType, sizeof(tokenType),
+                           &typeLen)) {
+    goto cleanup;
+  }
+  if (tokenType == TokenImpersonation) {
+    SECURITY_IMPERSONATION_LEVEL impLevel = SecurityAnonymous;
+    DWORD impLen = 0;
+    if (!GetTokenInformation(token, TokenImpersonationLevel, &impLevel,
+                             sizeof(impLevel), &impLen) ||
+        impLevel < SecurityImpersonation) {
+      goto cleanup;
+    }
+  }
+
+  DWORD bufSize = sizeof(stackBuf);
+  DWORD needed = 0;
+  if (!GetTokenInformation(token, TokenPrivileges, privs, bufSize, &needed)) {
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || needed == 0) {
+      goto cleanup;
+    }
+    heapPrivs = (PTOKEN_PRIVILEGES)malloc(needed);
+    if (heapPrivs == NULL) {
+      goto cleanup;
+    }
+    privs = heapPrivs;
+    bufSize = needed;
+    if (!GetTokenInformation(token, TokenPrivileges, privs, bufSize, &needed)) {
+      goto cleanup;
+    }
+  }
+
+  for (DWORD i = 0; i < privs->PrivilegeCount; ++i) {
+    const LUID_AND_ATTRIBUTES *entry = &privs->Privileges[i];
+    if (entry->Luid.LowPart == manageVolLuid.LowPart &&
+        entry->Luid.HighPart == manageVolLuid.HighPart) {
+      hasPrivilege =
+          (entry->Attributes & SE_PRIVILEGE_ENABLED) != 0 ? TRUE : FALSE;
+      break;
+    }
+  }
+
+cleanup:
+  if (heapPrivs != NULL) {
+    free(heapPrivs);
+  }
+  CloseHandle(token);
+  return hasPrivilege;
+}
+
 VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   static volatile LONG globalEventId = 0;
   ULONG currentEventId = InterlockedIncrement(&globalEventId);
@@ -139,6 +237,7 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   ULONG disposition;
   DWORD options;
   DOKAN_IO_SECURITY_CONTEXT ioSecurityContext;
+  ZeroMemory(&ioSecurityContext, sizeof(ioSecurityContext));
   WCHAR *fileName;
   BOOL childExisted = TRUE;
   BOOL openTargetDirectory =
@@ -154,6 +253,9 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
   CreateDispatchCommon(IoEvent, 0, /*UseExtraMemoryPool=*/FALSE,
                        /*ClearNonPoolBuffer=*/TRUE);
 
+  IoEvent->DokanFileInfo.CaseSensitive =
+      (IoEvent->EventContext->Flags & SL_CASE_SENSITIVE) != 0;
+
   assert(IoEvent->DokanOpenInfo == NULL);
 
   if (HasLiteralDotOrDotDotSegment(fileName)) {
@@ -163,6 +265,8 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
 
   if (openTargetDirectory && wcscmp(fileName, L"\\") == 0) {
     // Per [MS-FSA 2.1.5.1.2], the volume root has no parent directory.
+    // Defense-in-depth: current dokan3.sys (sys/create.c) intercepts L"\\"
+    // with STATUS_ACCESS_DENIED before userland dispatch.
     status = STATUS_INVALID_PARAMETER;
     goto fail;
   }
@@ -260,6 +364,12 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
           } else if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
             DbgPrint("SL_OPEN_TARGET_DIRECTORY file not found\n");
             childExisted = FALSE;
+          } else if (status == STATUS_OBJECT_NAME_INVALID ||
+                     status == STATUS_NAME_TOO_LONG ||
+                     status == STATUS_OBJECT_PATH_SYNTAX_BAD) {
+            IoEvent->DokanFileInfo.Context = 0;
+            IoEvent->DokanFileInfo.DeletePending = FALSE;
+            goto fail;
           }
 
           IoEvent->DokanFileInfo.Context = 0;
@@ -299,6 +409,15 @@ VOID DispatchCreate(PDOKAN_IO_EVENT IoEvent) {
       DbgPrint("SL_OPEN_TARGET_DIRECTORY specified\n");
     }
     goto fail;
+  }
+
+  if (!openTargetDirectory && !IoEvent->DokanFileInfo.IsDirectory &&
+      IoEvent->DokanInstance->DokanOperations->SetValidDataLength != NULL &&
+      (ioSecurityContext.DesiredAccess &
+       (FILE_WRITE_DATA | GENERIC_WRITE | GENERIC_ALL | MAXIMUM_ALLOWED)) !=
+          0) {
+    IoEvent->DokanOpenInfo->HasManageVolumePrivilege =
+        DokanCaptureManageVolumePrivilege(IoEvent);
   }
 
   IoEvent->EventResult->Status = STATUS_SUCCESS;

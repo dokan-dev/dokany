@@ -264,11 +264,54 @@ int impl_fuse_context::check_and_resolve(std::string *name) {
   return 0;
 }
 
+namespace {
+
+void assignUnixTimeToLargeInteger(time_t t, LARGE_INTEGER *dest) {
+  if (t != 0) {
+    FILETIME ft = unixTimeToFiletime(t);
+    dest->LowPart = ft.dwLowDateTime;
+    dest->HighPart = static_cast<LONG>(ft.dwHighDateTime);
+  }
+}
+
+// Local v3.0 conversion helper for DOKAN_FILE_INFORMATION and DOKAN_FIND_DATA.
+// The legacy convertStatlikeBuf helper in installed dokan_fuse/include/utils.h
+// is intentionally retained untouched for public-header backwards compatibility.
+template <class T>
+void convertStatlikeToDokan(const struct FUSE_STAT *stbuf,
+                            const std::string &name, T *out) {
+  if (stbuf == nullptr)
+    return;
+
+  if ((stbuf->st_mode & S_IFDIR) == S_IFDIR)
+    out->FileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+  else
+    out->FileAttributes = FILE_ATTRIBUTE_NORMAL;
+
+  out->EndOfFile.QuadPart = static_cast<LONGLONG>(stbuf->st_size);
+  out->FileIndex = static_cast<ULONG64>(stbuf->st_ino);
+
+  assignUnixTimeToLargeInteger(stbuf->st_ctim.tv_sec, &out->CreationTime);
+  assignUnixTimeToLargeInteger(stbuf->st_atim.tv_sec, &out->LastAccessTime);
+  assignUnixTimeToLargeInteger(stbuf->st_mtim.tv_sec, &out->LastWriteTime);
+
+  // Partial support for read-only files - currently done for files without
+  // write permission only.
+  if (!(stbuf->st_mode & 0222))
+    out->FileAttributes |= FILE_ATTRIBUTE_READONLY;
+  std::string fname = extract_file_name(name);
+  if (!fname.empty() && fname.at(0) == '.') // UNIX hidden files
+    out->FileAttributes |= FILE_ATTRIBUTE_HIDDEN;
+}
+
+} // namespace
+
 int impl_fuse_context::walk_directory(void *buf, const char *name,
                                       const struct FUSE_STAT *stbuf,
                                       FUSE_OFF_T off) {
   walk_data *wd = static_cast<walk_data *>(buf);
-  WIN32_FIND_DATAW find_data = {0};
+  DOKAN_FIND_DATA find_data;
+  ZeroMemory(&find_data, sizeof(DOKAN_FIND_DATA));
 
   fuse_context* context = fuse_get_context();
   if(context == nullptr && wd->delegateSetFuseContext != nullptr)
@@ -281,17 +324,16 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
   PDOKAN_FILE_INFO DokanFileInfo = wd->DokanFileInfo;
   std::string dirname = wd->dirname;
 
-  utf8_to_wchar_buf(name, find_data.cFileName, MAX_PATH);
+  utf8_to_wchar_buf(name, find_data.FileName, MAX_PATH);
   // fix name if wrong encoding
-  if (!find_data.cFileName[0]) {
-    struct FUSE_STAT stbuf = {0};
-    utf8_to_wchar_buf_old(name, find_data.cFileName, MAX_PATH);
-    std::string new_name = wchar_to_utf8_cstr(find_data.cFileName);
+  if (!find_data.FileName[0]) {
+    struct FUSE_STAT rename_stbuf = {0};
+    utf8_to_wchar_buf_old(name, find_data.FileName, MAX_PATH);
+    std::string new_name = wchar_to_utf8_cstr(find_data.FileName);
     if (ctx->ops_.getattr && ctx->ops_.rename && new_name.length() &&
-        ctx->ops_.getattr(new_name.c_str(), &stbuf) == -ENOENT)
+        ctx->ops_.getattr(new_name.c_str(), &rename_stbuf) == -ENOENT)
       ctx->ops_.rename(name, new_name.c_str());
   }
-  memset(find_data.cAlternateFileName, 0, sizeof(find_data.cAlternateFileName));
 
   struct FUSE_STAT stat = {0};
 
@@ -313,13 +355,13 @@ int impl_fuse_context::walk_directory(void *buf, const char *name,
     CHECKED(ctx->ops_.getattr(resolved.c_str(), &stat));
   }
 
-  convertStatlikeBuf(&stat, name, &find_data);
+  convertStatlikeToDokan(&stat, name, &find_data);
 
   uint32_t attrs = 0xFFFFFFFFu;
   if (ctx->ops_.win_get_attributes)
       attrs = ctx->ops_.win_get_attributes((dirname + name).c_str());
   if (attrs != 0xFFFFFFFFu)
-    find_data.dwFileAttributes = attrs;
+    find_data.FileAttributes = attrs;
 
   return p_fill_find_data(&find_data, DokanFileInfo);
 }
@@ -704,7 +746,7 @@ int impl_fuse_context::flush_file_buffers(LPCWSTR /*file_name*/,
 }
 
 int impl_fuse_context::get_file_information(
-    LPCWSTR file_name, LPBY_HANDLE_FILE_INFORMATION handle_file_information,
+    LPCWSTR file_name, PDOKAN_FILE_INFORMATION handle_file_information,
     PDOKAN_FILE_INFO dokan_file_info) {
   std::string fname = unixify(wchar_to_utf8_cstr(file_name));
 
@@ -719,16 +761,16 @@ int impl_fuse_context::get_file_information(
     CHECKED(ops_.getattr(resolved.c_str(), &st));
   }
 
-  handle_file_information->nNumberOfLinks = st.st_nlink;
+  handle_file_information->NumberOfLinks = static_cast<ULONG>(st.st_nlink);
   if ((st.st_mode & S_IFDIR) == S_IFDIR)
     dokan_file_info->IsDirectory = TRUE;
-  convertStatlikeBuf(&st, fname, handle_file_information);
+  convertStatlikeToDokan(&st, fname, handle_file_information);
 
   uint32_t attrs = 0xFFFFFFFFu;
   if (ops_.win_get_attributes)
     attrs = ops_.win_get_attributes(fname.c_str());
   if (attrs != 0xFFFFFFFFu)
-    handle_file_information->dwFileAttributes = attrs;
+    handle_file_information->FileAttributes = attrs;
 
   return 0;
 }

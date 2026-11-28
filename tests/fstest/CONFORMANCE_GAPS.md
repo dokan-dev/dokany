@@ -105,12 +105,11 @@ an unsupported feature rather than failing an assertion. These skipped domains
 are intentionally absent from `baselines/dokan_*.json` and tracked here instead:
 
 - **8.3 Short Names (`REQUIRE_SHORT_NAMES_ENABLED()`):** In `dokan/directory.c`,
-  `DokanWriteDirectoryEntry` (`:107-159`) leaves `ShortNameLength`
-  zero-initialized for `FileBothDirectoryInformation`,
-  `FileIdBothDirectoryInformation`, and `FileIdExtdBothDirectoryInformation`,
-  discarding `WIN32_FIND_DATAW::cAlternateFileName` even when `mirror.c`
-  populates it from an 8.3-enabled backing NTFS volume, and
-  `DispatchSetInformation` (`dokan/setfile.c:283-329`) does not handle
+  `DokanWriteDirectoryEntry` leaves `ShortNameLength` zero-initialized for
+  `FileBothDirectoryInformation`, `FileIdBothDirectoryInformation`, and
+  `FileIdExtdBothDirectoryInformation` (as `DOKAN_FIND_DATA` does not carry an
+  8.3 short-name field even when backing NTFS volumes have 8.3 names enabled),
+  and `DispatchSetInformation` (`dokan/setfile.c`) does not handle
   `FileShortNameInformation`. As a result, `ProbeShortNamesEnabled` observes
   `short_name_length == 0` and the five 8.3 tests
   (`DirEnumTest.FindFirstFileMatches8dot3ShortNameWildcard`,
@@ -267,14 +266,15 @@ data-mapped file with `DELETE` access is allowed while legacy
 In `sys/fileinfo.c:876-881`, `DokanCompleteSetInformation` invokes
 `MmFlushImageSection(&fcb->SectionObjectPointers, MmFlushForDelete)` only
 *after* `DokanSetDispositionInformation` (`dokan/setfile.c`) has already
-invoked user-mode `MirrorDeleteFile` (`samples/dokan_mirror/mirror.c:850-856`)
-or `memfs_deletefile` (`samples/dokan_memfs/memfs_operations.cpp:507-521`). On
-`mirror`, `MirrorDeleteFile` has already set `FileDispositionInfo = TRUE` on
+invoked user-mode `MirrorSetFileDisposition` (`MirrorDeleteFileHelper` in
+`samples/dokan_mirror/mirror.c`) or `memfs_setfiledisposition`
+(`samples/dokan_memfs/memfs_operations.cpp`). On `mirror`,
+`MirrorDeleteFileHelper` has already set `FileDispositionInfo = TRUE` on
 the backing NTFS handle (including for data-mapped files, where
 `MirrorCreateFile` succeeds on `DELETE` opens with `kShareAll`), and
 `dokan3.sys` never sends a rollback request when returning
 `STATUS_CANNOT_DELETE`, so the backing file is deleted as soon as the mapped
-section unmaps. Separately, `memfs_deletefile` is stateless (no rollback leak),
+section unmaps. Separately, `memfs_setfiledisposition` is stateless (no rollback leak),
 but on `memfs` (`DeleteImageMappedFileFailsCannotDelete`), once an unmapped
 `SEC_IMAGE` file is deleted via `DeleteFileW`, `sys/cleanup.c:138-145` removes
 the node while Windows Memory Manager (builds `>= 17763`, passing on Server
@@ -335,8 +335,9 @@ when resolving `MAXIMUM_ALLOWED` on read-only or restricted-DACL files. In
 `FILE_APPEND_DATA`. Finally, `DokanCheckShareAccess` (`sys/create.c:294-295`)
 checks `DokanFCBIsPendingDeletion` (`DOKAN_FCB_STATE_DELETE_PENDING`,
 `sys/public.h:108`) only on the target child FCB, never on its parent
-directory FCB, while `MirrorDeleteDirectory` (`mirror.c:861-915`) and
-`memfs_deletedirectory` (`memfs_operations.cpp:524-536`) only check emptiness
+directory FCB, while `MirrorSetFileDisposition` (`MirrorDeleteDirectoryHelper`
+in `samples/dokan_mirror/mirror.c`) and `memfs_setfiledisposition`
+(`samples/dokan_memfs/memfs_operations.cpp`) only check emptiness
 (deferring deletion to `Cleanup` without marking the directory delete-pending).
 In `memfs`, `memfs_createfile`
 (`samples/dokan_memfs/memfs_operations.cpp:163-166`) deliberately replaces
@@ -455,28 +456,31 @@ rejects values `< current VDL` or `> EndOfFile` with
 handle fails with `STATUS_INVALID_PARAMETER`.
 
 **Observed Dokan Behavior:**
-The `DOKAN_OPERATIONS` ABI (`dokan/dokan.h`) uses Win32
-`BY_HANDLE_FILE_INFORMATION` and three-timestamp `SetFileTime`, which carry
-neither `ChangeTime` nor independent `AllocationSize`, and `CREATE_CONTEXT`
-(`sys/public.h:207-216`) / `DOKAN_OPERATIONS::ZwCreateFile` do not forward
-create-time `Irp->Overlay.AllocationSize`. Consequently,
-`DokanFillFileBasicInfo` (`dokan/fileinfo.c:46-47`) and
-`DokanFillNetworkOpenInfo` copy `ftLastWriteTime` into `ChangeTime` (note that
-this aliasing also makes any assertion checking only that `ChangeTime` equals
-`LastWriteTime`—or advances alongside `LastWriteTime`—vacuous on `mirror` and
-`memfs`), `DokanSetBasicInformation` (`dokan/setfile.c`) drops `ChangeTime`,
-and `DokanFillFileStandardInfo` synthesizes `AllocationSize` by rounding
-`EndOfFile` up via `ALIGN_ALLOCATION_SIZE`. Under
-`FileValidDataLengthInformation`,
-`DokanInitializeFcb` (`sys/util/fcb.c:54-57`) initializes `ValidDataLength`
-to `MAXLONGLONG`, `sys/fileinfo.c` performs no `SeManageVolumePrivilege` or
-bounds validation, and `DokanSetValidDataLengthInformation`
-(`dokan/setfile.c:232-253`) forwards the request directly to
-`DokanOperations->SetEndOfFile`. In addition, `MirrorSetAllocationSize` (`samples/dokan_mirror/mirror.c`)
-ignores `AllocSize > fileSize`, and `DokanDispatchRead` (`sys/read.c:146`) /
-`DokanDispatchWrite` (`sys/write.c:75`) return `STATUS_INVALID_PARAMETER`
-instead of `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`) on
-directory handles.
+Although the Dokan v3.0 `DOKAN_OPERATIONS` ABI (`dokan/dokan.h`) now carries
+NT-native `DOKAN_FILE_INFORMATION` (`ChangeTime`, independent
+`AllocationSize`), atomic `SetFileBasicInformation`, and optional
+`SetValidDataLength` (with central `SeManageVolumePrivilege` capture in
+`dokan/create.c` and validation in `dokan/setfile.c`), `CREATE_CONTEXT`
+(`sys/public.h:207-216`) / `DOKAN_OPERATIONS::ZwCreateFile` still do not
+forward create-time `Irp->Overlay.AllocationSize`. Both `mirror`
+(`MirrorGetFileInformation`, `MirrorSetFileBasicInformation`) and `memfs`
+(`memfs_getfileInformation`, `memfs_setfilebasicinformation`) still use
+mechanical v3 adapters that leave `DOKAN_FILE_INFORMATION::ChangeTime = 0`
+(causing `DokanResolveChangeTime` in `dokan/fileinfo.c` to fall back to
+`LastWriteTime`—note that this fallback makes any assertion checking only that
+`ChangeTime` equals or advances alongside `LastWriteTime` vacuous on `mirror`
+and `memfs`), ignore incoming `ChangeTime` in `SetFileBasicInformation`, leave
+`DOKAN_FILE_INFORMATION::AllocationSize = 0` (causing
+`DokanResolveAllocationSize` to auto-align `EndOfFile` via
+`ALIGN_ALLOCATION_SIZE`), and leave `DOKAN_OPERATIONS::SetValidDataLength`
+`NULL` (returning `STATUS_NOT_IMPLEMENTED`). In addition,
+`DokanInitializeFcb` (`sys/util/fcb.c:54-57`) still initializes
+`ValidDataLength` to `MAXLONGLONG`, `MirrorSetAllocationSize`
+(`samples/dokan_mirror/mirror.c`) ignores `AllocSize > fileSize`, and
+`DokanDispatchRead` (`sys/read.c:146`) / `DokanDispatchWrite`
+(`sys/write.c:75`) return `STATUS_INVALID_PARAMETER` instead of
+`STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`) on directory
+handles.
 
 **Covered Tests:**
 
@@ -516,13 +520,14 @@ delete/rename-and-recreate cycles.
 
 **Observed Dokan Behavior:**
 In `samples/dokan_memfs/memfs_operations.cpp`, `memfs_createfile` (`:156-162`)
-sets `FILE_ATTRIBUTE_ARCHIVE` on create/truncate, but `memfs_writefile`
-(`:327-374`), `memfs_setendoffile` (`:561-571`), and `memfs_setallocationsize`
-(`:573-583`) never update `times.lastwrite` or re-set `FILE_ATTRIBUTE_ARCHIVE`
-(breaking both `SetEndOfFile` and Win32 `TRUNCATE_EXISTING`, which truncates
-via `SetAllocationSize`/`SetEndOfFile`). `memfs_setfiletime` (`:488-504`) stores any non-zero `FILETIME` verbatim
-without tracking per-handle freeze/unfreeze state for explicit sets, `-1`, or
-`-2`; and `memfs_readfile` never advances `times.lastaccess` when the host NTFS
+sets `FILE_ATTRIBUTE_ARCHIVE` on create/truncate, but `memfs_writefile`,
+`memfs_setendoffile`, and `memfs_setallocationsize` never update
+`times.lastwrite` or re-set `FILE_ATTRIBUTE_ARCHIVE` (breaking both
+`SetEndOfFile` and Win32 `TRUNCATE_EXISTING`, which truncates via
+`SetAllocationSize`/`SetEndOfFile`). `memfs_setfilebasicinformation` stores any
+non-zero timestamp verbatim without tracking per-handle freeze/unfreeze state
+for explicit sets, `-1`, or `-2`; and `memfs_readfile` never advances
+`times.lastaccess` when the host NTFS
 `NtfsDisableLastAccessUpdate` registry policy enables last-access updates
 (note: that policy key is `ntfs.sys`-private). In
 `samples/dokan_memfs/filenodes.cpp`, `fs_filenodes::add`,
@@ -610,25 +615,25 @@ the string terminator, and honor `SL_RETURN_SINGLE_ENTRY` (`0x02`) without
 advancing the scan cursor when `SL_NO_CURSOR_UPDATE` (`0x10`) is set.
 
 **Observed Dokan Behavior:**
-In `dokan/directory.c`, `DokanWriteDirectoryEntry` (`:107-159`) leaves `FileId`
-zero-initialized for `FileIdFullDirectoryInformation`,
-`FileIdBothDirectoryInformation`, `FileIdExtdDirectoryInformation`, and
-`FileIdExtdBothDirectoryInformation`, causing both
+`dokan/directory.c` (`DokanWriteDirectoryEntry`) now populates 64-bit `FileId`
+and 128-bit `FILE_ID_128` values from `DOKAN_FIND_DATA.FileIndex` (resolving
+both ID tests on `memfs`), but `samples/dokan_mirror/mirror.c`
+(`MirrorFindFiles`) still enumerates via Win32 `FindFirstFileW` /
+`FindNextFileW` and leaves `FileIndex = 0`, causing
 `NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds` and
-`NtQueryDirectoryIdFullAndIdExtdInfoClasses` to fail `FileId` verification on
-`memfs` and `mirror`. Separately, `DokanQueryDirectory` and
-`DokanCompleteDirectoryControl` (`sys/directory.c:121-153, 316`) ignore
-`SL_NO_CURSOR_UPDATE` (`0x10`) alongside `SL_RETURN_SINGLE_ENTRY` (`0x02`)
-(unconditionally advancing `ccb->Context`) and ignore non-initial
-`QueryDirectory.FileName` patterns whenever `initial == FALSE`.
+`NtQueryDirectoryIdFullAndIdExtdInfoClasses` to fail on `mirror`. Separately,
+`DokanQueryDirectory` and `DokanCompleteDirectoryControl`
+(`sys/directory.c:121-153, 316`) ignore `SL_NO_CURSOR_UPDATE` (`0x10`)
+alongside `SL_RETURN_SINGLE_ENTRY` (`0x02`) (unconditionally advancing
+`ccb->Context`) and ignore non-initial `QueryDirectory.FileName` patterns
+whenever `initial == FALSE`.
 
 **Covered Tests:**
 
 - `DirEnumTest.NtQueryDirectoryFileExQuerySingleEntryNoCursorUpdate`
   (`memfs`, `mirror`)
-- `DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds`
-  (`memfs`, `mirror`)
-- `DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses` (`memfs`, `mirror`)
+- `DirEnumTest.NtQueryDirectoryFileIdBothDirectoryInfoReportsFileIds` (`mirror`)
+- `DirEnumTest.NtQueryDirectoryIdFullAndIdExtdInfoClasses` (`mirror`)
 
 ### GAP-13: File Info Queries, Change Notify, and Mount Manager
 
@@ -805,7 +810,7 @@ writable file with a directory follows NTFS replace rules.
 **Observed Dokan Behavior:**
 In `samples/dokan_memfs/filenodes.cpp`, `fs_filenodes::remove` recursively
 deletes all children whenever `memfs_cleanup` runs with `DeletePending` set
-(bypassing `memfs_deletedirectory` emptiness checks on
+(bypassing `memfs_setfiledisposition` directory emptiness checks on
 `FILE_FLAG_DELETE_ON_CLOSE` and `NtDeleteFile`). In `fs_filenodes::move`,
 self-renames hit `!replace_if_existing && new_f` and return
 `STATUS_OBJECT_NAME_COLLISION`, the `f->is_directory || new_f->is_directory`
@@ -1092,17 +1097,18 @@ Windows 10 1809+) and `FILE_RENAME_IGNORE_READONLY_ATTRIBUTE`.
 `POSIX_SEMANTICS` and `ON_CLOSE` on `FileDispositionInformationEx`. While
 `DokanSetDispositionInformation` honors
 `FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE` to bypass its central read-only
-guard (fixing `memfs`), `MirrorDeleteFile`
-(`samples/dokan_mirror/mirror.c:850-856`) still calls Win32
-`FileDispositionInfo` without `FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE`. On
-Windows 11 24H2+ (build `>= 26100`), `DeleteFileW` uses POSIX unlink on
-data-mapped files, which therefore fails `ERROR_ACCESS_DENIED` on both `memfs`
-and `mirror`.
-Likewise, `PopulateRenameEventInformations` (`sys/fileinfo.c`) and
-`DokanSetRenameInformation` (`dokan/setfile.c`) forward only `ReplaceIfExists`
-to `DOKAN_OPERATIONS::MoveFile`, discarding all `FileRenameInformationEx`
-flags (and on `memfs`, `fs_filenodes::move` also fails the pre-check by
-allowing non-POSIX overwrite of an open data-mapped target, per `GAP-16`).
+guard (fixing `memfs`), `MirrorSetFileDisposition` (`MirrorDeleteFileHelper` in
+`samples/dokan_mirror/mirror.c`) still calls Win32 `FileDispositionInfo`
+without `FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE`. On Windows 11 24H2+
+(build `>= 26100`), `DeleteFileW` uses POSIX unlink on data-mapped files, which
+therefore fails `ERROR_ACCESS_DENIED` on both `memfs` and `mirror`.
+Likewise, although `DokanSetRenameInformation` (`dokan/setfile.c`) now forwards
+`RenameFlags` to `DOKAN_OPERATIONS::MoveFile`, `PopulateRenameEventInformations`
+(`sys/fileinfo.c`) copies only the 1-byte low-byte flags without POSIX/extended
+kernel rename handling, and `mirror` / `memfs` still inspect only
+`FILE_RENAME_REPLACE_IF_EXISTS` (and on `memfs`, `fs_filenodes::move` also
+fails the pre-check by allowing non-POSIX overwrite of an open data-mapped
+target, per `GAP-16`).
 
 **Covered Tests:**
 
@@ -1134,19 +1140,21 @@ and deleting reparse points (symbolic links, directory junctions, and custom
 GUID tags, rejecting tag/GUID mismatches), returns `STATUS_REPARSE` during
 path resolution (including intermediate component traversal, chained symlinks,
 `FILE_FLAG_OPEN_REPARSE_POINT`, and loop detection), and reports reparse tags
-in `WIN32_FIND_DATAW::dwReserved0`, `FileAttributeTagInformation`, and
-`FileIdExtdDirectoryInformation`.
+in Win32 `FindFirstFileW` (`WIN32_FIND_DATAW::dwReserved0`),
+`FileAttributeTagInformation`, and `FileIdExtdDirectoryInformation`.
 
 **Observed Dokan Behavior:**
 `DokanVolumeUserFsRequest` (`sys/fscontrol.c`) hardcodes
 `STATUS_NOT_A_REPARSE_POINT` for `FSCTL_GET_REPARSE_POINT` and returns
 `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`) for
-`FSCTL_SET_REPARSE_POINT` and `FSCTL_DELETE_REPARSE_POINT`.
-`DokanFillFileAttributeTagInfo` (`dokan/fileinfo.c`) hardcodes
-`ReparseTag = 0`, `DokanWriteDirectoryEntry` (`dokan/directory.c:107-159`)
-leaves `ReparsePointTag` zero-initialized for `FileIdExtdDirectoryInformation`
-and `FileIdExtdBothDirectoryInformation`, and `sys/create.c` has no
-`STATUS_REPARSE` dispatch path.
+`FSCTL_SET_REPARSE_POINT` and `FSCTL_DELETE_REPARSE_POINT`. While
+`DokanFillFileAttributeTagInfo` (`dokan/fileinfo.c`) and
+`DokanWriteDirectoryEntry` (`dokan/directory.c`) now forward
+`DOKAN_FILE_INFORMATION::ReparseTag` and `DOKAN_FIND_DATA::ReparseTag` to
+`FileAttributeTagInformation` and `FileIdExtd*` directory queries, `mirror` and
+`memfs` still leave `ReparseTag = 0`, `DokanWriteDirectoryEntry` leaves
+`EaSize` zero-initialized (used by Win32 `FindFirstFileW` to populate
+`dwReserved0`), and `sys/create.c` has no `STATUS_REPARSE` dispatch path.
 
 **Covered Tests:**
 
@@ -1304,7 +1312,7 @@ children (unless `FILE_NO_COMPRESSION` is specified), updates
 `DokanVolumeUserFsRequest` (`sys/fscontrol.c`) rejects
 `FSCTL_SET_COMPRESSION` and `FSCTL_GET_COMPRESSION` with
 `STATUS_INVALID_DEVICE_REQUEST` (`ERROR_INVALID_FUNCTION`), and
-`DokanEndDispatchGetFileInformation` (`dokan/fileinfo.c:410-413`) returns
+`DokanEndDispatchGetFileInformation` (`dokan/fileinfo.c`) returns
 `STATUS_NOT_IMPLEMENTED` for `FileCompressionInformation`.
 
 **Covered Tests:**
@@ -1386,22 +1394,20 @@ FSCTLs.
 - **Affected Targets:** `memfs`, `mirror`
 
 **NTFS Specification (Microsoft proof):**
-Per [`FILE_STANDARD_LINK_INFORMATION`][wdk-stdlink],
-[`FILE_STAT_INFORMATION`][wdk-filestat],
-[`FILE_CASE_SENSITIVE_INFORMATION`][wdk-casesens],
+Per [`FILE_CASE_SENSITIVE_INFORMATION`][wdk-casesens],
 [MS-FSCC 2.5 (`FileFsAttributeInformation` and
 `FileFsSectorSizeInformation`)][ms-fscc-fsinfo],
 and [`GetVolumeInformationW`][win32-volinfo], modern NTFS supports querying
-`FileStandardLinkInformation`, `FileStatInformation`, `FileStatLxInformation`,
-and `FileFsSectorSizeInformation`, querying/setting per-directory
+`FileFsSectorSizeInformation`, `FileFsControlInformation`, and
+`FSCTL_READ_FILE_USN_DATA`, querying/setting per-directory
 `FileCaseSensitiveInformation` (inherited by child directories), and
 advertising accurate NTFS capability flags.
 
 **Observed Dokan Behavior:**
 `DokanEndDispatchGetFileInformation` (`dokan/fileinfo.c`) and
 `DispatchSetInformation` (`dokan/setfile.c`) do not recognize
-`FileStandardLinkInformation`, `FileStatInformation`,
-`FileStatLxInformation`, or `FileCaseSensitiveInformation`, falling through
+`FileCaseSensitiveInformation` (and `DokanCompareFcb` at `sys/util/fcb.c:457-459`
+compares FCBs globally by `DOKAN_EVENT_CASE_SENSITIVE`), falling through
 to `STATUS_INVALID_PARAMETER`. Likewise,
 `DokanDispatchQueryVolumeInformation` (`sys/volume.c:55-234`) handles only
 `FileFsVolumeInformation`, `FileFsSizeInformation`, `FileFsDeviceInformation`,
@@ -1423,8 +1429,6 @@ passing `/b` overwrites those flags with only
 
 - `InfoQueriesTest.GetVolumeInformationNtfsFeatureFlags` (`memfs`, `mirror`)
 - `InfoQueriesTest.NtQueryFileFsSectorSizeInformation` (`memfs`, `mirror`)
-- `InfoQueriesTest.NtQueryFileStandardLinkInfo` (`memfs`, `mirror`)
-- `InfoQueriesTest.NtQueryFileStatAndStatLxInformation` (`memfs`, `mirror`)
 - `InfoQueriesTest.NtQueryVolumeFsControlInformation` (`memfs`, `mirror`)
 - `InfoQueriesTest.ReadFileUsnDataMatchesFileIdParentAndName`
   (`memfs`, `mirror`)
@@ -1508,7 +1512,5 @@ set preemptively to prevent VM bugchecks until `sys/fileinfo.c:865` is fixed).
 [wdk-rename-info]: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information
 [wdk-vdl-info]: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/ns-ntddk-_file_valid_data_length_information
 [wdk-casesens]: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_case_sensitive_information
-[wdk-filestat]: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_stat_information
-[wdk-stdlink]: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_standard_link_information
 
 <!-- markdownlint-enable MD013 -->

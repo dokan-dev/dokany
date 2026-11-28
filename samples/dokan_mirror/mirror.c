@@ -714,13 +714,27 @@ MirrorFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   }
 }
 
+static VOID FileTimeToLargeInteger(const FILETIME *FileTime,
+                                   PLARGE_INTEGER LargeInt) {
+  LargeInt->LowPart = FileTime->dwLowDateTime;
+  LargeInt->HighPart = (LONG)FileTime->dwHighDateTime;
+}
+
+static VOID LargeIntegerToFileTime(const LARGE_INTEGER *LargeInt,
+                                   PFILETIME FileTime) {
+  FileTime->dwLowDateTime = LargeInt->LowPart;
+  FileTime->dwHighDateTime = (DWORD)LargeInt->HighPart;
+}
+
 static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
-  LPCWSTR FileName, LPBY_HANDLE_FILE_INFORMATION HandleFileInformation,
-  PDOKAN_FILE_INFO DokanFileInfo) {
+    LPCWSTR FileName, PDOKAN_FILE_INFORMATION HandleFileInformation,
+    PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
   BOOL opened = FALSE;
+  BY_HANDLE_FILE_INFORMATION bhfi;
 
+  ZeroMemory(&bhfi, sizeof(BY_HANDLE_FILE_INFORMATION));
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
   DbgPrint(L"GetFileInfo : %s\n", filePath);
@@ -737,14 +751,15 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
     opened = TRUE;
   }
 
-  if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
+  if (!GetFileInformationByHandle(handle, &bhfi)) {
     DbgPrint(L"\terror code = %d\n", GetLastError());
 
     // FileName is a root directory
     // in this case, FindFirstFile can't get directory information
     if (wcslen(FileName) == 1) {
       DbgPrint(L"  root dir\n");
-      HandleFileInformation->dwFileAttributes = GetFileAttributes(filePath);
+      bhfi.dwFileAttributes = GetFileAttributes(filePath);
+      bhfi.nNumberOfLinks = 1;
 
     } else {
       WIN32_FIND_DATAW find;
@@ -757,21 +772,36 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
           CloseHandle(handle);
         return DokanNtStatusFromWin32(error);
       }
-      HandleFileInformation->dwFileAttributes = find.dwFileAttributes;
-      HandleFileInformation->ftCreationTime = find.ftCreationTime;
-      HandleFileInformation->ftLastAccessTime = find.ftLastAccessTime;
-      HandleFileInformation->ftLastWriteTime = find.ftLastWriteTime;
-      HandleFileInformation->nFileSizeHigh = find.nFileSizeHigh;
-      HandleFileInformation->nFileSizeLow = find.nFileSizeLow;
+      bhfi.dwFileAttributes = find.dwFileAttributes;
+      bhfi.ftCreationTime = find.ftCreationTime;
+      bhfi.ftLastAccessTime = find.ftLastAccessTime;
+      bhfi.ftLastWriteTime = find.ftLastWriteTime;
+      bhfi.nFileSizeHigh = find.nFileSizeHigh;
+      bhfi.nFileSizeLow = find.nFileSizeLow;
+      bhfi.nNumberOfLinks = 1;
       DbgPrint(L"\tFindFiles OK, file size = %d\n", find.nFileSizeLow);
       FindClose(findHandle);
     }
   } else {
     DbgPrint(L"\tGetFileInformationByHandle success, file size = %d\n",
-             HandleFileInformation->nFileSizeLow);
+             bhfi.nFileSizeLow);
   }
 
-  DbgPrint(L"FILE ATTRIBUTE  = %d\n", HandleFileInformation->dwFileAttributes);
+  HandleFileInformation->FileAttributes = bhfi.dwFileAttributes;
+  FileTimeToLargeInteger(&bhfi.ftCreationTime,
+                         &HandleFileInformation->CreationTime);
+  FileTimeToLargeInteger(&bhfi.ftLastAccessTime,
+                         &HandleFileInformation->LastAccessTime);
+  FileTimeToLargeInteger(&bhfi.ftLastWriteTime,
+                         &HandleFileInformation->LastWriteTime);
+  HandleFileInformation->EndOfFile.HighPart = (LONG)bhfi.nFileSizeHigh;
+  HandleFileInformation->EndOfFile.LowPart = bhfi.nFileSizeLow;
+  HandleFileInformation->VolumeSerialNumber = bhfi.dwVolumeSerialNumber;
+  HandleFileInformation->NumberOfLinks = bhfi.nNumberOfLinks;
+  HandleFileInformation->FileIndex =
+      (((ULONG64)bhfi.nFileIndexHigh) << 32) | (ULONG64)bhfi.nFileIndexLow;
+
+  DbgPrint(L"FILE ATTRIBUTE  = %d\n", HandleFileInformation->FileAttributes);
 
   if (opened)
     CloseHandle(handle);
@@ -782,11 +812,14 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 static NTSTATUS DOKAN_CALLBACK
 MirrorFindFiles(LPCWSTR FileName,
                 PFillFindData FillFindData, // function pointer
-                PDOKAN_FILE_INFO DokanFileInfo) {
+                ULONG FindFlags, PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(FindFlags);
+
   WCHAR filePath[DOKAN_MAX_PATH];
   size_t fileLen;
   HANDLE hFind;
   WIN32_FIND_DATAW findData;
+  DOKAN_FIND_DATA dokanFindData;
   DWORD error;
   int count = 0;
 
@@ -813,15 +846,35 @@ MirrorFindFiles(LPCWSTR FileName,
 
   // Root folder does not have . and .. folder - we remove them
   BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
+  BOOL fillFailed = FALSE;
   do {
     if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 &&
-                        wcscmp(findData.cFileName, L"..") != 0))
-      FillFindData(&findData, DokanFileInfo);
+                        wcscmp(findData.cFileName, L"..") != 0)) {
+      ZeroMemory(&dokanFindData, sizeof(DOKAN_FIND_DATA));
+      dokanFindData.FileAttributes = findData.dwFileAttributes;
+      FileTimeToLargeInteger(&findData.ftCreationTime,
+                             &dokanFindData.CreationTime);
+      FileTimeToLargeInteger(&findData.ftLastAccessTime,
+                             &dokanFindData.LastAccessTime);
+      FileTimeToLargeInteger(&findData.ftLastWriteTime,
+                             &dokanFindData.LastWriteTime);
+      dokanFindData.EndOfFile.HighPart = (LONG)findData.nFileSizeHigh;
+      dokanFindData.EndOfFile.LowPart = findData.nFileSizeLow;
+      wcscpy_s(dokanFindData.FileName, MAX_PATH, findData.cFileName);
+      if (FillFindData(&dokanFindData, DokanFileInfo) != 0) {
+        fillFailed = TRUE;
+        break;
+      }
+    }
     count++;
   } while (FindNextFile(hFind, &findData) != 0);
 
-  error = GetLastError();
+  error = fillFailed ? ERROR_SUCCESS : GetLastError();
   FindClose(hFind);
+
+  if (fillFailed) {
+    return STATUS_NO_MEMORY;
+  }
 
   if (error != ERROR_NO_MORE_FILES) {
     DbgPrint(L"\tFindNextFile error. Error is %u\n\n", error);
@@ -833,8 +886,8 @@ MirrorFindFiles(LPCWSTR FileName,
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS MirrorDeleteFileHelper(LPCWSTR FileName,
+                                       PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
@@ -858,10 +911,9 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS MirrorDeleteDirectoryHelper(LPCWSTR FileName,
+                                            PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
-  // HANDLE	handle = (HANDLE)DokanFileInfo->Context;
   HANDLE hFind;
   WIN32_FIND_DATAW findData;
   size_t fileLen;
@@ -873,7 +925,7 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
            DokanFileInfo->DeletePending);
 
   if (!DokanFileInfo->DeletePending)
-    //Dokan notify that the file is requested not to be deleted.
+    // Dokan notify that the file is requested not to be deleted.
     return STATUS_SUCCESS;
 
   fileLen = wcslen(filePath);
@@ -914,10 +966,19 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK
-MirrorMoveFile(LPCWSTR FileName, // existing file name
-               LPCWSTR NewFileName, BOOL ReplaceIfExisting,
-               PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK MirrorSetFileDisposition(
+    LPCWSTR FileName, ULONG DispositionFlags, PDOKAN_FILE_INFO DokanFileInfo) {
+  UNREFERENCED_PARAMETER(DispositionFlags);
+
+  if (DokanFileInfo->IsDirectory) {
+    return MirrorDeleteDirectoryHelper(FileName, DokanFileInfo);
+  }
+  return MirrorDeleteFileHelper(FileName, DokanFileInfo);
+}
+
+static NTSTATUS DOKAN_CALLBACK MirrorMoveFile(
+    LPCWSTR FileName, // existing file name
+    LPCWSTR NewFileName, ULONG RenameFlags, PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   WCHAR newFilePath[DOKAN_MAX_PATH];
   HANDLE handle;
@@ -959,13 +1020,11 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
   ZeroMemory(renameInfo, bufferSize);
 
   renameInfo->ReplaceIfExists =
-    ReplaceIfExisting
-      ? TRUE
-          : FALSE; // some warning about converting BOOL to BOOLEAN
+      (RenameFlags & FILE_RENAME_REPLACE_IF_EXISTS) ? TRUE : FALSE;
   renameInfo->RootDirectory = NULL; // hope it is never needed, shouldn't be
   renameInfo->FileNameLength =
-    (DWORD)newFilePathLen *
-    sizeof(newFilePath[0]); // they want length in bytes
+      (DWORD)newFilePathLen *
+      sizeof(newFilePath[0]); // they want length in bytes
 
   wcscpy_s(renameInfo->FileName, newFilePathLen + 1, newFilePath);
 
@@ -1089,55 +1148,46 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
-  LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo) {
-  UNREFERENCED_PARAMETER(DokanFileInfo);
-
-  WCHAR filePath[DOKAN_MAX_PATH];
-
-  GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
-
-  DbgPrint(L"SetFileAttributes %s 0x%x\n", filePath, FileAttributes);
-
-  if (FileAttributes != 0) {
-    if (!SetFileAttributes(filePath, FileAttributes)) {
-      DWORD error = GetLastError();
-      DbgPrint(L"\terror code = %d\n\n", error);
-      return DokanNtStatusFromWin32(error);
-    }
-  } else {
-    // case FileAttributes == 0 :
-    // MS-FSCC 2.6 File Attributes : There is no file attribute with the value 0x00000000
-    // because a value of 0x00000000 in the FileAttributes field means that the file attributes for this file MUST NOT be changed when setting basic information for the file
-    DbgPrint(L"Set 0 to FileAttributes means MUST NOT be changed. Didn't call "
-             L"SetFileAttributes function. \n");
-  }
-
-  DbgPrint(L"\n");
-  return STATUS_SUCCESS;
-}
-
-static NTSTATUS DOKAN_CALLBACK
-MirrorSetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
-                  CONST FILETIME *LastAccessTime, CONST FILETIME *LastWriteTime,
-                  PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK MirrorSetFileBasicInformation(
+    LPCWSTR FileName, const FILE_BASIC_INFORMATION *BasicInfo,
+    PDOKAN_FILE_INFO DokanFileInfo) {
   WCHAR filePath[DOKAN_MAX_PATH];
   HANDLE handle;
+  FILETIME creationTime;
+  FILETIME lastAccessTime;
+  FILETIME lastWriteTime;
 
   GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
 
-  DbgPrint(L"SetFileTime %s\n", filePath);
+  DbgPrint(L"SetFileBasicInformation %s 0x%x\n", filePath,
+           BasicInfo->FileAttributes);
 
   handle = (HANDLE)DokanFileInfo->Context;
-
   if (!handle || handle == INVALID_HANDLE_VALUE) {
     DbgPrint(L"\tinvalid handle\n\n");
     return STATUS_INVALID_HANDLE;
   }
 
-  if (!SetFileTime(handle, CreationTime, LastAccessTime, LastWriteTime)) {
+  if (BasicInfo->FileAttributes != 0) {
+    if (!SetFileAttributes(filePath, BasicInfo->FileAttributes)) {
+      DWORD error = GetLastError();
+      DbgPrint(L"\tSetFileAttributes error code = %d\n\n", error);
+      return DokanNtStatusFromWin32(error);
+    }
+  } else {
+    // MS-FSCC 2.6 File Attributes: 0x00000000 means attributes MUST NOT be
+    // changed when setting basic information for the file.
+    DbgPrint(L"Set 0 to FileAttributes means MUST NOT be changed. Didn't call "
+             L"SetFileAttributes function.\n");
+  }
+
+  LargeIntegerToFileTime(&BasicInfo->CreationTime, &creationTime);
+  LargeIntegerToFileTime(&BasicInfo->LastAccessTime, &lastAccessTime);
+  LargeIntegerToFileTime(&BasicInfo->LastWriteTime, &lastWriteTime);
+
+  if (!SetFileTime(handle, &creationTime, &lastAccessTime, &lastWriteTime)) {
     DWORD error = GetLastError();
-    DbgPrint(L"\terror code = %d\n\n", error);
+    DbgPrint(L"\tSetFileTime error code = %d\n\n", error);
     return DokanNtStatusFromWin32(error);
   }
 
@@ -1717,13 +1767,12 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
   dokanOperations.GetFileInformation = MirrorGetFileInformation;
   dokanOperations.FindFiles = MirrorFindFiles;
   dokanOperations.FindFilesWithPattern = NULL;
-  dokanOperations.SetFileAttributes = MirrorSetFileAttributes;
-  dokanOperations.SetFileTime = MirrorSetFileTime;
-  dokanOperations.DeleteFile = MirrorDeleteFile;
-  dokanOperations.DeleteDirectory = MirrorDeleteDirectory;
+  dokanOperations.SetFileBasicInformation = MirrorSetFileBasicInformation;
+  dokanOperations.SetFileDisposition = MirrorSetFileDisposition;
   dokanOperations.MoveFile = MirrorMoveFile;
   dokanOperations.SetEndOfFile = MirrorSetEndOfFile;
   dokanOperations.SetAllocationSize = MirrorSetAllocationSize;
+  dokanOperations.SetValidDataLength = NULL;
   dokanOperations.LockFile = MirrorLockFile;
   dokanOperations.UnlockFile = MirrorUnlockFile;
   dokanOperations.GetFileSecurity = MirrorGetFileSecurity;

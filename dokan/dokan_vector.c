@@ -97,13 +97,13 @@ VOID DokanVector_Free(PDOKAN_VECTOR Vector) {
 }
 
 // Appends an item to the vector at the Front. Expensive, please use PushBack instead.
-BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, PVOID Item) {
+BOOL DokanVector_PushFront(PDOKAN_VECTOR Vector, LPCVOID Item) {
   return DokanVector_PushFrontArray(Vector, Item, /*Count=*/1);
 }
 
 // Appends an array of items to the vector at the Front.
 // This is more efficient than calling DokanVector_PushFront multiple times as it only shifts the vector once.
-BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, PVOID Items,
+BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, LPCVOID Items,
                                 size_t Count) {
   assert(Vector && Items);
   if (Count == 0) {
@@ -126,7 +126,7 @@ BOOL DokanVector_PushFrontArray(PDOKAN_VECTOR Vector, PVOID Items,
 }
 
 // Appends an item to the vector.
-BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item) {
+BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, LPCVOID Item) {
   assert(Vector && Item);
   if (Vector->ItemCount + 1 >= Vector->MaxItems) {
     if (!DokanVector_Grow(Vector, 1)) {
@@ -141,7 +141,7 @@ BOOL DokanVector_PushBack(PDOKAN_VECTOR Vector, PVOID Item) {
 }
 
 // Appends an array of items to the vector.
-BOOL DokanVector_PushBackArray(PDOKAN_VECTOR Vector, PVOID Items,
+BOOL DokanVector_PushBackArray(PDOKAN_VECTOR Vector, LPCVOID Items,
                                size_t Count) {
   assert(Vector && Items);
   if (Count == 0) {
