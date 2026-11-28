@@ -72,7 +72,7 @@ Session 0 (where IFSTest multi-process security tests using `CreateProcessWithLo
 `SetOwnerSecurityTest` or `DirectoryTraverseTest` reports `IFSTEST_SETUP_PROCESS_CREATEPROC_FAILURE`.
 Scorecards (`fstest-results/*.json`), install logs, `guest_tests.log`, the serial console log,
 (on boot/SSH stalls, even if a retry recovers) `no-ssh-screen.ppm` and `boot-stall-diag.txt`
-(host kernel/QEMU/`kvm_amd` parameters plus two QEMU monitor snapshots 5s apart), and
+(host kernel/QEMU/`kvm_amd` parameters plus two QEMU monitor snapshots 5s apart; [`vm/common.sh`](vm/common.sh) also omits `hv_time` from `QEMU_CPU` to avoid an intermittent nested-AMD-KVM early-boot `AP #2 TPR=0xf0` deadlock), and
 (on test failures) `guest_diagnostics.txt` (recent `System`/`Application`/`TaskScheduler`/`WMI-Activity`
 events, live test processes, and trampoline state) are uploaded as `vm-logs-<os>-<shard>`.
 
