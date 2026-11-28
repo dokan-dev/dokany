@@ -50,7 +50,10 @@ VOID DokanExecuteCleanup(__in PREQUEST_CONTEXT RequestContext) {
 
   InterlockedDecrement(&fcb->UncleanCount);
 
-  IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
+  if (ccb->ShareAccessUpdated) {
+    IoRemoveShareAccess(RequestContext->IrpSp->FileObject, &fcb->ShareAccess);
+    ccb->ShareAccessUpdated = FALSE;
+  }
 
   // From Fastfat: Cleanup operations can always cleanup immediately therefore
   // we execute it sync.

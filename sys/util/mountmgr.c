@@ -19,6 +19,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "mountmgr.h"
+#include "str.h"
 
 NTSTATUS
 DokanSendIoContlToMountManager(__in ULONG IoControlCode,
@@ -80,11 +81,28 @@ NTSTATUS DokanSendVolumeMountPoint(__in PDokanDCB Dcb, BOOLEAN Create) {
   PMOUNTMGR_VOLUME_MOUNT_POINT volumMountPoint;
   ULONG length;
 
-  length = sizeof(MOUNTMGR_VOLUME_MOUNT_POINT) + Dcb->MountPoint->Length +
-           Dcb->PersistentSymbolicLinkName->Length;
+  PUNICODE_STRING mountPoint =
+      DokanSnapshotDcbUnicodeString(Dcb, &Dcb->MountPoint);
+  PUNICODE_STRING persistentSymbolicLinkName =
+      DokanSnapshotDcbUnicodeString(Dcb, &Dcb->PersistentSymbolicLinkName);
+  if (mountPoint == NULL || persistentSymbolicLinkName == NULL) {
+    if (mountPoint != NULL) {
+      DokanFreeUnicodeString(mountPoint);
+    }
+    if (persistentSymbolicLinkName != NULL) {
+      DokanFreeUnicodeString(persistentSymbolicLinkName);
+    }
+    DOKAN_LOG("Missing MountPoint or PersistentSymbolicLinkName");
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  length = sizeof(MOUNTMGR_VOLUME_MOUNT_POINT) + mountPoint->Length +
+           persistentSymbolicLinkName->Length;
   volumMountPoint = DokanAllocZero(length);
 
   if (volumMountPoint == NULL) {
+    DokanFreeUnicodeString(mountPoint);
+    DokanFreeUnicodeString(persistentSymbolicLinkName);
     DOKAN_LOG("Can't allocate MOUNTMGR_VOLUME_MOUNT_POINT");
     return STATUS_INSUFFICIENT_RESOURCES;
   }
@@ -94,19 +112,21 @@ NTSTATUS DokanSendVolumeMountPoint(__in PDokanDCB Dcb, BOOLEAN Create) {
   // TargetVolumeName (PersistanteSymbolicLinkName):
   // \??\Volume{71c74232-886a-11ea-870b-5cf37092b67e}
   volumMountPoint->SourceVolumeNameOffset = sizeof(MOUNTMGR_VOLUME_MOUNT_POINT);
-  volumMountPoint->SourceVolumeNameLength = Dcb->MountPoint->Length;
-  RtlCopyMemory(
-      (PCHAR)volumMountPoint + volumMountPoint->SourceVolumeNameOffset,
-      Dcb->MountPoint->Buffer, volumMountPoint->SourceVolumeNameLength);
+  volumMountPoint->SourceVolumeNameLength = mountPoint->Length;
+  RtlCopyMemory((PCHAR)volumMountPoint +
+                    volumMountPoint->SourceVolumeNameOffset,
+                mountPoint->Buffer, volumMountPoint->SourceVolumeNameLength);
   volumMountPoint->TargetVolumeNameOffset =
       volumMountPoint->SourceVolumeNameOffset +
       volumMountPoint->SourceVolumeNameLength;
-  volumMountPoint->TargetVolumeNameLength =
-      Dcb->PersistentSymbolicLinkName->Length;
-  RtlCopyMemory(
-      (PCHAR)volumMountPoint + volumMountPoint->TargetVolumeNameOffset,
-      Dcb->PersistentSymbolicLinkName->Buffer,
-      volumMountPoint->TargetVolumeNameLength);
+  volumMountPoint->TargetVolumeNameLength = persistentSymbolicLinkName->Length;
+  RtlCopyMemory((PCHAR)volumMountPoint +
+                    volumMountPoint->TargetVolumeNameOffset,
+                persistentSymbolicLinkName->Buffer,
+                volumMountPoint->TargetVolumeNameLength);
+
+  DokanFreeUnicodeString(mountPoint);
+  DokanFreeUnicodeString(persistentSymbolicLinkName);
 
   status = DokanSendIoContlToMountManager(
       Create ? IOCTL_MOUNTMGR_VOLUME_MOUNT_POINT_CREATED

@@ -246,28 +246,21 @@ VOID RetryIrps(__in PIRP_LIST PendingRetryIrp) {
 KSTART_ROUTINE NotificationThread;
 VOID NotificationThread(__in PVOID pDcb) {
   PKEVENT events[2];
-  PKWAIT_BLOCK waitBlock;
   NTSTATUS status;
   PDokanDCB Dcb = pDcb;
 
   DOKAN_LOG("Start");
 
-  waitBlock = DokanAlloc(sizeof(KWAIT_BLOCK) * 6);
-  if (waitBlock == NULL) {
-    DOKAN_LOG("Can't allocate WAIT_BLOCK");
-    return;
-  }
   events[0] = &Dcb->ReleaseEvent;
   events[1] = &Dcb->PendingRetryIrp.NotEmpty;
   do {
     status = KeWaitForMultipleObjects(2, events, WaitAny, Executive, KernelMode,
-                                      FALSE, NULL, waitBlock);
+                                      FALSE, NULL, NULL);
     if (status == STATUS_WAIT_1) {
       RetryIrps(&Dcb->PendingRetryIrp);
     }
   } while (status != STATUS_WAIT_0);
 
-  DokanFree(waitBlock);
   DOKAN_LOG("Stop");
 }
 
@@ -379,11 +372,17 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
                          L"VCB being released has wrong identifier type.");
   }
 
-  // Atomically claim dismount ownership (VcbGood -> VcbDismountStarting) while
-  // keeping IsUnmountPending FALSE during DokanDeleteMountPoint so
-  // MountManager's re-entrant IOCTL_MOUNTDEV_* requests succeed.
-  if (InterlockedCompareExchange(&vcb->Condition, VcbDismountStarting,
-                                 VcbGood) != VcbGood) {
+  // Atomically claim dismount ownership (VcbGood -> VcbDismountInProgress) so
+  // all new volume I/O is rejected immediately. DiskDeviceControl continues
+  // servicing MountManager's teardown handshakes (QUERY_DEVICE_NAME /
+  // QUERY_UNIQUE_ID / LINK_DELETED) while Dcb->Condition remains DcbActive.
+  LONG prevCondition = InterlockedCompareExchange(
+      &vcb->Condition, VcbDismountInProgress, VcbGood);
+  if (prevCondition != VcbGood) {
+    if (prevCondition == VcbNotMounted) {
+      DokanLogInfo(&logger, L"Volume mount is still in progress.");
+      return STATUS_DEVICE_BUSY;
+    }
     DokanLogInfo(&logger, L"Event release is already running for this volume.");
     return STATUS_SUCCESS;
   }
@@ -397,27 +396,25 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
   ObReferenceObject(DeviceObject);
   ObReferenceObject(diskDeviceObject);
 
+  // Wait (with zero Dokan locks held) for DokanMountVolume to finish
+  // MountManager arrival notification, symlink creation, and MUP registration
+  // so we never tear down mount points or MUP handles before they are created.
+  KeWaitForSingleObject(&dcb->MountCompletedEvent, Executive, KernelMode, FALSE,
+                        NULL);
+
   status = IoAcquireRemoveLock(&dcb->RemoveLock, vcb);
   if (!NT_SUCCESS(status)) {
+    InterlockedExchange(&vcb->Condition, VcbGood);
     DokanLogError(&logger, status, L"IoAcquireRemoveLock failed in release.");
     ObDereferenceObject(diskDeviceObject);
     ObDereferenceObject(DeviceObject);
     return STATUS_DEVICE_REMOVED;
   }
 
-  // 1. Delete the mount point with zero Dokan ERESOURCEs held. RemoveLock is
-  //    still active and Condition == VcbDismountStarting so MountManager's
-  //    re-entrant IOCTL_MOUNTDEV_* requests complete normally
-  //    (IOCTL_MOUNTDEV_LINK_DELETED is ignored because UseMountManager is
-  //    cleared, or defers via work item).
-  DokanDeleteMountPoint(RequestContext, dcb);
-
-  // 2. Now reject all new I/O: mark VCB dismount-in-progress, DCB
-  //    delete-pending, and flag VPB with VPB_REMOVE_PENDING (while keeping
-  //    Vpb->DeviceObject non-NULL until OpenFileCount == 0 &&
+  // 1. Immediately clear VPB_MOUNTED and flag VPB_REMOVE_PENDING so no new
+  //    opens can enter through IopParseDevice while mount points are removed
+  //    (keep Vpb->DeviceObject non-NULL until OpenFileCount == 0 &&
   //    Vpb->ReferenceCount == 0 so late CLEANUP/CLOSE route to volDeviceObject).
-  InterlockedExchange(&vcb->Condition, VcbDismountInProgress);
-  InterlockedExchange(&dcb->Condition, DcbDeletePending);
   if (vcb->Vpb != NULL) {
     KIRQL vpbIrql;
     IoAcquireVpbSpinLock(&vpbIrql);
@@ -426,11 +423,20 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
     IoReleaseVpbSpinLock(vpbIrql);
   }
 
+  // 2. Delete the mount point with zero Dokan ERESOURCEs held. RemoveLock is
+  //    still active and Dcb->Condition == DcbActive so MountManager's
+  //    re-entrant teardown IOCTLs (QUERY_DEVICE_NAME / QUERY_UNIQUE_ID /
+  //    LINK_DELETED) complete normally.
+  DokanDeleteMountPoint(RequestContext, dcb);
+
+  // 3. Mark DCB delete-pending, permanently signal ReleaseEvent to wake all
+  //    waiting/late-entering pull threads, drain pending IRPs and events, and
+  //    stop worker threads.
+  InterlockedExchange(&dcb->Condition, DcbDeletePending);
+
   DokanLogInfo(&logger, L"Starting unmount for device \"%wZ\"",
                dcb->DiskDeviceName);
 
-  // 3. Permanently signal ReleaseEvent to wake all waiting/late-entering pull
-  //    threads, drain pending IRPs and events, and stop worker threads.
   KeSetEvent(&dcb->ReleaseEvent, IO_NO_INCREMENT, FALSE);
   ReleasePendingIrp(&dcb->PendingIrp);
   ReleasePendingIrp(&dcb->PendingRetryIrp);
@@ -450,13 +456,18 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
     RunAsSystem(DokanDeregisterUncProvider, dcb);
   }
   if (dcb->DiskDeviceName != NULL) {
-    DOKAN_CONTROL dokanControl;
-    RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-    RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
-                  dcb->DiskDeviceName->Length);
-    dokanControl.SessionId = dcb->SessionId;
-    DokanLogInfo(&logger, L"Removing mount entry.");
-    RemoveMountEntry(dcb->Global, &dokanControl);
+    PDOKAN_CONTROL dokanControl = DokanAllocZero(sizeof(DOKAN_CONTROL));
+    if (dokanControl != NULL) {
+      RtlCopyMemory(dokanControl->DeviceName, dcb->DiskDeviceName->Buffer,
+                    dcb->DiskDeviceName->Length);
+      dokanControl->SessionId = dcb->SessionId;
+      DokanLogInfo(&logger, L"Removing mount entry.");
+      RemoveMountEntry(dcb->Global, dokanControl);
+      DokanFree(dokanControl);
+    } else {
+      DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
+                    L"Failed to allocate DOKAN_CONTROL to remove mount entry.");
+    }
   }
   if (dcb->MountedDeviceInterfaceName.Buffer != NULL) {
     DokanLogInfo(
@@ -475,23 +486,21 @@ NTSTATUS DokanEventRelease(__in_opt PREQUEST_CONTEXT RequestContext,
     RtlFreeUnicodeString(&dcb->DiskDeviceInterfaceName);
     RtlInitUnicodeString(&dcb->DiskDeviceInterfaceName, NULL);
   }
-  if (dcb->SymbolicLinkName != NULL) {
-    NTSTATUS linkStatus = IoDeleteSymbolicLink(dcb->SymbolicLinkName);
-    if (!NT_SUCCESS(linkStatus) && linkStatus != STATUS_OBJECT_NAME_NOT_FOUND) {
-      DOKAN_LOG_("Delete of SymbolicLink failed \"%wZ\" %s",
-                 dcb->SymbolicLinkName, DokanGetNTSTATUSStr(linkStatus));
-    }
-  }
+  DokanDeleteVolumeSymbolicLink(dcb);
 
   // 6. Evict standby SEC_IMAGE ControlAreas and clean cached sections with
   //    zero Dokan locks held so their internal FILE_OBJECTs close synchronously.
   DokanPurgeVolumeCachedSections(vcb);
 
   // 7. Transition to VcbDismounted and tear down VCB/DCB synchronously if no
-  //    open files or VPB references remain (otherwise final IRP_MJ_CLOSE or
-  //    the non-blocking dismount work item / backoff timer completes teardown).
+  //    open files or VPB references remain; if a transient VPB reference is
+  //    still unwinding on another core, queue the bounded dismount work item.
   InterlockedExchange(&vcb->Condition, VcbDismounted);
-  DokanCheckForDismount(vcb, /*ResidualVpbRefs=*/0);
+  if (!DokanCheckForDismount(vcb, /*ResidualVpbRefs=*/0) &&
+      InterlockedCompareExchange(&vcb->Condition, 0, 0) == VcbDismounted &&
+      InterlockedCompareExchange(&vcb->OpenFileCount, 0, 0) == 0) {
+    DokanQueueDismountWorkItem(vcb);
+  }
 
   DokanLogInfo(&logger, L"Finished event release.");
 
@@ -516,37 +525,45 @@ ULONG GetCurrentSessionId(__in PREQUEST_CONTEXT RequestContext) {
 
 NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   PDOKAN_UNICODE_STRING_INTERMEDIATE szMountPoint;
-  DOKAN_CONTROL dokanControl;
+  PDOKAN_CONTROL dokanControl = NULL;
   PMOUNT_ENTRY mountEntry;
 
   GET_IRP_UNICODE_STRING_INTERMEDIATE_OR_RETURN(RequestContext->Irp,
                                                 szMountPoint);
 
-  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-  RtlStringCchCopyW(dokanControl.MountPoint, MAXIMUM_FILENAME_LENGTH,
+  dokanControl = DokanAllocZero(sizeof(DOKAN_CONTROL));
+  if (dokanControl == NULL) {
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  RtlStringCchCopyW(dokanControl->MountPoint, MAXIMUM_FILENAME_LENGTH,
                     L"\\DosDevices\\");
   if ((szMountPoint->Length / sizeof(WCHAR)) < 4) {
-    dokanControl.MountPoint[12] = towupper(szMountPoint->Buffer[0]);
-    dokanControl.MountPoint[13] = L':';
-    dokanControl.MountPoint[14] = L'\0';
+    dokanControl->MountPoint[12] = towupper(szMountPoint->Buffer[0]);
+    dokanControl->MountPoint[13] = L':';
+    dokanControl->MountPoint[14] = L'\0';
   } else {
     if (szMountPoint->Length >
-        sizeof(dokanControl.MountPoint) - 12 * sizeof(WCHAR)) {
+        sizeof(dokanControl->MountPoint) - 12 * sizeof(WCHAR)) {
+      DokanFree(dokanControl);
       DOKAN_LOG_FINE_IRP(RequestContext, "Mount point buffer has invalid size");
       return STATUS_BUFFER_OVERFLOW;
     }
-    RtlCopyMemory(&dokanControl.MountPoint[12], szMountPoint->Buffer,
+    RtlCopyMemory(&dokanControl->MountPoint[12], szMountPoint->Buffer,
                   szMountPoint->Length);
   }
 
-  dokanControl.SessionId = GetCurrentSessionId(RequestContext);
-  mountEntry = FindMountEntry(RequestContext->DokanGlobal, &dokanControl,
-                 /*ExclusiveLock=*/FALSE);
+  dokanControl->SessionId = GetCurrentSessionId(RequestContext);
+  mountEntry = FindMountEntry(RequestContext->DokanGlobal, dokanControl,
+                              /*ExclusiveLock=*/FALSE);
   if (mountEntry == NULL) {
-    DOKAN_LOG_FINE_IRP(RequestContext, "Cannot found device associated to mount point %ws",
-                  dokanControl.MountPoint);
+    DOKAN_LOG_FINE_IRP(RequestContext,
+                       "Cannot found device associated to mount point %ws",
+                       dokanControl->MountPoint);
+    DokanFree(dokanControl);
     return STATUS_BUFFER_TOO_SMALL;
   }
+  DokanFree(dokanControl);
 
   PDEVICE_OBJECT volumeDeviceObject =
       mountEntry->MountControl.VolumeDeviceObject;
@@ -560,7 +577,17 @@ NTSTATUS DokanGlobalEventRelease(__in PREQUEST_CONTEXT RequestContext) {
   ExReleaseResourceLite(&mountEntry->Resource);
 
   NTSTATUS status;
-  if (volumeDeviceObject == NULL || IsDeletePending(volumeDeviceObject)) {
+  if (volumeDeviceObject == NULL) {
+    if (diskDeviceObject != NULL && !IsDeletePending(diskDeviceObject)) {
+      DOKAN_LOG_FINE_IRP(
+          RequestContext,
+          "Device is still mounting, so an unmount is not possible yet");
+      status = STATUS_DEVICE_BUSY;
+    } else {
+      DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");
+      status = STATUS_DEVICE_REMOVED;
+    }
+  } else if (IsDeletePending(volumeDeviceObject)) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Device is deleted");
     status = STATUS_DEVICE_REMOVED;
   } else if (!IsMounted(volumeDeviceObject)) {

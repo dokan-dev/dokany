@@ -194,8 +194,8 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   PDEVICE_OBJECT fsDiskDeviceObject = dokanGlobal->FsDiskDeviceObject;
   PDEVICE_OBJECT fsCdDeviceObject = dokanGlobal->FsCdDeviceObject;
 
-  KeSetEvent(&dokanGlobal->UnloadEvent, 0, FALSE);
   ExWaitForRundownProtectionRelease(&dokanGlobal->TeardownRundown);
+  DokanScanForDismountedVcb(dokanGlobal);
 
   RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
   IoDeleteSymbolicLink(&symbolicLinkName);
@@ -212,6 +212,9 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
     if (sessionEntry->MountPoint.Buffer != NULL) {
       DokanFree(sessionEntry->MountPoint.Buffer);
     }
+    if (sessionEntry->TargetDeviceName.Buffer != NULL) {
+      DokanFree(sessionEntry->TargetDeviceName.Buffer);
+    }
     DokanFree(sessionEntry);
   }
   ExReleaseFastMutex(&dokanGlobal->SessionMountPointLock);
@@ -220,20 +223,14 @@ VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   ASSERT(IsListEmpty(&dokanGlobal->MountPointList));
 
   // Delete all ERESOURCEs in the DOKAN_GLOBAL extension strictly before
-  // IoDeleteDevice / ObDereferenceObject can free the extension.
+  // IoDeleteDevice can free the extension.
   ExDeleteResourceLite(&dokanGlobal->Resource);
   ExDeleteResourceLite(&dokanGlobal->VcbListLock);
   ExDeleteResourceLite(&dokanGlobal->MountPointListLock);
   ExDeleteResourceLite(&dokanGlobal->MountManagerLock);
 
-  // Pair with ObReferenceObject in DokanCreateGlobalDiskDevice BEFORE
-  // IoDeleteDevice (IoCreateDevice's ref keeps each object alive until
-  // IoDeleteDevice runs).
-  ObDereferenceObject(fsDiskDeviceObject);
   IoDeleteDevice(fsDiskDeviceObject);
-  ObDereferenceObject(fsCdDeviceObject);
   IoDeleteDevice(fsCdDeviceObject);
-  ObDereferenceObject(deviceObject);
   IoDeleteDevice(deviceObject);
 }
 
@@ -331,6 +328,7 @@ Return Value:
   status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
   if (NT_ERROR(status)) {
+    DokanCleanupLogCache();
     return status;
   }
   //
@@ -394,9 +392,10 @@ Return Value:
       FsRtlRegisterFileSystemFilterCallbacks(DriverObject, &filterCallbacks);
 
   if (!NT_SUCCESS(status)) {
-    CleanupGlobalDiskDevice(dokanGlobal);
     DOKAN_LOG_("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x %s",
               status, DokanGetNTSTATUSStr(status));
+    CleanupGlobalDiskDevice(dokanGlobal);
+    DokanCleanupLogCache();
     return status;
   }
 
@@ -404,6 +403,7 @@ Return Value:
   if (g_DokanFcbAvlNodeSize == 0) {
     DOKAN_LOG("DokanProbeFcbAvlNodeSize failed");
     CleanupGlobalDiskDevice(dokanGlobal);
+    DokanCleanupLogCache();
     return STATUS_INSUFFICIENT_RESOURCES;
   }
 
@@ -429,6 +429,7 @@ Return Value:
         ExDeleteLookasideListEx(lookasideLists[j - 1].List);
       }
       CleanupGlobalDiskDevice(dokanGlobal);
+      DokanCleanupLogCache();
       return STATUS_INSUFFICIENT_RESOURCES;
     }
   }
@@ -871,15 +872,6 @@ VOID DokanResourceUnlockWithDebugInfo(
   }
   ExReleaseResourceLite(Resource);
   KeLeaveCriticalRegion();
-}
-
-BOOLEAN DokanVCBTryLockRW(PDokanVCB Vcb) {
-  KeEnterCriticalRegion();
-  BOOLEAN result = ExAcquireResourceExclusiveLite(&(Vcb)->Resource, FALSE);
-  if (!result) {
-    KeLeaveCriticalRegion();
-  }
-  return result;
 }
 
 ULONG GetOplockControlDebugInfoBit(ULONG FsControlCode) {

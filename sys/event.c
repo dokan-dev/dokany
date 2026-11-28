@@ -103,7 +103,8 @@ VOID DokanCreateIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
 
   RemoveEntryList(&irpEntry->ListEntry);
   InitializeListHead(&irpEntry->ListEntry);
-  if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
+  if (irpEntry->IrpList->EventEnabled &&
+      IsListEmpty(&irpEntry->IrpList->ListHead)) {
     KeClearEvent(&irpEntry->IrpList->NotEmpty);
   }
 
@@ -173,7 +174,8 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
       needExecuteCleanup = TRUE;
     }
 
-    if (IsListEmpty(&irpEntry->IrpList->ListHead)) {
+    if (irpEntry->IrpList->EventEnabled &&
+        IsListEmpty(&irpEntry->IrpList->ListHead)) {
       KeClearEvent(&irpEntry->IrpList->NotEmpty);
     }
 
@@ -182,23 +184,20 @@ VOID DokanIrpCancelRoutine(_Inout_ PDEVICE_OBJECT DeviceObject,
     KeReleaseSpinLock(lock, oldIrql);
     DOKAN_LOG_FINE_IRP((&requestContext), "Canceled");
 
-    if (needExecuteCleanup && KeGetCurrentIrql() > PASSIVE_LEVEL) {
+    if (needExecuteCleanup) {
+      // Unconditionally defer DokanExecuteCleanup to a PASSIVE_LEVEL system
+      // worker wrapped in FsRtlEnterFileSystem so FsRtlFastUnlockAll / FCB
+      // locks never run outside a critical region or invert caller locks.
       irpEntry->RequestContext.IsTopLevelIrp = FALSE;
       DokanQueueCancelIrpWorkItem(DeviceObject, irpEntry, STATUS_SUCCESS);
       return;
     }
 
     DokanFreeIrpEntry(irpEntry);
-
-    // Execute cleanup at PASSIVE_LEVEL after releasing spinlock
-    if (needExecuteCleanup) {
-      DokanExecuteCleanup(&requestContext);
-    }
   }
 
   Irp->IoStatus.Information = 0;
-  DokanCompleteIrpRequest(Irp, needExecuteCleanup ? STATUS_SUCCESS
-                                                  : STATUS_CANCELLED);
+  DokanCompleteIrpRequest(Irp, STATUS_CANCELLED);
 }
 
 VOID DokanOplockComplete(IN PVOID Context, IN PIRP Irp)
@@ -283,11 +282,45 @@ VOID DokanPrePostIrp(IN PVOID Context, IN PIRP Irp)
   IoMarkIrpPending(Irp);
 }
 
+static VOID DokanQueueAsyncIrpCancel(__in PREQUEST_CONTEXT RequestContext,
+                                     __in_opt PIRP_ENTRY ReservedEntry,
+                                     __in NTSTATUS Status) {
+  PIRP_ENTRY irpEntry = ReservedEntry;
+  if (irpEntry == NULL) {
+    irpEntry = DokanAllocateIrpEntry();
+  }
+  if (irpEntry != NULL) {
+    RtlZeroMemory(irpEntry, sizeof(IRP_ENTRY));
+    irpEntry->RequestContext = *RequestContext;
+    DokanQueueCancelIrpWorkItem(RequestContext->DeviceObject, irpEntry, Status);
+    return;
+  }
+  ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+  FsRtlEnterFileSystem();
+  DokanCancelPendingIrp(RequestContext, Status);
+  FsRtlExitFileSystem();
+}
+
+static PIRP_ENTRY
+DokanTakeOplockRetryEntry(__in PREQUEST_CONTEXT RequestContext) {
+  if (RequestContext->IrpSp->MajorFunction == IRP_MJ_CREATE &&
+      RequestContext->IrpSp->FileObject != NULL &&
+      RequestContext->IrpSp->FileObject->FsContext2 != NULL) {
+    PDokanCCB ccb = (PDokanCCB)RequestContext->IrpSp->FileObject->FsContext2;
+    if (GetIdentifierType(ccb) == CCB) {
+      return (PIRP_ENTRY)InterlockedExchangePointer(
+          (PVOID volatile *)&ccb->OplockRetryIrpEntry, NULL);
+    }
+  }
+  return NULL;
+}
+
 NTSTATUS
 RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
                        __in_opt PEVENT_CONTEXT EventContext,
-                       __in PIRP_LIST IrpList, __in ULONG CheckMount) {
-  PIRP_ENTRY irpEntry;
+                       __in PIRP_LIST IrpList, __in ULONG CheckMount,
+                       __inout_opt PIRP_ENTRY *ReservedEntry) {
+  PIRP_ENTRY irpEntry = NULL;
   KIRQL oldIrql;
 
   if (RequestContext->Vcb && CheckMount &&
@@ -296,8 +329,14 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
     return STATUS_NO_SUCH_DEVICE;
   }
 
-  // Allocate a record and save all the event context.
-  irpEntry = DokanAllocateIrpEntry();
+  // Reuse caller-reserved IRP_ENTRY if provided; otherwise allocate from
+  // lookaside.
+  if (ReservedEntry != NULL && *ReservedEntry != NULL) {
+    irpEntry = *ReservedEntry;
+    *ReservedEntry = NULL;
+  } else {
+    irpEntry = DokanAllocateIrpEntry();
+  }
 
   if (NULL == irpEntry) {
     DOKAN_LOG_FINE_IRP(RequestContext, "Can't allocate IRP_ENTRY");
@@ -313,28 +352,25 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   irpEntry->IrpList = IrpList;
   irpEntry->AsyncStatus = STATUS_SUCCESS;
 
-  // Update the irp timeout for the entry
-  if (RequestContext->Vcb) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite(&RequestContext->Dcb->Resource, TRUE);
-    DokanUpdateTimeout(&irpEntry->TickCount, RequestContext->Dcb->IrpTimeout);
-    ExReleaseResourceLite(&RequestContext->Dcb->Resource);
-    KeLeaveCriticalRegion();
-  } else {
-    DokanUpdateTimeout(&irpEntry->TickCount, DOKAN_IRP_PENDING_TIMEOUT);
-  }
+  // Dcb->IrpTimeout is immutable after DokanEventStart, so no lock is needed.
+  DokanUpdateTimeout(&irpEntry->TickCount, RequestContext->Vcb
+                                               ? RequestContext->Dcb->IrpTimeout
+                                               : DOKAN_IRP_PENDING_TIMEOUT);
 
   ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
   KeAcquireSpinLock(&IrpList->ListLock, &oldIrql);
 
   // Second unmount check with list lock acquired to ensure the device is
-  // not being unmount. Once DokanEventRelease has set the unmount-pending flag
-  // and canceled all IRPs, any IRP added to those list will never be completed
-  // and canceled.
+  // not being unmounted. Once DokanEventRelease has set VcbDismountInProgress
+  // and canceled all IRPs, any IRP added to these lists would never complete.
   if (RequestContext->Vcb && CheckMount &&
       IsUnmountPendingVcb(RequestContext->Vcb)) {
     KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
-    DokanFreeIrpEntry(irpEntry);
+    if (ReservedEntry != NULL) {
+      *ReservedEntry = irpEntry;
+    } else {
+      DokanFreeIrpEntry(irpEntry);
+    }
     return STATUS_NO_SUCH_DEVICE;
   }
 
@@ -344,10 +380,10 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
     irpEntry->SerialNumber = EventContext->SerialNumber;
   }
 
-  // WDM Best Practice: Initialize IRP state and link structures BEFORE setting the
-  // cancel routine, to ensure that if the cancel routine fires immediately, it has
-  // valid pointers to work with (e.g., irpEntry).
-  IoMarkIrpPending(RequestContext->Irp);
+  // WDM Best Practice: populate DRIVER_CONTEXT_IRP_ENTRY before setting the
+  // cancel routine, and only call IoMarkIrpPending once we have committed to
+  // returning STATUS_PENDING (both cancel routines acquire IrpList->ListLock
+  // before completing the IRP).
   RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] =
       irpEntry;
 
@@ -361,18 +397,23 @@ RegisterPendingIrpMain(__in PREQUEST_CONTEXT RequestContext,
   if (RequestContext->Irp->Cancel) {
     if (IoSetCancelRoutine(RequestContext->Irp, NULL) != NULL) {
       // We successfully unregistered the cancel routine before the OS fired it.
-      // We can safely abort the pending registration and return immediately.
+      // Abort pending registration without marking the IRP pending.
       RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
       KeReleaseSpinLock(&IrpList->ListLock, oldIrql);
-      DokanFreeIrpEntry(irpEntry);
+      if (ReservedEntry != NULL) {
+        *ReservedEntry = irpEntry;
+      } else {
+        DokanFreeIrpEntry(irpEntry);
+      }
       return STATUS_CANCELLED;
     }
     // If IoSetCancelRoutine returned NULL here, the OS has already taken the
-    // cancel routine. We MUST continue and insert the entry into the list.
-    // The cancel routine (which might be blocking on IrpList->ListLock right now)
-    // will safely remove it and complete the IRP once we release the lock.
+    // cancel routine. We MUST mark pending and insert into the list; the
+    // cancel routine (blocked on IrpList->ListLock) will remove and complete
+    // it once we release the lock.
   }
 
+  IoMarkIrpPending(RequestContext->Irp);
   InsertTailList(&IrpList->ListHead, &irpEntry->ListEntry);
 
   if (IrpList->EventEnabled) {
@@ -412,7 +453,8 @@ DokanRegisterPendingIrp(__in PREQUEST_CONTEXT RequestContext,
   } else {
     status = RegisterPendingIrpMain(RequestContext, EventContext,
                                     &RequestContext->Dcb->PendingIrp,
-                                    /*CheckMount=*/TRUE);
+                                    /*CheckMount=*/TRUE,
+                                    /*ReservedEntry=*/NULL);
   }
 
   if (status == STATUS_PENDING) {
@@ -430,6 +472,7 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext) {
   if (!RequestContext->Vcb) {
     return;
   }
+  PIRP_ENTRY reservedEntry = DokanTakeOplockRetryEntry(RequestContext);
   if (RequestContext->IrpSp->MajorFunction == IRP_MJ_CREATE) {
     // You can't just re-dispatch a create, since the part before the pending
     // retry has side-effects. DokanDispatchCreate uses this flag to identify
@@ -439,25 +482,14 @@ VOID DokanRegisterPendingRetryIrp(__in PREQUEST_CONTEXT RequestContext) {
     DokanCCBFlagsSetBit(ccb, DOKAN_RETRY_CREATE);
     OplockDebugRecordFlag(ccb->Fcb, DOKAN_OPLOCK_DEBUG_CREATE_RETRY_QUEUED);
   }
-  NTSTATUS status = RegisterPendingIrpMain(
-      RequestContext, /*EventContext=*/NULL,
-      &RequestContext->Dcb->PendingRetryIrp, /*CheckMount=*/TRUE);
+  NTSTATUS status =
+      RegisterPendingIrpMain(RequestContext, /*EventContext=*/NULL,
+                             &RequestContext->Dcb->PendingRetryIrp,
+                             /*CheckMount=*/TRUE, &reservedEntry);
   if (status != STATUS_PENDING) {
     // The IRP was already marked pending by DokanPrePostIrp during the oplock
-    // break, so we must complete/unwind it if registration failed (e.g. due to
-    // concurrent unmount or cancellation).
-    PIRP_ENTRY irpEntry = DokanAllocateIrpEntry();
-    if (irpEntry != NULL) {
-      RtlZeroMemory(irpEntry, sizeof(IRP_ENTRY));
-      irpEntry->RequestContext = *RequestContext;
-      DokanQueueCancelIrpWorkItem(RequestContext->DeviceObject, irpEntry,
-                                  status);
-    } else if (KeGetCurrentIrql() <= APC_LEVEL) {
-      DokanCancelPendingIrp(RequestContext, status);
-    } else {
-      RequestContext->Irp->IoStatus.Information = 0;
-      DokanCompleteIrpRequest(RequestContext->Irp, status);
-    }
+    // break, so unwind and complete it via the reserved embedded IO_WORKITEM.
+    DokanQueueAsyncIrpCancel(RequestContext, reservedEntry, status);
   }
 }
 
@@ -466,19 +498,8 @@ VOID DokanRegisterAsyncCreateFailure(__in PREQUEST_CONTEXT RequestContext,
   if (!RequestContext->Vcb) {
     return;
   }
-  PIRP_ENTRY irpEntry = DokanAllocateIrpEntry();
-  if (irpEntry != NULL) {
-    RtlZeroMemory(irpEntry, sizeof(IRP_ENTRY));
-    irpEntry->RequestContext = *RequestContext;
-    DokanQueueCancelIrpWorkItem(RequestContext->DeviceObject, irpEntry, Status);
-    return;
-  }
-  if (KeGetCurrentIrql() <= APC_LEVEL) {
-    DokanCancelCreateIrp(RequestContext, Status);
-  } else {
-    RequestContext->Irp->IoStatus.Information = 0;
-    DokanCompleteIrpRequest(RequestContext->Irp, Status);
-  }
+  PIRP_ENTRY reservedEntry = DokanTakeOplockRetryEntry(RequestContext);
+  DokanQueueAsyncIrpCancel(RequestContext, reservedEntry, Status);
 }
 
 void DokanDispatchCompletion(__in PDEVICE_OBJECT DeviceObject,
@@ -836,6 +857,49 @@ BOOLEAN MaybeUnmountOldDrive(__in PREQUEST_CONTEXT RequestContext,
   return TRUE;
 }
 
+static BOOLEAN
+DokanDoesSymbolicLinkMatchTarget(__in PUNICODE_STRING SymbolicLinkName,
+                                 __in PUNICODE_STRING ExpectedTarget) {
+  HANDLE linkHandle = NULL;
+  BOOLEAN matches = FALSE;
+  OBJECT_ATTRIBUTES objectAttributes;
+
+  if (SymbolicLinkName == NULL || SymbolicLinkName->Length == 0 ||
+      ExpectedTarget == NULL || ExpectedTarget->Length == 0 ||
+      ExpectedTarget->Length > MAXUSHORT - sizeof(WCHAR)) {
+    return FALSE;
+  }
+
+  InitializeObjectAttributes(&objectAttributes, SymbolicLinkName,
+                             OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL,
+                             NULL);
+  NTSTATUS status = ZwOpenSymbolicLinkObject(&linkHandle, SYMBOLIC_LINK_QUERY,
+                                             &objectAttributes);
+  if (!NT_SUCCESS(status)) {
+    return FALSE;
+  }
+
+  ULONG bufBytes = ExpectedTarget->Length + sizeof(WCHAR);
+  PWCHAR targetBuf = DokanAllocZero(bufBytes);
+  if (targetBuf != NULL) {
+    UNICODE_STRING linkTarget;
+    linkTarget.Buffer = targetBuf;
+    linkTarget.Length = 0;
+    linkTarget.MaximumLength = (USHORT)bufBytes;
+    ULONG returnedLength = 0;
+    status =
+        ZwQuerySymbolicLinkObject(linkHandle, &linkTarget, &returnedLength);
+    if (NT_SUCCESS(status) && RtlEqualUnicodeString(&linkTarget, ExpectedTarget,
+                                                    /*CaseInsensitive=*/TRUE)) {
+      matches = TRUE;
+    }
+    DokanFree(targetBuf);
+  }
+
+  ZwClose(linkHandle);
+  return matches;
+}
+
 VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
                           __in ULONG sessionId) {
   if (sessionId == (ULONG)-1) {
@@ -862,18 +926,23 @@ VOID RemoveSessionDevices(__in PREQUEST_CONTEXT RequestContext,
     PLIST_ENTRY entry = RemoveHeadList(&toDeleteList);
     PSESSION_MOUNT_POINT_ENTRY sessionEntry =
         CONTAINING_RECORD(entry, SESSION_MOUNT_POINT_ENTRY, ListEntry);
-    DeleteMountPointSymbolicLink(&sessionEntry->MountPoint);
+    if (DokanDoesSymbolicLinkMatchTarget(&sessionEntry->MountPoint,
+                                         &sessionEntry->TargetDeviceName)) {
+      DeleteMountPointSymbolicLink(&sessionEntry->MountPoint);
+    }
     if (sessionEntry->MountPoint.Buffer != NULL) {
       DokanFree(sessionEntry->MountPoint.Buffer);
+    }
+    if (sessionEntry->TargetDeviceName.Buffer != NULL) {
+      DokanFree(sessionEntry->TargetDeviceName.Buffer);
     }
     DokanFree(sessionEntry);
   }
 }
 
 // 40 KB is strictly above the default 24 KB x64/ARM64 (12 KB x86) kernel stack
-// so KeExpandKernelStackAndCalloutEx always switches to a fresh expanded stack
-// segment, yet safely below MAXIMUM_EXPANSION_SIZE (58 KB) on every Windows
-// version from Server 2016 through Server 2025.
+// so KeExpandKernelStackAndCalloutEx switches to a fresh expanded stack
+// segment; clamped to MAXIMUM_EXPANSION_SIZE at the call site.
 #define DOKAN_MOUNT_TRIGGER_STACK_SIZE (40 * 1024)
 
 typedef struct _DOKAN_TRIGGER_MOUNT_PARAMS {
@@ -889,7 +958,7 @@ typedef struct _DOKAN_TRIGGER_MOUNT_PARAMS {
 // IopMountVolume directly on the initial VPB. Network mounts intentionally keep
 // the backing FILE_DEVICE_DISK unnamed (naming it triggers a FltMgr ->
 // MountMgr -> WdFilter -> IopMountVolume self-deadlock on DeviceLock), so
-// network mounts fall through to IoVerifyVolume.
+// network mounts still use IoVerifyVolume until the direct redirector redesign.
 static EXPAND_STACK_CALLOUT DokanTriggerVolumeMountCallout;
 static VOID NTAPI DokanTriggerVolumeMountCallout(_In_opt_ PVOID Parameter) {
   if (Parameter == NULL) {
@@ -898,8 +967,10 @@ static VOID NTAPI DokanTriggerVolumeMountCallout(_In_opt_ PVOID Parameter) {
   PDOKAN_TRIGGER_MOUNT_PARAMS params = (PDOKAN_TRIGGER_MOUNT_PARAMS)Parameter;
   PDokanDCB dcb = params->Dcb;
 
-  if (!params->IsNetworkFileSystem && dcb->DiskDeviceName != NULL &&
-      dcb->DiskDeviceName->Length > 0) {
+  if (!params->IsNetworkFileSystem) {
+    if (dcb->DiskDeviceName == NULL || dcb->DiskDeviceName->Length == 0) {
+      return;
+    }
     NTSTATUS status = STATUS_UNSUCCESSFUL;
     HANDLE volumeHandle = NULL;
     PIRP topLevelIrp = IoGetTopLevelIrp();
@@ -928,12 +999,12 @@ static VOID NTAPI DokanTriggerVolumeMountCallout(_In_opt_ PVOID Parameter) {
       }
     }
 
-    if (NT_SUCCESS(status) && dcb->Vcb != NULL) {
-      return;
+    if (!NT_SUCCESS(status) || dcb->Vcb == NULL) {
+      DOKAN_LOG_("ZwCreateFile volume mount trigger did not mount "
+                 "(status=0x%x %s, Vcb=%p)",
+                 status, DokanGetNTSTATUSStr(status), dcb->Vcb);
     }
-    DOKAN_LOG_("ZwCreateFile volume mount trigger did not mount "
-               "(status=0x%x %s, Vcb=%p); falling back to IoVerifyVolume",
-               status, DokanGetNTSTATUSStr(status), dcb->Vcb);
+    return;
   }
 
   if (!IsDeletePending(dcb->DeviceObject)) {
@@ -941,8 +1012,8 @@ static VOID NTAPI DokanTriggerVolumeMountCallout(_In_opt_ PVOID Parameter) {
   }
 }
 
-static VOID DokanTriggerVolumeMount(__in PDokanDCB Dcb,
-                                    __in BOOLEAN IsNetworkFileSystem) {
+static NTSTATUS DokanTriggerVolumeMount(__in PDokanDCB Dcb,
+                                        __in BOOLEAN IsNetworkFileSystem) {
   DOKAN_TRIGGER_MOUNT_PARAMS params;
   params.Dcb = Dcb;
   params.IsNetworkFileSystem = IsNetworkFileSystem;
@@ -951,15 +1022,138 @@ static VOID DokanTriggerVolumeMount(__in PDokanDCB Dcb,
   // DokanDispatchCreate under Driver Verifier can consume ~20 KB of stack.
   // Expand onto a fresh kernel stack segment in the caller's thread/session
   // context (preserving session-local \DosDevices\ symlinks for /c mounts).
+  // Never fall back to the unexpanded stack on expansion failure.
+  SIZE_T expandSize = min((SIZE_T)DOKAN_MOUNT_TRIGGER_STACK_SIZE,
+                          (SIZE_T)MAXIMUM_EXPANSION_SIZE);
   NTSTATUS expandStatus = KeExpandKernelStackAndCalloutEx(
-      DokanTriggerVolumeMountCallout, &params, DOKAN_MOUNT_TRIGGER_STACK_SIZE,
+      DokanTriggerVolumeMountCallout, &params, expandSize,
       /*Wait=*/TRUE, /*Context=*/NULL);
   if (!NT_SUCCESS(expandStatus)) {
-    DOKAN_LOG_("KeExpandKernelStackAndCalloutEx failed (0x%x %s); running "
-               "volume mount trigger on current stack",
+    DOKAN_LOG_("KeExpandKernelStackAndCalloutEx failed (0x%x %s); aborting "
+               "volume mount trigger",
                expandStatus, DokanGetNTSTATUSStr(expandStatus));
-    DokanTriggerVolumeMountCallout(&params);
   }
+  return expandStatus;
+}
+
+// Tears down a DCB whose start sequence failed before (or during) volume mount.
+// Caller MUST NOT hold DokanGlobal->Resource or mountEntry->Resource.
+// Atomically transitions Dcb->Condition under Dcb->Resource exclusive so a late
+// DokanMountVolume cannot race DokanDeleteDcb; if a VCB did mount just before
+// we claimed DcbDeletePending, delegates teardown to DokanEventRelease.
+static VOID DokanAbortDcbStart(__in PREQUEST_CONTEXT RequestContext,
+                               __in PDokanDCB Dcb,
+                               __in_opt PDOKAN_CONTROL DokanControl,
+                               __in BOOLEAN StopNotificationThread,
+                               __in BOOLEAN RemoveEntry) {
+  PDEVICE_OBJECT lateVolDevice = NULL;
+
+  KeEnterCriticalRegion();
+  ExAcquireResourceExclusiveLite(&Dcb->Resource, TRUE);
+  InterlockedExchange(&Dcb->Condition, DcbDeletePending);
+  PDokanVCB lateVcb = (PDokanVCB)Dcb->Vcb;
+  if (lateVcb != NULL && GetIdentifierType(lateVcb) == VCB) {
+    lateVolDevice = lateVcb->DeviceObject;
+    ObReferenceObject(lateVolDevice);
+  }
+  ExReleaseResourceLite(&Dcb->Resource);
+  KeLeaveCriticalRegion();
+
+  if (lateVolDevice != NULL) {
+    // A late DokanMountVolume attached a VCB just before DcbDeletePending;
+    // wait for VcbGood + publication before delegating teardown.
+    KeWaitForSingleObject(&Dcb->MountCompletedEvent, Executive, KernelMode,
+                          FALSE, NULL);
+    DokanEventRelease(RequestContext, lateVolDevice);
+    ObDereferenceObject(lateVolDevice);
+    return;
+  }
+
+  if (StopNotificationThread) {
+    KeSetEvent(&Dcb->ReleaseEvent, IO_NO_INCREMENT, FALSE);
+    DokanStopEventNotificationThread(Dcb);
+  }
+  if (RemoveEntry && DokanControl != NULL) {
+    RemoveMountEntry(RequestContext->DokanGlobal, DokanControl);
+  }
+  if (NT_SUCCESS(IoAcquireRemoveLock(&Dcb->RemoveLock, RequestContext->Irp))) {
+    IoReleaseRemoveLockAndWait(&Dcb->RemoveLock, RequestContext->Irp);
+  }
+  DokanDeleteDcb(Dcb);
+}
+
+static NTSTATUS
+DokanSetupMountManagerPoint(__in PREQUEST_CONTEXT RequestContext,
+                            __in PDOKAN_LOGGER Logger, __in PDokanDCB Dcb,
+                            __in BOOLEAN IsMountPointDriveLetter,
+                            __inout PEVENT_DRIVER_INFO DriverInfo) {
+  NTSTATUS lockStatus =
+      IoAcquireRemoveLock(&Dcb->RemoveLock, RequestContext->Irp);
+  if (!NT_SUCCESS(lockStatus)) {
+    return DokanLogError(Logger, STATUS_INSUFFICIENT_RESOURCES,
+                         L"Device was removed before mount point setup.");
+  }
+
+  if (IsMountPointDriveLetter) {
+    if (!Dcb->MountPointDetermined) {
+      // Getting into this block is considered very rare, and we are not
+      // even sure how to achieve it naturally. It can be triggered
+      // artificially by adding an applicable deleted volume record under
+      // HKLM\System\MountedDevices.
+      DokanLogError(Logger, 0,
+                    L"Warning: mount point creation is being forced.");
+      DriverInfo->Flags |= DOKAN_DRIVER_INFO_MOUNT_FORCED;
+      DokanCreateMountPoint(Dcb);
+      if (!Dcb->MountPointDetermined) {
+        DokanLogError(Logger, 0,
+                      L"Mount point was still not assigned after forcing.");
+        DriverInfo->Status = DOKAN_START_FAILED;
+        DriverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED;
+      }
+    }
+  } else {
+    PUNICODE_STRING persistentSymbolicLinkName =
+        DokanSnapshotDcbUnicodeString(Dcb, &Dcb->PersistentSymbolicLinkName);
+    PUNICODE_STRING mountPoint =
+        DokanSnapshotDcbUnicodeString(Dcb, &Dcb->MountPoint);
+    if (persistentSymbolicLinkName != NULL && mountPoint != NULL) {
+      // Set our existing directory path as reparse point.
+      // It needs to be done outside DokanTriggerVolumeMount/DokanMountVolume
+      // as the MountManager will also call IoVerifyVolume on the device which
+      // will lead to a deadlock while trying to acquire the MountManager
+      // database.
+      ULONG setReparseInputlength = 0;
+      PCHAR setReparseInput = CreateSetReparsePointRequest(
+          RequestContext, persistentSymbolicLinkName, &setReparseInputlength);
+      if (setReparseInput) {
+        NTSTATUS fsctlStatus = SendDirectoryFsctl(
+            RequestContext, RequestContext->DeviceObject->DriverObject,
+            mountPoint, FSCTL_SET_REPARSE_POINT, setReparseInput,
+            setReparseInputlength);
+        DokanFree(setReparseInput);
+        if (NT_SUCCESS(fsctlStatus)) {
+          // Inform MountManager of the new mount point.
+          NotifyDirectoryMountPointCreated(Dcb);
+        } else {
+          DokanLogError(Logger, fsctlStatus,
+                        L"Failed to set reparse point on MountPoint \"%wZ\"",
+                        mountPoint);
+          DriverInfo->Status = DOKAN_START_FAILED;
+          DriverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED |
+                               DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED;
+        }
+      }
+    }
+    if (mountPoint != NULL) {
+      DokanFreeUnicodeString(mountPoint);
+    }
+    if (persistentSymbolicLinkName != NULL) {
+      DokanFreeUnicodeString(persistentSymbolicLinkName);
+    }
+  }
+
+  IoReleaseRemoveLock(&Dcb->RemoveLock, RequestContext->Irp);
+  return STATUS_SUCCESS;
 }
 
 // start event dispatching
@@ -986,6 +1180,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
   BOOLEAN isMountPointDriveLetter = FALSE;
   BOOLEAN globalResourceLocked = FALSE;
   PMOUNT_ENTRY foundPrevEntry = NULL;
+  BOOLEAN hadPrevEntry = FALSE;
+  PDEVICE_OBJECT oldDevice = NULL;
+  PDEVICE_OBJECT oldVolumeDevice = NULL;
   PDEVICE_OBJECT diskDeviceObject = NULL;
   PDEVICE_OBJECT volumeDeviceObject = NULL;
 
@@ -993,6 +1190,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
 
   DokanLogInfo(&logger, L"Entered event start.");
   DOKAN_LOG_FINE_IRP(RequestContext, "Event start");
+
+  DokanScanForDismountedVcb(RequestContext->DokanGlobal);
 
   // Validate the input buffer size using a separate pointer before allocating
   // our own EVENT_START copy inside __try.
@@ -1136,6 +1335,21 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       status = STATUS_SUCCESS;
       __leave;
     }
+    // Pin old devices and release foundPrevEntry->Resource immediately so we
+    // never hold a MOUNT_ENTRY lock across DokanCreateDiskDevice.
+    if (foundPrevEntry != NULL) {
+      hadPrevEntry = TRUE;
+      oldDevice = foundPrevEntry->MountControl.DiskDeviceObject;
+      oldVolumeDevice = foundPrevEntry->MountControl.VolumeDeviceObject;
+      if (oldDevice != NULL) {
+        ObReferenceObject(oldDevice);
+      }
+      if (oldVolumeDevice != NULL) {
+        ObReferenceObject(oldVolumeDevice);
+      }
+      ExReleaseResourceLite(&foundPrevEntry->Resource);
+      foundPrevEntry = NULL;
+    }
 
     baseGuid.Data2 = (USHORT)(RequestContext->DokanGlobal->MountId & 0xFFFF) ^
                      baseGuid.Data2;
@@ -1197,18 +1411,7 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     // we're willing to get rid of. Release DokanGlobal->Resource BEFORE
     // invoking MaybeUnmountOldDrive (which issues MountManager/MM/CC calls) to
     // avoid AB-BA lock cycles.
-    if (foundPrevEntry != NULL) {
-      PDEVICE_OBJECT oldDevice = foundPrevEntry->MountControl.DiskDeviceObject;
-      PDEVICE_OBJECT oldVolumeDevice =
-          foundPrevEntry->MountControl.VolumeDeviceObject;
-      if (oldDevice != NULL) {
-        ObReferenceObject(oldDevice);
-      }
-      if (oldVolumeDevice != NULL) {
-        ObReferenceObject(oldVolumeDevice);
-      }
-      ExReleaseResourceLite(&foundPrevEntry->Resource);
-      foundPrevEntry = NULL;
+    if (hadPrevEntry) {
       ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
       KeLeaveCriticalRegion();
       globalResourceLocked = FALSE;
@@ -1221,9 +1424,11 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       }
       if (oldVolumeDevice != NULL) {
         ObDereferenceObject(oldVolumeDevice);
+        oldVolumeDevice = NULL;
       }
       if (oldDevice != NULL) {
         ObDereferenceObject(oldDevice);
+        oldDevice = NULL;
       }
 
       KeEnterCriticalRegion();
@@ -1270,15 +1475,17 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
       KeLeaveCriticalRegion();
       globalResourceLocked = FALSE;
-      if (NT_SUCCESS(
-              IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp))) {
-        IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext->Irp);
-      }
-      DokanDeleteDcb(dcb);
+      DokanAbortDcbStart(RequestContext, dcb, NULL,
+                         /*StopNotificationThread=*/FALSE,
+                         /*RemoveEntry=*/FALSE);
       status = DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
                              L"Failed to allocate new mount entry.");
       __leave;
     }
+    // From here on, always look up and remove OUR entry by its unique
+    // DeviceName (not the requested MountPoint, which may still be held by an
+    // older volume or get reassigned by IOCTL_MOUNTDEV_LINK_CREATED).
+    dokanControl->MountPoint[0] = L'\0';
     DokanLogInfo(&logger, L"Inserted new mount entry.");
 
     dcb->FileLockInUserMode = fileLockUserMode;
@@ -1340,12 +1547,9 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
       ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
       KeLeaveCriticalRegion();
       globalResourceLocked = FALSE;
-      RemoveMountEntry(RequestContext->DokanGlobal, dokanControl);
-      if (NT_SUCCESS(
-              IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp))) {
-        IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext->Irp);
-      }
-      DokanDeleteDcb(dcb);
+      DokanAbortDcbStart(RequestContext, dcb, dokanControl,
+                         /*StopNotificationThread=*/FALSE,
+                         /*RemoveEntry=*/TRUE);
       status = DokanLogError(&logger, status,
                              L"Failed to start event notification thread.");
       __leave;
@@ -1355,7 +1559,8 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     KeLeaveCriticalRegion();
     globalResourceLocked = FALSE;
 
-    DokanTriggerVolumeMount(dcb, deviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+    NTSTATUS triggerStatus = DokanTriggerVolumeMount(
+        dcb, deviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
 
     PMOUNT_ENTRY mountEntry =
         FindMountEntry(RequestContext->DokanGlobal, dokanControl,
@@ -1374,25 +1579,27 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     }
     // Release mountEntry->Resource BEFORE calling MountManager/NTFS IOCTLs
     // (re-entrant IOCTL_MOUNTDEV_LINK_CREATED acquires MountPointListLock ->
-    // mountEntry->Resource exclusively). Guard DCB string reads with
-    // dcb->RemoveLock (zero ERESOURCEs held).
+    // mountEntry->Resource exclusively). DCB string fields are snapshotted
+    // under Dcb->Resource shared before external IOCTLs/FSCTLs.
     ExReleaseResourceLite(&mountEntry->Resource);
     mountEntry = NULL;
 
-    if (volumeDeviceObject == NULL) {
-      // DokanMountVolume did not mount this disk; clean up the orphaned
-      // notification thread, MountEntry, and DCB instead of reporting success.
-      DokanLogError(&logger, STATUS_UNSUCCESSFUL,
+    if (!NT_SUCCESS(triggerStatus) || volumeDeviceObject == NULL) {
+      // DokanMountVolume did not mount this disk (or stack expansion failed);
+      // atomically abort DCB (or release a late-mounted VCB) instead of
+      // reporting success.
+      DokanLogError(&logger,
+                    !NT_SUCCESS(triggerStatus) ? triggerStatus
+                                               : STATUS_UNSUCCESSFUL,
                     L"Volume mount failed during DokanEventStart; cleaning up "
                     L"unmounted disk device.");
-      KeSetEvent(&dcb->ReleaseEvent, IO_NO_INCREMENT, FALSE);
-      DokanStopEventNotificationThread(dcb);
-      RemoveMountEntry(RequestContext->DokanGlobal, dokanControl);
-      if (NT_SUCCESS(
-              IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp))) {
-        IoReleaseRemoveLockAndWait(&dcb->RemoveLock, RequestContext->Irp);
+      if (volumeDeviceObject != NULL) {
+        DokanEventRelease(RequestContext, volumeDeviceObject);
+      } else {
+        DokanAbortDcbStart(RequestContext, dcb, dokanControl,
+                           /*StopNotificationThread=*/TRUE,
+                           /*RemoveEntry=*/TRUE);
       }
-      DokanDeleteDcb(dcb);
       driverInfo->Status = DOKAN_START_FAILED;
       driverInfo->DeviceNumber = 0;
       driverInfo->MountId = 0;
@@ -1403,62 +1610,11 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     if (useMountManager) {
-      NTSTATUS lockStatus =
-          IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
-      if (!NT_SUCCESS(lockStatus)) {
-        status = DokanLogError(&logger, STATUS_INSUFFICIENT_RESOURCES,
-                               L"Device was removed before mount point setup.");
+      status = DokanSetupMountManagerPoint(RequestContext, &logger, dcb,
+                                           isMountPointDriveLetter, driverInfo);
+      if (!NT_SUCCESS(status)) {
         __leave;
       }
-
-      if (isMountPointDriveLetter) {
-        if (!dcb->MountPointDetermined) {
-          // Getting into this block is considered very rare, and we are not
-          // even sure how to achieve it naturally. It can be triggered
-          // artificially by adding an applicable deleted volume record under
-          // HKLM\System\MountedDevices.
-          DokanLogError(&logger, 0,
-                        L"Warning: mount point creation is being forced.");
-          driverInfo->Flags |= DOKAN_DRIVER_INFO_MOUNT_FORCED;
-          DokanCreateMountPoint(dcb);
-          if (!dcb->MountPointDetermined) {
-            DokanLogError(&logger, 0,
-                          L"Mount point was still not assigned after forcing.");
-            driverInfo->Status = DOKAN_START_FAILED;
-            driverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED;
-          }
-        }
-      } else if (!isMountPointDriveLetter && dcb->PersistentSymbolicLinkName) {
-        // Set our existing directory path as reparse point.
-        // It needs to be done outside DokanTriggerVolumeMount/DokanMountVolume
-        // as the MountManager will also call IoVerifyVolume on the device which
-        // will lead on a deadlock while trying to acquire the MountManager
-        // database.
-        ULONG setReparseInputlength = 0;
-        PCHAR setReparseInput = CreateSetReparsePointRequest(
-            RequestContext, dcb->PersistentSymbolicLinkName,
-            &setReparseInputlength);
-        if (setReparseInput) {
-          NTSTATUS fsctlStatus = SendDirectoryFsctl(
-              RequestContext, RequestContext->DeviceObject->DriverObject,
-              dcb->MountPoint, FSCTL_SET_REPARSE_POINT, setReparseInput,
-              setReparseInputlength);
-          DokanFree(setReparseInput);
-          if (NT_SUCCESS(fsctlStatus)) {
-            // Inform MountManager of the new mount point.
-            NotifyDirectoryMountPointCreated(dcb);
-          } else {
-            DokanLogError(&logger, fsctlStatus,
-                          L"Failed to set reparse point on MountPoint \"%wZ\"",
-                          dcb->MountPoint);
-            driverInfo->Status = DOKAN_START_FAILED;
-            driverInfo->Flags |= DOKAN_DRIVER_INFO_NO_MOUNT_POINT_ASSIGNED |
-                                 DOKAN_DRIVER_INFO_SET_REPARSE_POINT_FAILED;
-          }
-        }
-      }
-
-      IoReleaseRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
     }
 
     if (useMountManager && isMountPointDriveLetter) {
@@ -1506,6 +1662,12 @@ DokanEventStart(__in PREQUEST_CONTEXT RequestContext) {
     if (globalResourceLocked) {
       ExReleaseResourceLite(&RequestContext->DokanGlobal->Resource);
       KeLeaveCriticalRegion();
+    }
+    if (oldVolumeDevice != NULL) {
+      ObDereferenceObject(oldVolumeDevice);
+    }
+    if (oldDevice != NULL) {
+      ObDereferenceObject(oldDevice);
     }
     if (eventStart != NULL) {
       DokanFree(eventStart);
@@ -1563,12 +1725,7 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     writeIrp = irpEntry->RequestContext.Irp;
-    if (writeIrp == NULL) {
-      // this IRP has already been canceled
-      RemoveEntryList(&irpEntry->ListEntry);
-      DokanFreeIrpEntry(irpEntry);
-      continue;
-    }
+    ASSERT(writeIrp != NULL);
 
     if (IoSetCancelRoutine(writeIrp, NULL) == NULL) {
       // Cancel routine will run as soon as we release the lock
@@ -1586,7 +1743,27 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
     eventContext =
         (PEVENT_CONTEXT)
             writeIrp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT];
-    ASSERT(eventContext != NULL);
+    if (eventContext == NULL) {
+      // Duplicate FSCTL_EVENT_WRITE after buffer was already transferred;
+      // re-arm cancellation and reject cleanly without touching writeIrp.
+      BOOLEAN writeCanceled = FALSE;
+      IoSetCancelRoutine(writeIrp, DokanIrpCancelRoutine);
+      if (writeIrp->Cancel && IoSetCancelRoutine(writeIrp, NULL) != NULL) {
+        RemoveEntryList(&irpEntry->ListEntry);
+        InitializeListHead(&irpEntry->ListEntry);
+        writeIrp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_IRP_ENTRY] = NULL;
+        writeCanceled = TRUE;
+      }
+      KeReleaseSpinLock(&RequestContext->Dcb->PendingIrp.ListLock, oldIrql);
+      if (writeCanceled) {
+        DokanFreeIrpEntry(irpEntry);
+        writeIrp->IoStatus.Information = 0;
+        DokanCompleteIrpRequest(writeIrp, STATUS_CANCELLED);
+      }
+      RequestContext->Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
+      RequestContext->Irp->IoStatus.Information = 0;
+      return STATUS_INVALID_PARAMETER;
+    }
 
     // short of buffer length
     if (eventIrpSp->Parameters.DeviceIoControl.OutputBufferLength <
@@ -1601,15 +1778,19 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
       else
         buffer = RequestContext->Irp->AssociatedIrp.SystemBuffer;
 
-      ASSERT(buffer != NULL);
-      // The large event context that was not added to the list will not have a
-      // serial number specified. It should use the same serial number as the
-      // initial context that was sent to user mode for the IRP.
-      eventContext->SerialNumber = irpEntry->SerialNumber;
-      RtlCopyMemory(buffer, eventContext, eventContext->Length);
+      if (buffer == NULL) {
+        DOKAN_LOG_FINE_IRP(RequestContext, "EventWrite: Failed to map buffer");
+        status = STATUS_INSUFFICIENT_RESOURCES;
+      } else {
+        // The large event context that was not added to the list will not have
+        // a serial number specified. It should use the same serial number as
+        // the initial context that was sent to user mode for the IRP.
+        eventContext->SerialNumber = irpEntry->SerialNumber;
+        RtlCopyMemory(buffer, eventContext, eventContext->Length);
 
-      info = eventContext->Length;
-      status = STATUS_SUCCESS;
+        info = eventContext->Length;
+        status = STATUS_SUCCESS;
+      }
     }
 
     DokanFreeEventContext(eventContext);
@@ -1630,6 +1811,8 @@ DokanEventWrite(__in PREQUEST_CONTEXT RequestContext) {
       DokanFreeIrpEntry(irpEntry);
       writeIrp->IoStatus.Information = 0;
       DokanCompleteIrpRequest(writeIrp, STATUS_CANCELLED);
+      status = STATUS_CANCELLED;
+      info = 0;
     }
 
     RequestContext->Irp->IoStatus.Status = status;

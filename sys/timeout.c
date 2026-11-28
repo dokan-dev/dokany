@@ -24,22 +24,11 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "util/irp_buffer_helper.h"
 #include "util/str.h"
 
-VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext, __in PDokanDCB Dcb) {
-  PDEVICE_OBJECT volDeviceObject = NULL;
-
+VOID DokanUnmount(__in_opt PREQUEST_CONTEXT RequestContext,
+                  __in PDokanDCB Dcb) {
   DOKAN_LOG("Start");
-  if (NT_SUCCESS(IoAcquireRemoveLock(&Dcb->RemoveLock, (PVOID)DokanUnmount))) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite(&Dcb->Resource, TRUE);
-    PDokanVCB vcb = (PDokanVCB)Dcb->Vcb;
-    if (vcb != NULL && GetIdentifierType(vcb) == VCB) {
-      volDeviceObject = vcb->DeviceObject;
-      ObReferenceObject(volDeviceObject);
-    }
-    ExReleaseResourceLite(&Dcb->Resource);
-    KeLeaveCriticalRegion();
-    IoReleaseRemoveLock(&Dcb->RemoveLock, (PVOID)DokanUnmount);
-  }
+  PDEVICE_OBJECT volDeviceObject =
+      DokanPinVolumeDeviceFromDcb(Dcb, (PVOID)DokanUnmount);
   if (volDeviceObject != NULL) {
     FsRtlEnterFileSystem();
     DokanEventRelease(RequestContext, volDeviceObject);
@@ -96,9 +85,6 @@ ReleaseTimeoutPendingIrp(__in PDokanDCB Dcb) {
     }
   }
 
-  if (IsListEmpty(&Dcb->PendingIrp.ListHead)) {
-    KeClearEvent(&Dcb->PendingIrp.NotEmpty);
-  }
   KeReleaseSpinLock(&Dcb->PendingIrp.ListLock, oldIrql);
 
   shouldUnmount = !vcb->IsKeepaliveActive && !IsListEmpty(&completeList);

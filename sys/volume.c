@@ -269,17 +269,23 @@ VOID DokanCompleteQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext,
   // copy the information from user-mode to specified buffer
   ASSERT(buffer != NULL);
 
+  ULONG writtenLength = EventInfo->BufferLength;
+  RtlZeroMemory(buffer, bufferLen);
+  RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
+
   if (RequestContext->IrpSp->Parameters.QueryVolume.FsInformationClass ==
-      FileFsVolumeInformation) {
+          FileFsVolumeInformation &&
+      bufferLen >=
+          (ULONG)FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0])) {
     KeEnterCriticalRegion();
     ExAcquireResourceSharedLite(&RequestContext->Dcb->Resource, TRUE);
     if (RequestContext->Dcb->VolumeLabel != NULL) {
       PFILE_FS_VOLUME_INFORMATION volumeInfo =
-          (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
+          (PFILE_FS_VOLUME_INFORMATION)buffer;
 
-      ULONG remainingLength = bufferLen;
-      remainingLength -=
-          FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG labelOffset =
+          (ULONG)FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG remainingLength = bufferLen - labelOffset;
       ULONG bytesToCopy =
           (ULONG)wcslen(RequestContext->Dcb->VolumeLabel) * sizeof(WCHAR);
       if (remainingLength < bytesToCopy) {
@@ -289,19 +295,14 @@ VOID DokanCompleteQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext,
       volumeInfo->VolumeLabelLength = bytesToCopy;
       RtlCopyMemory(volumeInfo->VolumeLabel, RequestContext->Dcb->VolumeLabel,
                     bytesToCopy);
-      remainingLength -= bytesToCopy;
-
-      EventInfo->BufferLength = bufferLen - remainingLength;
+      writtenLength = labelOffset + bytesToCopy;
     }
     ExReleaseResourceLite(&RequestContext->Dcb->Resource);
     KeLeaveCriticalRegion();
   }
 
-  RtlZeroMemory(buffer, bufferLen);
-  RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
-
   // the written length
-  RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+  RequestContext->Irp->IoStatus.Information = writtenLength;
   RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }
 

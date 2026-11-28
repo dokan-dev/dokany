@@ -277,6 +277,7 @@ VOID DokanCancelFcbGarbageCollection(__in PDokanFCB Fcb,
     RemoveEntryList(&Fcb->NextGarbageCollectableFcb);
     Fcb->NextGarbageCollectableFcb.Flink = NULL;
     Fcb->GarbageCollectionGracePeriodPassed = FALSE;
+    Fcb->PurgedOnDismount = FALSE;
     DokanFCBFlagsClearBit(Fcb, DOKAN_FCB_STATE_DELETE_PENDING);
     DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_DIRECTORY);
     DokanFCBFlagsClearBit(Fcb, DOKAN_FILE_CHANGE_LAST_WRITE);
@@ -489,7 +490,16 @@ VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
   BOOLEAN newElement = FALSE;
   PDokanFCB *fcbInTable = (PDokanFCB *)RtlInsertElementGenericTableAvl(
       &RequestContext->Vcb->FcbTable, &Fcb, sizeof(PDokanFCB), &newElement);
-  ASSERT(fcbInTable);
+  if (fcbInTable == NULL) {
+    // AVL node allocation failed under memory pressure; keep Fcb reachable on
+    // ReplacedFcbList so unmount purge and final close still clean it up.
+    DOKAN_LOG_VCB(RequestContext->Vcb,
+                  "Failed to allocate AVL node during DokanRenameFcb %p.", Fcb);
+    Fcb->ReplacedByRename = TRUE;
+    InsertTailList(&RequestContext->Vcb->ReplacedFcbList,
+                   &Fcb->NextReplacedFcb);
+    return;
+  }
   if (newElement) {
     return;
   }
@@ -503,7 +513,8 @@ VOID DokanRenameFcb(__in PREQUEST_CONTEXT RequestContext, __in PDokanFCB Fcb,
     GarbageCollectFCB(RequestContext->Vcb, conflictingFcb,
                       /*RemoveFromTable=*/FALSE);
   } else {
-    // This cannot happen on NTFS. See Fcb::PendingDeletion doc.
+    // NTFS denies renaming onto an open target; track the displaced FCB on
+    // ReplacedFcbList until its handles/sections close (see ReplacedByRename).
     conflictingFcb->ReplacedByRename = TRUE;
     InsertTailList(&RequestContext->Vcb->ReplacedFcbList,
                    &conflictingFcb->NextReplacedFcb);

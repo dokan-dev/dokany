@@ -95,10 +95,19 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
   }
 
   vcb = dcb->Vcb;
+  ULONG ioControlCode =
+      RequestContext->IrpSp->Parameters.DeviceIoControl.IoControlCode;
   if (IsUnmountPendingVcb(vcb)) {
-    DOKAN_LOG_FINE_IRP(RequestContext,
-                       "Volume is unmounted so ignore dcb requests");
-    return STATUS_NO_SUCH_DEVICE;
+    // During DokanDeleteMountPoint (VcbDismountInProgress while Dcb->Condition
+    // is still DcbActive), MountManager issues these three re-entrant teardown
+    // handshakes; reject all other DCB IOCTLs immediately.
+    if (ioControlCode != IOCTL_MOUNTDEV_QUERY_DEVICE_NAME &&
+        ioControlCode != IOCTL_MOUNTDEV_QUERY_UNIQUE_ID &&
+        ioControlCode != IOCTL_MOUNTDEV_LINK_DELETED) {
+      DOKAN_LOG_FINE_IRP(RequestContext,
+                         "Volume is unmounted so ignore dcb requests");
+      return STATUS_NO_SUCH_DEVICE;
+    }
   }
 
   DOKAN_LOG_FINE_IRP(RequestContext, "Device name \"%wZ\"",
@@ -343,38 +352,40 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
         status = STATUS_NOT_FOUND;
         break;
       }
+      KeEnterCriticalRegion();
+      ExAcquireResourceSharedLite(&dcb->Resource, TRUE);
       if (dcb->MountPoint == NULL || dcb->MountPoint->Length == 0) {
         DokanLogInfo(
             &logger,
             L"Not suggesting link name because DCB has no mount point set.");
         status = STATUS_NOT_FOUND;
-        break;
-      }
-      if (!IsMountPointDriveLetter(dcb->MountPoint)) {
+      } else if (!IsMountPointDriveLetter(dcb->MountPoint)) {
         DokanLogInfo(&logger,
                      L"Not suggesting link name due to non-drive-letter mount "
                      L"point: \"%wZ\"",
                      dcb->MountPoint);
         status = STATUS_NOT_FOUND;
-        break;
+      } else {
+        // Return the drive letter. Generally this is the one specified in the
+        // mount request from user mode.
+        linkName->UseOnlyIfThereAreNoOtherLinks = TRUE;
+        linkName->NameLength = dcb->MountPoint->Length;
+        if (!AppendVarSizeOutputString(RequestContext->Irp, &linkName->Name,
+                                       dcb->MountPoint,
+                                       /*UpdateInformationOnFailure=*/FALSE,
+                                       /*FillSpaceWithPartialString=*/FALSE)) {
+          DokanLogInfo(
+              &logger,
+              L"Could not fit the suggested name in the output buffer.");
+          status = STATUS_BUFFER_OVERFLOW;
+        } else {
+          DokanLogInfo(&logger, L"Returning suggested name: \"%wZ\"",
+                       dcb->MountPoint);
+          status = STATUS_SUCCESS;
+        }
       }
-
-      // Return the drive letter. Generally this is the one specified in the
-      // mount request from user mode.
-      linkName->UseOnlyIfThereAreNoOtherLinks = TRUE;
-      linkName->NameLength = dcb->MountPoint->Length;
-      if (!AppendVarSizeOutputString(RequestContext->Irp, &linkName->Name,
-                                     dcb->MountPoint,
-                                     /*UpdateInformationOnFailure=*/FALSE,
-                                     /*FillSpaceWithPartialString=*/FALSE)) {
-        DokanLogInfo(&logger,
-                     L"Could not fit the suggested name in the output buffer.");
-        status = STATUS_BUFFER_OVERFLOW;
-        break;
-      }
-      DokanLogInfo(&logger, L"Returning suggested name: \"%wZ\"",
-                   dcb->MountPoint);
-      status = STATUS_SUCCESS;
+      ExReleaseResourceLite(&dcb->Resource);
+      KeLeaveCriticalRegion();
     } break;
 
     case IOCTL_MOUNTDEV_LINK_CREATED: {
@@ -393,7 +404,8 @@ DiskDeviceControl(__in PREQUEST_CONTEXT RequestContext,
         DokanLogInfo(&logger, L"Link created with empty name; ignoring.");
         break;
       }
-      if (IsUnmountPending(DeviceObject)) {
+      if (IsDeletePending(DeviceObject) ||
+          (vcb != NULL && IsUnmountPendingVcb(vcb))) {
         DokanLogInfo(&logger,
                      L"Link created when unmount is pending; ignoring.");
         break;

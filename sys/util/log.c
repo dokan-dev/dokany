@@ -517,6 +517,19 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
 
   __try {
     DokanResourceLockRW(&(g_DokanLogEntryList.Resource));
+
+    // Re-check VCB condition and DispatchDriverLogs AFTER acquiring
+    // g_DokanLogEntryList.Resource so CleanDokanLogEntry cannot drain the list
+    // before we insert an entry carrying a soon-to-be-dangling Vcb pointer.
+    if (requestContext && requestContext->Vcb) {
+      if (InterlockedCompareExchange(&requestContext->Vcb->Condition, 0, 0) !=
+              VcbGood ||
+          requestContext->Vcb->Dcb == NULL ||
+          !requestContext->Vcb->Dcb->DispatchDriverLogs) {
+        __leave;
+      }
+    }
+
     if (g_DokanLogEntryList.NumberOfCachedEntries >=
         DOKAN_LOG_MAX_ENTRY_CACHED) {
       ASSERT(!IsListEmpty(&g_DokanLogEntryList.Log));
@@ -555,10 +568,9 @@ VOID PushDokanLogEntry(_In_opt_ PVOID RequestContext, _In_ PCSTR Format, ...) {
     InsertTailList(&g_DokanLogEntryList.Log, &logEntry->ListEntry);
 
     if (requestContext && requestContext->Vcb) {
-      LONG cond =
-          InterlockedCompareExchange(&requestContext->Vcb->Condition, 0, 0);
-      if ((cond == VcbGood || cond == VcbDismountStarting) &&
-          requestContext->Vcb->Dcb) {
+      if (InterlockedCompareExchange(&requestContext->Vcb->Condition, 0, 0) ==
+              VcbGood &&
+          requestContext->Vcb->Dcb != NULL) {
         PopDokanLogEntry(requestContext, requestContext->Vcb);
       }
     }
