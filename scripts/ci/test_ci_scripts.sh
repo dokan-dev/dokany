@@ -499,6 +499,7 @@ if [[ "${1:-}" == "--version" ]]; then
   echo "QEMU emulator version 10.2.1 (stub)"
   exit 0
 fi
+printf '%s\n' "$@" > "$MOCK_STATE/qemu_args"
 count=0
 if [[ -f "$MOCK_STATE/qemu_starts" ]]; then
   count="$(cat "$MOCK_STATE/qemu_starts")"
@@ -562,12 +563,14 @@ STUB
 
 chmod +x "$MOCK_BIN"/*
 
-# 3a. Transient boot stall on attempt 1, recovery on attempt 2: preserves boot-stall-diag.txt & screenshot.
+# 3a. Transient boot stall on attempt 1, recovery on attempt 2: preserves boot-stall-diag.txt & screenshot,
+# and verifies the default QEMU_CPU from common.sh omits hv_time.
 STATE_3A="$VM_TEST_DIR/state-3a"
 RES_3A="$VM_TEST_DIR/results-3a"
 mkdir -p "$STATE_3A" "$RES_3A"
 OUT_3A="$VM_TEST_DIR/out-3a.log"
 PATH="$MOCK_BIN:$PATH" \
+  QEMU_CPU="" \
   MOCK_STATE="$STATE_3A" \
   MOCK_SUCCEED_ON_BOOT=2 \
   BOOT_MAX_ATTEMPTS=4 \
@@ -578,6 +581,16 @@ PATH="$MOCK_BIN:$PATH" \
 if [[ "$(cat "$STATE_3A/qemu_starts")" != "2" ]]; then
   echo "FAIL (3a): expected 2 QEMU starts, got $(cat "$STATE_3A/qemu_starts")" >&2
   cat "$OUT_3A" >&2
+  exit 1
+fi
+grep -Fxq 'host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic' "$STATE_3A/qemu_args" || {
+  echo "FAIL (3a): expected default QEMU_CPU without hv_time in qemu args" >&2
+  cat "$STATE_3A/qemu_args" >&2
+  exit 1
+}
+if grep -Fq 'hv_time' "$STATE_3A/qemu_args"; then
+  echo "FAIL (3a): default QEMU_CPU unexpectedly included hv_time" >&2
+  cat "$STATE_3A/qemu_args" >&2
   exit 1
 fi
 grep -q 'Boot to SSH:.*(retries: 1)' "$OUT_3A" || { echo "FAIL (3a): missing retries: 1 in summary" >&2; cat "$OUT_3A" >&2; exit 1; }
@@ -610,13 +623,15 @@ assert b'\r' not in raw, 'CR bytes were not stripped from boot-stall-diag.txt'
 assert b'\x1b[' not in raw, 'ANSI CSI escapes were not stripped from boot-stall-diag.txt'
 PY
 
-# 3b. Exhausting all 4 boot attempts fails cleanly and records 4 stalls (8 monitor snapshots).
+# 3b. Exhausting all 4 boot attempts fails cleanly, records 4 stalls (8 monitor snapshots),
+# and honors an explicit QEMU_CPU override.
 STATE_3B="$VM_TEST_DIR/state-3b"
 RES_3B="$VM_TEST_DIR/results-3b"
 mkdir -p "$STATE_3B" "$RES_3B"
 OUT_3B="$VM_TEST_DIR/out-3b.log"
 rc_3b=0
 PATH="$MOCK_BIN:$PATH" \
+  QEMU_CPU="host,hv_relaxed" \
   MOCK_STATE="$STATE_3B" \
   MOCK_SUCCEED_ON_BOOT=99 \
   BOOT_MAX_ATTEMPTS=4 \
@@ -632,6 +647,16 @@ if [[ "$(cat "$STATE_3B/qemu_starts")" != "4" ]]; then
   echo "FAIL (3b): expected 4 QEMU starts, got $(cat "$STATE_3B/qemu_starts")" >&2
   exit 1
 fi
+grep -Fxq 'host,hv_relaxed' "$STATE_3B/qemu_args" || {
+  echo "FAIL (3b): explicit QEMU_CPU override was not passed to QEMU" >&2
+  cat "$STATE_3B/qemu_args" >&2
+  exit 1
+}
+grep -Fq 'QEMU CPU: host,hv_relaxed' "$RES_3B/boot-stall-diag.txt" || {
+  echo "FAIL (3b): boot-stall-diag.txt did not record overridden QEMU_CPU" >&2
+  cat "$RES_3B/boot-stall-diag.txt" >&2
+  exit 1
+}
 [[ -s "$RES_3B/no-ssh-screen.ppm" ]] || { echo "FAIL (3b): no-ssh-screen.ppm missing" >&2; exit 1; }
 snap_count="$(grep -c -- '--- QEMU Monitor Snapshot ' "$RES_3B/boot-stall-diag.txt")"
 if [[ "$snap_count" != "8" ]]; then
