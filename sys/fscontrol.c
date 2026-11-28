@@ -299,6 +299,10 @@ DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
 
   switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
     case FSCTL_ACTIVATE_KEEPALIVE: {
+      if (RequestContext->Vcb == NULL ||
+          IsUnmountPendingVcb(RequestContext->Vcb)) {
+        return STATUS_VOLUME_DISMOUNTED;
+      }
       fileObject = RequestContext->IrpSp->FileObject;
       if (fileObject == NULL) {
         return DokanLogError(
@@ -341,6 +345,10 @@ DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
     }
 
     case FSCTL_NOTIFY_PATH: {
+      if (RequestContext->Vcb == NULL ||
+          IsUnmountPendingVcb(RequestContext->Vcb)) {
+        return STATUS_VOLUME_DISMOUNTED;
+      }
       PDOKAN_NOTIFY_PATH_INTERMEDIATE pNotifyPath = NULL;
       GET_IRP_NOTIFY_PATH_INTERMEDIATE_OR_RETURN(RequestContext->Irp,
                                                  pNotifyPath);
@@ -389,11 +397,26 @@ DokanVolumeUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
     case FSCTL_OPLOCK_BREAK_ACK_NO_2:
     case FSCTL_REQUEST_FILTER_OPLOCK:
     case FSCTL_REQUEST_OPLOCK:
+      if (RequestContext->Vcb == NULL ||
+          IsUnmountPendingVcb(RequestContext->Vcb)) {
+        return STATUS_VOLUME_DISMOUNTED;
+      }
       return DokanOplockRequest(RequestContext);
 
     case FSCTL_LOCK_VOLUME:
     case FSCTL_UNLOCK_VOLUME:
+      if (RequestContext->Vcb == NULL ||
+          IsUnmountPendingVcb(RequestContext->Vcb)) {
+        return STATUS_VOLUME_DISMOUNTED;
+      }
+      return STATUS_SUCCESS;
+
     case FSCTL_IS_VOLUME_MOUNTED:
+      if (RequestContext->Vcb == NULL ||
+          InterlockedCompareExchange(&RequestContext->Vcb->Condition, 0, 0) !=
+              VcbGood) {
+        return STATUS_VOLUME_DISMOUNTED;
+      }
       return STATUS_SUCCESS;
 
     case FSCTL_GET_REPARSE_POINT:
@@ -496,11 +519,12 @@ NTSTATUS PullEvents(__in PREQUEST_CONTEXT RequestContext,
       break;
     }
   }
-  // If there is still pending items we need to reflag the queue for when we come back
-  if (!IsListEmpty(&NotifyEvent->ListHead) &&
-       !KeReadStateQueue(&RequestContext->Dcb->NotifyIrpEventQueue)) {
-     KeInsertQueue(&RequestContext->Dcb->NotifyIrpEventQueue,
-                   &RequestContext->Dcb->NotifyIrpEventQueueList);
+  // Re-signal NotEmpty if pending items remain; otherwise clear any stale
+  // signal left by a producer racing between wake and ListLock acquisition.
+  if (!IsListEmpty(&NotifyEvent->ListHead)) {
+    KeSetEvent(&NotifyEvent->NotEmpty, IO_NO_INCREMENT, FALSE);
+  } else {
+    KeClearEvent(&NotifyEvent->NotEmpty);
   }
   KeReleaseSpinLock(&NotifyEvent->ListLock, workQueueIrql);
   RequestContext->Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -543,17 +567,19 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
     timeout.QuadPart += (LONGLONG)waitTimeoutMs * 10000; // Ms to 100 nano
   }
 
-  // 4 - Wait for new event indefinitely if we are the main pull thread
-  // or wait for the requested time.
-  PLIST_ENTRY listEntry;
-  KeRemoveQueueEx(&RequestContext->Dcb->NotifyIrpEventQueue, KernelMode, TRUE,
-                  waitTimeoutMs ? &timeout : NULL, &listEntry, 1);
-  if (listEntry != &RequestContext->Dcb->NotifyIrpEventQueueList) {
-    // Here we got interrupted: Alert / Timeout.
-    // In that case listEntry is an NTSTATUS (See KeRemoveQueue doc).
-
-    // Were we awake due to the device being unmount ?
-    if (IsUnmountPendingVcb(RequestContext->Vcb)) {
+  // 4 - Wait for either unmount (ReleaseEvent, NotificationEvent) or a queued
+  // event (NotifyEvent.NotEmpty, SynchronizationEvent — FIFO waiter wakeup).
+  // A permanent NotificationEvent for ReleaseEvent wakes all waiting and
+  // late-entering pull threads immediately during teardown.
+  PVOID waitEvents[2];
+  waitEvents[0] = &RequestContext->Dcb->ReleaseEvent;
+  waitEvents[1] = &RequestContext->Dcb->NotifyEvent.NotEmpty;
+  NTSTATUS waitStatus =
+      KeWaitForMultipleObjects(2, waitEvents, WaitAny, Executive, KernelMode,
+                               TRUE, waitTimeoutMs ? &timeout : NULL, NULL);
+  if (waitStatus != STATUS_WAIT_1) {
+    if (waitStatus == STATUS_WAIT_0 ||
+        IsUnmountPendingVcb(RequestContext->Vcb)) {
       return STATUS_NO_SUCH_DEVICE;
     }
     return STATUS_SUCCESS;
@@ -566,31 +592,67 @@ NTSTATUS DokanProcessAndPullEvents(__in PREQUEST_CONTEXT RequestContext) {
 NTSTATUS
 DokanDiskUserFsRequest(__in PREQUEST_CONTEXT RequestContext) {
   REQUEST_CONTEXT requestContext = *RequestContext;
-  // TODO(adrienj): Fake the request target the Vcb until we migrate the
-  // following function to expected being called to a Dcb.
-  requestContext.Vcb = requestContext.Dcb->Vcb;
-  switch (RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode) {
-    case FSCTL_EVENT_PROCESS_N_PULL:
-      return DokanProcessAndPullEvents(&requestContext);
-    case FSCTL_EVENT_RELEASE:
-      if (requestContext.Vcb == NULL) {
-        return STATUS_INVALID_PARAMETER;
-      }
-      return DokanEventRelease(&requestContext,
-                               requestContext.Vcb->DeviceObject);
-    case FSCTL_EVENT_WRITE:
-      return DokanEventWrite(&requestContext);
-    case FSCTL_GET_VOLUME_METRICS:
-      return DokanGetVolumeMetrics(&requestContext);
-    case FSCTL_RESET_TIMEOUT:
-      return DokanResetPendingIrpTimeout(&requestContext);
-    case FSCTL_GET_ACCESS_TOKEN:
-      return DokanGetAccessToken(&requestContext);
+  PDokanDCB dcb = requestContext.Dcb;
+  ULONG fsControlCode =
+      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode;
+
+  if (fsControlCode == FSCTL_EVENT_RELEASE) {
+    // Pin volDeviceObject briefly under RemoveLock, then drop RemoveLock
+    // before DokanEventRelease (which calls IoReleaseRemoveLockAndWait).
+    PDEVICE_OBJECT volDeviceObject =
+        DokanPinVolumeDeviceFromDcb(dcb, RequestContext->Irp);
+    if (volDeviceObject == NULL) {
+      return IsDeletePending(dcb->DeviceObject) ? STATUS_SUCCESS
+                                                : STATUS_INVALID_PARAMETER;
+    }
+    requestContext.Vcb = volDeviceObject->DeviceExtension;
+    NTSTATUS releaseStatus =
+        DokanEventRelease(&requestContext, volDeviceObject);
+    ObDereferenceObject(volDeviceObject);
+    return releaseStatus;
   }
-  DOKAN_LOG_FINE_IRP(
-      RequestContext, "Unsupported FsControlCode %x",
-      RequestContext->IrpSp->Parameters.FileSystemControl.FsControlCode);
-  return STATUS_INVALID_DEVICE_REQUEST;
+
+  // Direct diskDeviceObject handles (DesiredAccess == 0) bypass
+  // Vpb->ReferenceCount and Vcb->OpenFileCount; guard every non-release disk
+  // FSCTL with Dcb->RemoveLock so IoReleaseRemoveLockAndWait drains all pull
+  // and worker threads before DeleteVcb / DeleteDcb frees Vcb or Dcb->Resource.
+  NTSTATUS lockStatus =
+      IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
+  if (!NT_SUCCESS(lockStatus)) {
+    return STATUS_DEVICE_REMOVED;
+  }
+
+  NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+  requestContext.Vcb = dcb->Vcb;
+  if (requestContext.Vcb == NULL || IsUnmountPendingVcb(requestContext.Vcb)) {
+    status = STATUS_NO_SUCH_DEVICE;
+  } else {
+    switch (fsControlCode) {
+    case FSCTL_EVENT_PROCESS_N_PULL:
+      status = DokanProcessAndPullEvents(&requestContext);
+      break;
+    case FSCTL_EVENT_WRITE:
+      status = DokanEventWrite(&requestContext);
+      break;
+    case FSCTL_GET_VOLUME_METRICS:
+      status = DokanGetVolumeMetrics(&requestContext);
+      break;
+    case FSCTL_RESET_TIMEOUT:
+      status = DokanResetPendingIrpTimeout(&requestContext);
+      break;
+    case FSCTL_GET_ACCESS_TOKEN:
+      status = DokanGetAccessToken(&requestContext);
+      break;
+    default:
+      DOKAN_LOG_FINE_IRP(RequestContext, "Unsupported FsControlCode %x",
+                         fsControlCode);
+      status = STATUS_INVALID_DEVICE_REQUEST;
+      break;
+    }
+  }
+
+  IoReleaseRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
+  return status;
 }
 
 NTSTATUS
@@ -683,16 +745,15 @@ PCHAR CreateRemoveReparsePointRequest(PREQUEST_CONTEXT RequestContext,
   return (PCHAR)reparseData;
 }
 
-NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
-                            PUNICODE_STRING Path, ULONG Code, PCHAR Input,
-                            ULONG Length) {
-  UNREFERENCED_PARAMETER(RequestContext);
+NTSTATUS SendDirectoryFsctl(__in_opt PREQUEST_CONTEXT RequestContext,
+                            __in PDRIVER_OBJECT DriverObject,
+                            __in PUNICODE_STRING Path, __in ULONG Code,
+                            __in PCHAR Input, __in ULONG Length) {
   HANDLE handle = 0;
   PUNICODE_STRING directoryStr = NULL;
   NTSTATUS status = STATUS_SUCCESS;
   PIRP topLevelIrp = NULL;
-  DOKAN_INIT_LOGGER(logger, RequestContext->DeviceObject->DriverObject,
-                    IRP_MJ_FILE_SYSTEM_CONTROL);
+  DOKAN_INIT_LOGGER(logger, DriverObject, IRP_MJ_FILE_SYSTEM_CONTROL);
 
   __try {
     // Convert Dcb MountPoint \DosDevices\C:\foo to \??\C:\foo
@@ -705,9 +766,11 @@ NTSTATUS SendDirectoryFsctl(PREQUEST_CONTEXT RequestContext,
       __leave;
     }
 
-    if (RequestContext->IsTopLevelIrp) {
+    if (RequestContext == NULL || RequestContext->IsTopLevelIrp) {
       topLevelIrp = IoGetTopLevelIrp();
-      IoSetTopLevelIrp(NULL);
+      if (topLevelIrp != NULL) {
+        IoSetTopLevelIrp(NULL);
+      }
     }
 
     // Open the directory as \??\C:\foo
@@ -759,7 +822,6 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
   PDokanDCB dcb = NULL;
   PDokanVCB vcb = NULL;
   PVPB vpb = NULL;
-  DOKAN_CONTROL dokanControl;
   PMOUNT_ENTRY mountEntry = NULL;
   PDEVICE_OBJECT volDeviceObject;
   PDRIVER_OBJECT driverObject = RequestContext->DeviceObject->DriverObject;
@@ -827,156 +889,218 @@ NTSTATUS DokanMountVolume(__in PREQUEST_CONTEXT RequestContext) {
                          L"The driver version of the disk does not match.");
   }
 
-  if (IsDeletePending(dcb->DeviceObject)) {
-    return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
-                         L"This is a remount try of the device.");
-  }
-
-  BOOLEAN isNetworkFileSystem =
-      (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
-
-  DokanLogInfo(&logger,
-               L"Mounting volume using MountPoint \"%wZ\" device \"%wZ\"",
-               dcb->MountPoint, dcb->DiskDeviceName);
-
-  if (!isNetworkFileSystem) {
-    status = IoCreateDevice(driverObject,               // DriverObject
-                            sizeof(DokanVCB),           // DeviceExtensionSize
-                            NULL,                       // DeviceName
-                            dcb->VolumeDeviceType,      // DeviceType
-                            dcb->DeviceCharacteristics, // DeviceCharacteristics
-                            FALSE,                      // Not Exclusive
-                            &volDeviceObject);          // DeviceObject
-  } else {
-    status = IoCreateDeviceSecure(
-        driverObject,               // DriverObject
-        sizeof(DokanVCB),           // DeviceExtensionSize
-        dcb->DiskDeviceName,        // DeviceName
-        dcb->VolumeDeviceType,      // DeviceType
-        dcb->DeviceCharacteristics, // DeviceCharacteristics
-        FALSE,                      // Not Exclusive
-        &sddl,                      // Default SDDL String
-        NULL,                       // Device Class GUID
-        &volDeviceObject);          // DeviceObject
-  }
-
+  status = IoAcquireRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
   if (!NT_SUCCESS(status)) {
-    return DokanLogError(&logger, status, L"IoCreateDevice failed.");
-  }
-
-  vcb = volDeviceObject->DeviceExtension;
-  vcb->Identifier.Type = VCB;
-  vcb->Identifier.Size = sizeof(DokanVCB);
-
-  vcb->DeviceObject = volDeviceObject;
-  vcb->Dcb = dcb;
-  vcb->ResourceLogger.DriverObject = driverObject;
-  vcb->ValidFcbMask = 0xffffffffffffffff;
-  dcb->Vcb = vcb;
-
-  if (vcb->Dcb->FcbGarbageCollectionIntervalMs != 0) {
-    InitializeListHead(&vcb->FcbGarbageList);
-    KeInitializeEvent(&vcb->FcbGarbageListNotEmpty, SynchronizationEvent,
-                      FALSE);
-    DokanStartFcbGarbageCollector(vcb);
-  }
-
-  RtlInitializeGenericTableAvl(&vcb->FcbTable, DokanCompareFcb,
-                               DokanAllocateFcbAvl, DokanFreeFcbAvl, vcb);
-
-  InitializeListHead(&vcb->DirNotifyList);
-  FsRtlNotifyInitializeSync(&vcb->NotifySync);
-
-  ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
-
-  FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
-                           &vcb->AdvancedFCBHeaderMutex);
-
-  vpb = RequestContext->IrpSp->Parameters.MountVolume.Vpb;
-  DokanInitVpb(vpb, vcb->DeviceObject);
-
-  //
-  // Establish user-buffer access method.
-  //
-  SetLongFlag(volDeviceObject->Flags, DO_DIRECT_IO);
-  ClearLongFlag(volDeviceObject->Flags, DO_DEVICE_INITIALIZING);
-  SetLongFlag(vcb->Flags, VCB_MOUNTED);
-
-  ObReferenceObject(volDeviceObject);
-
-  DOKAN_LOG_FINE_IRP(RequestContext, "ExAcquireResourceExclusiveLite dcb resource");
-  ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
-
-  // set the device on dokanControl
-  RtlZeroMemory(&dokanControl, sizeof(DOKAN_CONTROL));
-  RtlCopyMemory(dokanControl.DeviceName, dcb->DiskDeviceName->Buffer,
-                dcb->DiskDeviceName->Length);
-  if (dcb->UNCName->Buffer != NULL && dcb->UNCName->Length > 0) {
-    RtlCopyMemory(dokanControl.UNCName, dcb->UNCName->Buffer,
-                  dcb->UNCName->Length);
-  }
-  dokanControl.SessionId = dcb->SessionId;
-  mountEntry =
-      FindMountEntry(dcb->Global, &dokanControl, /*ExclusiveLock=*/TRUE);
-  if (mountEntry != NULL) {
-    mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
-    mountEntry->MountControl.MountOptions = dcb->MountOptions;
-    ExReleaseResourceLite(&mountEntry->Resource);
-  } else {
-    ExReleaseResourceLite(&dcb->Resource);
     return DokanLogError(&logger, STATUS_DEVICE_REMOVED,
-                         L"MountEntry not found.");
+                         L"Disk device is already being removed.");
   }
 
-  ExReleaseResourceLite(&dcb->Resource);
-
-  // Start check thread
-  DokanStartCheckThread(dcb);
-
-  BOOLEAN isDriveLetter = IsMountPointDriveLetter(dcb->MountPoint);
-  // Create mount point for the volume
-  if (dcb->UseMountManager) {
-    BOOLEAN autoMountStateBackup = TRUE;
-    if (!isDriveLetter) {
-      ExAcquireResourceExclusiveLite(&dcb->Global->MountManagerLock, TRUE);
-      // Query current AutoMount State to restore it afterward.
-      DokanQueryAutoMount(&autoMountStateBackup);
-      // In case of failure, we suppose it was Enabled.
-
-      // MountManager suggest workflow do not accept a path longer than
-      // a driver letter mount point so we cannot use it to suggest
-      // our directory mount point. We disable Mount Manager AutoMount
-      // for avoiding having a driver letter assign to our device
-      // for the time we create our own mount point.
-      if (autoMountStateBackup) {
-        DokanSendAutoMount(FALSE);
-      }
+  __try {
+    if (IsDeletePending(dcb->DeviceObject)) {
+      status = DokanLogError(&logger, STATUS_DEVICE_REMOVED,
+                             L"This is a remount try of the device.");
+      __leave;
     }
-    status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
+
+    BOOLEAN isNetworkFileSystem =
+        (dcb->VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM);
+
+    DokanLogInfo(&logger,
+                 L"Mounting volume using MountPoint \"%wZ\" device \"%wZ\"",
+                 dcb->MountPoint, dcb->DiskDeviceName);
+
+    if (!isNetworkFileSystem) {
+      status =
+          IoCreateDevice(driverObject,               // DriverObject
+                         sizeof(DokanVCB),           // DeviceExtensionSize
+                         NULL,                       // DeviceName
+                         dcb->VolumeDeviceType,      // DeviceType
+                         dcb->DeviceCharacteristics, // DeviceCharacteristics
+                         FALSE,                      // Not Exclusive
+                         &volDeviceObject);          // DeviceObject
+    } else {
+      status = IoCreateDeviceSecure(
+          driverObject,               // DriverObject
+          sizeof(DokanVCB),           // DeviceExtensionSize
+          dcb->DiskDeviceName,        // DeviceName
+          dcb->VolumeDeviceType,      // DeviceType
+          dcb->DeviceCharacteristics, // DeviceCharacteristics
+          FALSE,                      // Not Exclusive
+          &sddl,                      // Default SDDL String
+          NULL,                       // Device Class GUID
+          &volDeviceObject);          // DeviceObject
+    }
+
     if (!NT_SUCCESS(status)) {
-      DokanLogError(&logger, status,
-                    L"DokanSendVolumeArrivalNotification failed.");
+      status = DokanLogError(&logger, status, L"IoCreateDevice failed.");
+      __leave;
     }
-    if (!isDriveLetter) {
-      // Restore previous AutoMount state.
-      if (autoMountStateBackup) {
-        DokanSendAutoMount(TRUE);
+
+    vpb = RequestContext->IrpSp->Parameters.MountVolume.Vpb;
+
+    vcb = volDeviceObject->DeviceExtension;
+    vcb->Identifier.Type = VCB;
+    vcb->Identifier.Size = sizeof(DokanVCB);
+
+    vcb->DeviceObject = volDeviceObject;
+    vcb->Dcb = dcb;
+    vcb->TargetDeviceObject =
+        RequestContext->IrpSp->Parameters.MountVolume.DeviceObject;
+    vcb->Global = dcb->Global;
+    vcb->Vpb = vpb;
+    vcb->Condition = VcbNotMounted;
+    vcb->OpenFileCount = 0;
+    vcb->DismountWorkItemQueued = 0;
+    InitializeListHead(&vcb->VcbLinks);
+    ExInitializeResourceLite(&vcb->Resource);
+    vcb->ResourceLogger.DriverObject = driverObject;
+    vcb->ValidFcbMask = 0xffffffffffffffff;
+
+    RtlInitializeGenericTableAvl(&vcb->FcbTable, DokanCompareFcb,
+                                 DokanAllocateFcbAvl, DokanFreeFcbAvl, vcb);
+    InitializeListHead(&vcb->ReplacedFcbList);
+
+    InitializeListHead(&vcb->DirNotifyList);
+    FsRtlNotifyInitializeSync(&vcb->NotifySync);
+
+    ExInitializeFastMutex(&vcb->AdvancedFCBHeaderMutex);
+
+    FsRtlSetupAdvancedHeader(&vcb->VolumeFileHeader,
+                             &vcb->AdvancedFCBHeaderMutex);
+    FsRtlSetupAdvancedHeader(&vcb->PreStartFileHeader,
+                             &vcb->AdvancedFCBHeaderMutex);
+
+    // Attach VCB to DCB under Dcb->Resource exclusive and re-check
+    // Dcb->Condition so a concurrent DokanEventStart abort cannot delete DCB
+    // out from under a newly mounted VCB.
+    BOOLEAN dcbActive = FALSE;
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(&dcb->Resource, TRUE);
+    if (InterlockedCompareExchange(&dcb->Condition, 0, 0) == DcbActive &&
+        dcb->Vcb == NULL) {
+      dcb->Vcb = vcb;
+      dcbActive = TRUE;
+    }
+    ExReleaseResourceLite(&dcb->Resource);
+    KeLeaveCriticalRegion();
+
+    if (!dcbActive) {
+      FsRtlTeardownPerStreamContexts(&vcb->VolumeFileHeader);
+      FsRtlTeardownPerStreamContexts(&vcb->PreStartFileHeader);
+      if (vcb->NotifySync != NULL) {
+        FsRtlNotifyUninitializeSync(&vcb->NotifySync);
+        vcb->NotifySync = NULL;
       }
-      ExReleaseResourceLite(&dcb->Global->MountManagerLock);
+      ExDeleteResourceLite(&vcb->Resource);
+      IoDeleteDevice(volDeviceObject);
+      status = DokanLogError(&logger, STATUS_DEVICE_REMOVED,
+                             L"Disk device is already being torn down.");
+      __leave;
     }
-  } else if (isDriveLetter) {
-    DokanCreateMountPoint(dcb);
+
+    if (vcb->Dcb->FcbGarbageCollectionIntervalMs != 0) {
+      InitializeListHead(&vcb->FcbGarbageList);
+      KeInitializeEvent(&vcb->FcbGarbageListNotEmpty, SynchronizationEvent,
+                        FALSE);
+      DokanStartFcbGarbageCollector(vcb);
+    }
+
+    DokanInitVpb(vpb, vcb->DeviceObject);
+
+    //
+    // Establish user-buffer access method.
+    //
+    SetLongFlag(volDeviceObject->Flags, DO_DIRECT_IO);
+    ClearLongFlag(volDeviceObject->Flags, DO_DEVICE_INITIALIZING);
+
+    // Start check thread BEFORE publishing VcbGood so any concurrent
+    // DokanEventRelease observes TimeoutThread != NULL.
+    DokanStartCheckThread(dcb);
+
+    // Do NOT ObReferenceObject(vcb->TargetDeviceObject) here:
+    // ntoskrnl!IopMountVolume already referenced
+    // IrpSp->Parameters.MountVolume.DeviceObject before IRP_MN_MOUNT_VOLUME
+    // and transfers that reference to the FSD on STATUS_SUCCESS (paired with
+    // ObDereferenceObject(targetDeviceObject) in DokanDeleteVcb, FastFat).
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(&dcb->Global->VcbListLock, TRUE);
+    InterlockedExchange(&vcb->Condition, VcbGood);
+    InsertTailList(&dcb->Global->VcbList, &vcb->VcbLinks);
+    ExReleaseResourceLite(&dcb->Global->VcbListLock);
+    KeLeaveCriticalRegion();
+
+    PUNICODE_STRING mountPointSnapshot =
+        DokanSnapshotDcbUnicodeString(dcb, &dcb->MountPoint);
+    BOOLEAN isDriveLetter = mountPointSnapshot != NULL &&
+                            IsMountPointDriveLetter(mountPointSnapshot);
+    if (mountPointSnapshot != NULL) {
+      DokanFreeUnicodeString(mountPointSnapshot);
+    }
+
+    // Create mount point for the volume
+    if (dcb->UseMountManager) {
+      BOOLEAN autoMountStateBackup = TRUE;
+      if (!isDriveLetter) {
+        KeEnterCriticalRegion();
+        ExAcquireResourceExclusiveLite(&dcb->Global->MountManagerLock, TRUE);
+        // Query current AutoMount State to restore it afterward.
+        DokanQueryAutoMount(&autoMountStateBackup);
+        // In case of failure, we suppose it was Enabled.
+
+        // MountManager suggest workflow do not accept a path longer than
+        // a driver letter mount point so we cannot use it to suggest
+        // our directory mount point. We disable Mount Manager AutoMount
+        // for avoiding having a driver letter assign to our device
+        // for the time we create our own mount point.
+        if (autoMountStateBackup) {
+          DokanSendAutoMount(FALSE);
+        }
+      }
+      status = DokanSendVolumeArrivalNotification(dcb->DiskDeviceName);
+      if (!NT_SUCCESS(status)) {
+        DokanLogError(&logger, status,
+                      L"DokanSendVolumeArrivalNotification failed.");
+      }
+      if (!isDriveLetter) {
+        // Restore previous AutoMount state.
+        if (autoMountStateBackup) {
+          DokanSendAutoMount(TRUE);
+        }
+        ExReleaseResourceLite(&dcb->Global->MountManagerLock);
+        KeLeaveCriticalRegion();
+      }
+    } else if (isDriveLetter && !IsUnmountPendingVcb(vcb)) {
+      DokanCreateMountPoint(dcb);
+    }
+
+    if (isNetworkFileSystem && !IsUnmountPendingVcb(vcb)) {
+      RunAsSystem(DokanRegisterUncProvider, dcb);
+    }
+
+    // Publish VolumeDeviceObject on MountEntry AFTER mount-point creation and
+    // MUP registration complete so DokanGlobalEventRelease cannot race them.
+    mountEntry = FindMountEntryByName(dcb->Global, dcb->DiskDeviceName,
+                                      dcb->UNCName, /*ExclusiveLock=*/TRUE);
+    if (mountEntry != NULL) {
+      mountEntry->MountControl.VolumeDeviceObject = volDeviceObject;
+      mountEntry->MountControl.MountOptions = dcb->MountOptions;
+      ExReleaseResourceLite(&mountEntry->Resource);
+      mountEntry = NULL;
+    }
+
+    InterlockedOr(&hasMountedAnyDisk, 1);
+    DokanLogInfo(&logger, L"Mounting successfully done.");
+    DOKAN_LOG_FINE_IRP(RequestContext, "Mounting successfully done.");
+
+    status = STATUS_SUCCESS;
+  } __finally {
+    // Always signal MountCompletedEvent before releasing RemoveLock so any
+    // concurrent DokanEventRelease waiting for publication never stalls.
+    KeSetEvent(&dcb->MountCompletedEvent, IO_NO_INCREMENT, FALSE);
+    IoReleaseRemoveLock(&dcb->RemoveLock, RequestContext->Irp);
   }
 
-  if (isNetworkFileSystem) {
-    RunAsSystem(DokanRegisterUncProvider, dcb);
-  }
-
-  InterlockedOr(&hasMountedAnyDisk, 1);
-  DokanLogInfo(&logger, L"Mounting successfully done.");
-  DOKAN_LOG_FINE_IRP(RequestContext, "Mounting successfully done.");
-
-  return STATUS_SUCCESS;
+  return status;
 }
 
 VOID DokanInitVpb(__in PVPB Vpb, __in PDEVICE_OBJECT VolumeDevice) {

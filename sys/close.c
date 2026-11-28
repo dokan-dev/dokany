@@ -23,6 +23,20 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "dokan.h"
 #include "util/fcb.h"
 
+// Unlinks and frees Ccb while caller holds Fcb->MainResource exclusive,
+// unlocks Fcb, releases the FCB reference, clears FileObject contexts, and
+// requests deferred OpenFileCount decrement.
+static VOID DokanCloseFileObject(__in PREQUEST_CONTEXT RequestContext,
+                                 __in PFILE_OBJECT FileObject,
+                                 __in PDokanFCB Fcb, __in PDokanCCB Ccb) {
+  DokanFreeCcbLocked(RequestContext, Ccb);
+  DokanFCBUnlock(Fcb);
+  DokanFreeFCB(RequestContext->Vcb, Fcb);
+  FileObject->FsContext = NULL;
+  FileObject->FsContext2 = NULL;
+  RequestContext->DecrementOpenFileCount = TRUE;
+}
+
 NTSTATUS
 DokanDispatchClose(__in PREQUEST_CONTEXT RequestContext)
 
@@ -54,25 +68,18 @@ Return Value:
   fileObject = RequestContext->IrpSp->FileObject;
   DOKAN_LOG_FINE_IRP(RequestContext, "FileObject=%p", fileObject);
 
-  if (fileObject == NULL || RequestContext->Vcb == NULL ||
-      !fileObject->FsContext2) {
+  if (fileObject == NULL || RequestContext->Vcb == NULL) {
     return STATUS_SUCCESS;
   }
 
-  if (!DokanCheckCCB(RequestContext, fileObject->FsContext2)) {
-    ccb = fileObject->FsContext2;
-    ASSERT(ccb != NULL);
-
-    fcb = ccb->Fcb;
-    ASSERT(fcb != NULL);
-
-    DokanFCBLockRW(fcb);
-    DokanFreeCCB(RequestContext, ccb);
-    DokanFCBUnlock(fcb);
-
-    DokanFreeFCB(RequestContext->Vcb, fcb);
-
-    fileObject->FsContext2 = NULL;
+  if (!fileObject->FsContext2) {
+    // Direct volume open (VolumeFileHeader) or pre-HasEventWait open
+    // (PreStartFileHeader).
+    if (fileObject->FsContext == &RequestContext->Vcb->VolumeFileHeader ||
+        fileObject->FsContext == &RequestContext->Vcb->PreStartFileHeader) {
+      fileObject->FsContext = NULL;
+      RequestContext->DecrementOpenFileCount = TRUE;
+    }
     return STATUS_SUCCESS;
   }
 
@@ -82,15 +89,19 @@ Return Value:
   fcb = ccb->Fcb;
   ASSERT(fcb != NULL);
 
+  if (!DokanCheckCCB(RequestContext, ccb)) {
+    DokanFCBLockRW(fcb);
+    DokanCloseFileObject(RequestContext, fileObject, fcb, ccb);
+    return STATUS_SUCCESS;
+  }
+
   OplockDebugRecordMajorFunction(fcb, IRP_MJ_CLOSE);
   DokanFCBLockRW(fcb);
   if (fcb->BlockUserModeDispatch) {
     DokanLogInfo(&logger,
                  L"Closed file with user mode dispatch blocked: \"%wZ\"",
                  &fcb->FileName);
-    DokanFreeCCB(RequestContext, ccb);
-    DokanFCBUnlock(fcb);
-    DokanFreeFCB(RequestContext->Vcb, fcb);
+    DokanCloseFileObject(RequestContext, fileObject, fcb, ccb);
     return STATUS_SUCCESS;
   }
 
@@ -100,9 +111,7 @@ Return Value:
   if (eventContext == NULL) {
     // status = STATUS_INSUFFICIENT_RESOURCES;
     DOKAN_LOG_FINE_IRP(RequestContext, "EventContext == NULL");
-    DokanFreeCCB(RequestContext, ccb);
-    DokanFCBUnlock(fcb);
-    DokanFreeFCB(RequestContext->Vcb, fcb);
+    DokanCloseFileObject(RequestContext, fileObject, fcb, ccb);
     return STATUS_SUCCESS;
   }
 
@@ -114,9 +123,7 @@ Return Value:
   RtlCopyMemory(eventContext->Operation.Close.FileName, fcb->FileName.Buffer,
                 fcb->FileName.Length);
 
-  DokanFreeCCB(RequestContext, ccb);
-  DokanFCBUnlock(fcb);
-  DokanFreeFCB(RequestContext->Vcb, fcb);
+  DokanCloseFileObject(RequestContext, fileObject, fcb, ccb);
 
   // Close can not be pending status don't register this IRP
 

@@ -269,33 +269,40 @@ VOID DokanCompleteQueryVolumeInformation(__in PREQUEST_CONTEXT RequestContext,
   // copy the information from user-mode to specified buffer
   ASSERT(buffer != NULL);
 
-  if (RequestContext->IrpSp->Parameters.QueryVolume.FsInformationClass ==
-          FileFsVolumeInformation &&
-      RequestContext->Dcb->VolumeLabel != NULL) {
-    PFILE_FS_VOLUME_INFORMATION volumeInfo =
-        (PFILE_FS_VOLUME_INFORMATION)EventInfo->Buffer;
-
-    ULONG remainingLength = bufferLen;
-    remainingLength -= FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
-    ULONG bytesToCopy =
-        (ULONG)wcslen(RequestContext->Dcb->VolumeLabel) * sizeof(WCHAR);
-    if (remainingLength < bytesToCopy) {
-      bytesToCopy = remainingLength;
-    }
-
-    volumeInfo->VolumeLabelLength = bytesToCopy;
-    RtlCopyMemory(volumeInfo->VolumeLabel, RequestContext->Dcb->VolumeLabel,
-                  bytesToCopy);
-    remainingLength -= bytesToCopy;
-
-    EventInfo->BufferLength = bufferLen - remainingLength;
-  }
-
+  ULONG writtenLength = EventInfo->BufferLength;
   RtlZeroMemory(buffer, bufferLen);
   RtlCopyMemory(buffer, EventInfo->Buffer, EventInfo->BufferLength);
 
+  if (RequestContext->IrpSp->Parameters.QueryVolume.FsInformationClass ==
+          FileFsVolumeInformation &&
+      bufferLen >=
+          (ULONG)FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0])) {
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(&RequestContext->Dcb->Resource, TRUE);
+    if (RequestContext->Dcb->VolumeLabel != NULL) {
+      PFILE_FS_VOLUME_INFORMATION volumeInfo =
+          (PFILE_FS_VOLUME_INFORMATION)buffer;
+
+      ULONG labelOffset =
+          (ULONG)FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel[0]);
+      ULONG remainingLength = bufferLen - labelOffset;
+      ULONG bytesToCopy =
+          (ULONG)wcslen(RequestContext->Dcb->VolumeLabel) * sizeof(WCHAR);
+      if (remainingLength < bytesToCopy) {
+        bytesToCopy = remainingLength;
+      }
+
+      volumeInfo->VolumeLabelLength = bytesToCopy;
+      RtlCopyMemory(volumeInfo->VolumeLabel, RequestContext->Dcb->VolumeLabel,
+                    bytesToCopy);
+      writtenLength = labelOffset + bytesToCopy;
+    }
+    ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+    KeLeaveCriticalRegion();
+  }
+
   // the written length
-  RequestContext->Irp->IoStatus.Information = EventInfo->BufferLength;
+  RequestContext->Irp->IoStatus.Information = writtenLength;
   RequestContext->Irp->IoStatus.Status = EventInfo->Status;
 }
 
@@ -339,11 +346,10 @@ DokanDispatchSetVolumeInformation(__in PREQUEST_CONTEXT RequestContext) {
         DokanFree(RequestContext->Dcb->VolumeLabel);
       }
       RequestContext->Dcb->VolumeLabel = newVolumeLabel;
-      ExReleaseResourceLite(&RequestContext->Dcb->Resource);
-      KeLeaveCriticalRegion();
-
       DOKAN_LOG_FINE_IRP(RequestContext, "Volume label changed to %ws",
                          RequestContext->Dcb->VolumeLabel);
+      ExReleaseResourceLite(&RequestContext->Dcb->Resource);
+      KeLeaveCriticalRegion();
 
       return STATUS_SUCCESS;
     }

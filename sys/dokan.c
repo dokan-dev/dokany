@@ -43,12 +43,12 @@ static size_t DokanProbeFcbAvlNodeSize();
 
 LOOKASIDE_LIST_EX g_DokanCCBLookasideList;
 LOOKASIDE_LIST_EX g_DokanFCBLookasideList;
-LOOKASIDE_LIST_EX g_DokanEResourceLookasideList;
 LOOKASIDE_LIST_EX g_DokanFcbAvlNodeLookasideList;
 size_t g_DokanFcbAvlNodeSize = 0;
 BOOLEAN g_FixFileNameForReparseMountPoint;
 
 LOOKASIDE_LIST_EX DokanIrpEntryLookasideList;
+size_t g_DokanIrpEntrySize = 0;
 
 FAST_IO_DISPATCH FastIoDispatch;
 FAST_IO_CHECK_IF_POSSIBLE DokanFastIoCheckIfPossible;
@@ -190,21 +190,48 @@ DokanLookasideCreate(__in LOOKASIDE_LIST_EX *pCache, __in size_t cbElement) {
 VOID CleanupGlobalDiskDevice(PDOKAN_GLOBAL dokanGlobal) {
   WCHAR symbolicLinkBuf[] = DOKAN_GLOBAL_SYMBOLIC_LINK_NAME;
   UNICODE_STRING symbolicLinkName;
+  PDEVICE_OBJECT deviceObject = dokanGlobal->DeviceObject;
+  PDEVICE_OBJECT fsDiskDeviceObject = dokanGlobal->FsDiskDeviceObject;
+  PDEVICE_OBJECT fsCdDeviceObject = dokanGlobal->FsCdDeviceObject;
 
-  KeSetEvent(&dokanGlobal->KillDeleteDeviceEvent, 0, FALSE);
+  ExWaitForRundownProtectionRelease(&dokanGlobal->TeardownRundown);
+  DokanScanForDismountedVcb(dokanGlobal);
 
   RtlInitUnicodeString(&symbolicLinkName, symbolicLinkBuf);
   IoDeleteSymbolicLink(&symbolicLinkName);
 
-  IoUnregisterFileSystem(dokanGlobal->FsDiskDeviceObject);
-  IoUnregisterFileSystem(dokanGlobal->FsCdDeviceObject);
+  IoUnregisterFileSystem(fsDiskDeviceObject);
+  IoUnregisterFileSystem(fsCdDeviceObject);
 
-  IoDeleteDevice(dokanGlobal->FsDiskDeviceObject);
-  IoDeleteDevice(dokanGlobal->FsCdDeviceObject);
-  IoDeleteDevice(dokanGlobal->DeviceObject);
+  // Drain any remaining session mount point cleanup entries.
+  ExAcquireFastMutex(&dokanGlobal->SessionMountPointLock);
+  while (!IsListEmpty(&dokanGlobal->SessionMountPointList)) {
+    PLIST_ENTRY entry = RemoveHeadList(&dokanGlobal->SessionMountPointList);
+    PSESSION_MOUNT_POINT_ENTRY sessionEntry =
+        CONTAINING_RECORD(entry, SESSION_MOUNT_POINT_ENTRY, ListEntry);
+    if (sessionEntry->MountPoint.Buffer != NULL) {
+      DokanFree(sessionEntry->MountPoint.Buffer);
+    }
+    if (sessionEntry->TargetDeviceName.Buffer != NULL) {
+      DokanFree(sessionEntry->TargetDeviceName.Buffer);
+    }
+    DokanFree(sessionEntry);
+  }
+  ExReleaseFastMutex(&dokanGlobal->SessionMountPointLock);
+
+  ASSERT(IsListEmpty(&dokanGlobal->VcbList));
+  ASSERT(IsListEmpty(&dokanGlobal->MountPointList));
+
+  // Delete all ERESOURCEs in the DOKAN_GLOBAL extension strictly before
+  // IoDeleteDevice can free the extension.
   ExDeleteResourceLite(&dokanGlobal->Resource);
+  ExDeleteResourceLite(&dokanGlobal->VcbListLock);
   ExDeleteResourceLite(&dokanGlobal->MountPointListLock);
   ExDeleteResourceLite(&dokanGlobal->MountManagerLock);
+
+  IoDeleteDevice(fsDiskDeviceObject);
+  IoDeleteDevice(fsCdDeviceObject);
+  IoDeleteDevice(deviceObject);
 }
 
 VOID InitMultiVersionResources() {
@@ -301,6 +328,7 @@ Return Value:
   status = DokanCreateGlobalDiskDevice(DriverObject, &dokanGlobal);
 
   if (NT_ERROR(status)) {
+    DokanCleanupLogCache();
     return status;
   }
   //
@@ -364,9 +392,10 @@ Return Value:
       FsRtlRegisterFileSystemFilterCallbacks(DriverObject, &filterCallbacks);
 
   if (!NT_SUCCESS(status)) {
-    CleanupGlobalDiskDevice(dokanGlobal);
     DOKAN_LOG_("  FsRtlRegisterFileSystemFilterCallbacks returned 0x%x %s",
               status, DokanGetNTSTATUSStr(status));
+    CleanupGlobalDiskDevice(dokanGlobal);
+    DokanCleanupLogCache();
     return status;
   }
 
@@ -374,20 +403,21 @@ Return Value:
   if (g_DokanFcbAvlNodeSize == 0) {
     DOKAN_LOG("DokanProbeFcbAvlNodeSize failed");
     CleanupGlobalDiskDevice(dokanGlobal);
+    DokanCleanupLogCache();
     return STATUS_INSUFFICIENT_RESOURCES;
   }
+
+  g_DokanIrpEntrySize = DOKAN_IRP_ENTRY_WORKITEM_OFFSET + IoSizeofWorkItem();
 
   struct {
     PLOOKASIDE_LIST_EX List;
     size_t ElementSize;
     PCSTR Name;
   } lookasideLists[] = {
-      {&DokanIrpEntryLookasideList, sizeof(IRP_ENTRY),
+      {&DokanIrpEntryLookasideList, g_DokanIrpEntrySize,
        "DokanIrpEntryLookasideList"},
       {&g_DokanCCBLookasideList, sizeof(DokanCCB), "g_DokanCCBLookasideList"},
       {&g_DokanFCBLookasideList, sizeof(DokanFCB), "g_DokanFCBLookasideList"},
-      {&g_DokanEResourceLookasideList, sizeof(ERESOURCE),
-       "g_DokanEResourceLookasideList"},
       {&g_DokanFcbAvlNodeLookasideList, g_DokanFcbAvlNodeSize,
        "g_DokanFcbAvlNodeLookasideList"},
   };
@@ -399,6 +429,7 @@ Return Value:
         ExDeleteLookasideListEx(lookasideLists[j - 1].List);
       }
       CleanupGlobalDiskDevice(dokanGlobal);
+      DokanCleanupLogCache();
       return STATUS_INSUFFICIENT_RESOURCES;
     }
   }
@@ -433,25 +464,28 @@ Return Value:
 
 {
 
-  PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
-  PDOKAN_GLOBAL dokanGlobal;
-
   PAGED_CODE();
 
-  dokanGlobal = deviceObject->DeviceExtension;
-  if (GetIdentifierType(dokanGlobal) == DGL) {
-    DOKAN_LOG("Delete Global DeviceObject");
-    CleanupGlobalDiskDevice(dokanGlobal);
+  // IoCreateDevice prepends to DriverObject->DeviceObject, so Dokan_3 (DGL) is
+  // behind DokanCdFs3 and DokanFs3 (whose DeviceExtensions are NULL).
+  for (PDEVICE_OBJECT deviceObject = DriverObject->DeviceObject;
+       deviceObject != NULL; deviceObject = deviceObject->NextDevice) {
+    if (deviceObject->DeviceExtension != NULL &&
+        GetIdentifierType(deviceObject->DeviceExtension) == DGL) {
+      DOKAN_LOG("Delete Global DeviceObject");
+      CleanupGlobalDiskDevice((PDOKAN_GLOBAL)deviceObject->DeviceExtension);
+      break;
+    }
   }
 
   ExDeleteLookasideListEx(&DokanIrpEntryLookasideList);
 
   ExDeleteLookasideListEx(&g_DokanCCBLookasideList);
   ExDeleteLookasideListEx(&g_DokanFCBLookasideList);
-  ExDeleteLookasideListEx(&g_DokanEResourceLookasideList);
   ExDeleteLookasideListEx(&g_DokanFcbAvlNodeLookasideList);
 
   DOKAN_LOG("All resources released");
+  DokanCleanupLogCache();
 }
 
 NTSTATUS
@@ -838,15 +872,6 @@ VOID DokanResourceUnlockWithDebugInfo(
   }
   ExReleaseResourceLite(Resource);
   KeLeaveCriticalRegion();
-}
-
-BOOLEAN DokanVCBTryLockRW(PDokanVCB Vcb) {
-  KeEnterCriticalRegion();
-  BOOLEAN result = ExAcquireResourceExclusiveLite(&(Vcb)->Resource, FALSE);
-  if (!result) {
-    KeLeaveCriticalRegion();
-  }
-  return result;
 }
 
 ULONG GetOplockControlDebugInfoBit(ULONG FsControlCode) {

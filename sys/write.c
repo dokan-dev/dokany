@@ -267,8 +267,7 @@ DokanDispatchWrite(__in PREQUEST_CONTEXT RequestContext) {
       // no more memory!
       if (eventWriteContext == NULL) {
         status = STATUS_INSUFFICIENT_RESOURCES;
-        RequestContext->Irp->Tail.Overlay.DriverContext[DRIVER_CONTEXT_EVENT] = 0;
-        DokanFreeEventContext(eventContext);
+        DokanFreeWriteEventContext(RequestContext->Irp);
         __leave;
       }
 
@@ -301,16 +300,17 @@ DokanDispatchWrite(__in PREQUEST_CONTEXT RequestContext) {
                                "FsRtlCheckOplock returned STATUS_PENDING");
           } else {
             DokanFreeEventContext(eventWriteContext);
-            RequestContext->Irp->Tail.Overlay
-                .DriverContext[DRIVER_CONTEXT_EVENT] = 0;
-            DokanFreeEventContext(eventContext);
+            DokanFreeWriteEventContext(RequestContext->Irp);
           }
           __leave;
         }
       }
 
-      // regiters this IRP to IRP wainting list and make it pending status
+      // registers this IRP to IRP waiting list and make it pending status
       status = DokanRegisterPendingIrp(RequestContext, eventWriteContext);
+      if (status != STATUS_PENDING) {
+        DokanFreeWriteEventContext(RequestContext->Irp);
+      }
     }
 
   } __finally {
